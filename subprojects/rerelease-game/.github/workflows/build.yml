@@ -1,0 +1,151 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  MESON_ARGS: >-
+    --auto-features=enabled
+    --fatal-meson-warnings
+    -Dwerror=true
+    -Dwrap_mode=forcefallback
+
+jobs:
+  mingw:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: ["i686", "x86_64"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: subprojects/packagecache
+          key: ${{ hashFiles('subprojects/*.wrap') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64 g++-mingw-w64 nasm python3-pip ninja-build
+          sudo python3 -m pip install meson
+
+      - name: Build
+        run: |
+          meson setup --cross-file=.ci/${{ matrix.arch }}-w64-mingw32.txt \
+          ${{ env.MESON_ARGS }} builddir
+          meson compile -C builddir
+
+  msvc:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: ["x86", "x64"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/cache@v4
+        with:
+          path: subprojects/packagecache
+          key: ${{ hashFiles('subprojects/*.wrap') }}
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - uses: ilammy/setup-nasm@v1
+
+      - name: Install dependencies
+        run: pip3 install --no-input meson ninja
+
+      - name: Build
+        run: |
+          meson setup ${{ env.MESON_ARGS }} builddir
+          meson compile -C builddir
+          meson install -C builddir --tags runtime --destdir ${{ github.workspace }}/installdir
+
+      - name: Setup variables
+        uses: actions/github-script@v7
+        with:
+          script: core.exportVariable('GITHUB_SHA_SHORT', context.sha.substring(0, 7))
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: q2rr-game-windows-${{ matrix.arch }}-${{env.GITHUB_SHA_SHORT}}
+          path: installdir/
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson
+
+      - name: Build
+        run: |
+          meson setup ${{ env.MESON_ARGS }} builddir
+          meson compile -C builddir
+          meson install -C builddir --tags runtime --destdir ${{ github.workspace }}/installdir
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+
+      - name: Setup variables
+        uses: actions/github-script@v7
+        with:
+          script: core.exportVariable('GITHUB_SHA_SHORT', context.sha.substring(0, 7))
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: q2rr-game-windows-${{ matrix.cc }}-x86_64-${{env.GITHUB_SHA_SHORT}}
+          path: installdir/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install meson
+
+      - name: Build
+        run: |
+          meson setup ${{ env.MESON_ARGS }} builddir
+          meson compile -C builddir
+
+  freebsd:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        uses: cross-platform-actions/action@v0.27.0
+        with:
+          operating_system: freebsd
+          architecture: x86-64
+          version: '14.2'
+          run: |
+            sudo pkg update
+            sudo pkg install -y git meson pkgconf
+            meson setup ${{ env.MESON_ARGS }} builddir
+            meson compile -C builddir
