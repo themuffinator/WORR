@@ -473,36 +473,24 @@ if openal.found()
   config.set10('USE_OPENAL', true)
 endif
 
-use_cmake_option_objects = meson.version().version_compare('>=1.2.0')
-
 freetype = disabler()
 if not freetype_opt.disabled() and (client_ui_enabled or freetype_opt.enabled())
   freetype = dependency('freetype2', required: freetype_opt.enabled())
 
   if not freetype.found() and freetype_opt.allowed()
-    if use_cmake_option_objects
-      ft_cmake_options = cmake_mod.subproject_options()
-      ft_cmake_options.add_cmake_defines({
-        'BUILD_SHARED_LIBS': 'OFF',
-        'CMAKE_DISABLE_FIND_PACKAGE_BZip2': 'ON',
-        'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec': 'ON',
-        'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz': 'ON',
-        'CMAKE_DISABLE_FIND_PACKAGE_PNG': 'ON',
-        'CMAKE_DISABLE_FIND_PACKAGE_ZLIB': zlib.found() ? 'OFF' : 'ON',
-      })
-      freetype_proj = cmake_mod.subproject('freetype2', options: ft_cmake_options)
-    else
-      ft_cmake_options = [
-        '-DBUILD_SHARED_LIBS=OFF',
-        '-DCMAKE_DISABLE_FIND_PACKAGE_BZip2=ON',
-        '-DCMAKE_DISABLE_FIND_PACKAGE_BrotliDec=ON',
-        '-DCMAKE_DISABLE_FIND_PACKAGE_HarfBuzz=ON',
-        '-DCMAKE_DISABLE_FIND_PACKAGE_PNG=ON',
-        '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=' + (zlib.found() ? 'OFF' : 'ON'),
-      ]
-      freetype_proj = cmake_mod.subproject('freetype2', cmake_options: ft_cmake_options)
-    endif
-    freetype = freetype_proj.dependency('freetype')
+    ft_cmake_options = [
+      'BUILD_SHARED_LIBS=OFF',
+      'CMAKE_DISABLE_FIND_PACKAGE_BZip2=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_PNG=ON',
+      (zlib.found())
+        ? 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=OFF'
+        : 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON',
+    ]
+
+    freetype_proj = cmake_mod.subproject('freetype2', options: ft_cmake_options)
+    freetype = freetype_proj.dependency('freetype', required: freetype_opt.enabled())
   endif
 
   if freetype.found()
@@ -519,24 +507,13 @@ if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
   rmlui = dependency('RmlUi', method: 'cmake', modules: rml_modules, required: rmlui_opt.enabled())
 
   if not rmlui.found() and rmlui_opt.allowed()
-    if use_cmake_option_objects
-      rml_opts = cmake_mod.subproject_options()
-      rml_opts.add_cmake_defines({
-        'BUILD_SHARED_LIBS': 'OFF',
-        'RMLUI_BUILD_LUA_BINDINGS': 'OFF',
-        'RMLUI_BUILD_SAMPLES': 'OFF',
-        'RMLUI_BUILD_TESTS': 'OFF',
-        'RMLUI_ENABLE_PRECOMPILED_HEADERS': 'OFF',
-      })
-    else
-      rml_opts = [
-        '-DBUILD_SHARED_LIBS=OFF',
-        '-DRMLUI_BUILD_LUA_BINDINGS=OFF',
-        '-DRMLUI_BUILD_SAMPLES=OFF',
-        '-DRMLUI_BUILD_TESTS=OFF',
-        '-DRMLUI_ENABLE_PRECOMPILED_HEADERS=OFF',
-      ]
-    endif
+    rml_opts = [
+      'BUILD_SHARED_LIBS=OFF',
+      'RMLUI_BUILD_LUA_BINDINGS=OFF',
+      'RMLUI_BUILD_SAMPLES=OFF',
+      'RMLUI_BUILD_TESTS=OFF',
+      'RMLUI_ENABLE_PRECOMPILED_HEADERS=OFF',
+    ]
 
     if freetype.found()
       freetype_prefix = ''
@@ -547,35 +524,22 @@ if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
       endif
 
       if freetype_prefix != ''
-        if use_cmake_option_objects
-          rml_opts.add_cmake_defines({'FREETYPE_ROOT': freetype_prefix})
-        else
-          rml_opts += ['-DFREETYPE_ROOT=' + freetype_prefix]
-        endif
+        rml_opts += 'FREETYPE_ROOT=' + freetype_prefix
       endif
     endif
 
-    if use_cmake_option_objects
-      rml_proj = cmake_mod.subproject('rmlui', options: rml_opts)
-    else
-      rml_proj = cmake_mod.subproject('rmlui', cmake_options: rml_opts)
-    endif
+    rml_proj = cmake_mod.subproject('rmlui', options: rml_opts)
 
     rml_deps = []
-    module_failures = false
     foreach module : rml_modules
       dep_required = module == 'RmlUi::RmlUi' and rmlui_opt.enabled()
-      module_dep = rml_proj.dependency(module)
+      module_dep = rml_proj.dependency(module, required: dep_required)
       if module_dep.found()
         rml_deps += module_dep
-      elif dep_required
-        module_failures = true
       endif
     endforeach
 
-    if module_failures
-      rml_deps = []
-    elif rml_deps.length() > 0
+    if rml_deps.length() > 0
       rmlui = declare_dependency(dependencies: rml_deps)
     endif
   endif

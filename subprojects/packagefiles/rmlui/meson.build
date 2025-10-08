@@ -1,24 +1,13 @@
 cmake = import('cmake')
-use_cmake_option_objects = meson.version().version_compare('>=1.2.0')
 
-if use_cmake_option_objects
-  cmake_opts = cmake.subproject_options()
-  cmake_opts.add_cmake_defines({
-    'BUILD_SHARED_LIBS': 'OFF',
-    'RMLUI_BUILD_LUA_BINDINGS': 'OFF',
-    'RMLUI_BUILD_SAMPLES': 'OFF',
-    'RMLUI_BUILD_TESTS': 'OFF',
-    'RMLUI_ENABLE_PRECOMPILED_HEADERS': 'OFF',
-  })
-else
-  cmake_opts = [
-    '-DBUILD_SHARED_LIBS=OFF',
-    '-DRMLUI_BUILD_LUA_BINDINGS=OFF',
-    '-DRMLUI_BUILD_SAMPLES=OFF',
-    '-DRMLUI_BUILD_TESTS=OFF',
-    '-DRMLUI_ENABLE_PRECOMPILED_HEADERS=OFF',
-  ]
-endif
+cmake_opts = cmake.subproject_options()
+cmake_opts.add_cmake_defines({
+  'BUILD_SHARED_LIBS': 'OFF',
+  'RMLUI_BUILD_LUA_BINDINGS': 'OFF',
+  'RMLUI_BUILD_SAMPLES': 'OFF',
+  'RMLUI_BUILD_TESTS': 'OFF',
+  'RMLUI_ENABLE_PRECOMPILED_HEADERS': 'OFF',
+})
 
 freetype_dep = dependency('freetype2', required: false)
 if freetype_dep.found()
@@ -30,16 +19,8 @@ if freetype_dep.found()
   endif
 
   if freetype_prefix != ''
-    if use_cmake_option_objects
-      cmake_opts.add_cmake_defines({'FREETYPE_ROOT': freetype_prefix})
-    else
-      cmake_opts += ['-DFREETYPE_ROOT=' + freetype_prefix]
-    endif
+    cmake_opts.add_cmake_defines({'FREETYPE_ROOT': freetype_prefix})
   endif
 endif
 
-if use_cmake_option_objects
-  cmake_proj = cmake.configure('rmlui', options: cmake_opts)
-else
-  cmake_proj = cmake.configure('rmlui', cmake_options: cmake_opts)
-endif
+cmake_proj = cmake.configure('rmlui', options: cmake_opts)
