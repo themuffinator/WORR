@@ -28,6 +28,11 @@ option('client-ui',
   value: true,
   description: 'Enable menu-based user interface')
 
+option('freetype',
+  type: 'feature',
+  value: 'auto',
+  description: 'FreeType2 font rendering support')
+
 option('default-game',
   type: 'string',
   value: '',
@@ -105,6 +110,11 @@ option('openal',
   type: 'feature',
   value: 'auto',
   description: 'OpenAL sound backend')
+
+option('rmlui',
+  type: 'feature',
+  value: 'auto',
+  description: 'RmlUi HTML/CSS user interface support')
 
 option('opengl-es1',
   type: 'boolean',
