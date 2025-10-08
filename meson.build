@@ -481,17 +481,18 @@ if want_freetype
   freetype = dependency('freetype2', required: freetype_opt.enabled())
 
   if not freetype.found() and freetype_opt.allowed()
-    freetype_cmake_options = [
-      'BUILD_SHARED_LIBS=OFF',
-      'CMAKE_DISABLE_FIND_PACKAGE_BZip2=ON',
-      'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec=ON',
-      'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz=ON',
-      'CMAKE_DISABLE_FIND_PACKAGE_PNG=ON',
-    ]
+    freetype_cmake_options = cmake_mod.subproject_options()
+    freetype_cmake_options.add_cmake_defines({
+      'BUILD_SHARED_LIBS': 'OFF',
+      'CMAKE_DISABLE_FIND_PACKAGE_BZip2': 'ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec': 'ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz': 'ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_PNG': 'ON',
+    })
     if zlib.found()
-      freetype_cmake_options += ['CMAKE_DISABLE_FIND_PACKAGE_ZLIB=OFF']
+      freetype_cmake_options.add_cmake_define('CMAKE_DISABLE_FIND_PACKAGE_ZLIB', 'OFF')
     else
-      freetype_cmake_options += ['CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON']
+      freetype_cmake_options.add_cmake_define('CMAKE_DISABLE_FIND_PACKAGE_ZLIB', 'ON')
     endif
 
     freetype_proj = cmake_mod.subproject('freetype2', options: freetype_cmake_options)
@@ -513,13 +514,14 @@ if want_rmlui
   rmlui = dependency('RmlUi', method: 'cmake', modules: rmlui_modules, required: rmlui_opt.enabled())
 
   if not rmlui.found() and rmlui_opt.allowed()
-    rml_cmake_options = [
-      'BUILD_SHARED_LIBS=OFF',
-      'RMLUI_BUILD_LUA_BINDINGS=OFF',
-      'RMLUI_BUILD_SAMPLES=OFF',
-      'RMLUI_BUILD_TESTS=OFF',
-      'RMLUI_ENABLE_PRECOMPILED_HEADERS=OFF',
-    ]
+    rml_cmake_options = cmake_mod.subproject_options()
+    rml_cmake_options.add_cmake_defines({
+      'BUILD_SHARED_LIBS': 'OFF',
+      'RMLUI_BUILD_LUA_BINDINGS': 'OFF',
+      'RMLUI_BUILD_SAMPLES': 'OFF',
+      'RMLUI_BUILD_TESTS': 'OFF',
+      'RMLUI_ENABLE_PRECOMPILED_HEADERS': 'OFF',
+    })
 
     if freetype.found()
       freetype_prefix = ''
@@ -530,7 +532,7 @@ if want_rmlui
       endif
 
       if freetype_prefix != ''
-        rml_cmake_options += ['FREETYPE_ROOT=' + freetype_prefix]
+        rml_cmake_options.add_cmake_define('FREETYPE_ROOT', freetype_prefix)
       endif
     endif
 
