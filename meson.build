@@ -392,7 +392,7 @@ fallback_opt = ['default_library=static']
 
 freetype_opt = get_option('freetype')
 rmlui_opt = get_option('rmlui')
-client_ui_enabled = get_option('client-ui')
+client_ui_requested = get_option('client-ui')
 
 zlib = dependency('zlib',
   fallback:        'zlib-ng',
@@ -473,23 +473,28 @@ if openal.found()
   config.set10('USE_OPENAL', true)
 endif
 
+# --- UI dependencies ------------------------------------------------------
+
 freetype = disabler()
-if not freetype_opt.disabled() and (client_ui_enabled or freetype_opt.enabled())
+want_freetype = not freetype_opt.disabled() and (client_ui_requested or freetype_opt.enabled())
+if want_freetype
   freetype = dependency('freetype2', required: freetype_opt.enabled())
 
   if not freetype.found() and freetype_opt.allowed()
-    ft_cmake_options = [
+    freetype_cmake_options = [
       'BUILD_SHARED_LIBS=OFF',
       'CMAKE_DISABLE_FIND_PACKAGE_BZip2=ON',
       'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec=ON',
       'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz=ON',
       'CMAKE_DISABLE_FIND_PACKAGE_PNG=ON',
-      (zlib.found())
-        ? 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=OFF'
-        : 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON',
     ]
+    if zlib.found()
+      freetype_cmake_options += ['CMAKE_DISABLE_FIND_PACKAGE_ZLIB=OFF']
+    else
+      freetype_cmake_options += ['CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON']
+    endif
 
-    freetype_proj = cmake_mod.subproject('freetype2', options: ft_cmake_options)
+    freetype_proj = cmake_mod.subproject('freetype2', options: freetype_cmake_options)
     freetype = freetype_proj.dependency('freetype', required: freetype_opt.enabled())
   endif
 
@@ -502,12 +507,13 @@ if not freetype_opt.disabled() and (client_ui_enabled or freetype_opt.enabled())
 endif
 
 rmlui = disabler()
-if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
-  rml_modules = ['RmlUi::RmlUi', 'RmlUi::Controls', 'RmlUi::Debugger']
-  rmlui = dependency('RmlUi', method: 'cmake', modules: rml_modules, required: rmlui_opt.enabled())
+rmlui_modules = ['RmlUi::RmlUi', 'RmlUi::Controls', 'RmlUi::Debugger']
+want_rmlui = not rmlui_opt.disabled() and (client_ui_requested or rmlui_opt.enabled())
+if want_rmlui
+  rmlui = dependency('RmlUi', method: 'cmake', modules: rmlui_modules, required: rmlui_opt.enabled())
 
   if not rmlui.found() and rmlui_opt.allowed()
-    rml_opts = [
+    rml_cmake_options = [
       'BUILD_SHARED_LIBS=OFF',
       'RMLUI_BUILD_LUA_BINDINGS=OFF',
       'RMLUI_BUILD_SAMPLES=OFF',
@@ -524,22 +530,27 @@ if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
       endif
 
       if freetype_prefix != ''
-        rml_opts += 'FREETYPE_ROOT=' + freetype_prefix
+        rml_cmake_options += ['FREETYPE_ROOT=' + freetype_prefix]
       endif
     endif
 
-    rml_proj = cmake_mod.subproject('rmlui', options: rml_opts)
+    rml_proj = cmake_mod.subproject('rmlui', options: rml_cmake_options)
 
     rml_deps = []
-    foreach module : rml_modules
-      dep_required = module == 'RmlUi::RmlUi' and rmlui_opt.enabled()
+    rmlui_core_found = false
+    foreach module : rmlui_modules
+      core_module = module == 'RmlUi::RmlUi'
+      dep_required = core_module and rmlui_opt.enabled()
       module_dep = rml_proj.dependency(module, required: dep_required)
       if module_dep.found()
+        if core_module
+          rmlui_core_found = true
+        endif
         rml_deps += module_dep
       endif
     endforeach
 
-    if rml_deps.length() > 0
+    if rmlui_core_found
       rmlui = declare_dependency(dependencies: rml_deps)
     endif
   endif
