@@ -502,7 +502,7 @@ if not freetype_opt.disabled() and (client_ui_enabled or freetype_opt.enabled())
       ]
       freetype_proj = cmake_mod.subproject('freetype2', cmake_options: ft_cmake_options)
     endif
-    freetype = freetype_proj.dependency('freetype', required: freetype_opt.enabled())
+    freetype = freetype_proj.dependency('freetype')
   endif
 
   if freetype.found()
@@ -562,15 +562,20 @@ if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
     endif
 
     rml_deps = []
+    module_failures = false
     foreach module : rml_modules
       dep_required = module == 'RmlUi::RmlUi' and rmlui_opt.enabled()
-      module_dep = rml_proj.dependency(module, required: dep_required)
+      module_dep = rml_proj.dependency(module)
       if module_dep.found()
         rml_deps += module_dep
+      elif dep_required
+        module_failures = true
       endif
     endforeach
 
-    if rml_deps.length() > 0
+    if module_failures
+      rml_deps = []
+    elif rml_deps.length() > 0
       rmlui = declare_dependency(dependencies: rml_deps)
     endif
   endif
