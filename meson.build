@@ -9,6 +9,8 @@ project('worr', 'c',
   ],
 )
 
+cmake_mod = import('cmake')
+
 common_src = [
   'src/common/bsp.c',
   'src/common/cmd.c',
@@ -388,6 +390,10 @@ texture_formats = []
 
 fallback_opt = ['default_library=static']
 
+freetype_opt = get_option('freetype')
+rmlui_opt = get_option('rmlui')
+client_ui_enabled = get_option('client-ui')
+
 zlib = dependency('zlib',
   fallback:        'zlib-ng',
   required:        get_option('zlib'),
@@ -465,6 +471,85 @@ if openal.found()
   client_src += [ 'src/client/sound/al.c', 'src/client/sound/qal.c', 'inc/common/jsmn.h' ]
   client_deps += openal
   config.set10('USE_OPENAL', true)
+endif
+
+freetype = disabler()
+if not freetype_opt.disabled() and (client_ui_enabled or freetype_opt.enabled())
+  freetype = dependency('freetype2', required: freetype_opt.enabled())
+
+  if not freetype.found() and freetype_opt.allowed()
+    ft_cmake_options = [
+      'BUILD_SHARED_LIBS=OFF',
+      'CMAKE_DISABLE_FIND_PACKAGE_BZip2=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_BrotliDec=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz=ON',
+      'CMAKE_DISABLE_FIND_PACKAGE_PNG=ON',
+      (zlib.found())
+        ? 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=OFF'
+        : 'CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON',
+    ]
+
+    freetype_proj = cmake_mod.subproject('freetype2', options: ft_cmake_options)
+    freetype = freetype_proj.dependency('freetype', required: freetype_opt.enabled())
+  endif
+
+  if freetype.found()
+    client_deps += freetype
+    config.set10('USE_FREETYPE', true)
+  elif freetype_opt.enabled()
+    error('FreeType2 support requested but dependency not found')
+  endif
+endif
+
+rmlui = disabler()
+if not rmlui_opt.disabled() and (client_ui_enabled or rmlui_opt.enabled())
+  rml_modules = ['RmlUi::RmlUi', 'RmlUi::Controls', 'RmlUi::Debugger']
+  rmlui = dependency('RmlUi', method: 'cmake', modules: rml_modules, required: rmlui_opt.enabled())
+
+  if not rmlui.found() and rmlui_opt.allowed()
+    rml_opts = [
+      'BUILD_SHARED_LIBS=OFF',
+      'RMLUI_BUILD_LUA_BINDINGS=OFF',
+      'RMLUI_BUILD_SAMPLES=OFF',
+      'RMLUI_BUILD_TESTS=OFF',
+      'RMLUI_ENABLE_PRECOMPILED_HEADERS=OFF',
+    ]
+
+    if freetype.found()
+      freetype_prefix = ''
+      if freetype.type_name() == 'pkgconfig'
+        freetype_prefix = freetype.get_pkgconfig_variable('prefix', default: '')
+      elif freetype.type_name() == 'cmake'
+        freetype_prefix = freetype.get_variable(cmake: 'PACKAGE_PREFIX_DIR', default: '')
+      endif
+
+      if freetype_prefix != ''
+        rml_opts += 'FREETYPE_ROOT=' + freetype_prefix
+      endif
+    endif
+
+    rml_proj = cmake_mod.subproject('rmlui', options: rml_opts)
+
+    rml_deps = []
+    foreach module : rml_modules
+      dep_required = module == 'RmlUi::RmlUi' and rmlui_opt.enabled()
+      module_dep = rml_proj.dependency(module, required: dep_required)
+      if module_dep.found()
+        rml_deps += module_dep
+      endif
+    endforeach
+
+    if rml_deps.length() > 0
+      rmlui = declare_dependency(dependencies: rml_deps)
+    endif
+  endif
+
+  if rmlui.found()
+    client_deps += rmlui
+    config.set10('USE_RMLUI', true)
+  elif rmlui_opt.enabled()
+    error('RmlUi support requested but dependency not found')
+  endif
 endif
 
 # require FFmpeg >= 5.1.3
@@ -746,6 +831,7 @@ summary({
   'client-gtv'         : config.get('USE_CLIENT_GTV', 0) != 0,
   'client-ui'          : config.get('USE_UI', 0) != 0,
   'debug'              : config.get('USE_DEBUG', 0) != 0,
+  'freetype'           : config.get('USE_FREETYPE', 0) != 0,
   'game-abi-hack'      : config.get('USE_GAME_ABI_HACK', 0) != 0,
   'game-new-api'       : config.get('USE_NEW_GAME_API', 0) != 0,
   'icmp-errors'        : config.get('USE_ICMP', 0) != 0,
@@ -759,6 +845,7 @@ summary({
   'mvd-server'         : config.get('USE_MVD_SERVER', 0) != 0,
   'openal'             : config.get('USE_OPENAL', 0) != 0,
   'packetdup-hack'     : config.get('USE_PACKETDUP', 0) != 0,
+  'rmlui'              : config.get('USE_RMLUI', 0) != 0,
   'save-games'         : config.get('USE_SAVEGAMES', 0) != 0,
   'sdl2'               : config.get('USE_SDL', '') != '',
   'software-sound'     : config.get('USE_SNDDMA', 0) != 0,
