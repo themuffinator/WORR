@@ -57,10 +57,10 @@ static cvar_t *map_visibility_patch;
     do { if (!(cond)) { BSP_ERROR(msg); return Q_ERR_INVALID_FORMAT; } } while (0)
 
 #define BSP_EXTENDED 0
-#include "bsp_template.c"
+#include "bsp_template.cpp"
 
 #define BSP_EXTENDED 1
-#include "bsp_template.c"
+#include "bsp_template.cpp"
 
 /*
 ===============================================================================

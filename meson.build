@@ -1,4 +1,4 @@
-project('worr', 'c',
+project('worr', ['cpp', 'c'],
   license: 'GPL-2.0-or-later',
   version: run_command(find_program('python3'), 'version.py', check: true).stdout().strip(),
   meson_version: '>= 0.60.0',
@@ -12,37 +12,37 @@ project('worr', 'c',
 cmake_mod = import('cmake')
 
 common_src = [
-  'src/common/bsp.c',
-  'src/common/cmd.c',
-  'src/common/cmodel.c',
-  'src/common/common.c',
-  'src/common/crc.c',
-  'src/common/cvar.c',
-  'src/common/error.c',
-  'src/common/field.c',
-  'src/common/fifo.c',
-  'src/common/files.c',
-  'src/common/game3_convert.c',
-  'src/common/game3_pmove/new.c',
-  'src/common/game3_pmove/old.c',
-  'src/common/natsort.c',
-  'src/common/hash_map.c',
-  'src/common/loc.c',
-  'src/common/math.c',
-  'src/common/mdfour.c',
-  'src/common/msg.c',
-  'src/common/net/chan.c',
-  'src/common/net/net.c',
-  'src/common/pmove.c',
-  'src/common/prompt.c',
-  'src/common/q2proto_shared.c',
-  'src/common/sizebuf.c',
-  'src/common/steam.c',
-  'src/common/utils.c',
-  'src/common/zone.c',
+  'src/common/bsp.cpp',
+  'src/common/cmd.cpp',
+  'src/common/cmodel.cpp',
+  'src/common/common.cpp',
+  'src/common/crc.cpp',
+  'src/common/cvar.cpp',
+  'src/common/error.cpp',
+  'src/common/field.cpp',
+  'src/common/fifo.cpp',
+  'src/common/files.cpp',
+  'src/common/game3_convert.cpp',
+  'src/common/game3_pmove/new.cpp',
+  'src/common/game3_pmove/old.cpp',
+  'src/common/natsort.cpp',
+  'src/common/hash_map.cpp',
+  'src/common/loc.cpp',
+  'src/common/math.cpp',
+  'src/common/mdfour.cpp',
+  'src/common/msg.cpp',
+  'src/common/net/chan.cpp',
+  'src/common/net/net.cpp',
+  'src/common/pmove.cpp',
+  'src/common/prompt.cpp',
+  'src/common/q2proto_shared.cpp',
+  'src/common/sizebuf.cpp',
+  'src/common/steam.cpp',
+  'src/common/utils.cpp',
+  'src/common/zone.cpp',
   'src/common/features.h',
-  'src/common/mapdb.c',
-  'src/shared/shared.c',
+  'src/common/mapdb.cpp',
+  'src/shared/shared.cpp',
 
   'q2proto/src/q2proto_client.c',
   'q2proto/src/q2proto_coords.c',
@@ -67,8 +67,8 @@ common_src = [
   'q2proto/src/q2proto_sound.c',
   'q2proto/src/q2proto_string.c',
 
-  'src/common/q2proto-glue.c',
-  'src/common/q2proto-packing.c',
+  'src/common/q2proto-glue.cpp',
+  'src/common/q2proto-packing.cpp',
 
   'inc/shared/atomic.h',
   'inc/shared/base85.h',
@@ -124,48 +124,48 @@ common_src = [
 ]
 
 client_src = [
-  'src/client/ascii.c',
-  'src/client/cgame.c',
-  'src/client/cgame_classic.c',
-  'src/client/console.c',
-  'src/client/demo.c',
-  'src/client/download.c',
-  'src/client/effects.c',
-  'src/client/entities.c',
-  'src/client/input.c',
-  'src/client/keys.c',
-  'src/client/locs.c',
-  'src/client/main.c',
-  'src/client/newfx.c',
-  'src/client/parse.c',
-  'src/client/precache.c',
-  'src/client/predict.c',
-  'src/client/refresh.c',
-  'src/client/screen.c',
-  'src/client/sound/main.c',
-  'src/client/sound/mem.c',
+  'src/client/ascii.cpp',
+  'src/client/cgame.cpp',
+  'src/client/cgame_classic.cpp',
+  'src/client/console.cpp',
+  'src/client/demo.cpp',
+  'src/client/download.cpp',
+  'src/client/effects.cpp',
+  'src/client/entities.cpp',
+  'src/client/input.cpp',
+  'src/client/keys.cpp',
+  'src/client/locs.cpp',
+  'src/client/main.cpp',
+  'src/client/newfx.cpp',
+  'src/client/parse.cpp',
+  'src/client/precache.cpp',
+  'src/client/predict.cpp',
+  'src/client/refresh.cpp',
+  'src/client/screen.cpp',
+  'src/client/sound/main.cpp',
+  'src/client/sound/mem.cpp',
   'src/client/sound/qal.h',
   'src/client/sound/sound.h',
-  'src/client/tent.c',
-  'src/client/view.c',
-  'src/client/wheel.c',
+  'src/client/tent.cpp',
+  'src/client/view.cpp',
+  'src/client/wheel.cpp',
   'src/client/client.h',
   'src/client/cgame_classic.h',
-  'src/common/async.c',
-  'src/common/gamedll.c',
-  'src/server/commands.c',
-  'src/server/entities.c',
-  'src/server/game.c',
-  'src/server/game3_proxy/game3_proxy.c',
-  'src/server/init.c',
-  'src/server/main.c',
-  'src/server/send.c',
-  'src/server/user.c',
-  'src/server/nav.c',
-  'src/server/world.c',
+  'src/common/async.cpp',
+  'src/common/gamedll.cpp',
+  'src/server/commands.cpp',
+  'src/server/entities.cpp',
+  'src/server/game.cpp',
+  'src/server/game3_proxy/game3_proxy.cpp',
+  'src/server/init.cpp',
+  'src/server/main.cpp',
+  'src/server/send.cpp',
+  'src/server/user.cpp',
+  'src/server/nav.cpp',
+  'src/server/world.cpp',
   'src/server/server.h',
-  'src/shared/base85.c',
-  'src/shared/m_flash.c',
+  'src/shared/base85.cpp',
+  'src/shared/m_flash.cpp',
 
   'inc/server/server.h',
 
@@ -180,35 +180,35 @@ client_src = [
 ]
 
 ui_src = [
-  'src/client/ui/demos.c',
-  'src/client/ui/menu.c',
-  'src/client/ui/playerconfig.c',
-  'src/client/ui/playermodels.c',
-  'src/client/ui/script.c',
-  'src/client/ui/servers.c',
-  'src/client/ui/mapdb.c',
-  'src/client/ui/ui.c',
+  'src/client/ui/demos.cpp',
+  'src/client/ui/menu.cpp',
+  'src/client/ui/playerconfig.cpp',
+  'src/client/ui/playermodels.cpp',
+  'src/client/ui/script.cpp',
+  'src/client/ui/servers.cpp',
+  'src/client/ui/mapdb.cpp',
+  'src/client/ui/ui.cpp',
   'src/client/ui/ui.h',
 ]
 
 refresh_src = [
-  'src/refresh/draw.c',
-  'src/refresh/hq2x.c',
-  'src/refresh/images.c',
-  'src/refresh/legacy.c',
-  'src/refresh/main.c',
-  'src/refresh/mesh.c',
-  'src/refresh/models.c',
-  'src/refresh/qgl.c',
-  'src/refresh/shader.c',
-  'src/refresh/sky.c',
-  'src/refresh/state.c',
-  'src/refresh/surf.c',
-  'src/refresh/tess.c',
-  'src/refresh/texture.c',
-  'src/refresh/world.c',
-  'src/refresh/debug.c',
-  'src/refresh/debug_text.c',
+  'src/refresh/draw.cpp',
+  'src/refresh/hq2x.cpp',
+  'src/refresh/images.cpp',
+  'src/refresh/legacy.cpp',
+  'src/refresh/main.cpp',
+  'src/refresh/mesh.cpp',
+  'src/refresh/models.cpp',
+  'src/refresh/qgl.cpp',
+  'src/refresh/shader.cpp',
+  'src/refresh/sky.cpp',
+  'src/refresh/state.cpp',
+  'src/refresh/surf.cpp',
+  'src/refresh/tess.cpp',
+  'src/refresh/texture.cpp',
+  'src/refresh/world.cpp',
+  'src/refresh/debug.cpp',
+  'src/refresh/debug_text.cpp',
   'src/refresh/arbfp.h',
   'src/refresh/gl.h',
   'src/refresh/images.h',
@@ -218,78 +218,79 @@ refresh_src = [
 ]
 
 server_src = [
-  'src/client/null.c',
-  'src/common/gamedll.c',
-  'src/server/commands.c',
-  'src/server/entities.c',
-  'src/server/game.c',
-  'src/server/game3_proxy/game3_proxy.c',
-  'src/server/init.c',
-  'src/server/main.c',
-  'src/server/send.c',
-  'src/server/user.c',
-  'src/server/nav.c',
-  'src/server/world.c',
+  'src/client/null.cpp',
+  'src/common/gamedll.cpp',
+  'src/server/commands.cpp',
+  'src/server/entities.cpp',
+  'src/server/game.cpp',
+  'src/server/game3_proxy/game3_proxy.cpp',
+  'src/server/init.cpp',
+  'src/server/main.cpp',
+  'src/server/send.cpp',
+  'src/server/user.cpp',
+  'src/server/nav.cpp',
+  'src/server/world.cpp',
   'src/server/server.h',
-  'src/shared/base85.c',
+  'src/shared/base85.cpp',
 
   'inc/server/server.h',
 ]
 
 game_src = [
-  'src/game/g_ai.c',
-  'src/game/g_chase.c',
-  'src/game/g_cmds.c',
-  'src/game/g_combat.c',
-  'src/game/g_func.c',
-  'src/game/g_items.c',
-  'src/game/g_main.c',
-  'src/game/g_misc.c',
-  'src/game/g_monster.c',
-  'src/game/g_phys.c',
-  'src/game/g_ptrs.c',
-  'src/game/g_save.c',
-  'src/game/g_spawn.c',
-  'src/game/g_svcmds.c',
-  'src/game/g_target.c',
-  'src/game/g_trigger.c',
-  'src/game/g_turret.c',
-  'src/game/g_utils.c',
-  'src/game/g_weapon.c',
-  'src/game/m_actor.c',
-  'src/game/m_berserk.c',
-  'src/game/m_boss2.c',
-  'src/game/m_boss31.c',
-  'src/game/m_boss32.c',
-  'src/game/m_boss3.c',
-  'src/game/m_brain.c',
-  'src/game/m_chick.c',
-  'src/game/m_flipper.c',
-  'src/game/m_float.c',
-  'src/game/m_flyer.c',
-  'src/game/m_gladiator.c',
-  'src/game/m_gunner.c',
-  'src/game/m_hover.c',
-  'src/game/m_infantry.c',
-  'src/game/m_insane.c',
-  'src/game/m_medic.c',
-  'src/game/m_move.c',
-  'src/game/m_mutant.c',
-  'src/game/m_parasite.c',
-  'src/game/m_soldier.c',
-  'src/game/m_supertank.c',
-  'src/game/m_tank.c',
-  'src/game/p_client.c',
-  'src/game/p_hud.c',
-  'src/game/p_trail.c',
-  'src/game/p_view.c',
-  'src/game/p_weapon.c',
-  'src/shared/base85.c',
-  'src/shared/m_flash.c',
-  'src/shared/shared.c',
+  'src/game/g_ai.cpp',
+  'src/game/g_chase.cpp',
+  'src/game/g_cmds.cpp',
+  'src/game/g_combat.cpp',
+  'src/game/g_func.cpp',
+  'src/game/g_items.cpp',
+  'src/game/g_main.cpp',
+  'src/game/g_misc.cpp',
+  'src/game/g_monster.cpp',
+  'src/game/g_phys.cpp',
+  'src/game/g_ptrs.cpp',
+  'src/game/g_save.cpp',
+  'src/game/g_spawn.cpp',
+  'src/game/g_svcmds.cpp',
+  'src/game/g_target.cpp',
+  'src/game/g_trigger.cpp',
+  'src/game/g_turret.cpp',
+  'src/game/g_utils.cpp',
+  'src/game/g_weapon.cpp',
+  'src/game/m_actor.cpp',
+  'src/game/m_berserk.cpp',
+  'src/game/m_boss2.cpp',
+  'src/game/m_boss31.cpp',
+  'src/game/m_boss32.cpp',
+  'src/game/m_boss3.cpp',
+  'src/game/m_brain.cpp',
+  'src/game/m_chick.cpp',
+  'src/game/m_flipper.cpp',
+  'src/game/m_float.cpp',
+  'src/game/m_flyer.cpp',
+  'src/game/m_gladiator.cpp',
+  'src/game/m_gunner.cpp',
+  'src/game/m_hover.cpp',
+  'src/game/m_infantry.cpp',
+  'src/game/m_insane.cpp',
+  'src/game/m_medic.cpp',
+  'src/game/m_move.cpp',
+  'src/game/m_mutant.cpp',
+  'src/game/m_parasite.cpp',
+  'src/game/m_soldier.cpp',
+  'src/game/m_supertank.cpp',
+  'src/game/m_tank.cpp',
+  'src/game/p_client.cpp',
+  'src/game/p_hud.cpp',
+  'src/game/p_trail.cpp',
+  'src/game/p_view.cpp',
+  'src/game/p_weapon.cpp',
+  'src/shared/base85.cpp',
+  'src/shared/m_flash.cpp',
+  'src/shared/shared.cpp',
 ]
 
 cc = meson.get_compiler('c')
+cppc = meson.get_compiler('cpp')
 
 win32 = host_machine.system() == 'windows'
 x86 = host_machine.cpu_family() == 'x86'
@@ -348,7 +349,9 @@ dll_link_args = []
 
 if cc.get_argument_syntax() == 'gcc'
   if x86
-    add_global_arguments('-msse2', '-mfpmath=sse', language: 'c')
+    foreach lang : ['c', 'cpp']
+      add_global_arguments('-msse2', '-mfpmath=sse', language: lang)
+    endforeach
   endif
 
   test_args = [
@@ -364,6 +367,7 @@ if cc.get_argument_syntax() == 'gcc'
   ]
 
   common_args += cc.get_supported_arguments(test_args)
+  common_args += cppc.get_supported_arguments(test_args)
   engine_args += cc.get_supported_arguments(['-Wmissing-prototypes'])
 
   if win32
@@ -381,8 +385,10 @@ elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/wd4267', '/wd4018']
 endif
 
-add_project_arguments(common_args, language: 'c')
-add_project_link_arguments(common_link_args, language: 'c')
+foreach lang : ['c', 'cpp']
+  add_project_arguments(common_args, language: lang)
+  add_project_link_arguments(common_link_args, language: lang)
+endforeach
 
 config = configuration_data()
 
@@ -423,13 +429,13 @@ curl = dependency('libcurl',
 )
 
 if curl.found()
-  client_src += 'src/client/http.c'
+  client_src += 'src/client/http.cpp'
   config.set10('USE_CURL', true)
 endif
 
 sdl2 = dependency('sdl2', required: get_option('sdl2'))
 if sdl2.found()
-  client_src += 'src/unix/video/sdl.c'
+  client_src += 'src/unix/video/sdl.cpp'
   config.set('USE_SDL', 'USE_CLIENT')
 endif
 
@@ -468,7 +474,7 @@ openal = dependency('openal',
   default_options: fallback_opt,
 )
 if openal.found()
-  client_src += [ 'src/client/sound/al.c', 'src/client/sound/qal.c', 'inc/common/jsmn.h' ]
+  client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.h' ]
   client_deps += openal
   config.set10('USE_OPENAL', true)
 endif
@@ -639,7 +645,7 @@ avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpe
 swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 if avcodec.found() and avformat.found() and avutil.found() and swresample.found() and swscale.found()
-  client_src += ['src/client/cin.c', 'src/client/sound/ogg.c']
+  client_src += ['src/client/cin.cpp', 'src/client/sound/ogg.cpp']
   client_deps += [avcodec, avformat, avutil, swresample, swscale]
   config.set10('USE_AVCODEC', true)
 endif
@@ -651,7 +657,7 @@ else
 endif
 
 if get_option('client-gtv')
-  client_src += 'src/client/gtv.c'
+  client_src += 'src/client/gtv.cpp'
   config.set10('USE_CLIENT_GTV', true)
 endif
 
@@ -661,8 +667,8 @@ if get_option('client-ui')
   prog_embed = find_program('embed.py')
 
   q2pro_menu_c = custom_target(
-      'worr.menu.c',
-      output : 'worr.menu.c',
+      'worr.menu.cpp',
+      output : 'worr.menu.cpp',
       input : 'src/client/ui/worr.menu',
       command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_q2pro_menu'],
   )
@@ -673,9 +679,9 @@ if get_option('client-ui')
 endif
 
 if get_option('software-sound').require(win32 or sdl2.found()).allowed()
-  client_src += 'src/client/sound/dma.c'
+  client_src += 'src/client/sound/dma.cpp'
   if sdl2.found()
-    client_src += 'src/unix/sound/sdl.c'
+    client_src += 'src/unix/sound/sdl.cpp'
   endif
   config.set10('USE_SNDDMA', true)
 elif not openal.found()
@@ -683,13 +689,13 @@ elif not openal.found()
 endif
 
 if get_option('anticheat-server')
-  server_src += 'src/server/ac.c'
+  server_src += 'src/server/ac.cpp'
   config.set('USE_AC_SERVER', 'USE_SERVER')
 endif
 
 if get_option('mvd-server')
   common_src += [
-    'src/server/mvd.c',
+    'src/server/mvd.cpp',
     'inc/server/mvd/client.h',
     'inc/server/mvd/protocol.h'
   ]
@@ -698,32 +704,32 @@ endif
 
 if get_option('mvd-client')
   common_src += [
-    'src/server/mvd/client.c',
-    'src/server/mvd/game.c',
-    'src/server/mvd/parse.c'
+    'src/server/mvd/client.cpp',
+    'src/server/mvd/game.cpp',
+    'src/server/mvd/parse.cpp'
   ]
   config.set10('USE_MVD_CLIENT', true)
 endif
 
 if get_option('save-games')
-  common_src += 'src/server/save.c'
+  common_src += 'src/server/save.cpp'
   config.set10('USE_SAVEGAMES', true)
 endif
 
 if get_option('system-console')
   if not win32
-    common_src += 'src/unix/tty.c'
+    common_src += 'src/unix/tty.cpp'
   endif
   config.set10('USE_SYSCON', true)
 endif
 
 if get_option('tests')
-  common_src += 'src/common/tests.c'
+  common_src += 'src/common/tests.cpp'
   config.set10('USE_TESTS', true)
 endif
 
 if get_option('debug')
-  refresh_src += 'src/refresh/debug.c'
+  refresh_src += 'src/refresh/debug.cpp'
 endif
 
 if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_argument('-mstackrealign')).allowed()
@@ -738,6 +744,7 @@ executable('worr', common_src, client_src, refresh_src,
   win_subsystem:         'windows,6.0',
   link_args:             exe_link_args,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
+  cpp_args:              ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
   install:               true,
   install_dir:           bindir,
 )
@@ -749,6 +756,7 @@ executable('worr.ded', common_src, server_src,
   win_subsystem:         'console,6.0',
   link_args:             exe_link_args,
   c_args:                ['-DUSE_SERVER=1', engine_args],
+  cpp_args:              ['-DUSE_SERVER=1', engine_args],
   install:               true,
   install_dir:           bindir,
 )

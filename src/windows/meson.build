@@ -1,7 +1,7 @@
 windows = import('windows')
 
-common_src += files('system.c', 'hunk.c')
-client_src += files('client.c', 'wgl.c')
+common_src += files('system.cpp', 'hunk.cpp')
+client_src += files('client.cpp', 'wgl.cpp')
 
 common_deps += cc.find_library('ws2_32')
 client_deps += cc.find_library('opengl32')
@@ -29,12 +29,12 @@ game_src += windows.compile_resources('res/game.rc',
 client_deps += subproject('khr-headers').get_variable('khr_headers_dep')
 
 if get_option('software-sound').allowed()
-  client_src += files('wave.c', 'dsound.c')
+  client_src += files('wave.cpp', 'dsound.cpp')
   client_deps += cc.find_library('winmm')
 endif
 
 if get_option('windows-egl')
-  client_src += files('egl.c')
+  client_src += files('egl.cpp')
   config.set10('USE_WIN32EGL', true)
 endif
 
@@ -43,6 +43,6 @@ if get_option('windows-service')
 endif
 
 if get_option('windows-crash-dumps').require(host_machine.cpu_family().startswith('x86')).allowed()
-  common_src += files('debug.c')
+  common_src += files('debug.cpp')
   config.set10('USE_DBGHELP', true)
 endif
