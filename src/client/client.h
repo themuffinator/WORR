@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <array>
+
 #include "shared/shared.h"
 #include "shared/list.h"
 #include "shared/game.h"
@@ -653,7 +655,7 @@ typedef struct {
 extern client_static_t      cls;
 
 extern cmdbuf_t     cl_cmdbuf;
-extern char         cl_cmdbuf_text[MAX_STRING_CHARS];
+extern std::array<char, MAX_STRING_CHARS> cl_cmdbuf_text;
 
 //=============================================================================
 
