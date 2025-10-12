@@ -1,4 +1,4 @@
-common_src += files('system.c', 'hunk.c')
+common_src += files('system.cpp', 'hunk.cpp')
 
 libm = cc.find_library('m', required: false)
 if libm.found()

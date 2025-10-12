@@ -28,4 +28,4 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define PMOVE_C2S(x) COORD2SHORT(x)
 #define PMOVE_TRACE(start, mins, maxs, end) pm->trace(start, mins, maxs, end)
 #define PMOVE_TRACE_MASK(start, mins, maxs, end, mask) pm->trace(start, mins, maxs, end)
-#include "template.c"
+#include "template.cpp"
