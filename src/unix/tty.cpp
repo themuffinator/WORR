@@ -36,6 +36,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <errno.h>
 #include <poll.h>
 
+#include <array>
+
 enum {
     CTRL_A = 1, CTRL_B = 2, CTRL_D = 4, CTRL_E = 5, CTRL_F = 6, CTRL_H = 8,
     TAB = 9, ENTER = 10, CTRL_K = 11, CTRL_L = 12, CTRL_N = 14, CTRL_P = 16,
@@ -114,15 +116,15 @@ static void tty_write(const char *buf, size_t len)
 q_printf(1, 2)
 static void tty_printf(const char *fmt, ...)
 {
-    char buf[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> buf{};
     va_list ap;
     size_t len;
 
     va_start(ap, fmt);
-    len = Q_vscnprintf(buf, sizeof(buf), fmt, ap);
+    len = Q_vscnprintf(buf.data(), buf.size(), fmt, ap);
     va_end(ap);
 
-    tty_write(buf, len);
+    tty_write(buf.data(), len);
 }
 
 static int tty_get_width(void)
@@ -675,7 +677,7 @@ void Sys_ConsoleOutput(const char *text, size_t len)
 
 void Sys_SetConsoleTitle(const char *title)
 {
-    char buf[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> buf{};
     size_t len;
 
     if (!tty_enabled) {
@@ -697,12 +699,12 @@ void Sys_SetConsoleTitle(const char *title)
 
     buf[len++] = '\007';
 
-    tty_write(buf, len);
+    tty_write(buf.data(), len);
 }
 
 void Sys_SetConsoleColor(color_index_t color)
 {
-    char buf[5];
+    std::array<char, 5> buf{};
     size_t len;
 
     if (!tty_enabled) {
@@ -734,7 +736,7 @@ void Sys_SetConsoleColor(color_index_t color)
     if (color != COLOR_INDEX_NONE) {
         tty_hide_input();
     }
-    tty_write(buf, len);
+    tty_write(buf.data(), len);
     if (color == COLOR_INDEX_NONE) {
         tty_show_input();
     }
