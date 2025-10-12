@@ -21,6 +21,30 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define Z_CopyString(string)    Z_TagCopyString(string, TAG_GENERAL)
 #define Z_CopyStruct(ptr)       memcpy(Z_Malloc(sizeof(*ptr)), ptr, sizeof(*ptr))
 
+#ifdef __cplusplus
+struct z_allocation {
+    void *value;
+
+    constexpr z_allocation(void *p = nullptr) noexcept
+        : value(p) {}
+
+    template <typename T>
+    constexpr operator T *() const noexcept
+    {
+        return static_cast<T *>(value);
+    }
+
+    constexpr explicit operator bool() const noexcept
+    {
+        return value != nullptr;
+    }
+};
+
+using z_pointer = z_allocation;
+#else
+typedef void *z_pointer;
+#endif
+
 // memory tags to allow dynamic memory to be cleaned up
 // game DLL has separate tag namespace starting at TAG_MAX
 typedef enum {
@@ -46,16 +70,16 @@ typedef enum {
 void    Z_Init(void);
 void    Z_Free(void *ptr);
 void    Z_Freep(void *ptr);
-void    *Z_Realloc(void *ptr, size_t size);
-void    *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
+z_pointer   Z_Realloc(void *ptr, size_t size);
+z_pointer   Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
 q_malloc
-void    *Z_Malloc(size_t size);
+z_pointer   Z_Malloc(size_t size);
 q_malloc
-void    *Z_Mallocz(size_t size);
+z_pointer   Z_Mallocz(size_t size);
 q_malloc
-void    *Z_TagMalloc(size_t size, memtag_t tag);
+z_pointer   Z_TagMalloc(size_t size, memtag_t tag);
 q_malloc
-void    *Z_TagMallocz(size_t size, memtag_t tag);
+z_pointer   Z_TagMallocz(size_t size, memtag_t tag);
 q_malloc
 char    *Z_TagCopyString(const char *in, memtag_t tag);
 void    Z_FreeTags(memtag_t tag);

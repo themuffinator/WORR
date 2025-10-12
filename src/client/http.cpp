@@ -132,7 +132,7 @@ static size_t recv_func(void *ptr, size_t size, size_t nmemb, void *stream)
     // grow buffer in MIN_DLSIZE chunks. +1 for NUL.
     new_size = Q_ALIGN(dl->position + bytes + 1, MIN_DLSIZE);
     if (new_size > dl->size) {
-        char *buf = realloc(dl->buffer, new_size);
+        char *buf = static_cast<char *>(realloc(dl->buffer, new_size));
         if (!buf)
             return 0;
         dl->size = new_size;

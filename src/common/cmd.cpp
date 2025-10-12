@@ -1283,7 +1283,7 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
 
         // copy off text into static buffer
         if (scan != expanded)
-            scan = memcpy(expanded, text, len + 1);
+            scan = static_cast<char *>(memcpy(expanded, text, len + 1));
 
         // scan out the complete macro
         start = scan + i + 1;
