@@ -25,6 +25,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "q2proto/q2proto.h"
 
+#include <array>
+
 #if USE_ZLIB
 #include <zlib.h>
 
@@ -384,56 +386,56 @@ bool nonfatal_client_read_errors = false;
 
 q2proto_error_t q2protoerr_client_read(uintptr_t io_arg, q2proto_error_t err, const char *msg, ...)
 {
-    char buf[256];
+    std::array<char, 256> buf;
     va_list argptr;
 
     va_start(argptr, msg);
-    Q_vsnprintf(buf, sizeof(buf), msg, argptr);
+    Q_vsnprintf(buf.data(), buf.size(), msg, argptr);
     va_end(argptr);
 
     if (nonfatal_client_read_errors)
-        Com_WPrintf("%s\n", buf);
+        Com_WPrintf("%s\n", buf.data());
     else
-        Com_Error(ERR_DROP, "%s", buf);
+        Com_Error(ERR_DROP, "%s", buf.data());
     return err;
 }
 
 q2proto_error_t q2protoerr_client_write(uintptr_t io_arg, q2proto_error_t err, const char *msg, ...)
 {
-    char buf[256];
+    std::array<char, 256> buf;
     va_list argptr;
 
     va_start(argptr, msg);
-    Q_vsnprintf(buf, sizeof(buf), msg, argptr);
+    Q_vsnprintf(buf.data(), buf.size(), msg, argptr);
     va_end(argptr);
 
-    Com_EPrintf("client write error: %s\n", buf);
+    Com_EPrintf("client write error: %s\n", buf.data());
     return err;
 }
 
 q2proto_error_t q2protoerr_server_write(uintptr_t io_arg, q2proto_error_t err, const char *msg, ...)
 {
-    char buf[256];
+    std::array<char, 256> buf;
     va_list argptr;
 
     va_start(argptr, msg);
-    Q_vsnprintf(buf, sizeof(buf), msg, argptr);
+    Q_vsnprintf(buf.data(), buf.size(), msg, argptr);
     va_end(argptr);
 
-    Com_EPrintf("server write error: %s\n", buf);
+    Com_EPrintf("server write error: %s\n", buf.data());
     return err;
 }
 
 q2proto_error_t q2protoerr_server_read(uintptr_t io_arg, q2proto_error_t err, const char *msg, ...)
 {
-    char buf[256];
+    std::array<char, 256> buf;
     va_list argptr;
 
     va_start(argptr, msg);
-    Q_vsnprintf(buf, sizeof(buf), msg, argptr);
+    Q_vsnprintf(buf.data(), buf.size(), msg, argptr);
     va_end(argptr);
 
-    Com_EPrintf("server read error: %s\n", buf);
+    Com_EPrintf("server read error: %s\n", buf.data());
     return err;
 }
 
@@ -450,7 +452,7 @@ void q2protodbg_shownet(uintptr_t io_arg, int level, int offset, const char *msg
     if (cl_shownet->integer > level)
     {
         q2protoio_ioarg_t *io_data = (q2protoio_ioarg_t *)io_arg;
-        char buf[256];
+        std::array<char, 256> buf;
         va_list argptr;
 
     #if USE_ZLIB
@@ -461,10 +463,10 @@ void q2protodbg_shownet(uintptr_t io_arg, int level, int offset, const char *msg
         const char *offset_suffix = is_deflate ? "[z]" : "";
 
         va_start(argptr, msg);
-        Q_vsnprintf(buf, sizeof(buf), msg, argptr);
+        Q_vsnprintf(buf.data(), buf.size(), msg, argptr);
         va_end(argptr);
 
-        Com_LPrintf(PRINT_DEVELOPER, "%3u%s:%s\n", io_data->sz_read->readcount + offset, offset_suffix, buf);
+        Com_LPrintf(PRINT_DEVELOPER, "%3u%s:%s\n", io_data->sz_read->readcount + offset, offset_suffix, buf.data());
     }
 }
 #endif

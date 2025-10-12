@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/bsp.h"
+
+#include <algorithm>
+#include <array>
 #include "common/cmd.h"
 #include "common/common.h"
 #include "common/files.h"
@@ -89,22 +92,23 @@ static q_noinline uint32_t *null_ptr(void)
 // test crash dumps and NX support
 static void Com_Crash_f(void)
 {
-    static byte buf1[16];
-    byte buf2[16], *buf3;
+    static std::array<byte, 16> buf1;
+    std::array<byte, 16> buf2;
+    byte *buf3;
     int i = Q_atoi(Cmd_Argv(1));
 
     switch (i) {
     case 1:
         // data
-        memset(buf1, 0xcc, 16);
+        buf1.fill(0xcc);
         buf1[0] = 0xc3;
-        ((void (*)(void))buf1)();
+        ((void (*)(void))buf1.data())();
         break;
     case 2:
         // stack
-        memset(buf2, 0xcc, 16);
+        buf2.fill(0xcc);
         buf2[0] = 0xc3;
-        ((void (*)(void))buf2)();
+        ((void (*)(void))buf2.data())();
         break;
     case 3:
         // heap
@@ -502,7 +506,8 @@ static const int num_snprintf_tests = q_countof(snprintf_tests);
 static void Com_TestSnprintf_f(void)
 {
     const snprintf_test_t *t;
-    char buf[16], *ptr;
+    std::array<char, 16> buf;
+    char *ptr;
     size_t len;
     int i, errors;
     bool overflow;
@@ -511,23 +516,23 @@ static void Com_TestSnprintf_f(void)
     for (i = 0; i < num_snprintf_tests; i++) {
         t = &snprintf_tests[i];
 
-        ptr = t->size ? buf : NULL;
+        ptr = t->size ? buf.data() : NULL;
 
-        memset(buf, 'x', 15); buf[15] = 0;
+        std::fill_n(buf.begin(), 15, 'x'); buf[15] = 0;
         len = Q_snprintf(ptr, t->size, "hello world");
         overflow = len >= t->size;
-        if (t->len1 != len || strcmp(buf, t->res) || overflow != t->overflow1) {
+        if (t->len1 != len || strcmp(buf.data(), t->res) || overflow != t->overflow1) {
             Com_EPrintf("%s( %p, %zu ) == \"%s\" (%zu) [%d], expected \"%s\" (%zu) [%d]\n",
-                        "Q_snprintf", ptr, t->size, buf, len, overflow, t->res, t->len1, t->overflow1);
+                        "Q_snprintf", ptr, t->size, buf.data(), len, overflow, t->res, t->len1, t->overflow1);
             errors++;
         }
 
-        memset(buf, 'x', 15); buf[15] = 0;
+        std::fill_n(buf.begin(), 15, 'x'); buf[15] = 0;
         len = Q_scnprintf(ptr, t->size, "hello world");
         overflow = len >= t->size;
-        if (t->len2 != len || strcmp(buf, t->res) || overflow != t->overflow2) {
+        if (t->len2 != len || strcmp(buf.data(), t->res) || overflow != t->overflow2) {
             Com_EPrintf("%s( %p, %zu ) == \"%s\" (%zu) [%d], expected \"%s\" (%zu) [%d]\n",
-                        "Q_scnprintf", ptr, t->size, buf, len, overflow, t->res, t->len2, t->overflow2);
+                        "Q_scnprintf", ptr, t->size, buf.data(), len, overflow, t->res, t->len2, t->overflow2);
             errors++;
         }
     }
@@ -677,7 +682,7 @@ static const uint32_t blocksum_res[] = {
 static bool mdfour_test(int num, int chunk)
 {
     struct mdfour md;
-    uint8_t digest[16];
+    std::array<uint8_t, 16> digest;
     uint8_t *data = (uint8_t *)mdfour_str[num];
     size_t size = strlen(mdfour_str[num]);
     const char *res = mdfour_res[num];
@@ -692,7 +697,7 @@ static bool mdfour_test(int num, int chunk)
         data += n;
         size -= n;
     }
-    mdfour_result(&md, digest);
+    mdfour_result(&md, digest.data());
 
     for (i = 0; i < 16; i++) {
         int c1 = Q_charhex(res[i*2+0]);
@@ -741,7 +746,7 @@ static void Com_MdfourTest_f(void)
 
 static void Com_MdfourSum_f(void)
 {
-    uint8_t digest[16];
+    std::array<uint8_t, 16> digest;
     struct mdfour md;
     qhandle_t f;
     int64_t len;
@@ -759,17 +764,17 @@ static void Com_MdfourSum_f(void)
 
     mdfour_begin(&md);
     while (len > 0) {
-        uint8_t buf[1 << 16];
-        int n = min(len, sizeof(buf));
-        if (FS_Read(buf, n, f) != n) {
+        std::array<uint8_t, 1 << 16> buf;
+        int n = min<int64_t>(len, buf.size());
+        if (FS_Read(buf.data(), n, f) != n) {
             Com_Printf("Read error\n");
             goto fail;
         }
-        mdfour_update(&md, buf, n);
+        mdfour_update(&md, buf.data(), n);
         len -= n;
     }
 
-    mdfour_result(&md, digest);
+    mdfour_result(&md, digest.data());
     for (int i = 0; i < 16; i++)
         Com_Printf("%02x", digest[i]);
     Com_Printf("\n");

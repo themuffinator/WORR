@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/mdfour.h"
+
+#include <array>
 #include "common/intreadwrite.h"
 
 /* NOTE: This code makes no attempt to be fast!
@@ -90,31 +92,31 @@ void mdfour_begin(struct mdfour *md)
 
 static void mdfour_tail(struct mdfour *md)
 {
-    uint8_t buf[128];
-    uint32_t M[16];
+    std::array<uint8_t, 128> buf;
+    std::array<uint32_t, 16> M;
     uint64_t b = md->count * 8;
     uint32_t n = md->count & 63;
 
-    memset(buf, 0, 128);
-    memcpy(buf, md->block, n);
+    buf.fill(0);
+    memcpy(buf.data(), md->block, n);
     buf[n] = 0x80;
 
     if (n <= 55) {
-        WL64(buf + 56, b);
-        copy64(M, buf);
-        mdfour64(md, M);
+        WL64(buf.data() + 56, b);
+        copy64(M.data(), buf.data());
+        mdfour64(md, M.data());
     } else {
-        WL64(buf + 120, b);
-        copy64(M, buf);
-        mdfour64(md, M);
-        copy64(M, buf + 64);
-        mdfour64(md, M);
+        WL64(buf.data() + 120, b);
+        copy64(M.data(), buf.data());
+        mdfour64(md, M.data());
+        copy64(M.data(), buf.data() + 64);
+        mdfour64(md, M.data());
     }
 }
 
 void mdfour_update(struct mdfour *md, const uint8_t *in, size_t n)
 {
-    uint32_t M[16];
+    std::array<uint32_t, 16> M;
     uint32_t index = md->count & 63;
     uint32_t avail = 64 - index;
 
@@ -127,15 +129,15 @@ void mdfour_update(struct mdfour *md, const uint8_t *in, size_t n)
 
     if (index) {
         memcpy(md->block + index, in, avail);
-        copy64(M, md->block);
-        mdfour64(md, M);
+        copy64(M.data(), md->block);
+        mdfour64(md, M.data());
         in += avail;
         n -= avail;
     }
 
     while (n >= 64) {
-        copy64(M, in);
-        mdfour64(md, M);
+        copy64(M.data(), in);
+        mdfour64(md, M.data());
         in += 64;
         n -= 64;
     }

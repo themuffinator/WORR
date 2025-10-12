@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cvar.c -- dynamic variable tracking
 
 #include "shared/shared.h"
+
+#include <array>
 #include "common/cmd.h"
 #include "common/common.h"
 #include "common/cvar.h"
@@ -485,7 +487,7 @@ Cvar_SetValue
 */
 void Cvar_SetValue(cvar_t *var, float value, from_t from)
 {
-    char    val[32];
+    std::array<char, 32> val;
 
     if (var->value == value) {
         set_back_cvar(var);
@@ -493,11 +495,11 @@ void Cvar_SetValue(cvar_t *var, float value, from_t from)
     }
 
     if (value - floorf(value) < 1e-6f)
-        Q_snprintf(val, sizeof(val), "%.f", value);
+        Q_snprintf(val.data(), val.size(), "%.f", value);
     else
-        Q_snprintf(val, sizeof(val), "%f", value);
+        Q_snprintf(val.data(), val.size(), "%f", value);
 
-    Cvar_SetByVar(var, val, from);
+    Cvar_SetByVar(var, val.data(), from);
 }
 
 /*
@@ -507,16 +509,16 @@ Cvar_SetInteger
 */
 void Cvar_SetInteger(cvar_t *var, int value, from_t from)
 {
-    char    val[32];
+    std::array<char, 32> val;
 
     if (var->integer == value) {
         set_back_cvar(var);
         return; // not changed
     }
 
-    Q_snprintf(val, sizeof(val), "%i", value);
+    Q_snprintf(val.data(), val.size(), "%i", value);
 
-    Cvar_SetByVar(var, val, from);
+    Cvar_SetByVar(var, val.data(), from);
 }
 
 #if 0
@@ -527,16 +529,16 @@ Cvar_SetHex
 */
 void Cvar_SetHex(cvar_t *var, int value, from_t from)
 {
-    char    val[32];
+    std::array<char, 32> val;
 
     if (var->integer == value) {
         set_back_cvar(var);
         return; // not changed
     }
 
-    Q_snprintf(val, sizeof(val), "0x%X", value);
+    Q_snprintf(val.data(), val.size(), "0x%X", value);
 
-    Cvar_SetByVar(var, val, from);
+    Cvar_SetByVar(var, val.data(), from);
 }
 #endif
 
@@ -906,8 +908,8 @@ static void Cvar_List_f(void)
         }
 
         if (verbose) {
-            char buffer[4];
-            memset(buffer, '-', sizeof(buffer));
+            std::array<char, 4> buffer;
+            buffer.fill('-');
 
             if (var->flags & CVAR_CHEAT)
                 buffer[0] = 'C';
@@ -929,7 +931,7 @@ static void Cvar_List_f(void)
             else if (var->flags & (CVAR_CUSTOM | CVAR_WEAK))
                 buffer[3] = '?';
 
-            Com_Printf("%.4s ", buffer);
+            Com_Printf("%.4s ", buffer.data());
         }
 
         Com_Printf("%s \"%s\"\n", var->name, var->string);

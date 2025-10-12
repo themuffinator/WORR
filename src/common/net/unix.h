@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // net_unix.h -- BSD sockets wrapper
 //
 
+#include <array>
+
 static const char *os_error_string(int err)
 {
     return strerror(err);
@@ -29,7 +31,7 @@ static const char *os_error_string(int err)
 static bool process_error_queue(qsocket_t sock, const netadr_t *to)
 {
 #if USE_ICMP
-    byte buffer[1024];
+    std::array<byte, 1024> buffer;
     struct sockaddr_storage from_addr;
     struct msghdr msg;
     struct cmsghdr *cmsg;
@@ -44,8 +46,8 @@ static bool process_error_queue(qsocket_t sock, const netadr_t *to)
         memset(&msg, 0, sizeof(msg));
         msg.msg_name = &from_addr;
         msg.msg_namelen = sizeof(from_addr);
-        msg.msg_control = buffer;
-        msg.msg_controllen = sizeof(buffer);
+        msg.msg_control = buffer.data();
+        msg.msg_controllen = buffer.size();
 
         if (recvmsg(sock, &msg, MSG_ERRQUEUE) == -1) {
             if (errno != EWOULDBLOCK)

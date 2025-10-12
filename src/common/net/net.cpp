@@ -35,6 +35,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server/server.h"
 #include "system/system.h"
 
+#include <array>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -209,7 +211,7 @@ static void NET_SockadrToNetadr(const struct sockaddr_storage *s, netadr_t *a)
 
 const char *NET_BaseAdrToString(const netadr_t *a)
 {
-    static char s[MAX_QPATH];
+    static std::array<char, MAX_QPATH> s;
 
     switch (a->type) {
     case NA_UNSPECIFIED:
@@ -220,8 +222,8 @@ const char *NET_BaseAdrToString(const netadr_t *a)
     case NA_BROADCAST:
 #endif
     case NA_IP:
-        if (inet_ntop(AF_INET, &a->ip, s, sizeof(s)))
-            return s;
+        if (inet_ntop(AF_INET, &a->ip, s.data(), s.size()))
+            return s.data();
         else
             return "<invalid>";
     case NA_IP6:
@@ -231,11 +233,11 @@ const char *NET_BaseAdrToString(const netadr_t *a)
 
             addrlen = NET_NetadrToSockadr(a, &addr);
             if (getnameinfo((struct sockaddr *)&addr, addrlen,
-                            s, sizeof(s), NULL, 0, NI_NUMERICHOST) == 0)
-                return s;
+                            s.data(), s.size(), NULL, 0, NI_NUMERICHOST) == 0)
+                return s.data();
         }
-        if (inet_ntop(AF_INET6, &a->ip, s, sizeof(s)))
-            return s;
+        if (inet_ntop(AF_INET6, &a->ip, s.data(), s.size()))
+            return s.data();
         else
             return "<invalid>";
     default:
@@ -252,7 +254,7 @@ NET_AdrToString
 */
 const char *NET_AdrToString(const netadr_t *a)
 {
-    static char s[MAX_QPATH];
+    static std::array<char, MAX_QPATH> s;
 
     switch (a->type) {
     case NA_UNSPECIFIED:
@@ -262,10 +264,10 @@ const char *NET_AdrToString(const netadr_t *a)
         return "loopback";
 #endif
     default:
-        Q_snprintf(s, sizeof(s), (a->type == NA_IP6) ? "[%s]:%u" : "%s:%u",
+        Q_snprintf(s.data(), s.size(), (a->type == NA_IP6) ? "[%s]:%u" : "%s:%u",
                    NET_BaseAdrToString(a), BigShort(a->port));
     }
-    return s;
+    return s.data();
 }
 
 static struct addrinfo *NET_SearchAdrrInfo(struct addrinfo *rp, int family)
@@ -281,7 +283,7 @@ static struct addrinfo *NET_SearchAdrrInfo(struct addrinfo *rp, int family)
 
 bool NET_StringPairToAdr(const char *host, const char *port, netadr_t *a)
 {
-    byte buf[128];
+    std::array<byte, 128> buf;
     struct addrinfo hints, *res, *rp;
     int err;
 
@@ -290,8 +292,8 @@ bool NET_StringPairToAdr(const char *host, const char *port, netadr_t *a)
     if (net_enable_ipv6->integer < 1)
         hints.ai_family = AF_INET;
 
-    if (inet_pton(AF_INET, host, buf) == 1 ||
-        inet_pton(AF_INET6, host, buf) == 1)
+    if (inet_pton(AF_INET, host, buf.data()) == 1 ||
+        inet_pton(AF_INET6, host, buf.data()) == 1)
         hints.ai_flags |= AI_NUMERICHOST;
 
 #ifdef AI_NUMERICSERV

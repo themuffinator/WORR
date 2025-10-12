@@ -27,6 +27,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.h"
 #include "common/prompt.h"
 
+#include <array>
+
 static cvar_t   *com_completion_mode;
 static cvar_t   *com_completion_treshold;
 
@@ -35,7 +37,7 @@ static void Prompt_ShowMatches(const commandPrompt_t *prompt, char **matches, in
     int numCols = 7, numLines;
     int i, j, k;
     size_t maxlen, len, total;
-    size_t colwidths[6];
+    std::array<size_t, 6> colwidths{};
 
     // determine number of columns needed
     do {
