@@ -23,6 +23,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/steam.h"
 #include "shared/atomic.h"
 
+#include <array>
+
 #if USE_WINSVC
 #include <winsvc.h>
 #include <setjmp.h>
@@ -517,7 +519,7 @@ void Sys_SaveHistory(void)
 #define FOREGROUND_BLACK    0
 #define FOREGROUND_WHITE    (FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_RED)
 
-static const WORD textColors[8] = {
+static const std::array<WORD, 8> textColors = {
     FOREGROUND_BLACK,
     FOREGROUND_RED,
     FOREGROUND_GREEN,
@@ -573,13 +575,13 @@ void Sys_SetConsoleColor(color_index_t color)
 // be given a specific size rather than strlen'ing the input
 static void __stdcall QOutputDebugStringA(LPCSTR lpOutputString, size_t len)
 {
-    ULONG_PTR args[2];
+    std::array<ULONG_PTR, 2> args;
     args[0] = (ULONG_PTR)len;
     args[1] = (ULONG_PTR)lpOutputString;
- 
+
     __try
     {
-        RaiseException(DBG_PRINTEXCEPTION_C, 0, 2, args);
+        RaiseException(DBG_PRINTEXCEPTION_C, 0, static_cast<DWORD>(args.size()), args.data());
     }
     __except(EXCEPTION_EXECUTE_HANDLER)
     {
@@ -722,8 +724,8 @@ SERVICE CONTROL
 
 static void Sys_InstallService_f(void)
 {
-    char servicePath[1024];
-    char serviceName[256];
+    std::array<char, 1024> servicePath{};
+    std::array<char, 256> serviceName{};
     SC_HANDLE scm, service;
     DWORD length;
     char *commandline;
@@ -741,24 +743,24 @@ static void Sys_InstallService_f(void)
         return;
     }
 
-    Q_concat(serviceName, sizeof(serviceName), PRODUCT " - ", Cmd_Argv(1));
+    Q_concat(serviceName.data(), serviceName.size(), PRODUCT " - ", Cmd_Argv(1));
 
-    length = GetModuleFileNameA(NULL, servicePath, sizeof(servicePath) - 1);
+    length = GetModuleFileNameA(NULL, servicePath.data(), static_cast<DWORD>(servicePath.size() - 1));
     if (!length) {
         Com_EPrintf("Couldn't get module file name: %s\n", Sys_ErrorString(GetLastError()));
         goto fail;
     }
     commandline = Cmd_RawArgsFrom(2);
-    if (length + strlen(commandline) + 10 > sizeof(servicePath) - 1) {
+    if (length + strlen(commandline) + 10 > servicePath.size() - 1) {
         Com_Printf("Oversize service command line.\n");
         goto fail;
     }
-    strcpy(servicePath + length, " -service ");
-    strcpy(servicePath + length + 10, commandline);
+    strcpy(servicePath.data() + length, " -service ");
+    strcpy(servicePath.data() + length + 10, commandline);
 
-    service = CreateServiceA(scm, serviceName, serviceName, SERVICE_START,
+    service = CreateServiceA(scm, serviceName.data(), serviceName.data(), SERVICE_START,
                              SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START,
-                             SERVICE_ERROR_IGNORE, servicePath,
+                             SERVICE_ERROR_IGNORE, servicePath.data(),
                              NULL, NULL, NULL, NULL, NULL);
     if (!service) {
         Com_EPrintf("Couldn't create service: %s\n", Sys_ErrorString(GetLastError()));
@@ -775,7 +777,7 @@ fail:
 
 static void Sys_DeleteService_f(void)
 {
-    char serviceName[256];
+    std::array<char, 256> serviceName{};
     SC_HANDLE scm, service;
 
     if (Cmd_Argc() < 2) {
@@ -789,9 +791,9 @@ static void Sys_DeleteService_f(void)
         return;
     }
 
-    Q_concat(serviceName, sizeof(serviceName), PRODUCT " - ", Cmd_Argv(1));
+    Q_concat(serviceName.data(), serviceName.size(), PRODUCT " - ", Cmd_Argv(1));
 
-    service = OpenServiceA(scm, serviceName, DELETE);
+    service = OpenServiceA(scm, serviceName.data(), DELETE);
     if (!service) {
         Com_EPrintf("Couldn't open service: %s\n", Sys_ErrorString(GetLastError()));
         goto fail;
@@ -916,16 +918,16 @@ void Sys_Sleep(int msec)
 
 const char *Sys_ErrorString(int err)
 {
-    static char buf[256];
+    static std::array<char, 256> buf;
 
     if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM |
                         FORMAT_MESSAGE_IGNORE_INSERTS |
                         FORMAT_MESSAGE_MAX_WIDTH_MASK, NULL, err,
                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-                        buf, sizeof(buf), NULL))
-        Q_snprintf(buf, sizeof(buf), "unknown error %d", err);
+                        buf.data(), static_cast<DWORD>(buf.size()), NULL))
+        Q_snprintf(buf.data(), buf.size(), "unknown error %d", err);
 
-    return buf;
+    return buf.data();
 }
 
 /*
@@ -1214,14 +1216,14 @@ bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length)
 
 static bool find_gog_installation_path(const char *app_id, char *out_dir, size_t out_dir_length)
 {
-    DWORD folder_path_len = MAX_OSPATH;
-    char folder_path[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> folder_path;
+    DWORD folder_path_len = static_cast<DWORD>(folder_path.size());
     bool result = false;
     
 #ifndef _WIN64
-    LSTATUS status = RegGetValueA(HKEY_LOCAL_MACHINE, va("SOFTWARE\\GOG.com\\Games\\%s\\", app_id), "path", RRF_RT_REG_SZ, NULL, (PVOID) &folder_path, &folder_path_len);
+    LSTATUS status = RegGetValueA(HKEY_LOCAL_MACHINE, va("SOFTWARE\\GOG.com\\Games\\%s\\", app_id), "path", RRF_RT_REG_SZ, NULL, (PVOID)folder_path.data(), &folder_path_len);
 #else
-    LSTATUS status = RegGetValueA(HKEY_LOCAL_MACHINE, va("SOFTWARE\\WOW6432Node\\GOG.com\\Games\\%s\\", app_id), "path", RRF_RT_REG_SZ, NULL, (PVOID) &folder_path, &folder_path_len);
+    LSTATUS status = RegGetValueA(HKEY_LOCAL_MACHINE, va("SOFTWARE\\WOW6432Node\\GOG.com\\Games\\%s\\", app_id), "path", RRF_RT_REG_SZ, NULL, (PVOID)folder_path.data(), &folder_path_len);
 #endif
 
     if (status != ERROR_SUCCESS) {
@@ -1229,7 +1231,7 @@ static bool find_gog_installation_path(const char *app_id, char *out_dir, size_t
         return result;
     }
 
-    Q_strlcpy(out_dir, folder_path, out_dir_length);
+    Q_strlcpy(out_dir, folder_path.data(), out_dir_length);
 
     FS_NormalizePath(out_dir);
 
@@ -1259,22 +1261,23 @@ static bool find_xbox_installation_path(rerelease_mode_t rr_mode, char *out_dir,
 
     const PCWSTR family_name = QUAKE_II_XBOX_FAMILY_NAME;
 
-    WCHAR buffer[MAX_PATH];
-    PWSTR packageNames[1];
-    uint32_t num_packages = 1, buffer_length = MAX_PATH;
-    LONG result = GetPackagesByPackageFamily(family_name, &num_packages, packageNames, &buffer_length, buffer);
+    std::array<WCHAR, MAX_PATH> buffer{};
+    std::array<PWSTR, 1> packageNames{};
+    uint32_t num_packages = 1;
+    uint32_t buffer_length = static_cast<uint32_t>(buffer.size());
+    LONG result = GetPackagesByPackageFamily(family_name, &num_packages, packageNames.data(), &buffer_length, buffer.data());
 
     if (result)
         return false;
 
-    WCHAR path[MAX_PATH];
-    uint32_t pathLength = MAX_PATH;
-    result = GetPackagePathByFullName(packageNames[0], &pathLength, path);
-    
+    std::array<WCHAR, MAX_PATH> path{};
+    uint32_t pathLength = static_cast<uint32_t>(path.size());
+    result = GetPackagePathByFullName(packageNames[0], &pathLength, path.data());
+
     if (result)
         return false;
 
-    WideCharToMultiByte(CP_ACP, 0, path, pathLength, out_dir, out_dir_length, NULL, NULL);
+    WideCharToMultiByte(CP_ACP, 0, path.data(), pathLength, out_dir, out_dir_length, NULL, NULL);
     return true;
 }
 

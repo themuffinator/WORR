@@ -21,6 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GL/gl.h>
 #include <GL/wglext.h>
 
+#include <array>
+
 static struct {
     HGLRC       context;        // handle to GL rendering context
     HMODULE     handle;         // handle to GL library
@@ -89,7 +91,7 @@ static int wgl_setup_gl(r_opengl_config_t cfg)
 
     // choose pixel format
     if (wgl.ChoosePixelFormatARB && cfg.multisamples) {
-        int attr[] = {
+        const std::array<int, 19> attr = {
             WGL_DRAW_TO_WINDOW_ARB, TRUE,
             WGL_SUPPORT_OPENGL_ARB, TRUE,
             WGL_DOUBLE_BUFFER_ARB, TRUE,
@@ -103,7 +105,7 @@ static int wgl_setup_gl(r_opengl_config_t cfg)
         };
         UINT num_formats;
 
-        if (!wgl.ChoosePixelFormatARB(win.dc, attr, NULL, 1, &pixelformat, &num_formats)) {
+        if (!wgl.ChoosePixelFormatARB(win.dc, attr.data(), NULL, 1, &pixelformat, &num_formats)) {
             print_error("wglChoosePixelFormatARB");
             goto soft;
         }
@@ -155,7 +157,7 @@ static int wgl_setup_gl(r_opengl_config_t cfg)
 
     // startup the OpenGL subsystem by creating a context and making it current
     if (wgl.CreateContextAttribsARB && (cfg.debug || cfg.profile)) {
-        int attr[9];
+        std::array<int, 9> attr{};
         int i = 0;
 
         if (cfg.profile) {
@@ -177,7 +179,7 @@ static int wgl_setup_gl(r_opengl_config_t cfg)
         }
         attr[i] = 0;
 
-        if (!(wgl.context = wgl.CreateContextAttribsARB(win.dc, NULL, attr))) {
+        if (!(wgl.context = wgl.CreateContextAttribsARB(win.dc, NULL, attr.data()))) {
             print_error("wglCreateContextAttribsARB");
             goto soft;
         }

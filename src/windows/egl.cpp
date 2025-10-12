@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include <EGL/egl.h>
 
+#include <array>
+
 static struct {
     void        *handle;
     EGLDisplay  dpy;
@@ -55,7 +57,7 @@ static void print_error(const char *what)
 
 static bool choose_config(r_opengl_config_t cfg, EGLConfig *config)
 {
-    EGLint cfg_attr[] = {
+    std::array<EGLint, 19> cfg_attr = {
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
         EGL_RED_SIZE, 5,
@@ -63,13 +65,13 @@ static bool choose_config(r_opengl_config_t cfg, EGLConfig *config)
         EGL_BLUE_SIZE, 5,
         EGL_DEPTH_SIZE, cfg.depthbits,
         EGL_STENCIL_SIZE, cfg.stencilbits,
-        EGL_SAMPLE_BUFFERS, (bool)cfg.multisamples,
+        EGL_SAMPLE_BUFFERS, static_cast<EGLint>((bool)cfg.multisamples),
         EGL_SAMPLES, cfg.multisamples,
         EGL_NONE
     };
 
     EGLint num_configs;
-    if (!qeglChooseConfig(egl.dpy, cfg_attr, config, 1, &num_configs)) {
+    if (!qeglChooseConfig(egl.dpy, cfg_attr.data(), config, 1, &num_configs)) {
         print_error("eglChooseConfig");
         return false;
     }
@@ -133,12 +135,12 @@ static bool egl_init(void)
         goto fail;
     }
 
-    EGLint ctx_attr[] = {
+    std::array<EGLint, 5> ctx_attr = {
         EGL_CONTEXT_MAJOR_VERSION, 3,
         EGL_CONTEXT_OPENGL_DEBUG, cfg.debug,
         EGL_NONE
     };
-    egl.ctx = qeglCreateContext(egl.dpy, config, EGL_NO_CONTEXT, ctx_attr);
+    egl.ctx = qeglCreateContext(egl.dpy, config, EGL_NO_CONTEXT, ctx_attr.data());
     if (!egl.ctx) {
         print_error("eglCreateContext");
         goto fail;

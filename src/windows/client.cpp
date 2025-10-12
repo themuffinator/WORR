@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include <hidusage.h>
 
+#include <array>
+
 win_state_t     win;
 
 static cvar_t   *vid_flip_on_switch;
@@ -554,7 +556,7 @@ static void win_disablewinkey_changed(cvar_t *self)
     }
 }
 
-static const byte scantokey[2][96] = {
+static const std::array<std::array<byte, 96>, 2> scantokey = { {
     {
 //      0               1           2           3               4           5               6           7
 //      8               9           A           B               C           D               E           F
@@ -585,7 +587,7 @@ static const byte scantokey[2][96] = {
         K_DOWNARROW,    K_PGDN,     K_INS,      K_DEL,          0,          0,              0,          0,
         0,              0,          0,          K_LWINKEY,      K_RWINKEY,  K_MENU,         0,          0,          // 5
     }
-};
+} };
 
 // Map from windows to quake keynums
 static void legacy_key_event(WPARAM wParam, LPARAM lParam, bool down)
@@ -709,18 +711,18 @@ static void raw_mouse_event(const RAWMOUSE *rm)
 
 static void raw_input_event(HRAWINPUT handle)
 {
-    BYTE buffer[64];
+    std::array<BYTE, 64> buffer;
     UINT len, ret;
     PRAWINPUT ri;
 
-    len = sizeof(buffer);
-    ret = GetRawInputData(handle, RID_INPUT, buffer, &len, sizeof(RAWINPUTHEADER));
+    len = static_cast<UINT>(buffer.size());
+    ret = GetRawInputData(handle, RID_INPUT, buffer.data(), &len, sizeof(RAWINPUTHEADER));
     if (ret == (UINT)-1) {
         Com_EPrintf("GetRawInputData failed with error %#lx\n", GetLastError());
         return;
     }
 
-    ri = (PRAWINPUT)buffer;
+    ri = reinterpret_cast<PRAWINPUT>(buffer.data());
     if (ri->header.dwType == RIM_TYPEMOUSE) {
         raw_mouse_event(&ri->data.mouse);
     }
