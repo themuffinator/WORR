@@ -164,7 +164,7 @@ void Z_Freep(void *ptr)
 Z_Realloc
 ========================
 */
-void *Z_Realloc(void *ptr, size_t size)
+z_pointer Z_Realloc(void *ptr, size_t size)
 {
     zhead_t *z;
 
@@ -192,7 +192,7 @@ void *Z_Realloc(void *ptr, size_t size)
 
     Z_CountFree(z);
 
-    z = realloc(z, size);
+    z = static_cast<zhead_t *>(realloc(z, size));
     if (!z) {
         Com_Error(ERR_FATAL, "%s: couldn't realloc %zu bytes", __func__, size);
     }
@@ -209,7 +209,7 @@ void *Z_Realloc(void *ptr, size_t size)
     return z + 1;
 }
 
-void *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
+z_pointer Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
 {
     Q_assert(!size || nmemb <= INT_MAX / size);
     if (!ptr)
@@ -279,7 +279,8 @@ static void *Z_TagMallocInternal(size_t size, memtag_t tag, bool init)
     Q_assert(tag > TAG_FREE && tag <= UINT16_MAX);
 
     size += sizeof(*z);
-    z = init ? calloc(1, size) : malloc(size);
+    void *raw = init ? calloc(1, size) : malloc(size);
+    z = static_cast<zhead_t *>(raw);
     if (!z) {
         Com_Error(ERR_FATAL, "%s: couldn't allocate %zu bytes", __func__, size);
     }
@@ -305,22 +306,22 @@ static void *Z_TagMallocInternal(size_t size, memtag_t tag, bool init)
     return z + 1;
 }
 
-void *Z_TagMalloc(size_t size, memtag_t tag)
+z_pointer Z_TagMalloc(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, false);
 }
 
-void *Z_TagMallocz(size_t size, memtag_t tag)
+z_pointer Z_TagMallocz(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, true);
 }
 
-void *Z_Malloc(size_t size)
+z_pointer Z_Malloc(size_t size)
 {
     return Z_TagMalloc(size, TAG_GENERAL);
 }
 
-void *Z_Mallocz(size_t size)
+z_pointer Z_Mallocz(size_t size)
 {
     return Z_TagMallocz(size, TAG_GENERAL);
 }
@@ -349,7 +350,7 @@ char *Z_TagCopyString(const char *in, memtag_t tag)
     }
 
     len = strlen(in) + 1;
-    return memcpy(Z_TagMalloc(len, tag), in, len);
+    return static_cast<char *>(memcpy(Z_TagMalloc(len, tag), in, len));
 }
 
 /*

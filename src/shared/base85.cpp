@@ -252,11 +252,11 @@ base85_context_grow (struct base85_context_t *ctx)
   // TODO: Refine size, and fallback strategy.
   size_t size = ctx->out_cb * 2;
   ptrdiff_t offset = ctx->out_pos - ctx->out;
-  uint8_t *buffer = realloc (ctx->out, size);
+  uint8_t *buffer = static_cast<uint8_t *>(realloc (ctx->out, size));
   if (!buffer)
   {
     // Try a smaller allocation.
-    buffer = realloc (ctx->out, ctx->out_cb + SMALL_DELTA);
+    buffer = static_cast<uint8_t *>(realloc (ctx->out, ctx->out_cb + SMALL_DELTA));
     if (!buffer)
       return B85_E_BAD_ALLOC;
   }
@@ -318,7 +318,7 @@ B85_CONTEXT_INIT (struct base85_context_t *ctx)
   ctx->pos = 0;
   ctx->state = B85_S_START;
 
-  ctx->out = malloc (INITIAL_BUFFER_SIZE);
+  ctx->out = static_cast<uint8_t *>(malloc (INITIAL_BUFFER_SIZE));
   if (!ctx->out)
     return B85_E_BAD_ALLOC;
 

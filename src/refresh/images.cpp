@@ -696,7 +696,7 @@ static int IMG_SaveTGA(const screenshot_t *s)
     if (!fwrite(&header, sizeof(header), 1, s->fp))
         return Q_ERR_FAILURE;
 
-    byte *row = malloc(s->width * 3);
+    byte *row = static_cast<byte *>(malloc(s->width * 3));
     if (!row)
         return Q_ERR(ENOMEM);
 
@@ -890,7 +890,7 @@ static int IMG_SaveJPG(const screenshot_t *s)
     jerr.pub.output_message = my_output_message;
     jerr.filename = s->async ? NULL : s->filename;
 
-    row_pointers = malloc(sizeof(JSAMPROW) * s->height);
+    row_pointers = static_cast<JSAMPARRAY>(malloc(sizeof(JSAMPROW) * s->height));
     if (!row_pointers)
         return Q_ERR(ENOMEM);
 
@@ -1127,7 +1127,7 @@ static int IMG_SavePNG(const screenshot_t *s)
         goto fail;
     }
 
-    row_pointers = malloc(sizeof(png_bytep) * s->height);
+    row_pointers = static_cast<png_bytepp>(malloc(sizeof(png_bytep) * s->height));
     if (!row_pointers) {
         ret = Q_ERR(ENOMEM);
         goto fail;
