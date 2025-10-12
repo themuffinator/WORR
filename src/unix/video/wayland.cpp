@@ -48,6 +48,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <unistd.h>
 #include <poll.h>
 
+#include <array>
+
 struct output {
     struct wl_list link;
     struct wl_list surf;
@@ -808,16 +810,15 @@ static bool init(void)
     CHECK_ERR(wl.cursor_surface = wl_compositor_create_surface(wl.compositor), "wl_compositor_create_surface");
     reload_cursor();
 
-    EGLint ctx_attr[] = {
-        EGL_CONTEXT_OPENGL_DEBUG, cfg.debug,
-        EGL_NONE
+    std::array<EGLint, 3> ctx_attr{
+        EGL_CONTEXT_OPENGL_DEBUG, static_cast<EGLint>(cfg.debug), EGL_NONE
     };
     if (egl_major == 1 && egl_minor < 5)
         ctx_attr[0] = EGL_NONE;
 
     CHECK_ERR(wl.egl_window = wl_egl_window_create(wl.surface, wl.width * wl.scale_factor, wl.height * wl.scale_factor), "wl_egl_window_create");
     CHECK_EGL(wl.egl_surface = eglCreateWindowSurface(wl.egl_display, config, wl.egl_window, NULL), "eglCreateWindowSurface");
-    CHECK_EGL(wl.egl_context = eglCreateContext(wl.egl_display, config, EGL_NO_CONTEXT, ctx_attr), "eglCreateContext");
+    CHECK_EGL(wl.egl_context = eglCreateContext(wl.egl_display, config, EGL_NO_CONTEXT, ctx_attr.data()), "eglCreateContext");
     CHECK_EGL(eglMakeCurrent(wl.egl_display, wl.egl_surface, wl.egl_surface, wl.egl_context), "eglMakeCurrent");
     CHECK_EGL(eglSwapInterval(wl.egl_display, 0), "eglSwapInterval");
 
@@ -1080,15 +1081,15 @@ static char *get_selection(int fd)
         return NULL;
     }
 
-    char buf[MAX_STRING_CHARS];
-    int r = read(fd, buf, sizeof(buf) - 1);
+    std::array<char, MAX_STRING_CHARS> buf{};
+    int r = read(fd, buf.data(), buf.size() - 1);
     close(fd);
 
     if (r < 1)
         return NULL;
 
     buf[r] = 0;
-    return UTF8_TranslitString(buf);
+    return UTF8_TranslitString(buf.data());
 }
 
 static char *get_selection_data(void)
@@ -1096,8 +1097,8 @@ static char *get_selection_data(void)
     if (!wl.selection_offer || !wl.selection_offer_type)
         return NULL;
 
-    int fds[2];
-    if (pipe2(fds, O_CLOEXEC) < 0)
+    std::array<int, 2> fds{};
+    if (pipe2(fds.data(), O_CLOEXEC) < 0)
         return NULL;
 
     zwp_primary_selection_offer_v1_receive(wl.selection_offer, wl.selection_offer_type, fds[1]);
@@ -1111,8 +1112,8 @@ static char *get_clipboard_data(void)
     if (!wl.data_offer || !wl.data_offer_type)
         return NULL;
 
-    int fds[2];
-    if (pipe2(fds, O_CLOEXEC) < 0)
+    std::array<int, 2> fds{};
+    if (pipe2(fds.data(), O_CLOEXEC) < 0)
         return NULL;
 
     wl_data_offer_receive(wl.data_offer, wl.data_offer_type, fds[1]);

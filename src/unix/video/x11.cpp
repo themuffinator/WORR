@@ -39,6 +39,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <GL/glx.h>
 
+#include <array>
+
 #include <poll.h>
 
 #define XA(x)   XInternAtom(x11.dpy, #x, False)
@@ -395,7 +397,7 @@ static bool init(void)
             glXCreateContextAttribsARB = get_proc_addr("glXCreateContextAttribsARB");
 
         if (glXCreateContextAttribsARB) {
-            int ctx_attr[9];
+            std::array<int, 9> ctx_attr{};
             int i = 0;
 
             if (cfg.profile) {
@@ -414,7 +416,7 @@ static bool init(void)
             }
             ctx_attr[i] = None;
 
-            if (!(x11.ctx = glXCreateContextAttribsARB(x11.dpy, fbc, NULL, True, ctx_attr)))
+            if (!(x11.ctx = glXCreateContextAttribsARB(x11.dpy, fbc, NULL, True, ctx_attr.data())))
                 Com_EPrintf("Failed to create GL context with attributes\n");
         } else {
             Com_WPrintf("GLX_ARB_create_context not found\n");
@@ -781,13 +783,13 @@ static bool init_mouse(void)
         return false;
     }
 
-    uint8_t mask[4] = { 0 };
+    std::array<uint8_t, 4> mask{};
     XIEventMask eventmask = {
         .deviceid = XIAllMasterDevices,
-        .mask_len = sizeof(mask),
-        .mask = mask
+        .mask_len = static_cast<int>(mask.size()),
+        .mask = reinterpret_cast<unsigned char *>(mask.data())
     };
-    XISetMask(mask, XI_RawMotion);
+    XISetMask(reinterpret_cast<unsigned char *>(mask.data()), XI_RawMotion);
     XISelectEvents(x11.dpy, x11.root, &eventmask, 1);
 
     Com_Printf("XInput2 mouse initialized\n");

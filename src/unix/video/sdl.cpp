@@ -35,6 +35,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "../res/q2pro.xbm"
 #include <SDL.h>
 
+#include <array>
+
 static struct {
     SDL_Window      *window;
     SDL_GLContext   *context;
@@ -183,14 +185,14 @@ static void set_clipboard_data(const char *data)
 
 static void update_gamma(const byte *table)
 {
-    Uint16 ramp[256];
+    std::array<Uint16, 256> ramp{};
     int i;
 
     if (sdl.flags & QVF_GAMMARAMP) {
         for (i = 0; i < 256; i++) {
             ramp[i] = table[i] << 8;
         }
-        SDL_SetWindowGammaRamp(sdl.window, ramp, ramp, ramp);
+        SDL_SetWindowGammaRamp(sdl.window, ramp.data(), ramp.data(), ramp.data());
     }
 }
 
@@ -305,11 +307,11 @@ static bool init(void)
     SDL_Surface *icon = SDL_CreateRGBSurfaceWithFormatFrom(q2icon_bits, q2icon_width, q2icon_height,
                                                            1, q2icon_width / 8, SDL_PIXELFORMAT_INDEX1LSB);
     if (icon) {
-        SDL_Color colors[2] = {
+        std::array<SDL_Color, 2> colors{{
             { 255, 255, 255 },
             {   0, 128, 128 }
-        };
-        SDL_SetPaletteColors(icon->format->palette, colors, 0, 2);
+        }};
+        SDL_SetPaletteColors(icon->format->palette, colors.data(), 0, 2);
         SDL_SetColorKey(icon, SDL_TRUE, 0);
         SDL_SetWindowIcon(sdl.window, icon);
         SDL_FreeSurface(icon);
@@ -317,10 +319,10 @@ static bool init(void)
 
     cvar_t *vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_REFRESH);
     if (vid_hwgamma->integer) {
-        Uint16  gamma[3][256];
+        std::array<std::array<Uint16, 256>, 3> gamma{};
 
-        if (SDL_GetWindowGammaRamp(sdl.window, gamma[0], gamma[1], gamma[2]) == 0 &&
-            SDL_SetWindowGammaRamp(sdl.window, gamma[0], gamma[1], gamma[2]) == 0) {
+        if (SDL_GetWindowGammaRamp(sdl.window, gamma[0].data(), gamma[1].data(), gamma[2].data()) == 0 &&
+            SDL_SetWindowGammaRamp(sdl.window, gamma[0].data(), gamma[1].data(), gamma[2].data()) == 0) {
             Com_Printf("...enabling hardware gamma\n");
             sdl.flags |= QVF_GAMMARAMP;
         } else {
