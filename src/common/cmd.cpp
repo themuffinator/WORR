@@ -28,6 +28,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/utils.h"
 #include "client/client.h"
 
+#include <array>
+
 #define Cmd_Malloc(size)        Z_TagMalloc(size, TAG_CMD)
 #define Cmd_CopyString(string)  Z_TagCopyString(string, TAG_CMD)
 
@@ -1114,7 +1116,7 @@ void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
 void Cmd_PrintHelp(const cmd_option_t *opt)
 {
     const cmd_option_t *o;
-    char buffer[32];
+    std::array<char, 32> buffer;
     int width = 0;
 
     for (o = opt; o->sh; o++) {
@@ -1127,11 +1129,11 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
     Com_Printf("\nAvailable options:\n");
     while (opt->sh) {
         if (opt->sh[1] == ':') {
-            Q_concat(buffer, sizeof(buffer), opt->lo, "=<", opt->sh + 2, ">");
+            Q_concat(buffer.data(), buffer.size(), opt->lo, "=<", opt->sh + 2, ">");
         } else {
-            Q_strlcpy(buffer, opt->lo, sizeof(buffer));
+            Q_strlcpy(buffer.data(), opt->lo, buffer.size());
         }
-        Com_Printf("-%c | --%*s | %s\n", opt->sh[0], -width, buffer, opt->help);
+        Com_Printf("-%c | --%*s | %s\n", opt->sh[0], -width, buffer.data(), opt->help);
         opt++;
     }
     Com_Printf("\n");

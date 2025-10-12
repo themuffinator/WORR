@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "shared/list.h"
+
+#include <array>
 #include "common/common.h"
 #include "common/cvar.h"
 #include "common/error.h"
@@ -884,19 +886,20 @@ static int64_t open_file_write_gzip(file_t *file, const char *fullpath, const ch
 
 static int64_t open_file_write(file_t *file, const char *name)
 {
-    char normalized[MAX_OSPATH], fullpath[MAX_OSPATH];
-    char mode_str[8];
+    std::array<char, MAX_OSPATH> normalized;
+    std::array<char, MAX_OSPATH> fullpath;
+    std::array<char, 8> mode_str;
     size_t len;
     int64_t pos;
     int ret;
 
     // normalize the path
-    if (FS_NormalizePathBuffer(normalized, name, sizeof(normalized)) >= sizeof(normalized)) {
+    if (FS_NormalizePathBuffer(normalized.data(), name, normalized.size()) >= normalized.size()) {
         return Q_ERR(ENAMETOOLONG);
     }
 
     // check for bad characters
-    if (!FS_ValidatePath(normalized)) {
+    if (!FS_ValidatePath(normalized.data())) {
         ret = Q_ERR_INVALID_PATH;
         goto fail;
     }
@@ -904,39 +907,39 @@ static int64_t open_file_write(file_t *file, const char *name)
     // expand the path
     if ((file->mode & FS_PATH_MASK) == FS_PATH_BASE) {
         if (sys_homedir->string[0]) {
-            len = Q_concat(fullpath, sizeof(fullpath),
-                           sys_homedir->string, "/" BASEGAME "/", normalized);
+            len = Q_concat(fullpath.data(), fullpath.size(),
+                           sys_homedir->string, "/" BASEGAME "/", normalized.data());
         } else {
-            len = Q_concat(fullpath, sizeof(fullpath),
-                           sys_basedir->string, "/" BASEGAME "/", normalized);
+            len = Q_concat(fullpath.data(), fullpath.size(),
+                           sys_basedir->string, "/" BASEGAME "/", normalized.data());
         }
     } else {
-        len = Q_concat(fullpath, sizeof(fullpath), fs_gamedir, "/", normalized);
+        len = Q_concat(fullpath.data(), fullpath.size(), fs_gamedir, "/", normalized.data());
     }
-    if (len >= sizeof(fullpath)) {
+    if (len >= fullpath.size()) {
         ret = Q_ERR(ENAMETOOLONG);
         goto fail;
     }
 
-    ret = FS_CreatePath(fullpath);
+    ret = FS_CreatePath(fullpath.data());
     if (ret) {
         goto fail;
     }
 
     switch (file->mode & FS_MODE_MASK) {
     case FS_MODE_APPEND:
-        strcpy(mode_str, "a");
+        Q_strlcpy(mode_str.data(), "a", mode_str.size());
         break;
     case FS_MODE_WRITE:
-        strcpy(mode_str, "w");
+        Q_strlcpy(mode_str.data(), "w", mode_str.size());
         if (file->mode & FS_FLAG_EXCL)
-            strcat(mode_str, "x");
+            Q_strlcat(mode_str.data(), "x", mode_str.size());
         break;
     case FS_MODE_RDWR:
         // this mode is only used by client downloading code
         // similar to FS_MODE_APPEND, but does not create
         // the file if it does not exist
-        strcpy(mode_str, "r+");
+        Q_strlcpy(mode_str.data(), "r+", mode_str.size());
         break;
     default:
         Q_assert(!"bad mode");
@@ -944,23 +947,23 @@ static int64_t open_file_write(file_t *file, const char *name)
 
     // open in binary mode by default
     if (!(file->mode & FS_FLAG_TEXT))
-        strcat(mode_str, "b");
+        Q_strlcat(mode_str.data(), "b", mode_str.size());
 
     if (file->mode & FS_FLAG_GZIP)
-        pos = open_file_write_gzip(file, fullpath, mode_str);
+        pos = open_file_write_gzip(file, fullpath.data(), mode_str.data());
     else
-        pos = open_file_write_real(file, fullpath, mode_str);
+        pos = open_file_write_real(file, fullpath.data(), mode_str.data());
 
     if (pos < 0) {
         ret = pos;
         goto fail;
     }
 
-    FS_DPrintf("%s: %s: %"PRId64" bytes\n", __func__, fullpath, pos);
+    FS_DPrintf("%s: %s: %"PRId64" bytes\n", __func__, fullpath.data(), pos);
     return pos;
 
 fail:
-    FS_DPrintf("%s: %s: %s\n", __func__, normalized, Q_ErrorString(ret));
+    FS_DPrintf("%s: %s: %s\n", __func__, normalized.data(), Q_ErrorString(ret));
     return ret;
 }
 
@@ -1365,7 +1368,7 @@ fail:
 // Used for streaming data out of either a pak file or a separate file.
 static int64_t open_file_read(file_t *file, const char *normalized, size_t namelen)
 {
-    char            fullpath[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> fullpath;
     searchpath_t    *search;
     pack_t          *pak;
     unsigned        hash;
@@ -1425,13 +1428,13 @@ static int64_t open_file_read(file_t *file, const char *normalized, size_t namel
                 continue;
             }
             // check a file in the directory tree
-            if (Q_concat(fullpath, sizeof(fullpath), search->filename,
-                         "/", normalized) >= sizeof(fullpath)) {
+            if (Q_concat(fullpath.data(), fullpath.size(), search->filename,
+                         "/", normalized) >= fullpath.size()) {
                 ret = Q_ERR(ENAMETOOLONG);
                 goto fail;
             }
 
-            ret = open_from_disk(file, fullpath);
+            ret = open_from_disk(file, fullpath.data());
             if (ret != Q_ERR(ENOENT))
                 return ret;
 
@@ -1439,8 +1442,8 @@ static int64_t open_file_read(file_t *file, const char *normalized, size_t namel
             if (valid == PATH_MIXED_CASE) {
                 // convert to lower case and retry
                 FS_COUNT_STRLWR;
-                Q_strlwr(fullpath + strlen(search->filename) + 1);
-                ret = open_from_disk(file, fullpath);
+                Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
+                ret = open_from_disk(file, fullpath.data());
                 if (ret != Q_ERR(ENOENT))
                     return ret;
             }
@@ -1459,29 +1462,29 @@ fail:
 // Normalizes quake path, expands symlinks
 static int64_t expand_open_file_read(file_t *file, const char *name)
 {
-    char        normalized[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> normalized;
     int64_t     ret;
     size_t      namelen;
 
 // normalize path
-    namelen = FS_NormalizePathBuffer(normalized, name, MAX_OSPATH);
-    if (namelen >= MAX_OSPATH) {
+    namelen = FS_NormalizePathBuffer(normalized.data(), name, normalized.size());
+    if (namelen >= normalized.size()) {
         return Q_ERR(ENAMETOOLONG);
     }
 
 // expand hard symlinks
-    if (expand_links(&fs_hard_links, normalized, &namelen) && namelen >= MAX_OSPATH) {
+    if (expand_links(&fs_hard_links, normalized.data(), &namelen) && namelen >= normalized.size()) {
         return Q_ERR(ENAMETOOLONG);
     }
 
-    ret = open_file_read(file, normalized, namelen);
+    ret = open_file_read(file, normalized.data(), namelen);
     if (ret == Q_ERR(ENOENT)) {
 // expand soft symlinks
-        if (expand_links(&fs_soft_links, normalized, &namelen)) {
-            if (namelen >= MAX_OSPATH) {
+        if (expand_links(&fs_soft_links, normalized.data(), &namelen)) {
+            if (namelen >= normalized.size()) {
                 return Q_ERR(ENAMETOOLONG);
             }
-            ret = open_file_read(file, normalized, namelen);
+            ret = open_file_read(file, normalized.data(), namelen);
         }
     }
 
@@ -1810,12 +1813,12 @@ fail:
 static qhandle_t easy_open_write(char *buf, size_t size, unsigned mode,
                                  const char *dir, const char *name, const char *ext)
 {
-    char normalized[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> normalized;
     int64_t ret = Q_ERR(ENAMETOOLONG);
     qhandle_t f;
 
     // make it impossible to escape the destination directory when writing files
-    if (FS_NormalizePathBuffer(normalized, name, sizeof(normalized)) >= sizeof(normalized)) {
+    if (FS_NormalizePathBuffer(normalized.data(), name, normalized.size()) >= normalized.size()) {
         goto fail;
     }
 
@@ -1829,9 +1832,9 @@ static qhandle_t easy_open_write(char *buf, size_t size, unsigned mode,
     name = buf;
 
     // replace any bad characters with underscores to make automatic commands happy
-    FS_CleanupPath(normalized);
+    FS_CleanupPath(normalized.data());
 
-    if (Q_concat(buf, size, dir, normalized) >= size) {
+    if (Q_concat(buf, size, dir, normalized.data()) >= size) {
         goto fail;
     }
 
@@ -2032,15 +2035,15 @@ bool FS_EasyWriteFile(char *buf, size_t size, unsigned mode,
 
 static int build_absolute_path(char *buffer, const char *path)
 {
-    char normalized[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> normalized;
 
-    if (FS_NormalizePathBuffer(normalized, path, MAX_OSPATH) >= MAX_OSPATH)
+    if (FS_NormalizePathBuffer(normalized.data(), path, normalized.size()) >= normalized.size())
         return Q_ERR(ENAMETOOLONG);
 
-    if (!FS_ValidatePath(normalized))
+    if (!FS_ValidatePath(normalized.data()))
         return Q_ERR_INVALID_PATH;
 
-    if (Q_concat(buffer, MAX_OSPATH, fs_gamedir, "/", normalized) >= MAX_OSPATH)
+    if (Q_concat(buffer, MAX_OSPATH, fs_gamedir, "/", normalized.data()) >= MAX_OSPATH)
         return Q_ERR(ENAMETOOLONG);
 
     return Q_ERR_SUCCESS;
@@ -2053,15 +2056,15 @@ FS_RenameFile
 */
 int FS_RenameFile(const char *from, const char *to)
 {
-    char frompath[MAX_OSPATH];
-    char topath[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> frompath;
+    std::array<char, MAX_OSPATH> topath;
     int ret;
 
-    if ((ret = build_absolute_path(frompath, from)))
+    if ((ret = build_absolute_path(frompath.data(), from)))
         return ret;
-    if ((ret = build_absolute_path(topath, to)))
+    if ((ret = build_absolute_path(topath.data(), to)))
         return ret;
-    if (rename(frompath, topath))
+    if (rename(frompath.data(), topath.data()))
         return Q_ERRNO;
 
     return Q_ERR_SUCCESS;
@@ -2697,7 +2700,7 @@ static void add_game_dir(unsigned mode, const char *base, const char *game, bool
     pack_t          *pack;
     listfiles_t     list;
     int             i;
-    char            path[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> path;
     size_t          len;
 
     len = Q_concat(fs_gamedir, sizeof(fs_gamedir), base, "/", game);
@@ -2739,20 +2742,20 @@ static void add_game_dir(unsigned mode, const char *base, const char *game, bool
     qsort(list.files, list.count, sizeof(list.files[0]), pakcmp);
 
     for (i = 0; i < list.count; i++) {
-        len = Q_concat(path, sizeof(path), fs_gamedir, "/", list.files[i]);
-        if (len >= sizeof(path)) {
+        len = Q_concat(path.data(), path.size(), fs_gamedir, "/", list.files[i]);
+        if (len >= path.size()) {
             Com_EPrintf("%s: refusing oversize path\n", __func__);
             continue;
         }
 #if USE_ZLIB
         // FIXME: guess packfile type by contents instead?
-        if (len > 4 && !Q_stricmp(path + len - 4, ".pkz"))
-            pack = load_zip_file(path);
+        if (len > 4 && !Q_stricmp(path.data() + len - 4, ".pkz"))
+            pack = load_zip_file(path.data());
         else
 #endif
-            pack = load_pak_file(path);
+            pack = load_pak_file(path.data());
         if (!pack) {
-            Com_EPrintf("Couldn't load %s: %s\n", path, Com_GetLastError());
+            Com_EPrintf("Couldn't load %s: %s\n", path.data(), Com_GetLastError());
             continue;
         }
         search = FS_Malloc(sizeof(*search));
@@ -2890,7 +2893,8 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
     packfile_t      *file;
     void            *info;
     int             i, j;
-    char            normalized[MAX_OSPATH], buffer[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> normalized;
+    std::array<char, MAX_OSPATH> buffer;
     size_t          len, pathlen;
     char            *s, *p;
 
@@ -2907,12 +2911,12 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
         pathlen = 0;
     } else {
         // normalize the path
-        pathlen = FS_NormalizePathBuffer(normalized, path, sizeof(normalized));
-        if (pathlen >= sizeof(normalized)) {
+        pathlen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
+        if (pathlen >= normalized.size()) {
             return NULL;
         }
 
-        path = normalized;
+        path = normalized.data();
     }
 
     // can't mix directory search with other flags
@@ -2982,8 +2986,8 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
 
                 // copy name off
                 if (flags & (FS_SEARCH_DIRSONLY | FS_SEARCH_STRIPEXT)) {
-                    Q_strlcpy(buffer, s, sizeof(buffer));
-                    s = buffer;
+                    Q_strlcpy(buffer.data(), s, buffer.size());
+                    s = buffer.data();
                 }
 
                 // hacky directory search support for pak files
@@ -3038,19 +3042,19 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
             len = strlen(search->filename) + 1;
 
             if (pathlen) {
-                if (valid == PATH_NOT_CHECKED) {
-                    valid = FS_ValidatePath(path);
-                }
-                if (valid == PATH_INVALID) {
-                    continue;
-                }
-                if (Q_concat(buffer, sizeof(buffer), search->filename, "/", path) >= sizeof(buffer)) {
-                    continue;
-                }
-                if (!(flags & FS_SEARCH_SAVEPATH)) {
+                    if (valid == PATH_NOT_CHECKED) {
+                        valid = FS_ValidatePath(path);
+                    }
+                    if (valid == PATH_INVALID) {
+                        continue;
+                    }
+                    if (Q_concat(buffer.data(), buffer.size(), search->filename, "/", path) >= buffer.size()) {
+                        continue;
+                    }
+                    if (!(flags & FS_SEARCH_SAVEPATH)) {
                     len += pathlen + 1; // skip path
                 }
-                s = buffer;
+                s = buffer.data();
             } else {
                 s = search->filename;
             }
@@ -3214,7 +3218,8 @@ Verbosely looks up a filename with exactly the same logic as expand_open_file_re
 */
 static void FS_WhereIs_f(void)
 {
-    char            normalized[MAX_OSPATH], fullpath[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> normalized;
+    std::array<char, MAX_OSPATH> fullpath;
     searchpath_t    *search;
     pack_t          *pak;
     packfile_t      *entry;
@@ -3232,16 +3237,16 @@ static void FS_WhereIs_f(void)
     }
 
 // normalize path
-    namelen = FS_NormalizePathBuffer(normalized, Cmd_Argv(1), MAX_OSPATH);
-    if (namelen >= MAX_OSPATH) {
+    namelen = FS_NormalizePathBuffer(normalized.data(), Cmd_Argv(1), normalized.size());
+    if (namelen >= normalized.size()) {
         Com_Printf("Refusing to lookup oversize path.\n");
         return;
     }
 
 // expand hard symlinks
-    link = expand_links(&fs_hard_links, normalized, &namelen);
+    link = expand_links(&fs_hard_links, normalized.data(), &namelen);
     if (link) {
-        if (namelen >= MAX_OSPATH) {
+        if (namelen >= normalized.size()) {
             Com_Printf("Oversize symbolic link ('%s --> '%s').\n",
                        link->name, link->target);
             return;
@@ -3270,7 +3275,7 @@ recheck:
                    normalized, MAX_QPATH - 1);
     }
 
-    hash = FS_HashPath(normalized, 0);
+    hash = FS_HashPath(normalized.data(), 0);
 
     valid = PATH_NOT_CHECKED;
 
@@ -3289,10 +3294,10 @@ recheck:
                 if (entry->namelen != namelen) {
                     continue;
                 }
-                if (!FS_pathcmp(pak->names + entry->nameofs, normalized)) {
+                if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
                     // found it!
                     Com_Printf("%s/%s (%"PRId64" bytes)\n", pak->filename,
-                               normalized, entry->filelen);
+                               normalized.data(), entry->filelen);
                     if (!report_all) {
                         return;
                     }
@@ -3301,12 +3306,12 @@ recheck:
             }
         } else {
             if (valid == PATH_NOT_CHECKED) {
-                valid = FS_ValidatePath(normalized);
+                valid = FS_ValidatePath(normalized.data());
                 if (valid == PATH_INVALID) {
                     // warn about invalid path
                     Com_Printf("Not searching for '%s' in physical file "
                                "system since path contains invalid characters.\n",
-                               normalized);
+                               normalized.data());
                 }
             }
             if (valid == PATH_INVALID) {
@@ -3314,37 +3319,37 @@ recheck:
             }
 
             // check a file in the directory tree
-            len = Q_concat(fullpath, MAX_OSPATH,
-                           search->filename, "/", normalized);
-            if (len >= MAX_OSPATH) {
+            len = Q_concat(fullpath.data(), fullpath.size(),
+                           search->filename, "/", normalized.data());
+            if (len >= fullpath.size()) {
                 Com_WPrintf("Full path length '%s/%s' exceeded %d characters.\n",
-                            search->filename, normalized, MAX_OSPATH - 1);
+                            search->filename, normalized.data(), MAX_OSPATH - 1);
                 if (!report_all) {
                     return;
                 }
                 continue;
             }
 
-            ret = get_path_info(fullpath, &info);
+            ret = get_path_info(fullpath.data(), &info);
 
 #ifndef _WIN32
             if (ret == Q_ERR(ENOENT) && valid == PATH_MIXED_CASE) {
-                Q_strlwr(fullpath + strlen(search->filename) + 1);
-                ret = get_path_info(fullpath, &info);
+                Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
+                ret = get_path_info(fullpath.data(), &info);
                 if (ret == Q_ERR_SUCCESS)
                     Com_Printf("Physical path found after converting to lower case.\n");
             }
 #endif
 
             if (ret == Q_ERR_SUCCESS) {
-                Com_Printf("%s (%"PRId64" bytes)\n", fullpath, info.size);
+                Com_Printf("%s (%"PRId64" bytes)\n", fullpath.data(), info.size);
                 if (!report_all) {
                     return;
                 }
                 total++;
             } else if (ret != Q_ERR(ENOENT)) {
                 Com_EPrintf("Couldn't get info on '%s': %s\n",
-                            fullpath, Q_ErrorString(ret));
+                            fullpath.data(), Q_ErrorString(ret));
                 if (!report_all) {
                     return;
                 }
@@ -3354,9 +3359,9 @@ recheck:
 
     if ((total == 0 || report_all) && link == NULL) {
         // expand soft symlinks
-        link = expand_links(&fs_soft_links, normalized, &namelen);
+        link = expand_links(&fs_soft_links, normalized.data(), &namelen);
         if (link) {
-            if (namelen >= MAX_OSPATH) {
+            if (namelen >= normalized.size()) {
                 Com_Printf("Oversize symbolic link ('%s --> '%s').\n",
                            link->name, link->target);
                 return;
@@ -3369,9 +3374,9 @@ recheck:
     }
 
     if (total) {
-        Com_Printf("%d instances of %s\n", total, normalized);
+        Com_Printf("%d instances of %s\n", total, normalized.data());
     } else {
-        Com_Printf("%s was not found\n", normalized);
+        Com_Printf("%s was not found\n", normalized.data());
     }
 }
 
@@ -3565,8 +3570,8 @@ static void FS_Link_f(void)
     list_t *list;
     symlink_t *link;
     size_t namelen, targlen;
-    char name[MAX_OSPATH];
-    char target[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> name;
+    std::array<char, MAX_OSPATH> target;
 
     if (!strncmp(Cmd_Argv(0), "soft", 4))
         list = &fs_soft_links;
@@ -3594,21 +3599,21 @@ static void FS_Link_f(void)
         return;
     }
 
-    namelen = FS_NormalizePathBuffer(name, Cmd_Argv(1), sizeof(name));
-    if (namelen == 0 || namelen >= sizeof(name)) {
+    namelen = FS_NormalizePathBuffer(name.data(), Cmd_Argv(1), name.size());
+    if (namelen == 0 || namelen >= name.size()) {
         Com_Printf("Invalid symbolic link name.\n");
         return;
     }
 
-    targlen = FS_NormalizePathBuffer(target, Cmd_Argv(2), sizeof(target));
-    if (targlen == 0 || targlen >= sizeof(target)) {
+    targlen = FS_NormalizePathBuffer(target.data(), Cmd_Argv(2), target.size());
+    if (targlen == 0 || targlen >= target.size()) {
         Com_Printf("Invalid symbolic link target.\n");
         return;
     }
 
     // search for existing link with this name
     FOR_EACH_SYMLINK(link, list) {
-        if (!FS_pathcmp(link->name, name)) {
+        if (!FS_pathcmp(link->name, name.data())) {
             Z_Free(link->target);
             goto update;
         }
@@ -3616,12 +3621,12 @@ static void FS_Link_f(void)
 
     // create new link
     link = FS_Malloc(sizeof(*link) + namelen);
-    memcpy(link->name, name, namelen + 1);
+    memcpy(link->name, name.data(), namelen + 1);
     link->namelen = namelen;
     List_Append(list, &link->entry);
 
 update:
-    link->target = FS_CopyString(target);
+    link->target = FS_CopyString(target.data());
     link->targlen = targlen;
 }
 
@@ -3676,14 +3681,14 @@ static void add_builtin_content(void)
 static void add_game_kpf(unsigned mode, const char *dir)
 {
 #if USE_ZLIB
-    char path[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> path;
     pack_t *pack;
     searchpath_t *search;
 
-    if (Q_snprintf(path, sizeof(path), "%s/Q2Game.kpf", dir) >= sizeof(path))
+    if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
         return;
 
-    pack = load_zip_file(path);
+    pack = load_zip_file(path.data());
     if (!pack)
         return;
 
@@ -3976,19 +3981,19 @@ static void FS_FindBaseDir(void)
 
     if (detect_base_dir) {
         // find Steam installation dir first
-        char client_dir[MAX_OSPATH] = { 0 };
+        std::array<char, MAX_OSPATH> client_dir{};
 
         const sys_getinstalledgamepath_func_t *gamepath_func = gamepath_funcs;
-        while (*gamepath_func && !(*gamepath_func)(com_rerelease->integer, client_dir, sizeof(client_dir)))
+        while (*gamepath_func && !(*gamepath_func)(com_rerelease->integer, client_dir.data(), client_dir.size()))
         {
             gamepath_func++;
         }
 
         // Don't set an "empty" base dir, use defaults instead
-        if (*client_dir) {
-            Cvar_Set("basedir", client_dir);
+        if (client_dir[0]) {
+            Cvar_Set("basedir", client_dir.data());
         #ifdef _WIN32
-            Cvar_Set("libdir", client_dir);
+            Cvar_Set("libdir", client_dir.data());
         #endif
         }
     }
@@ -3996,10 +4001,10 @@ static void FS_FindBaseDir(void)
     // TODO: find a better home (lol) for me
 #ifdef _WIN32
     if (com_rerelease->integer == RERELEASE_MODE_YES) {
-        char homedir[MAX_OSPATH];
-        if (Sys_GetRereleaseHomeDir(homedir, sizeof(homedir) - 2)) {
-            FS_NormalizePath(homedir);
-            Cvar_Set("homedir", homedir);
+        std::array<char, MAX_OSPATH> homedir;
+        if (Sys_GetRereleaseHomeDir(homedir.data(), homedir.size() - 2)) {
+            FS_NormalizePath(homedir.data());
+            Cvar_Set("homedir", homedir.data());
         }
     }
 #endif
