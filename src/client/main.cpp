@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_main.c  -- client main loop
 
+#include <array>
+
 #include "client.h"
 
 #include "q2proto/q2proto.h"
@@ -118,7 +120,7 @@ centity_t   cl_entities[MAX_EDICTS];
 
 // used for executing stringcmds
 cmdbuf_t    cl_cmdbuf;
-char        cl_cmdbuf_text[MAX_STRING_CHARS];
+std::array<char, MAX_STRING_CHARS> cl_cmdbuf_text{};
 
 //======================================================================
 
@@ -406,7 +408,7 @@ Resend a connect message if the last one has timed out
 */
 void CL_CheckForResend(void)
 {
-    char userinfo[MAX_INFO_STRING];
+    std::array<char, MAX_INFO_STRING> userinfo{};
     int maxmsglen;
 
     if (cls.demo.playback) {
@@ -465,14 +467,14 @@ void CL_CheckForResend(void)
         maxmsglen = MAX_PACKETLEN_WRITABLE;
     }
 
-    Cvar_BitInfo(userinfo, CVAR_USERINFO);
+    Cvar_BitInfo(userinfo.data(), CVAR_USERINFO);
 
     q2proto_connect_t connect;
     memset(&connect, 0, sizeof(connect));
     connect.protocol = q2proto_protocol_from_netver(cls.serverProtocol);
     connect.qport = net_qport->integer;
     connect.challenge = cls.challenge;
-    connect.userinfo = q2proto_make_string(userinfo);
+    connect.userinfo = q2proto_make_string(userinfo.data());
     connect.packet_length = maxmsglen;
     connect.q2pro_nctype = net_chantype->integer;
 
@@ -481,14 +483,14 @@ void CL_CheckForResend(void)
         goto fail;
     cls.quakePort = connect.qport;
 
-    char connect_args[MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */];
+    std::array<char, MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */> connect_args{};
 
-    err = q2proto_get_connect_arguments(connect_args, sizeof(connect_args), NULL, &connect);
+    err = q2proto_get_connect_arguments(connect_args.data(), connect_args.size(), NULL, &connect);
     if (err != Q2P_ERR_SUCCESS)
         goto fail;
 
     Netchan_OutOfBand(NS_CLIENT, &cls.serverAddress,
-                      "connect %s\n", connect_args);
+                      "connect %s\n", connect_args.data());
     return;
 
 fail:
@@ -927,27 +929,27 @@ CL_ParsePrintMessage
 */
 static void CL_ParsePrintMessage(void)
 {
-    char string[MAX_NET_STRING];
+    std::array<char, MAX_NET_STRING> string{};
     serverStatus_t status;
     request_t *r;
 
-    MSG_ReadString(string, sizeof(string));
+    MSG_ReadString(string.data(), string.size());
 
     r = CL_FindRequest();
     if (r) {
         switch (r->type) {
         case REQ_STATUS_CL:
-            CL_ParseStatusResponse(&status, string);
+            CL_ParseStatusResponse(&status, string.data());
             CL_DumpStatusResponse(&status);
             break;
 #if USE_UI
         case REQ_STATUS_UI:
-            CL_ParseStatusResponse(&status, string);
+            CL_ParseStatusResponse(&status, string.data());
             UI_StatusEvent(&status);
             break;
 #endif
         case REQ_RCON:
-            Com_Printf("%s", string);
+            Com_Printf("%s", string.data());
             return; // rcon may come in multiple packets
 
         default:
@@ -963,7 +965,7 @@ static void CL_ParsePrintMessage(void)
     // and if so, start channenge cycle again
     if ((cls.state == ca_challenging || cls.state == ca_connecting) &&
         NET_IsEqualBaseAdr(&net_from, &cls.serverAddress)) {
-        Com_Printf("%s", string);
+        Com_Printf("%s", string.data());
         cls.state = ca_challenging;
         //cls.connect_count = 0;
         return;
@@ -981,7 +983,7 @@ Handle a reply from a ping
 */
 static void CL_ParseInfoMessage(void)
 {
-    char string[MAX_QPATH];
+    std::array<char, MAX_QPATH> string{};
     request_t *r;
 
     r = CL_FindRequest();
@@ -990,8 +992,8 @@ static void CL_ParseInfoMessage(void)
     if (r->type != REQ_INFO)
         return;
 
-    MSG_ReadString(string, sizeof(string));
-    Com_Printf("%s", string);
+    MSG_ReadString(string.data(), string.size());
+    Com_Printf("%s", string.data());
     if (r->adr.type != NA_BROADCAST)
         r->type = REQ_FREE;
 }
@@ -1223,16 +1225,16 @@ static void cl_vwep_changed(cvar_t *self)
 static void CL_Name_g(genctx_t *ctx)
 {
     int i;
-    char buffer[MAX_CLIENT_NAME];
+    std::array<char, MAX_CLIENT_NAME> buffer{};
 
     if (cls.state < ca_precached) {
         return;
     }
 
     for (i = 0; i < MAX_CLIENTS; i++) {
-        Q_strlcpy(buffer, cl.clientinfo[i].name, sizeof(buffer));
-        if (COM_strclr(buffer))
-            Prompt_AddMatch(ctx, buffer);
+        Q_strlcpy(buffer.data(), cl.clientinfo[i].name, buffer.size());
+        if (COM_strclr(buffer.data()))
+            Prompt_AddMatch(ctx, buffer.data());
     }
 }
 
@@ -1246,23 +1248,23 @@ Responses to broadcasts, etc
 */
 static void CL_ConnectionlessPacket(void)
 {
-    char    string[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> string{};
     char    *s, *c;
     int     i, j;
 
     MSG_BeginReading();
     MSG_ReadLong(); // skip the -1
 
-    if (MSG_ReadStringLine(string, sizeof(string)) >= sizeof(string)) {
+    if (MSG_ReadStringLine(string.data(), string.size()) >= string.size()) {
         Com_DPrintf("Oversize message received.  Ignored.\n");
         return;
     }
 
-    Cmd_TokenizeString(string, false);
+    Cmd_TokenizeString(string.data(), false);
 
     c = Cmd_Argv(0);
 
-    Com_DPrintf("%s: %s\n", NET_AdrToString(&net_from), Com_MakePrintable(string));
+    Com_DPrintf("%s: %s\n", NET_AdrToString(&net_from), Com_MakePrintable(string.data()));
 
     // challenge from the server we are connecting to
     if (!strcmp(c, "challenge")) {
@@ -1283,7 +1285,7 @@ static void CL_ConnectionlessPacket(void)
         cls.connect_time -= CONNECT_INSTANT; // fire immediately
         //cls.connect_count = 0;
 
-        q2proto_protocol_t accepted_protocols[Q2P_NUM_PROTOCOLS];
+        std::array<q2proto_protocol_t, Q2P_NUM_PROTOCOLS> accepted_protocols{};
         size_t num_accepted_protocols = 0;
 
         if (cls.serverProtocol != 0) {
@@ -1296,13 +1298,13 @@ static void CL_ConnectionlessPacket(void)
             accepted_protocols[0] = user_protocol;
             num_accepted_protocols = 1;
         } else {
-            const q2proto_game_api_t supported_game_apis[] = {Q2PROTO_GAME_VANILLA, Q2PROTO_GAME_Q2PRO_EXTENDED, Q2PROTO_GAME_Q2PRO_EXTENDED_V2, Q2PROTO_GAME_RERELEASE};
-            num_accepted_protocols = q2proto_get_protocols_for_gametypes(accepted_protocols, q_countof(accepted_protocols), supported_game_apis, q_countof(supported_game_apis));
+            const std::array<q2proto_game_api_t, 4> supported_game_apis{{Q2PROTO_GAME_VANILLA, Q2PROTO_GAME_Q2PRO_EXTENDED, Q2PROTO_GAME_Q2PRO_EXTENDED_V2, Q2PROTO_GAME_RERELEASE}};
+            num_accepted_protocols = q2proto_get_protocols_for_gametypes(accepted_protocols.data(), accepted_protocols.size(), supported_game_apis.data(), supported_game_apis.size());
         }
 
         q2proto_challenge_t challenge;
         q2proto_error_t parse_err;
-        parse_err = q2proto_parse_challenge(Cmd_Args(), accepted_protocols, num_accepted_protocols, &challenge);
+        parse_err = q2proto_parse_challenge(Cmd_Args(), accepted_protocols.data(), num_accepted_protocols, &challenge);
         if (parse_err != Q2P_ERR_SUCCESS) {
             Com_DPrintf("Challenge parse error %s.  Ignored.\n", q2proto_error_string(parse_err));
             return;
@@ -1321,7 +1323,7 @@ static void CL_ConnectionlessPacket(void)
     if (!strcmp(c, "client_connect")) {
         netchan_type_t type;
         int anticheat = 0;
-        char mapname[MAX_QPATH];
+        std::array<char, MAX_QPATH> mapname{};
         bool got_server = false;
 
         if (cls.state < ca_connecting) {
@@ -1344,7 +1346,7 @@ static void CL_ConnectionlessPacket(void)
             type = NETCHAN_OLD;
         }
 
-        mapname[0] = 0;
+        mapname[0] = '\0';
 
         // parse additional parameters
         j = Cmd_Argc();
@@ -1365,7 +1367,7 @@ static void CL_ConnectionlessPacket(void)
                     }
                 }
             } else if (!strncmp(s, "map=", 4)) {
-                Q_strlcpy(mapname, s + 4, sizeof(mapname));
+                Q_strlcpy(mapname.data(), s + 4, mapname.size());
             } else if (!strncmp(s, "dlserver=", 9)) {
                 if (!got_server) {
                     HTTP_SetServer(s + 9);
@@ -1558,14 +1560,14 @@ CL_FixUpGender_f
 static void CL_FixUpGender(void)
 {
     char *p;
-    char sk[MAX_QPATH];
+    std::array<char, MAX_QPATH> sk{};
 
-    Q_strlcpy(sk, info_skin->string, sizeof(sk));
-    if ((p = strchr(sk, '/')) != NULL)
+    Q_strlcpy(sk.data(), info_skin->string, sk.size());
+    if ((p = strchr(sk.data(), '/')) != NULL)
         *p = 0;
-    if (Q_stricmp(sk, "male") == 0 || Q_stricmp(sk, "cyborg") == 0)
+    if (Q_stricmp(sk.data(), "male") == 0 || Q_stricmp(sk.data(), "cyborg") == 0)
         Cvar_Set("gender", "male");
-    else if (Q_stricmp(sk, "female") == 0 || Q_stricmp(sk, "crackhor") == 0)
+    else if (Q_stricmp(sk.data(), "female") == 0 || Q_stricmp(sk.data(), "crackhor") == 0)
         Cvar_Set("gender", "female");
     else
         Cvar_Set("gender", "none");
@@ -1626,12 +1628,12 @@ CL_Userinfo_f
 */
 static void CL_Userinfo_f(void)
 {
-    char userinfo[MAX_INFO_STRING];
+    std::array<char, MAX_INFO_STRING> userinfo{};
 
-    Cvar_BitInfo(userinfo, CVAR_USERINFO);
+    Cvar_BitInfo(userinfo.data(), CVAR_USERINFO);
 
     Com_Printf("User info settings:\n");
-    Info_Print(userinfo);
+    Info_Print(userinfo.data());
 }
 
 /*
@@ -1664,7 +1666,7 @@ static void CL_PlaySound_c(genctx_t *ctx, int state)
 static void CL_PlaySound_f(void)
 {
     int     i;
-    char name[MAX_QPATH];
+    std::array<char, MAX_QPATH> name{};
 
     if (Cmd_Argc() < 2) {
         Com_Printf("Usage: %s <sound> [...]\n", Cmd_Argv(0));
@@ -1672,9 +1674,9 @@ static void CL_PlaySound_f(void)
     }
 
     for (i = 1; i < Cmd_Argc(); i++) {
-        Cmd_ArgvBuffer(i, name, sizeof(name));
-        COM_DefaultExtension(name, ".wav", sizeof(name));
-        S_StartLocalSound(name);
+        Cmd_ArgvBuffer(i, name.data(), name.size());
+        COM_DefaultExtension(name.data(), ".wav", name.size());
+        S_StartLocalSound(name.data());
     }
 }
 
@@ -2021,25 +2023,25 @@ CL_CheckForIgnore
 */
 bool CL_CheckForIgnore(const char *s)
 {
-    char buffer[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> buffer{};
     ignore_t *ignore;
 
     if (LIST_EMPTY(&cl_ignore_text) && LIST_EMPTY(&cl_ignore_nick)) {
         return false;
     }
 
-    Q_strlcpy(buffer, s, sizeof(buffer));
-    COM_strclr(buffer);
+    Q_strlcpy(buffer.data(), s, buffer.size());
+    COM_strclr(buffer.data());
 
     LIST_FOR_EACH(ignore_t, ignore, &cl_ignore_text, entry) {
-        if (Com_WildCmp(ignore->match, buffer)) {
+        if (Com_WildCmp(ignore->match, buffer.data())) {
             ignore->hits++;
             return true;
         }
     }
 
     LIST_FOR_EACH(ignore_t, ignore, &cl_ignore_nick, entry) {
-        if (match_ignore_nick(ignore->match, buffer)) {
+        if (match_ignore_nick(ignore->match, buffer.data())) {
             ignore->hits++;
             return true;
         }
@@ -2068,7 +2070,7 @@ static void CL_DumpClients_f(void)
 
 static void dump_program(const char *text, const char *name)
 {
-    char buffer[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> buffer{};
 
     if (cls.state != ca_active) {
         Com_Printf("Must be in a level to dump.\n");
@@ -2085,9 +2087,9 @@ static void dump_program(const char *text, const char *name)
         return;
     }
 
-    if (FS_EasyWriteFile(buffer, sizeof(buffer), FS_MODE_WRITE | FS_FLAG_TEXT,
+    if (FS_EasyWriteFile(buffer.data(), buffer.size(), FS_MODE_WRITE | FS_FLAG_TEXT,
                          "layouts/", Cmd_Argv(1), ".txt", text, strlen(text))) {
-        Com_Printf("Dumped %s program to %s.\n", name, buffer);
+        Com_Printf("Dumped %s program to %s.\n", name, buffer.data());
     }
 }
 
@@ -2122,7 +2124,7 @@ CL_WriteConfig_f
 */
 static void CL_WriteConfig_f(void)
 {
-    char buffer[MAX_OSPATH];
+    std::array<char, MAX_OSPATH> buffer{};
     bool aliases = false, bindings = false, modified = false;
     int c, mask = 0;
     qhandle_t f;
@@ -2163,7 +2165,7 @@ static void CL_WriteConfig_f(void)
         mask = CVAR_ARCHIVE;
     }
 
-    f = FS_EasyOpenFile(buffer, sizeof(buffer), FS_MODE_WRITE | FS_FLAG_TEXT,
+    f = FS_EasyOpenFile(buffer.data(), buffer.size(), FS_MODE_WRITE | FS_FLAG_TEXT,
                         "configs/", cmd_optarg, ".cfg");
     if (!f) {
         return;
@@ -2185,9 +2187,9 @@ static void CL_WriteConfig_f(void)
     }
 
     if (FS_CloseFile(f))
-        Com_EPrintf("Error writing %s\n", buffer);
+        Com_EPrintf("Error writing %s\n", buffer.data());
     else
-        Com_Printf("Wrote %s.\n", buffer);
+        Com_Printf("Wrote %s.\n", buffer.data());
 }
 
 static void CL_Say_c(genctx_t *ctx, int argnum)
@@ -3543,8 +3545,8 @@ void CL_Init(void)
     Con_RunConsole();
 
     cl_cmdbuf.from = FROM_STUFFTEXT;
-    cl_cmdbuf.text = cl_cmdbuf_text;
-    cl_cmdbuf.maxsize = sizeof(cl_cmdbuf_text);
+    cl_cmdbuf.text = cl_cmdbuf_text.data();
+    cl_cmdbuf.maxsize = cl_cmdbuf_text.size();
     cl_cmdbuf.exec = exec_server_string;
     
     SCR_RegisterStat("client.timings", CL_Client_Timings_stat);
