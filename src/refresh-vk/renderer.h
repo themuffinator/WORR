@@ -166,9 +166,30 @@ private:
     };
 
     struct ModelRecord {
+        struct AliasFrameMetadata {
+            std::array<float, 3> boundsMin{0.0f, 0.0f, 0.0f};
+            std::array<float, 3> boundsMax{0.0f, 0.0f, 0.0f};
+            std::array<float, 3> scale{0.0f, 0.0f, 0.0f};
+            std::array<float, 3> translate{0.0f, 0.0f, 0.0f};
+            float radius = 0.0f;
+        };
+
+        struct SpriteFrameMetadata {
+            int width = 0;
+            int height = 0;
+            int originX = 0;
+            int originY = 0;
+        };
+
         qhandle_t handle = 0;
         std::string name;
         unsigned registrationSequence = 0;
+        int type = 0;
+        int numFrames = 0;
+        int numMeshes = 0;
+        bool inlineModel = false;
+        std::vector<AliasFrameMetadata> aliasFrames;
+        std::vector<SpriteFrameMetadata> spriteFrames;
     };
 
     struct ImageRecord {
