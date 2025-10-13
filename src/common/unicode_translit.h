@@ -1,4 +1,4 @@
-static const struct { uint16_t code; char remap[4]; } unicode_translit[] = {
+static const struct { uint16_t code; char remap[8]; } unicode_translit[] = {
     { 0x00A0, " " }, // NO-BREAK SPACE
     { 0x00A1, "!" }, // INVERTED EXCLAMATION MARK
     { 0x00A2, "C/" }, // CENT SIGN
