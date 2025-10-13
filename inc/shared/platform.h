@@ -146,7 +146,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifdef _MSC_VER
 #define q_noreturn          __declspec(noreturn)
 #define q_noinline          __declspec(noinline)
-#define q_malloc            __declspec(restrict)
+/*
+ * When compiling as C++, the global \"restrict\" macro defined above maps to
+ * the Microsoft-specific "__restrict" keyword.  Using that replacement inside
+ * __declspec() results in the invalid attribute "__declspec(__restrict)",
+ * which MSVC rightfully rejects.  __declspec(allocator) expresses the same
+ * intent (a non-aliasing allocation result) without relying on the token that
+ * gets macro-expanded, so it remains valid for both C and C++ builds.
+ */
+#define q_malloc            __declspec(allocator)
 #define q_alignof(t)        __alignof(t)
 #define q_unreachable()     __assume(0)
 #define q_forceinline       __forceinline
