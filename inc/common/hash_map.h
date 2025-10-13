@@ -49,7 +49,8 @@ void    *HashMap_GetValueImpl(const hash_map_t *map, uint32_t index);
 // Murmur3 fmix32
 static inline uint32_t HashInt32(const void *const val)
 {
-    uint32_t h = *(uint32_t *)val;
+    uint32_t h;
+    memcpy(&h, val, sizeof(h));
     h ^= h >> 16;
     h *= 0x85ebca6b;
     h ^= h >> 13;
@@ -61,7 +62,8 @@ static inline uint32_t HashInt32(const void *const val)
 // Murmur3 fmix64
 static inline uint32_t HashInt64(const void *const val)
 {
-    uint64_t k = *(uint64_t *)val;
+    uint64_t k;
+    memcpy(&k, val, sizeof(k));
     k ^= k >> 33;
     k *= 0xff51afd7ed558ccdull;
     k ^= k >> 33;
@@ -82,9 +84,15 @@ static inline uint32_t HashFloat(const void *const val)
 
 static inline uint32_t HashPtr(const void *const val)
 {
-    if (sizeof(void *) == sizeof(uint64_t))
-        return HashInt64(val);
-    return HashInt32(val);
+    if (sizeof(void *) == sizeof(uint64_t)) {
+        uint64_t ptr_bits;
+        memcpy(&ptr_bits, val, sizeof(ptr_bits));
+        return HashInt64(&ptr_bits);
+    }
+
+    uint32_t ptr_bits;
+    memcpy(&ptr_bits, val, sizeof(ptr_bits));
+    return HashInt32(&ptr_bits);
 }
 
 // Murmur3 hash combine
@@ -100,14 +108,14 @@ static inline uint32_t HashCombine(uint32_t a, uint32_t b)
 
 static inline uint32_t HashVec2(const void *const val)
 {
-    vec2_t *vec = (vec2_t *)val;
-    return HashCombine(HashFloat(&(*vec)[0]), HashFloat(&(*vec)[1]));
+    const auto &vec = *reinterpret_cast<const vec2_t *>(val);
+    return HashCombine(HashFloat(&vec[0]), HashFloat(&vec[1]));
 }
 
 static inline uint32_t HashVec3(const void *const val)
 {
-    vec3_t *vec = (vec3_t *)val;
-    return HashCombine(HashFloat(&(*vec)[0]), HashCombine(HashFloat(&(*vec)[1]), HashFloat(&(*vec)[2])));
+    const auto &vec = *reinterpret_cast<const vec3_t *>(val);
+    return HashCombine(HashFloat(&vec[0]), HashCombine(HashFloat(&vec[1]), HashFloat(&vec[2])));
 }
 
 // FNV-1a hash
@@ -115,7 +123,7 @@ static inline uint32_t HashVec3(const void *const val)
 
 static inline uint32_t HashStr(const void *const val)
 {
-    const unsigned char  *str = *(const unsigned char **)val;
+    const auto *str = *reinterpret_cast<const unsigned char *const *>(val);
 
     uint32_t hval = 0;
     while (*str) {
@@ -129,7 +137,7 @@ static inline uint32_t HashStr(const void *const val)
 
 static inline uint32_t HashCaseStr(const void *const val)
 {
-    const unsigned char  *str = *(const unsigned char **)val;
+    const auto *str = *reinterpret_cast<const unsigned char *const *>(val);
 
     uint32_t hval = 0;
     while (*str) {
@@ -143,14 +151,14 @@ static inline uint32_t HashCaseStr(const void *const val)
 
 static inline bool HashStrCmp(const void *const a, const void *const b)
 {
-    const char *str_a = *(const char **)a;
-    const char *str_b = *(const char **)b;
+    const auto str_a = *reinterpret_cast<const char *const *>(a);
+    const auto str_b = *reinterpret_cast<const char *const *>(b);
     return strcmp(str_a, str_b) == 0;
 }
 
 static inline bool HashCaseStrCmp(const void *const a, const void *const b)
 {
-    const char *str_a = *(const char **)a;
-    const char *str_b = *(const char **)b;
+    const auto str_a = *reinterpret_cast<const char *const *>(a);
+    const auto str_b = *reinterpret_cast<const char *const *>(b);
     return Q_stricmp(str_a, str_b) == 0;
 }

@@ -47,7 +47,8 @@ HashMap_GetKeyImpl
 */
 void *HashMap_GetKeyImpl(const hash_map_t *map, uint32_t index)
 {
-    return (byte *)map->keys + (map->key_size * index);
+    const auto *keys = static_cast<const byte *>(map->keys);
+    return const_cast<byte *>(keys + (map->key_size * index));
 }
 
 /*
@@ -57,7 +58,8 @@ HashMap_GetValueImpl
 */
 void *HashMap_GetValueImpl(const hash_map_t *map, uint32_t index)
 {
-    return (byte *)map->values + (map->value_size * index);
+    const auto *values = static_cast<const byte *>(map->values);
+    return const_cast<byte *>(values + (map->value_size * index));
 }
 
 /*
