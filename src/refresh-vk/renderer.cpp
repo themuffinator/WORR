@@ -1693,25 +1693,27 @@ void VulkanRenderer::beginFrame() {
     frame.imageIndex = imageIndex;
     frame.hasImage = true;
 
+    auto releaseAcquiredImage = [&]() {
+        if (frame.imageIndex < imagesInFlight_.size()) {
+            imagesInFlight_[frame.imageIndex] = VK_NULL_HANDLE;
+        }
+        frame.hasImage = false;
+        frame.imageIndex = std::numeric_limits<uint32_t>::max();
+    };
+
     if (imageIndex < imagesInFlight_.size() && imagesInFlight_[imageIndex] != VK_NULL_HANDLE) {
         vkWaitForFences(device_, 1, &imagesInFlight_[imageIndex], VK_TRUE, std::numeric_limits<uint64_t>::max());
     }
 
-    if (imageIndex < imagesInFlight_.size()) {
-        imagesInFlight_[imageIndex] = frame.inFlight;
-    }
-
-    if (frame.inFlight != VK_NULL_HANDLE) {
-        vkResetFences(device_, 1, &frame.inFlight);
-    }
-
     if (frame.commandBuffer == VK_NULL_HANDLE) {
+        releaseAcquiredImage();
         return;
     }
 
     VkResult resetResult = vkResetCommandBuffer(frame.commandBuffer, 0);
     if (resetResult != VK_SUCCESS) {
         Com_Printf("refresh-vk: failed to reset command buffer (VkResult %d).\n", static_cast<int>(resetResult));
+        releaseAcquiredImage();
         return;
     }
 
@@ -1722,7 +1724,16 @@ void VulkanRenderer::beginFrame() {
     VkResult beginResult = vkBeginCommandBuffer(frame.commandBuffer, &beginInfo);
     if (beginResult != VK_SUCCESS) {
         Com_Printf("refresh-vk: failed to begin command buffer (VkResult %d).\n", static_cast<int>(beginResult));
+        releaseAcquiredImage();
         return;
+    }
+
+    if (frame.inFlight != VK_NULL_HANDLE) {
+        vkResetFences(device_, 1, &frame.inFlight);
+    }
+
+    if (frame.imageIndex < imagesInFlight_.size()) {
+        imagesInFlight_[frame.imageIndex] = frame.inFlight;
     }
 
     VkClearValue clearValue{};
