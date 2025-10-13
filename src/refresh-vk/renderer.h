@@ -17,6 +17,10 @@
 
 namespace refresh::vk {
 
+namespace draw2d {
+    struct Submission;
+}
+
 class VulkanRenderer {
 public:
     VulkanRenderer();
@@ -228,6 +232,8 @@ private:
     PipelineKind selectPipelineForEntity(const entity_t &ent) const;
     const ModelRecord *findModelRecord(qhandle_t handle) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
+
+    void submit2DDraw(const draw2d::Submission &submission);
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;

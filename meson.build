@@ -222,6 +222,7 @@ elif renderer_opt == 'refresh-vk'
   refresh_src = [
     'src/refresh-vk/main.cpp',
     'src/refresh-vk/renderer.cpp',
+    'src/refresh-vk/vk_draw2d.cpp',
   ]
 endif
 

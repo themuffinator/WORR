@@ -1,6 +1,9 @@
 #include "renderer.h"
 
+#include "vk_draw2d.h"
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -316,6 +319,21 @@ void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
     frameStats_.debugLines = framePrimitives_.debugLines.size();
 }
 
+void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
+    if (!submission.vertices || !submission.indices) {
+        return;
+    }
+
+    if (submission.vertexCount == 0 || submission.indexCount == 0) {
+        return;
+    }
+
+    Com_DPrintf("vk_draw2d: flushing %zu vertices, %zu indices (texture %d)\n",
+                submission.vertexCount,
+                submission.indexCount,
+                static_cast<int>(submission.texture));
+}
+
 bool VulkanRenderer::init(bool total) {
     if (!total) {
         frameActive_ = false;
@@ -340,6 +358,11 @@ bool VulkanRenderer::init(bool total) {
     modelLookup_.clear();
     imageLookup_.clear();
     rawPic_ = {};
+
+    if (!draw2d::initialize()) {
+        Com_Printf("Failed to initialize Vulkan 2D helper.\n");
+        return false;
+    }
 
     initialized_ = true;
     r_registration_sequence = 1;
@@ -367,6 +390,7 @@ void VulkanRenderer::shutdown(bool total) {
         rawPic_.pixels.clear();
         currentMap_.clear();
         resetTransientState();
+        draw2d::shutdown();
         initialized_ = false;
     }
 }
@@ -448,6 +472,12 @@ void VulkanRenderer::beginFrame() {
     commandLog_.clear();
 
     frameActive_ = true;
+
+    if (!draw2d::begin([this](const draw2d::Submission &submission) {
+            submit2DDraw(submission);
+        })) {
+        Com_Printf("vk_draw2d: failed to begin 2D batch for frame.\n");
+    }
 }
 
 void VulkanRenderer::endFrame() {
@@ -459,6 +489,7 @@ void VulkanRenderer::endFrame() {
         vid->swap_buffers();
     }
 
+    draw2d::end();
     commandLog_.clear();
     frameStats_.reset();
 
@@ -675,10 +706,43 @@ bool VulkanRenderer::getPicSize(int *w, int *h, qhandle_t pic) const {
     return it->second.transparent;
 }
 
-void VulkanRenderer::drawPic(int, int, color_t, qhandle_t) {
+void VulkanRenderer::drawPic(int x, int y, color_t color, qhandle_t pic) {
+    auto it = images_.find(pic);
+    if (it == images_.end()) {
+        return;
+    }
+
+    if (it->second.width <= 0 || it->second.height <= 0) {
+        return;
+    }
+
+    drawStretchPic(x, y, it->second.width, it->second.height, color, pic);
 }
 
-void VulkanRenderer::drawStretchPic(int, int, int, int, color_t, qhandle_t) {
+void VulkanRenderer::drawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
+
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+
+    std::array<std::array<float, 2>, 4> positions{{
+        {static_cast<float>(x), static_cast<float>(y)},
+        {static_cast<float>(x + w), static_cast<float>(y)},
+        {static_cast<float>(x + w), static_cast<float>(y + h)},
+        {static_cast<float>(x), static_cast<float>(y + h)}
+    }};
+
+    std::array<std::array<float, 2>, 4> uvs{{
+        {0.0f, 0.0f},
+        {1.0f, 0.0f},
+        {1.0f, 1.0f},
+        {0.0f, 1.0f}
+    }};
+
+    draw2d::submitQuad(positions, uvs, color.u32, pic);
 }
 
 void VulkanRenderer::drawStretchRotatePic(int, int, int, int, color_t, float, int, int, qhandle_t) {
