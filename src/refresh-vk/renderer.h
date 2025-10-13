@@ -75,6 +75,11 @@ public:
     void loadKFont(kfont_t *font, const char *filename);
     const kfont_char_t *lookupKFontChar(const kfont_t *kfont, uint32_t codepoint) const;
 
+    const std::vector<std::string> &platformInstanceExtensions() const;
+    bool createPlatformSurface(VkInstance instance, const VkAllocationCallbacks *allocator);
+    void destroyPlatformSurface(VkInstance instance, const VkAllocationCallbacks *allocator);
+    VkSurfaceKHR platformSurface() const;
+
 private:
     static constexpr size_t kKFontGlyphCount = static_cast<size_t>(KFONT_ASCII_MAX - KFONT_ASCII_MIN + 1);
 
@@ -300,6 +305,9 @@ private:
     qhandle_t ensureWhiteTexture();
     qhandle_t ensureRawTexture();
 
+    void initializePlatformHooks();
+    void collectPlatformInstanceExtensions();
+
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
     bool frameActive_ = false;
@@ -347,6 +355,17 @@ private:
     qhandle_t rawTextureHandle_ = 0;
 
     std::unordered_map<PipelineKind, PipelineDesc, EnumHash> pipelines_;
+
+    struct PlatformHooks {
+        vid_vk_get_instance_extensions_fn getInstanceExtensions = nullptr;
+        vid_vk_create_surface_fn createSurface = nullptr;
+        vid_vk_destroy_surface_fn destroySurface = nullptr;
+    };
+
+    PlatformHooks platformHooks_{};
+    std::vector<std::string> platformInstanceExtensions_;
+    VkInstance platformInstance_ = VK_NULL_HANDLE;
+    VkSurfaceKHR platformSurface_ = VK_NULL_HANDLE;
 };
 
 } // namespace refresh::vk

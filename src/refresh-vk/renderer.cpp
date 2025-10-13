@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <unordered_set>
 
 #include "common/cmodel.h"
 #include "common/files.h"
@@ -129,6 +130,31 @@ namespace {
                            color.u32,
                            texture);
     }
+
+    VideoGeometry queryVideoGeometry() {
+        VideoGeometry geometry{};
+
+        vrect_t rect{};
+        if (VID_GetGeometry(&rect)) {
+            geometry.width = std::max(1, rect.width);
+            geometry.height = std::max(1, rect.height);
+        }
+
+        vrect_t fullscreen{};
+        int freq = 0;
+        int depth = 0;
+        if (VID_GetFullscreen(&fullscreen, &freq, &depth)) {
+            geometry.flags = static_cast<vidFlags_t>(geometry.flags | QVF_FULLSCREEN);
+        }
+
+        return geometry;
+    }
+
+    void applyVideoGeometry(const VideoGeometry &geometry) {
+        r_config.width = geometry.width;
+        r_config.height = geometry.height;
+        r_config.flags = geometry.flags;
+    }
 }
 
 model_t *MOD_Find(const char *name);
@@ -156,30 +182,6 @@ void VulkanRenderer::FrameStats::reset() {
     particles = 0;
     flares = 0;
     debugLines = 0;
-    VideoGeometry queryVideoGeometry() {
-        VideoGeometry geometry{};
-
-        vrect_t rect{};
-        if (VID_GetGeometry(&rect)) {
-            geometry.width = std::max(1, rect.width);
-            geometry.height = std::max(1, rect.height);
-        }
-
-        vrect_t fullscreen{};
-        int freq = 0;
-        int depth = 0;
-        if (VID_GetFullscreen(&fullscreen, &freq, &depth)) {
-            geometry.flags = static_cast<vidFlags_t>(geometry.flags | QVF_FULLSCREEN);
-        }
-
-        return geometry;
-    }
-
-    void applyVideoGeometry(const VideoGeometry &geometry) {
-        r_config.width = geometry.width;
-        r_config.height = geometry.height;
-        r_config.flags = geometry.flags;
-    }
 }
 
 VulkanRenderer::VulkanRenderer()
@@ -499,6 +501,97 @@ qhandle_t VulkanRenderer::ensureRawTexture() {
     return handle;
 }
 
+const std::vector<std::string> &VulkanRenderer::platformInstanceExtensions() const {
+    return platformInstanceExtensions_;
+}
+
+VkSurfaceKHR VulkanRenderer::platformSurface() const {
+    return platformSurface_;
+}
+
+bool VulkanRenderer::createPlatformSurface(VkInstance instance, const VkAllocationCallbacks *allocator) {
+    if (!platformHooks_.createSurface) {
+        Com_Printf("refresh-vk: platform does not support Vulkan surface creation.\n");
+        return false;
+    }
+
+    destroyPlatformSurface(VK_NULL_HANDLE, allocator);
+
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkResult result = platformHooks_.createSurface(instance, allocator, &surface);
+    if (result != VK_SUCCESS || surface == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to create Vulkan surface (VkResult %d).\n", static_cast<int>(result));
+        return false;
+    }
+
+    platformSurface_ = surface;
+    platformInstance_ = instance;
+    return true;
+}
+
+void VulkanRenderer::destroyPlatformSurface(VkInstance instance, const VkAllocationCallbacks *allocator) {
+    if (platformSurface_ == VK_NULL_HANDLE) {
+        return;
+    }
+
+    VkInstance destroyInstance = instance;
+    if (destroyInstance == VK_NULL_HANDLE) {
+        destroyInstance = platformInstance_;
+    }
+
+    if (platformHooks_.destroySurface && destroyInstance != VK_NULL_HANDLE) {
+        platformHooks_.destroySurface(destroyInstance, platformSurface_, allocator);
+    }
+
+    platformSurface_ = VK_NULL_HANDLE;
+    platformInstance_ = VK_NULL_HANDLE;
+}
+
+void VulkanRenderer::initializePlatformHooks() {
+    platformHooks_ = {};
+    platformInstance_ = VK_NULL_HANDLE;
+    platformSurface_ = VK_NULL_HANDLE;
+
+    if (vid) {
+        platformHooks_.getInstanceExtensions = vid->vk.get_instance_extensions;
+        platformHooks_.createSurface = vid->vk.create_surface;
+        platformHooks_.destroySurface = vid->vk.destroy_surface;
+    }
+
+    collectPlatformInstanceExtensions();
+}
+
+void VulkanRenderer::collectPlatformInstanceExtensions() {
+    platformInstanceExtensions_.clear();
+
+    std::unordered_set<std::string> seen;
+    auto addExtension = [&](const char *name) {
+        if (!name || !*name) {
+            return;
+        }
+        if (seen.insert(name).second) {
+            platformInstanceExtensions_.emplace_back(name);
+        }
+    };
+
+    addExtension(VK_KHR_SURFACE_EXTENSION_NAME);
+
+    if (!platformHooks_.getInstanceExtensions) {
+        return;
+    }
+
+    uint32_t count = 0;
+    const char *const *extensions = platformHooks_.getInstanceExtensions(&count);
+    if (!extensions || count == 0) {
+        return;
+    }
+
+    platformInstanceExtensions_.reserve(platformInstanceExtensions_.size() + count);
+    for (uint32_t i = 0; i < count; ++i) {
+        addExtension(extensions[i]);
+    }
+}
+
 bool VulkanRenderer::init(bool total) {
     if (!total) {
         frameActive_ = false;
@@ -510,6 +603,8 @@ bool VulkanRenderer::init(bool total) {
     }
 
     Com_Printf("------- refresh-vk init -------\n");
+
+    initializePlatformHooks();
 
     VideoGeometry geometry = queryVideoGeometry();
     applyVideoGeometry(geometry);
@@ -529,6 +624,13 @@ bool VulkanRenderer::init(bool total) {
         return false;
     }
 
+    if (!platformInstanceExtensions_.empty()) {
+        Com_DPrintf("refresh-vk: required platform instance extensions:\n");
+        for (const std::string &extension : platformInstanceExtensions_) {
+            Com_DPrintf("    %s\n", extension.c_str());
+        }
+    }
+
     initialized_ = true;
     r_registration_sequence = 1;
 
@@ -546,6 +648,11 @@ void VulkanRenderer::shutdown(bool total) {
     if (frameActive_) {
         endFrame();
     }
+
+    destroyPlatformSurface(VK_NULL_HANDLE, nullptr);
+    platformInstanceExtensions_.clear();
+    platformHooks_ = {};
+    platformInstance_ = VK_NULL_HANDLE;
 
     if (total) {
         models_.clear();
