@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <vulkan/vulkan_core.h>
+
 #include "client/video.h"
 #include "common/cvar.h"
 #include "common/math.h"
@@ -166,6 +168,29 @@ private:
     };
 
     struct ModelRecord {
+        struct BufferAllocationInfo {
+            VkBuffer buffer = VK_NULL_HANDLE;
+            VkDeviceMemory memory = VK_NULL_HANDLE;
+            VkDeviceSize offset = 0;
+            VkDeviceSize size = 0;
+        };
+
+        struct DescriptorReference {
+            VkDescriptorSet set = VK_NULL_HANDLE;
+            uint32_t binding = 0;
+        };
+
+        struct MeshGeometry {
+            BufferAllocationInfo vertex;
+            BufferAllocationInfo index;
+            DescriptorReference descriptor;
+            size_t vertexCount = 0;
+            size_t indexCount = 0;
+            std::vector<uint8_t> vertexStaging;
+            std::vector<uint8_t> indexStaging;
+            bool uploaded = false;
+        };
+
         struct AliasFrameMetadata {
             std::array<float, 3> boundsMin{0.0f, 0.0f, 0.0f};
             std::array<float, 3> boundsMax{0.0f, 0.0f, 0.0f};
@@ -190,6 +215,7 @@ private:
         bool inlineModel = false;
         std::vector<AliasFrameMetadata> aliasFrames;
         std::vector<SpriteFrameMetadata> spriteFrames;
+        std::vector<MeshGeometry> meshGeometry;
     };
 
     struct ImageRecord {
@@ -238,6 +264,8 @@ private:
     void resetTransientState();
     void resetFrameState();
     void prepareFrameState(const refdef_t &fd);
+    void allocateModelGeometry(ModelRecord &record, const model_t &model);
+    void bindModelGeometryBuffers(ModelRecord &record);
     void evaluateFrameSettings();
     void uploadDynamicLights();
     void updateSkyState();
@@ -252,6 +280,7 @@ private:
     const PipelineDesc &ensurePipeline(PipelineKind kind);
     PipelineKind selectPipelineForEntity(const entity_t &ent) const;
     const ModelRecord *findModelRecord(qhandle_t handle) const;
+    ModelRecord *findModelRecord(qhandle_t handle);
     const ImageRecord *findImageRecord(qhandle_t handle) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
 
