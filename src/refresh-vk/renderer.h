@@ -16,6 +16,10 @@
 
 namespace refresh::vk {
 
+namespace draw2d {
+    struct Submission;
+}
+
 class VulkanRenderer {
 public:
     VulkanRenderer();
@@ -107,6 +111,8 @@ private:
     qhandle_t registerResource(NameLookup &lookup, std::string_view name);
 
     void resetTransientState();
+
+    void submit2DDraw(const draw2d::Submission &submission);
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
