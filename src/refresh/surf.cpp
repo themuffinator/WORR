@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 #include "gl.h"
 #include "common/mdfour.h"
+#include <array>
 
 lightmap_builder_t lm;
 static byte lm_buffer[0x4000000];
@@ -821,17 +822,17 @@ static void build_surface_light(mface_t *surf, vec_t *vbo)
 
 static void calc_surface_hash(mface_t *surf)
 {
-    uint32_t args[] = {
-        surf->texinfo->image - r_images,
-        surf->light_m ? surf->light_m - lm.lightmaps : 0,
+    std::array<uint32_t, 3> args = {
+        static_cast<uint32_t>(surf->texinfo->image - r_images),
+        static_cast<uint32_t>(surf->light_m ? surf->light_m - lm.lightmaps : 0),
         surf->statebits
     };
     struct mdfour md;
-    uint8_t out[16];
+    std::array<uint8_t, 16> out{};
 
     mdfour_begin(&md);
-    mdfour_update(&md, (uint8_t *)args, sizeof(args));
-    mdfour_result(&md, out);
+    mdfour_update(&md, reinterpret_cast<const uint8_t *>(args.data()), sizeof(uint32_t) * args.size());
+    mdfour_result(&md, out.data());
 
     surf->hash = 0;
     for (int i = 0; i < 16; i++)

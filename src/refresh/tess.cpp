@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 
 tesselator_t tess;
 
@@ -161,7 +162,7 @@ static void GL_FlushBeamSegments(void)
 static void GL_DrawPolyBeam(const vec3_t *segments, int num_segments, color_t color, float width)
 {
     int i, j, k, firstvert;
-    vec3_t points[BEAM_POINTS];
+    std::array<vec3_t, BEAM_POINTS> points{};
     vec3_t dir, right, up;
     vec_t *dst_vert;
     glIndex_t *dst_indices;
@@ -262,7 +263,8 @@ static void GL_DrawSimpleBeam(const vec3_t start, const vec3_t end, color_t colo
 
 static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t color, float width)
 {
-    vec3_t dir, segments[MAX_LIGHTNING_SEGMENTS + 1];
+    vec3_t dir;
+    std::array<vec3_t, MAX_LIGHTNING_SEGMENTS + 1> segments{};
     vec3_t right, up;
     vec_t length, segment_length;
     int i, num_segments, max_segments;
@@ -298,7 +300,7 @@ static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t c
     VectorCopy(end, segments[i]);
 
     if (gl_beamstyle->integer) {
-        GL_DrawPolyBeam(segments, num_segments, color, width);
+        GL_DrawPolyBeam(segments.data(), num_segments, color, width);
     } else {
         for (i = 0; i < num_segments; i++)
             GL_DrawSimpleBeam(segments[i], segments[i + 1], color, width);
@@ -307,7 +309,7 @@ static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t c
 
 void GL_DrawBeams(void)
 {
-    vec3_t segs[2];
+    std::array<vec3_t, 2> segs{};
     color_t color;
     float width, scale;
     const entity_t *ent;
@@ -746,7 +748,7 @@ static void GL_DrawFace(const mface_t *surf)
     const int numtris = surf->numsurfedges - 2;
     const int numindices = numtris * 3;
     glStateBits_t state = surf->statebits;
-    GLuint texnum[MAX_TMUS] = { 0 };
+    std::array<GLuint, MAX_TMUS> texnum{};
     glIndex_t *dst_indices;
     int i, j;
 
@@ -768,7 +770,7 @@ static void GL_DrawFace(const mface_t *surf)
         }
     }
 
-    if (memcmp(tess.texnum, texnum, sizeof(texnum)) ||
+    if (memcmp(tess.texnum, texnum.data(), texnum.size() * sizeof(texnum[0])) ||
         tess.flags != state ||
         tess.numindices + numindices > TESS_MAX_INDICES) {
         GL_Flush3D();

@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 
 drawStatic_t draw;
 
@@ -70,7 +71,8 @@ static inline void GL_StretchPic_(
     float s1, float t1, float s2, float t2,
     color_t color, int texnum, int flags)
 {
-    vec2_t vertices[4], texcoords[4];
+    std::array<vec2_t, 4> vertices{};
+    std::array<vec2_t, 4> texcoords{};
 
     Vector2Set(vertices[0], x,     y    );
     Vector2Set(vertices[1], x + w, y    );
@@ -82,7 +84,7 @@ static inline void GL_StretchPic_(
     Vector2Set(texcoords[2], s2, t2);
     Vector2Set(texcoords[3], s1, t2);
 
-    GL_DrawPic(vertices, texcoords, color, texnum, flags);
+    GL_DrawPic(vertices.data(), texcoords.data(), color, texnum, flags);
 }
 
 #define GL_StretchPic(x,y,w,h,s1,t1,s2,t2,color,image) \
@@ -94,7 +96,8 @@ static inline void GL_StretchRotatePic_(
     float angle, float pivot_x, float pivot_y,
     color_t color, int texnum, int flags)
 {
-    vec2_t vertices[4], texcoords[4];
+    std::array<vec2_t, 4> vertices{};
+    std::array<vec2_t, 4> texcoords{};
 
     float hw = w / 2.0f;
     float hh = h / 2.0f;
@@ -120,7 +123,7 @@ static inline void GL_StretchRotatePic_(
         vertices[i][1] = (vert_x * s + vert_y * c) + y;
     }
 
-    GL_DrawPic(vertices, texcoords, color, texnum, flags);
+    GL_DrawPic(vertices.data(), texcoords.data(), color, texnum, flags);
 }
 
 #define GL_StretchRotatePic(x,y,w,h,s1,t1,s2,t2,angle,px,py,color,image) \

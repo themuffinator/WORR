@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 
 void GL_SampleLightPoint(vec3_t color)
 {
@@ -69,8 +70,8 @@ void GL_SampleLightPoint(vec3_t color)
 static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_t color)
 {
     vec3_t point, avg;
-    uint32_t point_i[3];
-    vec3_t samples[8];
+    std::array<uint32_t, 3> point_i{};
+    std::array<vec3_t, 8> samples{};
     int i, j, mask, numsamples;
 
     if (!grid->numleafs || !gl_lightgrid->integer)
@@ -84,13 +85,13 @@ static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_
     VectorClear(avg);
 
     for (i = mask = numsamples = 0; i < 8; i++) {
-        uint32_t tmp[3];
+        std::array<uint32_t, 3> tmp{};
 
         tmp[0] = point_i[0] + ((i >> 0) & 1);
         tmp[1] = point_i[1] + ((i >> 1) & 1);
         tmp[2] = point_i[2] + ((i >> 2) & 1);
 
-        const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp);
+        const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp.data());
         if (!s)
             continue;
 
@@ -123,8 +124,8 @@ static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_
     // trilinear interpolation
     float fx, fy, fz;
     float bx, by, bz;
-    vec3_t lerp_x[4];
-    vec3_t lerp_y[2];
+    std::array<vec3_t, 4> lerp_x{};
+    std::array<vec3_t, 2> lerp_y{};
 
     fx = point[0] - point_i[0];
     fy = point[1] - point_i[1];
@@ -384,7 +385,7 @@ static void GL_MarkLeaves(void)
 void GL_DrawBspModel(mmodel_t *model)
 {
     mface_t *face;
-    vec3_t bounds[2];
+    std::array<vec3_t, 2> bounds{};
     vec_t dot;
     vec3_t transformed, temp;
     entity_t *ent = glr.ent;
@@ -404,7 +405,7 @@ void GL_DrawBspModel(mmodel_t *model)
         if (cull == CULL_CLIP) {
             VectorCopy(model->mins, bounds[0]);
             VectorCopy(model->maxs, bounds[1]);
-            cull = GL_CullLocalBox(ent->origin, bounds);
+            cull = GL_CullLocalBox(ent->origin, bounds.data());
             if (cull == CULL_OUT) {
                 c.rotatedBoxesCulled++;
                 return;
@@ -415,7 +416,7 @@ void GL_DrawBspModel(mmodel_t *model)
     } else {
         VectorAdd(model->mins, ent->origin, bounds[0]);
         VectorAdd(model->maxs, ent->origin, bounds[1]);
-        cull = GL_CullBox(bounds);
+        cull = GL_CullBox(bounds.data());
         if (cull == CULL_OUT) {
             c.boxesCulled++;
             return;

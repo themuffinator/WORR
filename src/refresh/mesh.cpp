@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 
 typedef enum {
     SHADOW_NO,
@@ -275,7 +276,7 @@ static void tess_lerped_plain(const maliasmesh_t *mesh)
 static glCullResult_t cull_static_model(const model_t *model)
 {
     const maliasframe_t *newframe = &model->frames[newframenum];
-    vec3_t bounds[2];
+    std::array<vec3_t, 2> bounds{};
     glCullResult_t cull;
 
     if (glr.ent->flags & RF_WEAPONMODEL) {
@@ -296,7 +297,7 @@ static glCullResult_t cull_static_model(const model_t *model)
     } else {
         VectorAdd(newframe->bounds[0], origin, bounds[0]);
         VectorAdd(newframe->bounds[1], origin, bounds[1]);
-        cull = GL_CullBox(bounds);
+        cull = GL_CullBox(bounds.data());
         if (cull == CULL_OUT) {
             c.boxesCulled++;
             return cull;
@@ -310,7 +311,7 @@ static glCullResult_t cull_lerped_model(const model_t *model)
 {
     const maliasframe_t *newframe = &model->frames[newframenum];
     const maliasframe_t *oldframe = &model->frames[oldframenum];
-    vec3_t bounds[2];
+    std::array<vec3_t, 2> bounds{};
     glCullResult_t cull;
 
     if (glr.ent->flags & RF_WEAPONMODEL) {
@@ -321,19 +322,19 @@ static glCullResult_t cull_lerped_model(const model_t *model)
             c.spheresCulled++;
             return cull;
         }
-        UnionBounds(newframe->bounds, oldframe->bounds, bounds);
+        UnionBounds(newframe->bounds, oldframe->bounds, bounds.data());
         if (cull == CULL_CLIP) {
-            cull = GL_CullLocalBox(origin, bounds);
+            cull = GL_CullLocalBox(origin, bounds.data());
             if (cull == CULL_OUT) {
                 c.rotatedBoxesCulled++;
                 return cull;
             }
         }
     } else {
-        UnionBounds(newframe->bounds, oldframe->bounds, bounds);
+        UnionBounds(newframe->bounds, oldframe->bounds, bounds.data());
         VectorAdd(bounds[0], origin, bounds[0]);
         VectorAdd(bounds[1], origin, bounds[1]);
-        cull = GL_CullBox(bounds);
+        cull = GL_CullBox(bounds.data());
         if (cull == CULL_OUT) {
             c.boxesCulled++;
             return cull;

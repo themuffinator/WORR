@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 
 static float    skyrotate;
 static bool     skyautorotate;
@@ -138,10 +139,10 @@ static void ClipSkyPolygon(int nump, vec3_t vecs, int stage)
     const float *v, *norm;
     bool        front, back;
     float       d, e;
-    float       dists[MAX_CLIP_VERTS];
-    int         sides[MAX_CLIP_VERTS];
-    vec3_t      newv[2][MAX_CLIP_VERTS];
-    int         newc[2];
+    std::array<float, MAX_CLIP_VERTS> dists{};
+    std::array<int, MAX_CLIP_VERTS> sides{};
+    std::array<std::array<vec3_t, MAX_CLIP_VERTS>, 2> newv{};
+    std::array<int, 2> newc{};
     int         i, j;
 
     if (nump > MAX_CLIP_VERTS - 2) {

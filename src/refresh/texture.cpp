@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.h"
 #include "common/prompt.h"
+#include <array>
 
 static int gl_filter_min;
 static int gl_filter_max;
@@ -202,7 +203,8 @@ static void IMG_ResampleTexture(const byte *in, int inwidth, int inheight,
     int         i, j;
     const byte  *inrow1, *inrow2;
     unsigned    frac, fracstep;
-    unsigned    p1[MAX_TEXTURE_SIZE], p2[MAX_TEXTURE_SIZE];
+    std::array<unsigned, MAX_TEXTURE_SIZE> p1{};
+    std::array<unsigned, MAX_TEXTURE_SIZE> p2{};
     const byte  *pix1, *pix2, *pix3, *pix4;
     float       heightScale;
 
@@ -892,7 +894,7 @@ void IMG_Load(image_t *image, byte *pic)
 void IMG_Unload(image_t *image)
 {
     if (image->texnum && !(image->flags & IF_SCRAP)) {
-        GLuint tex[2] = { image->texnum, image->texnum2 };
+        std::array<GLuint, 2> tex = { image->texnum, image->texnum2 };
 
         // invalidate bindings
         for (int i = 0; i < MAX_TMUS; i++)
@@ -902,7 +904,7 @@ void IMG_Unload(image_t *image)
         if (gls.texnumcube == tex[0])
             gls.texnumcube = 0;
 
-        qglDeleteTextures(tex[1] ? 2 : 1, tex);
+        qglDeleteTextures(tex[1] ? 2 : 1, tex.data());
         image->texnum = image->texnum2 = 0;
     }
 }

@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.h"
+#include <array>
 
 glRefdef_t glr;
 glStatic_t gl_static;
@@ -182,7 +183,7 @@ glCullResult_t GL_CullSphere(const vec3_t origin, float radius)
 
 glCullResult_t GL_CullLocalBox(const vec3_t origin, const vec3_t bounds[2])
 {
-    vec3_t points[8];
+    std::array<vec3_t, 8> points{};
     const cplane_t *p;
     int i, j;
     vec_t dot;
