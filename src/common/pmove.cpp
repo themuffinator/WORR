@@ -29,11 +29,21 @@ static contents_t (* current_pmove_pointcontents)(const vec3_t point);
 static int pm_clipmask;
 static csurface_v3_t trace3_result_surface;
 
+static qboolean BoolToQBoolean(bool value)
+{
+    return value ? qtrue : qfalse;
+}
+
+static bool QBooleanToBool(qboolean value)
+{
+    return value != qfalse;
+}
+
 static game3_trace_t convert_trace(const trace_t* trace)
 {
     game3_trace_t trace3;
-    trace3.allsolid = trace->allsolid;
-    trace3.startsolid = trace->startsolid;
+    trace3.allsolid = BoolToQBoolean(trace->allsolid);
+    trace3.startsolid = BoolToQBoolean(trace->startsolid);
     trace3.fraction = trace->fraction;
     VectorCopy(trace->endpos, trace3.endpos);
     trace3.plane = trace->plane;
@@ -92,7 +102,7 @@ void Pmove(pmove_t *pmove, const pmoveParams_t *params)
         ConvertToGame3_pmove_state_new(&game3_pmove.s, &pmove->s, true);
 
         ConvertToGame3_usercmd(&game3_pmove.cmd, &pmove->cmd);
-        game3_pmove.snapinitial = pmove->snapinitial;
+        game3_pmove.snapinitial = BoolToQBoolean(pmove->snapinitial);
         game3_pmove.trace = wrap_pmove_trace_new;
         // "Classic" pmove doesn't actually use clip(), so no need to set it
         game3_pmove.pointcontents = wrap_pmove_pointcontents;
@@ -102,6 +112,7 @@ void Pmove(pmove_t *pmove, const pmoveParams_t *params)
         game3_PmoveNew(&game3_pmove, &pmove->groundplane, params);
 
         ConvertFromGame3_pmove_state_new(&pmove->s, &game3_pmove.s, true);
+        pmove->snapinitial = QBooleanToBool(game3_pmove.snapinitial);
 
         VectorCopy(game3_pmove.viewangles, pmove->viewangles);
         VectorCopy(game3_pmove.mins, pmove->mins);
@@ -117,7 +128,7 @@ void Pmove(pmove_t *pmove, const pmoveParams_t *params)
         ConvertToGame3_pmove_state_old(&game3_pmove.s, &pmove->s, params->extended_server_ver != 0);
 
         ConvertToGame3_usercmd(&game3_pmove.cmd, &pmove->cmd);
-        game3_pmove.snapinitial = pmove->snapinitial;
+        game3_pmove.snapinitial = BoolToQBoolean(pmove->snapinitial);
         game3_pmove.trace = wrap_pmove_trace_old;
         // "Classic" pmove doesn't actually use clip(), so no need to set it
         game3_pmove.pointcontents = wrap_pmove_pointcontents;
@@ -127,6 +138,7 @@ void Pmove(pmove_t *pmove, const pmoveParams_t *params)
         game3_PmoveOld(&game3_pmove, &pmove->groundplane, params);
 
         ConvertFromGame3_pmove_state_old(&pmove->s, &game3_pmove.s, params->extended_server_ver != 0);
+        pmove->snapinitial = QBooleanToBool(game3_pmove.snapinitial);
 
         VectorCopy(game3_pmove.viewangles, pmove->viewangles);
         VectorCopy(game3_pmove.mins, pmove->mins);
