@@ -366,6 +366,76 @@ private:
     std::vector<std::string> platformInstanceExtensions_;
     VkInstance platformInstance_ = VK_NULL_HANDLE;
     VkSurfaceKHR platformSurface_ = VK_NULL_HANDLE;
+
+    struct QueueFamilyIndices {
+        std::optional<uint32_t> graphics;
+        std::optional<uint32_t> present;
+
+        bool complete() const {
+            return graphics.has_value() && present.has_value();
+        }
+    };
+
+    struct SwapchainSupportDetails {
+        VkSurfaceCapabilitiesKHR capabilities{};
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
+    };
+
+    struct InFlightFrame {
+        VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+        VkSemaphore imageAvailable = VK_NULL_HANDLE;
+        VkSemaphore renderFinished = VK_NULL_HANDLE;
+        VkFence inFlight = VK_NULL_HANDLE;
+        uint32_t imageIndex = 0;
+        bool hasImage = false;
+    };
+
+    bool createInstance();
+    void destroyInstance();
+    bool createDeviceResources();
+    void destroyDeviceResources();
+    bool createDescriptorPool();
+    void destroyDescriptorPool();
+    bool createCommandPool();
+    void destroyCommandPool();
+    bool createSwapchainResources(VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    void destroySwapchainResources();
+    void destroySyncObjects();
+    bool recreateSwapchain();
+    QueueFamilyIndices queryQueueFamilies(VkPhysicalDevice device) const;
+    SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
+    VkSurfaceFormatKHR chooseSwapchainFormat(const std::vector<VkSurfaceFormatKHR> &formats) const;
+    VkPresentModeKHR choosePresentMode(const std::vector<VkPresentModeKHR> &presentModes) const;
+    VkExtent2D chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR &capabilities) const;
+    bool pickPhysicalDevice();
+    bool createLogicalDevice();
+    bool createSyncObjects();
+    void destroyVulkan();
+    void finishFrameRecording();
+
+    VkInstance instance_ = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
+    VkDevice device_ = VK_NULL_HANDLE;
+    uint32_t graphicsQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t presentQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
+    VkQueue graphicsQueue_ = VK_NULL_HANDLE;
+    VkQueue presentQueue_ = VK_NULL_HANDLE;
+    VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
+    VkFormat swapchainFormat_ = VK_FORMAT_UNDEFINED;
+    VkExtent2D swapchainExtent_{ 0u, 0u };
+    std::vector<VkImage> swapchainImages_;
+    std::vector<VkImageView> swapchainImageViews_;
+    std::vector<VkFramebuffer> swapchainFramebuffers_;
+    std::vector<VkFence> imagesInFlight_;
+    VkRenderPass renderPass_ = VK_NULL_HANDLE;
+    VkCommandPool commandPool_ = VK_NULL_HANDLE;
+    std::vector<InFlightFrame> inFlightFrames_;
+    size_t currentFrameIndex_ = 0;
+    bool frameAcquired_ = false;
+    bool vsyncEnabled_ = true;
+    static constexpr size_t kMaxFramesInFlight = 2;
+    VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
 };
 
 } // namespace refresh::vk
