@@ -584,7 +584,9 @@ static void add_music_dir(const char *path, unsigned flags)
     if (len >= sizeof(fullpath))
         return;
 
-    listfiles_t list = { .filter = extensions, .flags = flags };
+    listfiles_t list{};
+    list.filter = extensions;
+    list.flags = flags;
     Sys_ListFiles_r(&list, fullpath, 0);
     FS_FinalizeList(&list);
 
@@ -594,7 +596,7 @@ static void add_music_dir(const char *path, unsigned flags)
     }
 
     for (int i = 0; i < list.count; i++) {
-        char *val = list.files[i];
+        char *val = static_cast<char *>(list.files[i]);
         char base[MAX_OSPATH];
 
         COM_StripExtension(base, val + len + 1, sizeof(base));

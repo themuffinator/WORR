@@ -21,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define Z_CopyString(string)    Z_TagCopyString(string, TAG_GENERAL)
 #define Z_CopyStruct(ptr)       memcpy(Z_Malloc(sizeof(*ptr)), ptr, sizeof(*ptr))
 
-#if defined(__cplusplus) && !defined(_MSC_VER)
+#ifdef __cplusplus
 struct z_allocation {
     void *value;
 
