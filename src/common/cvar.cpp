@@ -57,14 +57,14 @@ cvar_t *Cvar_FindVar(const char *var_name)
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 xgenerator_t Cvar_FindGenerator(const char *var_name)
 {
     cvar_t *var = Cvar_FindVar(var_name);
 
-    return var ? var->generator : NULL;
+    return var ? var->generator : nullptr;
 }
 
 /*
@@ -155,10 +155,10 @@ void Cvar_Default_g(genctx_t *ctx)
 // parse integer and float values
 static void parse_string_value(cvar_t *var)
 {
-    char *s = var->string;
+    const char *s = var->string;
 
     if (s[0] == '0' && s[1] == 'x') {
-        long v = strtol(s, NULL, 16);
+        long v = strtol(s, nullptr, 16);
 
         var->integer = Q_clipl_int32(v);
         var->value = (float)var->integer;
@@ -275,10 +275,10 @@ cvar_t *Cvar_Get(const char *var_name, const char *var_value, int flags)
 
     if (flags & CVAR_INFOMASK) {
         if (!validate_info_cvar(var_name)) {
-            return NULL;
+            return nullptr;
         }
         if (!validate_info_cvar(var_value)) {
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -297,11 +297,11 @@ cvar_t *Cvar_Get(const char *var_name, const char *var_value, int flags)
     var->name = (char *)(var + 1);
     memcpy(var->name, var_name, length);
     var->string = Z_CvarCopyString(var_value);
-    var->latched_string = NULL;
+    var->latched_string = nullptr;
     var->default_string = Z_CvarCopyString(var_value);
     parse_string_value(var);
     var->flags = flags;
-    var->changed = NULL;
+    var->changed = nullptr;
     var->generator = Cvar_Default_g;
     var->modified_count++;
     if (var->modified_count == 0)
@@ -621,7 +621,7 @@ void Cvar_GetLatchedVars(void)
             continue;
         Z_Free(var->string);
         var->string = var->latched_string;
-        var->latched_string = NULL;
+        var->latched_string = nullptr;
         parse_string_value(var);
         var->modified_count++;
         if (var->modified_count == 0)
@@ -675,7 +675,7 @@ void Cvar_Command(cvar_t *v)
 
 static void Cvar_Set_c(genctx_t *ctx, int argnum)
 {
-    char *s;
+    const char *s;
     cvar_t *var;
     xgenerator_t g;
 
@@ -683,7 +683,7 @@ static void Cvar_Set_c(genctx_t *ctx, int argnum)
         Cvar_Variable_g(ctx);
     } else if (argnum == 2) {
         s = Cmd_Argv(ctx->argnum - 1);
-        if ((var = Cvar_FindVar(s)) != NULL) {
+        if ((var = Cvar_FindVar(s)) != nullptr) {
             g = var->generator;
             if (g) {
                 ctx->data = var;
@@ -704,7 +704,7 @@ Allows setting and defining of arbitrary cvars from console
 void Cvar_Set_f(void)
 {
     int     c, flags;
-    char    *f;
+    const char    *f;
 
     c = Cmd_Argc();
     if (c < 3) {
@@ -743,7 +743,7 @@ Allows setting and defining of arbitrary cvars from console
 */
 static void Cvar_SetFlag_f(void)
 {
-    char    *s = Cmd_Argv(0);
+    const char    *s = Cmd_Argv(0);
     int     flags;
 
     if (Cmd_Argc() < 3) {
@@ -820,12 +820,12 @@ static const cmd_option_t o_cvarlist[] = {
     { "t", "custom", "list user-created cvars" },
     { "u", "userinfo", "list userinfo cvars" },
     { "v", "verbose", "display flags of each cvar" },
-    { NULL }
+    { nullptr }
 };
 
 static void Cvar_List_c(genctx_t *ctx, int argnum)
 {
-    Cmd_Option_c(o_cvarlist, NULL, ctx, argnum);
+    Cmd_Option_c(o_cvarlist, nullptr, ctx, argnum);
 }
 
 static void Cvar_List_f(void)
@@ -834,7 +834,7 @@ static void Cvar_List_f(void)
     int     i, total;
     bool    verbose = false, modified = false, latched = false;
     int     mask = 0;
-    char    *wildcard = NULL;
+    const char    *wildcard = nullptr;
     int     c;
 
     while ((c = Cmd_ParseOptions(o_cvarlist)) != -1) {
@@ -987,14 +987,14 @@ static void Cvar_Toggle_f(void)
 
 static void Cvar_Toggle_c(genctx_t *ctx, int argnum)
 {
-    char *s;
+    const char *s;
     xgenerator_t g;
 
     if (argnum == 1) {
         Cvar_Variable_g(ctx);
     } else {
         s = Cmd_Argv(ctx->argnum - argnum + 1);
-        if ((g = Cvar_FindGenerator(s)) != NULL) {
+        if ((g = Cvar_FindGenerator(s)) != nullptr) {
             g(ctx);
         }
     }
@@ -1143,7 +1143,7 @@ static const cmdreg_t c_cvar[] = {
     { "reset", Cvar_Reset_f, Cvar_Reset_c },
     { "resetall", Cvar_ResetAll_f },
 
-    { NULL }
+    { nullptr }
 };
 
 /*
