@@ -32,7 +32,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 mtexinfo_t nulltexinfo;
 
-const mleaf_t       nullleaf = { .cluster = -1 };
+const mleaf_t nullleaf = [] {
+    mleaf_t leaf{};
+    leaf.cluster = -1;
+    return leaf;
+}();
 
 static unsigned     floodvalid;
 static unsigned     checkcount;
@@ -144,7 +148,7 @@ void CM_LoadOverride(cm_t *cm, char *server, size_t server_size)
         goto fail;
 
     if (bits & OVERRIDE_NAME) {
-        if (!(buf = SZ_ReadData(&sz, MAX_QPATH)))
+        if (!(buf = static_cast<char *>(SZ_ReadData(&sz, MAX_QPATH))))
             goto fail;
         if (!memchr(buf, 0, MAX_QPATH))
             goto fail;
@@ -159,7 +163,7 @@ void CM_LoadOverride(cm_t *cm, char *server, size_t server_size)
         len = SZ_ReadLong(&sz);
         if (len <= 0)
             goto fail;
-        if (!(buf = SZ_ReadData(&sz, len)))
+        if (!(buf = static_cast<char *>(SZ_ReadData(&sz, len))))
             goto fail;
         cm->entitystring = Z_TagMalloc(len + 1, TAG_CMODEL);
         memcpy(cm->entitystring, buf, len);

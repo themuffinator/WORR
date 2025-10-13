@@ -29,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/client.h"
 
 #include <array>
+#include <algorithm>
 
 #define Cmd_Malloc(size)        Z_TagMalloc(size, TAG_CMD)
 #define Cmd_CopyString(string)  Z_TagCopyString(string, TAG_CMD)
@@ -834,7 +835,7 @@ static list_t   cmd_hash[CMD_HASH_SIZE];
 
 static int      cmd_argc;
 static char     *cmd_argv[MAX_STRING_TOKENS]; // pointers to cmd_data[]
-static char     *cmd_null_string = "";
+static char     cmd_null_string[1] = "";
 
 // complete command string, left untouched
 static char     cmd_string[MAX_STRING_CHARS];
@@ -1510,7 +1511,7 @@ Cmd_AddCommand
 */
 void Cmd_AddCommand(const char *name, xcommand_t function)
 {
-    cmdreg_t reg = { .name = name, .function = function };
+    cmdreg_t reg{ name, function, nullptr };
     Cmd_RegCommand(&reg);
 }
 

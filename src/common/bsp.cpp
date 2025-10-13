@@ -437,7 +437,7 @@ static void BSP_ParseDecoupledLM(bsp_t *bsp, const byte *in, size_t filelen)
         out->lm_height = BSP_Short();
 
         uint32_t offset = BSP_Long();
-        if (offset == std::numeric_limits<uint32_t>::max())
+        if (offset == (std::numeric_limits<uint32_t>::max)())
             out->lightmap = nullptr;
         else if (offset < bsp->numlightmapbytes)
             out->lightmap = bsp->lightmap + offset;
@@ -827,6 +827,9 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     uint32_t        lump_count[q_countof(bsp_lumps)];
     size_t          memsize;
     bool            extended = false;
+#if USE_REF
+    lump_t          ext[q_countof(bspx_lumps)] = {};
+#endif
 
     Q_assert(name);
     Q_assert(bsp_p);
@@ -918,7 +921,6 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     bsp->extended = extended;
 
 #if USE_REF
-    lump_t ext[q_countof(bspx_lumps)] = { 0 };
     memsize += BSP_ParseExtensionHeader(bsp, ext, buf, maxpos, filelen);
 #endif
 

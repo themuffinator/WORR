@@ -25,7 +25,21 @@ in_contents = in_contents.replace('\n', '\\n')
 in_contents = in_contents.replace('\r', '\\r')
 in_contents = in_contents.replace('"', '\\"')
 
-in_contents = '#include <stddef.h>\nconst char ' + sys.argv[3] + '[] = ' + '\"' + in_contents + '\";\nconst size_t ' + sys.argv[3] + '_size = ' + str(size) + ';'
+var_name = sys.argv[3]
+
+converted = [
+    '#include <stddef.h>',
+    f'const char {var_name}[] ='
+]
+
+chunk_size = 16384
+for i in range(0, len(in_contents), chunk_size):
+    chunk = in_contents[i:i + chunk_size]
+    converted.append(f'"{chunk}"')
+
+converted.append(';')
+converted.append(f'const size_t {var_name}_size = {size};')
+in_contents = '\n'.join(converted)
 
 # write
 out_file = open(output_path, "w")
