@@ -185,12 +185,15 @@ private:
         struct DescriptorReference {
             VkDescriptorSet set = VK_NULL_HANDLE;
             uint32_t binding = 0;
+            VkDescriptorBufferInfo vertex{};
+            VkDescriptorBufferInfo index{};
         };
 
         struct MeshGeometry {
             BufferAllocationInfo vertex;
             BufferAllocationInfo index;
             DescriptorReference descriptor;
+            VkIndexType indexType = VK_INDEX_TYPE_UINT16;
             size_t vertexCount = 0;
             size_t indexCount = 0;
             std::vector<uint8_t> vertexStaging;
@@ -281,6 +284,19 @@ private:
     void prepareFrameState(const refdef_t &fd);
     void allocateModelGeometry(ModelRecord &record, const model_t &model);
     void bindModelGeometryBuffers(ModelRecord &record);
+    bool uploadMeshGeometry(ModelRecord::MeshGeometry &geometry);
+    void destroyMeshGeometry(ModelRecord::MeshGeometry &geometry);
+    void destroyModelRecord(ModelRecord &record);
+    void destroyAllModelGeometry();
+    bool createModelDescriptorResources();
+    void destroyModelDescriptorResources();
+    bool createBuffer(ModelRecord::BufferAllocationInfo &buffer,
+                      VkDeviceSize size,
+                      VkBufferUsageFlags usage,
+                      VkMemoryPropertyFlags properties);
+    void destroyBuffer(ModelRecord::BufferAllocationInfo &buffer);
+    bool copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
     void evaluateFrameSettings();
     void uploadDynamicLights();
     void updateSkyState();
@@ -436,6 +452,8 @@ private:
     bool vsyncEnabled_ = true;
     static constexpr size_t kMaxFramesInFlight = 2;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+    VkPipelineLayout modelPipelineLayout_ = VK_NULL_HANDLE;
 };
 
 } // namespace refresh::vk
