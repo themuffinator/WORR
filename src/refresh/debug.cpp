@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/list.h"
 #include "common/prompt.h"
 #include <assert.h>
+#include <array>
 
 #define DEBUG_VERTEX_SIZE   4 // 3*float coord + 1 u32 color
 #define MAX_DEBUG_VERTICES  (q_countof(tess.vertices) / DEBUG_VERTEX_SIZE)
@@ -134,11 +135,12 @@ void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t tim
 
 void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test)
 {
-    vec3_t axis[3], end;
+    std::array<vec3_t, 3> axis{};
+    vec3_t end;
     color_t color;
 
     if (angles) {
-        AnglesToAxis(angles, axis);
+        AnglesToAxis(angles, axis.data());
     } else {
         VectorSet(axis[0], 1, 0, 0);
         VectorSet(axis[1], 0, 1, 0);
@@ -178,7 +180,7 @@ void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint3
 // https://danielsieger.com/blog/2021/03/27/generating-spheres.html
 void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test)
 {
-    vec3_t verts[160];
+    std::array<vec3_t, 160> verts{};
     const int n_stacks = min(4 + radius / 32, 10);
     const int n_slices = min(6 + radius / 32, 16);
     const int v0 = 0;

@@ -31,6 +31,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "system/system.h"
 #include "format/pcx.h"
 #include "format/wal.h"
+#include <array>
 #include "images.h"
 
 #if USE_PNG
@@ -511,8 +512,8 @@ done:
 IMG_LOAD(TGA)
 {
     byte *pixels, *start;
-    uint32_t *row_pointers[MAX_TEXTURE_SIZE];
-    uint32_t colormap[256];
+    std::array<uint32_t *, MAX_TEXTURE_SIZE> row_pointers{};
+    std::array<uint32_t, 256> colormap{};
     const uint32_t *pal;
     sizebuf_t s;
     unsigned id_length, colormap_type, image_type, colormap_start,
@@ -625,7 +626,7 @@ IMG_LOAD(TGA)
         // don't bother unpacking palette unless we need it
         if (image_type == TGA_Colormap) {
             if (colormap_length != 256)
-                memset(colormap, 0, sizeof(colormap));
+                colormap.fill(0);
 
             for (i = 0; i < colormap_length; i++) {
                 colormap[colormap_start + i] = tga_unpack_pixel(in, colormap_bpp);
@@ -650,12 +651,12 @@ IMG_LOAD(TGA)
     }
 
     bpp = (pixel_size + 1) / 8;
-    pal = image_type == TGA_Colormap ? colormap : NULL;
+    pal = image_type == TGA_Colormap ? colormap.data() : nullptr;
 
     if (rle)
-        ret = tga_decode_rle(&s, row_pointers, w, h, bpp, pal);
+        ret = tga_decode_rle(&s, row_pointers.data(), w, h, bpp, pal);
     else
-        ret = tga_decode_raw(&s, row_pointers, w, h, bpp, pal);
+        ret = tga_decode_raw(&s, row_pointers.data(), w, h, bpp, pal);
     if (ret < 0) {
         IMG_FreePixels(pixels);
         return ret;
@@ -686,14 +687,14 @@ IMG_LOAD(TGA)
 
 static int IMG_SaveTGA(const screenshot_t *s)
 {
-    byte header[TARGA_HEADER_SIZE] = { 0 };
+    std::array<byte, TARGA_HEADER_SIZE> header{};
 
     header[ 2] = 2;     // uncompressed type
     WL16(&header[12], s->width);
     WL16(&header[14], s->height);
     header[16] = 24;    // pixel size
 
-    if (!fwrite(&header, sizeof(header), 1, s->fp))
+    if (!fwrite(header.data(), header.size(), 1, s->fp))
         return Q_ERR_FAILURE;
 
     byte *row = static_cast<byte *>(malloc(s->width * 3));

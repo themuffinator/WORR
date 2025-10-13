@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include <array>
 #include "format/md2.h"
 #if USE_MD3
 #include "format/md3.h"
@@ -862,7 +863,7 @@ typedef struct {
 
 static void MD5_ComputeNormals(md5_mesh_t *mesh, const baseframe_joint_t *base_skeleton)
 {
-    vec3_t finalVerts[TESS_MAX_VERTICES];
+    std::array<vec3_t, TESS_MAX_VERTICES> finalVerts{};
     md5_vertex_t *vert;
     int i, j;
 
@@ -888,7 +889,7 @@ static void MD5_ComputeNormals(md5_mesh_t *mesh, const baseframe_joint_t *base_s
     }
 
     for (i = 0; i < mesh->num_indices; i += 3) {
-        vec3_t xyz[3];
+        std::array<vec3_t, 3> xyz{};
 
         for (j = 0; j < 3; j++)
             VectorCopy(finalVerts[mesh->indices[i + j]], xyz[j]);
@@ -946,7 +947,7 @@ static void MD5_ComputeNormals(md5_mesh_t *mesh, const baseframe_joint_t *base_s
 
 static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 {
-    baseframe_joint_t base_skeleton[MD5_MAX_JOINTS];
+    std::array<baseframe_joint_t, MD5_MAX_JOINTS> base_skeleton{};
     md5_model_t *mdl;
     int i, j, k;
 
@@ -1059,7 +1060,7 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
                 MD5_ParseError("Bad vert start/count");
         }
 
-        MD5_ComputeNormals(mesh, base_skeleton);
+        MD5_ComputeNormals(mesh, base_skeleton.data());
     }
 
     return true;
@@ -1084,10 +1085,10 @@ static void MD5_BuildFrameSkeleton(const joint_info_t *joint_infos,
 {
     for (int i = 0; i < num_joints; i++) {
         const baseframe_joint_t *baseJoint = &base_frame[i];
-        float components[7];
+        std::array<float, 7> components{};
 
-        float *animated_position = components + 0;
-        float *animated_quat = components + 3;
+        float *animated_position = components.data() + 0;
+        float *animated_quat = components.data() + 3;
 
         VectorCopy(baseJoint->pos, animated_position);
         VectorCopy(baseJoint->orient, animated_quat); // W will be re-calculated below
@@ -1135,7 +1136,7 @@ static void MD5_LoadScales(const md5_model_t *model, const char *path, joint_inf
 {
     const jsmntok_t *tok, *end;
     jsmn_parser parser;
-    jsmntok_t tokens[4096];
+    std::array<jsmntok_t, 4096> tokens;
     char *data;
     int len, ret;
 
@@ -1147,17 +1148,17 @@ static void MD5_LoadScales(const md5_model_t *model, const char *path, joint_inf
     }
 
     jsmn_init(&parser);
-    ret = jsmn_parse(&parser, data, len, tokens, q_countof(tokens));
+    ret = jsmn_parse(&parser, data, len, tokens.data(), static_cast<unsigned>(tokens.size()));
     if (ret < 0)
         goto fail;
     if (ret == 0)
         goto skip;
 
-    tok = &tokens[0];
+    tok = tokens.data();
     if (tok->type != JSMN_OBJECT)
         goto fail;
 
-    end = tokens + ret;
+    end = tokens.data() + ret;
     tok++;
 
     while (tok < end) {
@@ -1221,9 +1222,9 @@ fail:
  */
 static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
 {
-    joint_info_t joint_infos[MD5_MAX_JOINTS];
-    baseframe_joint_t base_frame[MD5_MAX_JOINTS];
-    float anim_frame_data[MD5_MAX_JOINTS * MD5_NUM_ANIMATED_COMPONENT_BITS];
+    std::array<joint_info_t, MD5_MAX_JOINTS> joint_infos{};
+    std::array<baseframe_joint_t, MD5_MAX_JOINTS> base_frame{};
+    std::array<float, MD5_MAX_JOINTS * MD5_NUM_ANIMATED_COMPONENT_BITS> anim_frame_data{};
     int num_joints, num_animated_components;
     md5_model_t *mdl = model->skeleton;
     int i, j;
@@ -1259,7 +1260,7 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
     COM_SkipToken(&s);
 
     MD5_ParseExpect(&s, "numAnimatedComponents");
-    num_animated_components = MD5_ParseUint(&s, 0, q_countof(anim_frame_data));
+    num_animated_components = MD5_ParseUint(&s, 0, static_cast<uint32_t>(anim_frame_data.size()));
 
     MD5_ParseExpect(&s, "hierarchy");
     MD5_ParseExpect(&s, "{");
@@ -1326,7 +1327,7 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
     char scale_path[MAX_QPATH];
     if (COM_StripExtension(scale_path, path, sizeof(scale_path)) < sizeof(scale_path) &&
         Q_strlcat(scale_path, ".md5scale", sizeof(scale_path)) < sizeof(scale_path))
-        MD5_LoadScales(model->skeleton, scale_path, joint_infos);
+        MD5_LoadScales(model->skeleton, scale_path, joint_infos.data());
     else
         Com_WPrintf("MD5 scale path too long: %s\n", scale_path);
 
@@ -1341,7 +1342,7 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
         MD5_ParseExpect(&s, "}");
 
         /* Build frame skeleton from the collected data */
-        MD5_BuildFrameSkeleton(joint_infos, base_frame, anim_frame_data,
+        MD5_BuildFrameSkeleton(joint_infos.data(), base_frame.data(), anim_frame_data.data(),
                                &mdl->skeleton_frames[frame_index * mdl->num_joints], mdl->num_joints);
     }
 
