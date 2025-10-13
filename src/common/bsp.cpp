@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // bsp.c -- model loading
 
+#include <limits>
+
 #include "shared/shared.h"
 #include "shared/list.h"
 #include "common/bsp.h"
@@ -152,8 +154,10 @@ static list_t   bsp_cache;
 
 static void BSP_PrintStats(const bsp_t *bsp)
 {
-    for (int i = 0; i < q_countof(bsp_stats); i++)
-        Com_Printf("%8d : %s\n", *(int *)((byte *)bsp + bsp_stats[i].ofs), bsp_stats[i].name);
+    for (int i = 0; i < q_countof(bsp_stats); i++) {
+        const auto *value = reinterpret_cast<const int *>(reinterpret_cast<const byte *>(bsp) + bsp_stats[i].ofs);
+        Com_Printf("%8d : %s\n", *value, bsp_stats[i].name);
+    }
 
     if (bsp->vis)
         Com_Printf("%8u : clusters\n", bsp->vis->numclusters);
@@ -223,7 +227,7 @@ static bsp_t *BSP_Find(const char *name)
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static int BSP_SetParent(mnode_t *node, unsigned key)
@@ -280,7 +284,7 @@ static int BSP_ValidateTree(bsp_t *bsp)
     // what the fuck?
     if (bsp->checksum == 0x247a28b4 && bsp->nummodels == 99 &&
         bsp->models[90].headnode == bsp->models[91].headnode)
-        bsp->models[90].headnode = (mnode_t *)bsp->leafs;
+        bsp->models[90].headnode = reinterpret_cast<mnode_t *>(bsp->leafs);
 
     for (i = 0, mod = bsp->models; i < bsp->nummodels; i++, mod++) {
         if (i == 0 && mod->headnode != bsp->nodes) {
@@ -433,12 +437,12 @@ static void BSP_ParseDecoupledLM(bsp_t *bsp, const byte *in, size_t filelen)
         out->lm_height = BSP_Short();
 
         uint32_t offset = BSP_Long();
-        if (offset == -1)
-            out->lightmap = NULL;
+        if (offset == std::numeric_limits<uint32_t>::max())
+            out->lightmap = nullptr;
         else if (offset < bsp->numlightmapbytes)
             out->lightmap = bsp->lightmap + offset;
         else {
-            out->lightmap = NULL;
+            out->lightmap = nullptr;
             errors = true;
         }
 
@@ -463,7 +467,7 @@ const lightgrid_sample_t *BSP_LookupLightgrid(const lightgrid_t *grid, const uin
 
     while (1) {
         if (nodenum & FLAG_OCCLUDED)
-            return NULL;
+            return nullptr;
 
         if (nodenum & FLAG_LEAF) {
             const lightgrid_leaf_t *leaf = &grid->leafs[nodenum & ~FLAG_LEAF];
@@ -475,7 +479,7 @@ const lightgrid_sample_t *BSP_LookupLightgrid(const lightgrid_t *grid, const uin
             uint32_t h = leaf->size[1];
             uint32_t index = w * (h * pos[2] + pos[1]) + pos[0];
             if (index >= leaf->numsamples)
-                return NULL;
+                return nullptr;
 
             return &grid->samples[leaf->firstsample + index * grid->numstyles];
         }
@@ -592,7 +596,6 @@ static void BSP_ParseLightgrid(bsp_t *bsp, const byte *in, size_t filelen)
     lightgrid_sample_t *sample;
     uint32_t remaining;
     sizebuf_t s;
-    byte *data;
     size_t size;
     int i, j;
 
@@ -608,7 +611,7 @@ static void BSP_ParseLightgrid(bsp_t *bsp, const byte *in, size_t filelen)
 
     SZ_InitRead(&s, in, filelen);
 
-    grid->nodes = BSP_ALLOC(sizeof(grid->nodes[0]) * grid->numnodes);
+    grid->nodes = static_cast<lightgrid_node_t *>(BSP_ALLOC(sizeof(grid->nodes[0]) * grid->numnodes));
 
     // load children first
     s.readcount = 45;
@@ -633,11 +636,13 @@ static void BSP_ParseLightgrid(bsp_t *bsp, const byte *in, size_t filelen)
         s.readcount += 32;
     }
 
-    grid->leafs = BSP_ALLOC(sizeof(grid->leafs[0]) * grid->numleafs);
+    grid->leafs = static_cast<lightgrid_leaf_t *>(BSP_ALLOC(sizeof(grid->leafs[0]) * grid->numleafs));
 
     // init samples to fully occluded
     size = sizeof(grid->samples[0]) * grid->numsamples * grid->numstyles;
-    grid->samples = sample = memset(BSP_ALLOC(size), 255, size);
+    grid->samples = static_cast<lightgrid_sample_t *>(BSP_ALLOC(size));
+    sample = grid->samples;
+    memset(sample, 255, size);
 
     remaining = grid->numsamples;
     s.readcount += 4;
@@ -659,7 +664,7 @@ static void BSP_ParseLightgrid(bsp_t *bsp, const byte *in, size_t filelen)
                 continue;
 
             Q_assert(numstyles <= grid->numstyles);
-            data = SZ_ReadData(&s, sizeof(*sample) * numstyles);
+            const auto *data = static_cast<const lightgrid_sample_t *>(SZ_ReadData(&s, sizeof(*sample) * numstyles));
             Q_assert(data);
             memcpy(sample, data, sizeof(*sample) * numstyles);
         }
@@ -681,7 +686,7 @@ static bool BSP_ParseFaceNormalsHeader(bsp_t *bsp, const byte *in, size_t filele
     bsp_normals_t *normals = &bsp->normals;
     sizebuf_t s;
 
-    SZ_InitRead(&s, (void *)in, filelen);
+    SZ_InitRead(&s, in, filelen);
     s.cursize = filelen;
 
     if (!BSP_ParseFaceNormalsHeader_(bsp, normals, &s)) {
@@ -698,7 +703,7 @@ static void BSP_ParseFaceNormals(bsp_t *bsp, const byte *in, size_t filelen)
     if (!BSP_ParseFaceNormalsHeader(bsp, in, filelen))
         return;
 
-    bsp->normals.normals = Z_Malloc(sizeof(vec3_t) * bsp->normals.num_normals);
+    bsp->normals.normals = static_cast<vec3_t *>(Z_Malloc(sizeof(vec3_t) * bsp->normals.num_normals));
 
     size_t off = sizeof(uint32_t);
 
@@ -717,7 +722,7 @@ static void BSP_ParseFaceNormals(bsp_t *bsp, const byte *in, size_t filelen)
         return;
     }
 
-    bsp->normals.normal_indices = Z_Malloc(sizeof(uint32_t) * num_indices);
+    bsp->normals.normal_indices = static_cast<uint32_t *>(Z_Malloc(sizeof(uint32_t) * num_indices));
 
     for (size_t i = 0; i < num_indices; i++) {
         memcpy(&bsp->normals.normal_indices[i], in + off, sizeof(uint32_t));
@@ -748,7 +753,7 @@ static size_t BSP_ParseExtensionHeader(bsp_t *bsp, lump_t *out, const byte *buf,
     }
 
     size_t extrasize = 0;
-    const xlump_t *l = (const xlump_t *)(buf + pos);
+    const auto *l = reinterpret_cast<const xlump_t *>(buf + pos);
     for (int i = 0; i < numlumps; i++, l++) {
         for (int j = 0; j < q_countof(bspx_lumps); j++) {
             const xlump_info_t *e = &bspx_lumps[j];
@@ -764,7 +769,7 @@ static size_t BSP_ParseExtensionHeader(bsp_t *bsp, lump_t *out, const byte *buf,
                 break;
             }
 
-            if ((uint64_t)ofs + len > filelen) {
+            if (static_cast<uint64_t>(ofs) + len > filelen) {
                 Com_WPrintf("Ignoring out of bounds %s lump\n", e->name);
                 break;
             }
@@ -813,8 +818,8 @@ Loads in the map and all submodels
 int BSP_Load(const char *name, bsp_t **bsp_p)
 {
     bsp_t           *bsp;
-    byte            *buf;
-    dheader_t       *header;
+    byte            *buf = nullptr;
+    const dheader_t *header;
     const lump_info_t *info;
     uint32_t        filelen, ofs, len, count, maxpos;
     int             i, ret;
@@ -826,12 +831,12 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     Q_assert(name);
     Q_assert(bsp_p);
 
-    *bsp_p = NULL;
+    *bsp_p = nullptr;
 
     if (!*name)
         return Q_ERR(ENOENT);
 
-    if ((bsp = BSP_Find(name)) != NULL) {
+    if ((bsp = BSP_Find(name)) != nullptr) {
         Com_PageInMemory(bsp->hunk.base, bsp->hunk.cursize);
         bsp->refcount++;
         *bsp_p = bsp;
@@ -841,7 +846,7 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     //
     // load the file
     //
-    filelen = FS_LoadFile(name, (void **)&buf);
+    filelen = FS_LoadFile(name, reinterpret_cast<void **>(&buf));
     if (!buf) {
         return filelen;
     }
@@ -852,7 +857,7 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     }
 
     // byte swap and validate the header
-    header = (dheader_t *)buf;
+    header = reinterpret_cast<const dheader_t *>(buf);
     switch (LittleLong(header->ident)) {
     case IDBSPHEADER:
         break;
@@ -874,7 +879,7 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
     for (i = 0, info = bsp_lumps; i < q_countof(bsp_lumps); i++, info++) {
         ofs = LittleLong(header->lumps[info->lump].fileofs);
         len = LittleLong(header->lumps[info->lump].filelen);
-        if ((uint64_t)ofs + len > filelen) {
+        if (static_cast<uint64_t>(ofs) + len > filelen) {
             if (!info->lump && ofs < filelen) {
                 // EntString workaround for eg ztnmap1
                 Com_WPrintf("%s lump out of bounds, fixing\n", info->name);
@@ -907,7 +912,7 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
 
     // load into hunk
     len = strlen(name);
-    bsp = Z_Mallocz(sizeof(*bsp) + len);
+    bsp = static_cast<bsp_t *>(Z_Mallocz(sizeof(*bsp) + len));
     memcpy(bsp->name, name, len + 1);
     bsp->refcount = 1;
     bsp->extended = extended;
@@ -1051,7 +1056,7 @@ static bool BSP_RecursiveLightPoint(const mnode_t *node, float p1f, float p2f, c
 void BSP_LightPoint(lightpoint_t *point, const vec3_t start, const vec3_t end, const mnode_t *headnode, int nolm_mask)
 {
     light_point = point;
-    light_point->surf = NULL;
+    light_point->surf = nullptr;
     light_point->fraction = 1;
     light_mask = nolm_mask;
 
@@ -1067,7 +1072,7 @@ void BSP_TransformedLightPoint(lightpoint_t *point, const vec3_t start, const ve
     vec3_t axis[3];
 
     light_point = point;
-    light_point->surf = NULL;
+    light_point->surf = nullptr;
     light_point->fraction = 1;
     light_mask = nolm_mask;
 
@@ -1121,8 +1126,9 @@ void BSP_ClusterVis(const bsp_t *bsp, visrow_t *mask, int cluster, int vis)
     }
 
     // decompress vis
-    in_end = (const byte *)bsp->vis + bsp->numvisibility;
-    in = (const byte *)bsp->vis + bsp->vis->bitofs[cluster][vis];
+    const auto *vis_bytes = reinterpret_cast<const byte *>(bsp->vis);
+    in_end = vis_bytes + bsp->numvisibility;
+    in = vis_bytes + bsp->vis->bitofs[cluster][vis];
     out_end = mask->b + bsp->visrowsize;
     out = mask->b;
     do {
