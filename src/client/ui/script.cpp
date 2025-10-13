@@ -17,7 +17,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "ui.h"
-#include "common/files.h"
+#include "common/json.h"
+
+#include <limits.h>
+#include <string.h>
 
 static menuSound_t Activate(menuCommon_t *self)
 {
@@ -43,17 +46,23 @@ static menuSound_t Activate(menuCommon_t *self)
     return QMS_NOTHANDLED;
 }
 
-static const cmd_option_t o_common[] = {
-    { "s:", "status" },
-    { NULL }
-};
+static void add_string_len(menuSpinControl_t *s, const char *tok, size_t len)
+{
+    if (s->numItems >= MAX_MENU_ITEMS)
+        return;
+
+    s->itemnames = Z_Realloc(s->itemnames, Q_ALIGN(s->numItems + 2, MIN_MENU_ITEMS) * sizeof(char *));
+
+    char *copy = UI_Malloc(len + 1);
+    memcpy(copy, tok, len);
+    copy[len] = '\0';
+
+    s->itemnames[s->numItems++] = copy;
+}
 
 static void add_string(menuSpinControl_t *s, const char *tok)
 {
-    if (s->numItems < MAX_MENU_ITEMS) {
-        s->itemnames = Z_Realloc(s->itemnames, Q_ALIGN(s->numItems + 2, MIN_MENU_ITEMS) * sizeof(char *));
-        s->itemnames[s->numItems++] = UI_CopyString(tok);
-    }
+    add_string_len(s, tok, strlen(tok));
 }
 
 static void add_expand(menuSpinControl_t *s, const char *tok)
@@ -91,775 +100,781 @@ static void add_expand(menuSpinControl_t *s, const char *tok)
     Z_Free(temp);
 }
 
-static void long_args_hack(menuSpinControl_t *s, int argc)
+typedef enum {
+    ITEM_KIND_VALUES,
+    ITEM_KIND_STRINGS,
+    ITEM_KIND_PAIRS,
+    ITEM_KIND_RANGE,
+    ITEM_KIND_ACTION,
+    ITEM_KIND_BITMAP,
+    ITEM_KIND_BIND,
+    ITEM_KIND_SAVEGAME,
+    ITEM_KIND_LOADGAME,
+    ITEM_KIND_TOGGLE,
+    ITEM_KIND_FIELD,
+    ITEM_KIND_BLANK,
+    ITEM_KIND_IMAGEVALUES,
+    ITEM_KIND_EPISODE,
+    ITEM_KIND_UNIT,
+} menuItemKind;
+
+typedef struct {
+    menuType_t type;
+    menuItemKind kind;
+} menuItemTypeInfo;
+
+static menuItemTypeInfo ParseItemType(const char *type)
 {
-    int i;
+    if (!Q_stricmp(type, "values"))
+        return { MTYPE_SPINCONTROL, ITEM_KIND_VALUES };
+    if (!Q_stricmp(type, "strings"))
+        return { MTYPE_STRINGS, ITEM_KIND_STRINGS };
+    if (!Q_stricmp(type, "pairs"))
+        return { MTYPE_PAIRS, ITEM_KIND_PAIRS };
+    if (!Q_stricmp(type, "range"))
+        return { MTYPE_SLIDER, ITEM_KIND_RANGE };
+    if (!Q_stricmp(type, "action"))
+        return { MTYPE_ACTION, ITEM_KIND_ACTION };
+    if (!Q_stricmp(type, "bitmap"))
+        return { MTYPE_BITMAP, ITEM_KIND_BITMAP };
+    if (!Q_stricmp(type, "bind"))
+        return { MTYPE_KEYBIND, ITEM_KIND_BIND };
+    if (!Q_stricmp(type, "savegame"))
+        return { MTYPE_SAVEGAME, ITEM_KIND_SAVEGAME };
+    if (!Q_stricmp(type, "loadgame"))
+        return { MTYPE_LOADGAME, ITEM_KIND_LOADGAME };
+    if (!Q_stricmp(type, "toggle"))
+        return { MTYPE_TOGGLE, ITEM_KIND_TOGGLE };
+    if (!Q_stricmp(type, "field"))
+        return { MTYPE_FIELD, ITEM_KIND_FIELD };
+    if (!Q_stricmp(type, "blank"))
+        return { MTYPE_SEPARATOR, ITEM_KIND_BLANK };
+    if (!Q_stricmp(type, "imagevalues"))
+        return { MTYPE_IMAGESPINCONTROL, ITEM_KIND_IMAGEVALUES };
+    if (!Q_stricmp(type, "episode_selector"))
+        return { MTYPE_EPISODE, ITEM_KIND_EPISODE };
+    if (!Q_stricmp(type, "unit_selector"))
+        return { MTYPE_UNIT, ITEM_KIND_UNIT };
 
-    s->itemnames = UI_Malloc(MIN_MENU_ITEMS * sizeof(char *));
+    return { MTYPE_BAD, ITEM_KIND_VALUES };
+}
 
-    for (i = 0; i < argc; i++) {
-        char *tok = Cmd_Argv(cmd_optind + i);
-        if (*tok == '$') {
-            tok++;
-            if (*tok == '$')
-                add_string(s, tok);
-            else
-                add_expand(s, tok);
-        } else {
-            add_string(s, tok);
-        }
-    }
+static char *Json_CopyStringUI(json_parse_t *parser)
+{
+    jsmntok_t *tok = Json_Ensure(parser, JSMN_STRING);
+    size_t len = tok->end - tok->start;
 
+    char *out = UI_Malloc(len + 1);
+    memcpy(out, parser->buffer + tok->start, len);
+    out[len] = '\0';
+
+    Json_Next(parser);
+
+    return out;
+}
+
+static void Json_CopyStringToBuffer(json_parse_t *parser, char *buffer, size_t size)
+{
+    jsmntok_t *tok = Json_Ensure(parser, JSMN_STRING);
+    size_t len = tok->end - tok->start;
+    if (len >= size)
+        len = size - 1;
+
+    memcpy(buffer, parser->buffer + tok->start, len);
+    buffer[len] = '\0';
+
+    Json_Next(parser);
+}
+
+static int Json_ReadInt(json_parse_t *parser)
+{
+    jsmntok_t *tok = Json_Ensure(parser, JSMN_PRIMITIVE);
+    int value = Q_atoi(parser->buffer + tok->start);
+    Json_Next(parser);
+    return value;
+}
+
+static float Json_ReadFloat(json_parse_t *parser)
+{
+    jsmntok_t *tok = Json_Ensure(parser, JSMN_PRIMITIVE);
+    float value = Q_atof(parser->buffer + tok->start);
+    Json_Next(parser);
+    return value;
+}
+
+static bool Json_ReadBool(json_parse_t *parser)
+{
+    jsmntok_t *tok = Json_Ensure(parser, JSMN_PRIMITIVE);
+    bool value = parser->buffer[tok->start] == 't';
+    Json_Next(parser);
+    return value;
+}
+
+static void FinalizeSpinItems(menuSpinControl_t *s)
+{
+    if (!s->itemnames)
+        return;
+
+    s->itemnames = Z_Realloc(s->itemnames, Q_ALIGN(s->numItems + 1, MIN_MENU_ITEMS) * sizeof(char *));
     s->itemnames[s->numItems] = NULL;
 }
 
-static void Parse_Spin(menuFrameWork_t *menu, menuType_t type)
+static void ParseSpinOptions(json_parse_t *parser, menuSpinControl_t *s)
 {
-    menuSpinControl_t *s;
-    int c, i, numItems;
-    char *status = NULL;
+    jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
 
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
+    for (int i = 0; i < array->size; i++) {
+        Json_Ensure(parser, JSMN_STRING);
+        const char *start = parser->buffer + parser->pos->start;
+        size_t len = parser->pos->end - parser->pos->start;
+
+        if (len && start[0] == '$') {
+            if (len > 1 && start[1] == '$') {
+                add_string_len(s, start + 1, len - 1);
+            } else if (len > 1) {
+                char *expand = UI_Malloc(len);
+                memcpy(expand, start + 1, len - 1);
+                expand[len - 1] = '\0';
+                add_expand(s, expand);
+                Z_Free(expand);
+            }
+        } else if (len) {
+            add_string_len(s, start, len);
         }
+
+        Json_Next(parser);
     }
 
-    numItems = Cmd_Argc() - (cmd_optind + 2);
-    if (numItems < 1) {
-        Com_Printf("Usage: %s <name> <cvar> <desc1> [...]\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = type;
-    s->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->generic.status = UI_CopyString(status);
-    s->cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-
-    cmd_optind += 2;
-    if (strchr(Cmd_ArgsFrom(cmd_optind), '$')) {
-        long_args_hack(s, numItems);
-    } else {
-        s->itemnames = UI_Mallocz(sizeof(char *) * (numItems + 1));
-        for (i = 0; i < numItems; i++) {
-            s->itemnames[i] = UI_CopyString(Cmd_Argv(cmd_optind + i));
-        }
-        s->numItems = numItems;
-    }
-
-    Menu_AddItem(menu, s);
+    FinalizeSpinItems(s);
 }
 
-static void Parse_EpisodeSelector(menuFrameWork_t *menu)
+static void ParsePairOptions(json_parse_t *parser, menuSpinControl_t *s)
 {
-    menuEpisodeSelector_t *s;
-    int c;
-    char *status = NULL;
+    jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
 
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
+    s->numItems = array->size;
+    s->itemnames = UI_Mallocz(sizeof(char *) * (s->numItems + 1));
+    s->itemvalues = UI_Mallocz(sizeof(char *) * (s->numItems + 1));
+
+    for (int i = 0; i < array->size; i++) {
+        jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+        char *label = NULL;
+        char *value = NULL;
+
+        for (int j = 0; j < object->size; j++) {
+            if (!Json_Strcmp(parser, "label")) {
+                Json_Next(parser);
+                label = Json_CopyStringUI(parser);
+            } else if (!Json_Strcmp(parser, "value")) {
+                Json_Next(parser);
+                value = Json_CopyStringUI(parser);
+            } else {
+                Json_Next(parser);
+                Json_SkipToken(parser);
+            }
         }
+
+        if (!label || !value)
+            Json_Error(parser, object, "pair entries require label and value");
+
+        s->itemnames[i] = label;
+        s->itemvalues[i] = value;
     }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->spin.generic.type = MTYPE_EPISODE;
-    s->spin.generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->spin.generic.status = UI_CopyString(status);
-    s->spin.cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-
-    UI_MapDB_FetchEpisodes(&s->spin.itemnames, &s->spin.numItems);
-
-    Menu_AddItem(menu, s);
 }
 
-static void Parse_UnitSelector(menuFrameWork_t *menu)
-{
-    menuUnitSelector_t *s;
-    int c;
-    char *status = NULL;
-
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->spin.generic.type = MTYPE_UNIT;
-    s->spin.generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->spin.generic.status = UI_CopyString(status);
-    s->spin.cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-    s->spin.generic.uiFlags |= UI_MULTILINE;
-
-    UI_MapDB_FetchUnits(&s->spin.itemnames, &s->itemindices, &s->spin.numItems);
-
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_ImageSpin(menuFrameWork_t *menu, menuType_t type)
-{
-    menuSpinControl_t *s;
-    int c, numItems;
-    char *status = NULL;
-
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    numItems = Cmd_Argc() - (cmd_optind + 2);
-    if (numItems < 1) {
-        Com_Printf("Usage: %s <name> <cvar> <path filter>\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = type;
-    s->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->generic.status = UI_CopyString(status);
-    s->cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-    s->path = UI_CopyString(Cmd_Argv(cmd_optind + 2));
-    s->filter = UI_CopyString(Cmd_Argv(cmd_optind + 3));
-    s->generic.width = atoi(Cmd_Argv(cmd_optind + 4));
-    s->generic.height = atoi(Cmd_Argv(cmd_optind + 5));
-
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_Pairs(menuFrameWork_t *menu)
-{
-    menuSpinControl_t *s;
-    int c, i, numItems;
-    char *status = NULL;
-
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    numItems = Cmd_Argc() - (cmd_optind + 2);
-    if (numItems < 2 || (numItems & 1)) {
-        Com_Printf("Usage: %s <name> <cvar> <desc1> <value1> [...]\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = MTYPE_PAIRS;
-    s->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->generic.status = UI_CopyString(status);
-    s->cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-    numItems /= 2;
-    s->itemnames = UI_Mallocz(sizeof(char *) * (numItems + 1));
-    s->itemvalues = UI_Mallocz(sizeof(char *) * (numItems + 1));
-    for (i = 0; i < numItems; i++) {
-        s->itemnames[i] = UI_CopyString(Cmd_Argv(cmd_optind + 2 + i * 2));
-        s->itemvalues[i] = UI_CopyString(Cmd_Argv(cmd_optind + 3 + i * 2));
-    }
-    s->numItems = numItems;
-
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_Range(menuFrameWork_t *menu)
-{
-    menuSlider_t *s;
-    char *status = NULL;
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    if (Cmd_Argc() - cmd_optind < 4) {
-        Com_Printf("Usage: %s <name> <cvar> <min> <max> [step]\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = MTYPE_SLIDER;
-    s->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->generic.status = UI_CopyString(status);
-    s->cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-    s->minvalue = Q_atof(Cmd_Argv(cmd_optind + 2));
-    s->maxvalue = Q_atof(Cmd_Argv(cmd_optind + 3));
-    if (Cmd_Argc() - cmd_optind > 4) {
-        s->step = Q_atof(Cmd_Argv(cmd_optind + 4));
-    } else {
-        s->step = (s->maxvalue - s->minvalue) / SLIDER_RANGE;
-    }
-
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_Action(menuFrameWork_t *menu)
-{
-    static const cmd_option_t o_action[] = {
-        { "a", "align" },
-        { "s:", "status" },
-        { NULL }
-    };
-    menuAction_t *a;
-    int uiFlags = UI_CENTER;
-    char *status = NULL;
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_action)) != -1) {
-        switch (c) {
-        case 'a':
-            uiFlags = UI_LEFT | UI_ALTCOLOR;
-            break;
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("Usage: %s <name> <command>\n", Cmd_Argv(0));
-        return;
-    }
-
-    a = UI_Mallocz(sizeof(*a));
-    a->generic.type = MTYPE_ACTION;
-    a->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    a->generic.activate = Activate;
-    a->generic.uiFlags = uiFlags;
-    a->generic.status = UI_CopyString(status);
-    a->cmd = UI_CopyString(Cmd_ArgsFrom(cmd_optind + 1));
-
-    Menu_AddItem(menu, a);
-}
-
-static void Parse_Bitmap(menuFrameWork_t *menu)
-{
-    static const cmd_option_t o_bitmap[] = {
-        { "s:", "status" },
-        { "N:", "altname" },
-        { NULL }
-    };
-    menuBitmap_t *b;
-    char *status = NULL, *altname = NULL;
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_bitmap)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        case 'N':
-            altname = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("Usage: %s <name> <command>\n", Cmd_Argv(0));
-        return;
-    }
-
-    b = UI_Mallocz(sizeof(*b));
-    b->generic.type = MTYPE_BITMAP;
-    b->generic.activate = Activate;
-    b->generic.status = UI_CopyString(status);
-    b->cmd = UI_CopyString(Cmd_ArgsFrom(cmd_optind + 1));
-    b->pics[0] = R_RegisterPic(Cmd_Argv(cmd_optind));
-    if (!altname)
-        altname = va("%s_sel", Cmd_Argv(cmd_optind));
-    b->pics[1] = R_RegisterPic(altname);
-    R_GetPicSize(&b->generic.width, &b->generic.height, b->pics[0]);
-
-    Menu_AddItem(menu, b);
-}
-
-static void Parse_Bind(menuFrameWork_t *menu)
-{
-    static const cmd_option_t o_bind[] = {
-        { "s:", "status" },
-        { "S:", "altstatus" },
-        { NULL }
-    };
-    menuKeybind_t *k;
-    const char *status = "Press Enter to change, Backspace to clear";
-    const char *altstatus = "Press the desired key, Escape to cancel";
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_bind)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        case 'S':
-            altstatus = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("Usage: %s <name> <command>\n", Cmd_Argv(0));
-        return;
-    }
-
-    k = UI_Mallocz(sizeof(*k));
-    k->generic.type = MTYPE_KEYBIND;
-    k->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    k->generic.uiFlags = UI_CENTER;
-    k->generic.status = UI_CopyString(status);
-    k->cmd = UI_CopyString(Cmd_ArgsFrom(cmd_optind + 1));
-    k->altstatus = UI_CopyString(altstatus);
-
-    Menu_AddItem(menu, k);
-}
-
-static void Parse_Savegame(menuFrameWork_t *menu, menuType_t type)
-{
-    menuAction_t *a;
-    char *status = NULL;
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
-            break;
-        default:
-            return;
-        }
-    }
-
-    if (Cmd_Argc() - cmd_optind < 1) {
-        Com_Printf("Usage: %s <dir>\n", Cmd_Argv(0));
-        return;
-    }
-
-    a = UI_Mallocz(sizeof(*a));
-    a->generic.type = type;
-    a->generic.name = UI_CopyString("<EMPTY>");
-    a->generic.activate = Activate;
-    a->generic.uiFlags = UI_CENTER;
-    a->generic.status = UI_CopyString(status);
-    a->cmd = UI_CopyString(Cmd_Argv(cmd_optind));
-
-    if (type == MTYPE_LOADGAME)
-        a->generic.flags |= QMF_GRAYED;
-
-    Menu_AddItem(menu, a);
-}
-
-static void Parse_Toggle(menuFrameWork_t *menu)
+static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
 {
     static const char *const yes_no_names[] = { "no", "yes", NULL };
-    menuSpinControl_t *s;
-    bool negate = false;
-    menuType_t type = MTYPE_TOGGLE;
-    int c, bit = 0;
-    char *b, *status = NULL;
 
-    while ((c = Cmd_ParseOptions(o_common)) != -1) {
-        switch (c) {
-        case 's':
-            status = cmd_optarg;
+    jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+    jsmntok_t *start = parser->pos;
+
+    menuItemTypeInfo info = { MTYPE_BAD, ITEM_KIND_VALUES };
+
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "type")) {
+            Json_Next(parser);
+            char type[32];
+            Json_CopyStringToBuffer(parser, type, sizeof(type));
+            info = ParseItemType(type);
+            if (info.type == MTYPE_BAD)
+                Json_Error(parser, object, "unknown menu item type");
             break;
-        default:
-            return;
         }
+
+        Json_Next(parser);
+        Json_SkipToken(parser);
     }
 
-    if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("Usage: %s <name> <cvar> [~][bit]\n", Cmd_Argv(0));
-        return;
+    if (info.type == MTYPE_BAD)
+        Json_Error(parser, object, "menu item missing type");
+
+    parser->pos = start;
+
+    menuCommon_t *common = NULL;
+    menuSpinControl_t *spin = NULL;
+    menuSlider_t *slider = NULL;
+    menuAction_t *action = NULL;
+    menuBitmap_t *bitmap = NULL;
+    menuKeybind_t *bind = NULL;
+    menuField_t *field = NULL;
+    menuSeparator_t *separator = NULL;
+    menuEpisodeSelector_t *episode = NULL;
+    menuUnitSelector_t *unit = NULL;
+
+    switch (info.kind) {
+    case ITEM_KIND_VALUES:
+    case ITEM_KIND_STRINGS:
+    case ITEM_KIND_PAIRS:
+    case ITEM_KIND_IMAGEVALUES:
+    case ITEM_KIND_TOGGLE:
+        spin = UI_Mallocz(sizeof(*spin));
+        common = &spin->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_RANGE:
+        slider = UI_Mallocz(sizeof(*slider));
+        common = &slider->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_ACTION:
+    case ITEM_KIND_SAVEGAME:
+    case ITEM_KIND_LOADGAME:
+        action = UI_Mallocz(sizeof(*action));
+        common = &action->generic;
+        common->type = info.type;
+        common->activate = Activate;
+        if (info.kind == ITEM_KIND_ACTION)
+            common->uiFlags = UI_CENTER;
+        else
+            common->uiFlags = UI_CENTER;
+        if (info.kind == ITEM_KIND_SAVEGAME || info.kind == ITEM_KIND_LOADGAME)
+            action->generic.name = UI_CopyString("<EMPTY>");
+        if (info.kind == ITEM_KIND_LOADGAME)
+            common->flags |= QMF_GRAYED;
+        break;
+    case ITEM_KIND_BITMAP:
+        bitmap = UI_Mallocz(sizeof(*bitmap));
+        common = &bitmap->generic;
+        common->type = info.type;
+        common->activate = Activate;
+        break;
+    case ITEM_KIND_BIND:
+        bind = UI_Mallocz(sizeof(*bind));
+        common = &bind->generic;
+        common->type = info.type;
+        common->uiFlags = UI_CENTER;
+        bind->generic.status = UI_CopyString("Press Enter to change, Backspace to clear");
+        bind->altstatus = UI_CopyString("Press the desired key, Escape to cancel");
+        break;
+    case ITEM_KIND_FIELD:
+        field = UI_Mallocz(sizeof(*field));
+        common = &field->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_BLANK:
+        separator = UI_Mallocz(sizeof(*separator));
+        common = &separator->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_EPISODE:
+        episode = UI_Mallocz(sizeof(*episode));
+        spin = &episode->spin;
+        common = &spin->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_UNIT:
+        unit = UI_Mallocz(sizeof(*unit));
+        spin = &unit->spin;
+        common = &spin->generic;
+        common->type = info.type;
+        spin->generic.uiFlags |= UI_MULTILINE;
+        break;
     }
 
-    b = Cmd_Argv(cmd_optind + 2);
-    if (*b == '~') {
-        negate = true;
-        b++;
-    }
-    if (*b) {
-        bit = Q_atoi(b);
-        if (bit < 0 || bit >= 32) {
-            Com_Printf("Invalid bit number: %d\n", bit);
-            return;
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "type")) {
+            Json_Next(parser);
+            Json_SkipToken(parser);
+            continue;
         }
-        type = MTYPE_BITFIELD;
-    }
 
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = type;
-    s->generic.name = UI_CopyString(Cmd_Argv(cmd_optind));
-    s->generic.status = UI_CopyString(status);
-    s->cvar = Cvar_WeakGet(Cmd_Argv(cmd_optind + 1));
-    s->itemnames = (char **)yes_no_names;
-    s->numItems = 2;
-    s->negate = negate;
-    s->mask = 1U << bit;
+        if (info.type == MTYPE_BAD)
+            Json_Error(parser, object, "menu item type must be specified before other fields");
 
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_Field(menuFrameWork_t *menu)
-{
-    static const cmd_option_t o_field[] = {
-        { "c", "center" },
-        { "i", "integer" },
-        { "n", "numeric" },
-        { "s:", "status" },
-        { "w:", "width" },
-        { NULL }
-    };
-    menuField_t *f;
-    bool center = false;
-    int flags = 0;
-    char *status = NULL;
-    int width = 16;
-    int c;
-
-    while ((c = Cmd_ParseOptions(o_field)) != -1) {
-        switch (c) {
-        case 'c':
-            center = true;
-            break;
-        case 'i':
-        case 'n':
-            flags |= QMF_NUMBERSONLY;
-            break;
-        case 's':
-            status = cmd_optarg;
-            break;
-        case 'w':
-            width = Q_atoi(cmd_optarg);
-            if (width < 1 || width > 32) {
-                Com_Printf("Invalid width\n");
-                return;
+        if (!Json_Strcmp(parser, "label")) {
+            Json_Next(parser);
+            Z_Free(common->name);
+            common->name = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "status")) {
+            Json_Next(parser);
+            Z_Free(common->status);
+            common->status = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "command")) {
+            Json_Next(parser);
+            char *cmd = Json_CopyStringUI(parser);
+            if (action)
+                action->cmd = cmd;
+            else if (bitmap)
+                bitmap->cmd = cmd;
+            else if (bind)
+                bind->cmd = cmd;
+            else
+                Z_Free(cmd);
+        } else if (!Json_Strcmp(parser, "align")) {
+            Json_Next(parser);
+            char align[16];
+            Json_CopyStringToBuffer(parser, align, sizeof(align));
+            if (common->type == MTYPE_ACTION) {
+                if (!Q_stricmp(align, "left"))
+                    common->uiFlags = UI_LEFT | UI_ALTCOLOR;
+                else
+                    common->uiFlags = UI_CENTER;
             }
-            break;
-        default:
-            return;
+        } else if (!Json_Strcmp(parser, "cvar")) {
+            Json_Next(parser);
+            char *cvar = Json_CopyStringUI(parser);
+            if (spin)
+                spin->cvar = Cvar_WeakGet(cvar);
+            else if (slider)
+                slider->cvar = Cvar_WeakGet(cvar);
+            else if (field)
+                field->cvar = Cvar_WeakGet(cvar);
+            Z_Free(cvar);
+        } else if (!Json_Strcmp(parser, "options")) {
+            Json_Next(parser);
+            if (!spin)
+                Json_Error(parser, object, "options only valid for spin controls");
+            if (info.kind == ITEM_KIND_PAIRS)
+                ParsePairOptions(parser, spin);
+            else
+                ParseSpinOptions(parser, spin);
+        } else if (!Json_Strcmp(parser, "min")) {
+            Json_Next(parser);
+            if (!slider)
+                Json_Error(parser, object, "min only valid for sliders");
+            slider->minvalue = Json_ReadFloat(parser);
+        } else if (!Json_Strcmp(parser, "max")) {
+            Json_Next(parser);
+            if (!slider)
+                Json_Error(parser, object, "max only valid for sliders");
+            slider->maxvalue = Json_ReadFloat(parser);
+        } else if (!Json_Strcmp(parser, "step")) {
+            Json_Next(parser);
+            if (!slider)
+                Json_Error(parser, object, "step only valid for sliders");
+            slider->step = Json_ReadFloat(parser);
+        } else if (!Json_Strcmp(parser, "altStatus")) {
+            Json_Next(parser);
+            if (!bind)
+                Json_Error(parser, object, "altStatus only valid for keybinds");
+            Z_Free(bind->altstatus);
+            bind->altstatus = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "selectedImage")) {
+            Json_Next(parser);
+            if (!bitmap)
+                Json_Error(parser, object, "selectedImage only valid for bitmaps");
+            char *name = Json_CopyStringUI(parser);
+            bitmap->pics[1] = R_RegisterPic(name);
+            Z_Free(name);
+        } else if (!Json_Strcmp(parser, "image")) {
+            Json_Next(parser);
+            if (!bitmap)
+                Json_Error(parser, object, "image only valid for bitmaps");
+            char *name = Json_CopyStringUI(parser);
+            bitmap->pics[0] = R_RegisterPic(name);
+            if (bitmap->pics[0])
+                R_GetPicSize(&bitmap->generic.width, &bitmap->generic.height, bitmap->pics[0]);
+            Z_Free(name);
+        } else if (!Json_Strcmp(parser, "negate")) {
+            Json_Next(parser);
+            if (!spin || (info.kind != ITEM_KIND_TOGGLE))
+                Json_Error(parser, object, "negate only valid for toggles");
+            spin->negate = Json_ReadBool(parser);
+        } else if (!Json_Strcmp(parser, "bit")) {
+            Json_Next(parser);
+            if (!spin || (info.kind != ITEM_KIND_TOGGLE))
+                Json_Error(parser, object, "bit only valid for toggles");
+            int bit = Json_ReadInt(parser);
+            if (bit < 0 || bit >= 32)
+                Json_Error(parser, object, "toggle bit must be between 0 and 31");
+            spin->mask = 1u << bit;
+            spin->generic.type = MTYPE_BITFIELD;
+        } else if (!Json_Strcmp(parser, "center")) {
+            Json_Next(parser);
+            if (!field)
+                Json_Error(parser, object, "center only valid for fields");
+            if (Json_ReadBool(parser)) {
+                Z_Free(common->name);
+                common->name = NULL;
+            }
+        } else if (!Json_Strcmp(parser, "numeric")) {
+            Json_Next(parser);
+            if (!field)
+                Json_Error(parser, object, "numeric only valid for fields");
+            if (Json_ReadBool(parser))
+                field->generic.flags |= QMF_NUMBERSONLY;
+        } else if (!Json_Strcmp(parser, "width")) {
+            Json_Next(parser);
+            int width = Json_ReadInt(parser);
+            if (field) {
+                if (width < 1 || width > 32)
+                    Json_Error(parser, object, "field width must be between 1 and 32");
+                field->width = width;
+            } else if (spin && info.kind == ITEM_KIND_IMAGEVALUES) {
+                spin->generic.width = width;
+            }
+        } else if (!Json_Strcmp(parser, "height")) {
+            Json_Next(parser);
+            if (!spin || info.kind != ITEM_KIND_IMAGEVALUES)
+                Json_Error(parser, object, "height only valid for image spin controls");
+            spin->generic.height = Json_ReadInt(parser);
+        } else if (!Json_Strcmp(parser, "path")) {
+            Json_Next(parser);
+            if (!spin || info.kind != ITEM_KIND_IMAGEVALUES)
+                Json_Error(parser, object, "path only valid for image spin controls");
+            spin->path = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "filter")) {
+            Json_Next(parser);
+            if (!spin || info.kind != ITEM_KIND_IMAGEVALUES)
+                Json_Error(parser, object, "filter only valid for image spin controls");
+            spin->filter = Json_CopyStringUI(parser);
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
         }
     }
 
-    f = UI_Mallocz(sizeof(*f));
-    f->generic.type = MTYPE_FIELD;
-    f->generic.name = center ? NULL : UI_CopyString(Cmd_Argv(cmd_optind));
-    f->generic.status = UI_CopyString(status);
-    f->generic.flags = flags;
-    f->cvar = Cvar_WeakGet(Cmd_Argv(center ? cmd_optind : cmd_optind + 1));
-    f->width = width;
+    switch (info.kind) {
+    case ITEM_KIND_VALUES:
+    case ITEM_KIND_STRINGS:
+        if (!spin || !spin->cvar || !spin->itemnames)
+            Json_Error(parser, object, "values/strings require cvar and options");
+        break;
+    case ITEM_KIND_PAIRS:
+        if (!spin || !spin->cvar || !spin->itemnames || !spin->itemvalues)
+            Json_Error(parser, object, "pairs require cvar and options");
+        break;
+    case ITEM_KIND_RANGE:
+        if (!slider || !slider->cvar)
+            Json_Error(parser, object, "range requires cvar");
+        if (!slider->step)
+            slider->step = (slider->maxvalue - slider->minvalue) / SLIDER_RANGE;
+        break;
+    case ITEM_KIND_ACTION:
+        if (!action || !action->cmd)
+            Json_Error(parser, object, "action requires command");
+        break;
+    case ITEM_KIND_BITMAP:
+        if (!bitmap || !bitmap->pics[0] || !bitmap->cmd)
+            Json_Error(parser, object, "bitmap requires image and command");
+        if (!bitmap->pics[1])
+            bitmap->pics[1] = bitmap->pics[0];
+        break;
+    case ITEM_KIND_BIND:
+        if (!bind || !bind->cmd)
+            Json_Error(parser, object, "bind requires command");
+        break;
+    case ITEM_KIND_SAVEGAME:
+    case ITEM_KIND_LOADGAME:
+        if (!action || !action->cmd)
+            Json_Error(parser, object, "save/load game requires path");
+        break;
+    case ITEM_KIND_TOGGLE:
+        if (!spin || !spin->cvar)
+            Json_Error(parser, object, "toggle requires cvar");
+        if (!spin->itemnames)
+            spin->itemnames = (char **)yes_no_names;
+        if (!spin->mask && spin->generic.type == MTYPE_BITFIELD)
+            spin->mask = 1;
+        spin->numItems = 2;
+        break;
+    case ITEM_KIND_FIELD:
+        if (!field || !field->cvar)
+            Json_Error(parser, object, "field requires cvar");
+        if (!field->width)
+            field->width = 16;
+        break;
+    case ITEM_KIND_IMAGEVALUES:
+        if (!spin || !spin->cvar || !spin->path || !spin->filter)
+            Json_Error(parser, object, "imagevalues require cvar, path and filter");
+        break;
+    case ITEM_KIND_EPISODE:
+        if (!spin || !spin->cvar)
+            Json_Error(parser, object, "episode selector requires cvar");
+        UI_MapDB_FetchEpisodes(&spin->itemnames, &spin->numItems);
+        break;
+    case ITEM_KIND_UNIT:
+        if (!unit || !spin->cvar)
+            Json_Error(parser, object, "unit selector requires cvar");
+        UI_MapDB_FetchUnits(&spin->itemnames, &unit->itemindices, &spin->numItems);
+        break;
+    case ITEM_KIND_BLANK:
+        break;
+    }
 
-    Menu_AddItem(menu, f);
+    Menu_AddItem(menu, common);
 }
 
-static void Parse_Blank(menuFrameWork_t *menu)
+static void ApplyMenuBackground(menuFrameWork_t *menu, const char *value)
 {
-    menuSeparator_t *s;
-
-    s = UI_Mallocz(sizeof(*s));
-    s->generic.type = MTYPE_SEPARATOR;
-
-    Menu_AddItem(menu, s);
-}
-
-static void Parse_Background(menuFrameWork_t *menu)
-{
-    char *s = Cmd_Argv(1);
-
-    if (SCR_ParseColor(s, &menu->color)) {
+    if (SCR_ParseColor(value, &menu->color)) {
         menu->image = 0;
         menu->transparent = menu->color.a != 255;
     } else {
-        menu->image = R_RegisterPic(s);
+        menu->image = R_RegisterPic(value);
         menu->transparent = R_GetPicSize(NULL, NULL, menu->image);
     }
 }
 
-static void Parse_Style(menuFrameWork_t *menu)
+static void ParseMenuPlaque(json_parse_t *parser, menuFrameWork_t *menu)
 {
-    static const cmd_option_t o_style[] = {
-        { "c", "compact" },
-        { "C", "no-compact" },
-        { "t", "transparent" },
-        { "T", "no-transparent" },
-        { NULL }
-    };
-    int c;
+    jsmntok_t *obj = Json_EnsureNext(parser, JSMN_OBJECT);
 
-    while ((c = Cmd_ParseOptions(o_style)) != -1) {
-        switch (c) {
-        case 'c':
-            menu->compact = true;
-            break;
-        case 'C':
-            menu->compact = false;
-            break;
-        case 't':
-            menu->transparent = true;
-            break;
-        case 'T':
-            menu->transparent = false;
-            break;
-        default:
-            return;
+    for (int i = 0; i < obj->size; i++) {
+        if (!Json_Strcmp(parser, "image")) {
+            Json_Next(parser);
+            char *name = Json_CopyStringUI(parser);
+            menu->plaque = R_RegisterPic(name);
+            if (menu->plaque)
+                R_GetPicSize(&menu->plaque_rc.width, &menu->plaque_rc.height, menu->plaque);
+            Z_Free(name);
+        } else if (!Json_Strcmp(parser, "logo")) {
+            Json_Next(parser);
+            char *name = Json_CopyStringUI(parser);
+            menu->logo = R_RegisterPic(name);
+            if (menu->logo)
+                R_GetPicSize(&menu->logo_rc.width, &menu->logo_rc.height, menu->logo);
+            Z_Free(name);
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
         }
     }
 }
 
-static void Parse_Color(void)
+static void ParseMenuStyle(json_parse_t *parser, menuFrameWork_t *menu)
 {
-    char *s, *c;
+    jsmntok_t *obj = Json_EnsureNext(parser, JSMN_OBJECT);
 
-    if (Cmd_Argc() < 3) {
-        Com_Printf("Usage: %s <state> <color>\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = Cmd_Argv(1);
-    c = Cmd_Argv(2);
-
-    if (!strcmp(s, "normal")) {
-        SCR_ParseColor(c, &uis.color.normal);
-    } else if (!strcmp(s, "active")) {
-        SCR_ParseColor(c, &uis.color.active);
-    } else if (!strcmp(s, "selection")) {
-        SCR_ParseColor(c, &uis.color.selection);
-    } else if (!strcmp(s, "disabled")) {
-        SCR_ParseColor(c, &uis.color.disabled);
-    } else {
-        Com_Printf("Unknown state '%s'\n", s);
-    }
-}
-
-static void Parse_Plaque(menuFrameWork_t *menu)
-{
-    if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <plaque> [logo]\n", Cmd_Argv(0));
-        return;
-    }
-
-    menu->plaque = R_RegisterPic(Cmd_Argv(1));
-    if (menu->plaque) {
-        R_GetPicSize(&menu->plaque_rc.width,
-                     &menu->plaque_rc.height, menu->plaque);
-    }
-
-    if (Cmd_Argc() > 2) {
-        menu->logo = R_RegisterPic(Cmd_Argv(2));
-        if (menu->logo) {
-            R_GetPicSize(&menu->logo_rc.width,
-                         &menu->logo_rc.height, menu->logo);
+    for (int i = 0; i < obj->size; i++) {
+        if (!Json_Strcmp(parser, "compact")) {
+            Json_Next(parser);
+            menu->compact = Json_ReadBool(parser);
+        } else if (!Json_Strcmp(parser, "transparent")) {
+            Json_Next(parser);
+            menu->transparent = Json_ReadBool(parser);
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
         }
     }
 }
 
-static void Parse_Banner(menuFrameWork_t *menu)
+static void ParseMenu(json_parse_t *parser)
 {
-    if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <banner>\n", Cmd_Argv(0));
-        return;
-    }
+    jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+    jsmntok_t *start = parser->pos;
+    char *name = NULL;
 
-    menu->banner = R_RegisterPic(Cmd_Argv(1));
-    if (menu->banner) {
-        R_GetPicSize(&menu->banner_rc.width,
-                     &menu->banner_rc.height, menu->banner);
-    }
-}
-
-static bool Parse_File(const char *path, int depth)
-{
-    char *raw, *data, *p, *cmd;
-    int argc;
-    menuFrameWork_t *menu = NULL;
-    int ret;
-
-    ret = FS_LoadFile(path, (void **)&raw);
-    if (!raw) {
-        if (ret != Q_ERR(ENOENT) || depth) {
-            Com_WPrintf("Couldn't %s %s: %s\n", depth ? "include" : "load",
-                        path, Q_ErrorString(ret));
-        }
-        return false;
-    }
-
-    data = raw;
-    COM_Compress(data);
-
-    while (*data) {
-        p = strchr(data, '\n');
-        if (p) {
-            *p = 0;
-        }
-
-        Cmd_TokenizeString(data, true);
-
-        argc = Cmd_Argc();
-        if (argc) {
-            cmd = Cmd_Argv(0);
-            if (menu) {
-                if (!strcmp(cmd, "end")) {
-                    if (menu->nitems) {
-                        List_Append(&ui_menus, &menu->entry);
-                    } else {
-                        Com_WPrintf("Menu entry without items\n");
-                        menu->free(menu);
-                    }
-                    menu = NULL;
-                } else if (!strcmp(cmd, "title")) {
-                    Z_Free(menu->title);
-                    menu->title = UI_CopyString(Cmd_Argv(1));
-                } else if (!strcmp(cmd, "plaque")) {
-                    Parse_Plaque(menu);
-                } else if (!strcmp(cmd, "banner")) {
-                    Parse_Banner(menu);
-                } else if (!strcmp(cmd, "background")) {
-                    Parse_Background(menu);
-                } else if (!strcmp(cmd, "style")) {
-                    Parse_Style(menu);
-                } else if (!strcmp(cmd, "values")) {
-                    Parse_Spin(menu, MTYPE_SPINCONTROL);
-                } else if (!strcmp(cmd, "strings")) {
-                    Parse_Spin(menu, MTYPE_STRINGS);
-                } else if (!strcmp(cmd, "pairs")) {
-                    Parse_Pairs(menu);
-                } else if (!strcmp(cmd, "range")) {
-                    Parse_Range(menu);
-                } else if (!strcmp(cmd, "action")) {
-                    Parse_Action(menu);
-                } else if (!strcmp(cmd, "bitmap")) {
-                    Parse_Bitmap(menu);
-                } else if (!strcmp(cmd, "bind")) {
-                    Parse_Bind(menu);
-                } else if (!strcmp(cmd, "savegame")) {
-                    Parse_Savegame(menu, MTYPE_SAVEGAME);
-                } else if (!strcmp(cmd, "loadgame")) {
-                    Parse_Savegame(menu, MTYPE_LOADGAME);
-                } else if (!strcmp(cmd, "toggle")) {
-                    Parse_Toggle(menu);
-                } else if (!strcmp(cmd, "field")) {
-                    Parse_Field(menu);
-                } else if (!strcmp(cmd, "blank")) {
-                    Parse_Blank(menu);
-                } else if (!strcmp(cmd, "imagevalues")) {
-                    Parse_ImageSpin(menu, MTYPE_IMAGESPINCONTROL);
-                } else if (!strcmp(cmd, "episode_selector")) {
-                    Parse_EpisodeSelector(menu);
-                } else if (!strcmp(cmd, "unit_selector")) {
-                    Parse_UnitSelector(menu);
-                } else {
-                    Com_WPrintf("Unknown keyword '%s'\n", cmd);
-                }
-            } else {
-                if (!strcmp(cmd, "begin")) {
-                    char *s = Cmd_Argv(1);
-                    if (!*s) {
-                        Com_WPrintf("Expected menu name after '%s'\n", cmd);
-                        break;
-                    }
-                    menu = UI_FindMenu(s);
-                    if (menu) {
-                        List_Remove(&menu->entry);
-                        if (menu->free) {
-                            menu->free(menu);
-                        }
-                    }
-                    menu = UI_Mallocz(sizeof(*menu));
-                    menu->name = UI_CopyString(s);
-                    menu->push = Menu_Push;
-                    menu->pop = Menu_Pop;
-                    menu->free = Menu_Free;
-                    menu->image = uis.backgroundHandle;
-                    menu->color.u32 = uis.color.background.u32;
-                    menu->transparent = uis.transparent;
-                } else if (!strcmp(cmd, "include")) {
-                    char *s = Cmd_Argv(1);
-                    if (!*s) {
-                        Com_WPrintf("Expected file name after '%s'\n", cmd);
-                        break;
-                    }
-                    if (depth == 16) {
-                        Com_WPrintf("Includes too deeply nested\n");
-                    } else {
-                        Parse_File(s, depth + 1);
-                    }
-                } else if (!strcmp(cmd, "color")) {
-                    Parse_Color();
-                } else if (!strcmp(cmd, "background")) {
-                    char *s = Cmd_Argv(1);
-
-                    if (SCR_ParseColor(s, &uis.color.background)) {
-                        uis.backgroundHandle = 0;
-                        uis.transparent = uis.color.background.a != 255;
-                    } else {
-                        uis.backgroundHandle = R_RegisterPic(s);
-                        uis.transparent = R_GetPicSize(NULL, NULL, uis.backgroundHandle);
-                    }
-                } else if (!strcmp(cmd, "font")) {
-                    uis.fontHandle = R_RegisterFont(Cmd_Argv(1));
-                } else if (!strcmp(cmd, "cursor")) {
-                    uis.cursorHandle = R_RegisterPic(Cmd_Argv(1));
-                    R_GetPicSize(&uis.cursorWidth,
-                                 &uis.cursorHeight, uis.cursorHandle);
-                } else if (!strcmp(cmd, "weapon")) {
-                    Cmd_ArgvBuffer(1, uis.weaponModel, sizeof(uis.weaponModel));
-                } else {
-                    Com_WPrintf("Unknown keyword '%s'\n", cmd);
-                    break;
-                }
-            }
-        }
-
-        if (!p) {
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "name")) {
+            Json_Next(parser);
+            name = Json_CopyStringUI(parser);
             break;
         }
 
-        data = p + 1;
+        Json_Next(parser);
+        Json_SkipToken(parser);
     }
 
-    FS_FreeFile(raw);
+    if (!name)
+        Json_Error(parser, object, "menu missing name");
 
+    parser->pos = start;
+
+    menuFrameWork_t *menu = UI_FindMenu(name);
     if (menu) {
-        Com_WPrintf("Menu entry without 'end' terminator\n");
-        menu->free(menu);
+        List_Remove(&menu->entry);
+        if (menu->free)
+            menu->free(menu);
+        menu = NULL;
     }
 
-    return true;
+    menu = UI_Mallocz(sizeof(*menu));
+    menu->name = name;
+    menu->push = Menu_Push;
+    menu->pop = Menu_Pop;
+    menu->free = Menu_Free;
+    menu->image = uis.backgroundHandle;
+    menu->color.u32 = uis.color.background.u32;
+    menu->transparent = uis.transparent;
+
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "name")) {
+            Json_Next(parser);
+            Json_SkipToken(parser);
+        } else if (!Json_Strcmp(parser, "title")) {
+            Json_Next(parser);
+            Z_Free(menu->title);
+            menu->title = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "status")) {
+            Json_Next(parser);
+            Z_Free(menu->status);
+            menu->status = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "banner")) {
+            Json_Next(parser);
+            char *name = Json_CopyStringUI(parser);
+            menu->banner = R_RegisterPic(name);
+            if (menu->banner)
+                R_GetPicSize(&menu->banner_rc.width, &menu->banner_rc.height, menu->banner);
+            Z_Free(name);
+        } else if (!Json_Strcmp(parser, "plaque")) {
+            Json_Next(parser);
+            ParseMenuPlaque(parser, menu);
+        } else if (!Json_Strcmp(parser, "background")) {
+            Json_Next(parser);
+            if (parser->pos->type == JSMN_STRING) {
+                char *value = Json_CopyStringUI(parser);
+                ApplyMenuBackground(menu, value);
+                Z_Free(value);
+            } else {
+                Json_Error(parser, parser->pos, "menu background must be a string");
+            }
+        } else if (!Json_Strcmp(parser, "style")) {
+            Json_Next(parser);
+            ParseMenuStyle(parser, menu);
+        } else if (!Json_Strcmp(parser, "items")) {
+            Json_Next(parser);
+            jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
+            for (int j = 0; j < array->size; j++)
+                ParseMenuItem(parser, menu);
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
+        }
+    }
+
+    if (!menu->nitems) {
+        Com_WPrintf("Menu '%s' defined without items\n", menu->name);
+        menu->free(menu);
+        return;
+    }
+
+    List_Append(&ui_menus, &menu->entry);
+}
+
+static void ParseColors(json_parse_t *parser)
+{
+    jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "normal")) {
+            Json_Next(parser);
+            char *value = Json_CopyStringUI(parser);
+            SCR_ParseColor(value, &uis.color.normal);
+            Z_Free(value);
+        } else if (!Json_Strcmp(parser, "active")) {
+            Json_Next(parser);
+            char *value = Json_CopyStringUI(parser);
+            SCR_ParseColor(value, &uis.color.active);
+            Z_Free(value);
+        } else if (!Json_Strcmp(parser, "selection")) {
+            Json_Next(parser);
+            char *value = Json_CopyStringUI(parser);
+            SCR_ParseColor(value, &uis.color.selection);
+            Z_Free(value);
+        } else if (!Json_Strcmp(parser, "disabled")) {
+            Json_Next(parser);
+            char *value = Json_CopyStringUI(parser);
+            SCR_ParseColor(value, &uis.color.disabled);
+            Z_Free(value);
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
+        }
+    }
+}
+
+static void ParseGlobalBackground(json_parse_t *parser)
+{
+    if (parser->pos->type != JSMN_STRING)
+        Json_Error(parser, parser->pos, "background must be a string");
+
+    char *value = Json_CopyStringUI(parser);
+
+    if (SCR_ParseColor(value, &uis.color.background)) {
+        uis.backgroundHandle = 0;
+        uis.transparent = uis.color.background.a != 255;
+    } else {
+        uis.backgroundHandle = R_RegisterPic(value);
+        uis.transparent = R_GetPicSize(NULL, NULL, uis.backgroundHandle);
+    }
+
+    Z_Free(value);
+}
+
+static void ParseCursor(json_parse_t *parser)
+{
+    if (parser->pos->type != JSMN_STRING)
+        Json_Error(parser, parser->pos, "cursor must be a string");
+
+    char *name = Json_CopyStringUI(parser);
+    uis.cursorHandle = R_RegisterPic(name);
+    R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
+    Z_Free(name);
+}
+
+static void ParseMenus(json_parse_t *parser)
+{
+    jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+    for (int i = 0; i < array->size; i++)
+        ParseMenu(parser);
 }
 
 void UI_LoadScript(void)
 {
-    Parse_File(APPLICATION ".menu", 0);
+    json_parse_t parser = {};
+
+    if (Json_ErrorHandler(parser)) {
+        Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser.error_loc, parser.error);
+        Json_Free(&parser);
+        return;
+    }
+
+    Json_Load(UI_DEFAULT_FILE, &parser);
+
+    jsmntok_t *object = Json_EnsureNext(&parser, JSMN_OBJECT);
+
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(&parser, "background")) {
+            Json_Next(&parser);
+            ParseGlobalBackground(&parser);
+        } else if (!Json_Strcmp(&parser, "font")) {
+            Json_Next(&parser);
+            char *font = Json_CopyStringUI(&parser);
+            uis.fontHandle = R_RegisterFont(font);
+            Z_Free(font);
+        } else if (!Json_Strcmp(&parser, "cursor")) {
+            Json_Next(&parser);
+            ParseCursor(&parser);
+        } else if (!Json_Strcmp(&parser, "weapon")) {
+            Json_Next(&parser);
+            char *weapon = Json_CopyStringUI(&parser);
+            Q_strlcpy(uis.weaponModel, weapon, sizeof(uis.weaponModel));
+            Z_Free(weapon);
+        } else if (!Json_Strcmp(&parser, "colors")) {
+            Json_Next(&parser);
+            ParseColors(&parser);
+        } else if (!Json_Strcmp(&parser, "menus")) {
+            Json_Next(&parser);
+            ParseMenus(&parser);
+        } else {
+            Json_Next(&parser);
+            Json_SkipToken(&parser);
+        }
+    }
+
+    Json_Free(&parser);
 }
