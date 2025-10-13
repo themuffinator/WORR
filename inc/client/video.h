@@ -18,6 +18,30 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifndef VK_VERSION_1_0
+typedef struct VkInstance_T *VkInstance;
+typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
+typedef struct VkAllocationCallbacks VkAllocationCallbacks;
+typedef enum VkResult VkResult;
+#endif
+
+typedef const char *const *(*vid_vk_get_instance_extensions_fn)(uint32_t *count);
+typedef VkResult (*vid_vk_create_surface_fn)(VkInstance instance,
+                                             const VkAllocationCallbacks *allocator,
+                                             VkSurfaceKHR *surface);
+typedef void (*vid_vk_destroy_surface_fn)(VkInstance instance,
+                                          VkSurfaceKHR surface,
+                                          const VkAllocationCallbacks *allocator);
+
+typedef struct {
+    vid_vk_get_instance_extensions_fn get_instance_extensions;
+    vid_vk_create_surface_fn create_surface;
+    vid_vk_destroy_surface_fn destroy_surface;
+} vid_vk_platform_t;
+
 typedef struct {
     const char *name;
 
@@ -45,6 +69,8 @@ typedef struct {
     void (*grab_mouse)(bool grab);
     void (*warp_mouse)(int x, int y);
     bool (*get_mouse_motion)(int *dx, int *dy);
+
+    vid_vk_platform_t vk;
 } vid_driver_t;
 
 extern cvar_t       *vid_geometry;
