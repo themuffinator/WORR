@@ -21,6 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 
+#include <array>
+
 #define MSG_GAMESTATE   (MSG_RELIABLE | MSG_CLEAR)
 
 /*
@@ -403,7 +405,7 @@ SV_BeginDownload_f
 */
 static void SV_BeginDownload_f(void)
 {
-    char    name[MAX_QPATH];
+    std::array<char, MAX_QPATH> name{};
     byte    *download;
     int64_t downloadsize = 0;
     int     maxdownloadsize, result, offset = 0;
@@ -413,17 +415,17 @@ static void SV_BeginDownload_f(void)
     q2proto_download_compress_t download_compress = Q2PROTO_DOWNLOAD_COMPRESS_AUTO;
     q2proto_server_download_state_t *download_state_ptr = NULL;
 
-    if (Cmd_ArgvBuffer(1, name, sizeof(name)) >= sizeof(name)) {
+    if (Cmd_ArgvBuffer(1, name.data(), name.size()) >= name.size()) {
         goto fail1;
     }
 
     // hack for 'status' command
-    if (!strcmp(name, "http")) {
+    if (!strcmp(name.data(), "http")) {
         sv_client->http_download = true;
         return;
     }
 
-    len = FS_NormalizePath(name);
+    len = FS_NormalizePath(name.data());
 
     if (Cmd_Argc() > 2)
         offset = Q_atoi(Cmd_Argv(2));   // downloaded offset
@@ -436,37 +438,37 @@ static void SV_BeginDownload_f(void)
         // check for illegal negative offsets
         || offset < 0
         // don't allow anything with .. path
-        || strstr(name, "..")
+        || strstr(name.data(), "..")
         // leading dots, slashes, etc are no good
         || !Q_ispath(name[0])
         // trailing dots, slashes, etc are no good
         || !Q_ispath(name[len - 1])
         // MUST be in a subdirectory
-        || !strchr(name, '/')) {
-        Com_DPrintf("Refusing download of %s to %s\n", name, sv_client->name);
+        || !strchr(name.data(), '/')) {
+        Com_DPrintf("Refusing download of %s to %s\n", name.data(), sv_client->name);
         goto fail1;
     }
 
-    if (FS_pathcmpn(name, CONST_STR_LEN("players/")) == 0) {
+    if (FS_pathcmpn(name.data(), CONST_STR_LEN("players/")) == 0) {
         allow = allow_download_players;
-    } else if (FS_pathcmpn(name, CONST_STR_LEN("models/")) == 0 ||
-               FS_pathcmpn(name, CONST_STR_LEN("sprites/")) == 0) {
+    } else if (FS_pathcmpn(name.data(), CONST_STR_LEN("models/")) == 0 ||
+               FS_pathcmpn(name.data(), CONST_STR_LEN("sprites/")) == 0) {
         allow = allow_download_models;
-    } else if (FS_pathcmpn(name, CONST_STR_LEN("sound/")) == 0) {
+    } else if (FS_pathcmpn(name.data(), CONST_STR_LEN("sound/")) == 0) {
         allow = allow_download_sounds;
-    } else if (FS_pathcmpn(name, CONST_STR_LEN("maps/")) == 0) {
+    } else if (FS_pathcmpn(name.data(), CONST_STR_LEN("maps/")) == 0) {
         allow = allow_download_maps;
-    } else if (FS_pathcmpn(name, CONST_STR_LEN("textures/")) == 0 ||
-               FS_pathcmpn(name, CONST_STR_LEN("env/")) == 0) {
+    } else if (FS_pathcmpn(name.data(), CONST_STR_LEN("textures/")) == 0 ||
+               FS_pathcmpn(name.data(), CONST_STR_LEN("env/")) == 0) {
         allow = allow_download_textures;
-    } else if (FS_pathcmpn(name, CONST_STR_LEN("pics/")) == 0) {
+    } else if (FS_pathcmpn(name.data(), CONST_STR_LEN("pics/")) == 0) {
         allow = allow_download_pics;
     } else {
         allow = allow_download_others;
     }
 
     if (!allow->integer) {
-        Com_DPrintf("Refusing download of %s to %s\n", name, sv_client->name);
+        Com_DPrintf("Refusing download of %s to %s\n", name.data(), sv_client->name);
         goto fail1;
     }
 
@@ -480,7 +482,7 @@ static void SV_BeginDownload_f(void)
 #if USE_ZLIB
     // prefer raw deflate stream from .pkz if supported
     if (sv_client->q2proto_ctx.features.download_compress_raw && offset == 0) {
-        downloadsize = FS_OpenFile(name, &f, FS_MODE_READ | FS_FLAG_DEFLATE);
+        downloadsize = FS_OpenFile(name.data(), &f, FS_MODE_READ | FS_FLAG_DEFLATE);
         if (f) {
             Com_DPrintf("Serving compressed download to %s\n", sv_client->name);
             download_compress = Q2PROTO_DOWNLOAD_COMPRESS_RAW;
@@ -489,9 +491,9 @@ static void SV_BeginDownload_f(void)
 #endif
 
     if (!f) {
-        downloadsize = FS_OpenFile(name, &f, FS_MODE_READ);
+        downloadsize = FS_OpenFile(name.data(), &f, FS_MODE_READ);
         if (!f) {
-            Com_DPrintf("Couldn't download %s to %s\n", name, sv_client->name);
+            Com_DPrintf("Couldn't download %s to %s\n", name.data(), sv_client->name);
             goto fail1;
         }
     }
@@ -502,7 +504,7 @@ static void SV_BeginDownload_f(void)
 #endif
     int err = q2proto_server_download_begin(&sv_client->q2proto_ctx, downloadsize, download_compress, deflate_args, &sv_client->download_state);
     if (err != Q2P_ERR_SUCCESS) {
-        Com_DPrintf("Couldn't download %s to %s: %s\n", name, sv_client->name, q2proto_error_string(err));
+        Com_DPrintf("Couldn't download %s to %s: %s\n", name.data(), sv_client->name, q2proto_error_string(err));
         goto fail1;
     }
     download_state_ptr = &sv_client->download_state;
@@ -513,7 +515,7 @@ static void SV_BeginDownload_f(void)
     }
 
     if (downloadsize == 0) {
-        Com_DPrintf("Refusing empty download of %s to %s\n", name, sv_client->name);
+        Com_DPrintf("Refusing empty download of %s to %s\n", name.data(), sv_client->name);
         goto fail2;
     }
 
@@ -628,12 +630,12 @@ static void SV_Disconnect_f(void)
 // dumps the serverinfo info string
 static void SV_ShowServerInfo_f(void)
 {
-    char serverinfo[MAX_INFO_STRING];
+    std::array<char, MAX_INFO_STRING> serverinfo{};
 
-    Cvar_BitInfo(serverinfo, CVAR_SERVERINFO);
+    Cvar_BitInfo(serverinfo.data(), CVAR_SERVERINFO);
 
     SV_ClientRedirect();
-    Info_Print(serverinfo);
+    Info_Print(serverinfo.data());
     Com_EndRedirect();
 }
 
@@ -1210,28 +1212,28 @@ Returns matched kickable ban or NULL
 */
 cvarban_t *SV_CheckInfoBans(const char *info, bool match_only)
 {
-    char key[MAX_INFO_STRING];
-    char value[MAX_INFO_STRING];
+    std::array<char, MAX_INFO_STRING> key{};
+    std::array<char, MAX_INFO_STRING> value{};
     cvarban_t *ban;
 
     if (LIST_EMPTY(&sv_infobanlist))
         return NULL;
 
     while (1) {
-        Info_NextPair(&info, key, value);
+        Info_NextPair(&info, key.data(), value.data());
         if (!info)
             return NULL;
 
         LIST_FOR_EACH(cvarban_t, ban, &sv_infobanlist, entry) {
             if (match_only && ban->action != FA_KICK)
                 continue;
-            if (Q_stricmp(ban->var, key))
+            if (Q_stricmp(ban->var, key.data()))
                 continue;
             if (match_only) {
-                if (match_cvar_ban(ban, value))
+                if (match_cvar_ban(ban, value.data()))
                     return ban;
             } else {
-                if (handle_cvar_ban(ban, value))
+                if (handle_cvar_ban(ban, value.data()))
                     return ban;
             }
         }
@@ -1309,7 +1311,8 @@ static void SV_ParseFullUserinfo(const q2proto_clc_userinfo_t *userinfo)
 
 static void SV_ParseDeltaUserinfo(const q2proto_clc_userinfo_delta_t *userinfo_delta)
 {
-    char key[MAX_INFO_KEY], value[MAX_INFO_VALUE];
+    std::array<char, MAX_INFO_KEY> key{};
+    std::array<char, MAX_INFO_VALUE> value{};
 
     // malicious users may try sending too many userinfo updates
     if (userinfoUpdateCount >= MAX_PACKET_USERINFOS) {
@@ -1317,24 +1320,24 @@ static void SV_ParseDeltaUserinfo(const q2proto_clc_userinfo_delta_t *userinfo_d
         return;
     }
 
-    if (q2pslcpy(key, sizeof(key), &userinfo_delta->name) >= sizeof(key)) {
+    if (q2pslcpy(key.data(), key.size(), &userinfo_delta->name) >= key.size()) {
         SV_DropClient(sv_client, "oversize userinfo key");
         return;
     }
 
-    if (q2pslcpy(value, sizeof(value), &userinfo_delta->value) >= sizeof(value)) {
+    if (q2pslcpy(value.data(), value.size(), &userinfo_delta->value) >= value.size()) {
         SV_DropClient(sv_client, "oversize userinfo value");
         return;
     }
 
     if (userinfoUpdateCount < MAX_PACKET_USERINFOS) {
-        if (!Info_SetValueForKey(sv_client->userinfo, key, value)) {
+        if (!Info_SetValueForKey(sv_client->userinfo, key.data(), value.data())) {
             SV_DropClient(sv_client, "malformed userinfo");
             return;
         }
 
         Com_DDPrintf("%s(%s): %s %s [%d]\n", __func__,
-                        sv_client->name, key, value, userinfoUpdateCount);
+                        sv_client->name, key.data(), value.data(), userinfoUpdateCount);
 
         userinfoUpdateCount++;
     } else {
@@ -1408,13 +1411,13 @@ static void SV_ParseClientSetting(const q2proto_clc_setting_t *setting)
 
 static void SV_ParseClientCommand(const q2proto_clc_stringcmd_t *stringcmd)
 {
-    char buffer[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> buffer{};
 
-    if (stringcmd->cmd.len >= sizeof(buffer)) {
+    if (stringcmd->cmd.len >= buffer.size()) {
         SV_DropClient(sv_client, "oversize stringcmd");
         return;
     }
-    q2pslcpy(buffer, sizeof(buffer), &stringcmd->cmd);
+    q2pslcpy(buffer.data(), buffer.size(), &stringcmd->cmd);
 
     // malicious users may try using too many string commands
     if (stringCmdCount >= MAX_PACKET_STRINGCMDS) {
@@ -1422,9 +1425,9 @@ static void SV_ParseClientCommand(const q2proto_clc_stringcmd_t *stringcmd)
         return;
     }
 
-    Com_DDPrintf("%s(%s): %s\n", __func__, sv_client->name, Com_MakePrintable(buffer));
+    Com_DDPrintf("%s(%s): %s\n", __func__, sv_client->name, Com_MakePrintable(buffer.data()));
 
-    SV_ExecuteUserCommand(buffer);
+    SV_ExecuteUserCommand(buffer.data());
     stringCmdCount++;
 }
 

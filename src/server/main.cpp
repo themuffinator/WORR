@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 #include "client/input.h"
+
+#include <array>
 #if USE_CLIENT
 #include "refresh/refresh.h"
 #endif
@@ -418,15 +420,15 @@ It is assumed that size of status buffer is at least SV_OUTPUTBUF_LENGTH!
 */
 static size_t SV_StatusString(char *status)
 {
-    char entry[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> entry{};
     client_t *cl;
     size_t total, len;
     char *tmp = sv_maxclients->string;
 
     // XXX: ugly hack to hide reserved slots
     if (svs.maxclients_soft != svs.maxclients) {
-        Q_snprintf(entry, sizeof(entry), "%d", svs.maxclients_soft);
-        sv_maxclients->string = entry;
+        Q_snprintf(entry.data(), entry.size(), "%d", svs.maxclients_soft);
+        sv_maxclients->string = entry.data();
     }
 
     // add server info
@@ -437,13 +439,13 @@ static size_t SV_StatusString(char *status)
     // add uptime
     if (sv_uptime->integer > 0) {
         if (sv_uptime->integer > 1) {
-            len = Com_UptimeLong_m(entry, MAX_INFO_VALUE);
+            len = Com_UptimeLong_m(entry.data(), MAX_INFO_VALUE);
         } else {
-            len = Com_Uptime_m(entry, MAX_INFO_VALUE);
+            len = Com_Uptime_m(entry.data(), MAX_INFO_VALUE);
         }
         if (total + 8 + len < MAX_INFO_STRING) {
             memcpy(status + total, "\\uptime\\", 8);
-            memcpy(status + total + 8, entry, len);
+            memcpy(status + total + 8, entry.data(), len);
             total += 8 + len;
         }
     }
@@ -456,17 +458,17 @@ static size_t SV_StatusString(char *status)
             if (cl->state == cs_zombie) {
                 continue;
             }
-            len = Q_snprintf(entry, sizeof(entry),
+            len = Q_snprintf(entry.data(), entry.size(),
                              "%i %i \"%s\"\n",
                              SV_GetClient_Stat(cl, STAT_FRAGS),
                              cl->ping, cl->name);
-            if (len >= sizeof(entry)) {
+            if (len >= entry.size()) {
                 continue;
             }
             if (total + len >= SV_OUTPUTBUF_LENGTH) {
                 break;        // can't hold any more
             }
-            memcpy(status + total, entry, len);
+            memcpy(status + total, entry.data(), len);
             total += len;
         }
     }
@@ -485,7 +487,7 @@ Responds with all the info that qplug or qspy can see
 */
 static void SVC_Status(void)
 {
-    char    buffer[MAX_PACKETLEN_DEFAULT];
+    std::array<char, MAX_PACKETLEN_DEFAULT> buffer{};
     size_t  len;
 
     if (!sv_status_show->integer) {
@@ -499,13 +501,13 @@ static void SVC_Status(void)
     }
 
     // write the packet header
-    memcpy(buffer, "\xff\xff\xff\xffprint\n", 10);
+    memcpy(buffer.data(), "\xff\xff\xff\xffprint\n", 10);
     len = 10;
 
-    len += SV_StatusString(buffer + len);
+    len += SV_StatusString(buffer.data() + len);
 
     // send the datagram
-    NET_SendPacket(NS_SERVER, buffer, len, &net_from);
+    NET_SendPacket(NS_SERVER, buffer.data(), len, &net_from);
 }
 
 /*
@@ -538,7 +540,7 @@ The second parameter should be the current protocol version number.
 */
 static void SVC_Info(void)
 {
-    char    buffer[MAX_QPATH+10];
+    std::array<char, MAX_QPATH + 10> buffer{};
     size_t  len;
     int     version;
 
@@ -549,12 +551,12 @@ static void SVC_Info(void)
     if (version < PROTOCOL_VERSION_DEFAULT || version > PROTOCOL_VERSION_Q2PRO)
         return; // ignore invalid versions
 
-    len = Q_scnprintf(buffer, sizeof(buffer),
+    len = Q_scnprintf(buffer.data(), buffer.size(),
                       "\xff\xff\xff\xffinfo\n%16s %8s %2i/%2i\n",
                       sv_hostname->string, sv.name, SV_CountClients(),
                       svs.maxclients_soft);
 
-    NET_SendPacket(NS_SERVER, buffer, len, &net_from);
+    NET_SendPacket(NS_SERVER, buffer.data(), len, &net_from);
 }
 
 /*
@@ -780,7 +782,7 @@ static const char *userinfo_ip_string(void)
 {
     // fake up reserved IPv4 address to prevent IPv6 unaware mods from exploding
     if (net_from.type == NA_IP6 && !(g_features->integer & GMF_IPV6_ADDRESS_AWARE)) {
-        static char s[MAX_QPATH];
+        static std::array<char, MAX_QPATH> s{};
         uint8_t res = 0;
         int i;
 
@@ -788,8 +790,8 @@ static const char *userinfo_ip_string(void)
         for (i = 0; i < 48 / CHAR_BIT; i++)
             res ^= net_from.ip.u8[i];
 
-        Q_snprintf(s, sizeof(s), "198.51.100.%u:%u", res, BigShort(net_from.port));
-        return s;
+        Q_snprintf(s.data(), s.size(), "198.51.100.%u:%u", res, BigShort(net_from.port));
+        return s.data();
     }
 
     return NET_AdrToString(&net_from);
@@ -1000,7 +1002,7 @@ static void append_extra_userinfo(conn_params_t *params, char *userinfo)
 
 static void SVC_DirectConnect(void)
 {
-    char            userinfo[MAX_INFO_STRING * 2];
+    std::array<char, MAX_INFO_STRING * 2> userinfo{};
     conn_params_t   params;
     client_t        *newcl;
     int             number;
@@ -1030,7 +1032,7 @@ static void SVC_DirectConnect(void)
         return;
     if (!parse_enhanced_params(&parsed_connect, &params))
         return;
-    if (!parse_userinfo(&parsed_connect, &params, userinfo))
+    if (!parse_userinfo(&parsed_connect, &params, userinfo.data()))
         return;
 
     // find a free client slot
@@ -1078,16 +1080,16 @@ static void SVC_DirectConnect(void)
 
     init_pmove_and_es_flags(newcl);
 
-    append_extra_userinfo(&params, userinfo);
+    append_extra_userinfo(&params, userinfo.data());
 
     // get the game a chance to reject this connection or modify the userinfo
     sv_client = newcl;
     sv_player = newcl->edict;
-    allow = ge->ClientConnect(newcl->edict, userinfo, "", false);
+    allow = ge->ClientConnect(newcl->edict, userinfo.data(), "", false);
     sv_client = NULL;
     sv_player = NULL;
     if (!allow) {
-        reason = Info_ValueForKey(userinfo, "rejmsg");
+        reason = Info_ValueForKey(userinfo.data(), "rejmsg");
         if (*reason) {
             reject_printf("%s\nConnection refused.\n", reason);
         } else {
@@ -1106,7 +1108,7 @@ static void SVC_DirectConnect(void)
     newcl->io_data.max_msg_len = newcl->netchan.maxpacketlen;
 
     // parse some info from the info strings
-    Q_strlcpy(newcl->userinfo, userinfo, sizeof(newcl->userinfo));
+    Q_strlcpy(newcl->userinfo, userinfo.data(), sizeof(newcl->userinfo));
     SV_UserinfoChanged(newcl);
 
     // send the connect packet to the client
@@ -1243,7 +1245,7 @@ connectionless packets.
 */
 static void SV_ConnectionlessPacket(void)
 {
-    char    string[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> string{};
     char    *c;
     int     i;
 
@@ -1255,12 +1257,12 @@ static void SV_ConnectionlessPacket(void)
     MSG_BeginReading();
     MSG_ReadLong();        // skip the -1 marker
 
-    if (MSG_ReadStringLine(string, sizeof(string)) >= sizeof(string)) {
+    if (MSG_ReadStringLine(string.data(), string.size()) >= string.size()) {
         Com_DPrintf("ignored oversize connectionless packet\n");
         return;
     }
 
-    Cmd_TokenizeString(string, false);
+    Cmd_TokenizeString(string.data(), false);
 
     c = Cmd_Argv(0);
     Com_DPrintf("ServerPacket[%s]: %s\n", NET_AdrToString(&net_from), c);
@@ -1757,7 +1759,7 @@ let it know we are alive, and log information
 */
 static void SV_MasterHeartbeat(void)
 {
-    char    buffer[MAX_PACKETLEN_DEFAULT];
+    std::array<char, MAX_PACKETLEN_DEFAULT> buffer{};
     size_t  len;
     master_t *send = NULL;
 
@@ -1787,15 +1789,15 @@ static void SV_MasterHeartbeat(void)
         return;
 
     // write the packet header
-    memcpy(buffer, "\xff\xff\xff\xffheartbeat\n", 14);
+    memcpy(buffer.data(), "\xff\xff\xff\xffheartbeat\n", 14);
     len = 14;
 
     // send the same string that we would give for a status OOB command
-    len += SV_StatusString(buffer + len);
+    len += SV_StatusString(buffer.data() + len);
 
     // send to group master
     Com_DPrintf("Sending heartbeat to %s\n", NET_AdrToString(&send->adr));
-    NET_SendPacket(NS_SERVER, buffer, len, &send->adr);
+    NET_SendPacket(NS_SERVER, buffer.data(), len, &send->adr);
 }
 
 /*
@@ -1938,7 +1940,7 @@ into a more C friendly form.
 */
 void SV_UserinfoChanged(client_t *cl)
 {
-    char    name[MAX_CLIENT_NAME];
+    std::array<char, MAX_CLIENT_NAME> name{};
     char    *val;
     size_t  len;
     int     i;
@@ -1948,30 +1950,30 @@ void SV_UserinfoChanged(client_t *cl)
 
     // name for C code
     val = Info_ValueForKey(cl->userinfo, "name");
-    len = Q_strlcpy(name, val, sizeof(name));
-    if (len >= sizeof(name)) {
-        len = sizeof(name) - 1;
+    len = Q_strlcpy(name.data(), val, name.size());
+    if (len >= name.size()) {
+        len = name.size() - 1;
     }
     // mask off high bit
     for (i = 0; i < len; i++)
         name[i] &= 127;
-    if (cl->name[0] && strcmp(cl->name, name)) {
+    if (cl->name[0] && strcmp(cl->name, name.data())) {
         if (COM_DEDICATED) {
             Com_Printf("%s[%s] changed name to %s\n", cl->name,
-                       NET_AdrToString(&cl->netchan.remote_address), name);
+                       NET_AdrToString(&cl->netchan.remote_address), name.data());
         }
 #if USE_MVD_CLIENT
         if (sv.state == ss_broadcast) {
-            MVD_GameClientNameChanged(cl->edict, name);
+            MVD_GameClientNameChanged(cl->edict, name.data());
         } else
 #endif
         if (sv_show_name_changes->integer > 1 ||
             (sv_show_name_changes->integer == 1 && cl->state == cs_spawned)) {
             SV_BroadcastPrintf(PRINT_HIGH, "%s changed name to %s\n",
-                               cl->name, name);
+                               cl->name, name.data());
         }
     }
-    memcpy(cl->name, name, len + 1);
+    memcpy(cl->name, name.data(), len + 1);
 
     // rate command
     val = Info_ValueForKey(cl->userinfo, "rate");

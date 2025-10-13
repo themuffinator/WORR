@@ -24,6 +24,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 
+#include <array>
+
 typedef enum {
     ACS_BAD,
     ACS_CLIENTACK,
@@ -279,7 +281,7 @@ badhash:
     }
 
     file = SV_Malloc(sizeof(*file) + pathlen);
-    memcpy(file->hash, hash.data(), sizeof(file->hash));
+    memcpy(file->hash, hash.data(), hash.size());
     memcpy(file->path, pstr, pathlen + 1);
     file->flags = flags;
     file->next = acs.files;
@@ -518,12 +520,12 @@ REPLY PARSING
 
 static void AC_Retry(void)
 {
-    char buf[MAX_QPATH];
+    std::array<char, MAX_QPATH> buf{};
     time_t clock;
 
-    Com_FormatTimeLong(buf, sizeof(buf), acs.retry_backoff);
+    Com_FormatTimeLong(buf.data(), buf.size(), acs.retry_backoff);
     Com_Printf("ANTICHEAT: Re%s in %s.\n",
-               ac.connected ? "connecting" : "trying", buf);
+               ac.connected ? "connecting" : "trying", buf.data());
     clock = time(NULL);
     acs.retry_time = clock + acs.retry_backoff;
 }
@@ -577,14 +579,14 @@ static void AC_Disable(void)
 static void AC_Announce(client_t *client, const char *fmt, ...)
 {
     va_list     argptr;
-    char        string[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> string{};
     size_t      len;
 
     va_start(argptr, fmt);
-    len = Q_vsnprintf(string, sizeof(string), fmt, argptr);
+    len = Q_vsnprintf(string.data(), string.size(), fmt, argptr);
     va_end(argptr);
 
-    if (len >= sizeof(string)) {
+    if (len >= string.size()) {
         Com_WPrintf("%s: overflow\n", __func__);
         return;
     }
@@ -592,7 +594,7 @@ static void AC_Announce(client_t *client, const char *fmt, ...)
     MSG_WriteByte(svc_print);
     MSG_WriteByte(PRINT_HIGH);
     MSG_WriteData(AC_MESSAGE, sizeof(AC_MESSAGE) - 1);
-    MSG_WriteData(string, len + 1);
+    MSG_WriteData(string.data(), len + 1);
 
     if (client->state == cs_spawned) {
         FOR_EACH_CLIENT(client) {
@@ -768,7 +770,7 @@ static void AC_ParseFileViolation(void)
     if (msg_read.readcount < msg_read.cursize) {
         MSG_ReadString(hash.data(), hash.size());
     } else {
-        Q_strlcpy(hash.data(), "no hash?", hash.size());
+        strcpy(hash.data(), "no hash?");
     }
 
     cl->ac_file_failures++;
@@ -891,10 +893,10 @@ static void AC_ParseDisconnect(void)
 
 static void AC_ParseError(void)
 {
-    char string[MAX_STRING_CHARS];
+    std::array<char, MAX_STRING_CHARS> string{};
 
-    MSG_ReadString(string, sizeof(string));
-    Com_EPrintf("ANTICHEAT: %s\n", string);
+    MSG_ReadString(string.data(), string.size());
+    Com_EPrintf("ANTICHEAT: %s\n", string.data());
     AC_Disable();
 }
 
