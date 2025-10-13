@@ -74,6 +74,8 @@ public:
     const kfont_char_t *lookupKFontChar(const kfont_t *kfont, uint32_t codepoint) const;
 
 private:
+    static constexpr size_t kKFontGlyphCount = static_cast<size_t>(KFONT_ASCII_MAX - KFONT_ASCII_MIN + 1);
+
     enum FogBits : uint32_t {
         FogNone = 0,
         FogGlobal = 1u << 0,
@@ -203,6 +205,14 @@ private:
         unsigned registrationSequence = 0;
     };
 
+    struct KFontRecord {
+        qhandle_t texture = 0;
+        std::array<kfont_char_t, kKFontGlyphCount> glyphs{};
+        uint16_t lineHeight = 0;
+        float sw = 0.0f;
+        float sh = 0.0f;
+    };
+
     struct RawPicState {
         int width = 0;
         int height = 0;
@@ -253,6 +263,7 @@ private:
     PipelineKind selectPipelineForEntity(const entity_t &ent) const;
     const ModelRecord *findModelRecord(qhandle_t handle) const;
     const ImageRecord *findImageRecord(qhandle_t handle) const;
+    const KFontRecord *findKFontRecord(const kfont_t *font) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
 
     void submit2DDraw(const draw2d::Submission &submission);
@@ -300,6 +311,7 @@ private:
     ImageMap images_;
     NameLookup modelLookup_;
     NameLookup imageLookup_;
+    std::unordered_map<const kfont_t *, KFontRecord> kfontCache_;
     RawPicState rawPic_;
     FrameState frameState_{};
     qhandle_t whiteTextureHandle_ = 0;
