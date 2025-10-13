@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "common/cmodel.h"
+
 refcfg_t r_config = {};
 unsigned r_registration_sequence = 0;
 
@@ -11,6 +13,7 @@ namespace refresh::vk {
 namespace {
     constexpr int kDefaultCharWidth = 8;
     constexpr int kDefaultCharHeight = 8;
+    constexpr float kInverseLightIntensity = 1.0f / 255.0f;
 
     int countPrintable(std::string_view value, size_t maxChars) {
         size_t count = 0;
@@ -65,6 +68,7 @@ void VulkanRenderer::resetTransientState() {
     clipRect_.reset();
     scale_ = 1.0f;
     autoScaleValue_ = 1;
+    resetFrameState();
 }
 
 bool VulkanRenderer::init(bool total) {
@@ -214,10 +218,20 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         return;
     }
 
-    // Placeholder implementation: update auto-scale using viewport height.
     if (fd->height > 0) {
         autoScaleValue_ = std::max(1, fd->height / SCREEN_HEIGHT);
     }
+
+    prepareFrameState(*fd);
+    evaluateFrameSettings();
+    uploadDynamicLights();
+    updateSkyState();
+
+    beginWorldPass();
+    if (!(frameState_.refdef.rdflags & RDF_NOWORLDMODEL)) {
+        renderWorld();
+    }
+    endWorldPass();
 }
 
 void VulkanRenderer::lightPoint(const vec3_t origin, vec3_t light) const {
@@ -225,9 +239,30 @@ void VulkanRenderer::lightPoint(const vec3_t origin, vec3_t light) const {
         return;
     }
 
-    light[0] = 0.0f;
-    light[1] = 0.0f;
-    light[2] = 0.0f;
+    light[0] = 1.0f;
+    light[1] = 1.0f;
+    light[2] = 1.0f;
+
+    if (!frameState_.hasRefdef) {
+        return;
+    }
+
+    for (const auto &dlight : frameState_.dlights) {
+        float dx = origin[0] - dlight.origin[0];
+        float dy = origin[1] - dlight.origin[1];
+        float dz = origin[2] - dlight.origin[2];
+        float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        float contribution = dlight.radius - DLIGHT_CUTOFF - distance;
+        if (contribution <= 0.0f) {
+            continue;
+        }
+
+        float scale = contribution * kInverseLightIntensity * dlight.intensity;
+        light[0] += scale * dlight.color[0];
+        light[1] += scale * dlight.color[1];
+        light[2] += scale * dlight.color[2];
+    }
 }
 
 void VulkanRenderer::setClipRect(const clipRect_t *clip) {
@@ -401,6 +436,123 @@ const kfont_char_t *VulkanRenderer::lookupKFontChar(const kfont_t *kfont, uint32
 
     size_t index = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
     return &kfont->chars[index];
+}
+
+void VulkanRenderer::resetFrameState() {
+    frameState_.refdef = {};
+    frameState_.entities.clear();
+    frameState_.dlights.clear();
+    frameState_.particles.clear();
+    frameState_.lightstyles.fill(lightstyle_t{});
+    frameState_.areaBits.clear();
+    frameState_.hasLightstyles = false;
+    frameState_.hasAreabits = false;
+    frameState_.hasRefdef = false;
+    frameState_.inWorldPass = false;
+    frameState_.worldRendered = false;
+    frameState_.dynamicLightsUploaded = false;
+    frameState_.skyActive = false;
+    frameState_.fogBits = FogNone;
+    frameState_.fogBitsSky = FogNone;
+    frameState_.perPixelLighting = false;
+}
+
+void VulkanRenderer::prepareFrameState(const refdef_t &fd) {
+    frameState_.refdef = fd;
+
+    frameState_.entities.clear();
+    if (fd.entities && fd.num_entities > 0) {
+        frameState_.entities.assign(fd.entities, fd.entities + fd.num_entities);
+        for (auto &ent : frameState_.entities) {
+            ent.next = nullptr;
+        }
+        frameState_.refdef.entities = frameState_.entities.data();
+        frameState_.refdef.num_entities = static_cast<int>(frameState_.entities.size());
+    } else {
+        frameState_.refdef.entities = nullptr;
+        frameState_.refdef.num_entities = 0;
+    }
+
+    frameState_.dlights.clear();
+    if (fd.dlights && fd.num_dlights > 0) {
+        frameState_.dlights.assign(fd.dlights, fd.dlights + fd.num_dlights);
+        frameState_.refdef.dlights = frameState_.dlights.data();
+        frameState_.refdef.num_dlights = static_cast<int>(frameState_.dlights.size());
+    } else {
+        frameState_.refdef.dlights = nullptr;
+        frameState_.refdef.num_dlights = 0;
+    }
+
+    frameState_.particles.clear();
+    if (fd.particles && fd.num_particles > 0) {
+        frameState_.particles.assign(fd.particles, fd.particles + fd.num_particles);
+        frameState_.refdef.particles = frameState_.particles.data();
+        frameState_.refdef.num_particles = static_cast<int>(frameState_.particles.size());
+    } else {
+        frameState_.refdef.particles = nullptr;
+        frameState_.refdef.num_particles = 0;
+    }
+
+    frameState_.hasLightstyles = false;
+    if (fd.lightstyles) {
+        std::copy(fd.lightstyles, fd.lightstyles + MAX_LIGHTSTYLES, frameState_.lightstyles.begin());
+        frameState_.refdef.lightstyles = frameState_.lightstyles.data();
+        frameState_.hasLightstyles = true;
+    } else {
+        frameState_.refdef.lightstyles = nullptr;
+    }
+
+    frameState_.areaBits.clear();
+    frameState_.hasAreabits = false;
+    if (fd.areabits) {
+        frameState_.areaBits.assign(fd.areabits, fd.areabits + MAX_MAP_AREA_BYTES);
+        frameState_.refdef.areabits = frameState_.areaBits.data();
+        frameState_.hasAreabits = true;
+    } else {
+        frameState_.refdef.areabits = nullptr;
+    }
+
+    frameState_.hasRefdef = true;
+}
+
+void VulkanRenderer::evaluateFrameSettings() {
+    frameState_.fogBits = FogNone;
+    frameState_.fogBitsSky = FogNone;
+
+    if (frameState_.refdef.fog.density > 0.0f) {
+        frameState_.fogBits = static_cast<FogBits>(frameState_.fogBits | FogGlobal);
+    }
+
+    if (frameState_.refdef.heightfog.density > 0.0f && frameState_.refdef.heightfog.falloff > 0.0f) {
+        frameState_.fogBits = static_cast<FogBits>(frameState_.fogBits | FogHeight);
+    }
+
+    if (frameState_.refdef.fog.sky_factor > 0.0f) {
+        frameState_.fogBitsSky = static_cast<FogBits>(frameState_.fogBitsSky | FogSky);
+    }
+
+    frameState_.perPixelLighting = frameState_.refdef.num_dlights > 0;
+}
+
+void VulkanRenderer::uploadDynamicLights() {
+    frameState_.dynamicLightsUploaded = !frameState_.dlights.empty();
+}
+
+void VulkanRenderer::updateSkyState() {
+    frameState_.skyActive = !sky_.name.empty();
+}
+
+void VulkanRenderer::beginWorldPass() {
+    frameState_.inWorldPass = true;
+    frameState_.worldRendered = false;
+}
+
+void VulkanRenderer::renderWorld() {
+    frameState_.worldRendered = true;
+}
+
+void VulkanRenderer::endWorldPass() {
+    frameState_.inWorldPass = false;
 }
 
 } // namespace refresh::vk

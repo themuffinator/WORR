@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -69,6 +70,13 @@ public:
     const kfont_char_t *lookupKFontChar(const kfont_t *kfont, uint32_t codepoint) const;
 
 private:
+    enum FogBits : uint32_t {
+        FogNone = 0,
+        FogGlobal = 1u << 0,
+        FogHeight = 1u << 1,
+        FogSky = 1u << 2,
+    };
+
     struct SkyDefinition {
         std::string name;
         float rotate = 0.0f;
@@ -103,10 +111,37 @@ private:
     using ImageMap = std::unordered_map<qhandle_t, ImageRecord>;
     using NameLookup = std::unordered_map<std::string, qhandle_t>;
 
+    struct FrameState {
+        refdef_t refdef{};
+        std::vector<entity_t> entities;
+        std::vector<dlight_t> dlights;
+        std::vector<particle_t> particles;
+        std::array<lightstyle_t, MAX_LIGHTSTYLES> lightstyles{};
+        std::vector<uint8_t> areaBits;
+        bool hasLightstyles = false;
+        bool hasAreabits = false;
+        bool hasRefdef = false;
+        bool inWorldPass = false;
+        bool worldRendered = false;
+        bool dynamicLightsUploaded = false;
+        bool skyActive = false;
+        FogBits fogBits = FogNone;
+        FogBits fogBitsSky = FogNone;
+        bool perPixelLighting = false;
+    };
+
     qhandle_t nextHandle();
     qhandle_t registerResource(NameLookup &lookup, std::string_view name);
 
     void resetTransientState();
+    void resetFrameState();
+    void prepareFrameState(const refdef_t &fd);
+    void evaluateFrameSettings();
+    void uploadDynamicLights();
+    void updateSkyState();
+    void beginWorldPass();
+    void renderWorld();
+    void endWorldPass();
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
@@ -124,6 +159,7 @@ private:
     NameLookup modelLookup_;
     NameLookup imageLookup_;
     RawPicState rawPic_;
+    FrameState frameState_{};
 };
 
 } // namespace refresh::vk
