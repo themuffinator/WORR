@@ -252,9 +252,13 @@ private:
     const PipelineDesc &ensurePipeline(PipelineKind kind);
     PipelineKind selectPipelineForEntity(const entity_t &ent) const;
     const ModelRecord *findModelRecord(qhandle_t handle) const;
+    const ImageRecord *findImageRecord(qhandle_t handle) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
 
     void submit2DDraw(const draw2d::Submission &submission);
+    bool canSubmit2D() const;
+    qhandle_t ensureWhiteTexture();
+    qhandle_t ensureRawTexture();
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
@@ -268,7 +272,27 @@ private:
     SkyDefinition sky_{};
     std::string currentMap_;
 
+    struct ScissorRect {
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t width = 0;
+        uint32_t height = 0;
+
+        bool operator==(const ScissorRect &other) const {
+            return x == other.x && y == other.y && width == other.width && height == other.height;
+        }
+
+        bool operator!=(const ScissorRect &other) const {
+            return !(*this == other);
+        }
+    };
+
+    void recordScissorCommand(const ScissorRect &rect, bool clipped);
+    ScissorRect fullScissorRect() const;
+    std::optional<ScissorRect> scaledClipRect(const clipRect_t &clip) const;
+
     std::optional<clipRect_t> clipRect_;
+    std::optional<ScissorRect> activeScissor_;
     float scale_ = 1.0f;
     int autoScaleValue_ = 1;
 
@@ -278,6 +302,8 @@ private:
     NameLookup imageLookup_;
     RawPicState rawPic_;
     FrameState frameState_{};
+    qhandle_t whiteTextureHandle_ = 0;
+    qhandle_t rawTextureHandle_ = 0;
 
     std::unordered_map<PipelineKind, PipelineDesc, EnumHash> pipelines_;
 };
