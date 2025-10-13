@@ -209,19 +209,17 @@ Returns COLOR_INDEX_NONE in case of error.
 */
 color_index_t Com_ParseColor(const char *s)
 {
-    color_index_t i;
-
     if (COM_IsUint(s)) {
-        i = Q_atoi(s);
-        if (i < 0 || i >= COLOR_INDEX_COUNT) {
+        const int value = Q_atoi(s);
+        if (value < 0 || value >= COLOR_INDEX_COUNT) {
             return COLOR_INDEX_NONE;
         }
-        return i;
+        return static_cast<color_index_t>(value);
     }
 
-    for (i = 0; i < COLOR_INDEX_COUNT; i++) {
-        if (!strcmp(colorNames[i], s)) {
-            return i;
+    for (int index = 0; index < COLOR_INDEX_COUNT; ++index) {
+        if (!strcmp(colorNames[index], s)) {
+            return static_cast<color_index_t>(index);
         }
     }
 

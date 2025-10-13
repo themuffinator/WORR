@@ -1222,15 +1222,14 @@ NET_Config
 */
 void NET_Config(netflag_t flag)
 {
-    netsrc_t sock;
-
     if (flag == net_active) {
         return;
     }
 
     if (flag == NET_NONE) {
         // shut down any existing sockets
-        for (sock = 0; sock < NS_COUNT; sock++) {
+        for (int index = 0; index < NS_COUNT; ++index) {
+            const netsrc_t sock = static_cast<netsrc_t>(index);
             if (udp_sockets[sock]) {
                 NET_CloseSocket(udp_sockets[sock]);
                 udp_sockets[sock] = NULL;
@@ -1256,7 +1255,8 @@ void NET_Config(netflag_t flag)
         NET_OpenServer6();
     }
 
-    net_active |= flag;
+    const unsigned combined = static_cast<unsigned>(net_active) | static_cast<unsigned>(flag);
+    net_active = static_cast<netflag_t>(combined);
 }
 
 /*

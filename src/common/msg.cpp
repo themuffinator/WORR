@@ -2349,44 +2349,47 @@ static void MSG_ReadColor(vec3_t color)
 
 static void MSG_ReadFog(player_fogchange_t *fog_change)
 {
-    q2pro_fog_bits_t bits = MSG_ReadByte();
+    const int protocolBits = MSG_ReadByte();
+    unsigned fogBits = 0;
 
-    if (bits & Q2PRO_FOG_BIT_COLOR) {
+    if (protocolBits & Q2PRO_FOG_BIT_COLOR) {
         MSG_ReadColor(fog_change->linear.color);
-        fog_change->bits |= FOG_BIT_R | FOG_BIT_G | FOG_BIT_B;
+        fogBits |= FOG_BIT_R | FOG_BIT_G | FOG_BIT_B;
     }
-    if (bits & Q2PRO_FOG_BIT_DENSITY) {
+    if (protocolBits & Q2PRO_FOG_BIT_DENSITY) {
         fog_change->linear.density    = MSG_ReadWord() / 65535.0f;
         fog_change->linear.sky_factor = MSG_ReadWord() / 65535.0f;
-        fog_change->bits |= FOG_BIT_DENSITY;
+        fogBits |= FOG_BIT_DENSITY;
     }
 
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_DENSITY) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_DENSITY) {
         fog_change->height.density = MSG_ReadWord() / 65535.0f;
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_DENSITY;
+        fogBits |= FOG_BIT_HEIGHTFOG_DENSITY;
     }
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_FALLOFF) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_FALLOFF) {
         fog_change->height.falloff = MSG_ReadWord() / 65535.0f;
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_FALLOFF;
+        fogBits |= FOG_BIT_HEIGHTFOG_FALLOFF;
     }
 
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_START_COLOR) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_START_COLOR) {
         MSG_ReadColor(fog_change->height.start.color);
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_START_R | FOG_BIT_HEIGHTFOG_START_G | FOG_BIT_HEIGHTFOG_START_B;
+        fogBits |= FOG_BIT_HEIGHTFOG_START_R | FOG_BIT_HEIGHTFOG_START_G | FOG_BIT_HEIGHTFOG_START_B;
     }
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_END_COLOR) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_END_COLOR) {
         MSG_ReadColor(fog_change->height.end.color);
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_END_R | FOG_BIT_HEIGHTFOG_END_G | FOG_BIT_HEIGHTFOG_END_B;
+        fogBits |= FOG_BIT_HEIGHTFOG_END_R | FOG_BIT_HEIGHTFOG_END_G | FOG_BIT_HEIGHTFOG_END_B;
     }
 
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_START_DIST) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_START_DIST) {
         fog_change->height.start.dist = MSG_ReadExtCoord();
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_START_DIST;
+        fogBits |= FOG_BIT_HEIGHTFOG_START_DIST;
     }
-    if (bits & Q2PRO_FOG_BIT_HEIGHT_END_DIST) {
+    if (protocolBits & Q2PRO_FOG_BIT_HEIGHT_END_DIST) {
         fog_change->height.end.dist = MSG_ReadExtCoord();
-        fog_change->bits |= FOG_BIT_HEIGHTFOG_END_DIST;
+        fogBits |= FOG_BIT_HEIGHTFOG_END_DIST;
     }
+
+    fog_change->bits = static_cast<fog_bits_t>(fogBits);
 }
 
 #if USE_CLIENT
@@ -2415,10 +2418,11 @@ void MSG_ParseDeltaPlayerstate_Default(const player_state_t *from,
     // parse the pmove_state_t
     //
     if (flags & PS_M_TYPE) {
+        const int pmTypeByte = MSG_ReadByte();
         if (flags & MSG_PS_RERELEASE)
-            to->pmove.pm_type = MSG_ReadByte();
+            to->pmove.pm_type = static_cast<pmtype_t>(pmTypeByte);
         else
-            to->pmove.pm_type = pmtype_from_game3(MSG_ReadByte());
+            to->pmove.pm_type = pmtype_from_game3(static_cast<game3_pmtype_t>(pmTypeByte));
     }
 
     if (flags & PS_M_ORIGIN) {
@@ -2557,10 +2561,11 @@ void MSG_ParseDeltaPlayerstate_Enhanced(const player_state_t    *from,
     // parse the pmove_state_t
     //
     if (flags & PS_M_TYPE) {
+        const int pmTypeByte = MSG_ReadByte();
         if (psflags & MSG_PS_RERELEASE)
-            to->pmove.pm_type = MSG_ReadByte();
+            to->pmove.pm_type = static_cast<pmtype_t>(pmTypeByte);
         else
-            to->pmove.pm_type = pmtype_from_game3(MSG_ReadByte());
+            to->pmove.pm_type = pmtype_from_game3(static_cast<game3_pmtype_t>(pmTypeByte));
     }
 
     if (flags & PS_M_ORIGIN) {
@@ -2726,10 +2731,11 @@ void MSG_ParseDeltaPlayerstate_Packet(player_state_t        *to,
     // parse the pmove_state_t
     //
     if (flags & PPS_M_TYPE) {
+        const int pmTypeByte = MSG_ReadByte();
         if (psflags & MSG_PS_RERELEASE)
-            to->pmove.pm_type = MSG_ReadByte();
+            to->pmove.pm_type = static_cast<pmtype_t>(pmTypeByte);
         else
-            to->pmove.pm_type = pmtype_from_game3(MSG_ReadByte());
+            to->pmove.pm_type = pmtype_from_game3(static_cast<game3_pmtype_t>(pmTypeByte));
     }
 
     if (flags & PPS_M_ORIGIN) {
