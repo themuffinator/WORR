@@ -1158,8 +1158,9 @@ static int seek_zip_file(file_t *file, int64_t offset, int whence)
     while (file->position < offset) {
         byte buf[ZIP_BUFSIZE];
 
-        int len = min(offset - file->position, sizeof(buf));
-        int ret = read_zip_file(file, buf, len);
+        const int64_t remaining = offset - file->position;
+        const size_t chunk = static_cast<size_t>(min(remaining, static_cast<int64_t>(sizeof(buf))));
+        int ret = read_zip_file(file, buf, chunk);
         if (ret < 0)
             return ret;
         if (ret == 0)
