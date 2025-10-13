@@ -588,7 +588,7 @@ static bool NET_SendLoopPacket(netsrc_t sock, const void *data,
     memcpy(msg->data, data, len);
     msg->datalen = len;
 
-    NET_LogPacket(to, "LP send", data, len);
+    NET_LogPacket(to, "LP send", static_cast<const byte *>(data), len);
 
     if (sock == NS_CLIENT) {
         net_rate_sent += len;
@@ -870,7 +870,7 @@ bool NET_SendPacket(netsrc_t sock, const void *data,
         Com_WPrintf("%s: short send to %s\n", __func__,
                     NET_AdrToString(to));
 
-    NET_LogPacket(to, "UDP send", data, ret);
+    NET_LogPacket(to, "UDP send", static_cast<const byte *>(data), ret);
 
     net_rate_sent += ret;
     net_bytes_sent += ret;
@@ -1575,7 +1575,8 @@ neterr_t NET_RunStream(netstream_t *s)
             } else {
                 FIFO_Commit(&s->recv, ret);
 
-                NET_LogPacket(&s->address, "TCP recv", data, ret);
+                NET_LogPacket(&s->address, "TCP recv",
+                               static_cast<const byte *>(data), ret);
 
                 net_rate_rcvd += ret;
                 net_bytes_rcvd += ret;
@@ -1607,7 +1608,8 @@ neterr_t NET_RunStream(netstream_t *s)
             } else {
                 FIFO_Decommit(&s->send, ret);
 
-                NET_LogPacket(&s->address, "TCP send", data, ret);
+                NET_LogPacket(&s->address, "TCP send",
+                               static_cast<const byte *>(data), ret);
 
                 net_rate_sent += ret;
                 net_bytes_sent += ret;
