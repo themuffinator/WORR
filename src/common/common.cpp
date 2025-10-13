@@ -697,7 +697,7 @@ static size_t Com_MapList_m(char *buffer, size_t size)
 
     list = FS_ListFiles("maps", ".bsp", FS_SEARCH_STRIPEXT, &numFiles);
     for (i = 0; i < numFiles && total < SIZE_MAX; i++) {
-        len = strlen(list[i]);
+        len = strlen(static_cast<const char *>(list[i]));
         if (i)
             total++;
         total += len = min(len, SIZE_MAX - total);

@@ -124,5 +124,6 @@ typedef struct {
 static inline frametime_t Com_ComputeFrametime(int rate)
 {
     int framediv = Q_clip(rate / BASE_FRAMERATE, 1, MAX_FRAMEDIV);
-    return (frametime_t){ .time = BASE_FRAMETIME / framediv, .div = framediv };
+    frametime_t result{ BASE_FRAMETIME / framediv, framediv };
+    return result;
 }
