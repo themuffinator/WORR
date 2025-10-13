@@ -683,7 +683,7 @@ static bool mdfour_test(int num, int chunk)
 {
     struct mdfour md;
     std::array<uint8_t, 16> digest;
-    uint8_t *data = (uint8_t *)mdfour_str[num];
+    const uint8_t *data = reinterpret_cast<const uint8_t *>(mdfour_str[num]);
     size_t size = strlen(mdfour_str[num]);
     const char *res = mdfour_res[num];
     int i;
@@ -733,7 +733,7 @@ static void Com_MdfourTest_f(void)
     }
 
     for (int i = 0; i < q_countof(mdfour_str); i++) {
-        uint32_t res = Com_BlockChecksum((uint8_t *)mdfour_str[i], strlen(mdfour_str[i]));
+        uint32_t res = Com_BlockChecksum(mdfour_str[i], strlen(mdfour_str[i]));
         if (res != blocksum_res[i]) {
             Com_EPrintf("String '%s', expected %#x, calculated %#x\n", mdfour_str[i], blocksum_res[i], res);
             errors++;
