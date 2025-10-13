@@ -523,7 +523,7 @@ int64_t FS_Tell(qhandle_t f)
     case FS_ZIP:
         return file->position;
     case FS_GZ:
-        ret = gztell(file->zfp);
+        ret = gztell(static_cast<gzFile>(file->zfp));
         if (ret == -1) {
             return Q_ERR_LIBRARY_ERROR;
         }
@@ -610,7 +610,7 @@ int FS_Seek(qhandle_t f, int64_t offset, int whence)
     case FS_ZIP:
         return seek_zip_file(file, offset, whence);
     case FS_GZ:
-        if (gzseek(file->zfp, offset, whence) == -1) {
+        if (gzseek(static_cast<gzFile>(file->zfp), offset, whence) == -1) {
             return Q_ERR_LIBRARY_ERROR;
         }
         return Q_ERR_SUCCESS;
@@ -710,7 +710,7 @@ int FS_CloseFile(qhandle_t f)
         break;
 #if USE_ZLIB
     case FS_GZ:
-        if (gzclose(file->zfp))
+        if (gzclose(static_cast<gzFile>(file->zfp)))
             ret = Q_ERR_LIBRARY_ERROR;
         break;
     case FS_ZIP:
@@ -1063,7 +1063,7 @@ static void open_zip_file(file_t *file)
 // only called for unique handles
 static void close_zip_file(file_t *file)
 {
-    zipstream_t *s = file->zfp;
+    zipstream_t *s = static_cast<zipstream_t *>(file->zfp);
 
     inflateEnd(&s->stream);
     Z_Free(s);
@@ -1073,7 +1073,7 @@ static void close_zip_file(file_t *file)
 
 static int read_zip_file(file_t *file, void *buf, size_t len)
 {
-    zipstream_t *s = file->zfp;
+    zipstream_t *s = static_cast<zipstream_t *>(file->zfp);
     z_streamp z = &s->stream;
     size_t block, result;
     int ret;
@@ -1135,7 +1135,7 @@ static int read_zip_file(file_t *file, void *buf, size_t len)
 static int seek_zip_file(file_t *file, int64_t offset, int whence)
 {
     packfile_t *entry = file->entry;
-    zipstream_t *s = file->zfp;
+    zipstream_t *s = static_cast<zipstream_t *>(file->zfp);
     z_streamp z = &s->stream;
 
     offset = get_seek_offset(file, offset, whence);
@@ -1583,7 +1583,7 @@ int FS_Read(void *buf, size_t len, qhandle_t f)
         return read_builtin_file(file, buf, len);
 #if USE_ZLIB
     case FS_GZ:
-        ret = gzread(file->zfp, buf, len);
+        ret = gzread(static_cast<gzFile>(file->zfp), buf, len);
         if (ret < 0) {
             return Q_ERR_LIBRARY_ERROR;
         }
@@ -1621,7 +1621,7 @@ int FS_ReadLine(qhandle_t f, char *buffer, size_t size)
         break;
 #if USE_ZLIB
     case FS_GZ:
-        s = gzgets(file->zfp, buffer, size);
+        s = gzgets(static_cast<gzFile>(file->zfp), buffer, static_cast<int>(size));
         if (!s)
             return 0;
         break;
@@ -1651,7 +1651,7 @@ int FS_Flush(qhandle_t f)
         break;
 #if USE_ZLIB
     case FS_GZ:
-        if (gzflush(file->zfp, Z_SYNC_FLUSH))
+        if (gzflush(static_cast<gzFile>(file->zfp), Z_SYNC_FLUSH))
             ret = Q_ERR_LIBRARY_ERROR;
         break;
 #endif
@@ -1696,7 +1696,7 @@ int FS_Write(const void *buf, size_t len, qhandle_t f)
         break;
 #if USE_ZLIB
     case FS_GZ:
-        if (gzwrite(file->zfp, buf, len) != len) {
+        if (gzwrite(static_cast<gzFile>(file->zfp), buf, static_cast<unsigned>(len)) != len) {
             file->error = Q_ERR_LIBRARY_ERROR;
             return file->error;
         }
@@ -1840,7 +1840,7 @@ static qhandle_t easy_open_write(char *buf, size_t size, unsigned mode,
     }
 
     // append the extension unless name already has it
-    if (COM_CompareExtension(normalized, ext) && Q_strlcat(buf, ext, size) >= size) {
+    if (COM_CompareExtension(normalized.data(), ext) && Q_strlcat(buf, ext, size) >= size) {
         goto fail;
     }
 
@@ -2743,7 +2743,7 @@ static void add_game_dir(unsigned mode, const char *base, const char *game, bool
     qsort(list.files, list.count, sizeof(list.files[0]), pakcmp);
 
     for (i = 0; i < list.count; i++) {
-        len = Q_concat(path.data(), path.size(), fs_gamedir, "/", list.files[i]);
+        len = Q_concat(path.data(), path.size(), fs_gamedir, "/", static_cast<const char *>(list.files[i]));
         if (len >= path.size()) {
             Com_EPrintf("%s: refusing oversize path\n", __func__);
             continue;
@@ -2925,7 +2925,9 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
         return NULL;
     }
 
-    listfiles_t list = { .filter = filter, .flags = flags };
+    listfiles_t list{};
+    list.filter = filter;
+    list.flags = flags;
     path_valid_t valid = PATH_NOT_CHECKED;
 
     flags = default_lookup_flags(flags);
@@ -3003,7 +3005,7 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
                     }
                     *p = 0;
                     for (j = 0; j < list.count; j++) {
-                        if (!FS_pathcmp(list.files[j], s)) {
+                        if (!FS_pathcmp(static_cast<const char *>(list.files[j]), s)) {
                             break;
                         }
                     }
@@ -3098,8 +3100,8 @@ void **FS_FinalizeList(listfiles_t *list)
 
         // remove duplicates
         for (int i = 0; i < list->count; i++) {
-            char *info = list->files[i];
-            while (i + 1 < list->count && !FS_pathcmp(list->files[i + 1], info)) {
+            char *info = static_cast<char *>(list->files[i]);
+            while (i + 1 < list->count && !FS_pathcmp(static_cast<const char *>(list->files[i + 1]), info)) {
                 Z_Free(list->files[++i]);
             }
             list->files[total++] = info;
@@ -3146,7 +3148,7 @@ void FS_File_g(const char *path, const char *ext, unsigned flags, genctx_t *ctx)
     }
 
     for (i = 0; i < numFiles; i++) {
-        s = list[i];
+        s = static_cast<char *>(list[i]);
         if (ctx->count < ctx->size && !strncmp(s, ctx->partial, ctx->length)) {
             ctx->matches = Z_Realloc(ctx->matches, Q_ALIGN(ctx->count + 1, MIN_MATCHES) * sizeof(char *));
             ctx->matches[ctx->count++] = s;
@@ -3165,7 +3167,7 @@ static void print_file_list(const char *path, const char *ext, unsigned flags)
 
     list = FS_ListFiles(path, ext, flags, &total);
     for (i = 0; i < total; i++) {
-        Com_Printf("%s\n", (char *)list[i]);
+        Com_Printf("%s\n", static_cast<char *>(list[i]));
     }
     Com_Printf("%i files listed\n", total);
     FS_FreeList(list);
@@ -3745,9 +3747,9 @@ static void setup_game_paths(void)
 static void setup_base_gamedir(void)
 {
     if (sys_homedir->string[0]) {
-        Q_snprintf(fs_gamedir, sizeof(fs_gamedir), "%s/"BASEGAME, sys_homedir->string);
+        Q_snprintf(fs_gamedir, sizeof(fs_gamedir), "%s/" BASEGAME, sys_homedir->string);
     } else {
-        Q_snprintf(fs_gamedir, sizeof(fs_gamedir), "%s/"BASEGAME, sys_basedir->string);
+        Q_snprintf(fs_gamedir, sizeof(fs_gamedir), "%s/" BASEGAME, sys_basedir->string);
     }
 #ifdef _WIN32
     FS_ReplaceSeparators(fs_gamedir, '/');
@@ -3922,15 +3924,14 @@ static void fs_game_changed(cvar_t *self)
 
 static void list_dirs(genctx_t *ctx, const char *path)
 {
-    listfiles_t list = {
-        .flags = FS_SEARCH_DIRSONLY,
-        .baselen = strlen(path) + 1,
-    };
+    listfiles_t list{};
+    list.flags = FS_SEARCH_DIRSONLY;
+    list.baselen = strlen(path) + 1;
 
     Sys_ListFiles_r(&list, path, 0);
 
     for (int i = 0; i < list.count; i++) {
-        char *s = list.files[i];
+        char *s = static_cast<char *>(list.files[i]);
 
         if (COM_IsPath(s))
             Prompt_AddMatch(ctx, s);
@@ -3985,8 +3986,9 @@ static void FS_FindBaseDir(void)
         std::array<char, MAX_OSPATH> client_dir{};
 
         const sys_getinstalledgamepath_func_t *gamepath_func = gamepath_funcs;
-        while (*gamepath_func && !(*gamepath_func)(com_rerelease->integer, client_dir.data(), client_dir.size()))
-        {
+        while (*gamepath_func &&
+               !(*gamepath_func)(static_cast<rerelease_mode_t>(com_rerelease->integer),
+                                  client_dir.data(), client_dir.size())) {
             gamepath_func++;
         }
 

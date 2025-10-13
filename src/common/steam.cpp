@@ -169,17 +169,16 @@ bool Steam_FindQuake2Path(rerelease_mode_t rr_mode, char *out_dir, size_t out_di
     Q_strlcat(out_dir, "/steamapps/common/Quake 2", out_dir_length);
 
     // found Steam dir - see if the mode we want is available
-    listfiles_t list = {
-        .flags = FS_SEARCH_DIRSONLY,
-        .baselen = strlen(out_dir) + 1,
-    };
+    listfiles_t list{};
+    list.flags = FS_SEARCH_DIRSONLY;
+    list.baselen = strlen(out_dir) + 1;
 
     Sys_ListFiles_r(&list, out_dir, 0);
 
     bool has_rerelease = false;
 
     for (int i = 0; i < list.count; i++) {
-        char *s = list.files[i];
+        char *s = static_cast<char *>(list.files[i]);
 
         if (!Q_stricmp(s, "rerelease")) {
             has_rerelease = true;
