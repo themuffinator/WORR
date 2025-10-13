@@ -110,8 +110,8 @@ static void CL_Carousel_Open(void)
 
 static void R_DrawStretchPicShadowAlpha(int x, int y, int w, int h, qhandle_t pic, int shadow_offset, float alpha)
 {
-    R_DrawStretchPic(x + shadow_offset, y + shadow_offset, w, h, COLOR_SETA_F(COLOR_BLACK, alpha), pic);
-    R_DrawStretchPic(x, y, w, h, COLOR_SETA_F(COLOR_WHITE, alpha), pic);
+    R_DrawStretchPic(x + shadow_offset, y + shadow_offset, w, h, ColorSetAlpha(COLOR_BLACK, alpha), pic);
+    R_DrawStretchPic(x, y, w, h, ColorSetAlpha(COLOR_WHITE, alpha), pic);
 }
 
 static void R_DrawPicShadow(int x, int y, qhandle_t pic, int shadow_offset)
@@ -153,9 +153,9 @@ void CL_Carousel_Draw(void)
             int count = cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, weap->ammo_index);
             color_t color;
             if (count <= weap->quantity_warn)
-                color = selected ? COLOR_RGB(255, 83, 83) : COLOR_RED;
+                color = selected ? ColorRGB(255, 83, 83) : COLOR_RED;
             else
-                color = selected ? COLOR_RGB(255, 255, 83) : COLOR_WHITE;
+                color = selected ? ColorRGB(255, 255, 83) : COLOR_WHITE;
 
             draw_count(carousel_x + (CAROUSEL_ICON_SIZE / 2), carousel_y + CAROUSEL_ICON_SIZE + 2, wc_ammo_scale->value, UI_DROPSHADOW | UI_CENTER, color, count);
         }
@@ -451,7 +451,7 @@ static color_t slot_count_color(bool selected, bool warn_low)
     color_t count_color;
     if (selected) {
         // "Selected" color is based off the tint for "selected" wheel icons in rerelease
-        count_color = warn_low ? COLOR_RGB(255, 62, 33) : COLOR_RGB(255, 248, 134);
+        count_color = warn_low ? ColorRGB(255, 62, 33) : ColorRGB(255, 248, 134);
     } else
         count_color = warn_low ? COLOR_RED : COLOR_WHITE;
     return count_color;
@@ -514,7 +514,7 @@ static void draw_wheel_slot(int slot_idx, int center_x, int center_y, int wheel_
 
     int min_count = slot->is_powerup ? 2 : 0;
     if (count != -1 && count >= min_count) {
-        draw_count(center_x + p[0] + size, center_y + p[1] + size, ww_ammo_scale->value * scale, UI_CENTER | UI_DROPSHADOW, COLOR_SETA_F(count_color, wheel_alpha), count);
+        draw_count(center_x + p[0] + size, center_y + p[1] + size, ww_ammo_scale->value * scale, UI_CENTER | UI_DROPSHADOW, ColorSetAlpha(count_color, wheel_alpha), count);
     }
 
     // We may need it later
@@ -541,7 +541,7 @@ void CL_Wheel_Draw(void)
     float t = 1.0f - cl.wheel.timer;
     float tween = 0.5f - (cos((t * t) * M_PIf) * 0.5f);
     float wheel_alpha = 1.0f - tween;
-    color_t base_color = COLOR_SETA_F(COLOR_WHITE, wheel_alpha);
+    color_t base_color = ColorSetAlpha(COLOR_WHITE, wheel_alpha);
     int wheel_draw_size = get_wheel_draw_size();
 
     R_DrawStretchPic(center_x - (wheel_draw_size / 2), center_y - (wheel_draw_size / 2), wheel_draw_size, wheel_draw_size, base_color, scr.wheel_circle);
@@ -586,7 +586,7 @@ void CL_Wheel_Draw(void)
             R_DrawStretchPicShadowAlpha(center_x - (24 * 3) / 2, center_y - ((24 * 3) / 2), (24 * 3), (24 * 3), ammo->icons.wheel, 2, wheel_alpha);
 
             color_t color = slot_count_color(false, warn_low); // don't use selected color inside the wheel
-            SCR_DrawString(center_x, center_y + 32, UI_CENTER | UI_DROPSHADOW, COLOR_SETA_F(color, wheel_alpha), va("%i", count));
+            SCR_DrawString(center_x, center_y + 32, UI_CENTER | UI_DROPSHADOW, ColorSetAlpha(color, wheel_alpha), va("%i", count));
         }
     }
 
@@ -596,7 +596,7 @@ void CL_Wheel_Draw(void)
                      (int)((center_y / scr.hud_scale) + cl.wheel.position[1] - (wheel_button_draw_size / 2)),
                      wheel_button_draw_size,
                      wheel_button_draw_size,
-                     COLOR_SETA_F(COLOR_WHITE, wheel_alpha * 0.5f), scr.wheel_button);
+                     ColorSetAlpha(COLOR_WHITE, wheel_alpha * 0.5f), scr.wheel_button);
 }
 
 void CL_Wheel_Precache(void)

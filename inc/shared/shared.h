@@ -809,32 +809,52 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define COLOR_U32_MAGENTA COLOR_U32_RGB(255,   0, 255)
 #define COLOR_U32_WHITE   COLOR_U32_RGB(255, 255, 255)
 
-// basic construction from rgba/rgb or alpha u8
-#define COLOR_RGBA(ur, ug, ub, ua) ((color_t) { .r = (ur), .g = (ug), .b = (ub), .a = (ua) })
-#define COLOR_RGB(ur, ug, ub)      ((color_t) { .r = (ur), .g = (ug), .b = (ub), .a = 255  })
-#define COLOR_A(ua)                ((color_t) { .r = 0, .g = 0, .b = 0, .a = (ua)  })
+inline constexpr color_t ColorU32(uint32_t value)
+{
+    return color_t{ value };
+}
 
-// color mask macros
-#define COLOR_MASK_ALPHA   COLOR_A(255)
-#define COLOR_MASK_RGB     COLOR_RGBA(255, 255, 255, 0)
+inline constexpr color_t ColorU24(uint32_t value)
+{
+    return ColorU32((value & 0x00FFFFFFu) | 0xFF000000u);
+}
 
-// conversion from 32-bit or 24-bit colors
-#define COLOR_U32(v)               ((color_t) { .u32 = (v) })
-#define COLOR_U24(v)               ((color_t) { .u32 = ((v) & COLOR_MASK_RGB.u32) | (COLOR_MASK_ALPHA.u32) })
+inline constexpr color_t ColorRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+    return ColorU32(COLOR_U32_RGBA(r, g, b, a));
+}
 
-// change alpha macros
-#define COLOR_SETA_U8(c, a)   ((color_t) { .u32 = ((((c).u32) & COLOR_MASK_RGB.u32) | (COLOR_A((a)).u32)) })
-#define COLOR_SETA_F(c, f)    COLOR_SETA_U8((c), ((f) * 255))
+inline constexpr color_t ColorRGB(uint8_t r, uint8_t g, uint8_t b)
+{
+    return ColorRGBA(r, g, b, 255);
+}
 
-// built-in color_t's
-#define COLOR_BLACK   COLOR_U32(COLOR_U32_BLACK)
-#define COLOR_RED     COLOR_U32(COLOR_U32_RED)
-#define COLOR_GREEN   COLOR_U32(COLOR_U32_GREEN)
-#define COLOR_YELLOW  COLOR_U32(COLOR_U32_YELLOW)
-#define COLOR_BLUE    COLOR_U32(COLOR_U32_BLUE)
-#define COLOR_CYAN    COLOR_U32(COLOR_U32_CYAN)
-#define COLOR_MAGENTA COLOR_U32(COLOR_U32_MAGENTA)
-#define COLOR_WHITE   COLOR_U32(COLOR_U32_WHITE)
+inline constexpr color_t ColorA(uint8_t a)
+{
+    return ColorRGBA(0, 0, 0, a);
+}
+
+inline constexpr color_t COLOR_MASK_ALPHA = ColorA(255);
+inline constexpr color_t COLOR_MASK_RGB = ColorRGBA(255, 255, 255, 0);
+
+inline constexpr color_t ColorSetAlpha(color_t c, uint8_t a)
+{
+    return ColorU32((c.u32 & COLOR_MASK_RGB.u32) | ColorA(a).u32);
+}
+
+inline constexpr color_t ColorSetAlpha(color_t c, float alpha)
+{
+    return ColorSetAlpha(c, static_cast<uint8_t>(alpha * 255.0f));
+}
+
+inline constexpr color_t COLOR_BLACK = ColorU32(COLOR_U32_BLACK);
+inline constexpr color_t COLOR_RED = ColorU32(COLOR_U32_RED);
+inline constexpr color_t COLOR_GREEN = ColorU32(COLOR_U32_GREEN);
+inline constexpr color_t COLOR_YELLOW = ColorU32(COLOR_U32_YELLOW);
+inline constexpr color_t COLOR_BLUE = ColorU32(COLOR_U32_BLUE);
+inline constexpr color_t COLOR_CYAN = ColorU32(COLOR_U32_CYAN);
+inline constexpr color_t COLOR_MAGENTA = ColorU32(COLOR_U32_MAGENTA);
+inline constexpr color_t COLOR_WHITE = ColorU32(COLOR_U32_WHITE);
 
 //=============================================
 

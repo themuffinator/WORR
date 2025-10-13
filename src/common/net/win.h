@@ -358,7 +358,8 @@ static neterr_t os_connect_hack(struct pollfd *e)
     FD_ZERO(&fd);
     FD_SET(e->fd, &fd);
 
-    ret = select(1, NULL, NULL, &fd, &(struct timeval){ 0 });
+    timeval tv{};
+    ret = select(1, NULL, NULL, &fd, &tv);
     if (ret == SOCKET_ERROR) {
         net_error = WSAGetLastError();
         return NET_ERROR;
@@ -385,12 +386,11 @@ static void os_net_init(void)
 
     Com_DPrintf("Winsock initialized\n");
 
-    OSVERSIONINFOEXA vi = {
-        .dwOSVersionInfoSize = sizeof(vi),
-        .dwMajorVersion = 10,
-        .dwMinorVersion = 0,
-        .dwBuildNumber = 19041,
-    };
+    OSVERSIONINFOEXA vi{};
+    vi.dwOSVersionInfoSize = sizeof(vi);
+    vi.dwMajorVersion = 10;
+    vi.dwMinorVersion = 0;
+    vi.dwBuildNumber = 19041;
 
     ULONGLONG mask = 0;
     VER_SET_CONDITION(mask, VER_MAJORVERSION, VER_GREATER_EQUAL);

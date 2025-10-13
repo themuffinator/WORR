@@ -1590,7 +1590,7 @@ static void MenuList_Draw(menuList_t *l)
         s = (char *)l->items[i] + l->extrasize;
 
         if (l->mlFlags & MLF_COLOR) {
-            color = COLOR_U32(*((uint32_t *)(s - 4)));
+            color = ColorU32(*((uint32_t *)(s - 4)));
         }
 
         xx = x;

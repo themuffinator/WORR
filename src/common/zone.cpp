@@ -51,14 +51,25 @@ typedef struct {
 static list_t       z_chain;
 static zstats_t     z_stats[TAG_MAX];
 
-#define S(d) \
-    { .z = { .magic = Z_MAGIC, .tag = TAG_STATIC, .size = sizeof(zstatic_t) }, .data = d }
+template <size_t N>
+static constexpr zstatic_t MakeZStatic(const char (&d)[N])
+{
+    zstatic_t value{};
+    static_assert(N <= sizeof(value.data), "zstatic_t data buffer must fit string literal");
+    value.z.magic = Z_MAGIC;
+    value.z.tag = TAG_STATIC;
+    value.z.size = sizeof(zstatic_t);
+    for (size_t i = 0; i < sizeof(value.data) && i < N; ++i) {
+        value.data[i] = d[i];
+    }
+    return value;
+}
 
-static const zstatic_t z_static[11] = {
-    S("0"), S("1"), S("2"), S("3"), S("4"), S("5"), S("6"), S("7"), S("8"), S("9"), S("")
+static constexpr zstatic_t z_static[11] = {
+    MakeZStatic("0"), MakeZStatic("1"), MakeZStatic("2"), MakeZStatic("3"), MakeZStatic("4"),
+    MakeZStatic("5"), MakeZStatic("6"), MakeZStatic("7"), MakeZStatic("8"), MakeZStatic("9"),
+    MakeZStatic("")
 };
-
-#undef S
 
 static const char *const z_tagnames[TAG_MAX] = {
     "game",

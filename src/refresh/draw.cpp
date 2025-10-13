@@ -217,7 +217,7 @@ void GL_Blend(void)
         outer.b = glr.fd.damage_blend[2] * 255;
         outer.a = glr.fd.damage_blend[3] * 255;
 
-        inner = COLOR_SETA_U8(outer, 0);
+        inner = ColorSetAlpha(outer, 0);
 
         if (gl_damageblend_frac->value > 0)
             GL_DrawVignette(Cvar_ClampValue(gl_damageblend_frac, 0, 0.5f), outer, inner);
@@ -387,7 +387,7 @@ void R_DrawFill8(int x, int y, int w, int h, int c)
 {
     if (!w || !h)
         return;
-    GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, COLOR_U32(d_8to24table[c & 0xff]), TEXNUM_WHITE, 0);
+    GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, ColorU32(d_8to24table[c & 0xff]), TEXNUM_WHITE, 0);
 }
 
 void R_DrawFill32(int x, int y, int w, int h, color_t color)
@@ -414,7 +414,7 @@ static inline void draw_char(int x, int y, int w, int h, int flags, int c, color
     t = (c >> 4) * 0.0625f;
 
     if (flags & UI_DROPSHADOW && c != 0x83) {
-        color_t black = COLOR_A(color.a);
+        color_t black = ColorA(color.a);
 
         GL_StretchPic(x + 1, y + 1, w, h, s, t,
                       s + 0.0625f, t + 0.0625f, black, image);
@@ -425,7 +425,7 @@ static inline void draw_char(int x, int y, int w, int h, int flags, int c, color
     }
 
     if (c >> 7)
-        color = COLOR_SETA_U8(COLOR_WHITE, color.a);
+        color = ColorSetAlpha(COLOR_WHITE, color.a);
 
     GL_StretchPic(x, y, w, h, s, t,
                   s + 0.0625f, t + 0.0625f, color, image);
@@ -492,7 +492,7 @@ static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t c
     if ((flags & UI_DROPSHADOW) || gl_fontshadow->integer > 0) {
         shadow_offset = (1 * scale);
         
-        color_t black = COLOR_A(color.a);
+        color_t black = ColorA(color.a);
 
         GL_StretchPic(x + shadow_offset, y + shadow_offset, w, h, s, t,
                       s + sw, t + sh, black, image);

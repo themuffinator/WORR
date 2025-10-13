@@ -966,9 +966,9 @@ static void GL_BuildIntensityTable(void)
         j = 255.0f / f;
     }
 
-    gl_static.inverse_intensity_33 = COLOR_RGBA(j, j, j, 85).u32;
-    gl_static.inverse_intensity_66 = COLOR_RGBA(j, j, j, 170).u32;
-    gl_static.inverse_intensity_100 = COLOR_RGB(j, j, j).u32;
+    gl_static.inverse_intensity_33 = ColorRGBA(j, j, j, 85).u32;
+    gl_static.inverse_intensity_66 = ColorRGBA(j, j, j, 170).u32;
+    gl_static.inverse_intensity_100 = ColorRGB(j, j, j).u32;
 }
 
 static void GL_BuildGammaTables(void)
