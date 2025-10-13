@@ -150,7 +150,7 @@ Z_Freep
 */
 void Z_Freep(void *ptr)
 {
-    void **p = ptr;
+    auto p = static_cast<void **>(ptr);
 
     Q_assert(p);
     if (*p) {
