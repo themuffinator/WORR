@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -73,6 +74,90 @@ public:
     const kfont_char_t *lookupKFontChar(const kfont_t *kfont, uint32_t codepoint) const;
 
 private:
+    enum FogBits : uint32_t {
+        FogNone = 0,
+        FogGlobal = 1u << 0,
+        FogHeight = 1u << 1,
+        FogSky = 1u << 2,
+    };
+  
+    enum class PipelineKind {
+        InlineBsp,
+        Alias,
+        Sprite,
+        Weapon,
+    };
+
+    struct PipelineDesc {
+        PipelineKind kind = PipelineKind::Alias;
+        std::string debugName;
+    };
+
+    struct RenderQueues {
+        std::vector<const entity_t *> beams;
+        std::vector<const entity_t *> flares;
+        std::vector<const entity_t *> bmodels;
+        std::vector<const entity_t *> opaque;
+        std::vector<const entity_t *> alphaBack;
+        std::vector<const entity_t *> alphaFront;
+
+        void clear();
+    };
+
+    struct BeamPrimitive {
+        std::array<float, 3> start{};
+        std::array<float, 3> end{};
+        float radius = 0.0f;
+        color_t color = COLOR_WHITE;
+    };
+
+    struct ParticleBillboard {
+        std::array<float, 3> origin{};
+        float scale = 1.0f;
+        float alpha = 1.0f;
+        color_t color = COLOR_WHITE;
+    };
+
+    struct FlarePrimitive {
+        std::array<float, 3> origin{};
+        float scale = 1.0f;
+        color_t color = COLOR_WHITE;
+    };
+
+    struct DebugLinePrimitive {
+        std::array<float, 3> start{};
+        std::array<float, 3> end{};
+        color_t color = COLOR_WHITE;
+        bool depthTest = true;
+    };
+
+    struct FramePrimitiveBuffers {
+        std::vector<BeamPrimitive> beams;
+        std::vector<ParticleBillboard> particles;
+        std::vector<FlarePrimitive> flares;
+        std::vector<DebugLinePrimitive> debugLines;
+
+        void clear();
+    };
+
+    struct FrameStats {
+        size_t drawCalls = 0;
+        size_t pipelinesBound = 0;
+        size_t beams = 0;
+        size_t particles = 0;
+        size_t flares = 0;
+        size_t debugLines = 0;
+
+        void reset();
+    };
+
+    struct EnumHash {
+        template <typename T>
+        size_t operator()(T value) const noexcept {
+            return static_cast<size_t>(value);
+        }
+    };
+
     struct SkyDefinition {
         std::string name;
         float rotate = 0.0f;
@@ -107,16 +192,57 @@ private:
     using ImageMap = std::unordered_map<qhandle_t, ImageRecord>;
     using NameLookup = std::unordered_map<std::string, qhandle_t>;
 
+    struct FrameState {
+        refdef_t refdef{};
+        std::vector<entity_t> entities;
+        std::vector<dlight_t> dlights;
+        std::vector<particle_t> particles;
+        std::array<lightstyle_t, MAX_LIGHTSTYLES> lightstyles{};
+        std::vector<uint8_t> areaBits;
+        bool hasLightstyles = false;
+        bool hasAreabits = false;
+        bool hasRefdef = false;
+        bool inWorldPass = false;
+        bool worldRendered = false;
+        bool dynamicLightsUploaded = false;
+        bool skyActive = false;
+        FogBits fogBits = FogNone;
+        FogBits fogBitsSky = FogNone;
+        bool perPixelLighting = false;
+    };
+
     qhandle_t nextHandle();
     qhandle_t registerResource(NameLookup &lookup, std::string_view name);
 
     void resetTransientState();
+    void resetFrameState();
+    void prepareFrameState(const refdef_t &fd);
+    void evaluateFrameSettings();
+    void uploadDynamicLights();
+    void updateSkyState();
+    void beginWorldPass();
+    void renderWorld();
+    void endWorldPass();
+    void classifyEntities(const refdef_t &fd);
+    void buildEffectBuffers(const refdef_t &fd);
+    void recordDrawCall(const PipelineDesc &pipeline, std::string_view label, size_t count = 0);
+    void recordStage(std::string_view label);
+    PipelineDesc makePipeline(PipelineKind kind) const;
+    const PipelineDesc &ensurePipeline(PipelineKind kind);
+    PipelineKind selectPipelineForEntity(const entity_t &ent) const;
+    const ModelRecord *findModelRecord(qhandle_t handle) const;
+    std::string_view classifyModelName(const ModelRecord *record) const;
 
     void submit2DDraw(const draw2d::Submission &submission);
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
     bool frameActive_ = false;
+
+    RenderQueues frameQueues_{};
+    FramePrimitiveBuffers framePrimitives_{};
+    FrameStats frameStats_{};
+    std::vector<std::string> commandLog_{};
 
     SkyDefinition sky_{};
     std::string currentMap_;
@@ -130,6 +256,9 @@ private:
     NameLookup modelLookup_;
     NameLookup imageLookup_;
     RawPicState rawPic_;
+    FrameState frameState_{};
+
+    std::unordered_map<PipelineKind, PipelineDesc, EnumHash> pipelines_;
 };
 
 } // namespace refresh::vk
