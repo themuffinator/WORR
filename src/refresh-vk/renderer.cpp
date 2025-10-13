@@ -9,6 +9,7 @@
 #include <limits>
 
 #include "common/cmodel.h"
+#include "refresh/images.h"
 #include "client/client.h"
 
 extern uint32_t d_8to24table[256];
@@ -22,6 +23,12 @@ namespace {
     constexpr int kDefaultCharWidth = 8;
     constexpr int kDefaultCharHeight = 8;
     constexpr float kInverseLightIntensity = 1.0f / 255.0f;
+    constexpr float kFontCellSize = 1.0f / 16.0f;
+    constexpr float kTileDivisor = 1.0f / 64.0f;
+    constexpr float kShadowOffset = 1.0f;
+    constexpr int kUIDropShadow = 1 << 4;
+    constexpr int kUIAltColor = 1 << 5;
+    constexpr int kUIXorColor = 1 << 7;
 
     struct VideoGeometry {
         int width = SCREEN_WIDTH;
@@ -55,6 +62,25 @@ namespace {
         return { value[0], value[1], value[2] };
     }
 
+    std::array<std::array<float, 2>, 4> makeQuad(float x, float y, float w, float h) {
+        return {{{
+            {x, y},
+            {x + w, y},
+            {x + w, y + h},
+            {x, y + h},
+        }}};
+    }
+
+    std::array<std::array<float, 2>, 4> makeUV(float u0, float v0, float u1, float v1) {
+        return {{{
+            {u0, v0},
+            {u1, v0},
+            {u1, v1},
+            {u0, v1},
+        }}};
+    }
+
+    const std::array<std::array<float, 2>, 4> kFullUVs = makeUV(0.0f, 0.0f, 1.0f, 1.0f);
     std::array<std::array<float, 2>, 4> makeQuadPositions(float x0, float y0, float x1, float y1) {
         return {{{ { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } }}};
     }
@@ -150,6 +176,7 @@ qhandle_t VulkanRenderer::registerResource(NameLookup &lookup, std::string_view 
 
 void VulkanRenderer::resetTransientState() {
     clipRect_.reset();
+    activeScissor_.reset();
     scale_ = 1.0f;
     autoScaleValue_ = 1;
     resetFrameState();
@@ -707,6 +734,86 @@ void VulkanRenderer::lightPoint(const vec3_t origin, vec3_t light) const {
     }
 }
 
+VulkanRenderer::ScissorRect VulkanRenderer::fullScissorRect() const {
+    ScissorRect rect{};
+    rect.x = 0;
+    rect.y = 0;
+
+    auto computeExtent = [](int dimension, double scale) -> uint32_t {
+        if (dimension <= 0 || scale <= 0.0) {
+            return 0u;
+        }
+        double scaled = static_cast<double>(dimension) * scale;
+        long long rounded = std::llround(scaled);
+        if (rounded <= 0) {
+            return 0u;
+        }
+        return static_cast<uint32_t>(rounded);
+    };
+
+    double scale = static_cast<double>(std::max(scale_, 0.0f));
+    rect.width = computeExtent(r_config.width, scale);
+    rect.height = computeExtent(r_config.height, scale);
+    return rect;
+}
+
+std::optional<VulkanRenderer::ScissorRect> VulkanRenderer::scaledClipRect(const clipRect_t &clip) const {
+    ScissorRect bounds = fullScissorRect();
+    if (bounds.width == 0 || bounds.height == 0) {
+        return std::nullopt;
+    }
+
+    double scale = static_cast<double>(std::max(scale_, 0.0f));
+    if (scale <= 0.0) {
+        return std::nullopt;
+    }
+
+    double left = static_cast<double>(clip.left) * scale;
+    double top = static_cast<double>(clip.top) * scale;
+    double right = static_cast<double>(clip.right) * scale;
+    double bottom = static_cast<double>(clip.bottom) * scale;
+
+    int32_t x0 = static_cast<int32_t>(std::floor(left));
+    int32_t y0 = static_cast<int32_t>(std::floor(top));
+    int32_t x1 = static_cast<int32_t>(std::ceil(right));
+    int32_t y1 = static_cast<int32_t>(std::ceil(bottom));
+
+    int32_t maxWidth = static_cast<int32_t>(bounds.width);
+    int32_t maxHeight = static_cast<int32_t>(bounds.height);
+
+    x0 = std::clamp(x0, 0, maxWidth);
+    y0 = std::clamp(y0, 0, maxHeight);
+    x1 = std::clamp(x1, 0, maxWidth);
+    y1 = std::clamp(y1, 0, maxHeight);
+
+    if (x1 <= x0 || y1 <= y0) {
+        return std::nullopt;
+    }
+
+    ScissorRect rect{};
+    rect.x = x0;
+    rect.y = y0;
+    rect.width = static_cast<uint32_t>(x1 - x0);
+    rect.height = static_cast<uint32_t>(y1 - y0);
+    return rect;
+}
+
+void VulkanRenderer::recordScissorCommand(const ScissorRect &rect, bool clipped) {
+    std::string entry = "vkCmdSetScissor offset=(";
+    entry.append(std::to_string(rect.x));
+    entry.push_back(',');
+    entry.append(std::to_string(rect.y));
+    entry.append(") extent=(");
+    entry.append(std::to_string(rect.width));
+    entry.push_back(',');
+    entry.append(std::to_string(rect.height));
+    entry.push_back(')');
+    if (!clipped) {
+        entry.append(" (full)");
+    }
+    commandLog_.push_back(std::move(entry));
+}
+
 void VulkanRenderer::setClipRect(const clipRect_t *clip) {
     bool changed = false;
     if (clip) {
@@ -727,6 +834,33 @@ void VulkanRenderer::setClipRect(const clipRect_t *clip) {
     } else {
         clipRect_.reset();
     }
+
+    ScissorRect fullRect = fullScissorRect();
+    std::optional<ScissorRect> desired = clip ? scaledClipRect(*clip) : std::nullopt;
+    bool drawingActive = frameActive_ && draw2d::isActive();
+
+    if (!desired) {
+        if (!activeScissor_) {
+            return;
+        }
+        if (drawingActive) {
+            draw2d::flush();
+            recordScissorCommand(fullRect, false);
+        }
+        activeScissor_.reset();
+        return;
+    }
+
+    if (activeScissor_ && *activeScissor_ == *desired) {
+        return;
+    }
+
+    if (drawingActive) {
+        draw2d::flush();
+        recordScissorCommand(*desired, true);
+    }
+
+    activeScissor_ = desired;
 }
 
 float VulkanRenderer::clampScale(cvar_t *var) const {
@@ -745,6 +879,29 @@ float VulkanRenderer::clampScale(cvar_t *var) const {
 }
 
 void VulkanRenderer::setScale(float scale) {
+    float target = 1.0f;
+    if (std::isfinite(scale)) {
+        target = std::clamp(scale, 0.25f, 4.0f);
+    }
+
+    if (std::abs(target - scale_) <= std::numeric_limits<float>::epsilon()) {
+        return;
+    }
+
+    bool drawingActive = frameActive_ && draw2d::isActive();
+    if (drawingActive && !clipRect_) {
+        draw2d::flush();
+    }
+
+    scale_ = target;
+    activeScissor_.reset();
+
+    if (clipRect_) {
+        setClipRect(&*clipRect_);
+    } else if (drawingActive) {
+        setClipRect(nullptr);
+    }
+  
     float newScale = 1.0f;
     if (std::isfinite(scale)) {
         newScale = std::clamp(scale, 0.25f, 4.0f);
@@ -766,6 +923,10 @@ void VulkanRenderer::drawChar(int x, int y, int flags, int ch, color_t color, qh
 }
 
 void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int ch, color_t color, qhandle_t font) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
+  
     if (!canSubmit2D()) {
         return;
     }
@@ -774,6 +935,55 @@ void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int 
         return;
     }
 
+    if (images_.find(font) == images_.end()) {
+        return;
+    }
+
+    uint8_t glyph = static_cast<uint8_t>(ch);
+    if ((glyph & 127u) == 32u) {
+        return;
+    }
+
+    if (flags & kUIAltColor) {
+        glyph |= 0x80u;
+    }
+    if (flags & kUIXorColor) {
+        glyph ^= 0x80u;
+    }
+
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    float u0 = static_cast<float>(glyph & 15u) * kFontCellSize;
+    float v0 = static_cast<float>(glyph >> 4) * kFontCellSize;
+    auto uvs = makeUV(u0, v0, u0 + kFontCellSize, v0 + kFontCellSize);
+
+    if ((flags & kUIDropShadow) && glyph != 0x83u) {
+        float offset = kShadowOffset * scale;
+        color_t shadow{};
+        shadow.r = 0;
+        shadow.g = 0;
+        shadow.b = 0;
+        shadow.a = color.a;
+        auto shadowPositions = makeQuad(fx + offset, fy + offset, fw, fh);
+        draw2d::submitQuad(shadowPositions, uvs, shadow.u32, font);
+    }
+
+    if (glyph & 0x80u) {
+        color.r = 255u;
+        color.g = 255u;
+        color.b = 255u;
+    }
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, uvs, color.u32, font);
     if (!findImageRecord(font)) {
         return;
     }
@@ -935,6 +1145,19 @@ void VulkanRenderer::drawStretchPic(int x, int y, int w, int h, color_t color, q
         return;
     }
 
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, kFullUVs, color.u32, pic);
+
     if (!findImageRecord(pic)) {
         return;
     }
@@ -949,10 +1172,48 @@ void VulkanRenderer::drawStretchRotatePic(int x, int y, int w, int h, color_t co
     if (!canSubmit2D()) {
         return;
     }
+  
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
 
     if (w <= 0 || h <= 0) {
         return;
     }
+
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+    float pivotX = static_cast<float>(pivot_x) * scale;
+    float pivotY = static_cast<float>(pivot_y) * scale;
+
+    float halfW = fw * 0.5f;
+    float halfH = fh * 0.5f;
+
+    std::array<std::array<float, 2>, 4> local{{
+        {-halfW + pivotX, -halfH + pivotY},
+        { halfW + pivotX, -halfH + pivotY},
+        { halfW + pivotX,  halfH + pivotY},
+        {-halfW + pivotX,  halfH + pivotY},
+    }};
+
+    std::array<std::array<float, 2>, 4> positions{};
+    float s = std::sin(angle);
+    float c = std::cos(angle);
+    for (size_t i = 0; i < local.size(); ++i) {
+        float lx = local[i][0];
+        float ly = local[i][1];
+        positions[i][0] = fx + (lx * c - ly * s);
+        positions[i][1] = fy + (lx * s + ly * c);
+    }
+
+    draw2d::submitQuad(positions, kFullUVs, color.u32, pic);
 
     if (!findImageRecord(pic)) {
         return;
@@ -981,6 +1242,10 @@ void VulkanRenderer::drawStretchRotatePic(int x, int y, int w, int h, color_t co
 }
 
 void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
+  
     if (!canSubmit2D()) {
         return;
     }
@@ -989,6 +1254,11 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
         return;
     }
 
+    auto it = images_.find(pic);
+    if (it == images_.end()) {
+        return;
+    }
+  
     const ImageRecord *image = findImageRecord(pic);
     if (!image) {
         return;
@@ -999,6 +1269,10 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
         return;
     }
 
+    float imageWidth = static_cast<float>(std::max(1, it->second.width));
+    float imageHeight = static_cast<float>(std::max(1, it->second.height));
+    float aspect = imageHeight / imageWidth;
+  
     float aspect = 1.0f;
     if (image->height > 0) {
         aspect = static_cast<float>(image->width) / static_cast<float>(image->height);
@@ -1007,6 +1281,23 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
     float scaleW = static_cast<float>(w);
     float scaleH = static_cast<float>(h) * aspect;
     float scale = std::max(scaleW, scaleH);
+
+    float s = 0.5f * (1.0f - (scaleW / scale));
+    float t = 0.5f * (1.0f - (scaleH / scale));
+
+    float scaleFactor = scale_;
+    if (scaleFactor <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scaleFactor;
+    float fy = static_cast<float>(y) * scaleFactor;
+    float fw = static_cast<float>(w) * scaleFactor;
+    float fh = static_cast<float>(h) * scaleFactor;
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    auto uvs = makeUV(s, t, 1.0f - s, 1.0f - t);
+    draw2d::submitQuad(positions, uvs, color.u32, pic);
     if (scale <= 0.0f) {
         return;
     }
@@ -1057,6 +1348,10 @@ void VulkanRenderer::updateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
 }
 
 void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
+  
     if (!canSubmit2D()) {
         return;
     }
@@ -1064,6 +1359,24 @@ void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
     if (w <= 0 || h <= 0) {
         return;
     }
+
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    float s0 = static_cast<float>(x) * kTileDivisor;
+    float t0 = static_cast<float>(y) * kTileDivisor;
+    float s1 = static_cast<float>(x + w) * kTileDivisor;
+    float t1 = static_cast<float>(y + h) * kTileDivisor;
+    auto uvs = makeUV(s0, t0, s1, t1);
+    draw2d::submitQuad(positions, uvs, COLOR_WHITE.u32, pic);
 
     if (!findImageRecord(pic)) {
         return;
@@ -1082,6 +1395,9 @@ void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
 }
 
 void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
     if (!canSubmit2D()) {
         return;
     }
@@ -1089,6 +1405,22 @@ void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
     if (w <= 0 || h <= 0) {
         return;
     }
+
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    color_t color{};
+    color.u32 = d_8to24table[c & 0xFF];
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, kFullUVs, color.u32, 0);
 
     qhandle_t texture = ensureWhiteTexture();
     color_t color = ColorU32(d_8to24table[c & 0xFF]);
@@ -1100,6 +1432,10 @@ void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
 }
 
 void VulkanRenderer::drawFill32(int x, int y, int w, int h, color_t color) {
+    if (!frameActive_ || !draw2d::isActive()) {
+        return;
+    }
+  
     if (!canSubmit2D()) {
         return;
     }
@@ -1108,6 +1444,18 @@ void VulkanRenderer::drawFill32(int x, int y, int w, int h, color_t color) {
         return;
     }
 
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, kFullUVs, color.u32, 0);
     qhandle_t texture = ensureWhiteTexture();
 
     submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),

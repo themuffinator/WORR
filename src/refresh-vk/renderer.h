@@ -251,7 +251,27 @@ private:
     SkyDefinition sky_{};
     std::string currentMap_;
 
+    struct ScissorRect {
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t width = 0;
+        uint32_t height = 0;
+
+        bool operator==(const ScissorRect &other) const {
+            return x == other.x && y == other.y && width == other.width && height == other.height;
+        }
+
+        bool operator!=(const ScissorRect &other) const {
+            return !(*this == other);
+        }
+    };
+
+    void recordScissorCommand(const ScissorRect &rect, bool clipped);
+    ScissorRect fullScissorRect() const;
+    std::optional<ScissorRect> scaledClipRect(const clipRect_t &clip) const;
+
     std::optional<clipRect_t> clipRect_;
+    std::optional<ScissorRect> activeScissor_;
     float scale_ = 1.0f;
     int autoScaleValue_ = 1;
 
