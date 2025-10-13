@@ -115,7 +115,7 @@ static int os_udp_recv(qsocket_t sock, void *data,
     for (tries = 0; tries < MAX_ERROR_RETRIES; tries++) {
         memset(&addr, 0, sizeof(addr));
         addrlen = sizeof(addr);
-        ret = recvfrom(sock, data, len, 0,
+        ret = recvfrom(sock, static_cast<char *>(data), len, 0,
                        (struct sockaddr *)&addr, &addrlen);
 
         NET_SockadrToNetadr(&addr, from);
@@ -153,7 +153,7 @@ static int os_udp_send(qsocket_t sock, const void *data,
 
     addrlen = NET_NetadrToSockadr(to, &addr);
 
-    ret = sendto(sock, data, len, 0,
+    ret = sendto(sock, static_cast<const char *>(data), len, 0,
                  (struct sockaddr *)&addr, addrlen);
 
     if (ret != SOCKET_ERROR)
@@ -185,7 +185,7 @@ static neterr_t os_get_error(void)
 
 static int os_recv(qsocket_t sock, void *data, size_t len, int flags)
 {
-    int ret = recv(sock, data, len, flags);
+    int ret = recv(sock, static_cast<char *>(data), len, flags);
 
     if (ret == SOCKET_ERROR)
         return os_get_error();
@@ -195,7 +195,7 @@ static int os_recv(qsocket_t sock, void *data, size_t len, int flags)
 
 static int os_send(qsocket_t sock, const void *data, size_t len, int flags)
 {
-    int ret = send(sock, data, len, flags);
+    int ret = send(sock, static_cast<const char *>(data), len, flags);
 
     if (ret == SOCKET_ERROR)
         return os_get_error();

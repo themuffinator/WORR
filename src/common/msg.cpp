@@ -96,7 +96,7 @@ void MSG_WriteChar(int c)
     Q_assert(c >= -128 && c <= 127);
 #endif
 
-    buf = SZ_GetSpace(&msg_write, 1);
+    buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 1));
     buf[0] = c;
 }
 
@@ -113,7 +113,7 @@ void MSG_WriteByte(int c)
     Q_assert(c >= 0 && c <= 255);
 #endif
 
-    buf = SZ_GetSpace(&msg_write, 1);
+    buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 1));
     buf[0] = c;
 }
 
@@ -130,7 +130,7 @@ void MSG_WriteShort(int c)
     Q_assert(c >= -0x8000 && c <= 0x7fff);
 #endif
 
-    buf = SZ_GetSpace(&msg_write, 2);
+    buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 2));
     WL16(buf, c);
 }
 
@@ -143,7 +143,7 @@ void MSG_WriteLong(int c)
 {
     byte    *buf;
 
-    buf = SZ_GetSpace(&msg_write, 4);
+    buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 4));
     WL32(buf, c);
 }
 
@@ -156,7 +156,7 @@ void MSG_WriteLong64(int64_t c)
 {
     byte    *buf;
 
-    buf = SZ_GetSpace(&msg_write, 8);
+    buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 8));
     WL64(buf, c);
 }
 
@@ -1701,7 +1701,7 @@ void MSG_BeginReading(void)
 
 byte *MSG_ReadData(size_t len)
 {
-    return SZ_ReadData(&msg_read, len);
+    return static_cast<byte *>(SZ_ReadData(&msg_read, len));
 }
 
 // returns -1 if no more characters are available

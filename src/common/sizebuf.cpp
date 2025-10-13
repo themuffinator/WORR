@@ -47,7 +47,7 @@ void SZ_InitGrowable(sizebuf_t *buf, size_t size, const char *tag)
 {
     Q_assert(size <= INT32_MAX);
     memset(buf, 0, sizeof(*buf));
-    buf->data = Z_Malloc(size);
+    buf->data = static_cast<byte *>(Z_Malloc(size));
     buf->maxsize = size;
     buf->tag = tag;
     buf->growable = true;
@@ -71,8 +71,6 @@ void SZ_Clear(sizebuf_t *buf)
 
 void *SZ_GetSpace(sizebuf_t *buf, size_t len)
 {
-    void    *data;
-
     if (buf->cursize > buf->maxsize) {
         Com_Error(ERR_FATAL,
                   "%s: %s: already overflowed",
@@ -88,7 +86,7 @@ void *SZ_GetSpace(sizebuf_t *buf, size_t len)
 
         if (buf->growable) {
             buf->maxsize = max(buf->cursize + len, buf->maxsize * 2);
-            buf->data = Z_Realloc(buf->data, buf->maxsize);
+            buf->data = static_cast<byte *>(Z_Realloc(buf->data, buf->maxsize));
         } else {
             if (!buf->allowoverflow) {
                 Com_Error(ERR_FATAL,
@@ -102,7 +100,7 @@ void *SZ_GetSpace(sizebuf_t *buf, size_t len)
         }
     }
 
-    data = buf->data + buf->cursize;
+    auto    *data = static_cast<byte *>(buf->data) + buf->cursize;
     buf->cursize += len;
     return data;
 }
@@ -111,7 +109,7 @@ void SZ_WriteByte(sizebuf_t *sb, int c)
 {
     byte    *buf;
 
-    buf = SZ_GetSpace(sb, 1);
+    buf = static_cast<byte *>(SZ_GetSpace(sb, 1));
     buf[0] = c;
 }
 
@@ -119,7 +117,7 @@ void SZ_WriteShort(sizebuf_t *sb, int c)
 {
     byte    *buf;
 
-    buf = SZ_GetSpace(sb, 2);
+    buf = static_cast<byte *>(SZ_GetSpace(sb, 2));
     WL16(buf, c);
 }
 
@@ -127,7 +125,7 @@ void SZ_WriteLong(sizebuf_t *sb, int c)
 {
     byte    *buf;
 
-    buf = SZ_GetSpace(sb, 4);
+    buf = static_cast<byte *>(SZ_GetSpace(sb, 4));
     WL32(buf, c);
 }
 
@@ -152,8 +150,6 @@ void SZ_WriteString(sizebuf_t *sb, const char *s)
 
 void *SZ_ReadData(sizebuf_t *buf, size_t len)
 {
-    void    *data;
-
     if (buf->readcount > buf->cursize || len > buf->cursize - buf->readcount) {
         if (!buf->allowunderflow) {
             Com_Error(ERR_DROP, "%s: read past end of message", __func__);
@@ -162,37 +158,37 @@ void *SZ_ReadData(sizebuf_t *buf, size_t len)
         return NULL;
     }
 
-    data = buf->data + buf->readcount;
+    auto    *data = static_cast<byte *>(buf->data) + buf->readcount;
     buf->readcount += len;
     return data;
 }
 
 int SZ_ReadByte(sizebuf_t *sb)
 {
-    byte *buf = SZ_ReadData(sb, 1);
+    byte *buf = static_cast<byte *>(SZ_ReadData(sb, 1));
     return buf ? *buf : -1;
 }
 
 int SZ_ReadShort(sizebuf_t *sb)
 {
-    byte *buf = SZ_ReadData(sb, 2);
+    byte *buf = static_cast<byte *>(SZ_ReadData(sb, 2));
     return buf ? (int16_t)RL16(buf) : -1;
 }
 
 int SZ_ReadWord(sizebuf_t *sb)
 {
-    byte *buf = SZ_ReadData(sb, 2);
+    byte *buf = static_cast<byte *>(SZ_ReadData(sb, 2));
     return buf ? (uint16_t)RL16(buf) : -1;
 }
 
 int SZ_ReadLong(sizebuf_t *sb)
 {
-    byte *buf = SZ_ReadData(sb, 4);
+    byte *buf = static_cast<byte *>(SZ_ReadData(sb, 4));
     return buf ? (int32_t)RL32(buf) : -1;
 }
 
 float SZ_ReadFloat(sizebuf_t *sb)
 {
-    byte *buf = SZ_ReadData(sb, 4);
+    byte *buf = static_cast<byte *>(SZ_ReadData(sb, 4));
     return buf ? LongToFloat(RL32(buf)) : -1.0f;
 }

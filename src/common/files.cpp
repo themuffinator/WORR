@@ -1085,7 +1085,7 @@ static int read_zip_file(file_t *file, void *buf, size_t len)
         return 0;
     }
 
-    z->next_out = buf;
+    z->next_out = static_cast<Bytef *>(buf);
     z->avail_out = (uInt)len;
 
     do {

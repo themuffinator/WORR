@@ -999,8 +999,8 @@ Returns pointer to next byte after 'c' in 'dst', or NULL if 'c' was not found.
 */
 void *Q_memccpy(void *dst, const void *src, int c, size_t size)
 {
-    byte *d = dst;
-    const byte *s = src;
+    auto *d = static_cast<byte *>(dst);
+    const auto *s = static_cast<const byte *>(src);
 
     while (size--) {
         if ((*d++ = *s++) == c) {
