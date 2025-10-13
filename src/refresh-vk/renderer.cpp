@@ -2,6 +2,8 @@
 
 #include "vk_draw2d.h"
 
+#include "refresh/images.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -424,18 +426,29 @@ qhandle_t VulkanRenderer::registerImage(const char *name, imagetype_t type, imag
         return 0;
     }
 
-    qhandle_t handle = registerResource(imageLookup_, name);
+    qhandle_t handle = ::R_RegisterImage(name, type, flags);
+    if (!handle) {
+        return 0;
+    }
+
+    const image_t *image = IMG_ForHandle(handle);
+    if (!image) {
+        return 0;
+    }
+
     auto &record = images_[handle];
     record.handle = handle;
-    record.name = name;
-    record.type = type;
-    record.flags = flags;
-    record.registrationSequence = r_registration_sequence;
-    record.transparent = (flags & IF_TRANSPARENT) != 0;
+    record.name = image->name;
+    record.type = static_cast<imagetype_t>(image->type);
+    record.flags = static_cast<imageflags_t>(image->flags);
+    record.width = image->width;
+    record.height = image->height;
+    record.transparent = (record.flags & IF_TRANSPARENT) != 0;
+    record.registrationSequence = image->registration_sequence;
 
-    if (flags & IF_SPECIAL) {
-        record.width = 1;
-        record.height = 1;
+    imageLookup_[record.name] = handle;
+    if (std::strcmp(record.name.c_str(), name) != 0) {
+        imageLookup_[name] = handle;
     }
 
     return handle;
