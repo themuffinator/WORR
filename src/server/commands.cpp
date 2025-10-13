@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 
+#include <array>
+
 /*
 ===============================================================================
 
@@ -738,7 +740,7 @@ static void dump_protocols(void)
 static void dump_settings(void)
 {
     client_t    *cl;
-    char        opt[8];
+    std::array<char, 8> opt{};
 
     Com_Printf(
         "num name            proto options upd fps\n"
@@ -754,7 +756,7 @@ static void dump_settings(void)
         opt[5] = cl->settings[CLS_NOPREDICT]      ? 'P' : ' ';
         opt[6] = cl->settings[CLS_NOFLARES]       ? 'L' : ' ';
         Com_Printf("%3i %-15.15s %5d %s %3d %3d\n",
-                   cl->number, cl->name, cl->protocol, opt,
+                   cl->number, cl->name, cl->protocol, opt.data(),
                    cl->settings[CLS_PLAYERUPDATES], cl->settings[CLS_FPS]);
     }
 }
