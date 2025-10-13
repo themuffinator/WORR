@@ -71,7 +71,7 @@ FORWARD_EMBEDDED_FILE(q2pro_menu);
 
 static const builtin_file_t builtin_files[] = {
 #if USE_CLIENT
-    { "q2repro.menu", res_q2pro_menu, &res_q2pro_menu_size },
+    { "q2repro.menu.json", res_q2pro_menu, &res_q2pro_menu_size },
 #endif
     { NULL }
 };

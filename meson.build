@@ -669,7 +669,7 @@ if get_option('client-ui')
   q2pro_menu_c = custom_target(
       'worr.menu.cpp',
       output : 'worr.menu.cpp',
-      input : 'src/client/ui/worr.menu',
+      input : 'src/client/ui/worr.menu.json',
       command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_q2pro_menu'],
   )
   client_src += q2pro_menu_c
