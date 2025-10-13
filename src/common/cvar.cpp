@@ -142,7 +142,7 @@ void Cvar_Variable_g(genctx_t *ctx)
 
 void Cvar_Default_g(genctx_t *ctx)
 {
-    cvar_t *c = ctx->data;
+    auto *c = static_cast<cvar_t *>(ctx->data);
 
     if (c) {
         if (strcmp(c->string, c->default_string)) {
