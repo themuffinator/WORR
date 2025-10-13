@@ -12,6 +12,12 @@ namespace {
     constexpr int kDefaultCharWidth = 8;
     constexpr int kDefaultCharHeight = 8;
 
+    struct VideoGeometry {
+        int width = SCREEN_WIDTH;
+        int height = SCREEN_HEIGHT;
+        vidFlags_t flags = {};
+    };
+
     int countPrintable(std::string_view value, size_t maxChars) {
         size_t count = 0;
         for (char ch : value) {
@@ -32,6 +38,31 @@ namespace {
 
     constexpr uint16_t defaultKFontHeight() {
         return 16;
+    }
+
+    VideoGeometry queryVideoGeometry() {
+        VideoGeometry geometry{};
+
+        vrect_t rect{};
+        if (VID_GetGeometry(&rect)) {
+            geometry.width = std::max(1, rect.width);
+            geometry.height = std::max(1, rect.height);
+        }
+
+        vrect_t fullscreen{};
+        int freq = 0;
+        int depth = 0;
+        if (VID_GetFullscreen(&fullscreen, &freq, &depth)) {
+            geometry.flags = static_cast<vidFlags_t>(geometry.flags | QVF_FULLSCREEN);
+        }
+
+        return geometry;
+    }
+
+    void applyVideoGeometry(const VideoGeometry &geometry) {
+        r_config.width = geometry.width;
+        r_config.height = geometry.height;
+        r_config.flags = geometry.flags;
     }
 }
 
@@ -79,9 +110,10 @@ bool VulkanRenderer::init(bool total) {
 
     Com_Printf("------- refresh-vk init -------\n");
 
-    r_config.width = SCREEN_WIDTH;
-    r_config.height = SCREEN_HEIGHT;
-    r_config.flags = {};
+    VideoGeometry geometry = queryVideoGeometry();
+    applyVideoGeometry(geometry);
+    Com_Printf("Using video geometry %dx%d%s\n", r_config.width, r_config.height,
+               (r_config.flags & QVF_FULLSCREEN) ? " (fullscreen)" : "");
 
     resetTransientState();
 
@@ -351,9 +383,11 @@ void VulkanRenderer::drawFill32(int, int, int, int, color_t) {
 }
 
 void VulkanRenderer::modeChanged(int width, int height, int flags) {
-    r_config.width = width;
-    r_config.height = height;
-    r_config.flags = static_cast<vidFlags_t>(flags);
+    VideoGeometry geometry{};
+    geometry.width = std::max(1, width);
+    geometry.height = std::max(1, height);
+    geometry.flags = static_cast<vidFlags_t>(flags);
+    applyVideoGeometry(geometry);
 }
 
 bool VulkanRenderer::videoSync() const {
