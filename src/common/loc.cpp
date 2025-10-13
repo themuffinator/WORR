@@ -367,6 +367,8 @@ void Loc_ReloadFile(void)
         loc.num_arguments = 0;
         loc.next = loc.hash_next = NULL;
 
+        uint32_t hash = 0;
+
         if (!Loc_Parse(&loc)) {
             goto line_error;
         }
@@ -376,7 +378,7 @@ void Loc_ReloadFile(void)
         memcpy(*tail, &loc, sizeof(loc));
 
         // hash
-        uint32_t hash = Com_HashString(loc.key, LOC_HASH_SIZE) & (LOC_HASH_SIZE - 1);
+        hash = Com_HashString(loc.key, LOC_HASH_SIZE) & (LOC_HASH_SIZE - 1);
         if (!loc_hash[hash]) {
             loc_hash[hash] = *tail;
         } else {

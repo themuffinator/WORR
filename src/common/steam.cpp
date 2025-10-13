@@ -140,6 +140,8 @@ static bool find_steam_app_path(const char *app_id, char *out_dir, size_t out_di
     char *file_contents = Z_Malloc(len + 1);
     file_contents[len] = '\0';
 
+    char *parse_contents = file_contents;
+
     size_t file_read = fread((void *) file_contents, 1, len, libraryfolders);
 
     fclose(libraryfolders);
@@ -149,8 +151,6 @@ static bool find_steam_app_path(const char *app_id, char *out_dir, size_t out_di
         result = false;
         goto exit;
     }
-
-    char *parse_contents = file_contents;
 
     result = parse_vdf_libraryfolders((const char **) &parse_contents, app_id, out_dir, out_dir_length);
 
