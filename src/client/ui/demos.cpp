@@ -243,7 +243,7 @@ static void CalcHash(void **list)
     while (*list) {
         info = *list++;
         len = sizeof(*info) + strlen(info->name) - 1;
-        mdfour_update(&md, (uint8_t *)info, len);
+        mdfour_update(&md, reinterpret_cast<const uint8_t *>(info), len);
     }
     mdfour_result(&md, m_demos.hash);
 }
