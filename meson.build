@@ -4,7 +4,7 @@ project('worr', ['cpp', 'c'],
   meson_version: '>= 0.60.0',
   default_options: [
     meson.version().version_compare('>=1.3.0') ? 'c_std=gnu11,c11' : 'c_std=gnu11',
-    'cpp_std=c++17',
+    'cpp_std=c++latest',
     'buildtype=debugoptimized',
   ],
 )
