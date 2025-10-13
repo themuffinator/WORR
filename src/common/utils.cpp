@@ -595,7 +595,7 @@ static int escape_char(int c)
     return 0;
 }
 
-const char com_hexchars[16] = "0123456789ABCDEF";
+const char com_hexchars[] = "0123456789ABCDEF";
 
 size_t Com_EscapeString(char *dst, const char *src, size_t size)
 {
