@@ -18,10 +18,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
-#ifdef _MSC_VER
-typedef volatile int atomic_int;
-#define atomic_load(p)      (*(p))
-#define atomic_store(p, v)  (*(p) = (v))
+#ifdef __cplusplus
+#include <atomic>
+
+struct atomic_int {
+    constexpr atomic_int() noexcept = default;
+    constexpr explicit atomic_int(int desired) noexcept
+        : value(desired) {}
+
+    atomic_int(const atomic_int &) = delete;
+    atomic_int &operator=(const atomic_int &) = delete;
+
+    std::atomic<int> value{0};
+};
+
+inline int atomic_load(const atomic_int *p) noexcept
+{
+    return p->value.load(std::memory_order_acquire);
+}
+
+template <typename T>
+inline void atomic_store(atomic_int *p, T desired) noexcept
+{
+    p->value.store(static_cast<int>(desired), std::memory_order_release);
+}
+
 #else
 #include <stdatomic.h>
 #endif
