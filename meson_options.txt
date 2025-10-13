@@ -121,6 +121,11 @@ option('opengl-es1',
   value: false,
   description: 'Build OpenGL ES 1 compatible renderer')
 
+option('renderer',
+  type: 'string',
+  value: 'refresh',
+  description: 'Select renderer backend (refresh or refresh-vk)')
+
 option('packetdup-hack',
   type: 'boolean',
   value: false,
