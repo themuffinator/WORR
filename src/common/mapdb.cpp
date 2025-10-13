@@ -60,49 +60,99 @@ typedef struct {
 
 #define q_member_sizeof(t, m) (sizeof(((t *) 0)->m ))
 
+static constexpr mapdb_key_t MapKeyFixedString(const char *name, size_t offset, size_t len)
+{
+        mapdb_key_t key{};
+        key.key = name;
+        key.type = JSMN_STRING;
+        key.offset = offset;
+        key.len = len;
+        return key;
+}
+
+static constexpr mapdb_key_t MapKeyDynamicString(const char *name, size_t offset)
+{
+        mapdb_key_t key{};
+        key.key = name;
+        key.type = JSMN_STRING;
+        key.offset = offset;
+        key.len = 0;
+        return key;
+}
+
+static constexpr mapdb_key_t MapKeySkip(const char *name)
+{
+        mapdb_key_t key{};
+        key.key = name;
+        key.type = JSMN_UNDEFINED;
+        return key;
+}
+
+static constexpr mapdb_key_t MapKeyU8(const char *name, size_t offset)
+{
+        mapdb_key_t key{};
+        key.key = name;
+        key.type = JSMN_PRIMITIVE;
+        key.offset = offset;
+        key.primitive = PRIM_U8;
+        return key;
+}
+
+static constexpr mapdb_key_t MapKeyBoolean(const char *name, size_t offset)
+{
+        mapdb_key_t key{};
+        key.key = name;
+        key.type = JSMN_PRIMITIVE;
+        key.offset = offset;
+        key.primitive = PRIM_BOOLEAN;
+        return key;
+}
+
 #define KEY_FIXED_STRING(name) \
-	.key = #name, .type = JSMN_STRING, .offset = offsetof(KEY_TYPE, name), .len = q_member_sizeof(KEY_TYPE, name)
+        MapKeyFixedString(#name, offsetof(KEY_TYPE, name), q_member_sizeof(KEY_TYPE, name))
 #define KEY_DYNAMIC_STRING(name) \
-	.key = #name, .type = JSMN_STRING, .offset = offsetof(KEY_TYPE, name), .len = 0
+        MapKeyDynamicString(#name, offsetof(KEY_TYPE, name))
 #define KEY_SKIP(name) \
-	.key = #name, .type = JSMN_UNDEFINED
+        MapKeySkip(#name)
 #define KEY_U8(name) \
-	.key = #name, .type = JSMN_PRIMITIVE, .offset = offsetof(KEY_TYPE, name), .primitive = PRIM_U8
+        MapKeyU8(#name, offsetof(KEY_TYPE, name))
 #define KEY_BOOLEAN(name) \
-	.key = #name, .type = JSMN_PRIMITIVE, .offset = offsetof(KEY_TYPE, name), .primitive = PRIM_BOOLEAN
+        MapKeyBoolean(#name, offsetof(KEY_TYPE, name))
 
 #define KEY_TYPE mapdb_episode_t
 static const mapdb_key_t episode_keys[] = {
-	{ KEY_FIXED_STRING(id) },
-	{ KEY_FIXED_STRING(command) },
-	{ KEY_FIXED_STRING(name) },
-	{ KEY_SKIP(activity) },
-	{ KEY_BOOLEAN(needsSkillSelect) },
-	{ NULL }
+        KEY_FIXED_STRING(id),
+        KEY_FIXED_STRING(command),
+        KEY_FIXED_STRING(name),
+        KEY_SKIP(activity),
+        KEY_BOOLEAN(needsSkillSelect),
+        {}
 };
 #undef KEY_TYPE
 
 #define KEY_TYPE mapdb_map_t
 static const mapdb_key_t map_keys[] = {
-	{ KEY_FIXED_STRING(bsp) },
-	{ KEY_FIXED_STRING(title) },
-	{ KEY_FIXED_STRING(episode) },
-	{ KEY_FIXED_STRING(short_name) },
-	{ KEY_U8(unit) },
-	{ KEY_BOOLEAN(sp) },
-	{ KEY_BOOLEAN(dm) },
-	{ KEY_BOOLEAN(bots) },
-	{ KEY_BOOLEAN(ctf) },
-	{ KEY_BOOLEAN(tdm) },
-	{ KEY_BOOLEAN(coop) },
-	{ KEY_BOOLEAN(display_bsp) },
-	{ KEY_DYNAMIC_STRING(start_items) },
-	{ NULL }
+        KEY_FIXED_STRING(bsp),
+        KEY_FIXED_STRING(title),
+        KEY_FIXED_STRING(episode),
+        KEY_FIXED_STRING(short_name),
+        KEY_U8(unit),
+        KEY_BOOLEAN(sp),
+        KEY_BOOLEAN(dm),
+        KEY_BOOLEAN(bots),
+        KEY_BOOLEAN(ctf),
+        KEY_BOOLEAN(tdm),
+        KEY_BOOLEAN(coop),
+        KEY_BOOLEAN(display_bsp),
+        KEY_DYNAMIC_STRING(start_items),
+        {}
 };
 #undef KEY_TYPE
 
-#define KEY_MEM \
-	((uint8_t *) obj + key->offset)
+static inline uint8_t *MapKeyMem(void *obj, const mapdb_key_t *key)
+{
+        return reinterpret_cast<uint8_t *>(obj) + key->offset;
+}
 
 static void MapDB_ParseKeys(json_parse_t *parser, void *obj, const mapdb_key_t *keys)
 {
@@ -127,26 +177,26 @@ static void MapDB_ParseKeys(json_parse_t *parser, void *obj, const mapdb_key_t *
 
 			if (key->type == JSMN_STRING) {
 				size_t l = Json_Strlen(parser);
-				if (key->len) {
-					Q_strnlcpy((char *) KEY_MEM, parser->buffer + parser->pos->start, l, key->len);
-				} else {
-					char *buf = Z_TagMalloc(l + 1, TAG_MAPDB);
+                                if (key->len) {
+                                        Q_strnlcpy(reinterpret_cast<char *>(MapKeyMem(obj, key)), parser->buffer + parser->pos->start, l, key->len);
+                                } else {
+                                        char *buf = Z_TagMalloc(l + 1, TAG_MAPDB);
 
-					if (!buf)
-						Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
+                                        if (!buf)
+                                                Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
 
-					Q_strnlcpy(buf, parser->buffer + parser->pos->start, l, l + 1);
-					*((char **) KEY_MEM) = buf;
-				}
-			} else if (key->type == JSMN_PRIMITIVE) {
-				if (key->primitive == PRIM_BOOLEAN) {
-					*((bool *) KEY_MEM) = parser->buffer[parser->pos->start] == 't';
-				} else if (key->primitive == PRIM_U8) {
-					*((uint8_t *) KEY_MEM) = strtol(parser->buffer + parser->pos->start, NULL, 10);
-				} else {
-					Json_Error(parser, parser->pos, "Unsupported primitive");
-				}
-			}
+                                        Q_strnlcpy(buf, parser->buffer + parser->pos->start, l, l + 1);
+                                        *reinterpret_cast<char **>(MapKeyMem(obj, key)) = buf;
+                                }
+                        } else if (key->type == JSMN_PRIMITIVE) {
+                                if (key->primitive == PRIM_BOOLEAN) {
+                                        *reinterpret_cast<bool *>(MapKeyMem(obj, key)) = parser->buffer[parser->pos->start] == 't';
+                                } else if (key->primitive == PRIM_U8) {
+                                        *reinterpret_cast<uint8_t *>(MapKeyMem(obj, key)) = strtol(parser->buffer + parser->pos->start, NULL, 10);
+                                } else {
+                                        Json_Error(parser, parser->pos, "Unsupported primitive");
+                                }
+                        }
 
 			Json_Next(parser);
 

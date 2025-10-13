@@ -864,8 +864,8 @@ static void Nav_DebugPath(const PathInfo *path, const PathRequest *request)
 
     int time = (request->debugging.drawTime * 1000) + 6000;
     
-    color_t path_color = COLOR_SETA_U8(COLOR_RED, 64);
-    color_t arrow_color = COLOR_SETA_U8(COLOR_YELLOW, 64);
+    color_t path_color = ColorSetAlpha(COLOR_RED, 64);
+    color_t arrow_color = ColorSetAlpha(COLOR_YELLOW, 64);
 
     R_AddDebugSphere(request->start, 8.0f, path_color, time, false);
     R_AddDebugSphere(request->goal, 8.0f, path_color, time, false);
@@ -1197,10 +1197,10 @@ static void Nav_RenderLink(const nav_node_t *node, int node_id, const vec3_t nod
     bool link_disabled = ((node->flags | link->target->flags) & NodeFlag_Disabled);
     uint8_t link_alpha = link_disabled ? (alpha * 0.5f) : alpha;
             
-    color_t line_color = COLOR_SETA_U8(link_disabled ? COLOR_RED : COLOR_WHITE, link_alpha);
-    color_t traversal_color = COLOR_SETA_U8(link_disabled ? COLOR_RED : COLOR_BLUE, link_alpha);
-    color_t arrow_color = COLOR_SETA_U8(COLOR_RED, link_alpha);
-    color_t one_way_line_color = COLOR_SETA_U8(link_disabled ? COLOR_RED : COLOR_CYAN, link_alpha);
+    color_t line_color = ColorSetAlpha(link_disabled ? COLOR_RED : COLOR_WHITE, link_alpha);
+    color_t traversal_color = ColorSetAlpha(link_disabled ? COLOR_RED : COLOR_BLUE, link_alpha);
+    color_t arrow_color = ColorSetAlpha(COLOR_RED, link_alpha);
+    color_t one_way_line_color = ColorSetAlpha(link_disabled ? COLOR_RED : COLOR_CYAN, link_alpha);
     
     vec3_t ctrl;
 
@@ -1274,7 +1274,7 @@ static void Nav_Debug(void)
 
         const uint8_t alpha = Q_clipf((1.0f - ((len - 32.f) / (nav_debug_range->value - 32.f))), 0.0f, 1.0f) * 255.f;
 
-        Nav_AddDebugCircle(node->origin, node->radius, COLOR_SETA_U8(COLOR_CYAN, alpha));
+        Nav_AddDebugCircle(node->origin, node->radius, ColorSetAlpha(COLOR_CYAN, alpha));
 
         vec3_t mins, maxs, origin;
         Nav_GetNodeBounds(node, mins, maxs);
@@ -1283,7 +1283,7 @@ static void Nav_Debug(void)
         VectorAdd(mins, origin, mins);
         VectorAdd(maxs, origin, maxs);
 
-        Nav_AddDebugBounds(mins, maxs, COLOR_SETA_U8((node->flags & NodeFlag_Disabled) ? COLOR_RED : COLOR_YELLOW, alpha));
+        Nav_AddDebugBounds(mins, maxs, ColorSetAlpha((node->flags & NodeFlag_Disabled) ? COLOR_RED : COLOR_YELLOW, alpha));
 
         if (node->flags & NodeFlag_CheckHasFloor) {
             vec3_t floormins, floormaxs;
@@ -1294,20 +1294,20 @@ static void Nav_Debug(void)
             floormins[2] = origin[2] - NavFloorDistance;
             floormaxs[2] = mins_z;
 
-            Nav_AddDebugBounds(floormins, floormaxs, COLOR_SETA_U8(COLOR_RED, alpha * 0.5f));
+            Nav_AddDebugBounds(floormins, floormaxs, ColorSetAlpha(COLOR_RED, alpha * 0.5f));
         }
 
         const vec3_t s = { node->origin[0], node->origin[1], node->origin[2] + 24.f };
 
-        Nav_AddDebugLine(node->origin, s, COLOR_SETA_U8(COLOR_CYAN, alpha));
+        Nav_AddDebugLine(node->origin, s, ColorSetAlpha(COLOR_CYAN, alpha));
 
         vec3_t t = { node->origin[0], node->origin[1], node->origin[2] + 64.f };
 
-        Nav_AddDebugText(t, NULL, va("%td", node - nav_data.nodes), 0.25f, COLOR_SETA_U8(COLOR_CYAN, alpha));
+        Nav_AddDebugText(t, NULL, va("%td", node - nav_data.nodes), 0.25f, ColorSetAlpha(COLOR_CYAN, alpha));
 
         t[2] -= 18;
 
-        R_AddDebugText(t, NULL, Nav_NodeFlagsToString(node->flags), 0.1f, COLOR_SETA_U8(COLOR_GREEN, alpha), SV_FRAMETIME, false);
+        R_AddDebugText(t, NULL, Nav_NodeFlagsToString(node->flags), 0.1f, ColorSetAlpha(COLOR_GREEN, alpha), SV_FRAMETIME, false);
         
         for (const nav_link_t *link = node->links; link != node->links + node->num_links; link++)
             Nav_RenderLink(node, i, s, link, alpha);

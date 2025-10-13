@@ -1454,95 +1454,96 @@ void Info_Print(const char *infostring)
 =====================================================================
 */
 
-const cs_remap_t cs_remap_old = {
-    .extended    = false,
+static constexpr cs_remap_t make_cs_remap_old()
+{
+    cs_remap_t remap{};
+    remap.extended = false;
+    remap.max_edicts = MAX_EDICTS_OLD;
+    remap.max_models = MAX_MODELS_OLD;
+    remap.max_sounds = MAX_SOUNDS_OLD;
+    remap.max_images = MAX_IMAGES_OLD;
+    remap.max_shadowlights = 0;
+    remap.max_wheelitems = 0;
+    remap.airaccel = CS_AIRACCEL_OLD;
+    remap.maxclients = CS_MAXCLIENTS_OLD;
+    remap.mapchecksum = CS_MAPCHECKSUM_OLD;
+    remap.models = CS_MODELS_OLD;
+    remap.sounds = CS_SOUNDS_OLD;
+    remap.images = CS_IMAGES_OLD;
+    remap.lights = CS_LIGHTS_OLD;
+    remap.shadowlights = static_cast<uint16_t>(-1);
+    remap.items = CS_ITEMS_OLD;
+    remap.playerskins = CS_PLAYERSKINS_OLD;
+    remap.general = CS_GENERAL_OLD;
+    remap.wheelweapons = static_cast<uint16_t>(-1);
+    remap.wheelammo = static_cast<uint16_t>(-1);
+    remap.wheelpowerups = static_cast<uint16_t>(-1);
+    remap.cdloopcount = static_cast<uint16_t>(-1);
+    remap.gamestyle = static_cast<uint16_t>(-1);
+    remap.end = MAX_CONFIGSTRINGS_OLD;
+    return remap;
+}
 
-    .max_edicts  = MAX_EDICTS_OLD,
-    .max_models  = MAX_MODELS_OLD,
-    .max_sounds  = MAX_SOUNDS_OLD,
-    .max_images  = MAX_IMAGES_OLD,
-    .max_shadowlights = 0,
-    .max_wheelitems = 0,
+static constexpr cs_remap_t make_cs_remap_rerelease()
+{
+    cs_remap_t remap{};
+    remap.extended = true;
+    remap.max_edicts = MAX_EDICTS;
+    remap.max_models = MAX_MODELS;
+    remap.max_sounds = MAX_SOUNDS;
+    remap.max_images = MAX_IMAGES;
+    remap.max_shadowlights = MAX_SHADOW_LIGHTS;
+    remap.max_wheelitems = MAX_WHEEL_ITEMS;
+    remap.airaccel = CS_AIRACCEL;
+    remap.maxclients = CS_MAXCLIENTS;
+    remap.mapchecksum = CS_MAPCHECKSUM;
+    remap.models = CS_MODELS;
+    remap.sounds = CS_SOUNDS;
+    remap.images = CS_IMAGES;
+    remap.lights = CS_LIGHTS;
+    remap.shadowlights = CS_SHADOWLIGHTS;
+    remap.items = CS_ITEMS;
+    remap.playerskins = CS_PLAYERSKINS;
+    remap.general = CS_GENERAL;
+    remap.wheelweapons = CS_WHEEL_WEAPONS;
+    remap.wheelammo = CS_WHEEL_AMMO;
+    remap.wheelpowerups = CS_WHEEL_POWERUPS;
+    remap.cdloopcount = CS_CD_LOOP_COUNT;
+    remap.gamestyle = CS_GAME_STYLE;
+    remap.end = MAX_CONFIGSTRINGS;
+    return remap;
+}
 
-    .airaccel    = CS_AIRACCEL_OLD,
-    .maxclients  = CS_MAXCLIENTS_OLD,
-    .mapchecksum = CS_MAPCHECKSUM_OLD,
+static constexpr cs_remap_t make_cs_remap_q2pro_new()
+{
+    cs_remap_t remap{};
+    remap.extended = true;
+    remap.max_edicts = MAX_EDICTS;
+    remap.max_models = MAX_MODELS;
+    remap.max_sounds = MAX_SOUNDS;
+    remap.max_images = MAX_IMAGES_EX;
+    remap.max_shadowlights = 0;
+    remap.max_wheelitems = 0;
+    remap.airaccel = CS_AIRACCEL_EX;
+    remap.maxclients = CS_MAXCLIENTS_EX;
+    remap.mapchecksum = CS_MAPCHECKSUM_EX;
+    remap.models = CS_MODELS_EX;
+    remap.sounds = CS_SOUNDS_EX;
+    remap.images = CS_IMAGES_EX;
+    remap.lights = CS_LIGHTS_EX;
+    remap.shadowlights = static_cast<uint16_t>(-1);
+    remap.items = CS_ITEMS_EX;
+    remap.playerskins = CS_PLAYERSKINS_EX;
+    remap.general = CS_GENERAL_EX;
+    remap.wheelweapons = static_cast<uint16_t>(-1);
+    remap.wheelammo = static_cast<uint16_t>(-1);
+    remap.wheelpowerups = static_cast<uint16_t>(-1);
+    remap.cdloopcount = static_cast<uint16_t>(-1);
+    remap.gamestyle = static_cast<uint16_t>(-1);
+    remap.end = MAX_CONFIGSTRINGS_EX;
+    return remap;
+}
 
-    .models      = CS_MODELS_OLD,
-    .sounds      = CS_SOUNDS_OLD,
-    .images      = CS_IMAGES_OLD,
-    .lights      = CS_LIGHTS_OLD,
-    .shadowlights = -1,
-    .items       = CS_ITEMS_OLD,
-    .playerskins = CS_PLAYERSKINS_OLD,
-    .general     = CS_GENERAL_OLD,
-    .wheelweapons = -1,
-    .wheelammo   = -1,
-    .wheelpowerups = -1,
-    .cdloopcount = -1,
-    .gamestyle   = -1,
-
-    .end         = MAX_CONFIGSTRINGS_OLD
-};
-
-const cs_remap_t cs_remap_rerelease = {
-    .extended    = true,
-
-    .max_edicts  = MAX_EDICTS,
-    .max_models  = MAX_MODELS,
-    .max_sounds  = MAX_SOUNDS,
-    .max_images  = MAX_IMAGES,
-    .max_shadowlights = MAX_SHADOW_LIGHTS,
-    .max_wheelitems = MAX_WHEEL_ITEMS,
-
-    .airaccel    = CS_AIRACCEL,
-    .maxclients  = CS_MAXCLIENTS,
-    .mapchecksum = CS_MAPCHECKSUM,
-
-    .models      = CS_MODELS,
-    .sounds      = CS_SOUNDS,
-    .images      = CS_IMAGES,
-    .lights      = CS_LIGHTS,
-    .shadowlights = CS_SHADOWLIGHTS,
-    .items       = CS_ITEMS,
-    .playerskins = CS_PLAYERSKINS,
-    .general     = CS_GENERAL,
-    .wheelweapons = CS_WHEEL_WEAPONS,
-    .wheelammo   = CS_WHEEL_AMMO,
-    .wheelpowerups = CS_WHEEL_POWERUPS,
-    .cdloopcount = CS_CD_LOOP_COUNT,
-    .gamestyle   = CS_GAME_STYLE,
-
-    .end         = MAX_CONFIGSTRINGS
-};
-
-const cs_remap_t cs_remap_q2pro_new = {
-    .extended    = true,
-
-    .max_edicts  = MAX_EDICTS,
-    .max_models  = MAX_MODELS,
-    .max_sounds  = MAX_SOUNDS,
-    .max_images  = MAX_IMAGES_EX,
-    .max_shadowlights = 0,
-    .max_wheelitems = 0,
-
-    .airaccel    = CS_AIRACCEL_EX,
-    .maxclients  = CS_MAXCLIENTS_EX,
-    .mapchecksum = CS_MAPCHECKSUM_EX,
-
-    .models      = CS_MODELS_EX,
-    .sounds      = CS_SOUNDS_EX,
-    .images      = CS_IMAGES_EX,
-    .lights      = CS_LIGHTS_EX,
-    .shadowlights = -1,
-    .items       = CS_ITEMS_EX,
-    .playerskins = CS_PLAYERSKINS_EX,
-    .general     = CS_GENERAL_EX,
-    .wheelweapons = -1,
-    .wheelammo   = -1,
-    .wheelpowerups = -1,
-    .cdloopcount = -1,
-    .gamestyle   = -1,
-
-    .end         = MAX_CONFIGSTRINGS_EX
-};
+const cs_remap_t cs_remap_old = make_cs_remap_old();
+const cs_remap_t cs_remap_rerelease = make_cs_remap_rerelease();
+const cs_remap_t cs_remap_q2pro_new = make_cs_remap_q2pro_new();

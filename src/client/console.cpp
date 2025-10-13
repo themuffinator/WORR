@@ -421,7 +421,7 @@ static void con_timestampscolor_changed(cvar_t *self)
     if (!SCR_ParseColor(self->string, &con.ts_color)) {
         Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
         Cvar_Reset(self);
-        con.ts_color = COLOR_RGB(170, 170, 170);
+        con.ts_color = ColorRGB(170, 170, 170);
     }
 }
 
@@ -701,7 +701,7 @@ static int Con_DrawLine(int v, int row, float alpha, bool notify)
     if (notify) {
         s += line->ts_len;
     } else if (line->ts_len) {
-        color = COLOR_SETA_F(con.ts_color, alpha);
+        color = ColorSetAlpha(con.ts_color, alpha);
         x = R_DrawString(x, v, 0, line->ts_len, s, color, con.charsetImage);
         s += line->ts_len;
         w -= line->ts_len;
@@ -842,7 +842,7 @@ static void Con_DrawSolidConsole(void)
 // draw arrows to show the buffer is backscrolled
     if (con.display != con.current) {
         for (i = 1; i < con.linewidth / 2; i += 4) {
-            R_DrawChar(i * CONCHAR_WIDTH, y, 0, '^', COLOR_SETA_U8(COLOR_RED, color.a), con.charsetImage);
+            R_DrawChar(i * CONCHAR_WIDTH, y, 0, '^', ColorSetAlpha(COLOR_RED, color.a), con.charsetImage);
         }
 
         y -= CONCHAR_HEIGHT;

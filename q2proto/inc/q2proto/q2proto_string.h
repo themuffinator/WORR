@@ -42,7 +42,7 @@ typedef struct q2proto_string_s {
 /// Helper: Create a q2proto_string_t from a null-terminated string
 static inline q2proto_string_t q2proto_make_string(const char *s)
 {
-    q2proto_string_t q2p_str = {.str = s, .len = s ? strlen(s) : 0};
+    q2proto_string_t q2p_str{ s, s ? strlen(s) : 0 };
     return q2p_str;
 }
 

@@ -1365,7 +1365,7 @@ void SCR_StatTableSize(int key_width, int value_width)
 void SCR_StatKeyValue(const char *key, const char *value)
 {
     int c = (stat_state.key_id & 1) ? 24 : 0;
-    R_DrawFill32(stat_state.x, stat_state.y, CONCHAR_WIDTH * (stat_state.key_width + stat_state.value_width) + (STAT_MARGIN * 2), CONCHAR_HEIGHT + (STAT_MARGIN * 2), COLOR_RGBA(c, c, c, 127));
+    R_DrawFill32(stat_state.x, stat_state.y, CONCHAR_WIDTH * (stat_state.key_width + stat_state.value_width) + (STAT_MARGIN * 2), CONCHAR_HEIGHT + (STAT_MARGIN * 2), ColorRGBA(c, c, c, 127));
     SCR_DrawString(stat_state.x + STAT_MARGIN, stat_state.y + STAT_MARGIN, UI_DROPSHADOW, COLOR_WHITE, key);
     stat_state.x += CONCHAR_WIDTH * stat_state.key_width;
     SCR_DrawString(stat_state.x + STAT_MARGIN, stat_state.y + STAT_MARGIN, UI_DROPSHADOW, COLOR_WHITE, value);
@@ -1668,7 +1668,7 @@ static void SCR_DrawHitMarker(color_t base_color)
     int x = (scr.hud_width - w) / 2;
     int y = (scr.hud_height - h) / 2;
 
-    color_t color = COLOR_RGBA(255, 0, 0, base_color.a * alpha);
+    color_t color = ColorRGBA(255, 0, 0, base_color.a * alpha);
 
     R_DrawStretchPic(x + ch_x->integer,
                      y + ch_y->integer,
@@ -1733,7 +1733,7 @@ static void SCR_DrawDamageDisplays(color_t base_color)
         float damage_yaw = angles[YAW];
         float yaw_diff = DEG2RAD((my_yaw - damage_yaw) - 180);
 
-        color_t color = COLOR_RGBA(
+        color_t color = ColorRGBA(
             (int) (entry->color[0] * 255.f),
             (int) (entry->color[1] * 255.f),
             (int) (entry->color[2] * 255.f),
@@ -2069,7 +2069,7 @@ static void SCR_Draw2D(void)
     SCR_SetupHUD();
 
     // The rest of 2D elements share common alpha
-    color_t color = COLOR_SETA_F(COLOR_WHITE, Cvar_ClampValue(scr_alpha, 0, 1));
+    color_t color = ColorSetAlpha(COLOR_WHITE, Cvar_ClampValue(scr_alpha, 0, 1));
 
     // CALL THE NEW FPS COUNTER FUNCTION HERE
     SCR_DrawFPS(color);

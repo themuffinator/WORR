@@ -311,13 +311,13 @@ void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
         x -= strlen(string) * CONCHAR_WIDTH;
     }
 
-    R_DrawString(x, y, flags, MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255), uis.fontHandle);
+    R_DrawString(x, y, flags, MAX_STRING_CHARS, string, ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
 }
 
 // nb: all UI chars are drawn at full alpha
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 {
-    R_DrawChar(x, y, flags, ch, COLOR_SETA_U8(color, 255), uis.fontHandle);
+    R_DrawChar(x, y, flags, ch, ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
 }
 
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
@@ -620,11 +620,11 @@ void UI_Init(void)
         uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
     }
 
-    uis.color.background    = COLOR_RGBA(0,   0,   0,   255);
-    uis.color.normal        = COLOR_RGBA(15,  128, 235, 100);
-    uis.color.active        = COLOR_RGBA(15,  128, 235, 100);
-    uis.color.selection     = COLOR_RGBA(15,  128, 235, 100);
-    uis.color.disabled      = COLOR_RGBA(127, 127, 127, 255);
+    uis.color.background    = ColorRGBA(0,   0,   0,   255);
+    uis.color.normal        = ColorRGBA(15,  128, 235, 100);
+    uis.color.active        = ColorRGBA(15,  128, 235, 100);
+    uis.color.selection     = ColorRGBA(15,  128, 235, 100);
+    uis.color.disabled      = ColorRGBA(127, 127, 127, 255);
 
     strcpy(uis.weaponModel, "w_railgun.md2");
 
