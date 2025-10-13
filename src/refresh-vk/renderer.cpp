@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -75,7 +77,23 @@ namespace {
         metadata.translate = toArray(frame.translate);
         metadata.radius = frame.radius;
         return metadata;
-      
+    }
+
+    VkBuffer makeFakeBufferHandle() {
+        static std::atomic<uintptr_t> counter{1};
+        return reinterpret_cast<VkBuffer>(counter.fetch_add(1, std::memory_order_relaxed));
+    }
+
+    VkDeviceMemory makeFakeMemoryHandle() {
+        static std::atomic<uintptr_t> counter{1};
+        return reinterpret_cast<VkDeviceMemory>(counter.fetch_add(1, std::memory_order_relaxed));
+    }
+
+    VkDescriptorSet makeFakeDescriptorHandle() {
+        static std::atomic<uintptr_t> counter{1};
+        return reinterpret_cast<VkDescriptorSet>(counter.fetch_add(1, std::memory_order_relaxed));
+    }
+
     std::array<std::array<float, 2>, 4> makeQuad(float x, float y, float w, float h) {
         return {{{
             {x, y},
@@ -256,6 +274,13 @@ const VulkanRenderer::PipelineDesc &VulkanRenderer::ensurePipeline(PipelineKind 
 }
 
 const VulkanRenderer::ModelRecord *VulkanRenderer::findModelRecord(qhandle_t handle) const {
+    if (auto it = models_.find(handle); it != models_.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+VulkanRenderer::ModelRecord *VulkanRenderer::findModelRecord(qhandle_t handle) {
     if (auto it = models_.find(handle); it != models_.end()) {
         return &it->second;
     }
@@ -573,6 +598,7 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
         record.inlineModel = true;
         record.aliasFrames.clear();
         record.spriteFrames.clear();
+        record.meshGeometry.clear();
 
         return handle;
     }
@@ -585,6 +611,7 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
     record.inlineModel = false;
     record.aliasFrames.clear();
     record.spriteFrames.clear();
+    record.meshGeometry.clear();
     record.type = 0;
     record.numFrames = 0;
     record.numMeshes = 0;
@@ -633,9 +660,86 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
                 record.spriteFrames.emplace_back(metadata);
             }
         }
+
+        allocateModelGeometry(record, *model);
     }
 
     return handle;
+}
+
+void VulkanRenderer::allocateModelGeometry(ModelRecord &record, const model_t &model) {
+    record.meshGeometry.clear();
+
+    if (model.type != MOD_ALIAS) {
+        return;
+    }
+
+    if (!model.meshes || model.nummeshes <= 0) {
+        return;
+    }
+
+    record.meshGeometry.reserve(static_cast<size_t>(model.nummeshes));
+
+    for (int meshIndex = 0; meshIndex < model.nummeshes; ++meshIndex) {
+        const maliasmesh_t &mesh = model.meshes[meshIndex];
+        ModelRecord::MeshGeometry geometry{};
+
+        if (mesh.numverts > 0 && mesh.verts && mesh.tcoords) {
+            const size_t vertexSize = static_cast<size_t>(mesh.numverts) * sizeof(*mesh.verts);
+            const size_t texCoordSize = static_cast<size_t>(mesh.numverts) * sizeof(*mesh.tcoords);
+            geometry.vertex.vertexStaging.resize(vertexSize + texCoordSize);
+            std::memcpy(geometry.vertex.vertexStaging.data(), mesh.verts, vertexSize);
+            std::memcpy(geometry.vertex.vertexStaging.data() + vertexSize, mesh.tcoords, texCoordSize);
+            geometry.vertex.buffer = makeFakeBufferHandle();
+            geometry.vertex.memory = makeFakeMemoryHandle();
+            geometry.vertex.size = static_cast<VkDeviceSize>(geometry.vertex.vertexStaging.size());
+            geometry.vertex.offset = 0;
+            geometry.vertexCount = static_cast<size_t>(mesh.numverts);
+        }
+
+        if (mesh.numindices > 0 && mesh.indices) {
+            const size_t indexSize = static_cast<size_t>(mesh.numindices) * sizeof(*mesh.indices);
+            geometry.index.indexStaging.resize(indexSize);
+            std::memcpy(geometry.index.indexStaging.data(), mesh.indices, indexSize);
+            geometry.index.buffer = makeFakeBufferHandle();
+            geometry.index.memory = makeFakeMemoryHandle();
+            geometry.index.size = static_cast<VkDeviceSize>(indexSize);
+            geometry.index.offset = 0;
+            geometry.indexCount = static_cast<size_t>(mesh.numindices);
+        }
+
+        if (!geometry.vertex.vertexStaging.empty() || !geometry.index.indexStaging.empty()) {
+            geometry.uploaded = false;
+            geometry.descriptor.set = makeFakeDescriptorHandle();
+            geometry.descriptor.binding = static_cast<uint32_t>(meshIndex);
+            record.meshGeometry.emplace_back(std::move(geometry));
+        }
+    }
+}
+
+void VulkanRenderer::bindModelGeometryBuffers(ModelRecord &record) {
+    if (record.meshGeometry.empty()) {
+        return;
+    }
+
+    for (size_t meshIndex = 0; meshIndex < record.meshGeometry.size(); ++meshIndex) {
+        auto &geometry = record.meshGeometry[meshIndex];
+        if (geometry.vertex.buffer == VK_NULL_HANDLE && geometry.index.buffer == VK_NULL_HANDLE) {
+            continue;
+        }
+
+        std::string entry{"bind.model."};
+        entry.append(record.name);
+        entry.push_back('#');
+        entry.append(std::to_string(meshIndex));
+        commandLog_.push_back(std::move(entry));
+
+        if (!geometry.uploaded) {
+            geometry.vertexStaging.clear();
+            geometry.indexStaging.clear();
+            geometry.uploaded = true;
+        }
+    }
 }
 
 qhandle_t VulkanRenderer::registerImage(const char *name, imagetype_t type, imageflags_t flags) {
@@ -764,7 +868,12 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         const PipelineDesc *pipeline = nullptr;
 
         for (auto it = queue.rbegin(); it != queue.rend(); ++it) {
-            PipelineKind kind = selectPipelineForEntity(**it);
+            const entity_t *entity = *it;
+            if (ModelRecord *record = findModelRecord(entity->model)) {
+                bindModelGeometryBuffers(*record);
+            }
+
+            PipelineKind kind = selectPipelineForEntity(*entity);
             if (!pipeline || kind != currentKind) {
                 if (pipeline && batchCount) {
                     recordDrawCall(*pipeline, label, batchCount);
