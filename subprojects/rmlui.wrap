@@ -1,6 +1,0 @@
-[wrap-git]
-directory = RmlUi
-url = https://github.com/mikke89/RmlUi.git
-revision = 6.0
-clone_recursive = true
-method = cmake

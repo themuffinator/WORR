@@ -1,6 +1,0 @@
-[wrap-git]
-directory = freetype2
-url = https://github.com/freetype/freetype.git
-revision = VER-2-13-2
-clone_recursive = true
-method = cmake
