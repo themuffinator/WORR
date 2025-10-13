@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // mvd_game.c
 //
 
+#include <array>
+
 #include "client.h"
 
 static cvar_t   *mvd_admin_password;
@@ -926,7 +928,7 @@ static void MVD_Forward_f(mvd_client_t *client)
 static void MVD_Say_f(mvd_client_t *client, int argnum)
 {
     mvd_t *mvd = client->mvd;
-    char text[150];
+    std::array<char, 150> text{};
     mvd_client_t *other;
     client_t *cl;
     unsigned i, j, delta;
@@ -968,7 +970,7 @@ static void MVD_Say_f(mvd_client_t *client, int argnum)
     client->floodSamples[client->floodHead & FLOOD_MASK] = svs.realtime;
     client->floodHead++;
 
-    Q_snprintf(text, sizeof(text), "[MVD] %s: %s",
+    Q_snprintf(text.data(), text.size(), "[MVD] %s: %s",
                client->cl->name, Cmd_ArgsFrom(argnum));
 
     FOR_EACH_MVDCL(other, mvd) {
@@ -980,7 +982,7 @@ static void MVD_Say_f(mvd_client_t *client, int argnum)
             continue;
         }
 
-        SV_ClientPrintf(cl, PRINT_CHAT, "%s\n", text);
+        SV_ClientPrintf(cl, PRINT_CHAT, "%s\n", text.data());
     }
 }
 
@@ -1239,7 +1241,7 @@ static void MVD_AutoFollow_f(mvd_client_t *client)
     }
 
     if (!strcmp(s, "list")) {
-        char    buffer[1000];
+        std::array<char, 1000> buffer{};
         size_t  total, len;
 
         total = 0;
@@ -1255,7 +1257,7 @@ static void MVD_AutoFollow_f(mvd_client_t *client)
             if (len == 0)
                 continue;
 
-            if (total + len + 2 >= sizeof(buffer))
+            if (total + len + 2 >= buffer.size())
                 break;
 
             if (total) {
@@ -1264,14 +1266,14 @@ static void MVD_AutoFollow_f(mvd_client_t *client)
                 total += 2;
             }
 
-            memcpy(buffer + total, player->name, len);
+            memcpy(buffer.data() + total, player->name, len);
             total += len;
         }
         buffer[total] = 0;
 
         if (total)
             SV_ClientPrintf(client->cl, PRINT_HIGH,
-                            "[MVD] Auto chasing %s\n", buffer);
+                            "[MVD] Auto chasing %s\n", buffer.data());
         else
             SV_ClientPrintf(client->cl, PRINT_HIGH,
                             "[MVD] Auto chase list is empty.\n");

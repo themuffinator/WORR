@@ -16,6 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <array>
+
 #include "../server.h"
 #include "shared/game3_shared.h"
 #include "shared/game3.h"
@@ -775,12 +777,12 @@ static char* read_as_base85(const char* filename, size_t* result_size)
     struct base85_context_t ctx;
     ascii85_context_init(&ctx);
 
-    uint8_t buf[1024];
+    std::array<uint8_t, 1024> buf{};
     while(!feof(f)) {
-        size_t num_read = fread(buf, sizeof(char), sizeof(buf) / sizeof(buf[0]), f);
+        size_t num_read = fread(buf.data(), sizeof(char), buf.size(), f);
         if (num_read == 0 && ferror(f))
             Com_Error(ERR_DROP, "Error reading %s", filename);
-        ascii85_encode(buf, num_read, &ctx);
+        ascii85_encode(buf.data(), num_read, &ctx);
     }
     fclose(f);
 

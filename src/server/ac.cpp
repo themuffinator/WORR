@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // r1ch.net anticheat server interface for Quake II
 //
 
+#include <array>
+
 #include "server.h"
 
 #include <array>
@@ -73,7 +75,7 @@ typedef enum {
 
 typedef struct ac_file_s {
     struct ac_file_s *next;
-    byte hash[20];
+    std::array<byte, 20> hash{};
     int flags;
     char path[1];
 } ac_file_t;
@@ -1255,7 +1257,7 @@ static void AC_SendChecks(void)
     AC_Flush();
 
     for (f = acs.files, p = NULL; f; p = f, f = f->next) {
-        MSG_WriteData(f->hash, sizeof(f->hash));
+        MSG_WriteData(f->hash.data(), sizeof(f->hash));
         MSG_WriteByte(f->flags);
         if (p && !strcmp(f->path, p->path)) {
             MSG_WriteByte(0);

@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // nav.c -- Kex navigation node support
 
+#include <array>
+
 #include "server.h"
 #include "server/nav.h"
 #include "common/error.h"
@@ -1102,14 +1104,14 @@ static const char *Nav_NodeFlagsToString(nav_node_flags_t flags)
 {
     // although it's very unlikely that a node will have
     // all flags, 256 covers all of the strings in the list.
-    static char node_text_buffer[256];
-    *node_text_buffer = 0;
+    static std::array<char, 256> node_text_buffer{};
+    node_text_buffer[0] = 0;
 
     for (size_t i = 0; i < q_countof(flags_to_text); i++)
         if (flags & flags_to_text[i].flag)
-            Q_strlcat(node_text_buffer, flags_to_text[i].text, sizeof(node_text_buffer));
+            Q_strlcat(node_text_buffer.data(), flags_to_text[i].text, node_text_buffer.size());
 
-    return node_text_buffer;
+    return node_text_buffer.data();
 }
 
 static inline void Nav_GetCurveControlPoint(const vec3_t a, const vec3_t b, vec3_t c)
