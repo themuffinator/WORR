@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // sv_mvd.c - GTV server and local MVD recorder
 //
 
+#include <array>
+
 #include "server.h"
 #include "server/mvd/protocol.h"
 
@@ -1003,7 +1005,7 @@ void SV_MvdEndFrame(void)
 {
     gtv_client_t *client;
     size_t total;
-    byte header[3];
+    std::array<byte, 3> header{};
 
     if (!SV_FRAMESYNC)
         return;
@@ -1049,12 +1051,12 @@ void SV_MvdEndFrame(void)
 
     // build message header
     total = mvd.message.cursize + msg_write.cursize + mvd.datagram.cursize;
-    WL16(header, total + 1);
+    WL16(header.data(), total + 1);
     header[2] = GTS_STREAM_DATA;
 
     // send frame to clients
     FOR_EACH_ACTIVE_GTV(client) {
-        write_stream(client, header, sizeof(header));
+        write_stream(client, header.data(), header.size());
         write_stream(client, mvd.message.data, mvd.message.cursize);
         write_stream(client, msg_write.data, msg_write.cursize);
         write_stream(client, mvd.datagram.data, mvd.datagram.cursize);
@@ -1433,11 +1435,11 @@ static void write_stream(gtv_client_t *client, void *data, size_t len)
 
 static void write_message(gtv_client_t *client, gtv_serverop_t op)
 {
-    byte header[3];
+    std::array<byte, 3> header{};
 
-    WL16(header, msg_write.cursize + 1);
+    WL16(header.data(), msg_write.cursize + 1);
     header[2] = op;
-    write_stream(client, header, sizeof(header));
+    write_stream(client, header.data(), header.size());
 
     write_stream(client, msg_write.data, msg_write.cursize);
 }
@@ -1459,7 +1461,7 @@ static bool auth_client(const gtv_client_t *client, const char *password)
 
 static void parse_hello(gtv_client_t *client)
 {
-    char password[MAX_QPATH];
+    std::array<char, MAX_QPATH> password{};
     int protocol, flags;
     size_t size;
     byte *data;
@@ -1485,11 +1487,11 @@ static void parse_hello(gtv_client_t *client)
     flags = MSG_ReadLong();
     MSG_ReadLong();
     MSG_ReadString(client->name, sizeof(client->name));
-    MSG_ReadString(password, sizeof(password));
+    MSG_ReadString(password.data(), password.size());
     MSG_ReadString(client->version, sizeof(client->version));
 
     // authorize access
-    if (!auth_client(client, password)) {
+    if (!auth_client(client, password.data())) {
         write_message(client, GTS_NOACCESS);
         drop_client(client, "not authorized");
         return;

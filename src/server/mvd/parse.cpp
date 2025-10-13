@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // mvd_parse.c
 //
 
+#include <array>
+
 #include "client.h"
 #include "server/mvd/protocol.h"
 
@@ -318,7 +320,7 @@ static void MVD_UnicastPrint(mvd_t *mvd, bool reliable, mvd_player_t *player)
 
 static void MVD_UnicastStuff(mvd_t *mvd, bool reliable, mvd_player_t *player)
 {
-    char string[8];
+    std::array<char, 8> string{};
     byte *data;
     uint32_t readcount, length;
 
@@ -330,8 +332,8 @@ static void MVD_UnicastStuff(mvd_t *mvd, bool reliable, mvd_player_t *player)
     data = msg_read.data + msg_read.readcount - 1;
     readcount = msg_read.readcount - 1;
 
-    MSG_ReadString(string, sizeof(string));
-    if (strncmp(string, "play ", 5)) {
+    MSG_ReadString(string.data(), string.size());
+    if (strncmp(string.data(), "play ", 5)) {
         return;
     }
 

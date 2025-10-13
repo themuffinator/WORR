@@ -16,6 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <array>
+
 #include "server.h"
 #include "client/input.h"
 #if USE_CLIENT
@@ -611,12 +613,12 @@ static void SVC_GetChallenge(void)
         svs.challenges[i].time = com_eventTime;
     }
 
-    char challenge_extra[64];
-    q2proto_get_challenge_extras(challenge_extra, sizeof(challenge_extra), q2repro_accepted_protocols, q_countof(q2repro_accepted_protocols));
+    std::array<char, 64> challenge_extra{};
+    q2proto_get_challenge_extras(challenge_extra.data(), challenge_extra.size(), q2repro_accepted_protocols, q_countof(q2repro_accepted_protocols));
 
     // send it back
     Netchan_OutOfBand(NS_SERVER, &net_from,
-                      "challenge %u %s", challenge, challenge_extra);
+                      "challenge %u %s", challenge, challenge_extra.data());
 }
 
 /*

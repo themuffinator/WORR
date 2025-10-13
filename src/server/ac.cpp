@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // r1ch.net anticheat server interface for Quake II
 //
 
+#include <array>
+
 #include "server.h"
 
 typedef enum {
@@ -71,7 +73,7 @@ typedef enum {
 
 typedef struct ac_file_s {
     struct ac_file_s *next;
-    byte hash[20];
+    std::array<byte, 20> hash{};
     int flags;
     char path[1];
 } ac_file_t;
@@ -225,7 +227,7 @@ static void AC_ParseHash(char *data, int linenum, const char *path)
     char *pstr, *hstr;
     size_t pathlen, hashlen;
     int flags;
-    byte hash[20];
+    std::array<byte, 20> hash{};
     ac_file_t *file;
     int i;
 
@@ -277,7 +279,7 @@ badhash:
     }
 
     file = SV_Malloc(sizeof(*file) + pathlen);
-    memcpy(file->hash, hash, sizeof(file->hash));
+    memcpy(file->hash, hash.data(), sizeof(file->hash));
     memcpy(file->path, pstr, pathlen + 1);
     file->flags = flags;
     file->next = acs.files;
@@ -287,7 +289,8 @@ badhash:
 
 static void AC_ParseCvar(char *data, int linenum, const char *path)
 {
-    char *values[256], *p;
+    std::array<char *, 256> values{};
+    char *p;
     char *name, *opstr, *val, *def;
     size_t len, namelen, vallen, deflen;
     ac_cvar_t *cvar;
@@ -641,8 +644,8 @@ static client_t *AC_ParseClient(void)
 static void AC_ParseViolation(void)
 {
     client_t        *cl;
-    char            reason[32];
-    char            clientreason[64];
+    std::array<char, 32> reason{};
+    std::array<char, 64> clientreason{};
 
     cl = AC_ParseClient();
     if (!cl) {
@@ -654,10 +657,10 @@ static void AC_ParseViolation(void)
         return;
     }
 
-    MSG_ReadString(reason, sizeof(reason));
+    MSG_ReadString(reason.data(), reason.size());
 
     if (msg_read.readcount < msg_read.cursize) {
-        MSG_ReadString(clientreason, sizeof(clientreason));
+        MSG_ReadString(clientreason.data(), clientreason.size());
     } else {
         clientreason[0] = 0;
     }
@@ -669,22 +672,22 @@ static void AC_ParseViolation(void)
     // for spawned clients.
 
     // fixme maybe
-    if (strcmp(reason, "disconnected")) {
-        char    showreason[32];
+    if (strcmp(reason.data(), "disconnected")) {
+        std::array<char, 32> showreason{};
 
         if (ac_show_violation_reason->integer)
-            Q_snprintf(showreason, sizeof(showreason), " (%s)", reason);
+            Q_snprintf(showreason.data(), showreason.size(), " (%s)", reason.data());
         else
             showreason[0] = 0;
 
         AC_Announce(cl, "%s was kicked for anticheat violation%s\n",
-                    cl->name, showreason);
+                    cl->name, showreason.data());
 
         Com_Printf("ANTICHEAT VIOLATION: %s[%s] was kicked: %s\n",
-                   cl->name, NET_AdrToString(&cl->netchan.remote_address), reason);
+                   cl->name, NET_AdrToString(&cl->netchan.remote_address), reason.data());
 
         if (clientreason[0])
-            SV_ClientPrintf(cl, PRINT_HIGH, "%s\n", clientreason);
+            SV_ClientPrintf(cl, PRINT_HIGH, "%s\n", clientreason.data());
 
         // hack to fix late zombies race condition
         cl->lastmessage = svs.realtime;
@@ -740,8 +743,8 @@ static void AC_ParseFileViolation(void)
 {
     string_entry_t    *bad;
     client_t    *cl;
-    char        path[MAX_QPATH];
-    char        hash[MAX_QPATH];
+    std::array<char, MAX_QPATH> path{};
+    std::array<char, MAX_QPATH> hash{};
     int         action;
     size_t      pathlen;
     ac_file_t   *f;
@@ -756,23 +759,23 @@ static void AC_ParseFileViolation(void)
         return;
     }
 
-    pathlen = MSG_ReadString(path, sizeof(path));
-    if (pathlen >= sizeof(path)) {
+    pathlen = MSG_ReadString(path.data(), path.size());
+    if (pathlen >= path.size()) {
         Com_WPrintf("ANTICHEAT: Oversize path in %s\n", __func__);
-        pathlen = sizeof(path) - 1;
+        pathlen = path.size() - 1;
     }
 
     if (msg_read.readcount < msg_read.cursize) {
-        MSG_ReadString(hash, sizeof(hash));
+        MSG_ReadString(hash.data(), hash.size());
     } else {
-        strcpy(hash, "no hash?");
+        Q_strlcpy(hash.data(), "no hash?", hash.size());
     }
 
     cl->ac_file_failures++;
 
     action = ac_badfile_action->integer;
     for (f = acs.files; f; f = f->next) {
-        if (!strcmp(f->path, path)) {
+        if (!strcmp(f->path, path.data())) {
             if (f->flags & ACH_REQUIRED) {
                 action = 0;
                 break;
@@ -781,19 +784,19 @@ static void AC_ParseFileViolation(void)
     }
 
     Com_Printf("ANTICHEAT FILE VIOLATION: %s[%s] has a modified %s [%s]\n",
-               cl->name, NET_AdrToString(&cl->netchan.remote_address), path, hash);
+               cl->name, NET_AdrToString(&cl->netchan.remote_address), path.data(), hash.data());
     switch (action) {
     case 0:
-        AC_Announce(cl, "%s was kicked for modified %s\n", cl->name, path);
+        AC_Announce(cl, "%s was kicked for modified %s\n", cl->name, path.data());
         break;
     case 1:
         SV_ClientPrintf(cl, PRINT_HIGH, AC_MESSAGE
                         "Your file %s has been modified. "
-                        "Please replace it with a known valid copy.\n", path);
+                        "Please replace it with a known valid copy.\n", path.data());
         break;
     case 2:
         // spamalicious :)
-        AC_Announce(cl, "%s has a modified %s\n", cl->name, path);
+        AC_Announce(cl, "%s has a modified %s\n", cl->name, path.data());
         break;
     }
 
@@ -814,7 +817,7 @@ static void AC_ParseFileViolation(void)
     }
 
     bad = SV_Malloc(sizeof(*bad) + pathlen);
-    memcpy(bad->string, path, pathlen + 1);
+    memcpy(bad->string, path.data(), pathlen + 1);
     bad->next = cl->ac_bad_files;
     cl->ac_bad_files = bad;
 }
@@ -1252,7 +1255,7 @@ static void AC_SendChecks(void)
     AC_Flush();
 
     for (f = acs.files, p = NULL; f; p = f, f = f->next) {
-        MSG_WriteData(f->hash, sizeof(f->hash));
+        MSG_WriteData(f->hash.data(), sizeof(f->hash));
         MSG_WriteByte(f->flags);
         if (p && !strcmp(f->path, p->path)) {
             MSG_WriteByte(0);

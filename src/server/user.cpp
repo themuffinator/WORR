@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // sv_user.c -- server code for moving users
 
+#include <array>
+
 #include "server.h"
 
 #define MSG_GAMESTATE   (MSG_RELIABLE | MSG_CLEAR)
@@ -173,7 +175,7 @@ static void stuff_junk(void)
 {
     static const char junkchars[] =
         "!#&'()*+,-./0123456789:<=>?@[\\]^_``````````abcdefghijklmnopqrstuvwxyz|~~~~~~~~~~";
-    char junk[8][16];
+    std::array<std::array<char, 16>, 8> junk{};
     int i, j;
 
     for (i = 0; i < 8; i++) {
@@ -182,24 +184,24 @@ static void stuff_junk(void)
         junk[i][j] = 0;
     }
 
-    Q_strlcpy(sv_client->reconnect_var, junk[2], sizeof(sv_client->reconnect_var));
-    Q_strlcpy(sv_client->reconnect_val, junk[3], sizeof(sv_client->reconnect_val));
+    Q_strlcpy(sv_client->reconnect_var, junk[2].data(), sizeof(sv_client->reconnect_var));
+    Q_strlcpy(sv_client->reconnect_val, junk[3].data(), sizeof(sv_client->reconnect_val));
 
-    SV_ClientCommand(sv_client, "set %s set\n", junk[0]);
-    SV_ClientCommand(sv_client, "$%s %s connect\n", junk[0], junk[1]);
+    SV_ClientCommand(sv_client, "set %s set\n", junk[0].data());
+    SV_ClientCommand(sv_client, "$%s %s connect\n", junk[0].data(), junk[1].data());
     if (Q_rand() & 1) {
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[2], junk[3]);
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[4],
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[2].data(), junk[3].data());
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[4].data(),
                          sv_force_reconnect->string);
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[5], junk[6]);
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[5].data(), junk[6].data());
     } else {
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[4],
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[4].data(),
                          sv_force_reconnect->string);
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[5], junk[6]);
-        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0], junk[2], junk[3]);
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[5].data(), junk[6].data());
+        SV_ClientCommand(sv_client, "$%s %s %s\n", junk[0].data(), junk[2].data(), junk[3].data());
     }
-    SV_ClientCommand(sv_client, "$%s %s \"\"\n", junk[0], junk[0]);
-    SV_ClientCommand(sv_client, "$%s $%s\n", junk[1], junk[4]);
+    SV_ClientCommand(sv_client, "$%s %s \"\"\n", junk[0].data(), junk[0].data());
+    SV_ClientCommand(sv_client, "$%s $%s\n", junk[1].data(), junk[4].data());
 }
 
 /*

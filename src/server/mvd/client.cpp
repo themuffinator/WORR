@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // mvd_client.c -- MVD/GTV client
 //
 
+#include <array>
+
 #include "client.h"
 #include "server/mvd/protocol.h"
 
@@ -1746,7 +1748,7 @@ static void list_generic(void)
 static void list_recordings(void)
 {
     mvd_t *mvd;
-    char buffer[8];
+    std::array<char, 8> buffer{};
 
     Com_Printf(
         "id name         map      size name\n"
@@ -1754,13 +1756,13 @@ static void list_recordings(void)
 
     FOR_EACH_MVD(mvd) {
         if (mvd->demorecording) {
-            Com_FormatSize(buffer, sizeof(buffer), FS_Tell(mvd->demorecording));
+            Com_FormatSize(buffer.data(), buffer.size(), FS_Tell(mvd->demorecording));
         } else {
-            strcpy(buffer, "-");
+            Q_strlcpy(buffer.data(), "-", buffer.size());
         }
         Com_Printf("%2d %-12.12s %-8.8s %-4s %s\n",
                    mvd->id, mvd->name, mvd->mapname,
-                   buffer, mvd->demoname ? mvd->demoname : "-");
+                   buffer.data(), mvd->demoname ? mvd->demoname : "-");
     }
 }
 
