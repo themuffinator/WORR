@@ -9,6 +9,8 @@
 #include <limits>
 
 #include "common/cmodel.h"
+#include "common/files.h"
+#include "refresh/gl.h"
 #include "refresh/images.h"
 #include "client/client.h"
 
@@ -62,6 +64,15 @@ namespace {
         return { value[0], value[1], value[2] };
     }
 
+    VulkanRenderer::ModelRecord::AliasFrameMetadata makeAliasFrameMetadata(const maliasframe_t &frame) {
+        VulkanRenderer::ModelRecord::AliasFrameMetadata metadata{};
+        metadata.boundsMin = toArray(frame.bounds[0]);
+        metadata.boundsMax = toArray(frame.bounds[1]);
+        metadata.scale = toArray(frame.scale);
+        metadata.translate = toArray(frame.translate);
+        metadata.radius = frame.radius;
+        return metadata;
+      
     std::array<std::array<float, 2>, 4> makeQuad(float x, float y, float w, float h) {
         return {{{
             {x, y},
@@ -98,6 +109,8 @@ namespace {
                            texture);
     }
 }
+
+model_t *MOD_Find(const char *name);
 
 void VulkanRenderer::RenderQueues::clear() {
     beams.clear();
@@ -523,11 +536,90 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
         return 0;
     }
 
+    if (name[0] == '*') {
+        int inlineIndex = Q_atoi(name + 1);
+        if (inlineIndex < 0) {
+            return 0;
+        }
+
+        qhandle_t handle = ~inlineIndex;
+        std::string key{name};
+        auto [it, inserted] = modelLookup_.emplace(key, handle);
+        if (!inserted) {
+            handle = it->second;
+        }
+
+        auto &record = models_[handle];
+        record.handle = handle;
+        record.name = name;
+        record.registrationSequence = r_registration_sequence;
+        record.type = 0;
+        record.numFrames = 0;
+        record.numMeshes = 0;
+        record.inlineModel = true;
+        record.aliasFrames.clear();
+        record.spriteFrames.clear();
+
+        return handle;
+    }
+
     qhandle_t handle = registerResource(modelLookup_, name);
     auto &record = models_[handle];
     record.handle = handle;
     record.name = name;
     record.registrationSequence = r_registration_sequence;
+    record.inlineModel = false;
+    record.aliasFrames.clear();
+    record.spriteFrames.clear();
+    record.type = 0;
+    record.numFrames = 0;
+    record.numMeshes = 0;
+
+    model_t *model = nullptr;
+    char normalized[MAX_QPATH];
+    size_t normalizedLength = FS_NormalizePathBuffer(normalized, name, MAX_QPATH);
+    if (normalizedLength > 0 && normalizedLength < MAX_QPATH) {
+        model = MOD_Find(normalized);
+    }
+    if (!model) {
+        model = MOD_Find(name);
+    }
+    if (!model && handle > 0) {
+        model_t *fromHandle = MOD_ForHandle(handle);
+        if (fromHandle) {
+            if (normalizedLength > 0 && normalizedLength < MAX_QPATH) {
+                if (FS_pathcmp(fromHandle->name, normalized) == 0) {
+                    model = fromHandle;
+                }
+            } else {
+                model = fromHandle;
+            }
+        }
+    }
+
+    if (model) {
+        record.type = model->type;
+        record.numFrames = model->numframes;
+        record.numMeshes = model->nummeshes;
+
+        if (model->type == MOD_ALIAS && model->frames) {
+            record.aliasFrames.reserve(static_cast<size_t>(model->numframes));
+            for (int i = 0; i < model->numframes; ++i) {
+                record.aliasFrames.emplace_back(makeAliasFrameMetadata(model->frames[i]));
+            }
+        } else if (model->type == MOD_SPRITE && model->spriteframes) {
+            record.spriteFrames.reserve(static_cast<size_t>(model->numframes));
+            for (int i = 0; i < model->numframes; ++i) {
+                const mspriteframe_t &frame = model->spriteframes[i];
+                ModelRecord::SpriteFrameMetadata metadata{};
+                metadata.width = frame.width;
+                metadata.height = frame.height;
+                metadata.originX = frame.origin_x;
+                metadata.originY = frame.origin_y;
+                record.spriteFrames.emplace_back(metadata);
+            }
+        }
+    }
 
     return handle;
 }
