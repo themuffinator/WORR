@@ -9,6 +9,11 @@ project('worr', ['cpp', 'c'],
   ],
 )
 
+renderer_opt = get_option('renderer')
+if renderer_opt not in ['refresh', 'refresh-vk']
+  error('Unknown renderer option: @0@'.format(renderer_opt))
+endif
+
 common_src = [
   'src/common/bsp.cpp',
   'src/common/cmd.cpp',
@@ -189,31 +194,38 @@ ui_src = [
   'src/client/ui/ui.h',
 ]
 
-refresh_src = [
-  'src/refresh/draw.cpp',
-  'src/refresh/hq2x.cpp',
-  'src/refresh/images.cpp',
-  'src/refresh/legacy.cpp',
-  'src/refresh/main.cpp',
-  'src/refresh/mesh.cpp',
-  'src/refresh/models.cpp',
-  'src/refresh/qgl.cpp',
-  'src/refresh/shader.cpp',
-  'src/refresh/sky.cpp',
-  'src/refresh/state.cpp',
-  'src/refresh/surf.cpp',
-  'src/refresh/tess.cpp',
-  'src/refresh/texture.cpp',
-  'src/refresh/world.cpp',
-  'src/refresh/debug.cpp',
-  'src/refresh/debug_text.cpp',
-  'src/refresh/arbfp.h',
-  'src/refresh/gl.h',
-  'src/refresh/images.h',
-  'src/refresh/qgl.h',
+if renderer_opt == 'refresh'
+  refresh_src = [
+    'src/refresh/draw.cpp',
+    'src/refresh/hq2x.cpp',
+    'src/refresh/images.cpp',
+    'src/refresh/legacy.cpp',
+    'src/refresh/main.cpp',
+    'src/refresh/mesh.cpp',
+    'src/refresh/models.cpp',
+    'src/refresh/qgl.cpp',
+    'src/refresh/shader.cpp',
+    'src/refresh/sky.cpp',
+    'src/refresh/state.cpp',
+    'src/refresh/surf.cpp',
+    'src/refresh/tess.cpp',
+    'src/refresh/texture.cpp',
+    'src/refresh/world.cpp',
+    'src/refresh/debug.cpp',
+    'src/refresh/debug_text.cpp',
+    'src/refresh/arbfp.h',
+    'src/refresh/gl.h',
+    'src/refresh/images.h',
+    'src/refresh/qgl.h',
+  ]
+elif renderer_opt == 'refresh-vk'
+  refresh_src = [
+    'src/refresh-vk/main.cpp',
+    'src/refresh-vk/renderer.cpp',
+  ]
+endif
 
-  'inc/refresh/refresh.h',
-]
+refresh_src += 'inc/refresh/refresh.h'
 
 server_src = [
   'src/client/null.cpp',
