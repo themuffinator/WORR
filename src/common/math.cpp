@@ -461,16 +461,16 @@ box_plane_t BoxOnPlaneSide(const vec3_t emins, const vec3_t emaxs, const cplane_
 
     vec_t       dist1 = P(i ^ 1, j ^ 1, k ^ 1);
     vec_t       dist2 = P(i, j, k);
-    box_plane_t sides = 0;
+    int         mask = 0;
 
 #undef P
 
     if (dist1 >= p->dist)
-        sides = BOX_INFRONT;
+        mask |= static_cast<int>(BOX_INFRONT);
     if (dist2 < p->dist)
-        sides |= BOX_BEHIND;
+        mask |= static_cast<int>(BOX_BEHIND);
 
-    return sides;
+    return static_cast<box_plane_t>(mask);
 }
 
 #if USE_REF
