@@ -79,6 +79,20 @@ static pthread_t    worker_thread;
 
 static void *worker_func(void *arg);
 
+static void ResetDownloadHandle(dlhandle_t &dl)
+{
+    dl.curl = nullptr;
+    dl.path[0] = '\0';
+    dl.file = nullptr;
+    dl.queue = nullptr;
+    dl.size = 0;
+    dl.position = 0;
+    free(dl.buffer);
+    dl.buffer = nullptr;
+    dl.result = CURLE_OK;
+    atomic_store(&dl.state, DL_FREE);
+}
+
 /*
 ===============================
 R1Q2 HTTP Downloading Functions
@@ -390,9 +404,6 @@ Disconnected from server, or fatal HTTP error occurred. Clean up.
 */
 void HTTP_CleanupDownloads(void)
 {
-    dlhandle_t  *dl;
-    int         i;
-
     download_server[0] = 0;
     download_referer[0] = 0;
     download_default_repo = false;
@@ -408,21 +419,18 @@ void HTTP_CleanupDownloads(void)
         curl_multi = NULL;
     }
 
-    for (i = 0; i < MAX_DLHANDLES; i++) {
-        dl = &download_handles[i];
-
-        if (dl->file) {
-            fclose(dl->file);
-            remove(dl->path);
+    for (dlhandle_t &handle : download_handles) {
+        if (handle.file) {
+            fclose(handle.file);
+            remove(handle.path);
         }
 
-        free(dl->buffer);
+        if (handle.curl) {
+            curl_easy_cleanup(handle.curl);
+        }
 
-        if (dl->curl)
-            curl_easy_cleanup(dl->curl);
+        ResetDownloadHandle(handle);
     }
-
-    memset(download_handles, 0, sizeof(download_handles));
 }
 
 /*
