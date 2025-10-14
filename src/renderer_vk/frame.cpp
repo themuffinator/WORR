@@ -1405,27 +1405,6 @@ void VulkanRenderer::beginFrame() {
         return;
     }
 
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-    clearValues[1].depthStencil = { 1.0f, 0 };
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass_;
-    renderPassInfo.framebuffer = (frame.imageIndex < swapchainFramebuffers_.size()) ? swapchainFramebuffers_[frame.imageIndex] : VK_NULL_HANDLE;
-    renderPassInfo.renderArea.offset = { 0, 0 };
-    renderPassInfo.renderArea.extent = swapchainExtent_;
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
-
-    if (renderPassInfo.framebuffer == VK_NULL_HANDLE) {
-        Com_Printf("refresh-vk: framebuffer unavailable for frame.\n");
-        vkEndCommandBuffer(frame.commandBuffer);
-        return;
-    }
-
-    vkCmdBeginRenderPass(frame.commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
     frameActive_ = true;
     frameAcquired_ = true;
     frameRenderPassActive_ = false;
@@ -1542,9 +1521,30 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     VkCommandBuffer commandBuffer = frame.commandBuffer;
     VkImage swapchainImage = (frame.imageIndex < swapchainImages_.size()) ? swapchainImages_[frame.imageIndex] : VK_NULL_HANDLE;
 
-    auto beginPass = [&](VkRenderPass pass, VkFramebuffer framebuffer, VkExtent2D extent, const VkClearColorValue &clearColor) {
+    auto endPass = [&]() {
+        if (!frameRenderPassActive_) {
+            return;
+        }
+
+        if (draw2d::isActive()) {
+            draw2d::flush();
+        }
+
+        vkCmdEndRenderPass(commandBuffer);
+        frameRenderPassActive_ = false;
+    };
+
+    auto beginPass = [&](VkRenderPass pass,
+                         VkFramebuffer framebuffer,
+                         VkExtent2D extent,
+                         const VkClearValue *clearValues,
+                         uint32_t clearValueCount) {
         if (commandBuffer == VK_NULL_HANDLE || pass == VK_NULL_HANDLE || framebuffer == VK_NULL_HANDLE) {
             return false;
+        }
+
+        if (frameRenderPassActive_) {
+            endPass();
         }
 
         VkRenderPassBeginInfo info{};
@@ -1553,11 +1553,8 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         info.framebuffer = framebuffer;
         info.renderArea.offset = { 0, 0 };
         info.renderArea.extent = extent;
-
-        VkClearValue clear{};
-        clear.color = clearColor;
-        info.clearValueCount = 1;
-        info.pClearValues = &clear;
+        info.clearValueCount = clearValueCount;
+        info.pClearValues = clearValues;
 
         vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         frameRenderPassActive_ = true;
@@ -1573,19 +1570,6 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         }
 
         return true;
-    };
-
-    auto endPass = [&]() {
-        if (!frameRenderPassActive_) {
-            return;
-        }
-
-        if (draw2d::isActive()) {
-            draw2d::flush();
-        }
-
-        vkCmdEndRenderPass(commandBuffer);
-        frameRenderPassActive_ = false;
     };
 
     VkClearColorValue clearColor{ { 0.0f, 0.0f, 0.0f, 1.0f } };
@@ -1618,7 +1602,13 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             sceneTargetReady_ = true;
         }
-        if (beginPass(offscreenRenderPass_, sceneTarget_.framebuffer, sceneTarget_.extent, clearColor)) {
+        VkClearValue offscreenClear{};
+        offscreenClear.color = clearColor;
+        if (beginPass(offscreenRenderPass_,
+                      sceneTarget_.framebuffer,
+                      sceneTarget_.extent,
+                      &offscreenClear,
+                      1)) {
             offscreenActive = true;
         }
     }
@@ -1653,7 +1643,14 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         VkFramebuffer framebufferHandle = (frame.imageIndex < swapchainFramebuffers_.size()) ?
                                               swapchainFramebuffers_[frame.imageIndex] :
                                               VK_NULL_HANDLE;
-        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor)) {
+        std::array<VkClearValue, 2> mainPassClears{};
+        mainPassClears[0].color = clearColor;
+        mainPassClears[1].depthStencil = { 1.0f, 0 };
+        if (!beginPass(renderPass_,
+                       framebufferHandle,
+                       swapchainExtent_,
+                       mainPassClears.data(),
+                       static_cast<uint32_t>(mainPassClears.size()))) {
             return;
         }
     }
@@ -1909,7 +1906,14 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         VkFramebuffer framebufferHandle = (frame.imageIndex < swapchainFramebuffers_.size()) ?
                                               swapchainFramebuffers_[frame.imageIndex] :
                                               VK_NULL_HANDLE;
-        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor)) {
+        std::array<VkClearValue, 2> mainPassClears{};
+        mainPassClears[0].color = clearColor;
+        mainPassClears[1].depthStencil = { 1.0f, 0 };
+        if (!beginPass(renderPass_,
+                       framebufferHandle,
+                       swapchainExtent_,
+                       mainPassClears.data(),
+                       static_cast<uint32_t>(mainPassClears.size()))) {
             return;
         }
     }
