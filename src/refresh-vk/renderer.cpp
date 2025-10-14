@@ -21,6 +21,7 @@
 #include "client/client.h"
 
 extern uint32_t d_8to24table[256];
+extern cvar_t *gl_swapinterval;
 
 refcfg_t r_config = {};
 unsigned r_registration_sequence = 0;
@@ -28,6 +29,27 @@ unsigned r_registration_sequence = 0;
 namespace refresh::vk {
 
 namespace {
+    uint8_t colorBitsForFormat(VkFormat format) {
+        switch (format) {
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            return 24;
+        case VK_FORMAT_B8G8R8_UNORM:
+        case VK_FORMAT_R8G8B8_UNORM:
+            return 24;
+        case VK_FORMAT_B5G6R5_UNORM_PACK16:
+        case VK_FORMAT_R5G6B5_UNORM_PACK16:
+            return 16;
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+            return 30;
+        default:
+            return 24;
+        }
+    }
+
     constexpr int kDefaultCharWidth = 8;
     constexpr int kDefaultCharHeight = 8;
     constexpr float kInverseLightIntensity = 1.0f / 255.0f;
@@ -730,6 +752,84 @@ void VulkanRenderer::resetTransientState() {
     autoScaleValue_ = 1;
     clear2DBatches();
     resetFrameState();
+    lastSubmittedFrame_.reset();
+}
+
+int VulkanRenderer::computeAutoScale() const {
+    const int baseHeight = SCREEN_HEIGHT;
+    const int baseWidth = SCREEN_WIDTH;
+
+    int width = std::max(1, r_config.width);
+    int height = std::max(1, r_config.height);
+
+    int scale = 1;
+    if (height >= width) {
+        scale = width / baseWidth;
+    } else {
+        scale = height / baseHeight;
+    }
+
+    if (scale < 1) {
+        scale = 1;
+    }
+
+    if (vid && vid->get_dpi_scale) {
+        int dpiScale = vid->get_dpi_scale();
+        if (dpiScale > scale) {
+            scale = dpiScale;
+        }
+    }
+
+    return scale;
+}
+
+void VulkanRenderer::updateUIScaling() {
+    autoScaleValue_ = std::max(1, computeAutoScale());
+
+    if (!std::isfinite(scale_) || scale_ <= 0.0f) {
+        scale_ = 1.0f;
+    }
+
+    // Re-apply the current scale to refresh dependent state such as clip rectangles.
+    setScale(scale_);
+}
+
+int VulkanRenderer::readSwapIntervalSetting() const {
+    int desired = 1;
+    if (gl_swapinterval) {
+        desired = gl_swapinterval->integer;
+    } else {
+        if (cvar_t *swap = Cvar_Find("gl_swapinterval")) {
+            desired = swap->integer;
+        }
+    }
+
+    if (desired < 0) {
+        desired = 0;
+    }
+
+    return desired;
+}
+
+bool VulkanRenderer::refreshSwapInterval(bool allowRecreate) {
+    int desired = readSwapIntervalSetting();
+    if (desired == swapInterval_) {
+        return false;
+    }
+
+    swapInterval_ = desired;
+
+    if (swapInterval_ > 0) {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags | QVF_VIDEOSYNC);
+    } else {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags & ~QVF_VIDEOSYNC);
+    }
+
+    if (allowRecreate && initialized_ && device_ != VK_NULL_HANDLE && swapchain_ != VK_NULL_HANDLE) {
+        rebuildSwapchain();
+    }
+
+    return true;
 }
 
 void VulkanRenderer::resetFrameState() {
@@ -2123,6 +2223,7 @@ void VulkanRenderer::initializePlatformHooks() {
     platformHooks_ = {};
     platformInstance_ = VK_NULL_HANDLE;
     platformSurface_ = VK_NULL_HANDLE;
+    supportsDebugUtils_ = false;
 
     if (vid) {
         platformHooks_.getInstanceExtensions = vid->vk.get_instance_extensions;
@@ -2140,6 +2241,9 @@ void VulkanRenderer::collectPlatformInstanceExtensions() {
     auto addExtension = [&](const char *name) {
         if (!name || !*name) {
             return;
+        }
+        if (std::strcmp(name, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
+            supportsDebugUtils_ = true;
         }
         if (seen.insert(name).second) {
             platformInstanceExtensions_.emplace_back(name);
@@ -2280,15 +2384,31 @@ VkSurfaceFormatKHR VulkanRenderer::chooseSwapchainFormat(const std::vector<VkSur
 }
 
 VkPresentModeKHR VulkanRenderer::choosePresentMode(const std::vector<VkPresentModeKHR> &presentModes) const {
-    for (VkPresentModeKHR mode : presentModes) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return mode;
-        }
-    }
+    auto hasMode = [&](VkPresentModeKHR desired) {
+        return std::find(presentModes.begin(), presentModes.end(), desired) != presentModes.end();
+    };
 
-    for (VkPresentModeKHR mode : presentModes) {
-        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-            return mode;
+    bool wantVsync = swapInterval_ > 0;
+
+    if (!wantVsync) {
+        if (hasMode(VK_PRESENT_MODE_MAILBOX_KHR)) {
+            return VK_PRESENT_MODE_MAILBOX_KHR;
+        }
+        if (hasMode(VK_PRESENT_MODE_IMMEDIATE_KHR)) {
+            return VK_PRESENT_MODE_IMMEDIATE_KHR;
+        }
+        if (hasMode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) {
+            return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+        }
+    } else {
+        if (swapInterval_ > 1 && hasMode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) {
+            return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+        }
+        if (hasMode(VK_PRESENT_MODE_FIFO_KHR)) {
+            return VK_PRESENT_MODE_FIFO_KHR;
+        }
+        if (hasMode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) {
+            return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
         }
     }
 
@@ -2359,6 +2479,18 @@ bool VulkanRenderer::pickPhysicalDevice() {
             continue;
         }
 
+        deviceExtensions_.clear();
+        deviceExtensions_.reserve(extensions.size());
+        for (const VkExtensionProperties &prop : extensions) {
+            deviceExtensions_.emplace_back(prop.extensionName);
+            if (std::strcmp(prop.extensionName, VK_EXT_DEBUG_MARKER_EXTENSION_NAME) == 0) {
+                supportsDebugUtils_ = true;
+            }
+        }
+
+        vkGetPhysicalDeviceProperties(candidate, &physicalDeviceProperties_);
+        vkGetPhysicalDeviceFeatures(candidate, &supportedFeatures_);
+
         physicalDevice_ = candidate;
         graphicsQueueFamily_ = indices.graphics.value();
         presentQueueFamily_ = indices.present.value();
@@ -2410,6 +2542,8 @@ bool VulkanRenderer::createLogicalDevice() {
         device_ = VK_NULL_HANDLE;
         return false;
     }
+
+    enabledFeatures_ = features;
 
     vkGetDeviceQueue(device_, graphicsQueueFamily_, 0, &graphicsQueue_);
     vkGetDeviceQueue(device_, presentQueueFamily_, 0, &presentQueue_);
@@ -2590,6 +2724,11 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
 
     imagesInFlight_.assign(imageCount, VK_NULL_HANDLE);
     vsyncEnabled_ = (presentMode == VK_PRESENT_MODE_FIFO_KHR || presentMode == VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+    if (vsyncEnabled_) {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags | QVF_VIDEOSYNC);
+    } else {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags & ~QVF_VIDEOSYNC);
+    }
 
     return true;
 }
@@ -2754,6 +2893,7 @@ void VulkanRenderer::destroySyncObjects() {
     }
 
     inFlightFrames_.clear();
+    lastSubmittedFrame_.reset();
 }
 
 void VulkanRenderer::destroySwapchainResources() {
@@ -2790,9 +2930,16 @@ void VulkanRenderer::destroySwapchainResources() {
     swapchainImages_.clear();
     imagesInFlight_.clear();
     frameAcquired_ = false;
+    frameActive_ = false;
     swapchainExtent_ = { 0u, 0u };
     swapchainFormat_ = VK_FORMAT_UNDEFINED;
-    vsyncEnabled_ = true;
+    vsyncEnabled_ = (swapInterval_ > 0);
+    if (vsyncEnabled_) {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags | QVF_VIDEOSYNC);
+    } else {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags & ~QVF_VIDEOSYNC);
+    }
+    lastSubmittedFrame_.reset();
 }
 
 void VulkanRenderer::destroyDescriptorPool() {
@@ -2835,50 +2982,36 @@ void VulkanRenderer::destroyDeviceResources() {
     presentQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
     physicalDevice_ = VK_NULL_HANDLE;
     memoryProperties_ = {};
+    physicalDeviceProperties_ = {};
+    supportedFeatures_ = {};
+    enabledFeatures_ = {};
+    deviceExtensions_.clear();
+    lastSubmittedFrame_.reset();
 }
 
-bool VulkanRenderer::recreateSwapchain() {
-    if (device_ == VK_NULL_HANDLE || swapchain_ == VK_NULL_HANDLE) {
+bool VulkanRenderer::rebuildSwapchain() {
+    if (device_ == VK_NULL_HANDLE) {
         return false;
     }
 
     vkDeviceWaitIdle(device_);
 
-    destroySyncObjects();
+    destroySwapchainResources();
 
-    for (VkFramebuffer framebuffer : swapchainFramebuffers_) {
-        if (framebuffer != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(device_, framebuffer, nullptr);
-        }
-    }
-    swapchainFramebuffers_.clear();
-
-    for (VkImageView view : swapchainImageViews_) {
-        if (view != VK_NULL_HANDLE) {
-            vkDestroyImageView(device_, view, nullptr);
-        }
-    }
-    swapchainImageViews_.clear();
-
-    VkSwapchainKHR oldSwapchain = swapchain_;
-    swapchain_ = VK_NULL_HANDLE;
-
-    if (!createSwapchainResources(oldSwapchain)) {
-        if (oldSwapchain != VK_NULL_HANDLE) {
-            vkDestroySwapchainKHR(device_, oldSwapchain, nullptr);
-        }
+    if (!createSwapchainResources()) {
         return false;
     }
 
-    if (oldSwapchain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(device_, oldSwapchain, nullptr);
-    }
-
     if (!createSyncObjects()) {
+        destroySwapchainResources();
         return false;
     }
 
     return true;
+}
+
+bool VulkanRenderer::recreateSwapchain() {
+    return rebuildSwapchain();
 }
 
 void VulkanRenderer::destroyVulkan() {
@@ -2925,6 +3058,15 @@ bool VulkanRenderer::init(bool total) {
                (r_config.flags & QVF_FULLSCREEN) ? " (fullscreen)" : "");
 
     resetTransientState();
+
+    swapInterval_ = readSwapIntervalSetting();
+    if (swapInterval_ > 0) {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags | QVF_VIDEOSYNC);
+    } else {
+        r_config.flags = static_cast<vidFlags_t>(r_config.flags & ~QVF_VIDEOSYNC);
+    }
+
+    updateUIScaling();
 
     models_.clear();
     images_.clear();
@@ -3316,6 +3458,11 @@ void VulkanRenderer::beginFrame() {
         return;
     }
 
+    refreshSwapInterval();
+    if (swapchain_ == VK_NULL_HANDLE) {
+        return;
+    }
+
     if (vid && vid->pump_events) {
         vid->pump_events();
     }
@@ -3332,13 +3479,17 @@ void VulkanRenderer::beginFrame() {
         vkWaitForFences(device_, 1, &frame.inFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());
     }
 
+    if (lastSubmittedFrame_.has_value() && *lastSubmittedFrame_ == currentFrameIndex_) {
+        lastSubmittedFrame_.reset();
+    }
+
     clear2DBatches();
 
     uint32_t imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(device_, swapchain_, std::numeric_limits<uint64_t>::max(), frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
 
     if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreateSwapchain();
+        rebuildSwapchain();
         return;
     }
 
@@ -3429,6 +3580,7 @@ void VulkanRenderer::endFrame() {
     }
 
     InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
+    size_t submittedIndex = currentFrameIndex_;
     if (!frame.hasImage || frame.commandBuffer == VK_NULL_HANDLE) {
         frameActive_ = false;
         frameAcquired_ = false;
@@ -3466,6 +3618,8 @@ void VulkanRenderer::endFrame() {
         frameStats_.reset();
         return;
     }
+
+    lastSubmittedFrame_ = submittedIndex;
 
     VkSwapchainKHR swapchains[] = { swapchain_ };
 
@@ -4308,7 +4462,16 @@ void VulkanRenderer::modeChanged(int width, int height, int flags) {
     geometry.width = std::max(1, width);
     geometry.height = std::max(1, height);
     geometry.flags = static_cast<vidFlags_t>(flags);
+
+    swapInterval_ = readSwapIntervalSetting();
+    if (swapInterval_ > 0) {
+        geometry.flags = static_cast<vidFlags_t>(geometry.flags | QVF_VIDEOSYNC);
+    } else {
+        geometry.flags = static_cast<vidFlags_t>(geometry.flags & ~QVF_VIDEOSYNC);
+    }
+
     applyVideoGeometry(geometry);
+    updateUIScaling();
 
     if (!initialized_ || device_ == VK_NULL_HANDLE || swapchain_ == VK_NULL_HANDLE) {
         return;
@@ -4318,22 +4481,69 @@ void VulkanRenderer::modeChanged(int width, int height, int flags) {
         return;
     }
 
-    recreateSwapchain();
+    rebuildSwapchain();
 }
 
 bool VulkanRenderer::videoSync() const {
-    return vsyncEnabled_;
+    if (!initialized_ || device_ == VK_NULL_HANDLE) {
+        return true;
+    }
+
+    if (!lastSubmittedFrame_.has_value() || inFlightFrames_.empty()) {
+        return true;
+    }
+
+    size_t index = *lastSubmittedFrame_;
+    if (index >= inFlightFrames_.size()) {
+        return true;
+    }
+
+    const InFlightFrame &frame = inFlightFrames_[index];
+    if (frame.inFlight == VK_NULL_HANDLE) {
+        return true;
+    }
+
+    VkResult status = vkGetFenceStatus(device_, frame.inFlight);
+    if (status == VK_SUCCESS) {
+        lastSubmittedFrame_.reset();
+        return true;
+    }
+
+    if (status == VK_NOT_READY) {
+        return false;
+    }
+
+    Com_Printf("refresh-vk: fence status check failed (VkResult %d).\n", static_cast<int>(status));
+    return true;
 }
 
 void VulkanRenderer::expireDebugObjects() {
+    R_ExpireDebugObjectsCPU();
 }
 
 bool VulkanRenderer::supportsPerPixelLighting() const {
-    return false;
+    cvar_t *perPixel = Cvar_Find("gl_per_pixel_lighting");
+    if (!perPixel) {
+        return false;
+    }
+    return perPixel->integer > 0;
 }
 
 r_opengl_config_t VulkanRenderer::getGLConfig() const {
-    return {};
+    r_opengl_config_t cfg{};
+    cfg.colorbits = colorBitsForFormat(swapchainFormat_);
+    cfg.depthbits = 0;
+    cfg.stencilbits = 0;
+    cfg.multisamples = 0;
+    cfg.debug = supportsDebugUtils_ ? 1 : 0;
+    cfg.profile = QGL_PROFILE_NONE;
+    uint32_t apiVersion = physicalDeviceProperties_.apiVersion;
+    if (apiVersion == 0) {
+        apiVersion = VK_API_VERSION_1_0;
+    }
+    cfg.major_ver = static_cast<uint8_t>(VK_API_VERSION_MAJOR(apiVersion));
+    cfg.minor_ver = static_cast<uint8_t>(VK_API_VERSION_MINOR(apiVersion));
+    return cfg;
 }
 
 void VulkanRenderer::loadKFont(kfont_t *font, const char *filename) {

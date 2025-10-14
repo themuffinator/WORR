@@ -675,10 +675,15 @@ void GL_DrawDebugObjects(void)
     GL_DrawDebugTexts();
 }
 
-void GL_ExpireDebugObjects(void)
+void R_ExpireDebugObjectsCPU(void)
 {
     GL_ExpireDebugLines();
     GL_ExpireDebugTexts();
+}
+
+void GL_ExpireDebugObjects(void)
+{
+    R_ExpireDebugObjectsCPU();
 }
 
 static void gl_debug_text_style_changed(cvar_t* cvar)
