@@ -348,6 +348,8 @@ private:
     qhandle_t registerResource(NameLookup &lookup, std::string_view name);
 
     void resetTransientState();
+    void clearFrameTransientQueues();
+    void resetFrameStatistics();
     void resetFrameState();
     void prepareFrameState(const refdef_t &fd);
     void allocateModelGeometry(ModelRecord &record, const model_t &model);

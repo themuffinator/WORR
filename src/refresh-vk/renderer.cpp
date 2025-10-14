@@ -732,10 +732,13 @@ void VulkanRenderer::resetTransientState() {
     resetFrameState();
 }
 
-void VulkanRenderer::resetFrameState() {
+void VulkanRenderer::clearFrameTransientQueues() {
     frameQueues_.clear();
     framePrimitives_.clear();
     effectStreams_.clear();
+}
+
+void VulkanRenderer::resetFrameStatistics() {
     frameStats_.reset();
 }
 
@@ -4504,6 +4507,9 @@ const kfont_char_t *VulkanRenderer::lookupKFontChar(const kfont_t *kfont, uint32
 }
 
 void VulkanRenderer::resetFrameState() {
+    clearFrameTransientQueues();
+    resetFrameStatistics();
+
     frameState_.refdef = {};
     frameState_.entities.clear();
     frameState_.dlights.clear();
