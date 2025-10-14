@@ -148,6 +148,7 @@ private:
         }
     };
 
+    // Frame data structures
     struct RenderQueues {
         std::vector<const entity_t *> beams;
         std::vector<const entity_t *> flares;
@@ -384,10 +385,11 @@ private:
         bool overlayBlendActive = false;
     };
 
+    // Resource management
     qhandle_t nextHandle();
     qhandle_t registerResource(NameLookup &lookup, std::string_view name);
 
-    void resetTransientState();
+    // Frame rendering
     void clearFrameTransientQueues();
     void resetFrameStatistics();
     void resetFrameState();
@@ -406,7 +408,6 @@ private:
                       VkMemoryPropertyFlags properties);
     void destroyBuffer(ModelRecord::BufferAllocationInfo &buffer);
     bool copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
     void evaluateFrameSettings();
     void uploadDynamicLights();
     void updateSkyState();
@@ -437,6 +438,7 @@ private:
     const KFontRecord *findKFontRecord(const kfont_t *font) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
 
+    // UI drawing
     void submit2DDraw(const draw2d::Submission &submission);
     bool canSubmit2D() const;
     qhandle_t ensureWhiteTexture();
@@ -444,6 +446,7 @@ private:
     void destroy2DBatch(Draw2DBatch &batch);
     void clear2DBatches();
 
+    // Device initialization
     void initializePlatformHooks();
     void collectPlatformInstanceExtensions();
     bool createTextureDescriptorSetLayout();
@@ -479,6 +482,12 @@ private:
     SkyDefinition sky_{};
     std::string currentMap_;
 
+    struct VideoGeometry {
+        int width = SCREEN_WIDTH;
+        int height = SCREEN_HEIGHT;
+        vidFlags_t flags = {};
+    };
+
     struct ScissorRect {
         int32_t x = 0;
         int32_t y = 0;
@@ -494,6 +503,10 @@ private:
         }
     };
 
+    // UI management
+    VideoGeometry queryVideoGeometry() const;
+    void applyVideoGeometry(const VideoGeometry &geometry);
+    void resetTransientState();
     void recordScissorCommand(const ScissorRect &rect, bool clipped);
     ScissorRect fullScissorRect() const;
     std::optional<ScissorRect> scaledClipRect(const clipRect_t &clip) const;
