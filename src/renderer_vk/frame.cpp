@@ -13,6 +13,7 @@
 #include <string>
 
 #include "client/client.h"
+#include "common/bsp.h"
 #include "common/cmodel.h"
 #include "common/files.h"
 
@@ -160,6 +161,9 @@ void VulkanRenderer::clearFrameTransientQueues() {
     frameQueues_.clear();
     framePrimitives_.clear();
     effectStreams_.clear();
+    worldOpaqueSurfaces_.clear();
+    worldAlphaSurfaces_.clear();
+    worldSkySurfaces_.clear();
 }
 void VulkanRenderer::resetFrameStatistics() {
     frameStats_.reset();
@@ -2110,12 +2114,286 @@ void VulkanRenderer::uploadDynamicLights() {
 void VulkanRenderer::updateSkyState() {
     frameState_.skyActive = !sky_.name.empty();
 }
+namespace {
+
+constexpr int kNodeClipped = 0;
+constexpr int kNodeUnclipped = MASK(4);
+
+inline float planeDistance(const cplane_t *plane, const vec3_t point) {
+    return DotProduct(plane->normal, point) - plane->dist;
+}
+
+} // namespace
+
 void VulkanRenderer::beginWorldPass() {
     frameState_.inWorldPass = true;
     frameState_.worldRendered = false;
 }
+
 void VulkanRenderer::renderWorld() {
-    frameState_.worldRendered = true;
+    frameState_.worldRendered = false;
+
+    worldOpaqueSurfaces_.clear();
+    worldAlphaSurfaces_.clear();
+    worldSkySurfaces_.clear();
+
+    const bsp_t *bsp = cl.bsp;
+    if (!bsp || !bsp->nodes) {
+        return;
+    }
+
+    markVisibleNodes(bsp);
+
+    ViewParameters view = computeViewParameters(frameState_.refdef);
+
+    buildWorldFrustum(view);
+
+    worldDrawFrame_ += 1u;
+    if (worldDrawFrame_ == 0u) {
+        worldDrawFrame_ = 1u;
+    }
+
+    gatherNodeSurfaces(bsp->nodes, kNodeClipped);
+
+    frameState_.worldRendered = !worldOpaqueSurfaces_.empty() || !worldAlphaSurfaces_.empty() || !worldSkySurfaces_.empty();
+}
+
+void VulkanRenderer::markVisibleNodes(const bsp_t *bsp) {
+    if (!bsp || !bsp->nodes) {
+        return;
+    }
+
+    const vec3_t &viewOrg = frameState_.refdef.vieworg;
+    const mleaf_t *leaf = BSP_PointLeaf(bsp->nodes, viewOrg);
+    int cluster1 = leaf ? leaf->cluster : -1;
+    int cluster2 = cluster1;
+
+    vec3_t offset{};
+    VectorCopy(viewOrg, offset);
+    if (leaf && !leaf->contents[0]) {
+        offset[2] -= 16.0f;
+    } else {
+        offset[2] += 16.0f;
+    }
+
+    const mleaf_t *adjacent = BSP_PointLeaf(bsp->nodes, offset);
+    if (adjacent && !(adjacent->contents[0] & CONTENTS_SOLID)) {
+        cluster2 = adjacent->cluster;
+    }
+
+    if (cluster1 == worldViewCluster1_ && cluster2 == worldViewCluster2_) {
+        return;
+    }
+
+    worldVisFrame_ += 1u;
+    if (worldVisFrame_ == 0u) {
+        worldVisFrame_ = 1u;
+    }
+
+    worldViewCluster1_ = cluster1;
+    worldViewCluster2_ = cluster2;
+
+    if (!bsp->vis || cluster1 == -1) {
+        for (int i = 0; i < bsp->numnodes; ++i) {
+            bsp->nodes[i].visframe = worldVisFrame_;
+        }
+        for (int i = 0; i < bsp->numleafs; ++i) {
+            bsp->leafs[i].visframe = worldVisFrame_;
+        }
+        return;
+    }
+
+    visrow_t combined{};
+    std::memset(&combined, 0, sizeof(combined));
+    BSP_ClusterVis(bsp, &combined, cluster1, DVIS_PVS);
+
+    if (cluster2 != cluster1 && cluster2 != -1) {
+        visrow_t secondary{};
+        std::memset(&secondary, 0, sizeof(secondary));
+        BSP_ClusterVis(bsp, &secondary, cluster2, DVIS_PVS);
+        int count = VIS_FAST_LONGS(bsp->visrowsize);
+        for (int i = 0; i < count; ++i) {
+            combined.l[i] |= secondary.l[i];
+        }
+    }
+
+    for (int i = 0; i < bsp->numleafs; ++i) {
+        mleaf_t *mutableLeaf = &bsp->leafs[i];
+        int cluster = mutableLeaf->cluster;
+        if (cluster == -1) {
+            continue;
+        }
+        if (!Q_IsBitSet(combined.b, cluster)) {
+            continue;
+        }
+        for (mnode_t *node = reinterpret_cast<mnode_t *>(mutableLeaf); node && node->visframe != worldVisFrame_; node = node->parent) {
+            node->visframe = worldVisFrame_;
+        }
+        mutableLeaf->visframe = worldVisFrame_;
+    }
+}
+
+void VulkanRenderer::buildWorldFrustum(const ViewParameters &view) {
+    for (cplane_t &plane : worldFrustumPlanes_) {
+        VectorClear(plane.normal);
+        plane.dist = 0.0f;
+        plane.type = PLANE_NON_AXIAL;
+        plane.signbits = 0;
+    }
+
+    vec3_t axisForward{};
+    vec3_t axisLeft{};
+    vec3_t axisUp{};
+    VectorCopy(view.axis[0].data(), axisForward);
+    VectorCopy(view.axis[1].data(), axisLeft);
+    VectorCopy(view.axis[2].data(), axisUp);
+
+    float angle = DEG2RAD(frameState_.refdef.fov_x * 0.5f);
+    float sf = std::sinf(angle);
+    float cf = std::cosf(angle);
+
+    vec3_t forward{};
+    vec3_t side{};
+    VectorScale(axisForward, sf, forward);
+    VectorScale(axisLeft, cf, side);
+    VectorAdd(forward, side, worldFrustumPlanes_[0].normal);
+    VectorSubtract(forward, side, worldFrustumPlanes_[1].normal);
+
+    angle = DEG2RAD(frameState_.refdef.fov_y * 0.5f);
+    sf = std::sinf(angle);
+    cf = std::cosf(angle);
+
+    vec3_t vertical{};
+    VectorScale(axisForward, sf, forward);
+    VectorScale(axisUp, cf, vertical);
+    VectorAdd(forward, vertical, worldFrustumPlanes_[2].normal);
+    VectorSubtract(forward, vertical, worldFrustumPlanes_[3].normal);
+
+    for (cplane_t &plane : worldFrustumPlanes_) {
+        VectorNormalize(plane.normal);
+        plane.dist = DotProduct(frameState_.refdef.vieworg, plane.normal);
+        plane.type = PLANE_NON_AXIAL;
+        SetPlaneSignbits(&plane);
+    }
+}
+
+bool VulkanRenderer::clipNode(const mnode_t *node, int &clipFlags) const {
+    if (!node) {
+        return false;
+    }
+    if (clipFlags == kNodeUnclipped) {
+        return true;
+    }
+
+    int flags = clipFlags;
+    for (int i = 0, mask = 1; i < 4; ++i, mask <<= 1) {
+        if (flags & mask) {
+            continue;
+        }
+        box_plane_t side = BoxOnPlaneSide(node->mins, node->maxs, &worldFrustumPlanes_[i]);
+        if (side == BOX_BEHIND) {
+            clipFlags = flags;
+            return false;
+        }
+        if (side == BOX_INFRONT) {
+            flags |= mask;
+        }
+    }
+
+    clipFlags = flags;
+    return true;
+}
+
+void VulkanRenderer::gatherLeafSurfaces(mleaf_t *leaf) {
+    if (!leaf) {
+        return;
+    }
+
+    if (leaf->contents[0] == CONTENTS_SOLID) {
+        return;
+    }
+
+    if (frameState_.hasAreabits && leaf->area >= 0) {
+        if (!frameState_.refdef.areabits || !Q_IsBitSet(frameState_.refdef.areabits, leaf->area)) {
+            return;
+        }
+    }
+
+    leaf->visframe = worldVisFrame_;
+
+    for (int i = 0; i < leaf->numleaffaces; ++i) {
+        mface_t *face = leaf->firstleafface[i];
+        if (!face) {
+            continue;
+        }
+        face->drawframe = worldDrawFrame_;
+    }
+}
+
+void VulkanRenderer::enqueueWorldFace(mface_t *face) {
+    if (!face || !face->texinfo) {
+        return;
+    }
+
+    if (face->numsurfedges == 0) {
+        return;
+    }
+
+    int flags = face->texinfo->c.flags;
+    if (flags & SURF_NODRAW) {
+        return;
+    }
+
+    WorldSurfaceDraw draw{};
+    draw.face = face;
+    draw.firstVertex = static_cast<uint32_t>(face->firstvert);
+    draw.vertexCount = static_cast<uint32_t>(face->numsurfedges);
+
+    if (flags & SURF_SKY) {
+        worldSkySurfaces_.push_back(draw);
+        return;
+    }
+
+    if ((flags & SURF_TRANS_MASK) != 0 || (flags & SURF_WARP) != 0) {
+        worldAlphaSurfaces_.push_back(draw);
+    } else {
+        worldOpaqueSurfaces_.push_back(draw);
+    }
+}
+
+void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
+    const vec3_t &viewOrg = frameState_.refdef.vieworg;
+
+    while (node && node->visframe == worldVisFrame_) {
+        int flags = clipFlags;
+        if (!clipNode(node, flags)) {
+            break;
+        }
+
+        if (!node->plane) {
+            gatherLeafSurfaces(reinterpret_cast<mleaf_t *>(const_cast<mnode_t *>(node)));
+            break;
+        }
+
+        float dot = planeDistance(node->plane, viewOrg);
+        int side = (dot < 0.0f) ? 1 : 0;
+
+        gatherNodeSurfaces(node->children[side], flags);
+
+        mface_t *face = node->firstface;
+        for (int i = 0; i < node->numfaces; ++i, ++face) {
+            if (!face) {
+                continue;
+            }
+            if (face->drawframe != worldDrawFrame_) {
+                continue;
+            }
+            enqueueWorldFace(face);
+        }
+
+        node = node->children[side ^ 1];
+        clipFlags = flags;
+    }
 }
 void VulkanRenderer::endWorldPass() {
     frameState_.inWorldPass = false;
