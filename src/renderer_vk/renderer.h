@@ -456,6 +456,7 @@ private:
     void evaluateFrameSettings();
     void uploadDynamicLights();
     void updateSkyState();
+    void resetWorldVisibilityState();
     void beginWorldPass();
     void renderWorld();
     void endWorldPass();
@@ -542,6 +543,7 @@ private:
     unsigned int worldDrawFrame_ = 0;
     int worldViewCluster1_ = -1;
     int worldViewCluster2_ = -1;
+    const bsp_t *currentBsp_ = nullptr;
 
     SkyDefinition sky_{};
     std::string currentMap_;
