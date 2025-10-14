@@ -1002,6 +1002,9 @@ void VulkanRenderer::beginRegistration(const char *map) {
         currentMap_.clear();
     }
 
+    currentBsp_ = nullptr;
+    resetWorldVisibilityState();
+
     ++r_registration_sequence;
 }
 qhandle_t VulkanRenderer::registerModel(const char *name) {
@@ -2117,6 +2120,13 @@ void VulkanRenderer::uploadDynamicLights() {
 void VulkanRenderer::updateSkyState() {
     frameState_.skyActive = !sky_.name.empty();
 }
+
+void VulkanRenderer::resetWorldVisibilityState() {
+    worldVisFrame_ = 0u;
+    worldDrawFrame_ = 0u;
+    worldViewCluster1_ = -1;
+    worldViewCluster2_ = -1;
+}
 namespace {
 
 constexpr int kNodeClipped = 0;
@@ -2143,6 +2153,11 @@ void VulkanRenderer::renderWorld() {
     const bsp_t *bsp = cl.bsp;
     if (!bsp || !bsp->nodes) {
         return;
+    }
+
+    if (bsp != currentBsp_) {
+        resetWorldVisibilityState();
+        currentBsp_ = bsp;
     }
 
     markVisibleNodes(bsp);
