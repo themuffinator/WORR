@@ -529,28 +529,122 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    destroyDepthResources();
+
+    VkImageCreateInfo depthInfo{};
+    depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    depthInfo.imageType = VK_IMAGE_TYPE_2D;
+    depthInfo.extent.width = swapchainExtent_.width;
+    depthInfo.extent.height = swapchainExtent_.height;
+    depthInfo.extent.depth = 1;
+    depthInfo.mipLevels = 1;
+    depthInfo.arrayLayers = 1;
+    depthInfo.format = depthFormat_;
+    depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    depthInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    depthInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult depthImageResult = vkCreateImage(device_, &depthInfo, nullptr, &depthImage_);
+    if (depthImageResult != VK_SUCCESS || depthImage_ == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to create depth image (VkResult %d).\n", static_cast<int>(depthImageResult));
+        destroyDepthResources();
+        return false;
+    }
+
+    VkMemoryRequirements depthRequirements{};
+    vkGetImageMemoryRequirements(device_, depthImage_, &depthRequirements);
+
+    uint32_t depthMemoryType = findMemoryType(depthRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (depthMemoryType == UINT32_MAX) {
+        Com_Printf("refresh-vk: failed to find suitable memory type for depth image.\n");
+        destroyDepthResources();
+        return false;
+    }
+
+    VkMemoryAllocateInfo depthAllocInfo{};
+    depthAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    depthAllocInfo.allocationSize = depthRequirements.size;
+    depthAllocInfo.memoryTypeIndex = depthMemoryType;
+
+    VkResult depthMemoryResult = vkAllocateMemory(device_, &depthAllocInfo, nullptr, &depthImageMemory_);
+    if (depthMemoryResult != VK_SUCCESS || depthImageMemory_ == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to allocate depth image memory (VkResult %d).\n", static_cast<int>(depthMemoryResult));
+        destroyDepthResources();
+        return false;
+    }
+
+    VkResult depthBindResult = vkBindImageMemory(device_, depthImage_, depthImageMemory_, 0);
+    if (depthBindResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to bind depth image memory (VkResult %d).\n", static_cast<int>(depthBindResult));
+        destroyDepthResources();
+        return false;
+    }
+
+    VkImageViewCreateInfo depthViewInfo{};
+    depthViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    depthViewInfo.image = depthImage_;
+    depthViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    depthViewInfo.format = depthFormat_;
+    depthViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    depthViewInfo.subresourceRange.baseMipLevel = 0;
+    depthViewInfo.subresourceRange.levelCount = 1;
+    depthViewInfo.subresourceRange.baseArrayLayer = 0;
+    depthViewInfo.subresourceRange.layerCount = 1;
+
+    VkResult depthViewResult = vkCreateImageView(device_, &depthViewInfo, nullptr, &depthImageView_);
+    if (depthViewResult != VK_SUCCESS || depthImageView_ == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to create depth image view (VkResult %d).\n", static_cast<int>(depthViewResult));
+        destroyDepthResources();
+        return false;
+    }
+
+    std::array<VkAttachmentDescription, 2> attachments{};
+    attachments[0].format = swapchainFormat_;
+    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    attachments[1].format = depthFormat_;
+    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentReference depthAttachmentRef{};
+    depthAttachmentRef.attachment = 1;
+    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
+    subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    renderPassInfo.pAttachments = attachments.data();
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
     renderPassInfo.dependencyCount = 1;
@@ -564,13 +658,13 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
 
     swapchainFramebuffers_.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; ++i) {
-        VkImageView attachments[] = { swapchainImageViews_[i] };
+        std::array<VkImageView, 2> attachments = { swapchainImageViews_[i], depthImageView_ };
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = renderPass_;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = swapchainExtent_.width;
         framebufferInfo.height = swapchainExtent_.height;
         framebufferInfo.layers = 1;
@@ -764,6 +858,9 @@ void VulkanRenderer::destroySyncObjects() {
 }
 void VulkanRenderer::destroySwapchainResources() {
     if (device_ == VK_NULL_HANDLE) {
+        depthImageView_ = VK_NULL_HANDLE;
+        depthImage_ = VK_NULL_HANDLE;
+        depthImageMemory_ = VK_NULL_HANDLE;
         return;
     }
 
@@ -789,6 +886,8 @@ void VulkanRenderer::destroySwapchainResources() {
     }
     swapchainImageViews_.clear();
 
+    destroyDepthResources();
+
     if (swapchain_ != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
         swapchain_ = VK_NULL_HANDLE;
@@ -807,6 +906,23 @@ void VulkanRenderer::destroySwapchainResources() {
         r_config.flags = static_cast<vidFlags_t>(r_config.flags & ~QVF_VIDEOSYNC);
     }
     lastSubmittedFrame_.reset();
+}
+
+void VulkanRenderer::destroyDepthResources() {
+    if (depthImageView_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkDestroyImageView(device_, depthImageView_, nullptr);
+    }
+    depthImageView_ = VK_NULL_HANDLE;
+
+    if (depthImage_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkDestroyImage(device_, depthImage_, nullptr);
+    }
+    depthImage_ = VK_NULL_HANDLE;
+
+    if (depthImageMemory_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkFreeMemory(device_, depthImageMemory_, nullptr);
+    }
+    depthImageMemory_ = VK_NULL_HANDLE;
 }
 void VulkanRenderer::destroyDescriptorPool() {
     if (descriptorPool_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
