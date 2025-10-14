@@ -9,6 +9,9 @@ VulkanRenderer::~VulkanRenderer() = default;
 
 VkPipelineLayout VulkanRenderer::pipelineLayoutFor(PipelineKind kind) const {
     switch (kind) {
+    case PipelineKind::ShadowBlob:
+    case PipelineKind::ShadowVolume:
+        return shadowPipelineLayout_;
     default:
         return modelPipelineLayout_;
     }

@@ -779,12 +779,35 @@ bool VulkanRenderer::createModelDescriptorResources() {
         }
     }
 
+    if (shadowPipelineLayout_ == VK_NULL_HANDLE) {
+        VkPushConstantRange pushRange{};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(ShadowPushConstants);
+
+        VkPipelineLayoutCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineInfo.setLayoutCount = 0;
+        pipelineInfo.pSetLayouts = nullptr;
+        pipelineInfo.pushConstantRangeCount = 1;
+        pipelineInfo.pPushConstantRanges = &pushRange;
+
+        VkResult pipelineResult = vkCreatePipelineLayout(device_, &pipelineInfo, nullptr, &shadowPipelineLayout_);
+        if (pipelineResult != VK_SUCCESS || shadowPipelineLayout_ == VK_NULL_HANDLE) {
+            Com_Printf("refresh-vk: failed to create shadow pipeline layout (VkResult %d).\n",
+                       static_cast<int>(pipelineResult));
+            shadowPipelineLayout_ = VK_NULL_HANDLE;
+            return false;
+        }
+    }
+
     return true;
 }
 void VulkanRenderer::destroyModelDescriptorResources() {
     if (device_ == VK_NULL_HANDLE) {
         modelPipelineLayout_ = VK_NULL_HANDLE;
         modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+        shadowPipelineLayout_ = VK_NULL_HANDLE;
         return;
     }
 
@@ -793,10 +816,18 @@ void VulkanRenderer::destroyModelDescriptorResources() {
         modelPipelineLayout_ = VK_NULL_HANDLE;
     }
 
+    if (shadowPipelineLayout_ != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(device_, shadowPipelineLayout_, nullptr);
+        shadowPipelineLayout_ = VK_NULL_HANDLE;
+    }
+
     if (modelDescriptorSetLayout_ != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(device_, modelDescriptorSetLayout_, nullptr);
         modelDescriptorSetLayout_ = VK_NULL_HANDLE;
     }
+
+    destroyBuffer(shadowVertexBuffer_);
+    destroyBuffer(shadowIndexBuffer_);
 }
 bool VulkanRenderer::uploadMeshGeometry(ModelRecord::MeshGeometry &geometry) {
     if (device_ == VK_NULL_HANDLE) {
