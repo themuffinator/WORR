@@ -1,0 +1,117 @@
+= Vulkan Renderer Feature Parity Checklist
+:toc:
+:toclevels: 2
+
+This checklist tracks parity work required for the Vulkan renderer to match the feature set, visual fidelity, and tool support of the legacy OpenGL renderer. Update the *Status* and *Notes* columns as tasks progress.
+
+== Status Legend
+
+* *Complete* — Vulkan implementation matches GL behaviour and has been signed off with regression testing.
+* *In Progress* — Work underway; gaps remain or verification pending.
+* *Not Started* — No Vulkan work begun; functionality currently missing.
+* *Needs Verification* — Implementation believed complete but awaiting QA or comparison capture.
+
+== Rendering Pipeline
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Frame graph sequencing (swapchain, render passes) | Needs Verification | Confirm presentation pacing and synchronization match GL.
+| Forward shading path | Needs Verification | Review lighting accumulation and BRDF parity with GL.
+| Skybox and environment draw order | Needs Verification | Ensure depth writes and cubemap sampling align with GL output.
+| Transparency sorting and blend modes | In Progress | Correct alpha test handling and blended entity order.
+| Particle system rendering | In Progress | Vulkan path shares emitter logic but lacks full blend mode parity.
+| Decal projection | Not Started | Port GL projected decal shaders and batching.
+| Post-processing chain (bloom, color grading, HDR tonemap) | In Progress | Bloom extract ported; tone mapping LUT integration pending.
+| UI and HUD overlay pass | Needs Verification | Validate orthographic projection and texture atlas sampling.
+| Screenshot capture (PNG/TGA) | Not Started | Implement transfer from swapchain image to CPU buffer.
+|===
+
+== Materials and Texturing
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Material system (surface params, flags) | In Progress | Descriptors created; per-surface constant parity pending.
+| Lightmap combination | Needs Verification | Compare Vulkan lightmap atlas updates with GL streaming path.
+| Animated textures (scroll, rotate, scale) | Needs Verification | Confirm UV transform updates per frame.
+| Detail textures | Not Started | Requires secondary sampler and blend equation parity.
+| Video textures / cinematics | Not Started | Reimplement YUV upload and shader conversion.
+| Anisotropic filtering control | Needs Verification | Ensure sampler max anisotropy obeys config.
+|===
+
+== Lighting and Shadows
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Static lightmaps | Needs Verification | Validate gamma correction and mip bias with GL captures.
+| Dynamic lights on surfaces | In Progress | Implement additive light volumes in compute or fragment pass.
+| Entity lighting (models, sprites) | Needs Verification | Confirm per-entity constant buffers replicate GL shading.
+| Real-time shadow volumes / blobs | Not Started | Port GL stencil workflow or adopt alternative approach.
+| Fog volumes | Not Started | Requires shader defines and per-leaf constants.
+|===
+
+== Models and Animation
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| MD3/MD2 static mesh rendering | Needs Verification | Geometry buffers uploaded; confirm pose interpolation.
+| Skeletal animation (if applicable) | Not Started | Evaluate for future-proofing even if GL path lacks.
+| Vertex morph targets | Needs Verification | Align interpolation weights with GL timers.
+| View weapon rendering | Needs Verification | Validate depth bias and hands lighting.
+| Sprite billboards | In Progress | Implement Vulkan pipeline state for additive sprites.
+|===
+
+== Effects and Post-Processing
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Screen-space distortion effects (water warp, heat) | In Progress | Port framebuffer fetch path to subpass input or separate pass.
+| Motion blur / camera shake overlays | Needs Verification | Confirm jitter offsets applied equally.
+| Color correction & gamma | Needs Verification | Validate swapchain output matches GL gamma controls.
+| Damage vignette and overlays | Needs Verification | Ensure blend factors and textures consistent.
+| Lens flares / light streaks | Not Started | Recreate additive quad passes.
+|===
+
+== Platform Integration and Tooling
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Configuration variables parity | Needs Verification | Ensure all `r_*` console variables respected.
+| Debug visualization modes (`r_showtris`, `r_lightmap`, etc.) | In Progress | Port GL wireframe and lightmap debug pipelines.
+| Renderdoc / validation layer support | Needs Verification | Keep validation clean; document known warnings.
+| Hot reload of shaders | Not Started | Implement file watch and pipeline rebuild.
+| Headless / dedicated server compatibility | Needs Verification | Confirm Vulkan path gracefully skips rendering.
+| Windows platform swapchain | Needs Verification | Validate surface selection, fullscreen toggle.
+| Linux platform swapchain | Needs Verification | Verify X11/Wayland integration matches GL stability.
+|===
+
+== Performance and Stability
+
+[cols="1,1,2", options="header"]
+|===
+| Feature | Status | Notes
+
+| Performance parity benchmarks | Not Started | Capture reference frametime comparisons per benchmark map.
+| Memory usage tracking | In Progress | Add stats for descriptor pools and buffer allocations.
+| GPU crash recovery | Not Started | Implement robust resource recreation on device loss.
+| CI smoke tests | Not Started | Automate capture comparison across renderers.
+|===
+
+== QA Checklist
+
+* Capture GL vs Vulkan frame dumps for each campaign map and compare artifacts.
+* Validate networking, input, and gameplay remain unaffected when Vulkan renderer is active.
+* Collect user feedback for feature gaps and prioritize remaining *Not Started* items.
+
+Update this document whenever parity milestones are achieved to maintain an accurate project roadmap.
