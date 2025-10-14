@@ -19,6 +19,15 @@
 
 namespace refresh::vk {
 
+extern cvar_t *vk_fog;
+extern cvar_t *vk_bloom;
+extern cvar_t *vk_polyblend;
+extern cvar_t *vk_waterwarp;
+extern cvar_t *vk_dynamic;
+extern cvar_t *vk_perPixelLighting;
+
+bool resolveToggle(cvar_t *primary, const char *legacyName, bool defaultValue);
+
 namespace draw2d {
     struct Submission;
 }

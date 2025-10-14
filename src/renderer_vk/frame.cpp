@@ -92,13 +92,6 @@ std::string describeFogBits(refresh::vk::VulkanRenderer::FogBits bits) {
     return description;
 }
 
-cvar_t *vk_fog = nullptr;
-cvar_t *vk_bloom = nullptr;
-cvar_t *vk_polyblend = nullptr;
-cvar_t *vk_waterwarp = nullptr;
-cvar_t *vk_dynamic = nullptr;
-cvar_t *vk_perPixelLighting = nullptr;
-
 bool legacyToggleValue(const char *name, bool defaultValue) {
     if (!name || !*name) {
         return defaultValue;
@@ -108,6 +101,15 @@ bool legacyToggleValue(const char *name, bool defaultValue) {
     }
     return defaultValue;
 }
+
+} // namespace
+
+cvar_t *vk_fog = nullptr;
+cvar_t *vk_bloom = nullptr;
+cvar_t *vk_polyblend = nullptr;
+cvar_t *vk_waterwarp = nullptr;
+cvar_t *vk_dynamic = nullptr;
+cvar_t *vk_perPixelLighting = nullptr;
 
 bool resolveToggle(cvar_t *primary, const char *legacyName, bool defaultValue) {
     bool fallback = legacyToggleValue(legacyName, defaultValue);
@@ -120,8 +122,6 @@ bool resolveToggle(cvar_t *primary, const char *legacyName, bool defaultValue) {
     }
     return value > 0;
 }
-
-} // namespace
 
 model_t *MOD_Find(const char *name);
 
