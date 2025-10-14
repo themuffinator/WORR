@@ -127,31 +127,12 @@ void VulkanRenderer::resetTransientState() {
 }
 
 int VulkanRenderer::computeAutoScale() const {
-    const int baseHeight = SCREEN_HEIGHT;
-    const int baseWidth = SCREEN_WIDTH;
-
-    int width = std::max(1, r_config.width);
-    int height = std::max(1, r_config.height);
-
-    int scale = 1;
-    if (height >= width) {
-        scale = width / baseWidth;
-    } else {
-        scale = height / baseHeight;
-    }
-
-    if (scale < 1) {
-        scale = 1;
-    }
-
+    int (*dpiScaleFn)() = nullptr;
     if (vid && vid->get_dpi_scale) {
-        int dpiScale = vid->get_dpi_scale();
-        if (dpiScale > scale) {
-            scale = dpiScale;
-        }
+        dpiScaleFn = vid->get_dpi_scale;
     }
 
-    return scale;
+    return Renderer_ComputeAutoScale(r_config, dpiScaleFn);
 }
 
 void VulkanRenderer::updateUIScaling() {

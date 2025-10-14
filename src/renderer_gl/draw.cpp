@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include "renderer/common.h"
 #include "renderer/kfont.h"
 #include <array>
 #include <cstring>
@@ -273,30 +274,12 @@ clear:
 
 int get_auto_scale(void)
 {
-    // Define the base vertical resolution the UI was designed for.
-    const int scale_base_height = SCREEN_HEIGHT;
-    int scale;
-
-    if (r_config.height < r_config.width) { // Landscape mode
-        scale = r_config.height / scale_base_height;
-    }
-    else { // Portrait mode
-        // For portrait, use a width that maintains the 4:3 aspect ratio.
-        const int scale_base_width = scale_base_height * 4 / 3; // SCREEN_HEIGHT * 4/3 = SCREEN_WIDTH
-        scale = r_config.width / scale_base_width;
-    }
-
-    // Ensure the scale factor is at least 1.
-    if (scale < 1) {
-        scale = 1;
-    }
-
+    int (*dpiScaleFn)() = nullptr;
     if (vid && vid->get_dpi_scale) {
-        int min_scale = vid->get_dpi_scale();
-        return max(scale, min_scale);
+        dpiScaleFn = vid->get_dpi_scale;
     }
 
-    return scale;
+    return Renderer_ComputeAutoScale(r_config, dpiScaleFn);
 }
 
 float R_ClampScale(cvar_t *var)
@@ -307,7 +290,11 @@ float R_ClampScale(cvar_t *var)
     if (var->value)
         return 1.0f / Cvar_ClampValue(var, 1.0f, 6.0f);
 
-    return 1.0f / get_auto_scale();
+    const int autoScale = get_auto_scale();
+    if (!autoScale)
+        return 1.0f;
+
+    return 1.0f / static_cast<float>(autoScale);
 }
 
 void R_SetScale(float scale)
