@@ -105,6 +105,19 @@ private:
         DebugLineNoDepth,
     };
 
+    struct PipelineKey {
+        PipelineKind kind = PipelineKind::Alias;
+        FogBits fogBits = FogNone;
+        FogBits fogSkyBits = FogNone;
+        bool perPixelLighting = false;
+        bool dynamicLights = false;
+
+        bool operator==(const PipelineKey &other) const noexcept {
+            return kind == other.kind && fogBits == other.fogBits && fogSkyBits == other.fogSkyBits &&
+                   perPixelLighting == other.perPixelLighting && dynamicLights == other.dynamicLights;
+        }
+    };
+
     struct PipelineDesc {
         enum class BlendMode {
             None,
@@ -112,13 +125,27 @@ private:
             Additive,
         };
 
-        PipelineKind kind = PipelineKind::Alias;
+        PipelineKey key{};
         std::string debugName;
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         BlendMode blend = BlendMode::None;
         bool depthTest = true;
         bool depthWrite = true;
         bool textured = false;
+        bool usesFog = false;
+        bool usesSkyFog = false;
+        bool usesDynamicLights = false;
+    };
+
+    struct PipelineKeyHash {
+        size_t operator()(const PipelineKey &key) const noexcept {
+            size_t hash = static_cast<size_t>(key.kind);
+            hash ^= static_cast<size_t>(key.fogBits) << 4;
+            hash ^= static_cast<size_t>(key.fogSkyBits) << 8;
+            hash ^= static_cast<size_t>(key.perPixelLighting) << 12;
+            hash ^= static_cast<size_t>(key.dynamicLights) << 16;
+            return hash;
+        }
     };
 
     struct RenderQueues {
@@ -329,6 +356,12 @@ private:
         refdef_t refdef{};
         std::vector<entity_t> entities;
         std::vector<dlight_t> dlights;
+        struct DynamicLightGPU {
+            std::array<float, 4> positionRadius{};
+            std::array<float, 4> colorIntensity{};
+            std::array<float, 4> cone{};
+        };
+        std::vector<DynamicLightGPU> dynamicLights;
         std::vector<particle_t> particles;
         std::array<lightstyle_t, MAX_LIGHTSTYLES> lightstyles{};
         std::vector<uint8_t> areaBits;
@@ -341,7 +374,14 @@ private:
         bool skyActive = false;
         FogBits fogBits = FogNone;
         FogBits fogBitsSky = FogNone;
+        bool fogEnabled = false;
+        bool fogSkyEnabled = false;
         bool perPixelLighting = false;
+        bool dynamicLightsEnabled = false;
+        int dynamicLightCount = 0;
+        bool waterwarpActive = false;
+        bool bloomActive = false;
+        bool overlayBlendActive = false;
     };
 
     qhandle_t nextHandle();
@@ -375,8 +415,9 @@ private:
     void buildEffectBuffers(const refdef_t &fd);
     void recordDrawCall(const PipelineDesc &pipeline, std::string_view label, size_t count = 0);
     void recordStage(std::string_view label);
-    PipelineDesc makePipeline(PipelineKind kind) const;
-    const PipelineDesc &ensurePipeline(PipelineKind kind);
+    PipelineDesc makePipeline(const PipelineKey &key) const;
+    PipelineKey buildPipelineKey(PipelineKind kind) const;
+    const PipelineDesc &ensurePipeline(const PipelineKey &key);
     struct ViewParameters {
         std::array<std::array<float, 3>, 3> axis{};
         std::array<float, 3> origin{};
@@ -470,7 +511,7 @@ private:
     qhandle_t rawTextureHandle_ = 0;
     std::vector<Draw2DBatch> frame2DBatches_{};
 
-    std::unordered_map<PipelineKind, PipelineDesc, EnumHash> pipelines_;
+    std::unordered_map<PipelineKey, PipelineDesc, PipelineKeyHash> pipelines_;
 
     struct PlatformHooks {
         vid_vk_get_instance_extensions_fn getInstanceExtensions = nullptr;
