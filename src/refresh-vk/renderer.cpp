@@ -127,19 +127,6 @@ namespace {
         return {{{ { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } }}};
     }
 
-    std::array<std::array<float, 2>, 4> makeQuadUVs(float s0, float t0, float s1, float t1) {
-        return {{{ { s0, t0 }, { s1, t0 }, { s1, t1 }, { s0, t1 } }}};
-    }
-
-    void submitTexturedQuad(float x0, float y0, float x1, float y1,
-                            float s0, float t0, float s1, float t1,
-                            color_t color, qhandle_t texture) {
-        draw2d::submitQuad(makeQuadPositions(x0, y0, x1, y1),
-                           makeQuadUVs(s0, t0, s1, t1),
-                           color.u32,
-                           texture);
-    }
-
     VideoGeometry queryVideoGeometry() {
         VideoGeometry geometry{};
 
@@ -741,6 +728,7 @@ void VulkanRenderer::resetTransientState() {
     activeScissor_.reset();
     scale_ = 1.0f;
     autoScaleValue_ = 1;
+    clear2DBatches();
     resetFrameState();
 }
 
@@ -784,6 +772,9 @@ VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(PipelineKind kind) con
         break;
     case PipelineKind::Weapon:
         desc.debugName = "weapon";
+        break;
+    case PipelineKind::Draw2D:
+        desc.debugName = "draw2d";
         break;
     case PipelineKind::BeamSimple:
         desc.debugName = "beam.simple";
@@ -990,6 +981,29 @@ void VulkanRenderer::destroyBuffer(ModelRecord::BufferAllocationInfo &buffer) {
 
     buffer.offset = 0;
     buffer.size = 0;
+}
+
+void VulkanRenderer::destroy2DBatch(Draw2DBatch &batch) {
+    if (device_ != VK_NULL_HANDLE && descriptorPool_ != VK_NULL_HANDLE && batch.descriptor.set != VK_NULL_HANDLE) {
+        vkFreeDescriptorSets(device_, descriptorPool_, 1, &batch.descriptor.set);
+    }
+    batch.descriptor.set = VK_NULL_HANDLE;
+    batch.descriptor.vertex = {};
+    batch.descriptor.index = {};
+
+    destroyBuffer(batch.vertex);
+    destroyBuffer(batch.index);
+
+    batch.vertexCount = 0;
+    batch.indexCount = 0;
+    batch.texture = 0;
+}
+
+void VulkanRenderer::clear2DBatches() {
+    for (auto &batch : frame2DBatches_) {
+        destroy2DBatch(batch);
+    }
+    frame2DBatches_.clear();
 }
 
 bool VulkanRenderer::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
@@ -1830,10 +1844,137 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
         return;
     }
 
-    Com_DPrintf("vk_draw2d: flushing %zu vertices, %zu indices (texture %d)\n",
-                submission.vertexCount,
-                submission.indexCount,
-                static_cast<int>(submission.texture));
+    if (!initialized_ || device_ == VK_NULL_HANDLE || inFlightFrames_.empty()) {
+        return;
+    }
+
+    if (currentFrameIndex_ >= inFlightFrames_.size()) {
+        return;
+    }
+
+    InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
+    if (frame.commandBuffer == VK_NULL_HANDLE || !frame.hasImage) {
+        return;
+    }
+
+    VkCommandBuffer commandBuffer = frame.commandBuffer;
+
+    Draw2DBatch batch{};
+    batch.vertexCount = submission.vertexCount;
+    batch.indexCount = submission.indexCount;
+    batch.texture = submission.texture;
+
+    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(submission.vertexCount * sizeof(draw2d::Vertex));
+    const VkDeviceSize indexSize = static_cast<VkDeviceSize>(submission.indexCount * sizeof(uint16_t));
+
+    if (vertexSize == 0 || indexSize == 0) {
+        return;
+    }
+
+    if (!createBuffer(batch.vertex,
+                      vertexSize,
+                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        return;
+    }
+
+    void *mappedVertices = nullptr;
+    if (vkMapMemory(device_, batch.vertex.memory, batch.vertex.offset, batch.vertex.size, 0, &mappedVertices) != VK_SUCCESS ||
+        mappedVertices == nullptr) {
+        destroyBuffer(batch.vertex);
+        return;
+    }
+    std::memcpy(mappedVertices, submission.vertices, static_cast<size_t>(vertexSize));
+    vkUnmapMemory(device_, batch.vertex.memory);
+
+    if (!createBuffer(batch.index,
+                      indexSize,
+                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        destroyBuffer(batch.vertex);
+        return;
+    }
+
+    void *mappedIndices = nullptr;
+    if (vkMapMemory(device_, batch.index.memory, batch.index.offset, batch.index.size, 0, &mappedIndices) != VK_SUCCESS ||
+        mappedIndices == nullptr) {
+        destroyBuffer(batch.vertex);
+        destroyBuffer(batch.index);
+        return;
+    }
+    std::memcpy(mappedIndices, submission.indices, static_cast<size_t>(indexSize));
+    vkUnmapMemory(device_, batch.index.memory);
+
+    batch.descriptor.vertex.buffer = batch.vertex.buffer;
+    batch.descriptor.vertex.offset = batch.vertex.offset;
+    batch.descriptor.vertex.range = batch.vertex.size;
+    batch.descriptor.index.buffer = batch.index.buffer;
+    batch.descriptor.index.offset = batch.index.offset;
+    batch.descriptor.index.range = batch.index.size;
+
+    if (descriptorPool_ != VK_NULL_HANDLE && createModelDescriptorResources()) {
+        if (batch.descriptor.set == VK_NULL_HANDLE) {
+            VkDescriptorSetAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocInfo.descriptorPool = descriptorPool_;
+            allocInfo.descriptorSetCount = 1;
+            allocInfo.pSetLayouts = &modelDescriptorSetLayout_;
+            VkResult allocResult = vkAllocateDescriptorSets(device_, &allocInfo, &batch.descriptor.set);
+            if (allocResult != VK_SUCCESS) {
+                batch.descriptor.set = VK_NULL_HANDLE;
+            }
+        }
+
+        if (batch.descriptor.set != VK_NULL_HANDLE) {
+            std::array<VkWriteDescriptorSet, 2> writes{};
+
+            VkWriteDescriptorSet &vertexWrite = writes[0];
+            vertexWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            vertexWrite.dstSet = batch.descriptor.set;
+            vertexWrite.dstBinding = 0;
+            vertexWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            vertexWrite.descriptorCount = 1;
+            vertexWrite.pBufferInfo = &batch.descriptor.vertex;
+
+            VkWriteDescriptorSet &indexWrite = writes[1];
+            indexWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            indexWrite.dstSet = batch.descriptor.set;
+            indexWrite.dstBinding = 1;
+            indexWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            indexWrite.descriptorCount = 1;
+            indexWrite.pBufferInfo = &batch.descriptor.index;
+
+            vkUpdateDescriptorSets(device_, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        }
+    }
+
+    if (batch.vertex.buffer != VK_NULL_HANDLE) {
+        VkBuffer buffers[] = { batch.vertex.buffer };
+        VkDeviceSize offsets[] = { batch.vertex.offset };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
+    }
+
+    if (batch.index.buffer != VK_NULL_HANDLE) {
+        vkCmdBindIndexBuffer(commandBuffer, batch.index.buffer, batch.index.offset, batch.indexType);
+    }
+
+    if (batch.descriptor.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+        vkCmdBindDescriptorSets(commandBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                modelPipelineLayout_,
+                                0,
+                                1,
+                                &batch.descriptor.set,
+                                0,
+                                nullptr);
+    }
+
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(submission.indexCount), 1, 0, 0, 0);
+
+    frame2DBatches_.push_back(batch);
+
+    const PipelineDesc &pipeline = ensurePipeline(PipelineKind::Draw2D);
+    recordDrawCall(pipeline, "draw2d", submission.indexCount / 3);
 }
 
 bool VulkanRenderer::canSubmit2D() const {
@@ -2674,6 +2815,7 @@ void VulkanRenderer::destroyDeviceResources() {
     }
 
     vkDeviceWaitIdle(device_);
+    clear2DBatches();
     destroyAllModelGeometry();
     destroySwapchainResources();
     destroyAllImageResources();
@@ -3190,6 +3332,8 @@ void VulkanRenderer::beginFrame() {
         vkWaitForFences(device_, 1, &frame.inFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());
     }
 
+    clear2DBatches();
+
     uint32_t imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(device_, swapchain_, std::numeric_limits<uint64_t>::max(), frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
 
@@ -3657,7 +3801,7 @@ void VulkanRenderer::setScale(float scale) {
     }
 
     bool drawingActive = frameActive_ && draw2d::isActive();
-    if (drawingActive && !clipRect_) {
+    if (drawingActive) {
         draw2d::flush();
     }
 
@@ -3669,17 +3813,6 @@ void VulkanRenderer::setScale(float scale) {
     } else if (drawingActive) {
         setClipRect(nullptr);
     }
-  
-    float newScale = 1.0f;
-    if (std::isfinite(scale)) {
-        newScale = std::clamp(scale, 0.25f, 4.0f);
-    }
-
-    if (std::abs(newScale - scale_) > std::numeric_limits<float>::epsilon() && draw2d::isActive()) {
-        draw2d::flush();
-    }
-
-    scale_ = newScale;
 }
 
 int VulkanRenderer::autoScale() const {
@@ -3694,7 +3827,7 @@ void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int 
     if (!frameActive_ || !draw2d::isActive()) {
         return;
     }
-  
+
     if (!canSubmit2D()) {
         return;
     }
@@ -3703,7 +3836,7 @@ void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int 
         return;
     }
 
-    if (images_.find(font) == images_.end()) {
+    if (!findImageRecord(font)) {
         return;
     }
 
@@ -3735,62 +3868,18 @@ void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int 
 
     if ((flags & kUIDropShadow) && glyph != 0x83u) {
         float offset = kShadowOffset * scale;
-        color_t shadow{};
-        shadow.r = 0;
-        shadow.g = 0;
-        shadow.b = 0;
-        shadow.a = color.a;
+        color_t shadow = ColorA(color.a);
         auto shadowPositions = makeQuad(fx + offset, fy + offset, fw, fh);
         draw2d::submitQuad(shadowPositions, uvs, shadow.u32, font);
     }
 
-    if (glyph & 0x80u) {
-        color.r = 255u;
-        color.g = 255u;
-        color.b = 255u;
-    }
-
-    auto positions = makeQuad(fx, fy, fw, fh);
-    draw2d::submitQuad(positions, uvs, color.u32, font);
-    if (!findImageRecord(font)) {
-        return;
-    }
-
-    int glyph = ch & 0xFF;
-    if ((glyph & 127) == 32) {
-        return;
-    }
-
-    if (flags & UI_ALTCOLOR) {
-        glyph |= 0x80;
-    }
-    if (flags & UI_XORCOLOR) {
-        glyph ^= 0x80;
-    }
-
-    constexpr float kCell = 1.0f / 16.0f;
-    float s0 = (glyph & 15) * kCell;
-    float t0 = (glyph >> 4) * kCell;
-    float s1 = s0 + kCell;
-    float t1 = t0 + kCell;
-
-    auto submit = [&](int px, int py, color_t tint) {
-        submitTexturedQuad(static_cast<float>(px), static_cast<float>(py),
-                           static_cast<float>(px + w), static_cast<float>(py + h),
-                           s0, t0, s1, t1, tint, font);
-    };
-
-    if ((flags & UI_DROPSHADOW) && glyph != 0x83) {
-        color_t shadow = ColorA(color.a);
-        submit(x + 1, y + 1, shadow);
-    }
-
     color_t finalColor = color;
-    if (glyph >> 7) {
+    if (glyph & 0x80u) {
         finalColor = ColorSetAlpha(COLOR_WHITE, color.a);
     }
 
-    submit(x, y, finalColor);
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, uvs, finalColor.u32, font);
 }
 
 int VulkanRenderer::drawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
@@ -3864,19 +3953,27 @@ int VulkanRenderer::drawKFontChar(int x, int y, int scale, int flags, uint32_t c
     float s1 = s0 + metrics->w * sw;
     float t1 = t0 + metrics->h * sh;
 
-    auto submit = [&](int px, int py, color_t tint) {
-        submitTexturedQuad(static_cast<float>(px), static_cast<float>(py),
-                           static_cast<float>(px + w), static_cast<float>(py + h),
-                           s0, t0, s1, t1, tint, texture);
-    };
-
-    if (flags & UI_DROPSHADOW) {
-        int offset = std::max(1, effectiveScale);
-        color_t shadow = ColorA(color.a);
-        submit(x + offset, y + offset, shadow);
+    float scaleFactor = scale_;
+    if (scaleFactor <= 0.0f) {
+        return x;
     }
 
-    submit(x, y, color);
+    float fx = static_cast<float>(x) * scaleFactor;
+    float fy = static_cast<float>(y) * scaleFactor;
+    float fw = static_cast<float>(w) * scaleFactor;
+    float fh = static_cast<float>(h) * scaleFactor;
+
+    auto uvs = makeUV(s0, t0, s1, t1);
+
+    if (flags & kUIDropShadow) {
+        float offset = static_cast<float>(std::max(1, effectiveScale)) * scaleFactor;
+        color_t shadow = ColorA(color.a);
+        auto shadowPositions = makeQuad(fx + offset, fy + offset, fw, fh);
+        draw2d::submitQuad(shadowPositions, uvs, shadow.u32, texture);
+    }
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, uvs, color.u32, texture);
     return x + w;
 }
 
@@ -3917,6 +4014,10 @@ void VulkanRenderer::drawStretchPic(int x, int y, int w, int h, color_t color, q
         return;
     }
 
+    if (!findImageRecord(pic)) {
+        return;
+    }
+
     float scale = scale_;
     if (scale <= 0.0f) {
         return;
@@ -3929,22 +4030,13 @@ void VulkanRenderer::drawStretchPic(int x, int y, int w, int h, color_t color, q
 
     auto positions = makeQuad(fx, fy, fw, fh);
     draw2d::submitQuad(positions, kFullUVs, color.u32, pic);
-
-    if (!findImageRecord(pic)) {
-        return;
-    }
-
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       0.0f, 0.0f, 1.0f, 1.0f,
-                       color, pic);
 }
 
 void VulkanRenderer::drawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle, int pivot_x, int pivot_y, qhandle_t pic) {
     if (!canSubmit2D()) {
         return;
     }
-  
+
     if (!frameActive_ || !draw2d::isActive()) {
         return;
     }
@@ -3953,50 +4045,20 @@ void VulkanRenderer::drawStretchRotatePic(int x, int y, int w, int h, color_t co
         return;
     }
 
+    if (!findImageRecord(pic)) {
+        return;
+    }
+
     float scale = scale_;
     if (scale <= 0.0f) {
         return;
     }
 
-    float fx = static_cast<float>(x) * scale;
-    float fy = static_cast<float>(y) * scale;
-    float fw = static_cast<float>(w) * scale;
-    float fh = static_cast<float>(h) * scale;
-    float pivotX = static_cast<float>(pivot_x) * scale;
-    float pivotY = static_cast<float>(pivot_y) * scale;
+    std::array<std::array<float, 2>, 4> positions = makeQuadPositions(static_cast<float>(x),
+                                                                       static_cast<float>(y),
+                                                                       static_cast<float>(x + w),
+                                                                       static_cast<float>(y + h));
 
-    float halfW = fw * 0.5f;
-    float halfH = fh * 0.5f;
-
-    std::array<std::array<float, 2>, 4> local{{
-        {-halfW + pivotX, -halfH + pivotY},
-        { halfW + pivotX, -halfH + pivotY},
-        { halfW + pivotX,  halfH + pivotY},
-        {-halfW + pivotX,  halfH + pivotY},
-    }};
-
-    std::array<std::array<float, 2>, 4> positions{};
-    float s = std::sin(angle);
-    float c = std::cos(angle);
-    for (size_t i = 0; i < local.size(); ++i) {
-        float lx = local[i][0];
-        float ly = local[i][1];
-        positions[i][0] = fx + (lx * c - ly * s);
-        positions[i][1] = fy + (lx * s + ly * c);
-    }
-
-    draw2d::submitQuad(positions, kFullUVs, color.u32, pic);
-
-    if (!findImageRecord(pic)) {
-        return;
-    }
-
-    float x0 = static_cast<float>(x);
-    float y0 = static_cast<float>(y);
-    float x1 = static_cast<float>(x + w);
-    float y1 = static_cast<float>(y + h);
-
-    auto positions = makeQuadPositions(x0, y0, x1, y1);
     float originX = static_cast<float>(x + pivot_x);
     float originY = static_cast<float>(y + pivot_y);
     float radians = DEG2RAD(angle);
@@ -4006,18 +4068,20 @@ void VulkanRenderer::drawStretchRotatePic(int x, int y, int w, int h, color_t co
     for (auto &pos : positions) {
         float dx = pos[0] - originX;
         float dy = pos[1] - originY;
-        pos[0] = originX + dx * cosine - dy * sine;
-        pos[1] = originY + dx * sine + dy * cosine;
+        float rotatedX = originX + dx * cosine - dy * sine;
+        float rotatedY = originY + dx * sine + dy * cosine;
+        pos[0] = rotatedX * scale;
+        pos[1] = rotatedY * scale;
     }
 
-    draw2d::submitQuad(positions, makeQuadUVs(0.0f, 0.0f, 1.0f, 1.0f), color.u32, pic);
+    draw2d::submitQuad(positions, kFullUVs, color.u32, pic);
 }
 
 void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic) {
     if (!frameActive_ || !draw2d::isActive()) {
         return;
     }
-  
+
     if (!canSubmit2D()) {
         return;
     }
@@ -4026,11 +4090,6 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
         return;
     }
 
-    auto it = images_.find(pic);
-    if (it == images_.end()) {
-        return;
-    }
-  
     const ImageRecord *image = findImageRecord(pic);
     if (!image) {
         return;
@@ -4041,21 +4100,21 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
         return;
     }
 
-    float imageWidth = static_cast<float>(std::max(1, it->second.width));
-    float imageHeight = static_cast<float>(std::max(1, it->second.height));
-    float aspect = imageHeight / imageWidth;
-  
-    float aspect = 1.0f;
-    if (image->height > 0) {
-        aspect = static_cast<float>(image->width) / static_cast<float>(image->height);
+    float imageWidth = static_cast<float>(std::max(1, image->width));
+    float imageHeight = static_cast<float>(std::max(1, image->height));
+    float aspect = imageWidth / imageHeight;
+
+    float destW = static_cast<float>(w);
+    float destH = static_cast<float>(h);
+    float scaledW = destW;
+    float scaledH = destH * aspect;
+    float scaleMax = std::max(scaledW, scaledH);
+    if (scaleMax <= 0.0f) {
+        return;
     }
 
-    float scaleW = static_cast<float>(w);
-    float scaleH = static_cast<float>(h) * aspect;
-    float scale = std::max(scaleW, scaleH);
-
-    float s = 0.5f * (1.0f - (scaleW / scale));
-    float t = 0.5f * (1.0f - (scaleH / scale));
+    float s = 0.5f * (1.0f - (scaledW / scaleMax));
+    float t = 0.5f * (1.0f - (scaledH / scaleMax));
 
     float scaleFactor = scale_;
     if (scaleFactor <= 0.0f) {
@@ -4064,24 +4123,12 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
 
     float fx = static_cast<float>(x) * scaleFactor;
     float fy = static_cast<float>(y) * scaleFactor;
-    float fw = static_cast<float>(w) * scaleFactor;
-    float fh = static_cast<float>(h) * scaleFactor;
+    float fw = destW * scaleFactor;
+    float fh = destH * scaleFactor;
 
     auto positions = makeQuad(fx, fy, fw, fh);
     auto uvs = makeUV(s, t, 1.0f - s, 1.0f - t);
     draw2d::submitQuad(positions, uvs, color.u32, pic);
-    if (scale <= 0.0f) {
-        return;
-    }
-
-    float s = (1.0f - scaleW / scale) * 0.5f;
-    float t = (1.0f - scaleH / scale) * 0.5f;
-    float s1 = 1.0f - s;
-    float t1 = 1.0f - t;
-
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       s, t, s1, t1, color, pic);
 }
 
 void VulkanRenderer::drawStretchRaw(int x, int y, int w, int h) {
@@ -4098,10 +4145,22 @@ void VulkanRenderer::drawStretchRaw(int x, int y, int w, int h) {
     }
 
     qhandle_t texture = ensureRawTexture();
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       0.0f, 0.0f, 1.0f, 1.0f,
-                       COLOR_WHITE, texture);
+    if (!texture || !findImageRecord(texture)) {
+        return;
+    }
+
+    float scale = scale_;
+    if (scale <= 0.0f) {
+        return;
+    }
+
+    float fx = static_cast<float>(x) * scale;
+    float fy = static_cast<float>(y) * scale;
+    float fw = static_cast<float>(w) * scale;
+    float fh = static_cast<float>(h) * scale;
+
+    auto positions = makeQuad(fx, fy, fw, fh);
+    draw2d::submitQuad(positions, kFullUVs, COLOR_WHITE.u32, texture);
 }
 
 void VulkanRenderer::updateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
@@ -4148,12 +4207,16 @@ void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
     if (!frameActive_ || !draw2d::isActive()) {
         return;
     }
-  
+
     if (!canSubmit2D()) {
         return;
     }
 
     if (w <= 0 || h <= 0) {
+        return;
+    }
+
+    if (!findImageRecord(pic)) {
         return;
     }
 
@@ -4174,21 +4237,6 @@ void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
     float t1 = static_cast<float>(y + h) * kTileDivisor;
     auto uvs = makeUV(s0, t0, s1, t1);
     draw2d::submitQuad(positions, uvs, COLOR_WHITE.u32, pic);
-
-    if (!findImageRecord(pic)) {
-        return;
-    }
-
-    constexpr float kDiv64 = 1.0f / 64.0f;
-    float s0 = static_cast<float>(x) * kDiv64;
-    float t0 = static_cast<float>(y) * kDiv64;
-    float s1 = static_cast<float>(x + w) * kDiv64;
-    float t1 = static_cast<float>(y + h) * kDiv64;
-
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       s0, t0, s1, t1,
-                       COLOR_WHITE, pic);
 }
 
 void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
@@ -4203,6 +4251,11 @@ void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
         return;
     }
 
+    qhandle_t texture = ensureWhiteTexture();
+    if (!texture || !findImageRecord(texture)) {
+        return;
+    }
+
     float scale = scale_;
     if (scale <= 0.0f) {
         return;
@@ -4213,19 +4266,9 @@ void VulkanRenderer::drawFill8(int x, int y, int w, int h, int c) {
     float fw = static_cast<float>(w) * scale;
     float fh = static_cast<float>(h) * scale;
 
-    color_t color{};
-    color.u32 = d_8to24table[c & 0xFF];
-
+    color_t tint = ColorU32(d_8to24table[c & 0xFF]);
     auto positions = makeQuad(fx, fy, fw, fh);
-    draw2d::submitQuad(positions, kFullUVs, color.u32, 0);
-
-    qhandle_t texture = ensureWhiteTexture();
-    color_t color = ColorU32(d_8to24table[c & 0xFF]);
-
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       0.0f, 0.0f, 1.0f, 1.0f,
-                       color, texture);
+    draw2d::submitQuad(positions, kFullUVs, tint.u32, texture);
 }
 
 void VulkanRenderer::drawFill32(int x, int y, int w, int h, color_t color) {
@@ -4241,6 +4284,11 @@ void VulkanRenderer::drawFill32(int x, int y, int w, int h, color_t color) {
         return;
     }
 
+    qhandle_t texture = ensureWhiteTexture();
+    if (!texture || !findImageRecord(texture)) {
+        return;
+    }
+
     float scale = scale_;
     if (scale <= 0.0f) {
         return;
@@ -4252,13 +4300,7 @@ void VulkanRenderer::drawFill32(int x, int y, int w, int h, color_t color) {
     float fh = static_cast<float>(h) * scale;
 
     auto positions = makeQuad(fx, fy, fw, fh);
-    draw2d::submitQuad(positions, kFullUVs, color.u32, 0);
-    qhandle_t texture = ensureWhiteTexture();
-
-    submitTexturedQuad(static_cast<float>(x), static_cast<float>(y),
-                       static_cast<float>(x + w), static_cast<float>(y + h),
-                       0.0f, 0.0f, 1.0f, 1.0f,
-                       color, texture);
+    draw2d::submitQuad(positions, kFullUVs, color.u32, texture);
 }
 
 void VulkanRenderer::modeChanged(int width, int height, int flags) {
