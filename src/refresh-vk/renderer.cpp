@@ -149,6 +149,68 @@ namespace {
         return {{{ { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } }}};
     }
 
+    cvar_t *vk_fog = nullptr;
+    cvar_t *vk_bloom = nullptr;
+    cvar_t *vk_polyblend = nullptr;
+    cvar_t *vk_waterwarp = nullptr;
+    cvar_t *vk_dynamic = nullptr;
+    cvar_t *vk_perPixelLighting = nullptr;
+
+    bool legacyToggleValue(const char *name, bool defaultValue) {
+        if (!name || !*name) {
+            return defaultValue;
+        }
+        if (cvar_t *legacy = Cvar_FindVar(name)) {
+            return legacy->integer > 0;
+        }
+        return defaultValue;
+    }
+
+    bool resolveToggle(cvar_t *primary, const char *legacyName, bool defaultValue) {
+        bool fallback = legacyToggleValue(legacyName, defaultValue);
+        if (!primary) {
+            return fallback;
+        }
+        int value = primary->integer;
+        if (value < 0) {
+            return fallback;
+        }
+        return value > 0;
+    }
+
+    std::string describeFogBits(refresh::vk::VulkanRenderer::FogBits bits) {
+        using FogBits = refresh::vk::VulkanRenderer::FogBits;
+        if (bits == FogBits::FogNone) {
+            return {};
+        }
+
+        std::string description{"("};
+        bool first = true;
+        auto append = [&](const char *label) {
+            if (!first) {
+                description.append("|");
+            }
+            description.append(label);
+            first = false;
+        };
+
+        if ((bits & FogBits::FogGlobal) != FogBits::FogNone) {
+            append("global");
+        }
+        if ((bits & FogBits::FogHeight) != FogBits::FogNone) {
+            append("height");
+        }
+        if ((bits & FogBits::FogSky) != FogBits::FogNone) {
+            append("sky");
+        }
+
+        if (first) {
+            return {};
+        }
+        description.push_back(')');
+        return description;
+    }
+
     VideoGeometry queryVideoGeometry() {
         VideoGeometry geometry{};
 
@@ -832,10 +894,13 @@ bool VulkanRenderer::refreshSwapInterval(bool allowRecreate) {
     return true;
 }
 
-void VulkanRenderer::resetFrameState() {
+void VulkanRenderer::clearFrameTransientQueues() {
     frameQueues_.clear();
     framePrimitives_.clear();
     effectStreams_.clear();
+}
+
+void VulkanRenderer::resetFrameStatistics() {
     frameStats_.reset();
 }
 
@@ -857,10 +922,11 @@ void VulkanRenderer::recordDrawCall(const PipelineDesc &pipeline, std::string_vi
     frameStats_.drawCalls += 1;
 }
 
-VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(PipelineKind kind) const {
+VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(const PipelineKey &key) const {
     PipelineDesc desc{};
-    desc.kind = kind;
-    switch (kind) {
+    desc.key = key;
+
+    switch (key.kind) {
     case PipelineKind::InlineBsp:
         desc.debugName = "inline_bsp";
         break;
@@ -923,16 +989,66 @@ VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(PipelineKind kind) con
         desc.textured = false;
         break;
     }
+
+    desc.usesFog = key.fogBits != FogNone;
+    desc.usesSkyFog = key.fogSkyBits != FogNone;
+    desc.usesDynamicLights = key.perPixelLighting && key.dynamicLights;
+
+    auto appendFogSuffix = [&](const char *label, FogBits bits) {
+        std::string fog = describeFogBits(bits);
+        if (!fog.empty()) {
+            desc.debugName.push_back('.');
+            desc.debugName.append(label);
+            desc.debugName.append(fog);
+        }
+    };
+
+    appendFogSuffix("fog", key.fogBits);
+    if (key.fogSkyBits != FogNone) {
+        appendFogSuffix("sky", key.fogSkyBits);
+    }
+    if (key.perPixelLighting) {
+        desc.debugName.append(".ppl");
+    }
+    if (key.dynamicLights) {
+        desc.debugName.append(".dl");
+    }
+
     return desc;
 }
 
-const VulkanRenderer::PipelineDesc &VulkanRenderer::ensurePipeline(PipelineKind kind) {
-    if (auto it = pipelines_.find(kind); it != pipelines_.end()) {
+VulkanRenderer::PipelineKey VulkanRenderer::buildPipelineKey(PipelineKind kind) const {
+    PipelineKey key{};
+    key.kind = kind;
+
+    switch (kind) {
+    case PipelineKind::InlineBsp:
+        key.fogBits = frameState_.fogBits;
+        key.fogSkyBits = frameState_.fogBitsSky;
+        key.perPixelLighting = frameState_.perPixelLighting;
+        key.dynamicLights = frameState_.dynamicLightsUploaded;
+        break;
+    case PipelineKind::Alias:
+    case PipelineKind::Sprite:
+    case PipelineKind::Weapon:
+        key.fogBits = frameState_.fogBits;
+        key.perPixelLighting = frameState_.perPixelLighting;
+        key.dynamicLights = frameState_.dynamicLightsUploaded;
+        break;
+    default:
+        break;
+    }
+
+    return key;
+}
+
+const VulkanRenderer::PipelineDesc &VulkanRenderer::ensurePipeline(const PipelineKey &key) {
+    if (auto it = pipelines_.find(key); it != pipelines_.end()) {
         return it->second;
     }
 
-    PipelineDesc desc = makePipeline(kind);
-    auto [it, inserted] = pipelines_.emplace(kind, std::move(desc));
+    PipelineDesc desc = makePipeline(key);
+    auto [it, inserted] = pipelines_.emplace(key, std::move(desc));
     if (inserted) {
         frameStats_.pipelinesBound += 1;
     }
@@ -1487,6 +1603,11 @@ VulkanRenderer::PipelineKind VulkanRenderer::selectPipelineForEntity(const entit
 void VulkanRenderer::classifyEntities(const refdef_t &fd) {
     frameQueues_.clear();
 
+    static cvar_t *drawEntities = Cvar_FindVar("gl_drawentities");
+    if (drawEntities && drawEntities->integer == 0) {
+        return;
+    }
+
     if (!fd.entities || fd.num_entities <= 0) {
         return;
     }
@@ -1534,6 +1655,46 @@ void VulkanRenderer::classifyEntities(const refdef_t &fd) {
 
         frameQueues_.alphaBack.push_back(ent);
     }
+}
+
+void VulkanRenderer::sortTransparentQueues(const refdef_t &fd) {
+    if (frameQueues_.alphaBack.empty() && frameQueues_.alphaFront.empty()) {
+        return;
+    }
+
+    const vec3_t &viewOrg = fd.vieworg;
+    auto distanceSquared = [&](const entity_t *ent) {
+        if (!ent) {
+            return std::numeric_limits<float>::infinity();
+        }
+
+        float dx = ent->origin[0] - viewOrg[0];
+        float dy = ent->origin[1] - viewOrg[1];
+        float dz = ent->origin[2] - viewOrg[2];
+        float dist = dx * dx + dy * dy + dz * dz;
+        if (!std::isfinite(dist)) {
+            return std::numeric_limits<float>::infinity();
+        }
+        return dist;
+    };
+
+    auto sortByDepth = [&](std::vector<const entity_t *> &queue) {
+        if (queue.size() < 2) {
+            return;
+        }
+
+        std::stable_sort(queue.begin(), queue.end(), [&](const entity_t *lhs, const entity_t *rhs) {
+            float left = distanceSquared(lhs);
+            float right = distanceSquared(rhs);
+            if (left == right) {
+                return lhs < rhs;
+            }
+            return left < right;
+        });
+    };
+
+    sortByDepth(frameQueues_.alphaBack);
+    sortByDepth(frameQueues_.alphaFront);
 }
 
 void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
@@ -2073,7 +2234,7 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
 
     frame2DBatches_.push_back(batch);
 
-    const PipelineDesc &pipeline = ensurePipeline(PipelineKind::Draw2D);
+    const PipelineDesc &pipeline = ensurePipeline(buildPipelineKey(PipelineKind::Draw2D));
     recordDrawCall(pipeline, "draw2d", submission.indexCount / 3);
 }
 
@@ -3047,6 +3208,13 @@ bool VulkanRenderer::init(bool total) {
         return true;
     }
 
+    vk_fog = Cvar_Get("vk_fog", "-1", 0);
+    vk_bloom = Cvar_Get("vk_bloom", "-1", 0);
+    vk_polyblend = Cvar_Get("vk_polyblend", "-1", 0);
+    vk_waterwarp = Cvar_Get("vk_waterwarp", "-1", 0);
+    vk_dynamic = Cvar_Get("vk_dynamic", "-1", 0);
+    vk_perPixelLighting = Cvar_Get("vk_per_pixel_lighting", "-1", 0);
+
     Com_Printf("------- refresh-vk init -------\n");
 
     initializePlatformHooks();
@@ -3669,6 +3837,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     recordStage("frame.begin");
 
     classifyEntities(*fd);
+    sortTransparentQueues(frameState_.refdef);
     buildEffectBuffers(*fd);
 
     if (!(fd->rdflags & RDF_NOWORLDMODEL)) {
@@ -3680,7 +3849,8 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
             return;
         }
 
-        PipelineKind currentKind = PipelineKind::Alias;
+        PipelineKey currentKey{};
+        bool havePipeline = false;
         size_t batchCount = 0;
         const PipelineDesc *pipeline = nullptr;
 
@@ -3691,18 +3861,20 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
             }
 
             PipelineKind kind = selectPipelineForEntity(*entity);
-            if (!pipeline || kind != currentKind) {
-                if (pipeline && batchCount) {
+            PipelineKey key = buildPipelineKey(kind);
+            if (!havePipeline || !(key == currentKey)) {
+                if (havePipeline && pipeline && batchCount) {
                     recordDrawCall(*pipeline, label, batchCount);
                 }
-                currentKind = kind;
-                pipeline = &ensurePipeline(kind);
+                currentKey = key;
+                pipeline = &ensurePipeline(currentKey);
+                havePipeline = true;
                 batchCount = 0;
             }
             ++batchCount;
         }
 
-        if (pipeline && batchCount) {
+        if (havePipeline && pipeline && batchCount) {
             recordDrawCall(*pipeline, label, batchCount);
         }
     };
@@ -3717,14 +3889,14 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     streamBeamPrimitives(viewParams, cylindricalBeams);
     if (!effectStreams_.beamIndices.empty()) {
         PipelineKind beamKind = cylindricalBeams ? PipelineKind::BeamCylindrical : PipelineKind::BeamSimple;
-        recordDrawCall(ensurePipeline(beamKind), "fx.beams", framePrimitives_.beams.size());
+        recordDrawCall(ensurePipeline(buildPipelineKey(beamKind)), "fx.beams", framePrimitives_.beams.size());
     }
 
     bool additiveParticles = gl_partstyle && gl_partstyle->integer != 0;
     streamParticlePrimitives(viewParams, additiveParticles);
     if (!effectStreams_.particleVertices.empty()) {
         PipelineKind particleKind = additiveParticles ? PipelineKind::ParticleAdditive : PipelineKind::ParticleAlpha;
-        recordDrawCall(ensurePipeline(particleKind), "fx.particles", framePrimitives_.particles.size());
+        recordDrawCall(ensurePipeline(buildPipelineKey(particleKind)), "fx.particles", framePrimitives_.particles.size());
     }
 
     bool flaresEnabled = true;
@@ -3734,7 +3906,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     if (flaresEnabled) {
         streamFlarePrimitives(viewParams);
         if (!effectStreams_.flareVertices.empty()) {
-            recordDrawCall(ensurePipeline(PipelineKind::Flare), "fx.flares", framePrimitives_.flares.size());
+            recordDrawCall(ensurePipeline(buildPipelineKey(PipelineKind::Flare)), "fx.flares", framePrimitives_.flares.size());
         }
     } else {
         effectStreams_.flareVertices.clear();
@@ -3746,23 +3918,31 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
 
     streamDebugLinePrimitives();
     if (!effectStreams_.debugLinesDepth.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::DebugLineDepth), "debug.lines.depth", effectStreams_.debugLinesDepth.size() / 2);
+        recordDrawCall(ensurePipeline(buildPipelineKey(PipelineKind::DebugLineDepth)), "debug.lines.depth", effectStreams_.debugLinesDepth.size() / 2);
     }
     if (!effectStreams_.debugLinesNoDepth.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::DebugLineNoDepth), "debug.lines.nodepth", effectStreams_.debugLinesNoDepth.size() / 2);
+        recordDrawCall(ensurePipeline(buildPipelineKey(PipelineKind::DebugLineNoDepth)), "debug.lines.nodepth", effectStreams_.debugLinesNoDepth.size() / 2);
     }
 
-    bool waterwarp = (fd->rdflags & RDF_UNDERWATER) != 0;
+    bool waterwarpEnabled = resolveToggle(vk_waterwarp, "gl_waterwarp", true);
+    bool waterwarp = waterwarpEnabled && (fd->rdflags & RDF_UNDERWATER) != 0;
+    frameState_.waterwarpActive = waterwarp;
     if (waterwarp) {
         recordStage("post.waterwarp");
     }
 
-    bool bloom = false;
+    bool bloomEnabled = resolveToggle(vk_bloom, "gl_bloom", true);
+    bool worldVisible = !(fd->rdflags & RDF_NOWORLDMODEL) && frameState_.worldRendered;
+    bool bloom = bloomEnabled && worldVisible;
+    frameState_.bloomActive = bloom;
     if (bloom) {
         recordStage("post.bloom");
     }
 
-    if (fd->screen_blend[3] > 0.0f || fd->damage_blend[3] > 0.0f) {
+    bool overlayEnabled = resolveToggle(vk_polyblend, "gl_polyblend", true);
+    bool overlayBlend = overlayEnabled && (fd->screen_blend[3] > 0.0f || fd->damage_blend[3] > 0.0f);
+    frameState_.overlayBlendActive = overlayBlend;
+    if (overlayBlend) {
         recordStage("overlay.blend");
     }
 
@@ -4522,11 +4702,8 @@ void VulkanRenderer::expireDebugObjects() {
 }
 
 bool VulkanRenderer::supportsPerPixelLighting() const {
-    cvar_t *perPixel = Cvar_Find("gl_per_pixel_lighting");
-    if (!perPixel) {
-        return false;
-    }
-    return perPixel->integer > 0;
+    return resolveToggle(vk_perPixelLighting, "gl_per_pixel_lighting", true) &&
+           resolveToggle(vk_dynamic, "gl_dynamic", true);
 }
 
 r_opengl_config_t VulkanRenderer::getGLConfig() const {
@@ -4714,9 +4891,13 @@ const kfont_char_t *VulkanRenderer::lookupKFontChar(const kfont_t *kfont, uint32
 }
 
 void VulkanRenderer::resetFrameState() {
+    clearFrameTransientQueues();
+    resetFrameStatistics();
+
     frameState_.refdef = {};
     frameState_.entities.clear();
     frameState_.dlights.clear();
+    frameState_.dynamicLights.clear();
     frameState_.particles.clear();
     frameState_.lightstyles.fill(lightstyle_t{});
     frameState_.areaBits.clear();
@@ -4729,13 +4910,23 @@ void VulkanRenderer::resetFrameState() {
     frameState_.skyActive = false;
     frameState_.fogBits = FogNone;
     frameState_.fogBitsSky = FogNone;
+    frameState_.fogEnabled = false;
+    frameState_.fogSkyEnabled = false;
     frameState_.perPixelLighting = false;
+    frameState_.dynamicLightsEnabled = false;
+    frameState_.dynamicLightCount = 0;
+    frameState_.waterwarpActive = false;
+    frameState_.bloomActive = false;
+    frameState_.overlayBlendActive = false;
 }
 
 void VulkanRenderer::prepareFrameState(const refdef_t &fd) {
     frameState_.refdef = fd;
 
     frameState_.entities.clear();
+    frameState_.dynamicLights.clear();
+    frameState_.dynamicLightCount = 0;
+    frameState_.dynamicLightsUploaded = false;
     if (fd.entities && fd.num_entities > 0) {
         frameState_.entities.assign(fd.entities, fd.entities + fd.num_entities);
         for (auto &ent : frameState_.entities) {
@@ -4794,23 +4985,62 @@ void VulkanRenderer::evaluateFrameSettings() {
     frameState_.fogBits = FogNone;
     frameState_.fogBitsSky = FogNone;
 
-    if (frameState_.refdef.fog.density > 0.0f) {
+    frameState_.fogEnabled = resolveToggle(vk_fog, "gl_fog", true);
+    if (frameState_.fogEnabled && frameState_.refdef.fog.density > 0.0f) {
         frameState_.fogBits = static_cast<FogBits>(frameState_.fogBits | FogGlobal);
     }
 
-    if (frameState_.refdef.heightfog.density > 0.0f && frameState_.refdef.heightfog.falloff > 0.0f) {
+    if (frameState_.fogEnabled && frameState_.refdef.heightfog.density > 0.0f && frameState_.refdef.heightfog.falloff > 0.0f) {
         frameState_.fogBits = static_cast<FogBits>(frameState_.fogBits | FogHeight);
     }
 
-    if (frameState_.refdef.fog.sky_factor > 0.0f) {
+    if (frameState_.fogEnabled && frameState_.refdef.fog.sky_factor > 0.0f) {
         frameState_.fogBitsSky = static_cast<FogBits>(frameState_.fogBitsSky | FogSky);
     }
+    frameState_.fogSkyEnabled = frameState_.fogBitsSky != FogNone;
 
-    frameState_.perPixelLighting = frameState_.refdef.num_dlights > 0;
+    bool dynamicAllowed = resolveToggle(vk_dynamic, "gl_dynamic", true);
+    bool perPixelAllowed = resolveToggle(vk_perPixelLighting, "gl_per_pixel_lighting", true);
+    frameState_.dynamicLightsEnabled = dynamicAllowed && perPixelAllowed;
+
+    if (!dynamicAllowed) {
+        frameState_.refdef.num_dlights = 0;
+    }
+
+    frameState_.perPixelLighting = frameState_.dynamicLightsEnabled;
 }
 
 void VulkanRenderer::uploadDynamicLights() {
-    frameState_.dynamicLightsUploaded = !frameState_.dlights.empty();
+    frameState_.dynamicLights.clear();
+    frameState_.dynamicLightCount = 0;
+    frameState_.dynamicLightsUploaded = false;
+
+    if (!frameState_.dynamicLightsEnabled || frameState_.dlights.empty()) {
+        return;
+    }
+
+    size_t count = std::min(frameState_.dlights.size(), static_cast<size_t>(MAX_DLIGHTS));
+    frameState_.dynamicLights.reserve(count);
+
+    for (size_t i = 0; i < count; ++i) {
+        const dlight_t &src = frameState_.dlights[i];
+        FrameState::DynamicLightGPU gpu{};
+        gpu.positionRadius = { src.origin[0], src.origin[1], src.origin[2], src.radius };
+        gpu.colorIntensity = { src.color[0], src.color[1], src.color[2], src.intensity };
+        gpu.cone = { src.cone[0], src.cone[1], src.cone[2], src.cone[3] };
+        frameState_.dynamicLights.emplace_back(gpu);
+    }
+
+    frameState_.dynamicLightCount = static_cast<int>(count);
+    frameState_.dynamicLightsUploaded = count > 0;
+
+    if (frameState_.dynamicLightsUploaded) {
+        std::string label = "lighting.dynamic.upload";
+        label.push_back('(');
+        label.append(std::to_string(frameState_.dynamicLightCount));
+        label.push_back(')');
+        recordStage(label);
+    }
 }
 
 void VulkanRenderer::updateSkyState() {
