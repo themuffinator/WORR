@@ -2445,22 +2445,43 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
         return;
     }
 
-    PipelineKey pipelineKey = buildPipelineKey(PipelineKind::InlineBsp);
-    const PipelineDesc &pipeline = ensurePipeline(pipelineKey);
+    PipelineKey inlinePipelineKey = buildPipelineKey(PipelineKind::InlineBsp);
+    const PipelineDesc &inlinePipeline = ensurePipeline(inlinePipelineKey);
+    PipelineKey decalPipelineKey = buildPipelineKey(PipelineKind::Decal);
+    const PipelineDesc &decalPipeline = ensurePipeline(decalPipelineKey);
 
-    VkPipeline pipelineHandle = VK_NULL_HANDLE;
+    VkPipeline inlinePipelineHandle = VK_NULL_HANDLE;
+    VkPipeline decalPipelineHandle = VK_NULL_HANDLE;
     if (pipelineLibrary_) {
-        pipelineHandle = pipelineLibrary_->requestPipeline(pipelineKey);
+        inlinePipelineHandle = pipelineLibrary_->requestPipeline(inlinePipelineKey);
+        decalPipelineHandle = pipelineLibrary_->requestPipeline(decalPipelineKey);
     }
-    if (pipelineHandle == VK_NULL_HANDLE) {
+    if (inlinePipelineHandle == VK_NULL_HANDLE) {
         return;
     }
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle);
+    VkPipeline boundPipeline = VK_NULL_HANDLE;
+    auto bindPipelineHandle = [&](const PipelineDesc &pipelineDesc, VkPipeline handle) {
+        if (handle == VK_NULL_HANDLE) {
+            return false;
+        }
+        if (boundPipeline == handle) {
+            return true;
+        }
 
-    std::string pipelineEntry{"bind.pipeline."};
-    pipelineEntry.append(pipeline.debugName);
-    commandLog_.push_back(std::move(pipelineEntry));
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, handle);
+
+        std::string pipelineEntry{"bind.pipeline."};
+        pipelineEntry.append(pipelineDesc.debugName);
+        commandLog_.push_back(std::move(pipelineEntry));
+
+        boundPipeline = handle;
+        return true;
+    };
+
+    if (!bindPipelineHandle(inlinePipeline, inlinePipelineHandle)) {
+        return;
+    }
 
     VkBuffer vertexBuffers[] = { worldVertexBuffer_.buffer };
     VkDeviceSize vertexOffsets[] = { worldVertexBuffer_.offset };
@@ -2503,7 +2524,14 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
                            &constants);
     }
 
-    auto drawBucket = [&](const std::vector<WorldDrawCommand> &bucket, std::string_view label) {
+    auto drawBucket = [&](const std::vector<WorldDrawCommand> &bucket,
+                          std::string_view label,
+                          const PipelineDesc &pipelineDesc,
+                          VkPipeline pipelineHandle) {
+        if (!bindPipelineHandle(pipelineDesc, pipelineHandle)) {
+            return size_t{0};
+        }
+
         size_t submitted = 0;
 
         for (const WorldDrawCommand &draw : bucket) {
@@ -2574,17 +2602,17 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
         }
 
         if (submitted > 0) {
-            recordDrawCall(pipeline, label, submitted);
+            recordDrawCall(pipelineDesc, label, submitted);
         }
 
         return submitted;
     };
 
     size_t totalDraws = 0;
-    totalDraws += drawBucket(worldSurfaceBuckets_[0], "world.opaque");
-    totalDraws += drawBucket(worldSurfaceBuckets_[1], "world.alpha");
-    totalDraws += drawBucket(worldSurfaceBuckets_[2], "world.sky");
-    totalDraws += drawBucket(worldSurfaceBuckets_[3], "world.decal");
+    totalDraws += drawBucket(worldSurfaceBuckets_[0], "world.opaque", inlinePipeline, inlinePipelineHandle);
+    totalDraws += drawBucket(worldSurfaceBuckets_[1], "world.alpha", inlinePipeline, inlinePipelineHandle);
+    totalDraws += drawBucket(worldSurfaceBuckets_[2], "world.sky", inlinePipeline, inlinePipelineHandle);
+    totalDraws += drawBucket(worldSurfaceBuckets_[3], "world.decal", decalPipeline, decalPipelineHandle);
 
     if (totalDraws > 0) {
         frameState_.worldRendered = true;
