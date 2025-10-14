@@ -563,6 +563,7 @@ private:
     void destroySwapchainResources();
     void destroySyncObjects();
     bool recreateSwapchain();
+    bool rebuildSwapchain();
     QueueFamilyIndices queryQueueFamilies(VkPhysicalDevice device) const;
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
     VkSurfaceFormatKHR chooseSwapchainFormat(const std::vector<VkSurfaceFormatKHR> &formats) const;
@@ -573,10 +574,17 @@ private:
     bool createSyncObjects();
     void destroyVulkan();
     void finishFrameRecording();
+    void updateUIScaling();
+    int computeAutoScale() const;
+    int readSwapIntervalSetting() const;
+    bool refreshSwapInterval(bool allowRecreate = true);
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
+    VkPhysicalDeviceProperties physicalDeviceProperties_{};
+    VkPhysicalDeviceFeatures supportedFeatures_{};
+    VkPhysicalDeviceFeatures enabledFeatures_{};
     VkPhysicalDeviceMemoryProperties memoryProperties_{};
     uint32_t graphicsQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
     uint32_t presentQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
@@ -595,11 +603,15 @@ private:
     size_t currentFrameIndex_ = 0;
     bool frameAcquired_ = false;
     bool vsyncEnabled_ = true;
+    int swapInterval_ = 1;
+    bool supportsDebugUtils_ = false;
+    mutable std::optional<size_t> lastSubmittedFrame_;
     static constexpr size_t kMaxFramesInFlight = 2;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout modelDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout modelPipelineLayout_ = VK_NULL_HANDLE;
+    std::vector<std::string> deviceExtensions_;
 };
 
 } // namespace refresh::vk
