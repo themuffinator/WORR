@@ -1113,6 +1113,22 @@ void VulkanRenderer::allocateModelGeometry(ModelRecord &record, const model_t &m
             continue;
         }
 
+        if (mesh.numskins > 0 && mesh.skins) {
+            geometry.skinHandles.reserve(static_cast<size_t>(mesh.numskins));
+            for (int skinIndex = 0; skinIndex < mesh.numskins; ++skinIndex) {
+                qhandle_t skinHandle = 0;
+                if (image_t *skin = mesh.skins[skinIndex]) {
+                    imagetype_t type = static_cast<imagetype_t>(skin->type);
+                    imageflags_t flags = static_cast<imageflags_t>(skin->flags);
+                    skinHandle = registerImage(skin->name, type, flags);
+                }
+                if (!skinHandle) {
+                    skinHandle = ensureWhiteTexture();
+                }
+                geometry.skinHandles.push_back(skinHandle);
+            }
+        }
+
         if (!geometry.vertexStaging.empty() || !geometry.indexStaging.empty()) {
             if (device_ != VK_NULL_HANDLE && !uploadMeshGeometry(geometry)) {
                 Com_Printf("refresh-vk: failed to upload mesh %d for model %s.\n",
@@ -1129,16 +1145,6 @@ void VulkanRenderer::bindModelGeometryBuffers(ModelRecord &record) {
         return;
     }
 
-    if (inFlightFrames_.empty() || !frameActive_) {
-        return;
-    }
-
-    InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
-    VkCommandBuffer commandBuffer = frame.commandBuffer;
-    if (commandBuffer == VK_NULL_HANDLE) {
-        return;
-    }
-
     for (size_t meshIndex = 0; meshIndex < record.meshGeometry.size(); ++meshIndex) {
         auto &geometry = record.meshGeometry[meshIndex];
 
@@ -1147,38 +1153,78 @@ void VulkanRenderer::bindModelGeometryBuffers(ModelRecord &record) {
                 continue;
             }
         }
-
-        if (geometry.vertex.buffer == VK_NULL_HANDLE && geometry.index.buffer == VK_NULL_HANDLE) {
-            continue;
-        }
-
-        std::string entry{"bind.model."};
-        entry.append(record.name);
-        entry.push_back('#');
-        entry.append(std::to_string(meshIndex));
-        commandLog_.push_back(std::move(entry));
-
-        if (geometry.vertex.buffer != VK_NULL_HANDLE && geometry.vertex.size > 0) {
-            VkBuffer buffers[] = { geometry.vertex.buffer };
-            VkDeviceSize offsets[] = { geometry.vertex.offset };
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-        }
-
-        if (geometry.index.buffer != VK_NULL_HANDLE && geometry.index.size > 0) {
-            vkCmdBindIndexBuffer(commandBuffer, geometry.index.buffer, geometry.index.offset, geometry.indexType);
-        }
-
-        if (geometry.descriptor.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
-            vkCmdBindDescriptorSets(commandBuffer,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    modelPipelineLayout_,
-                                    0,
-                                    1,
-                                    &geometry.descriptor.set,
-                                    0,
-                                    nullptr);
-        }
     }
+}
+VulkanRenderer::EntityPushConstants VulkanRenderer::buildEntityPushConstants(const entity_t &entity,
+                                                                            const ModelRecord &) const {
+    EntityPushConstants constants{};
+
+    vec3_t axis[3]{};
+    AnglesToAxis(entity.angles, axis);
+
+    vec3_t scale{1.0f, 1.0f, 1.0f};
+    if (!VectorCompare(entity.scale, vec3_origin)) {
+        scale[0] = (entity.scale[0] == 0.0f) ? 1.0f : entity.scale[0];
+        scale[1] = (entity.scale[1] == 0.0f) ? 1.0f : entity.scale[1];
+        scale[2] = (entity.scale[2] == 0.0f) ? 1.0f : entity.scale[2];
+    }
+
+    constants.modelMatrix = {
+        axis[0][0] * scale[0], axis[1][0] * scale[0], axis[2][0] * scale[0], 0.0f,
+        axis[0][1] * scale[1], axis[1][1] * scale[1], axis[2][1] * scale[1], 0.0f,
+        axis[0][2] * scale[2], axis[1][2] * scale[2], axis[2][2] * scale[2], 0.0f,
+        entity.origin[0], entity.origin[1], entity.origin[2], 1.0f,
+    };
+
+    std::array<float, 4> baseColor = toColorArray(entity.rgba);
+    float entityAlpha = std::clamp(entity.alpha, 0.0f, 1.0f);
+    if (entity.flags & RF_TRANSLUCENT) {
+        baseColor[3] = entityAlpha;
+    } else {
+        baseColor[3] = 1.0f;
+    }
+    constants.color = baseColor;
+
+    vec3_t lightColor{};
+    lightPoint(entity.origin, lightColor);
+    constants.lighting = { lightColor[0], lightColor[1], lightColor[2], 1.0f };
+
+    constants.misc = { entity.backlerp, entityAlpha, 0.0f, 0.0f };
+
+    constants.indices[0] = static_cast<uint32_t>(entity.frame);
+    constants.indices[1] = static_cast<uint32_t>(entity.oldframe);
+    constants.indices[2] = static_cast<uint32_t>(entity.flags & 0xFFFFFFFFu);
+    constants.indices[3] = static_cast<uint32_t>((entity.flags >> 32) & 0xFFFFFFFFu);
+
+    return constants;
+}
+VkDescriptorSet VulkanRenderer::selectTextureDescriptor(const entity_t &entity,
+                                                        const ModelRecord::MeshGeometry &geometry) {
+    const ImageRecord *image = nullptr;
+
+    if (entity.skin) {
+        image = findImageRecord(entity.skin);
+    }
+
+    if (!image && !geometry.skinHandles.empty()) {
+        int skinIndex = entity.skinnum;
+        if (skinIndex < 0 || skinIndex >= static_cast<int>(geometry.skinHandles.size())) {
+            skinIndex = 0;
+        }
+        qhandle_t handle = geometry.skinHandles[static_cast<size_t>(skinIndex)];
+        image = findImageRecord(handle);
+    }
+
+    if (!image) {
+        qhandle_t fallback = ensureWhiteTexture();
+        image = findImageRecord(fallback);
+    }
+
+    if (image) {
+        return image->descriptorSet;
+    }
+
+    return VK_NULL_HANDLE;
 }
 qhandle_t VulkanRenderer::registerImage(const char *name, imagetype_t type, imageflags_t flags) {
     if (!name || !*name) {
@@ -1608,44 +1654,153 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         recordStage("world.draw");
     }
 
-    auto processQueue = [&](const std::vector<const entity_t *> &queue, std::string_view label) {
+    auto processQueue = [&](const std::vector<const entity_t *> &queue, std::string_view label, bool backToFront) {
         if (queue.empty()) {
             return;
         }
 
-        PipelineKey currentKey{};
-        bool havePipeline = false;
-        size_t batchCount = 0;
-        const PipelineDesc *pipeline = nullptr;
+        VkCommandBuffer commandBuffer = frame.commandBuffer;
+        if (commandBuffer == VK_NULL_HANDLE) {
+            return;
+        }
 
-        for (auto it = queue.rbegin(); it != queue.rend(); ++it) {
-            const entity_t *entity = *it;
-            if (ModelRecord *record = findModelRecord(entity->model)) {
-                bindModelGeometryBuffers(*record);
+        PipelineKey currentKey{};
+        const PipelineDesc *currentPipelineDesc = nullptr;
+        VkPipeline currentPipelineHandle = VK_NULL_HANDLE;
+        size_t drawCountForPipeline = 0;
+
+        auto flushDrawLog = [&]() {
+            if (currentPipelineDesc && drawCountForPipeline > 0) {
+                recordDrawCall(*currentPipelineDesc, label, drawCountForPipeline);
             }
+            drawCountForPipeline = 0;
+        };
+
+        auto iterateQueue = [&](auto &&callback) {
+            if (backToFront) {
+                for (auto it = queue.rbegin(); it != queue.rend(); ++it) {
+                    callback(*it);
+                }
+            } else {
+                for (const entity_t *entity : queue) {
+                    callback(entity);
+                }
+            }
+        };
+
+        iterateQueue([&](const entity_t *entity) {
+            if (!entity) {
+                return;
+            }
+
+            ModelRecord *record = findModelRecord(entity->model);
+            if (!record || record->meshGeometry.empty()) {
+                return;
+            }
+
+            bindModelGeometryBuffers(*record);
 
             PipelineKind kind = selectPipelineForEntity(*entity);
             PipelineKey key = buildPipelineKey(kind);
-            if (!havePipeline || !(key == currentKey)) {
-                if (havePipeline && pipeline && batchCount) {
-                    recordDrawCall(*pipeline, label, batchCount);
-                }
-                currentKey = key;
-                pipeline = &ensurePipeline(currentKey);
-                havePipeline = true;
-                batchCount = 0;
-            }
-            ++batchCount;
-        }
 
-        if (havePipeline && pipeline && batchCount) {
-            recordDrawCall(*pipeline, label, batchCount);
-        }
+            if (!currentPipelineDesc || !(key == currentKey)) {
+                flushDrawLog();
+                currentKey = key;
+                currentPipelineDesc = &ensurePipeline(currentKey);
+                currentPipelineHandle = VK_NULL_HANDLE;
+
+                if (pipelineLibrary_) {
+                    currentPipelineHandle = pipelineLibrary_->requestPipeline(currentKey);
+                }
+
+                if (currentPipelineHandle != VK_NULL_HANDLE) {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipelineHandle);
+
+                    std::string entry{"bind.pipeline."};
+                    entry.append(currentPipelineDesc->debugName);
+                    commandLog_.push_back(std::move(entry));
+                }
+            }
+
+            if (currentPipelineHandle == VK_NULL_HANDLE) {
+                return;
+            }
+
+            EntityPushConstants constants = buildEntityPushConstants(*entity, *record);
+            if (modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkCmdPushConstants(commandBuffer,
+                                   modelPipelineLayout_,
+                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   0,
+                                   sizeof(EntityPushConstants),
+                                   &constants);
+            }
+
+            for (size_t meshIndex = 0; meshIndex < record->meshGeometry.size(); ++meshIndex) {
+                auto &geometry = record->meshGeometry[meshIndex];
+
+                if (geometry.vertex.buffer == VK_NULL_HANDLE && geometry.index.buffer == VK_NULL_HANDLE) {
+                    continue;
+                }
+
+                if (geometry.vertex.buffer != VK_NULL_HANDLE && geometry.vertex.size > 0) {
+                    VkBuffer buffers[] = { geometry.vertex.buffer };
+                    VkDeviceSize offsets[] = { geometry.vertex.offset };
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
+                }
+
+                if (geometry.descriptor.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+                    vkCmdBindDescriptorSets(commandBuffer,
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            modelPipelineLayout_,
+                                            0,
+                                            1,
+                                            &geometry.descriptor.set,
+                                            0,
+                                            nullptr);
+                }
+
+                VkDescriptorSet textureSet = selectTextureDescriptor(*entity, geometry);
+                if (textureSet != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE &&
+                    textureDescriptorSetLayout_ != VK_NULL_HANDLE) {
+                    vkCmdBindDescriptorSets(commandBuffer,
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            modelPipelineLayout_,
+                                            1,
+                                            1,
+                                            &textureSet,
+                                            0,
+                                            nullptr);
+                }
+
+                bool submitted = false;
+                if (geometry.index.buffer != VK_NULL_HANDLE && geometry.indexCount > 0) {
+                    vkCmdBindIndexBuffer(commandBuffer, geometry.index.buffer, geometry.index.offset, geometry.indexType);
+                    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(geometry.indexCount), 1, 0, 0, 0);
+                    submitted = true;
+                } else if (geometry.vertexCount > 0) {
+                    vkCmdDraw(commandBuffer, static_cast<uint32_t>(geometry.vertexCount), 1, 0, 0);
+                    submitted = true;
+                }
+
+                if (submitted) {
+                    ++drawCountForPipeline;
+
+                    std::string entry{"draw.model."};
+                    entry.append(record->name);
+                    entry.push_back('#');
+                    entry.append(std::to_string(meshIndex));
+                    commandLog_.push_back(std::move(entry));
+                }
+            }
+        });
+
+        flushDrawLog();
     };
 
-    processQueue(frameQueues_.bmodels, "entities.inline");
-    processQueue(frameQueues_.opaque, "entities.opaque");
-    processQueue(frameQueues_.alphaBack, "entities.alpha_back");
+    processQueue(frameQueues_.bmodels, "entities.inline", false);
+    processQueue(frameQueues_.opaque, "entities.opaque", false);
+    processQueue(frameQueues_.alphaBack, "entities.alpha_back", true);
 
     ViewParameters viewParams = computeViewParameters(*fd);
 
@@ -1678,7 +1833,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         frameStats_.flares = 0;
     }
 
-    processQueue(frameQueues_.alphaFront, "entities.alpha_front");
+    processQueue(frameQueues_.alphaFront, "entities.alpha_front", true);
 
     streamDebugLinePrimitives();
     if (!effectStreams_.debugLinesDepth.empty()) {

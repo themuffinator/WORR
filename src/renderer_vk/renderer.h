@@ -145,6 +145,14 @@ private:
         bool usesDynamicLights = false;
     };
 
+    struct alignas(16) EntityPushConstants {
+        std::array<float, 16> modelMatrix{};
+        std::array<float, 4> color{};
+        std::array<float, 4> lighting{};
+        std::array<float, 4> misc{};
+        std::array<uint32_t, 4> indices{};
+    };
+
     struct PipelineKeyHash {
         size_t operator()(const PipelineKey &key) const noexcept {
             size_t hash = static_cast<size_t>(key.kind);
@@ -282,6 +290,7 @@ private:
             size_t indexCount = 0;
             std::vector<uint8_t> vertexStaging;
             std::vector<uint8_t> indexStaging;
+            std::vector<qhandle_t> skinHandles;
             bool uploaded = false;
         };
 
@@ -412,6 +421,8 @@ private:
     void prepareFrameState(const refdef_t &fd);
     void allocateModelGeometry(ModelRecord &record, const model_t &model);
     void bindModelGeometryBuffers(ModelRecord &record);
+    EntityPushConstants buildEntityPushConstants(const entity_t &entity, const ModelRecord &record) const;
+    VkDescriptorSet selectTextureDescriptor(const entity_t &entity, const ModelRecord::MeshGeometry &geometry);
     bool uploadMeshGeometry(ModelRecord::MeshGeometry &geometry);
     void destroyMeshGeometry(ModelRecord::MeshGeometry &geometry);
     void destroyModelRecord(ModelRecord &record);
