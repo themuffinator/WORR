@@ -65,6 +65,7 @@ struct rUvWindow_t {
 
 void Renderer_InitSharedCvars();
 
+int Renderer_ComputeAutoScale(const refcfg_t &cfg, int (*getDpiScale)());
 GlyphDrawData Renderer_BuildAtlasGlyph(const AtlasGlyphParams &params);
 GlyphDrawData Renderer_BuildKFontGlyph(const KFontGlyphParams &params);
 bool R_ComputeKeepAspectUVWindow(int w, int h, float image_aspect, rUvWindow_t *out);

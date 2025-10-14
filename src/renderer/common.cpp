@@ -44,6 +44,34 @@ void Renderer_InitSharedCvars() {
     Cvar_Get("gl_per_pixel_lighting", "1", 0);
 }
 
+int Renderer_ComputeAutoScale(const refcfg_t &cfg, int (*getDpiScale)()) {
+    const int baseHeight = SCREEN_HEIGHT;
+    const int baseWidth = SCREEN_WIDTH;
+
+    const int width = std::max(1, cfg.width);
+    const int height = std::max(1, cfg.height);
+
+    int scale;
+    if (height < width) {
+        scale = height / baseHeight;
+    } else {
+        scale = width / baseWidth;
+    }
+
+    if (scale < 1) {
+        scale = 1;
+    }
+
+    if (getDpiScale) {
+        const int dpiScale = getDpiScale();
+        if (dpiScale > scale) {
+            scale = dpiScale;
+        }
+    }
+
+    return scale;
+}
+
 GlyphDrawData Renderer_BuildAtlasGlyph(const AtlasGlyphParams &params) {
     GlyphDrawData data{};
 
