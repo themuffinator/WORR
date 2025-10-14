@@ -56,8 +56,17 @@ extern cvar_t *gl_partscale;
 extern cvar_t *gl_partstyle;
 extern cvar_t *gl_beamstyle;
 
+struct rUvWindow_t {
+    float s0;
+    float t0;
+    float s1;
+    float t1;
+};
+
 void Renderer_InitSharedCvars();
 
 GlyphDrawData Renderer_BuildAtlasGlyph(const AtlasGlyphParams &params);
 GlyphDrawData Renderer_BuildKFontGlyph(const KFontGlyphParams &params);
+bool R_ComputeKeepAspectUVWindow(int w, int h, float image_aspect, rUvWindow_t *out);
+rUvWindow_t R_ComputeTileUVWindow(int x, int y, int w, int h);
 
