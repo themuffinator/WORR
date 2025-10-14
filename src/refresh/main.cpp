@@ -31,14 +31,7 @@ statCounters_t  c;
 
 entity_t gl_world;
 
-refcfg_t r_config;
-
-unsigned r_registration_sequence;
-
 // regular variables
-cvar_t *gl_partscale;
-cvar_t *gl_partstyle;
-cvar_t *gl_beamstyle;
 cvar_t *gl_celshading;
 cvar_t *gl_dotshading;
 cvar_t *gl_shadows;
@@ -63,7 +56,6 @@ cvar_t *gl_damageblend_frac;
 cvar_t *gl_waterwarp;
 cvar_t *gl_fog;
 cvar_t *gl_bloom;
-cvar_t *gl_swapinterval;
 
 // development variables
 cvar_t *gl_znear;
@@ -1092,6 +1084,8 @@ static void gl_clearcolor_changed(cvar_t *self)
 
 static void GL_Register(void)
 {
+    Renderer_InitSharedCvars();
+
     // regular variables
     gl_partscale = Cvar_Get("gl_partscale", "2", 0);
     gl_partstyle = Cvar_Get("gl_partstyle", "0", 0);

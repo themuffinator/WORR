@@ -17,7 +17,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include "renderer/kfont.h"
 #include <array>
+#include <cstring>
 
 drawStatic_t draw;
 
@@ -515,74 +517,26 @@ int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, colo
 
 const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 {
-    if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
-        return NULL;
-
-    const kfont_char_t *ch = &kfont->chars[codepoint - KFONT_ASCII_MIN];
-
-    if (!ch->w)
-        return NULL;
-
-    return ch;
+    return Renderer_LookupKFontGlyph(kfont, codepoint);
 }
 
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
-    memset(font, 0, sizeof(*font));
-
-    char *buffer;
-
-    if (FS_LoadFile(filename, (void **) &buffer) < 0)
+    if (!font)
         return;
 
-    const char *data = buffer;
+    RendererKFontLoadContext context{};
+    context.registerImage = [](void *, const char *path, imagetype_t type, imageflags_t flags) -> qhandle_t {
+        return R_RegisterImage(path, type, flags);
+    };
 
-    while (true) {
-        const char *token = COM_Parse(&data);
-
-        if (!*token)
-            break;
-
-        if (!strcmp(token, "texture")) {
-            token = COM_Parse(&data);
-            font->pic = R_RegisterFont(va("/%s", token));
-        } else if (!strcmp(token, "unicode")) {
-        } else if (!strcmp(token, "mapchar")) {
-            token = COM_Parse(&data);
-
-            while (true) {
-                token = COM_Parse(&data);
-
-                if (!strcmp(token, "}"))
-                    break;
-
-                uint32_t codepoint = strtoul(token, NULL, 10);
-                uint32_t x, y, w, h;
-                
-                x = strtoul(COM_Parse(&data), NULL, 10);
-                y = strtoul(COM_Parse(&data), NULL, 10);
-                w = strtoul(COM_Parse(&data), NULL, 10);
-                h = strtoul(COM_Parse(&data), NULL, 10);
-                COM_Parse(&data);
-
-                codepoint -= KFONT_ASCII_MIN;
-
-                if (codepoint < KFONT_ASCII_MAX) {
-                    font->chars[codepoint].x = x;
-                    font->chars[codepoint].y = y;
-                    font->chars[codepoint].w = w;
-                    font->chars[codepoint].h = h;
-
-                    font->line_height = max(font->line_height, h);
-                }
-            }
-        }
+    RendererKFontData data{};
+    if (!Renderer_LoadKFont(filename, context, &data)) {
+        std::memset(font, 0, sizeof(*font));
+        return;
     }
-    
-    font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
-    font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
-    FS_FreeFile(buffer);
+    Renderer_AssignKFont(font, data);
 }
 
 qhandle_t r_charset;

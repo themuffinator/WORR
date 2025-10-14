@@ -198,7 +198,6 @@ if renderer_opt == 'refresh'
   refresh_src = [
     'src/refresh/draw.cpp',
     'src/refresh/hq2x.cpp',
-    'src/refresh/images.cpp',
     'src/refresh/legacy.cpp',
     'src/refresh/main.cpp',
     'src/refresh/mesh.cpp',
@@ -215,7 +214,6 @@ if renderer_opt == 'refresh'
     'src/refresh/debug_text.cpp',
     'src/refresh/arbfp.h',
     'src/refresh/gl.h',
-    'src/refresh/images.h',
     'src/refresh/qgl.h',
   ]
 elif renderer_opt == 'refresh-vk'
@@ -225,6 +223,15 @@ elif renderer_opt == 'refresh-vk'
     'src/refresh-vk/vk_draw2d.cpp',
   ]
 endif
+
+refresh_src += [
+  'src/renderer/common.cpp',
+  'src/renderer/common.h',
+  'src/renderer/images.cpp',
+  'src/renderer/images.h',
+  'src/renderer/kfont.cpp',
+  'src/renderer/kfont.h',
+]
 
 refresh_src += 'inc/refresh/refresh.h'
 
