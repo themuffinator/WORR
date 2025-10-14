@@ -335,14 +335,13 @@ void R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pi
         return;
     }
 
-    float scale_w = w;
-    float scale_h = h * image->aspect;
-    float scale = max(scale_w, scale_h);
+    rUvWindow_t uv;
+    if (!R_ComputeKeepAspectUVWindow(w, h, image->aspect, &uv)) {
+        R_DrawStretchPic(x, y, w, h, color, pic);
+        return;
+    }
 
-    float s = (1.0f - scale_w / scale) * 0.5f;
-    float t = (1.0f - scale_h / scale) * 0.5f;
-
-    GL_StretchPic(x, y, w, h, s, t, 1.0f - s, 1.0f - t, color, image);
+    GL_StretchPic(x, y, w, h, uv.s0, uv.t0, uv.s1, uv.t1, color, image);
 }
 
 void R_DrawPic(int x, int y, color_t color, qhandle_t pic)
@@ -364,12 +363,10 @@ void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic)
     qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pic_w, pic_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pic);
 }
 
-#define DIV64 (1.0f / 64.0f)
-
 void R_TileClear(int x, int y, int w, int h, qhandle_t pic)
 {
-    GL_StretchPic(x, y, w, h, x * DIV64, y * DIV64,
-                  (x + w) * DIV64, (y + h) * DIV64, COLOR_WHITE, IMG_ForHandle(pic));
+    const rUvWindow_t uv = R_ComputeTileUVWindow(x, y, w, h);
+    GL_StretchPic(x, y, w, h, uv.s0, uv.t0, uv.s1, uv.t1, COLOR_WHITE, IMG_ForHandle(pic));
 }
 
 void R_DrawFill8(int x, int y, int w, int h, int c)
