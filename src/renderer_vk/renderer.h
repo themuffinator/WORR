@@ -13,9 +13,10 @@
 #include <vulkan/vulkan_core.h>
 
 #include "client/video.h"
+#include "common/common.h"
 #include "common/cvar.h"
 #include "common/math.h"
-#include "common/common.h"
+#include "common/bsp.h"
 #include "refresh/refresh.h"
 
 namespace refresh::vk {
@@ -241,6 +242,12 @@ private:
         void clear();
     };
 
+    struct WorldSurfaceDraw {
+        const mface_t *face = nullptr;
+        uint32_t firstVertex = 0;
+        uint32_t vertexCount = 0;
+    };
+
     struct FrameStats {
         size_t drawCalls = 0;
         size_t pipelinesBound = 0;
@@ -452,6 +459,12 @@ private:
     void beginWorldPass();
     void renderWorld();
     void endWorldPass();
+    void markVisibleNodes(const bsp_t *bsp);
+    void buildWorldFrustum(const ViewParameters &view);
+    void gatherNodeSurfaces(const mnode_t *node, int clipFlags);
+    void gatherLeafSurfaces(mleaf_t *leaf);
+    void enqueueWorldFace(mface_t *face);
+    bool clipNode(const mnode_t *node, int &clipFlags) const;
     void classifyEntities(const refdef_t &fd);
     void sortTransparentQueues(const refdef_t &fd);
     void buildEffectBuffers(const refdef_t &fd);
@@ -521,6 +534,14 @@ private:
     EffectVertexStreams effectStreams_{};
     FrameStats frameStats_{};
     std::vector<std::string> commandLog_{};
+    std::vector<WorldSurfaceDraw> worldOpaqueSurfaces_{};
+    std::vector<WorldSurfaceDraw> worldAlphaSurfaces_{};
+    std::vector<WorldSurfaceDraw> worldSkySurfaces_{};
+    std::array<cplane_t, 4> worldFrustumPlanes_{};
+    unsigned int worldVisFrame_ = 0;
+    unsigned int worldDrawFrame_ = 0;
+    int worldViewCluster1_ = -1;
+    int worldViewCluster2_ = -1;
 
     SkyDefinition sky_{};
     std::string currentMap_;
