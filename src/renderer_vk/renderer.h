@@ -347,6 +347,14 @@ private:
         std::vector<uint32_t> pixels;
     };
 
+    struct OffscreenTarget {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        VkExtent2D extent{ 0u, 0u };
+    };
+
     struct Draw2DBatch {
         ModelRecord::BufferAllocationInfo vertex;
         ModelRecord::BufferAllocationInfo index;
@@ -473,9 +481,14 @@ private:
     void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image,
                            uint32_t width, uint32_t height);
     bool uploadImagePixels(ImageRecord &record, const uint8_t *pixels, size_t size,
-                           uint32_t width, uint32_t height, VkFormat format);
+                            uint32_t width, uint32_t height, VkFormat format);
     bool ensureTextureResources(ImageRecord &record, const uint8_t *pixels, size_t size,
                                 uint32_t width, uint32_t height, VkFormat format);
+    bool createPostProcessResources();
+    void destroyPostProcessResources();
+    bool createOffscreenTarget(OffscreenTarget &target, VkExtent2D extent, VkFormat format, VkRenderPass renderPass,
+                               VkImageUsageFlags usage);
+    void destroyOffscreenTarget(OffscreenTarget &target);
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
@@ -625,6 +638,7 @@ private:
     VkFormat depthFormat_ = VK_FORMAT_D24_UNORM_S8_UINT;
     std::vector<VkFence> imagesInFlight_;
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
+    VkRenderPass offscreenRenderPass_ = VK_NULL_HANDLE;
     VkCommandPool commandPool_ = VK_NULL_HANDLE;
     std::vector<InFlightFrame> inFlightFrames_;
     size_t currentFrameIndex_ = 0;
@@ -639,6 +653,13 @@ private:
     VkDescriptorSetLayout modelDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout modelPipelineLayout_ = VK_NULL_HANDLE;
     std::vector<std::string> deviceExtensions_;
+    OffscreenTarget sceneTarget_{};
+    std::array<OffscreenTarget, 2> bloomTargets_{};
+    bool postProcessAvailable_ = false;
+    bool frameRenderPassActive_ = false;
+    bool draw2DBegun_ = false;
+    bool sceneTargetReady_ = false;
+    std::array<bool, 2> bloomTargetsReady_{};
 };
 
 } // namespace refresh::vk

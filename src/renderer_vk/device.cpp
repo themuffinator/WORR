@@ -520,6 +520,15 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
         }
     }
 
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = swapchainFormat_;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     destroyDepthResources();
 
     VkImageCreateInfo depthInfo{};
@@ -665,6 +674,10 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
             Com_Printf("refresh-vk: failed to create framebuffer (VkResult %d).\n", static_cast<int>(framebufferResult));
             return false;
         }
+    }
+
+    if (!createPostProcessResources()) {
+        Com_Printf("refresh-vk: post-process resources unavailable, disabling effects.\n");
     }
 
     imagesInFlight_.assign(imageCount, VK_NULL_HANDLE);
@@ -852,6 +865,7 @@ void VulkanRenderer::destroySwapchainResources() {
     }
 
     destroySyncObjects();
+    destroyPostProcessResources();
 
     for (VkFramebuffer framebuffer : swapchainFramebuffers_) {
         if (framebuffer != VK_NULL_HANDLE) {
@@ -986,6 +1000,221 @@ void VulkanRenderer::destroyVulkan() {
     destroyPlatformSurface(instance_, nullptr);
     destroyInstance();
 }
+bool VulkanRenderer::createOffscreenTarget(OffscreenTarget &target, VkExtent2D extent, VkFormat format,
+                                           VkRenderPass renderPass, VkImageUsageFlags usage) {
+    destroyOffscreenTarget(target);
+
+    if (device_ == VK_NULL_HANDLE || renderPass == VK_NULL_HANDLE || extent.width == 0 || extent.height == 0) {
+        return false;
+    }
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent = { extent.width, extent.height, 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = usage;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult imageResult = vkCreateImage(device_, &imageInfo, nullptr, &target.image);
+    if (imageResult != VK_SUCCESS || target.image == VK_NULL_HANDLE) {
+        target.image = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryRequirements requirements{};
+    vkGetImageMemoryRequirements(device_, target.image, &requirements);
+    uint32_t memoryType = findMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (memoryType == UINT32_MAX) {
+        vkDestroyImage(device_, target.image, nullptr);
+        target.image = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = requirements.size;
+    allocInfo.memoryTypeIndex = memoryType;
+
+    VkResult allocResult = vkAllocateMemory(device_, &allocInfo, nullptr, &target.memory);
+    if (allocResult != VK_SUCCESS || target.memory == VK_NULL_HANDLE) {
+        vkDestroyImage(device_, target.image, nullptr);
+        target.image = VK_NULL_HANDLE;
+        target.memory = VK_NULL_HANDLE;
+        return false;
+    }
+
+    vkBindImageMemory(device_, target.image, target.memory, 0);
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = target.image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VkResult viewResult = vkCreateImageView(device_, &viewInfo, nullptr, &target.view);
+    if (viewResult != VK_SUCCESS || target.view == VK_NULL_HANDLE) {
+        destroyOffscreenTarget(target);
+        return false;
+    }
+
+    VkImageView attachments[] = { target.view };
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments = attachments;
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
+
+    VkResult framebufferResult = vkCreateFramebuffer(device_, &framebufferInfo, nullptr, &target.framebuffer);
+    if (framebufferResult != VK_SUCCESS || target.framebuffer == VK_NULL_HANDLE) {
+        destroyOffscreenTarget(target);
+        return false;
+    }
+
+    target.extent = extent;
+    return true;
+}
+void VulkanRenderer::destroyOffscreenTarget(OffscreenTarget &target) {
+    if (device_ == VK_NULL_HANDLE) {
+        target = {};
+        return;
+    }
+
+    if (target.framebuffer != VK_NULL_HANDLE) {
+        vkDestroyFramebuffer(device_, target.framebuffer, nullptr);
+        target.framebuffer = VK_NULL_HANDLE;
+    }
+    if (target.view != VK_NULL_HANDLE) {
+        vkDestroyImageView(device_, target.view, nullptr);
+        target.view = VK_NULL_HANDLE;
+    }
+    if (target.image != VK_NULL_HANDLE) {
+        vkDestroyImage(device_, target.image, nullptr);
+        target.image = VK_NULL_HANDLE;
+    }
+    if (target.memory != VK_NULL_HANDLE) {
+        vkFreeMemory(device_, target.memory, nullptr);
+        target.memory = VK_NULL_HANDLE;
+    }
+
+    target.extent = { 0u, 0u };
+}
+bool VulkanRenderer::createPostProcessResources() {
+    destroyPostProcessResources();
+
+    if (device_ == VK_NULL_HANDLE || swapchainExtent_.width == 0 || swapchainExtent_.height == 0 ||
+        swapchainFormat_ == VK_FORMAT_UNDEFINED) {
+        postProcessAvailable_ = false;
+        return false;
+    }
+
+    VkAttachmentDescription attachment{};
+    attachment.format = swapchainFormat_;
+    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference colorRef{};
+    colorRef.attachment = 0;
+    colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorRef;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &attachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    VkResult passResult = vkCreateRenderPass(device_, &renderPassInfo, nullptr, &offscreenRenderPass_);
+    if (passResult != VK_SUCCESS || offscreenRenderPass_ == VK_NULL_HANDLE) {
+        offscreenRenderPass_ = VK_NULL_HANDLE;
+        postProcessAvailable_ = false;
+        return false;
+    }
+
+    VkImageUsageFlags sceneUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if (!createOffscreenTarget(sceneTarget_, swapchainExtent_, swapchainFormat_, offscreenRenderPass_, sceneUsage)) {
+        destroyPostProcessResources();
+        postProcessAvailable_ = false;
+        return false;
+    }
+
+    VkExtent2D bloomExtent{ std::max(1u, swapchainExtent_.width / 4), std::max(1u, swapchainExtent_.height / 4) };
+    VkImageUsageFlags bloomUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    for (auto &target : bloomTargets_) {
+        if (!createOffscreenTarget(target, bloomExtent, swapchainFormat_, offscreenRenderPass_, bloomUsage)) {
+            destroyPostProcessResources();
+            postProcessAvailable_ = false;
+            return false;
+        }
+    }
+
+    postProcessAvailable_ = true;
+    sceneTargetReady_ = false;
+    bloomTargetsReady_.fill(false);
+    return true;
+}
+void VulkanRenderer::destroyPostProcessResources() {
+    if (device_ == VK_NULL_HANDLE) {
+        postProcessAvailable_ = false;
+        sceneTarget_ = {};
+        bloomTargets_ = {};
+        offscreenRenderPass_ = VK_NULL_HANDLE;
+        sceneTargetReady_ = false;
+        bloomTargetsReady_.fill(false);
+        return;
+    }
+
+    for (auto &target : bloomTargets_) {
+        destroyOffscreenTarget(target);
+    }
+    bloomTargets_ = {};
+    destroyOffscreenTarget(sceneTarget_);
+
+    if (offscreenRenderPass_ != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(device_, offscreenRenderPass_, nullptr);
+        offscreenRenderPass_ = VK_NULL_HANDLE;
+    }
+
+    postProcessAvailable_ = false;
+    sceneTargetReady_ = false;
+    bloomTargetsReady_.fill(false);
+}
 void VulkanRenderer::finishFrameRecording() {
     if (!frameActive_ || !frameAcquired_) {
         return;
@@ -996,7 +1225,10 @@ void VulkanRenderer::finishFrameRecording() {
         return;
     }
 
-    vkCmdEndRenderPass(frame.commandBuffer);
+    if (frameRenderPassActive_) {
+        vkCmdEndRenderPass(frame.commandBuffer);
+        frameRenderPassActive_ = false;
+    }
     VkResult endResult = vkEndCommandBuffer(frame.commandBuffer);
     if (endResult != VK_SUCCESS) {
         Com_Printf("refresh-vk: failed to end command buffer (VkResult %d).\n", static_cast<int>(endResult));
