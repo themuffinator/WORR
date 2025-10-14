@@ -220,6 +220,7 @@ elif renderer_opt == 'renderer_vk'
   refresh_src = [
     'src/renderer_vk/main.cpp',
     'src/renderer_vk/renderer.cpp',
+    'src/renderer_vk/pipeline.cpp',
     'src/renderer_vk/resources.cpp',
     'src/renderer_vk/device.cpp',
     'src/renderer_vk/frame.cpp',

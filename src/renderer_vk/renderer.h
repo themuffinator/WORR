@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -22,6 +23,8 @@ namespace refresh::vk {
 namespace draw2d {
     struct Submission;
 }
+
+class PipelineLibrary;
 
 class VulkanRenderer {
 public:
@@ -80,7 +83,12 @@ public:
     void destroyPlatformSurface(VkInstance instance, const VkAllocationCallbacks *allocator);
     VkSurfaceKHR platformSurface() const;
 
+    VkDevice device() const { return device_; }
+    VkRenderPass renderPass() const { return renderPass_; }
+    VkPipelineLayout pipelineLayoutFor(PipelineKind kind) const;
+
 private:
+    friend class PipelineLibrary;
     static constexpr size_t kKFontGlyphCount = static_cast<size_t>(KFONT_ASCII_MAX - KFONT_ASCII_MIN + 1);
 
     enum FogBits : uint32_t {
@@ -528,6 +536,7 @@ private:
     std::vector<Draw2DBatch> frame2DBatches_{};
 
     std::unordered_map<PipelineKey, PipelineDesc, PipelineKeyHash> pipelines_;
+    std::unique_ptr<PipelineLibrary> pipelineLibrary_;
 
     struct PlatformHooks {
         vid_vk_get_instance_extensions_fn getInstanceExtensions = nullptr;
