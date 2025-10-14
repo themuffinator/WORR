@@ -1338,33 +1338,13 @@ void VulkanRenderer::beginFrame() {
         return;
     }
 
-    VkClearValue clearValue{};
-    clearValue.color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass_;
-    renderPassInfo.framebuffer = (frame.imageIndex < swapchainFramebuffers_.size()) ? swapchainFramebuffers_[frame.imageIndex] : VK_NULL_HANDLE;
-    renderPassInfo.renderArea.offset = { 0, 0 };
-    renderPassInfo.renderArea.extent = swapchainExtent_;
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearValue;
-
-    if (renderPassInfo.framebuffer == VK_NULL_HANDLE) {
-        Com_Printf("refresh-vk: framebuffer unavailable for frame.\n");
-        vkEndCommandBuffer(frame.commandBuffer);
-        return;
-    }
-
-    vkCmdBeginRenderPass(frame.commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
     frameActive_ = true;
     frameAcquired_ = true;
+    frameRenderPassActive_ = false;
+    draw2DBegun_ = false;
 
-    if (!draw2d::begin([this](const draw2d::Submission &submission) {
-            submit2DDraw(submission);
-        })) {
-        Com_Printf("vk_draw2d: failed to begin 2D batch for frame.\n");
+    if (draw2d::isActive()) {
+        draw2d::end();
     }
 }
 void VulkanRenderer::endFrame() {
@@ -1372,7 +1352,10 @@ void VulkanRenderer::endFrame() {
         return;
     }
 
-    draw2d::end();
+    if (draw2DBegun_) {
+        draw2d::end();
+        draw2DBegun_ = false;
+    }
     finishFrameRecording();
 
     if (inFlightFrames_.empty()) {
@@ -1459,10 +1442,114 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         autoScaleValue_ = std::max(1, fd->height / SCREEN_HEIGHT);
     }
 
+    if (currentFrameIndex_ >= inFlightFrames_.size()) {
+        return;
+    }
+
+    InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
+    if (!frame.hasImage || frame.commandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    VkCommandBuffer commandBuffer = frame.commandBuffer;
+    VkImage swapchainImage = (frame.imageIndex < swapchainImages_.size()) ? swapchainImages_[frame.imageIndex] : VK_NULL_HANDLE;
+
+    auto beginPass = [&](VkRenderPass pass, VkFramebuffer framebuffer, VkExtent2D extent, const VkClearColorValue &clearColor) {
+        if (commandBuffer == VK_NULL_HANDLE || pass == VK_NULL_HANDLE || framebuffer == VK_NULL_HANDLE) {
+            return false;
+        }
+
+        VkRenderPassBeginInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        info.renderPass = pass;
+        info.framebuffer = framebuffer;
+        info.renderArea.offset = { 0, 0 };
+        info.renderArea.extent = extent;
+
+        VkClearValue clear{};
+        clear.color = clearColor;
+        info.clearValueCount = 1;
+        info.pClearValues = &clear;
+
+        vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+        frameRenderPassActive_ = true;
+
+        if (!draw2DBegun_) {
+            if (!draw2d::begin([this](const draw2d::Submission &submission) {
+                    submit2DDraw(submission);
+                })) {
+                Com_Printf("vk_draw2d: failed to begin 2D batch for frame.\n");
+            } else {
+                draw2DBegun_ = true;
+            }
+        }
+
+        return true;
+    };
+
+    auto endPass = [&]() {
+        if (!frameRenderPassActive_) {
+            return;
+        }
+
+        if (draw2d::isActive()) {
+            draw2d::flush();
+        }
+
+        vkCmdEndRenderPass(commandBuffer);
+        frameRenderPassActive_ = false;
+    };
+
+    VkClearColorValue clearColor{ { 0.0f, 0.0f, 0.0f, 1.0f } };
+
     prepareFrameState(*fd);
     evaluateFrameSettings();
     uploadDynamicLights();
     updateSkyState();
+
+    bool worldVisible = (fd->rdflags & RDF_NOWORLDMODEL) == 0;
+    bool waterwarpEnabled = resolveToggle(vk_waterwarp, "gl_waterwarp", true);
+    bool waterwarp = waterwarpEnabled && (fd->rdflags & RDF_UNDERWATER) != 0;
+    bool bloomEnabled = resolveToggle(vk_bloom, "gl_bloom", true);
+    bool bloom = bloomEnabled && worldVisible;
+    bool overlayEnabled = resolveToggle(vk_polyblend, "gl_polyblend", true);
+    bool overlayBlend = overlayEnabled && (fd->screen_blend[3] > 0.0f || fd->damage_blend[3] > 0.0f);
+
+    frameState_.waterwarpActive = waterwarp;
+    frameState_.bloomActive = bloom;
+    frameState_.overlayBlendActive = overlayBlend;
+
+    bool usePostProcess = postProcessAvailable_ && (waterwarp || bloom || overlayBlend);
+    bool offscreenActive = false;
+
+    if (usePostProcess && sceneTarget_.framebuffer != VK_NULL_HANDLE && offscreenRenderPass_ != VK_NULL_HANDLE) {
+        if (!sceneTargetReady_ && sceneTarget_.image != VK_NULL_HANDLE) {
+            transitionImageLayout(commandBuffer,
+                                   sceneTarget_.image,
+                                   VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            sceneTargetReady_ = true;
+        }
+        if (beginPass(offscreenRenderPass_, sceneTarget_.framebuffer, sceneTarget_.extent, clearColor)) {
+            offscreenActive = true;
+        }
+    }
+
+    if (!offscreenActive) {
+        if (swapchainImage != VK_NULL_HANDLE) {
+            transitionImageLayout(commandBuffer,
+                                   swapchainImage,
+                                   VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        }
+
+        VkFramebuffer framebufferHandle = (frame.imageIndex < swapchainFramebuffers_.size()) ?
+                                              swapchainFramebuffers_[frame.imageIndex] :
+                                              VK_NULL_HANDLE;
+        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor)) {
+            return;
+        }
+    }
 
     beginWorldPass();
     if (!(frameState_.refdef.rdflags & RDF_NOWORLDMODEL)) {
@@ -1559,25 +1646,67 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         recordDrawCall(ensurePipeline(buildPipelineKey(PipelineKind::DebugLineNoDepth)), "debug.lines.nodepth", effectStreams_.debugLinesNoDepth.size() / 2);
     }
 
-    bool waterwarpEnabled = resolveToggle(vk_waterwarp, "gl_waterwarp", true);
-    bool waterwarp = waterwarpEnabled && (fd->rdflags & RDF_UNDERWATER) != 0;
-    frameState_.waterwarpActive = waterwarp;
-    if (waterwarp) {
+    if (offscreenActive) {
+        endPass();
+
+        if (sceneTarget_.image != VK_NULL_HANDLE && swapchainImage != VK_NULL_HANDLE) {
+            transitionImageLayout(commandBuffer,
+                                   sceneTarget_.image,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            transitionImageLayout(commandBuffer,
+                                   swapchainImage,
+                                   VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            VkImageBlit region{};
+            region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.srcSubresource.mipLevel = 0;
+            region.srcSubresource.baseArrayLayer = 0;
+            region.srcSubresource.layerCount = 1;
+            region.srcOffsets[0] = { 0, 0, 0 };
+            region.srcOffsets[1] = { static_cast<int32_t>(sceneTarget_.extent.width), static_cast<int32_t>(sceneTarget_.extent.height), 1 };
+
+            region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.dstSubresource.mipLevel = 0;
+            region.dstSubresource.baseArrayLayer = 0;
+            region.dstSubresource.layerCount = 1;
+            region.dstOffsets[0] = { 0, 0, 0 };
+            region.dstOffsets[1] = { static_cast<int32_t>(swapchainExtent_.width), static_cast<int32_t>(swapchainExtent_.height), 1 };
+
+            vkCmdBlitImage(commandBuffer,
+                           sceneTarget_.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           swapchainImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &region,
+                           VK_FILTER_LINEAR);
+
+            transitionImageLayout(commandBuffer,
+                                   swapchainImage,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            transitionImageLayout(commandBuffer,
+                                   sceneTarget_.image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        }
+
+        VkFramebuffer framebufferHandle = (frame.imageIndex < swapchainFramebuffers_.size()) ?
+                                              swapchainFramebuffers_[frame.imageIndex] :
+                                              VK_NULL_HANDLE;
+        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor)) {
+            return;
+        }
+    }
+
+    if (frameState_.waterwarpActive) {
         recordStage("post.waterwarp");
     }
 
-    bool bloomEnabled = resolveToggle(vk_bloom, "gl_bloom", true);
-    bool worldVisible = !(fd->rdflags & RDF_NOWORLDMODEL) && frameState_.worldRendered;
-    bool bloom = bloomEnabled && worldVisible;
-    frameState_.bloomActive = bloom;
-    if (bloom) {
+    if (frameState_.bloomActive && frameState_.worldRendered) {
         recordStage("post.bloom");
     }
 
-    bool overlayEnabled = resolveToggle(vk_polyblend, "gl_polyblend", true);
-    bool overlayBlend = overlayEnabled && (fd->screen_blend[3] > 0.0f || fd->damage_blend[3] > 0.0f);
-    frameState_.overlayBlendActive = overlayBlend;
-    if (overlayBlend) {
+    if (frameState_.overlayBlendActive) {
         recordStage("overlay.blend");
     }
 
