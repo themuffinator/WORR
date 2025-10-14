@@ -10,7 +10,7 @@ project('worr', ['cpp', 'c'],
 )
 
 renderer_opt = get_option('renderer')
-if renderer_opt not in ['refresh', 'refresh-vk']
+if renderer_opt not in ['renderer_gl', 'renderer_vk']
   error('Unknown renderer option: @0@'.format(renderer_opt))
 endif
 
@@ -194,33 +194,33 @@ ui_src = [
   'src/client/ui/ui.h',
 ]
 
-if renderer_opt == 'refresh'
+if renderer_opt == 'renderer_gl'
   refresh_src = [
-    'src/refresh/draw.cpp',
-    'src/refresh/hq2x.cpp',
-    'src/refresh/legacy.cpp',
-    'src/refresh/main.cpp',
-    'src/refresh/mesh.cpp',
-    'src/refresh/models.cpp',
-    'src/refresh/qgl.cpp',
-    'src/refresh/shader.cpp',
-    'src/refresh/sky.cpp',
-    'src/refresh/state.cpp',
-    'src/refresh/surf.cpp',
-    'src/refresh/tess.cpp',
-    'src/refresh/texture.cpp',
-    'src/refresh/world.cpp',
-    'src/refresh/debug.cpp',
-    'src/refresh/debug_text.cpp',
-    'src/refresh/arbfp.h',
-    'src/refresh/gl.h',
-    'src/refresh/qgl.h',
+    'src/renderer_gl/draw.cpp',
+    'src/renderer_gl/hq2x.cpp',
+    'src/renderer_gl/legacy.cpp',
+    'src/renderer_gl/main.cpp',
+    'src/renderer_gl/mesh.cpp',
+    'src/renderer_gl/models.cpp',
+    'src/renderer_gl/qgl.cpp',
+    'src/renderer_gl/shader.cpp',
+    'src/renderer_gl/sky.cpp',
+    'src/renderer_gl/state.cpp',
+    'src/renderer_gl/surf.cpp',
+    'src/renderer_gl/tess.cpp',
+    'src/renderer_gl/texture.cpp',
+    'src/renderer_gl/world.cpp',
+    'src/renderer_gl/debug.cpp',
+    'src/renderer_gl/debug_text.cpp',
+    'src/renderer_gl/arbfp.h',
+    'src/renderer_gl/gl.h',
+    'src/renderer_gl/qgl.h',
   ]
-elif renderer_opt == 'refresh-vk'
+elif renderer_opt == 'renderer_vk'
   refresh_src = [
-    'src/refresh-vk/main.cpp',
-    'src/refresh-vk/renderer.cpp',
-    'src/refresh-vk/vk_draw2d.cpp',
+    'src/renderer_vk/main.cpp',
+    'src/renderer_vk/renderer.cpp',
+    'src/renderer_vk/vk_draw2d.cpp',
   ]
 endif
 
@@ -651,7 +651,7 @@ if get_option('tests')
 endif
 
 if get_option('debug')
-  refresh_src += 'src/refresh/debug.cpp'
+  refresh_src += 'src/renderer_gl/debug.cpp'
 endif
 
 if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_argument('-mstackrealign')).allowed()

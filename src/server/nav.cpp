@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "refresh/refresh.h"
 // ugly but necessary to hook into nav system without
 // exposing this into a mess of spaghetti
-#include "../refresh/gl.h"
+#include "../renderer_gl/gl.h"
 
 static cvar_t *nav_debug;
 static cvar_t *nav_debug_range;
