@@ -31,7 +31,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/client.h"
 #include "refresh/refresh.h"
 #include "system/hunk.h"
-#include "images.h"
+#include "renderer/common.h"
+#include "renderer/images.h"
 #include "qgl.h"
 
 /*

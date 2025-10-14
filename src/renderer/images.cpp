@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "format/pcx.h"
 #include "format/wal.h"
 #include <array>
-#include "images.h"
+#include "renderer/images.h"
 
 #if USE_PNG
 #define PNG_SKIP_SETJMP_CHECK

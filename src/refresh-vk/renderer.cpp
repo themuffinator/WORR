@@ -2,7 +2,9 @@
 
 #include "vk_draw2d.h"
 
-#include "refresh/images.h"
+#include "renderer/common.h"
+#include "renderer/images.h"
+#include "renderer/kfont.h"
 
 #include <algorithm>
 #include <array>
@@ -12,19 +14,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <unordered_set>
 
 #include "common/cmodel.h"
 #include "common/files.h"
-#include "refresh/gl.h"
-#include "refresh/images.h"
 #include "client/client.h"
 
 extern uint32_t d_8to24table[256];
-extern cvar_t *gl_swapinterval;
-
-refcfg_t r_config = {};
-unsigned r_registration_sequence = 0;
 
 namespace refresh::vk {
 
@@ -78,14 +75,6 @@ namespace {
             ++count;
         }
         return static_cast<int>(count);
-    }
-
-    constexpr uint16_t defaultKFontWidth() {
-        return 16;
-    }
-
-    constexpr uint16_t defaultKFontHeight() {
-        return 16;
     }
 
     std::array<float, 3> toArray(const vec3_t value) {
@@ -3208,6 +3197,8 @@ bool VulkanRenderer::init(bool total) {
         return true;
     }
 
+    Renderer_InitSharedCvars();
+
     vk_fog = Cvar_Get("vk_fog", "-1", 0);
     vk_bloom = Cvar_Get("vk_bloom", "-1", 0);
     vk_polyblend = Cvar_Get("vk_polyblend", "-1", 0);
@@ -4728,166 +4719,43 @@ void VulkanRenderer::loadKFont(kfont_t *font, const char *filename) {
         return;
     }
 
-    auto assignFallback = [this, font]() {
-        std::memset(font, 0, sizeof(*font));
-
-        font->pic = registerImage("_kfont", IT_FONT, IF_PERMANENT);
-
-        uint16_t cursorX = 0;
-        for (auto &glyph : font->chars) {
-            glyph.x = cursorX;
-            glyph.y = 0;
-            glyph.w = defaultKFontWidth();
-            glyph.h = defaultKFontHeight();
-            cursorX = static_cast<uint16_t>(cursorX + glyph.w);
-        }
-
-        font->line_height = defaultKFontHeight();
-        font->sw = 1.0f;
-        font->sh = 1.0f;
-        kfontCache_.erase(font);
-    };
-
     kfontCache_.erase(font);
 
-    if (!filename || !*filename) {
-        assignFallback();
-        return;
+    RendererKFontLoadContext context{};
+    context.userData = this;
+    context.registerImage = [](void *userData, const char *path, imagetype_t type, imageflags_t flags) -> qhandle_t {
+        auto *renderer = static_cast<VulkanRenderer *>(userData);
+        return renderer->registerImage(path, type, flags);
+    };
+
+    RendererKFontData data{};
+    bool loaded = Renderer_LoadKFont(filename, context, &data);
+
+    if (!loaded) {
+        qhandle_t fallbackTexture = registerImage("_kfont", IT_FONT, IF_PERMANENT);
+        Renderer_BuildFallbackKFont(RENDERER_DEFAULT_KFONT_WIDTH, RENDERER_DEFAULT_KFONT_HEIGHT,
+                                    fallbackTexture, &data);
     }
 
-    char *buffer = nullptr;
-    if (FS_LoadFile(filename, reinterpret_cast<void **>(&buffer)) < 0 || !buffer) {
-        assignFallback();
-        return;
+    Renderer_AssignKFont(font, data);
+
+    if (loaded) {
+        KFontRecord record{};
+        record.texture = data.texture;
+        record.glyphs = data.glyphs;
+        record.lineHeight = data.lineHeight;
+        record.sw = data.sw;
+        record.sh = data.sh;
+        kfontCache_[font] = record;
     }
-
-    KFontRecord record{};
-    std::memset(font, 0, sizeof(*font));
-
-    const char *data = buffer;
-    while (true) {
-        const char *token = COM_Parse(&data);
-
-        if (!token || !*token) {
-            break;
-        }
-
-        if (!std::strcmp(token, "texture")) {
-            const char *textureToken = COM_Parse(&data);
-            if (textureToken && *textureToken) {
-                std::string imagePath;
-                if (textureToken[0] == '/') {
-                    imagePath = textureToken;
-                } else {
-                    imagePath = '/';
-                    imagePath += textureToken;
-                }
-                record.texture = registerImage(imagePath.c_str(), IT_FONT, IF_PERMANENT);
-            }
-        } else if (!std::strcmp(token, "unicode")) {
-            token = COM_Parse(&data);
-            while (true) {
-                token = COM_Parse(&data);
-                if (!token || !*token || !std::strcmp(token, "}")) {
-                    break;
-                }
-            }
-        } else if (!std::strcmp(token, "mapchar")) {
-            token = COM_Parse(&data);
-
-            while (true) {
-                token = COM_Parse(&data);
-
-                if (!token || !*token) {
-                    break;
-                }
-
-                if (!std::strcmp(token, "}")) {
-                    break;
-                }
-
-                const char *xToken = COM_Parse(&data);
-                const char *yToken = COM_Parse(&data);
-                const char *wToken = COM_Parse(&data);
-                const char *hToken = COM_Parse(&data);
-                const char *sheetToken = COM_Parse(&data);
-                (void)sheetToken;
-
-                if (!xToken || !*xToken || !yToken || !*yToken || !wToken || !*wToken || !hToken || !*hToken) {
-                    continue;
-                }
-
-                uint32_t codepoint = static_cast<uint32_t>(std::strtoul(token, nullptr, 10));
-                uint32_t xValue = static_cast<uint32_t>(std::strtoul(xToken, nullptr, 10));
-                uint32_t yValue = static_cast<uint32_t>(std::strtoul(yToken, nullptr, 10));
-                uint32_t wValue = static_cast<uint32_t>(std::strtoul(wToken, nullptr, 10));
-                uint32_t hValue = static_cast<uint32_t>(std::strtoul(hToken, nullptr, 10));
-
-                if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX) {
-                    continue;
-                }
-
-                size_t index = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
-                record.glyphs[index].x = static_cast<uint16_t>(xValue);
-                record.glyphs[index].y = static_cast<uint16_t>(yValue);
-                record.glyphs[index].w = static_cast<uint16_t>(wValue);
-                record.glyphs[index].h = static_cast<uint16_t>(hValue);
-                record.lineHeight = std::max<uint16_t>(record.lineHeight, static_cast<uint16_t>(hValue));
-            }
-        }
-    }
-
-    FS_FreeFile(buffer);
-
-    if (!record.texture) {
-        assignFallback();
-        return;
-    }
-
-    const image_t *image = IMG_ForHandle(record.texture);
-    if (!image || image->width <= 0 || image->height <= 0) {
-        assignFallback();
-        return;
-    }
-
-    record.sw = 1.0f / static_cast<float>(image->width);
-    record.sh = 1.0f / static_cast<float>(image->height);
-    if (record.lineHeight == 0) {
-        record.lineHeight = defaultKFontHeight();
-    }
-
-    font->pic = record.texture;
-    font->line_height = record.lineHeight;
-    font->sw = record.sw;
-    font->sh = record.sh;
-    std::copy(record.glyphs.begin(), record.glyphs.end(), std::begin(font->chars));
-
-    kfontCache_[font] = record;
 }
 
 const kfont_char_t *VulkanRenderer::lookupKFontChar(const kfont_t *kfont, uint32_t codepoint) const {
-    if (!kfont) {
-        return nullptr;
-    }
-
-    if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX) {
-        return nullptr;
-    }
-
-    size_t index = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
     if (const KFontRecord *record = findKFontRecord(kfont)) {
-        const kfont_char_t &glyph = record->glyphs[index];
-        if (glyph.w == 0) {
-            return nullptr;
-        }
-        return &record->glyphs[index];
+        return Renderer_LookupKFontGlyph(record->glyphs.data(), record->glyphs.size(), codepoint);
     }
 
-    const kfont_char_t &glyph = kfont->chars[index];
-    if (glyph.w == 0) {
-        return nullptr;
-    }
-    return &kfont->chars[index];
+    return Renderer_LookupKFontGlyph(kfont, codepoint);
 }
 
 void VulkanRenderer::resetFrameState() {
