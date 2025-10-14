@@ -1049,7 +1049,12 @@ bool VulkanRenderer::createOffscreenTarget(OffscreenTarget &target, VkExtent2D e
         return false;
     }
 
-    vkBindImageMemory(device_, target.image, target.memory, 0);
+    VkResult bindResult = vkBindImageMemory(device_, target.image, target.memory, 0);
+    if (bindResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to bind offscreen image memory (VkResult %d).\n", static_cast<int>(bindResult));
+        destroyOffscreenTarget(target);
+        return false;
+    }
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
