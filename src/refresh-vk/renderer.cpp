@@ -1387,6 +1387,11 @@ VulkanRenderer::PipelineKind VulkanRenderer::selectPipelineForEntity(const entit
 void VulkanRenderer::classifyEntities(const refdef_t &fd) {
     frameQueues_.clear();
 
+    static cvar_t *drawEntities = Cvar_FindVar("gl_drawentities");
+    if (drawEntities && drawEntities->integer == 0) {
+        return;
+    }
+
     if (!fd.entities || fd.num_entities <= 0) {
         return;
     }
@@ -1434,6 +1439,46 @@ void VulkanRenderer::classifyEntities(const refdef_t &fd) {
 
         frameQueues_.alphaBack.push_back(ent);
     }
+}
+
+void VulkanRenderer::sortTransparentQueues(const refdef_t &fd) {
+    if (frameQueues_.alphaBack.empty() && frameQueues_.alphaFront.empty()) {
+        return;
+    }
+
+    const vec3_t &viewOrg = fd.vieworg;
+    auto distanceSquared = [&](const entity_t *ent) {
+        if (!ent) {
+            return std::numeric_limits<float>::infinity();
+        }
+
+        float dx = ent->origin[0] - viewOrg[0];
+        float dy = ent->origin[1] - viewOrg[1];
+        float dz = ent->origin[2] - viewOrg[2];
+        float dist = dx * dx + dy * dy + dz * dz;
+        if (!std::isfinite(dist)) {
+            return std::numeric_limits<float>::infinity();
+        }
+        return dist;
+    };
+
+    auto sortByDepth = [&](std::vector<const entity_t *> &queue) {
+        if (queue.size() < 2) {
+            return;
+        }
+
+        std::stable_sort(queue.begin(), queue.end(), [&](const entity_t *lhs, const entity_t *rhs) {
+            float left = distanceSquared(lhs);
+            float right = distanceSquared(rhs);
+            if (left == right) {
+                return lhs < rhs;
+            }
+            return left < right;
+        });
+    };
+
+    sortByDepth(frameQueues_.alphaBack);
+    sortByDepth(frameQueues_.alphaFront);
 }
 
 void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
@@ -3515,6 +3560,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     recordStage("frame.begin");
 
     classifyEntities(*fd);
+    sortTransparentQueues(frameState_.refdef);
     buildEffectBuffers(*fd);
 
     if (!(fd->rdflags & RDF_NOWORLDMODEL)) {

@@ -372,6 +372,7 @@ private:
     void renderWorld();
     void endWorldPass();
     void classifyEntities(const refdef_t &fd);
+    void sortTransparentQueues(const refdef_t &fd);
     void buildEffectBuffers(const refdef_t &fd);
     void recordDrawCall(const PipelineDesc &pipeline, std::string_view label, size_t count = 0);
     void recordStage(std::string_view label);
