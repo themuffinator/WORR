@@ -583,6 +583,7 @@ private:
     void destroyCommandPool();
     bool createSwapchainResources(VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void destroySwapchainResources();
+    void destroyDepthResources();
     void destroySyncObjects();
     bool recreateSwapchain();
     bool rebuildSwapchain();
@@ -618,6 +619,10 @@ private:
     std::vector<VkImage> swapchainImages_;
     std::vector<VkImageView> swapchainImageViews_;
     std::vector<VkFramebuffer> swapchainFramebuffers_;
+    VkImage depthImage_ = VK_NULL_HANDLE;
+    VkDeviceMemory depthImageMemory_ = VK_NULL_HANDLE;
+    VkImageView depthImageView_ = VK_NULL_HANDLE;
+    VkFormat depthFormat_ = VK_FORMAT_D24_UNORM_S8_UINT;
     std::vector<VkFence> imagesInFlight_;
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
     VkCommandPool commandPool_ = VK_NULL_HANDLE;
