@@ -23,6 +23,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // images.h -- common image manager
 //
 
+#include <stddef.h>
+
 #include "shared/list.h"
 #include "common/files.h"
 #include "common/zone.h"
@@ -91,6 +93,22 @@ image_t *IMG_ForHandle(qhandle_t h);
 
 void IMG_Unload(image_t *image);
 void IMG_Load(image_t *image, byte *pic);
+
+typedef struct image_pixels_s {
+    byte *pixels;
+    size_t size;
+    uint16_t width;
+    uint16_t height;
+    uint16_t upload_width;
+    uint16_t upload_height;
+    imagetype_t type;
+    imageflags_t flags;
+    float aspect;
+    char name[MAX_QPATH];
+} image_pixels_t;
+
+bool IMG_LoadPixels(const char *name, imagetype_t type, imageflags_t flags, image_pixels_t *out);
+void IMG_FreePixels(image_pixels_t *pixels);
 
 typedef struct screenshot_s screenshot_t;
 

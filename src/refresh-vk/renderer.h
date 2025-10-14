@@ -235,8 +235,18 @@ private:
         imageflags_t flags = IF_NONE;
         int width = 0;
         int height = 0;
+        int uploadWidth = 0;
+        int uploadHeight = 0;
         bool transparent = false;
         unsigned registrationSequence = 0;
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkExtent3D extent{ 0u, 0u, 1u };
     };
 
     struct KFontRecord {
@@ -323,6 +333,25 @@ private:
 
     void initializePlatformHooks();
     void collectPlatformInstanceExtensions();
+    bool createTextureDescriptorSetLayout();
+    void destroyTextureDescriptorSetLayout();
+    void destroyImageRecord(ImageRecord &record);
+    void destroyAllImageResources();
+    bool allocateTextureDescriptor(ImageRecord &record);
+    uint32_t findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties) const;
+    bool createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+                      VkBuffer &buffer, VkDeviceMemory &memory);
+    void destroyBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+    void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image,
+                               VkImageLayout oldLayout, VkImageLayout newLayout);
+    void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image,
+                           uint32_t width, uint32_t height);
+    bool uploadImagePixels(ImageRecord &record, const uint8_t *pixels, size_t size,
+                           uint32_t width, uint32_t height, VkFormat format);
+    bool ensureTextureResources(ImageRecord &record, const uint8_t *pixels, size_t size,
+                                uint32_t width, uint32_t height, VkFormat format);
 
     std::atomic<qhandle_t> handleCounter_;
     bool initialized_ = false;
@@ -433,6 +462,7 @@ private:
     VkInstance instance_ = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
+    VkPhysicalDeviceMemoryProperties memoryProperties_{};
     uint32_t graphicsQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
     uint32_t presentQueueFamily_ = VK_QUEUE_FAMILY_IGNORED;
     VkQueue graphicsQueue_ = VK_NULL_HANDLE;
@@ -452,6 +482,7 @@ private:
     bool vsyncEnabled_ = true;
     static constexpr size_t kMaxFramesInFlight = 2;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout modelDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout modelPipelineLayout_ = VK_NULL_HANDLE;
 };
