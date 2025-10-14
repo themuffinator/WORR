@@ -119,6 +119,7 @@ private:
         bool depthTest = true;
         bool depthWrite = true;
         bool textured = false;
+        VkPipeline pipeline = VK_NULL_HANDLE;
     };
 
     struct RenderQueues {

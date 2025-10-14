@@ -1858,6 +1858,7 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
     }
 
     VkCommandBuffer commandBuffer = frame.commandBuffer;
+    const PipelineDesc &pipeline = ensurePipeline(PipelineKind::Draw2D);
 
     Draw2DBatch batch{};
     batch.vertexCount = submission.vertexCount;
@@ -1873,7 +1874,7 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
 
     if (!createBuffer(batch.vertex,
                       vertexSize,
-                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
         return;
     }
@@ -1889,7 +1890,7 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
 
     if (!createBuffer(batch.index,
                       indexSize,
-                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
         destroyBuffer(batch.vertex);
         return;
@@ -1969,11 +1970,14 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
                                 nullptr);
     }
 
+    if (pipeline.pipeline != VK_NULL_HANDLE) {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+    }
+
     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(submission.indexCount), 1, 0, 0, 0);
 
     frame2DBatches_.push_back(batch);
 
-    const PipelineDesc &pipeline = ensurePipeline(PipelineKind::Draw2D);
     recordDrawCall(pipeline, "draw2d", submission.indexCount / 3);
 }
 
