@@ -938,6 +938,7 @@ void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
             billboard.alpha = particle.alpha;
             if (particle.color != -1) {
                 billboard.color.u32 = d_8to24table[particle.color & 0xff];
+                billboard.color.a = 255;
             } else {
                 billboard.color = particle.rgba;
             }
