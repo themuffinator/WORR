@@ -857,6 +857,18 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
     batch.indexCount = submission.indexCount;
     batch.texture = submission.texture;
 
+    const ImageRecord *image = findImageRecord(submission.texture);
+    if (!image) {
+        if (submission.texture == rawTextureHandle_) {
+            ensureRawTexture();
+            image = findImageRecord(submission.texture);
+        } else {
+            qhandle_t fallback = ensureWhiteTexture();
+            image = findImageRecord(fallback);
+        }
+    }
+    VkDescriptorSet textureDescriptor = image ? image->descriptorSet : VK_NULL_HANDLE;
+
     const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(submission.vertexCount * sizeof(draw2d::Vertex));
     const VkDeviceSize indexSize = static_cast<VkDeviceSize>(submission.indexCount * sizeof(uint16_t));
 
@@ -952,12 +964,19 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
     }
 
     if (batch.descriptor.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+        std::array<VkDescriptorSet, 2> descriptorSets{ batch.descriptor.set, textureDescriptor };
+        uint32_t descriptorCount = 1;
+
+        if (textureDescriptor != VK_NULL_HANDLE && textureDescriptorSetLayout_ != VK_NULL_HANDLE) {
+            descriptorCount = 2;
+        }
+
         vkCmdBindDescriptorSets(commandBuffer,
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 modelPipelineLayout_,
                                 0,
-                                1,
-                                &batch.descriptor.set,
+                                descriptorCount,
+                                descriptorSets.data(),
                                 0,
                                 nullptr);
     }
