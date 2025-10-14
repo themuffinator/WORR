@@ -3951,7 +3951,7 @@ void VulkanRenderer::loadKFont(kfont_t *font, const char *filename) {
         return;
     }
 
-    const image_t *image = IMG_ForHandle(record.texture);
+    const ImageRecord *image = findImageRecord(record.texture);
     if (!image || image->width <= 0 || image->height <= 0) {
         assignFallback();
         return;
