@@ -455,6 +455,15 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
         imageCount = support.capabilities.maxImageCount;
     }
 
+    VkImageUsageFlags swapchainUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    bool transferDstSupported = (support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0;
+    if (transferDstSupported) {
+        swapchainUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    } else {
+        Com_Printf("refresh-vk: swapchain missing transfer dst usage; post-process blit disabled.\n");
+        destroyPostProcessResources();
+    }
+
     VkSwapchainCreateInfoKHR swapchainInfo{};
     swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchainInfo.surface = platformSurface_;
@@ -463,7 +472,7 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
     swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
     swapchainInfo.imageExtent = extent;
     swapchainInfo.imageArrayLayers = 1;
-    swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainInfo.imageUsage = swapchainUsage;
 
     uint32_t queueFamilyIndices[] = { graphicsQueueFamily_, presentQueueFamily_ };
     if (graphicsQueueFamily_ != presentQueueFamily_) {
@@ -603,11 +612,11 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
     std::array<VkAttachmentDescription, 2> attachments{};
     attachments[0].format = swapchainFormat_;
     attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     attachments[1].format = depthFormat_;
@@ -676,8 +685,12 @@ bool VulkanRenderer::createSwapchainResources(VkSwapchainKHR oldSwapchain) {
         }
     }
 
-    if (!createPostProcessResources()) {
-        Com_Printf("refresh-vk: post-process resources unavailable, disabling effects.\n");
+    if (transferDstSupported) {
+        if (!createPostProcessResources()) {
+            Com_Printf("refresh-vk: post-process resources unavailable, disabling effects.\n");
+        }
+    } else {
+        postProcessAvailable_ = false;
     }
 
     imagesInFlight_.assign(imageCount, VK_NULL_HANDLE);

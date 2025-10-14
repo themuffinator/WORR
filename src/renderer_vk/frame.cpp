@@ -1477,7 +1477,11 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     VkCommandBuffer commandBuffer = frame.commandBuffer;
     VkImage swapchainImage = (frame.imageIndex < swapchainImages_.size()) ? swapchainImages_[frame.imageIndex] : VK_NULL_HANDLE;
 
-    auto beginPass = [&](VkRenderPass pass, VkFramebuffer framebuffer, VkExtent2D extent, const VkClearColorValue &clearColor) {
+    auto beginPass = [&](VkRenderPass pass,
+                         VkFramebuffer framebuffer,
+                         VkExtent2D extent,
+                         const VkClearColorValue &clearColor,
+                         bool preserveContents = false) {
         if (commandBuffer == VK_NULL_HANDLE || pass == VK_NULL_HANDLE || framebuffer == VK_NULL_HANDLE) {
             return false;
         }
@@ -1496,6 +1500,21 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
 
         vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         frameRenderPassActive_ = true;
+
+        if (!preserveContents && pass == renderPass_) {
+            VkClearAttachment attachment{};
+            attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            attachment.colorAttachment = 0;
+            attachment.clearValue.color = clearColor;
+
+            VkClearRect rect{};
+            rect.rect.offset = { 0, 0 };
+            rect.rect.extent = extent;
+            rect.baseArrayLayer = 0;
+            rect.layerCount = 1;
+
+            vkCmdClearAttachments(commandBuffer, 1, &attachment, 1, &rect);
+        }
 
         if (!draw2DBegun_) {
             if (!draw2d::begin([this](const draw2d::Submission &submission) {
@@ -1716,7 +1735,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         VkFramebuffer framebufferHandle = (frame.imageIndex < swapchainFramebuffers_.size()) ?
                                               swapchainFramebuffers_[frame.imageIndex] :
                                               VK_NULL_HANDLE;
-        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor)) {
+        if (!beginPass(renderPass_, framebufferHandle, swapchainExtent_, clearColor, true)) {
             return;
         }
     }
