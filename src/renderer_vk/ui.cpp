@@ -43,7 +43,6 @@ uint8_t colorBitsForFormat(VkFormat format) {
 constexpr int kDefaultCharWidth = 8;
 constexpr int kDefaultCharHeight = 8;
 constexpr float kFontCellSize = 1.0f / 16.0f;
-constexpr float kTileDivisor = 1.0f / 64.0f;
 constexpr float kShadowOffset = 1.0f;
 constexpr int kUIDropShadow = 1 << 4;
 constexpr int kUIAltColor = 1 << 5;
@@ -835,17 +834,11 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
     float imageHeight = static_cast<float>(std::max(1, image->height));
     float aspect = imageWidth / imageHeight;
 
-    float destW = static_cast<float>(w);
-    float destH = static_cast<float>(h);
-    float scaledW = destW;
-    float scaledH = destH * aspect;
-    float scaleMax = std::max(scaledW, scaledH);
-    if (scaleMax <= 0.0f) {
+    rUvWindow_t uv;
+    if (!R_ComputeKeepAspectUVWindow(w, h, aspect, &uv)) {
+        drawStretchPic(x, y, w, h, color, pic);
         return;
     }
-
-    float s = 0.5f * (1.0f - (scaledW / scaleMax));
-    float t = 0.5f * (1.0f - (scaledH / scaleMax));
 
     float scaleFactor = scale_;
     if (scaleFactor <= 0.0f) {
@@ -854,11 +847,11 @@ void VulkanRenderer::drawKeepAspectPic(int x, int y, int w, int h, color_t color
 
     float fx = static_cast<float>(x) * scaleFactor;
     float fy = static_cast<float>(y) * scaleFactor;
-    float fw = destW * scaleFactor;
-    float fh = destH * scaleFactor;
+    float fw = static_cast<float>(w) * scaleFactor;
+    float fh = static_cast<float>(h) * scaleFactor;
 
     auto positions = makeQuad(fx, fy, fw, fh);
-    auto uvs = makeUV(s, t, 1.0f - s, 1.0f - t);
+    auto uvs = makeUV(uv.s0, uv.t0, uv.s1, uv.t1);
     draw2d::submitQuad(positions, uvs, color.u32, pic);
 }
 
@@ -962,11 +955,8 @@ void VulkanRenderer::tileClear(int x, int y, int w, int h, qhandle_t pic) {
     float fh = static_cast<float>(h) * scale;
 
     auto positions = makeQuad(fx, fy, fw, fh);
-    float s0 = static_cast<float>(x) * kTileDivisor;
-    float t0 = static_cast<float>(y) * kTileDivisor;
-    float s1 = static_cast<float>(x + w) * kTileDivisor;
-    float t1 = static_cast<float>(y + h) * kTileDivisor;
-    auto uvs = makeUV(s0, t0, s1, t1);
+    const rUvWindow_t uv = R_ComputeTileUVWindow(x, y, w, h);
+    auto uvs = makeUV(uv.s0, uv.t0, uv.s1, uv.t1);
     draw2d::submitQuad(positions, uvs, COLOR_WHITE.u32, pic);
 }
 
