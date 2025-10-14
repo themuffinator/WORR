@@ -123,8 +123,8 @@ option('opengl-es1',
 
 option('renderer',
   type: 'string',
-  value: 'refresh',
-  description: 'Select renderer backend (refresh or refresh-vk)')
+  value: 'renderer_gl',
+  description: 'Select renderer backend (renderer_gl or renderer_vk)')
 
 option('packetdup-hack',
   type: 'boolean',
