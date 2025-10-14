@@ -105,8 +105,8 @@ void R_DrawStretchRaw(int x, int y, int w, int h) {
     g_renderer.drawStretchRaw(x, y, w, h);
 }
 
-void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
-    g_renderer.updateRawPic(pic_w, pic_h, pic);
+void R_UpdateRawPic(const rawPicUpload_t *pic) {
+    g_renderer.updateRawPic(pic);
 }
 
 void R_TileClear(int x, int y, int w, int h, qhandle_t pic) {

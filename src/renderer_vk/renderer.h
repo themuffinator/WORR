@@ -65,7 +65,7 @@ public:
                               int pivot_x, int pivot_y, qhandle_t pic);
     void drawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
     void drawStretchRaw(int x, int y, int w, int h);
-    void updateRawPic(int pic_w, int pic_h, const uint32_t *pic);
+    void updateRawPic(const rawPicUpload_t *pic);
     void tileClear(int x, int y, int w, int h, qhandle_t pic);
     void drawFill8(int x, int y, int w, int h, int c);
     void drawFill32(int x, int y, int w, int h, color_t color);
@@ -361,7 +361,8 @@ private:
     struct RawPicState {
         int width = 0;
         int height = 0;
-        std::vector<uint32_t> pixels;
+        rawPicFormat_t sourceFormat = RAW_PIC_FORMAT_RGBA8;
+        std::vector<uint8_t> pixels;
     };
 
     struct OffscreenTarget {
@@ -495,6 +496,7 @@ private:
     bool canSubmit2D() const;
     qhandle_t ensureWhiteTexture();
     qhandle_t ensureRawTexture();
+    bool uploadRawTexture(ImageRecord &record, const RawPicState &pic);
     void destroy2DBatch(Draw2DBatch &batch);
     void clear2DBatches();
 

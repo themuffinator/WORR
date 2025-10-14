@@ -12,6 +12,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "client/client.h"
 
@@ -85,6 +86,157 @@ const std::array<std::array<float, 2>, 4> kFullUVs = makeUV(0.0f, 0.0f, 1.0f, 1.
 
 std::array<std::array<float, 2>, 4> makeQuadPositions(float x0, float y0, float x1, float y1) {
     return {{{ { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } }}};
+}
+
+constexpr size_t kRawPicBytesPerPixel = 4;
+
+inline uint8_t clampToByte(int value) {
+    return static_cast<uint8_t>(std::clamp(value, 0, 255));
+}
+
+bool convertRGBAPlane(const rawPicUpload_t &upload, std::vector<uint8_t> &out) {
+    if (upload.planeCount < 1 || !upload.planes[0]) {
+        return false;
+    }
+
+    const size_t width = static_cast<size_t>(std::max(0, upload.width));
+    const size_t height = static_cast<size_t>(std::max(0, upload.height));
+    if (width == 0 || height == 0) {
+        return false;
+    }
+
+    const size_t expectedStride = width * kRawPicBytesPerPixel;
+    const size_t stride = upload.strides[0];
+    if (stride < expectedStride) {
+        return false;
+    }
+
+    out.resize(width * height * kRawPicBytesPerPixel);
+    const uint8_t *source = upload.planes[0];
+    uint8_t *dest = out.data();
+
+    for (size_t y = 0; y < height; ++y) {
+        std::memcpy(dest + y * expectedStride, source + y * stride, expectedStride);
+    }
+
+    return true;
+}
+
+bool convertYUV420ToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &out) {
+    if (upload.planeCount < 3 || !upload.planes[0] || !upload.planes[1] || !upload.planes[2]) {
+        return false;
+    }
+
+    const int width = std::max(0, upload.width);
+    const int height = std::max(0, upload.height);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    out.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * kRawPicBytesPerPixel);
+
+    const uint8_t *yPlane = upload.planes[0];
+    const uint8_t *uPlane = upload.planes[1];
+    const uint8_t *vPlane = upload.planes[2];
+    const size_t yStride = upload.strides[0];
+    const size_t uStride = upload.strides[1];
+    const size_t vStride = upload.strides[2];
+
+    for (int y = 0; y < height; ++y) {
+        const uint8_t *yRow = yPlane + static_cast<size_t>(y) * yStride;
+        const uint8_t *uRow = uPlane + static_cast<size_t>(y / 2) * uStride;
+        const uint8_t *vRow = vPlane + static_cast<size_t>(y / 2) * vStride;
+        uint8_t *dst = out.data() + static_cast<size_t>(y) * static_cast<size_t>(width) * kRawPicBytesPerPixel;
+
+        for (int x = 0; x < width; ++x) {
+            const int ySample = static_cast<int>(yRow[x]);
+            const int uSample = static_cast<int>(uRow[x / 2]);
+            const int vSample = static_cast<int>(vRow[x / 2]);
+
+            int c = ySample - 16;
+            int d = uSample - 128;
+            int e = vSample - 128;
+            if (c < 0) {
+                c = 0;
+            }
+
+            const int r = (298 * c + 409 * e + 128) >> 8;
+            const int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            const int b = (298 * c + 516 * d + 128) >> 8;
+
+            dst[0] = clampToByte(r);
+            dst[1] = clampToByte(g);
+            dst[2] = clampToByte(b);
+            dst[3] = 255;
+            dst += kRawPicBytesPerPixel;
+        }
+    }
+
+    return true;
+}
+
+bool convertNV12ToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &out) {
+    if (upload.planeCount < 2 || !upload.planes[0] || !upload.planes[1]) {
+        return false;
+    }
+
+    const int width = std::max(0, upload.width);
+    const int height = std::max(0, upload.height);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    out.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * kRawPicBytesPerPixel);
+
+    const uint8_t *yPlane = upload.planes[0];
+    const uint8_t *uvPlane = upload.planes[1];
+    const size_t yStride = upload.strides[0];
+    const size_t uvStride = upload.strides[1];
+
+    for (int y = 0; y < height; ++y) {
+        const uint8_t *yRow = yPlane + static_cast<size_t>(y) * yStride;
+        const uint8_t *uvRow = uvPlane + static_cast<size_t>(y / 2) * uvStride;
+        uint8_t *dst = out.data() + static_cast<size_t>(y) * static_cast<size_t>(width) * kRawPicBytesPerPixel;
+
+        for (int x = 0; x < width; ++x) {
+            const int uvIndex = (x / 2) * 2;
+            const int ySample = static_cast<int>(yRow[x]);
+            const int uSample = static_cast<int>(uvRow[uvIndex]);
+            const int vSample = static_cast<int>(uvRow[uvIndex + 1]);
+
+            int c = ySample - 16;
+            int d = uSample - 128;
+            int e = vSample - 128;
+            if (c < 0) {
+                c = 0;
+            }
+
+            const int r = (298 * c + 409 * e + 128) >> 8;
+            const int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            const int b = (298 * c + 516 * d + 128) >> 8;
+
+            dst[0] = clampToByte(r);
+            dst[1] = clampToByte(g);
+            dst[2] = clampToByte(b);
+            dst[3] = 255;
+            dst += kRawPicBytesPerPixel;
+        }
+    }
+
+    return true;
+}
+
+bool convertRawPicToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &out) {
+    switch (upload.format) {
+    case RAW_PIC_FORMAT_RGBA8:
+        return convertRGBAPlane(upload, out);
+    case RAW_PIC_FORMAT_YUV420P:
+        return convertYUV420ToRGBA(upload, out);
+    case RAW_PIC_FORMAT_NV12:
+        return convertNV12ToRGBA(upload, out);
+    default:
+        return false;
+    }
 }
 
 } // namespace
@@ -270,11 +422,11 @@ qhandle_t VulkanRenderer::ensureRawTexture() {
             record.registrationSequence = r_registration_sequence;
 
             if (!rawPic_.pixels.empty()) {
-                const uint8_t *pixels = reinterpret_cast<const uint8_t *>(rawPic_.pixels.data());
-                size_t size = rawPic_.pixels.size() * sizeof(uint32_t);
-                uint32_t width = static_cast<uint32_t>(std::max(1, rawPic_.width));
-                uint32_t height = static_cast<uint32_t>(std::max(1, rawPic_.height));
-                ensureTextureResources(record, pixels, size, width, height, VK_FORMAT_R8G8B8A8_UNORM);
+                if (!uploadRawTexture(record, rawPic_)) {
+                    destroyImageRecord(record);
+                    rawTextureHandle_ = 0;
+                    return 0;
+                }
             }
             return rawTextureHandle_;
         }
@@ -300,12 +452,7 @@ qhandle_t VulkanRenderer::ensureRawTexture() {
     record.transparent = true;
     record.registrationSequence = r_registration_sequence;
 
-    const uint8_t *pixels = reinterpret_cast<const uint8_t *>(rawPic_.pixels.data());
-    size_t size = rawPic_.pixels.size() * sizeof(uint32_t);
-    uint32_t width = static_cast<uint32_t>(std::max(1, rawPic_.width));
-    uint32_t height = static_cast<uint32_t>(std::max(1, rawPic_.height));
-
-    if (!ensureTextureResources(record, pixels, size, width, height, VK_FORMAT_R8G8B8A8_UNORM)) {
+    if (!uploadRawTexture(record, rawPic_)) {
         imageLookup_.erase(record.name);
         rawTextureHandle_ = 0;
         return 0;
@@ -866,12 +1013,12 @@ void VulkanRenderer::drawStretchRaw(int x, int y, int w, int h) {
     draw2d::submitQuad(positions, kFullUVs, COLOR_WHITE.u32, texture);
 }
 
-void VulkanRenderer::updateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
+void VulkanRenderer::updateRawPic(const rawPicUpload_t *pic) {
     if (draw2d::isActive()) {
         draw2d::flush();
     }
 
-    if (pic_w <= 0 || pic_h <= 0 || !pic) {
+    if (!pic || pic->width <= 0 || pic->height <= 0 || pic->planeCount <= 0) {
         rawPic_ = {};
         if (auto it = images_.find(rawTextureHandle_); it != images_.end()) {
             destroyImageRecord(it->second);
@@ -880,9 +1027,22 @@ void VulkanRenderer::updateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
         return;
     }
 
-    rawPic_.width = pic_w;
-    rawPic_.height = pic_h;
-    rawPic_.pixels.assign(pic, pic + (static_cast<size_t>(pic_w) * static_cast<size_t>(pic_h)));
+    rawPic_.width = pic->width;
+    rawPic_.height = pic->height;
+    rawPic_.sourceFormat = pic->format;
+
+    std::vector<uint8_t> converted;
+    if (!convertRawPicToRGBA(*pic, converted)) {
+        Com_Printf("refresh-vk: unsupported raw picture format %d.\n", static_cast<int>(pic->format));
+        rawPic_ = {};
+        if (auto it = images_.find(rawTextureHandle_); it != images_.end()) {
+            destroyImageRecord(it->second);
+        }
+        rawTextureHandle_ = 0;
+        return;
+    }
+
+    rawPic_.pixels = std::move(converted);
 
     if (rawTextureHandle_ != 0) {
         if (auto it = images_.find(rawTextureHandle_); it != images_.end()) {
@@ -893,12 +1053,11 @@ void VulkanRenderer::updateRawPic(int pic_w, int pic_h, const uint32_t *pic) {
             record.uploadHeight = rawPic_.height;
             record.registrationSequence = r_registration_sequence;
 
-            const uint8_t *pixels = reinterpret_cast<const uint8_t *>(rawPic_.pixels.data());
-            size_t size = rawPic_.pixels.size() * sizeof(uint32_t);
-            uint32_t width = static_cast<uint32_t>(std::max(1, rawPic_.width));
-            uint32_t height = static_cast<uint32_t>(std::max(1, rawPic_.height));
-            ensureTextureResources(record, pixels, size, width, height, VK_FORMAT_R8G8B8A8_UNORM);
-            return;
+            if (uploadRawTexture(record, rawPic_)) {
+                return;
+            }
+
+            destroyImageRecord(record);
         }
         rawTextureHandle_ = 0;
     }

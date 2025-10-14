@@ -268,8 +268,25 @@ void    R_DrawPic(int x, int y, color_t color, qhandle_t pic);
 void    R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
 void    R_DrawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle, int pivot_x, int pivot_y, qhandle_t pic);
 void    R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
+#define RAW_PIC_MAX_PLANES 3
+
+typedef enum {
+    RAW_PIC_FORMAT_RGBA8 = 0,
+    RAW_PIC_FORMAT_YUV420P = 1,
+    RAW_PIC_FORMAT_NV12 = 2,
+} rawPicFormat_t;
+
+typedef struct {
+    int             width;
+    int             height;
+    rawPicFormat_t  format;
+    int             planeCount;
+    const uint8_t  *planes[RAW_PIC_MAX_PLANES];
+    size_t          strides[RAW_PIC_MAX_PLANES];
+} rawPicUpload_t;
+
 void    R_DrawStretchRaw(int x, int y, int w, int h);
-void    R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic);
+void    R_UpdateRawPic(const rawPicUpload_t *pic);
 void    R_TileClear(int x, int y, int w, int h, qhandle_t pic);
 void    R_DrawFill8(int x, int y, int w, int h, int c);
 void    R_DrawFill32(int x, int y, int w, int h, color_t color);

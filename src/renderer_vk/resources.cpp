@@ -3,6 +3,7 @@
 #include "renderer/common.h"
 #include "renderer/images.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <utility>
@@ -544,6 +545,22 @@ bool VulkanRenderer::ensureTextureResources(ImageRecord &record, const uint8_t *
     }
 
     return true;
+}
+bool VulkanRenderer::uploadRawTexture(ImageRecord &record, const RawPicState &pic) {
+    if (pic.width <= 0 || pic.height <= 0) {
+        return false;
+    }
+
+    if (pic.pixels.empty()) {
+        return false;
+    }
+
+    const uint8_t *pixels = pic.pixels.data();
+    size_t size = pic.pixels.size();
+    uint32_t width = static_cast<uint32_t>(std::max(1, pic.width));
+    uint32_t height = static_cast<uint32_t>(std::max(1, pic.height));
+
+    return ensureTextureResources(record, pixels, size, width, height, VK_FORMAT_R8G8B8A8_UNORM);
 }
 bool VulkanRenderer::createBuffer(ModelRecord::BufferAllocationInfo &buffer,
                                   VkDeviceSize size,
