@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -117,6 +118,8 @@ private:
         Flare,
         DebugLineDepth,
         DebugLineNoDepth,
+        ShadowBlob,
+        ShadowVolume,
     };
 
     struct PipelineKey {
@@ -137,6 +140,7 @@ private:
             None,
             Alpha,
             Additive,
+            Modulate,
         };
 
         PipelineKey key{};
@@ -149,6 +153,13 @@ private:
         bool usesFog = false;
         bool usesSkyFog = false;
         bool usesDynamicLights = false;
+        VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
+        VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        bool polygonOffset = false;
+        VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                               VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        std::vector<VkVertexInputBindingDescription> vertexBindings;
+        std::vector<VkVertexInputAttributeDescription> vertexAttributes;
     };
 
     struct alignas(16) EntityPushConstants {
@@ -157,6 +168,11 @@ private:
         std::array<float, 4> lighting{};
         std::array<float, 4> misc{};
         std::array<uint32_t, 4> indices{};
+    };
+
+    struct alignas(16) ShadowPushConstants {
+        std::array<float, 16> viewProjection{};
+        std::array<float, 4> color{};
     };
 
     struct PipelineKeyHash {
@@ -178,6 +194,7 @@ private:
         std::vector<const entity_t *> opaque;
         std::vector<const entity_t *> alphaBack;
         std::vector<const entity_t *> alphaFront;
+        std::vector<const entity_t *> shadows;
 
         void clear();
     };
@@ -214,6 +231,13 @@ private:
         std::vector<ParticleBillboard> particles;
         std::vector<FlarePrimitive> flares;
         std::vector<DebugLinePrimitive> debugLines;
+        struct ShadowPrimitive {
+            std::array<float, 3> center{};
+            float radius = 0.0f;
+            float bottom = 0.0f;
+            float alpha = 0.5f;
+        };
+        std::vector<ShadowPrimitive> shadows;
 
         void clear();
     };
@@ -241,6 +265,8 @@ private:
         std::vector<BillboardVertex> particleVertices;
         std::vector<BillboardVertex> flareVertices;
         std::vector<uint16_t> flareIndices;
+        std::vector<BillboardVertex> shadowVertices;
+        std::vector<uint16_t> shadowIndices;
         std::vector<DebugLineVertex> debugLinesDepth;
         std::vector<DebugLineVertex> debugLinesNoDepth;
 
@@ -474,6 +500,8 @@ private:
     void classifyEntities(const refdef_t &fd);
     void sortTransparentQueues(const refdef_t &fd);
     void buildEffectBuffers(const refdef_t &fd);
+    void streamShadowPrimitives(const ViewParameters &view);
+    bool renderShadowPass(VkCommandBuffer commandBuffer);
     void recordDrawCall(const PipelineDesc &pipeline, std::string_view label, size_t count = 0);
     void recordStage(std::string_view label);
     PipelineDesc makePipeline(const PipelineKey &key) const;
@@ -494,6 +522,7 @@ private:
     const ImageRecord *findImageRecord(qhandle_t handle) const;
     const KFontRecord *findKFontRecord(const kfont_t *font) const;
     std::string_view classifyModelName(const ModelRecord *record) const;
+    float computeShadowRadius(const entity_t &entity, const ModelRecord *record) const;
 
     // UI drawing
     void submit2DDraw(const draw2d::Submission &submission);
@@ -557,6 +586,10 @@ private:
     ModelRecord::BufferAllocationInfo worldIndexBuffer_{};
     VkIndexType worldIndexType_ = VK_INDEX_TYPE_UINT16;
     std::array<std::vector<WorldDrawCommand>, 4> worldSurfaceBuckets_{};
+
+    ModelRecord::BufferAllocationInfo shadowVertexBuffer_{};
+    ModelRecord::BufferAllocationInfo shadowIndexBuffer_{};
+    VkPipelineLayout shadowPipelineLayout_ = VK_NULL_HANDLE;
 
     struct VideoGeometry {
         int width = SCREEN_WIDTH;

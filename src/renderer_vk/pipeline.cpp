@@ -167,6 +167,10 @@ bool PipelineLibrary::createGraphicsPipeline(PipelineObject &object) {
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(object.desc.vertexBindings.size());
+    vertexInput.pVertexBindingDescriptions = object.desc.vertexBindings.data();
+    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(object.desc.vertexAttributes.size());
+    vertexInput.pVertexAttributeDescriptions = object.desc.vertexAttributes.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -181,9 +185,10 @@ bool PipelineLibrary::createGraphicsPipeline(PipelineObject &object) {
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.cullMode = object.desc.cullMode;
+    rasterizer.frontFace = object.desc.frontFace;
     rasterizer.lineWidth = 1.0f;
+    rasterizer.depthBiasEnable = object.desc.polygonOffset ? VK_TRUE : VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisample{};
     multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -196,8 +201,7 @@ bool PipelineLibrary::createGraphicsPipeline(PipelineObject &object) {
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.colorWriteMask = object.desc.colorWriteMask;
     switch (object.desc.blend) {
     case VulkanRenderer::PipelineDesc::BlendMode::Alpha:
         colorBlendAttachment.blendEnable = VK_TRUE;
@@ -214,6 +218,15 @@ bool PipelineLibrary::createGraphicsPipeline(PipelineObject &object) {
         colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
         colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
         colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        break;
+    case VulkanRenderer::PipelineDesc::BlendMode::Modulate:
+        colorBlendAttachment.blendEnable = VK_TRUE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
         colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
         break;

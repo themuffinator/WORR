@@ -5,6 +5,8 @@
 #include "renderer/common.h"
 #include "renderer/images.h"
 
+#include "common/math.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -133,12 +135,14 @@ void VulkanRenderer::RenderQueues::clear() {
     opaque.clear();
     alphaBack.clear();
     alphaFront.clear();
+    shadows.clear();
 }
 void VulkanRenderer::FramePrimitiveBuffers::clear() {
     beams.clear();
     particles.clear();
     flares.clear();
     debugLines.clear();
+    shadows.clear();
 }
 void VulkanRenderer::EffectVertexStreams::clear() {
     beamVertices.clear();
@@ -146,6 +150,8 @@ void VulkanRenderer::EffectVertexStreams::clear() {
     particleVertices.clear();
     flareVertices.clear();
     flareIndices.clear();
+    shadowVertices.clear();
+    shadowIndices.clear();
     debugLinesDepth.clear();
     debugLinesNoDepth.clear();
 }
@@ -261,6 +267,50 @@ VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(const PipelineKey &key
         desc.depthTest = false;
         desc.depthWrite = false;
         desc.textured = false;
+        break;
+    case PipelineKind::ShadowBlob: {
+        desc.debugName = "shadow.blob";
+        desc.blend = PipelineDesc::BlendMode::Modulate;
+        desc.depthWrite = false;
+        desc.textured = false;
+        desc.cullMode = VK_CULL_MODE_NONE;
+        desc.usesFog = false;
+
+        VkVertexInputBindingDescription binding{};
+        binding.binding = 0;
+        binding.stride = static_cast<uint32_t>(sizeof(EffectVertexStreams::BillboardVertex));
+        binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        desc.vertexBindings.push_back(binding);
+
+        VkVertexInputAttributeDescription position{};
+        position.location = 0;
+        position.binding = 0;
+        position.format = VK_FORMAT_R32G32B32_SFLOAT;
+        position.offset = static_cast<uint32_t>(offsetof(EffectVertexStreams::BillboardVertex, position));
+        desc.vertexAttributes.push_back(position);
+
+        VkVertexInputAttributeDescription uv{};
+        uv.location = 1;
+        uv.binding = 0;
+        uv.format = VK_FORMAT_R32G32_SFLOAT;
+        uv.offset = static_cast<uint32_t>(offsetof(EffectVertexStreams::BillboardVertex, uv));
+        desc.vertexAttributes.push_back(uv);
+
+        VkVertexInputAttributeDescription color{};
+        color.location = 2;
+        color.binding = 0;
+        color.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        color.offset = static_cast<uint32_t>(offsetof(EffectVertexStreams::BillboardVertex, color));
+        desc.vertexAttributes.push_back(color);
+        break;
+    }
+    case PipelineKind::ShadowVolume:
+        desc.debugName = "shadow.volume";
+        desc.blend = PipelineDesc::BlendMode::Modulate;
+        desc.depthWrite = false;
+        desc.textured = false;
+        desc.cullMode = VK_CULL_MODE_NONE;
+        desc.usesFog = false;
         break;
     }
 
@@ -379,6 +429,16 @@ void VulkanRenderer::classifyEntities(const refdef_t &fd) {
             continue;
         }
 
+        bool castsShadow = false;
+        if (!(ent->flags & RF_NOSHADOW)) {
+            if (ent->flags & (RF_CASTSHADOW | RF_DOT_SHADOW)) {
+                castsShadow = true;
+            }
+        }
+        if (castsShadow) {
+            frameQueues_.shadows.push_back(ent);
+        }
+
         constexpr uint32_t kInlineMask = 1u << 31;
         if ((ent->model & kInlineMask) != 0u) {
             frameQueues_.bmodels.push_back(ent);
@@ -445,6 +505,31 @@ void VulkanRenderer::sortTransparentQueues(const refdef_t &fd) {
 void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
     framePrimitives_.clear();
 
+    for (const entity_t *shadowEntity : frameQueues_.shadows) {
+        if (!shadowEntity) {
+            continue;
+        }
+
+        const ModelRecord *record = findModelRecord(shadowEntity->model);
+        float radius = computeShadowRadius(*shadowEntity, record);
+        if (!std::isfinite(radius) || radius <= 0.0f) {
+            continue;
+        }
+
+        FramePrimitiveBuffers::ShadowPrimitive primitive{};
+        primitive.center = toArray(shadowEntity->origin);
+        primitive.radius = radius;
+        primitive.bottom = shadowEntity->bottom_z;
+        if (!std::isfinite(primitive.bottom) || primitive.bottom == 0.0f) {
+            primitive.bottom = shadowEntity->origin[2] - radius;
+        }
+        primitive.alpha = (shadowEntity->flags & RF_DOT_SHADOW) ? 0.45f : 0.55f;
+        if (shadowEntity->flags & RF_TRANSLUCENT) {
+            primitive.alpha *= std::clamp(shadowEntity->alpha, 0.1f, 1.0f);
+        }
+        framePrimitives_.shadows.push_back(primitive);
+    }
+
     for (const entity_t *beamEntity : frameQueues_.beams) {
         BeamPrimitive primitive{};
         primitive.start = toArray(beamEntity->origin);
@@ -483,6 +568,173 @@ void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
     frameStats_.flares = framePrimitives_.flares.size();
 
     frameStats_.debugLines = framePrimitives_.debugLines.size();
+}
+
+void VulkanRenderer::streamShadowPrimitives(const ViewParameters &) {
+    effectStreams_.shadowVertices.clear();
+    effectStreams_.shadowIndices.clear();
+
+    if (framePrimitives_.shadows.empty()) {
+        return;
+    }
+
+    uint16_t baseIndex = 0;
+    for (const auto &primitive : framePrimitives_.shadows) {
+        if (primitive.radius <= 0.0f) {
+            continue;
+        }
+
+        if (effectStreams_.shadowVertices.size() + 4 > std::numeric_limits<uint16_t>::max()) {
+            break;
+        }
+
+        float halfSize = primitive.radius;
+        float z = primitive.bottom + 0.1f;
+
+        EffectVertexStreams::BillboardVertex v0{};
+        EffectVertexStreams::BillboardVertex v1{};
+        EffectVertexStreams::BillboardVertex v2{};
+        EffectVertexStreams::BillboardVertex v3{};
+
+        float cx = primitive.center[0];
+        float cy = primitive.center[1];
+
+        v0.position = { cx - halfSize, cy - halfSize, z };
+        v1.position = { cx + halfSize, cy - halfSize, z };
+        v2.position = { cx + halfSize, cy + halfSize, z };
+        v3.position = { cx - halfSize, cy + halfSize, z };
+
+        std::array<float, 4> color = { 0.0f, 0.0f, 0.0f, std::clamp(primitive.alpha, 0.0f, 1.0f) };
+        v0.color = color;
+        v1.color = color;
+        v2.color = color;
+        v3.color = color;
+
+        v0.uv = { 0.0f, 0.0f };
+        v1.uv = { 1.0f, 0.0f };
+        v2.uv = { 1.0f, 1.0f };
+        v3.uv = { 0.0f, 1.0f };
+
+        baseIndex = static_cast<uint16_t>(effectStreams_.shadowVertices.size());
+        effectStreams_.shadowVertices.push_back(v0);
+        effectStreams_.shadowVertices.push_back(v1);
+        effectStreams_.shadowVertices.push_back(v2);
+        effectStreams_.shadowVertices.push_back(v3);
+
+        effectStreams_.shadowIndices.push_back(baseIndex + 0);
+        effectStreams_.shadowIndices.push_back(baseIndex + 1);
+        effectStreams_.shadowIndices.push_back(baseIndex + 2);
+        effectStreams_.shadowIndices.push_back(baseIndex + 0);
+        effectStreams_.shadowIndices.push_back(baseIndex + 2);
+        effectStreams_.shadowIndices.push_back(baseIndex + 3);
+    }
+}
+
+bool VulkanRenderer::renderShadowPass(VkCommandBuffer commandBuffer) {
+    if (device_ == VK_NULL_HANDLE || commandBuffer == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    if (effectStreams_.shadowVertices.empty() || effectStreams_.shadowIndices.empty()) {
+        return false;
+    }
+
+    VkDeviceSize vertexSize = static_cast<VkDeviceSize>(effectStreams_.shadowVertices.size() *
+                                                        sizeof(EffectVertexStreams::BillboardVertex));
+    VkDeviceSize indexSize = static_cast<VkDeviceSize>(effectStreams_.shadowIndices.size() * sizeof(uint16_t));
+    if (vertexSize == 0 || indexSize == 0) {
+        return false;
+    }
+
+    if (shadowVertexBuffer_.buffer == VK_NULL_HANDLE || shadowVertexBuffer_.size < vertexSize) {
+        destroyBuffer(shadowVertexBuffer_);
+        if (!createBuffer(shadowVertexBuffer_,
+                          vertexSize,
+                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            return false;
+        }
+    }
+
+    if (shadowIndexBuffer_.buffer == VK_NULL_HANDLE || shadowIndexBuffer_.size < indexSize) {
+        destroyBuffer(shadowIndexBuffer_);
+        if (!createBuffer(shadowIndexBuffer_,
+                          indexSize,
+                          VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            return false;
+        }
+    }
+
+    void *mapped = nullptr;
+    if (vkMapMemory(device_, shadowVertexBuffer_.memory, shadowVertexBuffer_.offset, shadowVertexBuffer_.size, 0, &mapped) !=
+        VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, effectStreams_.shadowVertices.data(), static_cast<size_t>(vertexSize));
+    vkUnmapMemory(device_, shadowVertexBuffer_.memory);
+
+    mapped = nullptr;
+    if (vkMapMemory(device_, shadowIndexBuffer_.memory, shadowIndexBuffer_.offset, shadowIndexBuffer_.size, 0, &mapped) !=
+        VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, effectStreams_.shadowIndices.data(), static_cast<size_t>(indexSize));
+    vkUnmapMemory(device_, shadowIndexBuffer_.memory);
+
+    PipelineKey key = buildPipelineKey(PipelineKind::ShadowBlob);
+    const PipelineDesc &pipeline = ensurePipeline(key);
+    VkPipeline pipelineHandle = VK_NULL_HANDLE;
+    if (pipelineLibrary_) {
+        pipelineHandle = pipelineLibrary_->requestPipeline(key);
+    }
+    if (pipelineHandle == VK_NULL_HANDLE || shadowPipelineLayout_ == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle);
+
+    std::string pipelineEntry{"bind.pipeline."};
+    pipelineEntry.append(pipeline.debugName);
+    commandLog_.push_back(std::move(pipelineEntry));
+
+    VkBuffer vertexBuffers[] = { shadowVertexBuffer_.buffer };
+    VkDeviceSize offsets[] = { shadowVertexBuffer_.offset };
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, shadowIndexBuffer_.buffer, shadowIndexBuffer_.offset, VK_INDEX_TYPE_UINT16);
+
+    ShadowPushConstants constants{};
+
+    vec3_t axis[3]{};
+    AnglesToAxis(frameState_.refdef.viewangles, axis);
+
+    mat4_t view{};
+    Matrix_FromOriginAxis(frameState_.refdef.vieworg, axis, view);
+
+    mat4_t projection{};
+    Matrix_Frustum(frameState_.refdef.fov_x, frameState_.refdef.fov_y, 1.0f, 0.01f, 8192.0f, projection);
+
+    mat4_t viewProj{};
+    Matrix_Multiply(projection, view, viewProj);
+    std::copy(std::begin(viewProj), std::end(viewProj), constants.viewProjection.begin());
+    constants.color = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+    vkCmdPushConstants(commandBuffer,
+                       shadowPipelineLayout_,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0,
+                       sizeof(ShadowPushConstants),
+                       &constants);
+
+    vkCmdDrawIndexed(commandBuffer,
+                     static_cast<uint32_t>(effectStreams_.shadowIndices.size()),
+                     1,
+                     0,
+                     0,
+                     0);
+
+    recordDrawCall(pipeline, "world.shadows", effectStreams_.shadowVertices.size() / 4);
+    return true;
 }
 VulkanRenderer::ViewParameters VulkanRenderer::computeViewParameters(const refdef_t &fd) const {
     ViewParameters params{};
@@ -1232,6 +1484,41 @@ VulkanRenderer::EntityPushConstants VulkanRenderer::buildEntityPushConstants(con
 
     return constants;
 }
+
+float VulkanRenderer::computeShadowRadius(const entity_t &entity, const ModelRecord *record) const {
+    float scale = 1.0f;
+    if (!VectorCompare(entity.scale, vec3_origin)) {
+        scale = std::max({ std::abs(entity.scale[0]) > 0.0f ? std::abs(entity.scale[0]) : 1.0f,
+                           std::abs(entity.scale[1]) > 0.0f ? std::abs(entity.scale[1]) : 1.0f,
+                           std::abs(entity.scale[2]) > 0.0f ? std::abs(entity.scale[2]) : 1.0f });
+    }
+
+    float radius = 0.0f;
+    if (record) {
+        if (record->type == MOD_ALIAS && record->numFrames > 0 && !record->aliasFrames.empty()) {
+            int frameIndex = std::clamp(static_cast<int>(entity.frame), 0, record->numFrames - 1);
+            radius = record->aliasFrames[static_cast<size_t>(frameIndex)].radius;
+        } else if (record->type == MOD_SPRITE && record->numFrames > 0 && !record->spriteFrames.empty()) {
+            int frameIndex = std::clamp(static_cast<int>(entity.frame), 0, record->numFrames - 1);
+            const auto &frame = record->spriteFrames[static_cast<size_t>(frameIndex)];
+            radius = 0.5f * std::max(frame.width, frame.height);
+        }
+
+        if (radius <= 0.0f && record->type == MOD_ALIAS && record->numFrames > 0 && !record->aliasFrames.empty()) {
+            int frameIndex = std::clamp(static_cast<int>(entity.frame), 0, record->numFrames - 1);
+            const auto &metadata = record->aliasFrames[static_cast<size_t>(frameIndex)];
+            float dx = metadata.boundsMax[0] - metadata.boundsMin[0];
+            float dy = metadata.boundsMax[1] - metadata.boundsMin[1];
+            radius = 0.5f * std::max(dx, dy);
+        }
+    }
+
+    if (!std::isfinite(radius) || radius <= 0.0f) {
+        radius = 16.0f;
+    }
+
+    return radius * scale;
+}
 VkDescriptorSet VulkanRenderer::selectTextureDescriptor(const entity_t &entity,
                                                         const ModelRecord::MeshGeometry &geometry) {
     const ImageRecord *image = nullptr;
@@ -1685,6 +1972,11 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
         frame.finalImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
+    classifyEntities(*fd);
+    buildEffectBuffers(*fd);
+    ViewParameters viewParams = computeViewParameters(*fd);
+    streamShadowPrimitives(viewParams);
+
     beginWorldPass();
     if (!(frameState_.refdef.rdflags & RDF_NOWORLDMODEL)) {
         renderWorld();
@@ -1692,9 +1984,7 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     endWorldPass();
     recordStage("frame.begin");
 
-    classifyEntities(*fd);
     sortTransparentQueues(frameState_.refdef);
-    buildEffectBuffers(*fd);
 
     if (!(fd->rdflags & RDF_NOWORLDMODEL)) {
         recordStage("world.draw");
@@ -1847,8 +2137,6 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     processQueue(frameQueues_.bmodels, "entities.inline", false);
     processQueue(frameQueues_.opaque, "entities.opaque", false);
     processQueue(frameQueues_.alphaBack, "entities.alpha_back", true);
-
-    ViewParameters viewParams = computeViewParameters(*fd);
 
     bool cylindricalBeams = gl_beamstyle && gl_beamstyle->integer != 0;
     streamBeamPrimitives(viewParams, cylindricalBeams);
@@ -2678,6 +2966,9 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
 
     size_t totalDraws = 0;
     totalDraws += drawBucket(worldSurfaceBuckets_[0], "world.opaque");
+    if (renderShadowPass(commandBuffer)) {
+        totalDraws += 1;
+    }
     totalDraws += drawBucket(worldSurfaceBuckets_[1], "world.alpha");
     totalDraws += drawBucket(worldSurfaceBuckets_[2], "world.sky");
     totalDraws += drawBucket(worldSurfaceBuckets_[3], "world.decal");
