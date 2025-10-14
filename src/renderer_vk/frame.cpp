@@ -1358,6 +1358,10 @@ void VulkanRenderer::beginFrame() {
         vkWaitForFences(device_, 1, &frame.inFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());
     }
 
+    frame.finalImage = VK_NULL_HANDLE;
+    frame.finalImageExtent = { 0u, 0u };
+    frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
     if (lastSubmittedFrame_.has_value() && *lastSubmittedFrame_ == currentFrameIndex_) {
         lastSubmittedFrame_.reset();
     }
@@ -1430,7 +1434,6 @@ void VulkanRenderer::endFrame() {
         draw2d::end();
         draw2DBegun_ = false;
     }
-    finishFrameRecording();
 
     if (inFlightFrames_.empty()) {
         frameActive_ = false;
@@ -1449,6 +1452,9 @@ void VulkanRenderer::endFrame() {
         frameStats_.reset();
         return;
     }
+
+    recordFrameReadback(frame, submittedIndex);
+    finishFrameRecording();
 
     VkSemaphore waitSemaphores[] = { frame.imageAvailable };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT };
@@ -1568,13 +1574,16 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
 
         if (!draw2DBegun_) {
             if (!draw2d::begin([this](const draw2d::Submission &submission) {
-                    submit2DDraw(submission);
-                })) {
+                submit2DDraw(submission);
+            })) {
                 Com_Printf("vk_draw2d: failed to begin 2D batch for frame.\n");
             } else {
                 draw2DBegun_ = true;
             }
         }
+
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = extent;
 
         return true;
     };
@@ -1617,6 +1626,9 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
                       &offscreenClear,
                       1)) {
             offscreenActive = true;
+            frame.finalImage = sceneTarget_.image;
+            frame.finalImageExtent = sceneTarget_.extent;
+            frame.finalImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
     }
 
@@ -1660,6 +1672,9 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
                        static_cast<uint32_t>(mainPassClears.size()))) {
             return;
         }
+        frame.finalImage = swapchainImage;
+        frame.finalImageExtent = swapchainExtent_;
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
     beginWorldPass();
@@ -1923,6 +1938,9 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
                        static_cast<uint32_t>(mainPassClears.size()))) {
             return;
         }
+        frame.finalImage = swapchainImage;
+        frame.finalImageExtent = swapchainExtent_;
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
     if (frameState_.waterwarpActive) {
@@ -1938,6 +1956,84 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     }
 
     recordStage("frame.end");
+}
+void VulkanRenderer::recordFrameReadback(InFlightFrame &frame, size_t frameIndex) {
+    if (frame.commandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    frame.readbackValid = false;
+
+    if (frame.finalImage == VK_NULL_HANDLE || frame.finalImageLayout == VK_IMAGE_LAYOUT_UNDEFINED) {
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return;
+    }
+
+    if (frame.readbackBuffer == VK_NULL_HANDLE || frame.readbackMemory == VK_NULL_HANDLE) {
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return;
+    }
+
+    if (frame.finalImageExtent.width == 0 || frame.finalImageExtent.height == 0) {
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return;
+    }
+
+    VkDeviceSize requiredSize = static_cast<VkDeviceSize>(frame.finalImageExtent.width) *
+                                static_cast<VkDeviceSize>(frame.finalImageExtent.height) * 4u;
+    if (requiredSize == 0 || requiredSize > frame.readbackSize) {
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return;
+    }
+
+    if (frameRenderPassActive_) {
+        vkCmdEndRenderPass(frame.commandBuffer);
+        frameRenderPassActive_ = false;
+    }
+
+    VkExtent2D copyExtent = frame.finalImageExtent;
+    VkImageLayout originalLayout = frame.finalImageLayout;
+    transitionImageLayout(frame.commandBuffer,
+                          frame.finalImage,
+                          originalLayout,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent = { frame.finalImageExtent.width, frame.finalImageExtent.height, 1 };
+
+    vkCmdCopyImageToBuffer(frame.commandBuffer,
+                           frame.finalImage,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           frame.readbackBuffer,
+                           1,
+                           &region);
+
+    transitionImageLayout(frame.commandBuffer,
+                          frame.finalImage,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          originalLayout);
+
+    frame.readbackExtent = copyExtent;
+    frame.readbackValid = true;
+    frame.finalImage = VK_NULL_HANDLE;
+    frame.finalImageExtent = { 0u, 0u };
+    frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    lastCompletedReadback_ = frameIndex;
 }
 void VulkanRenderer::lightPoint(const vec3_t origin, vec3_t light) const {
     if (!light) {

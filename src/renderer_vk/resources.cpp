@@ -330,6 +330,16 @@ void VulkanRenderer::transitionImageLayout(VkCommandBuffer commandBuffer, VkImag
         barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        srcStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = 0;
+        srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dstStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
     }
 
     vkCmdPipelineBarrier(commandBuffer,

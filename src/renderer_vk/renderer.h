@@ -19,6 +19,8 @@
 #include "common/bsp.h"
 #include "refresh/refresh.h"
 
+struct screenshot_s;
+
 namespace refresh::vk {
 
 namespace draw2d {
@@ -45,6 +47,8 @@ public:
     void endFrame();
     void renderFrame(const refdef_t *fd);
     void lightPoint(const vec3_t origin, vec3_t light) const;
+
+    int readPixels(screenshot_s *s);
 
     void setClipRect(const clipRect_t *clip);
     float clampScale(cvar_t *var) const;
@@ -632,6 +636,14 @@ private:
         VkFence inFlight = VK_NULL_HANDLE;
         uint32_t imageIndex = 0;
         bool hasImage = false;
+        VkBuffer readbackBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory readbackMemory = VK_NULL_HANDLE;
+        VkDeviceSize readbackSize = 0;
+        VkExtent2D readbackExtent{ 0u, 0u };
+        bool readbackValid = false;
+        VkImage finalImage = VK_NULL_HANDLE;
+        VkExtent2D finalImageExtent{ 0u, 0u };
+        VkImageLayout finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     };
 
     bool createInstance();
@@ -658,6 +670,7 @@ private:
     bool createSyncObjects();
     void destroyVulkan();
     void finishFrameRecording();
+    void recordFrameReadback(InFlightFrame &frame, size_t frameIndex);
     void updateUIScaling();
     int computeAutoScale() const;
     int readSwapIntervalSetting() const;
@@ -695,6 +708,7 @@ private:
     int swapInterval_ = 1;
     bool supportsDebugUtils_ = false;
     mutable std::optional<size_t> lastSubmittedFrame_;
+    std::optional<size_t> lastCompletedReadback_;
     static constexpr size_t kMaxFramesInFlight = 2;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
