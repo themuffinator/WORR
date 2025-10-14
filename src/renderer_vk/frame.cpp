@@ -308,6 +308,9 @@ const VulkanRenderer::PipelineDesc &VulkanRenderer::ensurePipeline(const Pipelin
     if (inserted) {
         frameStats_.pipelinesBound += 1;
     }
+    if (pipelineLibrary_) {
+        pipelineLibrary_->requestPipeline(key);
+    }
     return it->second;
 }
 VulkanRenderer::PipelineKind VulkanRenderer::selectPipelineForEntity(const entity_t &ent) const {
@@ -838,6 +841,14 @@ void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
     }
 
     VkCommandBuffer commandBuffer = frame.commandBuffer;
+
+    if (pipelineLibrary_) {
+        PipelineKey pipelineKey = buildPipelineKey(PipelineKind::Draw2D);
+        VkPipeline pipelineHandle = pipelineLibrary_->requestPipeline(pipelineKey);
+        if (pipelineHandle != VK_NULL_HANDLE) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle);
+        }
+    }
 
     Draw2DBatch batch{};
     batch.vertexCount = submission.vertexCount;

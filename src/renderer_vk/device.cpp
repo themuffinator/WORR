@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include "renderer/common.h"
+#include "pipeline.h"
 
 #include <algorithm>
 #include <array>
@@ -713,6 +714,13 @@ bool VulkanRenderer::createDeviceResources() {
         return false;
     }
 
+    if (!pipelineLibrary_) {
+        pipelineLibrary_ = std::make_unique<PipelineLibrary>(*this);
+    }
+    if (pipelineLibrary_ && !pipelineLibrary_->initialize()) {
+        return false;
+    }
+
     if (!createSyncObjects()) {
         destroySwapchainResources();
         return false;
@@ -818,6 +826,10 @@ void VulkanRenderer::destroyDeviceResources() {
     destroySwapchainResources();
     destroyAllImageResources();
     destroyModelDescriptorResources();
+    if (pipelineLibrary_) {
+        pipelineLibrary_->shutdown();
+        pipelineLibrary_.reset();
+    }
     destroyDescriptorPool();
     destroyTextureDescriptorSetLayout();
     destroyCommandPool();

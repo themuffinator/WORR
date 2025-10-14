@@ -7,4 +7,11 @@ VulkanRenderer::VulkanRenderer()
 
 VulkanRenderer::~VulkanRenderer() = default;
 
+VkPipelineLayout VulkanRenderer::pipelineLayoutFor(PipelineKind kind) const {
+    switch (kind) {
+    default:
+        return modelPipelineLayout_;
+    }
+}
+
 } // namespace refresh::vk
