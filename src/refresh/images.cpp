@@ -2077,6 +2077,128 @@ image_t *IMG_ForHandle(qhandle_t h)
     return &r_images[h];
 }
 
+bool IMG_LoadPixels(const char *name, imagetype_t type, imageflags_t flags, image_pixels_t *out)
+{
+    if (!name || !*name || !out)
+        return false;
+
+    memset(out, 0, sizeof(*out));
+
+    char fullname[MAX_QPATH];
+    size_t len;
+
+    if (type == IT_SKIN || type == IT_SPRITE) {
+        len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
+    } else if (*name == '/' || *name == '\\') {
+        len = FS_NormalizePathBuffer(fullname, name + 1, sizeof(fullname));
+    } else {
+        len = Q_concat(fullname, sizeof(fullname), "pics/", name);
+    }
+
+    if (len >= sizeof(fullname)) {
+        print_error(name, flags, Q_ERR(ENAMETOOLONG));
+        return false;
+    }
+
+    const char *defaultExt = (type == IT_SKIN) ? ".wal" : ".pcx";
+    len = COM_DefaultExtension(fullname, defaultExt, sizeof(fullname));
+    if (len >= sizeof(fullname)) {
+        print_error(fullname, flags, Q_ERR(ENAMETOOLONG));
+        return false;
+    }
+
+    image_t temp = {};
+    memcpy(temp.name, fullname, len + 1);
+    temp.baselen = COM_FileExtension(temp.name) - temp.name;
+    temp.type = type;
+    temp.flags = flags;
+
+    byte *pic = NULL;
+    int ret = 0;
+
+    if (flags & IF_SPECIAL) {
+        load_special_image(&temp, &pic);
+    } else {
+        imageformat_t fmt = IM_MAX;
+        if (temp.baselen < len) {
+            for (fmt = 0; fmt < IM_MAX; fmt++) {
+                if (!Q_stricmp(temp.name + temp.baselen + 1, img_loaders[fmt].ext))
+                    break;
+            }
+        }
+
+        ret = load_image_data(&temp, fmt, true, &pic);
+        if (ret < 0 || !pic) {
+            print_error(temp.name, flags, ret);
+            if (pic)
+                Z_Free(pic);
+            return false;
+        }
+
+        if (!temp.upload_width)
+            temp.upload_width = temp.width;
+        if (!temp.upload_height)
+            temp.upload_height = temp.height;
+        if (!temp.width)
+            temp.width = temp.upload_width;
+        if (!temp.height)
+            temp.height = temp.upload_height;
+
+        if (temp.upload_height)
+            temp.aspect = (float)temp.upload_width / temp.upload_height;
+        else
+            temp.aspect = 1.0f;
+    }
+
+    out->pixels = pic;
+    out->width = temp.width;
+    out->height = temp.height;
+    out->upload_width = temp.upload_width;
+    out->upload_height = temp.upload_height;
+    out->type = temp.type;
+    out->flags = temp.flags;
+    out->aspect = temp.aspect ? temp.aspect : 1.0f;
+    Q_strlcpy(out->name, temp.name, sizeof(out->name));
+
+    if (out->upload_width && out->upload_height)
+        out->size = (size_t)out->upload_width * out->upload_height * 4;
+    else
+        out->size = 0;
+
+    if (!(flags & IF_SPECIAL) && out->pixels && out->size >= 4) {
+        const byte *src = out->pixels + 3;
+        size_t count = (size_t)out->upload_width * out->upload_height;
+        bool transparent = false;
+        for (size_t i = 0; i < count; i++, src += 4) {
+            if (*src < 255) {
+                transparent = true;
+                break;
+            }
+        }
+        if (transparent)
+            out->flags = (imageflags_t)(out->flags | IF_TRANSPARENT);
+        else
+            out->flags = (imageflags_t)(out->flags & ~IF_TRANSPARENT);
+    }
+
+    out->flags = (imageflags_t)(out->flags & ~IF_SCRAP);
+
+    return true;
+}
+
+void IMG_FreePixels(image_pixels_t *pixels)
+{
+    if (!pixels)
+        return;
+
+    if (pixels->pixels) {
+        Z_Free(pixels->pixels);
+        pixels->pixels = NULL;
+    }
+
+    pixels->size = 0;
+}
+
 qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags)
 {
     image_t* image;
