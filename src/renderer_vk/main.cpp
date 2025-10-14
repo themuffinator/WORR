@@ -4,6 +4,12 @@ namespace {
     refresh::vk::VulkanRenderer g_renderer;
 }
 
+namespace refresh::vk {
+    VulkanRenderer &GetRendererInstance() {
+        return g_renderer;
+    }
+}
+
 bool R_Init(bool total) {
     return g_renderer.init(total);
 }

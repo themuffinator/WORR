@@ -759,6 +759,14 @@ bool VulkanRenderer::createSyncObjects() {
         frame.commandBuffer = VK_NULL_HANDLE;
         frame.imageIndex = 0;
         frame.hasImage = false;
+        frame.readbackBuffer = VK_NULL_HANDLE;
+        frame.readbackMemory = VK_NULL_HANDLE;
+        frame.readbackSize = 0;
+        frame.readbackExtent = { 0u, 0u };
+        frame.readbackValid = false;
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     if (!inFlightFrames_.empty()) {
@@ -780,7 +788,33 @@ bool VulkanRenderer::createSyncObjects() {
         }
     }
 
+    VkExtent2D readbackExtent = swapchainExtent_;
+    if (readbackExtent.width > 0 && readbackExtent.height > 0) {
+        VkDeviceSize readbackSize = static_cast<VkDeviceSize>(readbackExtent.width) *
+                                    static_cast<VkDeviceSize>(readbackExtent.height) * 4u;
+        if (readbackSize > 0) {
+            for (InFlightFrame &frame : inFlightFrames_) {
+                if (frame.readbackBuffer != VK_NULL_HANDLE || frame.readbackMemory != VK_NULL_HANDLE) {
+                    destroyBuffer(frame.readbackBuffer, frame.readbackMemory);
+                    frame.readbackBuffer = VK_NULL_HANDLE;
+                    frame.readbackMemory = VK_NULL_HANDLE;
+                }
+                if (!createBuffer(readbackSize,
+                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                   frame.readbackBuffer,
+                                   frame.readbackMemory)) {
+                    return false;
+                }
+                frame.readbackSize = readbackSize;
+                frame.readbackExtent = readbackExtent;
+                frame.readbackValid = false;
+            }
+        }
+    }
+
     currentFrameIndex_ = 0;
+    lastCompletedReadback_.reset();
     return true;
 }
 bool VulkanRenderer::createDeviceResources() {
@@ -850,11 +884,23 @@ void VulkanRenderer::destroySyncObjects() {
             vkDestroyFence(device_, frame.inFlight, nullptr);
             frame.inFlight = VK_NULL_HANDLE;
         }
+        if (frame.readbackBuffer != VK_NULL_HANDLE || frame.readbackMemory != VK_NULL_HANDLE) {
+            destroyBuffer(frame.readbackBuffer, frame.readbackMemory);
+            frame.readbackBuffer = VK_NULL_HANDLE;
+            frame.readbackMemory = VK_NULL_HANDLE;
+        }
+        frame.readbackSize = 0;
+        frame.readbackExtent = { 0u, 0u };
+        frame.readbackValid = false;
+        frame.finalImage = VK_NULL_HANDLE;
+        frame.finalImageExtent = { 0u, 0u };
+        frame.finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         frame.hasImage = false;
     }
 
     inFlightFrames_.clear();
     lastSubmittedFrame_.reset();
+    lastCompletedReadback_.reset();
 }
 void VulkanRenderer::destroySwapchainResources() {
     if (device_ == VK_NULL_HANDLE) {

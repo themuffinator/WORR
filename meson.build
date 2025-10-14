@@ -226,7 +226,8 @@ elif renderer_opt == 'renderer_vk'
     'src/renderer_vk/frame.cpp',
     'src/renderer_vk/ui.cpp',
     'src/renderer_vk/vk_draw2d.cpp',
-  ]
+    'src/renderer_vk/readback.cpp',
+]
 endif
 
 refresh_src += [
