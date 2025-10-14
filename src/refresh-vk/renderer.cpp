@@ -80,21 +80,6 @@ namespace {
         return metadata;
     }
 
-    VkBuffer makeFakeBufferHandle() {
-        static std::atomic<uintptr_t> counter{1};
-        return reinterpret_cast<VkBuffer>(counter.fetch_add(1, std::memory_order_relaxed));
-    }
-
-    VkDeviceMemory makeFakeMemoryHandle() {
-        static std::atomic<uintptr_t> counter{1};
-        return reinterpret_cast<VkDeviceMemory>(counter.fetch_add(1, std::memory_order_relaxed));
-    }
-
-    VkDescriptorSet makeFakeDescriptorHandle() {
-        static std::atomic<uintptr_t> counter{1};
-        return reinterpret_cast<VkDescriptorSet>(counter.fetch_add(1, std::memory_order_relaxed));
-    }
-
     std::array<std::array<float, 2>, 4> makeQuad(float x, float y, float w, float h) {
         return {{{
             {x, y},
@@ -824,6 +809,466 @@ std::string_view VulkanRenderer::classifyModelName(const ModelRecord *record) co
         return {};
     }
     return std::string_view{name}.substr(dot);
+}
+
+uint32_t VulkanRenderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
+    if (physicalDevice_ == VK_NULL_HANDLE) {
+        return UINT32_MAX;
+    }
+
+    VkPhysicalDeviceMemoryProperties memoryProperties{};
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &memoryProperties);
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+        if ((typeFilter & (1u << i)) == 0) {
+            continue;
+        }
+        if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    return UINT32_MAX;
+}
+
+bool VulkanRenderer::createBuffer(ModelRecord::BufferAllocationInfo &buffer,
+                                  VkDeviceSize size,
+                                  VkBufferUsageFlags usage,
+                                  VkMemoryPropertyFlags properties) {
+    if (device_ == VK_NULL_HANDLE || size == 0) {
+        return false;
+    }
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult bufferResult = vkCreateBuffer(device_, &bufferInfo, nullptr, &buffer.buffer);
+    if (bufferResult != VK_SUCCESS || buffer.buffer == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to create buffer (VkResult %d).\n", static_cast<int>(bufferResult));
+        buffer.buffer = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(device_, buffer.buffer, &requirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = requirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, properties);
+
+    if (allocInfo.memoryTypeIndex == UINT32_MAX) {
+        Com_Printf("refresh-vk: unable to find compatible memory type for buffer.\n");
+        vkDestroyBuffer(device_, buffer.buffer, nullptr);
+        buffer.buffer = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkResult memoryResult = vkAllocateMemory(device_, &allocInfo, nullptr, &buffer.memory);
+    if (memoryResult != VK_SUCCESS || buffer.memory == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to allocate buffer memory (VkResult %d).\n", static_cast<int>(memoryResult));
+        vkDestroyBuffer(device_, buffer.buffer, nullptr);
+        buffer.buffer = VK_NULL_HANDLE;
+        buffer.memory = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkResult bindResult = vkBindBufferMemory(device_, buffer.buffer, buffer.memory, 0);
+    if (bindResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to bind buffer memory (VkResult %d).\n", static_cast<int>(bindResult));
+        vkDestroyBuffer(device_, buffer.buffer, nullptr);
+        vkFreeMemory(device_, buffer.memory, nullptr);
+        buffer.buffer = VK_NULL_HANDLE;
+        buffer.memory = VK_NULL_HANDLE;
+        return false;
+    }
+
+    buffer.offset = 0;
+    buffer.size = size;
+    return true;
+}
+
+void VulkanRenderer::destroyBuffer(ModelRecord::BufferAllocationInfo &buffer) {
+    if (device_ == VK_NULL_HANDLE) {
+        buffer = {};
+        return;
+    }
+
+    if (buffer.buffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device_, buffer.buffer, nullptr);
+        buffer.buffer = VK_NULL_HANDLE;
+    }
+
+    if (buffer.memory != VK_NULL_HANDLE) {
+        vkFreeMemory(device_, buffer.memory, nullptr);
+        buffer.memory = VK_NULL_HANDLE;
+    }
+
+    buffer.offset = 0;
+    buffer.size = 0;
+}
+
+bool VulkanRenderer::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+    if (device_ == VK_NULL_HANDLE || commandPool_ == VK_NULL_HANDLE || graphicsQueue_ == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool_;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    VkResult allocResult = vkAllocateCommandBuffers(device_, &allocInfo, &commandBuffer);
+    if (allocResult != VK_SUCCESS || commandBuffer == VK_NULL_HANDLE) {
+        Com_Printf("refresh-vk: failed to allocate command buffer for copy (VkResult %d).\n", static_cast<int>(allocResult));
+        return false;
+    }
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VkResult beginResult = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    if (beginResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to begin copy command buffer (VkResult %d).\n", static_cast<int>(beginResult));
+        vkFreeCommandBuffers(device_, commandPool_, 1, &commandBuffer);
+        return false;
+    }
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
+
+    VkResult endResult = vkEndCommandBuffer(commandBuffer);
+    if (endResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to end copy command buffer (VkResult %d).\n", static_cast<int>(endResult));
+        vkFreeCommandBuffers(device_, commandPool_, 1, &commandBuffer);
+        return false;
+    }
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VkResult submitResult = vkQueueSubmit(graphicsQueue_, 1, &submitInfo, VK_NULL_HANDLE);
+    if (submitResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: failed to submit buffer copy (VkResult %d).\n", static_cast<int>(submitResult));
+        vkFreeCommandBuffers(device_, commandPool_, 1, &commandBuffer);
+        return false;
+    }
+
+    VkResult waitResult = vkQueueWaitIdle(graphicsQueue_);
+    if (waitResult != VK_SUCCESS) {
+        Com_Printf("refresh-vk: queue wait failed after buffer copy (VkResult %d).\n", static_cast<int>(waitResult));
+        vkFreeCommandBuffers(device_, commandPool_, 1, &commandBuffer);
+        return false;
+    }
+
+    vkFreeCommandBuffers(device_, commandPool_, 1, &commandBuffer);
+    return true;
+}
+
+bool VulkanRenderer::createModelDescriptorResources() {
+    if (device_ == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    if (modelDescriptorSetLayout_ == VK_NULL_HANDLE) {
+        VkDescriptorSetLayoutBinding vertexBinding{};
+        vertexBinding.binding = 0;
+        vertexBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        vertexBinding.descriptorCount = 1;
+        vertexBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        VkDescriptorSetLayoutBinding indexBinding = vertexBinding;
+        indexBinding.binding = 1;
+
+        std::array<VkDescriptorSetLayoutBinding, 2> bindings{vertexBinding, indexBinding};
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+        layoutInfo.pBindings = bindings.data();
+
+        VkResult layoutResult = vkCreateDescriptorSetLayout(device_, &layoutInfo, nullptr, &modelDescriptorSetLayout_);
+        if (layoutResult != VK_SUCCESS || modelDescriptorSetLayout_ == VK_NULL_HANDLE) {
+            Com_Printf("refresh-vk: failed to create model descriptor set layout (VkResult %d).\n", static_cast<int>(layoutResult));
+            modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+            return false;
+        }
+    }
+
+    if (modelPipelineLayout_ == VK_NULL_HANDLE) {
+        VkPipelineLayoutCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineInfo.setLayoutCount = 1;
+        pipelineInfo.pSetLayouts = &modelDescriptorSetLayout_;
+
+        VkResult pipelineResult = vkCreatePipelineLayout(device_, &pipelineInfo, nullptr, &modelPipelineLayout_);
+        if (pipelineResult != VK_SUCCESS || modelPipelineLayout_ == VK_NULL_HANDLE) {
+            Com_Printf("refresh-vk: failed to create model pipeline layout (VkResult %d).\n", static_cast<int>(pipelineResult));
+            if (modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkDestroyPipelineLayout(device_, modelPipelineLayout_, nullptr);
+                modelPipelineLayout_ = VK_NULL_HANDLE;
+            }
+            if (modelDescriptorSetLayout_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(device_, modelDescriptorSetLayout_, nullptr);
+                modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void VulkanRenderer::destroyModelDescriptorResources() {
+    if (device_ == VK_NULL_HANDLE) {
+        modelPipelineLayout_ = VK_NULL_HANDLE;
+        modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+        return;
+    }
+
+    if (modelPipelineLayout_ != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(device_, modelPipelineLayout_, nullptr);
+        modelPipelineLayout_ = VK_NULL_HANDLE;
+    }
+
+    if (modelDescriptorSetLayout_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(device_, modelDescriptorSetLayout_, nullptr);
+        modelDescriptorSetLayout_ = VK_NULL_HANDLE;
+    }
+}
+
+bool VulkanRenderer::uploadMeshGeometry(ModelRecord::MeshGeometry &geometry) {
+    if (device_ == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    const bool hasVertexData = !geometry.vertexStaging.empty();
+    const bool hasIndexData = !geometry.indexStaging.empty();
+
+    if (!hasVertexData && !hasIndexData) {
+        geometry.uploaded = true;
+        return true;
+    }
+
+    ModelRecord::BufferAllocationInfo newVertex{};
+    ModelRecord::BufferAllocationInfo newIndex{};
+
+    if (hasVertexData) {
+        ModelRecord::BufferAllocationInfo staging{};
+        VkDeviceSize vertexSize = static_cast<VkDeviceSize>(geometry.vertexStaging.size());
+        if (!createBuffer(staging,
+                          vertexSize,
+                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            return false;
+        }
+
+        void *mapped = nullptr;
+        VkResult mapResult = vkMapMemory(device_, staging.memory, staging.offset, staging.size, 0, &mapped);
+        if (mapResult != VK_SUCCESS || mapped == nullptr) {
+            Com_Printf("refresh-vk: failed to map vertex staging memory (VkResult %d).\n", static_cast<int>(mapResult));
+            destroyBuffer(staging);
+            return false;
+        }
+
+        std::memcpy(mapped, geometry.vertexStaging.data(), geometry.vertexStaging.size());
+        vkUnmapMemory(device_, staging.memory);
+
+        if (!createBuffer(newVertex,
+                          vertexSize,
+                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            destroyBuffer(staging);
+            return false;
+        }
+
+        if (!copyBuffer(staging.buffer, newVertex.buffer, newVertex.size)) {
+            destroyBuffer(staging);
+            destroyBuffer(newVertex);
+            return false;
+        }
+
+        destroyBuffer(staging);
+    }
+
+    if (hasIndexData) {
+        ModelRecord::BufferAllocationInfo staging{};
+        VkDeviceSize indexSize = static_cast<VkDeviceSize>(geometry.indexStaging.size());
+        if (!createBuffer(staging,
+                          indexSize,
+                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            if (hasVertexData) {
+                destroyBuffer(newVertex);
+            }
+            return false;
+        }
+
+        void *mapped = nullptr;
+        VkResult mapResult = vkMapMemory(device_, staging.memory, staging.offset, staging.size, 0, &mapped);
+        if (mapResult != VK_SUCCESS || mapped == nullptr) {
+            Com_Printf("refresh-vk: failed to map index staging memory (VkResult %d).\n", static_cast<int>(mapResult));
+            destroyBuffer(staging);
+            if (hasVertexData) {
+                destroyBuffer(newVertex);
+            }
+            return false;
+        }
+
+        std::memcpy(mapped, geometry.indexStaging.data(), geometry.indexStaging.size());
+        vkUnmapMemory(device_, staging.memory);
+
+        if (!createBuffer(newIndex,
+                          indexSize,
+                          VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            destroyBuffer(staging);
+            if (hasVertexData) {
+                destroyBuffer(newVertex);
+            }
+            return false;
+        }
+
+        if (!copyBuffer(staging.buffer, newIndex.buffer, newIndex.size)) {
+            destroyBuffer(staging);
+            destroyBuffer(newIndex);
+            if (hasVertexData) {
+                destroyBuffer(newVertex);
+            }
+            return false;
+        }
+
+        destroyBuffer(staging);
+    }
+
+    if (hasVertexData) {
+        destroyBuffer(geometry.vertex);
+        geometry.vertex = newVertex;
+        geometry.descriptor.vertex.buffer = geometry.vertex.buffer;
+        geometry.descriptor.vertex.offset = geometry.vertex.offset;
+        geometry.descriptor.vertex.range = geometry.vertex.size;
+    }
+
+    if (hasIndexData) {
+        destroyBuffer(geometry.index);
+        geometry.index = newIndex;
+        geometry.descriptor.index.buffer = geometry.index.buffer;
+        geometry.descriptor.index.offset = geometry.index.offset;
+        geometry.descriptor.index.range = geometry.index.size;
+    }
+
+    if ((geometry.vertex.buffer != VK_NULL_HANDLE || geometry.index.buffer != VK_NULL_HANDLE) &&
+        descriptorPool_ != VK_NULL_HANDLE) {
+        if (geometry.descriptor.set == VK_NULL_HANDLE) {
+            if (createModelDescriptorResources()) {
+                VkDescriptorSetAllocateInfo allocInfo{};
+                allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                allocInfo.descriptorPool = descriptorPool_;
+                allocInfo.descriptorSetCount = 1;
+                allocInfo.pSetLayouts = &modelDescriptorSetLayout_;
+
+                VkResult allocResult = vkAllocateDescriptorSets(device_, &allocInfo, &geometry.descriptor.set);
+                if (allocResult != VK_SUCCESS) {
+                    Com_Printf("refresh-vk: failed to allocate model descriptor set (VkResult %d).\n", static_cast<int>(allocResult));
+                    geometry.descriptor.set = VK_NULL_HANDLE;
+                }
+            }
+        }
+
+        if (geometry.descriptor.set != VK_NULL_HANDLE) {
+            std::array<VkWriteDescriptorSet, 2> writes{};
+            uint32_t writeCount = 0;
+
+            if (geometry.vertex.buffer != VK_NULL_HANDLE && geometry.vertex.size > 0) {
+                geometry.descriptor.vertex.buffer = geometry.vertex.buffer;
+                geometry.descriptor.vertex.offset = geometry.vertex.offset;
+                geometry.descriptor.vertex.range = geometry.vertex.size;
+
+                VkWriteDescriptorSet &write = writes[writeCount++];
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write.dstSet = geometry.descriptor.set;
+                write.dstBinding = 0;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                write.descriptorCount = 1;
+                write.pBufferInfo = &geometry.descriptor.vertex;
+            } else {
+                geometry.descriptor.vertex = {};
+            }
+
+            if (geometry.index.buffer != VK_NULL_HANDLE && geometry.index.size > 0) {
+                geometry.descriptor.index.buffer = geometry.index.buffer;
+                geometry.descriptor.index.offset = geometry.index.offset;
+                geometry.descriptor.index.range = geometry.index.size;
+
+                VkWriteDescriptorSet &write = writes[writeCount++];
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write.dstSet = geometry.descriptor.set;
+                write.dstBinding = 1;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                write.descriptorCount = 1;
+                write.pBufferInfo = &geometry.descriptor.index;
+            } else {
+                geometry.descriptor.index = {};
+            }
+
+            if (writeCount > 0) {
+                vkUpdateDescriptorSets(device_, writeCount, writes.data(), 0, nullptr);
+            }
+        }
+    }
+
+    if (hasVertexData) {
+        geometry.vertexStaging.clear();
+    }
+    if (hasIndexData) {
+        geometry.indexStaging.clear();
+    }
+
+    geometry.uploaded = true;
+    return true;
+}
+
+void VulkanRenderer::destroyMeshGeometry(ModelRecord::MeshGeometry &geometry) {
+    if (geometry.descriptor.set != VK_NULL_HANDLE && descriptorPool_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkFreeDescriptorSets(device_, descriptorPool_, 1, &geometry.descriptor.set);
+    }
+    geometry.descriptor.set = VK_NULL_HANDLE;
+    geometry.descriptor.vertex = {};
+    geometry.descriptor.index = {};
+
+    destroyBuffer(geometry.vertex);
+    destroyBuffer(geometry.index);
+
+    geometry.vertexStaging.clear();
+    geometry.indexStaging.clear();
+    geometry.vertexCount = 0;
+    geometry.indexCount = 0;
+    geometry.indexType = VK_INDEX_TYPE_UINT16;
+    geometry.uploaded = false;
+}
+
+void VulkanRenderer::destroyModelRecord(ModelRecord &record) {
+    for (auto &geometry : record.meshGeometry) {
+        destroyMeshGeometry(geometry);
+    }
+    record.meshGeometry.clear();
+}
+
+void VulkanRenderer::destroyAllModelGeometry() {
+    for (auto &entry : models_) {
+        destroyModelRecord(entry.second);
+    }
 }
 
 VulkanRenderer::PipelineKind VulkanRenderer::selectPipelineForEntity(const entity_t &ent) const {
@@ -1685,6 +2130,9 @@ bool VulkanRenderer::createDeviceResources() {
 
     if (!createTextureDescriptorSetLayout()) {
         destroyDescriptorPool();
+    }
+  
+    if (!createModelDescriptorResources()) {
         return false;
     }
 
@@ -1785,8 +2233,10 @@ void VulkanRenderer::destroyDeviceResources() {
     }
 
     vkDeviceWaitIdle(device_);
+    destroyAllModelGeometry();
     destroySwapchainResources();
     destroyAllImageResources();
+    destroyModelDescriptorResources();
     destroyDescriptorPool();
     destroyTextureDescriptorSetLayout();
     destroyCommandPool();
@@ -2018,7 +2468,7 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
         record.inlineModel = true;
         record.aliasFrames.clear();
         record.spriteFrames.clear();
-        record.meshGeometry.clear();
+        destroyModelRecord(record);
 
         return handle;
     }
@@ -2031,7 +2481,7 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
     record.inlineModel = false;
     record.aliasFrames.clear();
     record.spriteFrames.clear();
-    record.meshGeometry.clear();
+    destroyModelRecord(record);
     record.type = 0;
     record.numFrames = 0;
     record.numMeshes = 0;
@@ -2088,7 +2538,7 @@ qhandle_t VulkanRenderer::registerModel(const char *name) {
 }
 
 void VulkanRenderer::allocateModelGeometry(ModelRecord &record, const model_t &model) {
-    record.meshGeometry.clear();
+    destroyModelRecord(record);
 
     if (model.type != MOD_ALIAS) {
         return;
@@ -2103,37 +2553,38 @@ void VulkanRenderer::allocateModelGeometry(ModelRecord &record, const model_t &m
     for (int meshIndex = 0; meshIndex < model.nummeshes; ++meshIndex) {
         const maliasmesh_t &mesh = model.meshes[meshIndex];
         ModelRecord::MeshGeometry geometry{};
+        geometry.descriptor.binding = static_cast<uint32_t>(meshIndex);
 
         if (mesh.numverts > 0 && mesh.verts && mesh.tcoords) {
             const size_t vertexSize = static_cast<size_t>(mesh.numverts) * sizeof(*mesh.verts);
             const size_t texCoordSize = static_cast<size_t>(mesh.numverts) * sizeof(*mesh.tcoords);
-            geometry.vertex.vertexStaging.resize(vertexSize + texCoordSize);
-            std::memcpy(geometry.vertex.vertexStaging.data(), mesh.verts, vertexSize);
-            std::memcpy(geometry.vertex.vertexStaging.data() + vertexSize, mesh.tcoords, texCoordSize);
-            geometry.vertex.buffer = makeFakeBufferHandle();
-            geometry.vertex.memory = makeFakeMemoryHandle();
-            geometry.vertex.size = static_cast<VkDeviceSize>(geometry.vertex.vertexStaging.size());
-            geometry.vertex.offset = 0;
+            geometry.vertexStaging.resize(vertexSize + texCoordSize);
+            std::memcpy(geometry.vertexStaging.data(), mesh.verts, vertexSize);
+            std::memcpy(geometry.vertexStaging.data() + vertexSize, mesh.tcoords, texCoordSize);
             geometry.vertexCount = static_cast<size_t>(mesh.numverts);
         }
 
         if (mesh.numindices > 0 && mesh.indices) {
             const size_t indexSize = static_cast<size_t>(mesh.numindices) * sizeof(*mesh.indices);
-            geometry.index.indexStaging.resize(indexSize);
-            std::memcpy(geometry.index.indexStaging.data(), mesh.indices, indexSize);
-            geometry.index.buffer = makeFakeBufferHandle();
-            geometry.index.memory = makeFakeMemoryHandle();
-            geometry.index.size = static_cast<VkDeviceSize>(indexSize);
-            geometry.index.offset = 0;
+            geometry.indexStaging.resize(indexSize);
+            std::memcpy(geometry.indexStaging.data(), mesh.indices, indexSize);
             geometry.indexCount = static_cast<size_t>(mesh.numindices);
+            geometry.indexType = VK_INDEX_TYPE_UINT16;
         }
 
-        if (!geometry.vertex.vertexStaging.empty() || !geometry.index.indexStaging.empty()) {
-            geometry.uploaded = false;
-            geometry.descriptor.set = makeFakeDescriptorHandle();
-            geometry.descriptor.binding = static_cast<uint32_t>(meshIndex);
-            record.meshGeometry.emplace_back(std::move(geometry));
+        if (geometry.vertexCount == 0 && geometry.indexCount == 0) {
+            continue;
         }
+
+        if (!geometry.vertexStaging.empty() || !geometry.indexStaging.empty()) {
+            if (device_ != VK_NULL_HANDLE && !uploadMeshGeometry(geometry)) {
+                Com_Printf("refresh-vk: failed to upload mesh %d for model %s.\n",
+                           meshIndex,
+                           record.name.c_str());
+            }
+        }
+
+        record.meshGeometry.emplace_back(std::move(geometry));
     }
 }
 
@@ -2142,8 +2593,25 @@ void VulkanRenderer::bindModelGeometryBuffers(ModelRecord &record) {
         return;
     }
 
+    if (inFlightFrames_.empty() || !frameActive_) {
+        return;
+    }
+
+    InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
+    VkCommandBuffer commandBuffer = frame.commandBuffer;
+    if (commandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
     for (size_t meshIndex = 0; meshIndex < record.meshGeometry.size(); ++meshIndex) {
         auto &geometry = record.meshGeometry[meshIndex];
+
+        if (!geometry.uploaded && (!geometry.vertexStaging.empty() || !geometry.indexStaging.empty())) {
+            if (!uploadMeshGeometry(geometry)) {
+                continue;
+            }
+        }
+
         if (geometry.vertex.buffer == VK_NULL_HANDLE && geometry.index.buffer == VK_NULL_HANDLE) {
             continue;
         }
@@ -2154,10 +2622,25 @@ void VulkanRenderer::bindModelGeometryBuffers(ModelRecord &record) {
         entry.append(std::to_string(meshIndex));
         commandLog_.push_back(std::move(entry));
 
-        if (!geometry.uploaded) {
-            geometry.vertexStaging.clear();
-            geometry.indexStaging.clear();
-            geometry.uploaded = true;
+        if (geometry.vertex.buffer != VK_NULL_HANDLE && geometry.vertex.size > 0) {
+            VkBuffer buffers[] = { geometry.vertex.buffer };
+            VkDeviceSize offsets[] = { geometry.vertex.offset };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
+        }
+
+        if (geometry.index.buffer != VK_NULL_HANDLE && geometry.index.size > 0) {
+            vkCmdBindIndexBuffer(commandBuffer, geometry.index.buffer, geometry.index.offset, geometry.indexType);
+        }
+
+        if (geometry.descriptor.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+            vkCmdBindDescriptorSets(commandBuffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    modelPipelineLayout_,
+                                    0,
+                                    1,
+                                    &geometry.descriptor.set,
+                                    0,
+                                    nullptr);
         }
     }
 }
@@ -2229,11 +2712,19 @@ void VulkanRenderer::setSky(const char *name, float rotate, bool autorotate, con
 }
 
 void VulkanRenderer::endRegistration() {
+    for (auto it = models_.begin(); it != models_.end();) {
+        if (it->second.registrationSequence != r_registration_sequence) {
+            destroyModelRecord(it->second);
+            it = models_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
     auto predicate = [](auto &pair) {
         return pair.second.registrationSequence != r_registration_sequence;
     };
 
-    std::erase_if(models_, predicate);
     std::erase_if(images_, predicate);
 }
 
