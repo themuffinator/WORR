@@ -70,6 +70,30 @@ namespace {
         return { value[0], value[1], value[2] };
     }
 
+    constexpr float kParticleSize = 1.0f + M_SQRT1_2f;
+    constexpr float kParticleScale = 1.0f / (2.0f * kParticleSize);
+    constexpr float kParticleDistanceBias = 20.0f;
+    constexpr float kParticleDistanceScale = 0.004f;
+    constexpr int kBeamCylinderSides = 12;
+
+    std::array<float, 4> toColorArray(color_t color, float alphaScale = 1.0f) {
+        constexpr float kInv255 = 1.0f / 255.0f;
+        float alpha = static_cast<float>(color.a) * kInv255 * alphaScale;
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
+        return {
+            static_cast<float>(color.r) * kInv255,
+            static_cast<float>(color.g) * kInv255,
+            static_cast<float>(color.b) * kInv255,
+            alpha,
+        };
+    }
+
+    void arrayToVec3(const std::array<float, 3> &src, vec3_t dst) {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+    }
+
     VulkanRenderer::ModelRecord::AliasFrameMetadata makeAliasFrameMetadata(const maliasframe_t &frame) {
         VulkanRenderer::ModelRecord::AliasFrameMetadata metadata{};
         metadata.boundsMin = toArray(frame.bounds[0]);
@@ -160,6 +184,16 @@ void VulkanRenderer::FramePrimitiveBuffers::clear() {
     debugLines.clear();
 }
 
+void VulkanRenderer::EffectVertexStreams::clear() {
+    beamVertices.clear();
+    beamIndices.clear();
+    particleVertices.clear();
+    flareVertices.clear();
+    flareIndices.clear();
+    debugLinesDepth.clear();
+    debugLinesNoDepth.clear();
+}
+
 void VulkanRenderer::FrameStats::reset() {
     drawCalls = 0;
     pipelinesBound = 0;
@@ -206,6 +240,7 @@ void VulkanRenderer::resetTransientState() {
 void VulkanRenderer::resetFrameState() {
     frameQueues_.clear();
     framePrimitives_.clear();
+    effectStreams_.clear();
     frameStats_.reset();
 }
 
@@ -242,6 +277,52 @@ VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(PipelineKind kind) con
         break;
     case PipelineKind::Weapon:
         desc.debugName = "weapon";
+        break;
+    case PipelineKind::BeamSimple:
+        desc.debugName = "beam.simple";
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthWrite = false;
+        desc.textured = true;
+        break;
+    case PipelineKind::BeamCylindrical:
+        desc.debugName = "beam.cylinder";
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthWrite = false;
+        desc.textured = false;
+        break;
+    case PipelineKind::ParticleAlpha:
+        desc.debugName = "particle.alpha";
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthWrite = false;
+        desc.textured = true;
+        break;
+    case PipelineKind::ParticleAdditive:
+        desc.debugName = "particle.add";
+        desc.blend = PipelineDesc::BlendMode::Additive;
+        desc.depthWrite = false;
+        desc.textured = true;
+        break;
+    case PipelineKind::Flare:
+        desc.debugName = "flare";
+        desc.blend = PipelineDesc::BlendMode::Additive;
+        desc.depthTest = false;
+        desc.depthWrite = false;
+        desc.textured = true;
+        break;
+    case PipelineKind::DebugLineDepth:
+        desc.debugName = "debug.line.depth";
+        desc.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthWrite = false;
+        desc.textured = false;
+        break;
+    case PipelineKind::DebugLineNoDepth:
+        desc.debugName = "debug.line.nodepth";
+        desc.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthTest = false;
+        desc.depthWrite = false;
+        desc.textured = false;
         break;
     }
     return desc;
@@ -855,7 +936,11 @@ void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
             billboard.origin = toArray(particle.origin);
             billboard.scale = particle.scale;
             billboard.alpha = particle.alpha;
-            billboard.color = particle.rgba;
+            if (particle.color != -1) {
+                billboard.color.u32 = d_8to24table[particle.color & 0xff];
+            } else {
+                billboard.color = particle.rgba;
+            }
             framePrimitives_.particles.push_back(billboard);
         }
     }
@@ -871,6 +956,362 @@ void VulkanRenderer::buildEffectBuffers(const refdef_t &fd) {
     frameStats_.flares = framePrimitives_.flares.size();
 
     frameStats_.debugLines = framePrimitives_.debugLines.size();
+}
+
+VulkanRenderer::ViewParameters VulkanRenderer::computeViewParameters(const refdef_t &fd) const {
+    ViewParameters params{};
+    vec3_t axis[3]{};
+    AnglesToAxis(fd.viewangles, axis);
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            params.axis[i][j] = axis[i][j];
+        }
+    }
+    params.origin = toArray(fd.vieworg);
+    return params;
+}
+
+void VulkanRenderer::streamBeamPrimitives(const ViewParameters &view, bool cylindricalStyle) {
+    effectStreams_.beamVertices.clear();
+    effectStreams_.beamIndices.clear();
+
+    if (framePrimitives_.beams.empty()) {
+        return;
+    }
+
+    vec3_t viewAxis[3]{};
+    for (int i = 0; i < 3; ++i) {
+        arrayToVec3(view.axis[i], viewAxis[i]);
+    }
+    vec3_t viewOrigin{};
+    arrayToVec3(view.origin, viewOrigin);
+
+    for (const BeamPrimitive &beam : framePrimitives_.beams) {
+        vec3_t start{};
+        vec3_t end{};
+        arrayToVec3(beam.start, start);
+        arrayToVec3(beam.end, end);
+
+        float radius = std::abs(beam.radius);
+        if (!std::isfinite(radius) || radius <= 0.0f) {
+            continue;
+        }
+
+        float widthScale = cylindricalStyle ? 0.5f : 1.2f;
+        float width = radius * widthScale;
+        if (!std::isfinite(width) || width <= 0.0f) {
+            continue;
+        }
+
+        const std::array<float, 4> color = toColorArray(beam.color);
+
+        vec3_t direction{};
+        VectorSubtract(end, start, direction);
+        if (VectorNormalize(direction) <= 0.0f) {
+            continue;
+        }
+
+        if (cylindricalStyle) {
+            size_t requiredVertices = static_cast<size_t>(kBeamCylinderSides) * 2;
+            if (effectStreams_.beamVertices.size() + requiredVertices > std::numeric_limits<uint16_t>::max()) {
+                continue;
+            }
+
+            uint16_t baseIndex = static_cast<uint16_t>(effectStreams_.beamVertices.size());
+
+            vec3_t right{};
+            vec3_t up{};
+            MakeNormalVectors(direction, right, up);
+            VectorScale(right, width, right);
+
+            for (int i = 0; i < kBeamCylinderSides; ++i) {
+                float angle = (360.0f / static_cast<float>(kBeamCylinderSides)) * static_cast<float>(i);
+                vec3_t offset{};
+                RotatePointAroundVector(offset, direction, right, angle);
+
+                vec3_t startVertex{};
+                VectorAdd(start, offset, startVertex);
+                EffectVertexStreams::BeamVertex startBeam{};
+                startBeam.position = toArray(startVertex);
+                startBeam.uv = { 0.0f, 0.0f };
+                startBeam.color = color;
+                effectStreams_.beamVertices.emplace_back(startBeam);
+
+                vec3_t endVertex{};
+                VectorAdd(end, offset, endVertex);
+                EffectVertexStreams::BeamVertex endBeam{};
+                endBeam.position = toArray(endVertex);
+                endBeam.uv = { 0.0f, 1.0f };
+                endBeam.color = color;
+                effectStreams_.beamVertices.emplace_back(endBeam);
+            }
+
+            for (int i = 0; i < kBeamCylinderSides; ++i) {
+                uint16_t current = baseIndex + static_cast<uint16_t>(i * 2);
+                uint16_t next = baseIndex + static_cast<uint16_t>(((i + 1) % kBeamCylinderSides) * 2);
+                uint16_t currentTop = current + 1;
+                uint16_t nextTop = next + 1;
+
+                effectStreams_.beamIndices.push_back(current);
+                effectStreams_.beamIndices.push_back(currentTop);
+                effectStreams_.beamIndices.push_back(nextTop);
+
+                effectStreams_.beamIndices.push_back(current);
+                effectStreams_.beamIndices.push_back(nextTop);
+                effectStreams_.beamIndices.push_back(next);
+            }
+        } else {
+            if (effectStreams_.beamVertices.size() + 4 > std::numeric_limits<uint16_t>::max()) {
+                continue;
+            }
+
+            vec3_t viewerToStart{};
+            VectorSubtract(viewOrigin, start, viewerToStart);
+
+            vec3_t right{};
+            CrossProduct(direction, viewerToStart, right);
+            if (VectorNormalize(right) <= 0.0f) {
+                vec3_t tmp{};
+                MakeNormalVectors(direction, right, tmp);
+            }
+            VectorScale(right, width, right);
+
+            vec3_t v0{};
+            vec3_t v1{};
+            vec3_t v2{};
+            vec3_t v3{};
+            VectorAdd(start, right, v0);
+            VectorSubtract(start, right, v1);
+            VectorSubtract(end, right, v2);
+            VectorAdd(end, right, v3);
+
+            uint16_t baseIndex = static_cast<uint16_t>(effectStreams_.beamVertices.size());
+
+            EffectVertexStreams::BeamVertex vertices[4]{};
+            vertices[0].position = toArray(v0);
+            vertices[0].uv = { 0.0f, 0.0f };
+            vertices[0].color = color;
+
+            vertices[1].position = toArray(v1);
+            vertices[1].uv = { 1.0f, 0.0f };
+            vertices[1].color = color;
+
+            vertices[2].position = toArray(v2);
+            vertices[2].uv = { 1.0f, 1.0f };
+            vertices[2].color = color;
+
+            vertices[3].position = toArray(v3);
+            vertices[3].uv = { 0.0f, 1.0f };
+            vertices[3].color = color;
+
+            effectStreams_.beamVertices.insert(effectStreams_.beamVertices.end(), std::begin(vertices), std::end(vertices));
+
+            effectStreams_.beamIndices.push_back(baseIndex + 0);
+            effectStreams_.beamIndices.push_back(baseIndex + 2);
+            effectStreams_.beamIndices.push_back(baseIndex + 3);
+            effectStreams_.beamIndices.push_back(baseIndex + 0);
+            effectStreams_.beamIndices.push_back(baseIndex + 1);
+            effectStreams_.beamIndices.push_back(baseIndex + 2);
+        }
+    }
+}
+
+void VulkanRenderer::streamParticlePrimitives(const ViewParameters &view, bool additiveBlend) {
+    (void)additiveBlend;
+
+    effectStreams_.particleVertices.clear();
+
+    if (framePrimitives_.particles.empty()) {
+        return;
+    }
+
+    vec3_t viewAxis[3]{};
+    for (int i = 0; i < 3; ++i) {
+        arrayToVec3(view.axis[i], viewAxis[i]);
+    }
+    vec3_t viewOrigin{};
+    arrayToVec3(view.origin, viewOrigin);
+
+    float partScale = (gl_partscale) ? gl_partscale->value : 1.0f;
+
+    for (const ParticleBillboard &billboard : framePrimitives_.particles) {
+        vec3_t origin{};
+        arrayToVec3(billboard.origin, origin);
+
+        vec3_t toParticle{};
+        VectorSubtract(origin, viewOrigin, toParticle);
+        float dist = DotProduct(toParticle, viewAxis[0]);
+
+        float scale = 1.0f;
+        if (dist > kParticleDistanceBias) {
+            scale += dist * kParticleDistanceScale;
+        }
+        scale *= partScale * billboard.scale;
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            continue;
+        }
+
+        float scale2 = scale * kParticleScale;
+
+        vec3_t vertex0{};
+        VectorMA(origin, scale2, viewAxis[1], vertex0);
+        VectorMA(vertex0, -scale2, viewAxis[2], vertex0);
+
+        vec3_t vertex1{};
+        VectorMA(vertex0, scale, viewAxis[2], vertex1);
+
+        vec3_t vertex2{};
+        VectorMA(vertex0, -scale, viewAxis[1], vertex2);
+
+        const std::array<float, 4> color = toColorArray(billboard.color, billboard.alpha);
+
+        EffectVertexStreams::BillboardVertex v0{};
+        v0.position = toArray(vertex0);
+        v0.uv = { 0.0f, 0.0f };
+        v0.color = color;
+
+        EffectVertexStreams::BillboardVertex v1{};
+        v1.position = toArray(vertex1);
+        v1.uv = { 0.0f, kParticleSize };
+        v1.color = color;
+
+        EffectVertexStreams::BillboardVertex v2{};
+        v2.position = toArray(vertex2);
+        v2.uv = { kParticleSize, 0.0f };
+        v2.color = color;
+
+        effectStreams_.particleVertices.push_back(v0);
+        effectStreams_.particleVertices.push_back(v1);
+        effectStreams_.particleVertices.push_back(v2);
+    }
+}
+
+void VulkanRenderer::streamFlarePrimitives(const ViewParameters &view) {
+    effectStreams_.flareVertices.clear();
+    effectStreams_.flareIndices.clear();
+
+    if (framePrimitives_.flares.empty()) {
+        return;
+    }
+
+    vec3_t viewAxis[3]{};
+    for (int i = 0; i < 3; ++i) {
+        arrayToVec3(view.axis[i], viewAxis[i]);
+    }
+    vec3_t viewOrigin{};
+    arrayToVec3(view.origin, viewOrigin);
+
+    for (const FlarePrimitive &flare : framePrimitives_.flares) {
+        if (flare.scale <= 0.0f) {
+            continue;
+        }
+
+        vec3_t origin{};
+        arrayToVec3(flare.origin, origin);
+
+        vec3_t dir{};
+        VectorSubtract(origin, viewOrigin, dir);
+        float dist = DotProduct(dir, viewAxis[0]);
+
+        float scale = 2.5f;
+        if (dist > kParticleDistanceBias) {
+            scale += dist * kParticleDistanceScale;
+        }
+        scale *= flare.scale;
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            continue;
+        }
+
+        if (effectStreams_.flareVertices.size() + 4 > std::numeric_limits<uint16_t>::max()) {
+            continue;
+        }
+
+        vec3_t left{};
+        vec3_t right{};
+        vec3_t up{};
+        vec3_t down{};
+        VectorScale(viewAxis[1], scale, left);
+        VectorScale(viewAxis[1], -scale, right);
+        VectorScale(viewAxis[2], scale, up);
+        VectorScale(viewAxis[2], -scale, down);
+
+        vec3_t v0{};
+        vec3_t v1{};
+        vec3_t v2{};
+        vec3_t v3{};
+
+        vec3_t temp{};
+        VectorAdd(origin, down, temp);
+        VectorAdd(temp, left, v0);
+
+        VectorAdd(origin, up, temp);
+        VectorAdd(temp, left, v1);
+
+        VectorAdd(origin, down, temp);
+        VectorAdd(temp, right, v2);
+
+        VectorAdd(origin, up, temp);
+        VectorAdd(temp, right, v3);
+
+        uint16_t baseIndex = static_cast<uint16_t>(effectStreams_.flareVertices.size());
+
+        const std::array<float, 4> color = toColorArray(flare.color);
+
+        EffectVertexStreams::BillboardVertex vertices[4]{};
+        vertices[0].position = toArray(v0);
+        vertices[0].uv = { 0.0f, 1.0f };
+        vertices[0].color = color;
+
+        vertices[1].position = toArray(v1);
+        vertices[1].uv = { 0.0f, 0.0f };
+        vertices[1].color = color;
+
+        vertices[2].position = toArray(v2);
+        vertices[2].uv = { 1.0f, 1.0f };
+        vertices[2].color = color;
+
+        vertices[3].position = toArray(v3);
+        vertices[3].uv = { 1.0f, 0.0f };
+        vertices[3].color = color;
+
+        effectStreams_.flareVertices.insert(effectStreams_.flareVertices.end(), std::begin(vertices), std::end(vertices));
+
+        effectStreams_.flareIndices.push_back(baseIndex + 0);
+        effectStreams_.flareIndices.push_back(baseIndex + 1);
+        effectStreams_.flareIndices.push_back(baseIndex + 2);
+        effectStreams_.flareIndices.push_back(baseIndex + 2);
+        effectStreams_.flareIndices.push_back(baseIndex + 1);
+        effectStreams_.flareIndices.push_back(baseIndex + 3);
+    }
+}
+
+void VulkanRenderer::streamDebugLinePrimitives() {
+    effectStreams_.debugLinesDepth.clear();
+    effectStreams_.debugLinesNoDepth.clear();
+
+    if (framePrimitives_.debugLines.empty()) {
+        return;
+    }
+
+    for (const DebugLinePrimitive &line : framePrimitives_.debugLines) {
+        const std::array<float, 4> color = toColorArray(line.color);
+
+        EffectVertexStreams::DebugLineVertex start{};
+        start.position = line.start;
+        start.color = color;
+
+        EffectVertexStreams::DebugLineVertex end{};
+        end.position = line.end;
+        end.color = color;
+
+        if (line.depthTest) {
+            effectStreams_.debugLinesDepth.push_back(start);
+            effectStreams_.debugLinesDepth.push_back(end);
+        } else {
+            effectStreams_.debugLinesNoDepth.push_back(start);
+            effectStreams_.debugLinesNoDepth.push_back(end);
+        }
+    }
 }
 
 void VulkanRenderer::submit2DDraw(const draw2d::Submission &submission) {
@@ -2392,22 +2833,45 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
     processQueue(frameQueues_.opaque, "entities.opaque");
     processQueue(frameQueues_.alphaBack, "entities.alpha_back");
 
-    if (!framePrimitives_.beams.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::Alias), "fx.beams", framePrimitives_.beams.size());
+    ViewParameters viewParams = computeViewParameters(*fd);
+
+    bool cylindricalBeams = gl_beamstyle && gl_beamstyle->integer != 0;
+    streamBeamPrimitives(viewParams, cylindricalBeams);
+    if (!effectStreams_.beamIndices.empty()) {
+        PipelineKind beamKind = cylindricalBeams ? PipelineKind::BeamCylindrical : PipelineKind::BeamSimple;
+        recordDrawCall(ensurePipeline(beamKind), "fx.beams", framePrimitives_.beams.size());
     }
 
-    if (!framePrimitives_.particles.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::Sprite), "fx.particles", framePrimitives_.particles.size());
+    bool additiveParticles = gl_partstyle && gl_partstyle->integer != 0;
+    streamParticlePrimitives(viewParams, additiveParticles);
+    if (!effectStreams_.particleVertices.empty()) {
+        PipelineKind particleKind = additiveParticles ? PipelineKind::ParticleAdditive : PipelineKind::ParticleAlpha;
+        recordDrawCall(ensurePipeline(particleKind), "fx.particles", framePrimitives_.particles.size());
     }
 
-    if (!framePrimitives_.flares.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::Sprite), "fx.flares", framePrimitives_.flares.size());
+    bool flaresEnabled = true;
+    if (cl_flares) {
+        flaresEnabled = cl_flares->integer != 0;
+    }
+    if (flaresEnabled) {
+        streamFlarePrimitives(viewParams);
+        if (!effectStreams_.flareVertices.empty()) {
+            recordDrawCall(ensurePipeline(PipelineKind::Flare), "fx.flares", framePrimitives_.flares.size());
+        }
+    } else {
+        effectStreams_.flareVertices.clear();
+        effectStreams_.flareIndices.clear();
+        frameStats_.flares = 0;
     }
 
     processQueue(frameQueues_.alphaFront, "entities.alpha_front");
 
-    if (!framePrimitives_.debugLines.empty()) {
-        recordDrawCall(ensurePipeline(PipelineKind::Alias), "debug.lines", framePrimitives_.debugLines.size());
+    streamDebugLinePrimitives();
+    if (!effectStreams_.debugLinesDepth.empty()) {
+        recordDrawCall(ensurePipeline(PipelineKind::DebugLineDepth), "debug.lines.depth", effectStreams_.debugLinesDepth.size() / 2);
+    }
+    if (!effectStreams_.debugLinesNoDepth.empty()) {
+        recordDrawCall(ensurePipeline(PipelineKind::DebugLineNoDepth), "debug.lines.nodepth", effectStreams_.debugLinesNoDepth.size() / 2);
     }
 
     bool waterwarp = (fd->rdflags & RDF_UNDERWATER) != 0;

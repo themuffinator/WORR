@@ -95,11 +95,29 @@ private:
         Alias,
         Sprite,
         Weapon,
+        BeamSimple,
+        BeamCylindrical,
+        ParticleAlpha,
+        ParticleAdditive,
+        Flare,
+        DebugLineDepth,
+        DebugLineNoDepth,
     };
 
     struct PipelineDesc {
+        enum class BlendMode {
+            None,
+            Alpha,
+            Additive,
+        };
+
         PipelineKind kind = PipelineKind::Alias;
         std::string debugName;
+        VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        BlendMode blend = BlendMode::None;
+        bool depthTest = true;
+        bool depthWrite = true;
+        bool textured = false;
     };
 
     struct RenderQueues {
@@ -145,6 +163,35 @@ private:
         std::vector<ParticleBillboard> particles;
         std::vector<FlarePrimitive> flares;
         std::vector<DebugLinePrimitive> debugLines;
+
+        void clear();
+    };
+
+    struct EffectVertexStreams {
+        struct BeamVertex {
+            std::array<float, 3> position{};
+            std::array<float, 2> uv{};
+            std::array<float, 4> color{};
+        };
+
+        struct BillboardVertex {
+            std::array<float, 3> position{};
+            std::array<float, 2> uv{};
+            std::array<float, 4> color{};
+        };
+
+        struct DebugLineVertex {
+            std::array<float, 3> position{};
+            std::array<float, 4> color{};
+        };
+
+        std::vector<BeamVertex> beamVertices;
+        std::vector<uint16_t> beamIndices;
+        std::vector<BillboardVertex> particleVertices;
+        std::vector<BillboardVertex> flareVertices;
+        std::vector<uint16_t> flareIndices;
+        std::vector<DebugLineVertex> debugLinesDepth;
+        std::vector<DebugLineVertex> debugLinesNoDepth;
 
         void clear();
     };
@@ -309,6 +356,15 @@ private:
     void recordStage(std::string_view label);
     PipelineDesc makePipeline(PipelineKind kind) const;
     const PipelineDesc &ensurePipeline(PipelineKind kind);
+    struct ViewParameters {
+        std::array<std::array<float, 3>, 3> axis{};
+        std::array<float, 3> origin{};
+    };
+    ViewParameters computeViewParameters(const refdef_t &fd) const;
+    void streamBeamPrimitives(const ViewParameters &view, bool cylindricalStyle);
+    void streamParticlePrimitives(const ViewParameters &view, bool additiveBlend);
+    void streamFlarePrimitives(const ViewParameters &view);
+    void streamDebugLinePrimitives();
     PipelineKind selectPipelineForEntity(const entity_t &ent) const;
     const ModelRecord *findModelRecord(qhandle_t handle) const;
     ModelRecord *findModelRecord(qhandle_t handle);
@@ -330,6 +386,7 @@ private:
 
     RenderQueues frameQueues_{};
     FramePrimitiveBuffers framePrimitives_{};
+    EffectVertexStreams effectStreams_{};
     FrameStats frameStats_{};
     std::vector<std::string> commandLog_{};
 
