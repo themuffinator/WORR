@@ -1563,6 +1563,25 @@ void VulkanRenderer::renderFrame(const refdef_t *fd) {
             transitionImageLayout(commandBuffer,
                                    swapchainImage,
                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            VkImageSubresourceRange clearRange{};
+            clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            clearRange.baseMipLevel = 0;
+            clearRange.levelCount = 1;
+            clearRange.baseArrayLayer = 0;
+            clearRange.layerCount = 1;
+
+            vkCmdClearColorImage(commandBuffer,
+                                 swapchainImage,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                 &clearColor,
+                                 1,
+                                 &clearRange);
+
+            transitionImageLayout(commandBuffer,
+                                   swapchainImage,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
 
