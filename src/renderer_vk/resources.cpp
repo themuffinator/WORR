@@ -718,10 +718,24 @@ bool VulkanRenderer::createModelDescriptorResources() {
     }
 
     if (modelPipelineLayout_ == VK_NULL_HANDLE) {
+        std::array<VkDescriptorSetLayout, 2> setLayouts{};
+        uint32_t layoutCount = 0;
+        setLayouts[layoutCount++] = modelDescriptorSetLayout_;
+        if (textureDescriptorSetLayout_ != VK_NULL_HANDLE) {
+            setLayouts[layoutCount++] = textureDescriptorSetLayout_;
+        }
+
+        VkPushConstantRange pushRange{};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(EntityPushConstants);
+
         VkPipelineLayoutCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineInfo.setLayoutCount = 1;
-        pipelineInfo.pSetLayouts = &modelDescriptorSetLayout_;
+        pipelineInfo.setLayoutCount = layoutCount;
+        pipelineInfo.pSetLayouts = setLayouts.data();
+        pipelineInfo.pushConstantRangeCount = 1;
+        pipelineInfo.pPushConstantRanges = &pushRange;
 
         VkResult pipelineResult = vkCreatePipelineLayout(device_, &pipelineInfo, nullptr, &modelPipelineLayout_);
         if (pipelineResult != VK_SUCCESS || modelPipelineLayout_ == VK_NULL_HANDLE) {
@@ -960,6 +974,7 @@ void VulkanRenderer::destroyMeshGeometry(ModelRecord::MeshGeometry &geometry) {
 
     geometry.vertexStaging.clear();
     geometry.indexStaging.clear();
+    geometry.skinHandles.clear();
     geometry.vertexCount = 0;
     geometry.indexCount = 0;
     geometry.indexType = VK_INDEX_TYPE_UINT16;
