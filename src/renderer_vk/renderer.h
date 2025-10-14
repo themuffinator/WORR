@@ -371,6 +371,17 @@ private:
         VkExtent2D extent{ 0u, 0u };
     };
 
+    struct WorldDrawCommand {
+        ModelRecord::DescriptorReference geometry{};
+        VkDescriptorSet diffuse = VK_NULL_HANDLE;
+        VkDescriptorSet lightmap = VK_NULL_HANDLE;
+        VkDescriptorSet dynamicLights = VK_NULL_HANDLE;
+        uint32_t firstIndex = 0;
+        uint32_t indexCount = 0;
+        int32_t vertexOffset = 0;
+        uint32_t vertexCount = 0;
+    };
+
     struct Draw2DBatch {
         ModelRecord::BufferAllocationInfo vertex;
         ModelRecord::BufferAllocationInfo index;
@@ -534,6 +545,11 @@ private:
 
     SkyDefinition sky_{};
     std::string currentMap_;
+
+    ModelRecord::BufferAllocationInfo worldVertexBuffer_{};
+    ModelRecord::BufferAllocationInfo worldIndexBuffer_{};
+    VkIndexType worldIndexType_ = VK_INDEX_TYPE_UINT16;
+    std::array<std::vector<WorldDrawCommand>, 3> worldSurfaceBuckets_{};
 
     struct VideoGeometry {
         int width = SCREEN_WIDTH;

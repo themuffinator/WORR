@@ -164,6 +164,9 @@ void VulkanRenderer::clearFrameTransientQueues() {
     worldOpaqueSurfaces_.clear();
     worldAlphaSurfaces_.clear();
     worldSkySurfaces_.clear();
+    for (auto &bucket : worldSurfaceBuckets_) {
+        bucket.clear();
+    }
 }
 void VulkanRenderer::resetFrameStatistics() {
     frameStats_.reset();
@@ -2393,6 +2396,185 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
 
         node = node->children[side ^ 1];
         clipFlags = flags;
+    }
+  
+    if (!frameState_.inWorldPass) {
+        return;
+    }
+
+    if (inFlightFrames_.empty() || currentFrameIndex_ >= inFlightFrames_.size()) {
+        return;
+    }
+
+    InFlightFrame &frame = inFlightFrames_[currentFrameIndex_];
+    VkCommandBuffer commandBuffer = frame.commandBuffer;
+    if (commandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    if (worldVertexBuffer_.buffer == VK_NULL_HANDLE || worldVertexBuffer_.size == 0) {
+        return;
+    }
+
+    bool hasDrawData = false;
+    for (const auto &bucket : worldSurfaceBuckets_) {
+        for (const WorldDrawCommand &draw : bucket) {
+            if (draw.indexCount > 0 || draw.vertexCount > 0) {
+                hasDrawData = true;
+                break;
+            }
+        }
+        if (hasDrawData) {
+            break;
+        }
+    }
+
+    if (!hasDrawData) {
+        return;
+    }
+
+    PipelineKey pipelineKey = buildPipelineKey(PipelineKind::InlineBsp);
+    const PipelineDesc &pipeline = ensurePipeline(pipelineKey);
+
+    VkPipeline pipelineHandle = VK_NULL_HANDLE;
+    if (pipelineLibrary_) {
+        pipelineHandle = pipelineLibrary_->requestPipeline(pipelineKey);
+    }
+    if (pipelineHandle == VK_NULL_HANDLE) {
+        return;
+    }
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle);
+
+    std::string pipelineEntry{"bind.pipeline."};
+    pipelineEntry.append(pipeline.debugName);
+    commandLog_.push_back(std::move(pipelineEntry));
+
+    VkBuffer vertexBuffers[] = { worldVertexBuffer_.buffer };
+    VkDeviceSize vertexOffsets[] = { worldVertexBuffer_.offset };
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, vertexOffsets);
+
+    const bool hasIndexBuffer = worldIndexBuffer_.buffer != VK_NULL_HANDLE && worldIndexBuffer_.size > 0;
+    if (hasIndexBuffer) {
+        vkCmdBindIndexBuffer(commandBuffer, worldIndexBuffer_.buffer, worldIndexBuffer_.offset, worldIndexType_);
+    }
+
+    EntityPushConstants constants{};
+    constants.modelMatrix = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+    constants.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    constants.lighting.fill(0.0f);
+    if (frameState_.hasLightstyles) {
+        size_t count = std::min(constants.lighting.size(), frameState_.lightstyles.size());
+        for (size_t i = 0; i < count; ++i) {
+            constants.lighting[i] = frameState_.lightstyles[i].white;
+        }
+    }
+    constants.misc = { 0.0f, 0.0f, 0.0f, 0.0f };
+    constants.indices = {
+        static_cast<uint32_t>(frameState_.fogBits),
+        static_cast<uint32_t>(frameState_.fogBitsSky),
+        static_cast<uint32_t>(std::max(frameState_.dynamicLightCount, 0)),
+        frameState_.dynamicLightsUploaded ? 1u : 0u,
+    };
+
+    if (modelPipelineLayout_ != VK_NULL_HANDLE) {
+        vkCmdPushConstants(commandBuffer,
+                           modelPipelineLayout_,
+                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0,
+                           sizeof(EntityPushConstants),
+                           &constants);
+    }
+
+    auto drawBucket = [&](const std::vector<WorldDrawCommand> &bucket, std::string_view label) {
+        size_t submitted = 0;
+
+        for (const WorldDrawCommand &draw : bucket) {
+            if (draw.indexCount == 0 && draw.vertexCount == 0) {
+                continue;
+            }
+
+            if (draw.geometry.set != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        modelPipelineLayout_,
+                                        0,
+                                        1,
+                                        &draw.geometry.set,
+                                        0,
+                                        nullptr);
+            }
+
+            if (draw.diffuse != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        modelPipelineLayout_,
+                                        1,
+                                        1,
+                                        &draw.diffuse,
+                                        0,
+                                        nullptr);
+            }
+
+            if (draw.lightmap != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        modelPipelineLayout_,
+                                        2,
+                                        1,
+                                        &draw.lightmap,
+                                        0,
+                                        nullptr);
+            }
+
+            if (draw.dynamicLights != VK_NULL_HANDLE && modelPipelineLayout_ != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        modelPipelineLayout_,
+                                        3,
+                                        1,
+                                        &draw.dynamicLights,
+                                        0,
+                                        nullptr);
+            }
+
+            if (draw.indexCount > 0 && hasIndexBuffer) {
+                vkCmdDrawIndexed(commandBuffer,
+                                 draw.indexCount,
+                                 1,
+                                 draw.firstIndex,
+                                 draw.vertexOffset,
+                                 0);
+                ++submitted;
+            } else if (draw.vertexCount > 0 && draw.vertexOffset >= 0) {
+                vkCmdDraw(commandBuffer,
+                          draw.vertexCount,
+                          1,
+                          static_cast<uint32_t>(draw.vertexOffset),
+                          0);
+                ++submitted;
+            }
+        }
+
+        if (submitted > 0) {
+            recordDrawCall(pipeline, label, submitted);
+        }
+
+        return submitted;
+    };
+
+    size_t totalDraws = 0;
+    totalDraws += drawBucket(worldSurfaceBuckets_[0], "world.opaque");
+    totalDraws += drawBucket(worldSurfaceBuckets_[1], "world.alpha");
+    totalDraws += drawBucket(worldSurfaceBuckets_[2], "world.sky");
+
+    if (totalDraws > 0) {
+        frameState_.worldRendered = true;
     }
 }
 void VulkanRenderer::endWorldPass() {
