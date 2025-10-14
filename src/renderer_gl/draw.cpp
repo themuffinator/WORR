@@ -19,8 +19,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.h"
 #include "renderer/common.h"
 #include "renderer/kfont.h"
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <vector>
 
 drawStatic_t draw;
 
@@ -357,10 +359,184 @@ void R_DrawStretchRaw(int x, int y, int w, int h)
     GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, COLOR_WHITE, TEXNUM_RAW, 0);
 }
 
-void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic)
+namespace {
+
+constexpr size_t kRawPicBytesPerPixel = 4;
+
+inline uint8_t clampToByte(int value)
+{
+    return static_cast<uint8_t>(std::clamp(value, 0, 255));
+}
+
+bool convertRGBAPlane(const rawPicUpload_t &upload, std::vector<uint8_t> &buffer)
+{
+    if (upload.planeCount < 1 || !upload.planes[0]) {
+        return false;
+    }
+
+    const size_t width = static_cast<size_t>(std::max(0, upload.width));
+    const size_t height = static_cast<size_t>(std::max(0, upload.height));
+    if (width == 0 || height == 0) {
+        return false;
+    }
+
+    const size_t expectedStride = width * kRawPicBytesPerPixel;
+    const size_t stride = upload.strides[0];
+    if (stride < expectedStride) {
+        return false;
+    }
+
+    buffer.resize(width * height * kRawPicBytesPerPixel);
+    const uint8_t *source = upload.planes[0];
+    uint8_t *dest = buffer.data();
+
+    for (size_t y = 0; y < height; ++y) {
+        std::memcpy(dest + y * expectedStride, source + y * stride, expectedStride);
+    }
+
+    return true;
+}
+
+bool convertYUV420ToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &buffer)
+{
+    if (upload.planeCount < 3 || !upload.planes[0] || !upload.planes[1] || !upload.planes[2]) {
+        return false;
+    }
+
+    const int width = std::max(0, upload.width);
+    const int height = std::max(0, upload.height);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    buffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * kRawPicBytesPerPixel);
+
+    const uint8_t *yPlane = upload.planes[0];
+    const uint8_t *uPlane = upload.planes[1];
+    const uint8_t *vPlane = upload.planes[2];
+    const size_t yStride = upload.strides[0];
+    const size_t uStride = upload.strides[1];
+    const size_t vStride = upload.strides[2];
+
+    for (int y = 0; y < height; ++y) {
+        const uint8_t *yRow = yPlane + static_cast<size_t>(y) * yStride;
+        const uint8_t *uRow = uPlane + static_cast<size_t>(y / 2) * uStride;
+        const uint8_t *vRow = vPlane + static_cast<size_t>(y / 2) * vStride;
+        uint8_t *dst = buffer.data() + static_cast<size_t>(y) * static_cast<size_t>(width) * kRawPicBytesPerPixel;
+
+        for (int x = 0; x < width; ++x) {
+            const int ySample = static_cast<int>(yRow[x]);
+            const int uSample = static_cast<int>(uRow[x / 2]);
+            const int vSample = static_cast<int>(vRow[x / 2]);
+
+            int c = ySample - 16;
+            int d = uSample - 128;
+            int e = vSample - 128;
+            if (c < 0) {
+                c = 0;
+            }
+
+            const int r = (298 * c + 409 * e + 128) >> 8;
+            const int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            const int b = (298 * c + 516 * d + 128) >> 8;
+
+            dst[0] = clampToByte(r);
+            dst[1] = clampToByte(g);
+            dst[2] = clampToByte(b);
+            dst[3] = 255;
+            dst += kRawPicBytesPerPixel;
+        }
+    }
+
+    return true;
+}
+
+bool convertNV12ToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &buffer)
+{
+    if (upload.planeCount < 2 || !upload.planes[0] || !upload.planes[1]) {
+        return false;
+    }
+
+    const int width = std::max(0, upload.width);
+    const int height = std::max(0, upload.height);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    buffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * kRawPicBytesPerPixel);
+
+    const uint8_t *yPlane = upload.planes[0];
+    const uint8_t *uvPlane = upload.planes[1];
+    const size_t yStride = upload.strides[0];
+    const size_t uvStride = upload.strides[1];
+
+    for (int y = 0; y < height; ++y) {
+        const uint8_t *yRow = yPlane + static_cast<size_t>(y) * yStride;
+        const uint8_t *uvRow = uvPlane + static_cast<size_t>(y / 2) * uvStride;
+        uint8_t *dst = buffer.data() + static_cast<size_t>(y) * static_cast<size_t>(width) * kRawPicBytesPerPixel;
+
+        for (int x = 0; x < width; ++x) {
+            const int uvIndex = (x / 2) * 2;
+            const int ySample = static_cast<int>(yRow[x]);
+            const int uSample = static_cast<int>(uvRow[uvIndex]);
+            const int vSample = static_cast<int>(uvRow[uvIndex + 1]);
+
+            int c = ySample - 16;
+            int d = uSample - 128;
+            int e = vSample - 128;
+            if (c < 0) {
+                c = 0;
+            }
+
+            const int r = (298 * c + 409 * e + 128) >> 8;
+            const int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            const int b = (298 * c + 516 * d + 128) >> 8;
+
+            dst[0] = clampToByte(r);
+            dst[1] = clampToByte(g);
+            dst[2] = clampToByte(b);
+            dst[3] = 255;
+            dst += kRawPicBytesPerPixel;
+        }
+    }
+
+    return true;
+}
+
+bool convertRawPicToRGBA(const rawPicUpload_t &upload, std::vector<uint8_t> &buffer)
+{
+    switch (upload.format) {
+    case RAW_PIC_FORMAT_RGBA8:
+        return convertRGBAPlane(upload, buffer);
+    case RAW_PIC_FORMAT_YUV420P:
+        return convertYUV420ToRGBA(upload, buffer);
+    case RAW_PIC_FORMAT_NV12:
+        return convertNV12ToRGBA(upload, buffer);
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
+void R_UpdateRawPic(const rawPicUpload_t *pic)
 {
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_RAW);
-    qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pic_w, pic_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pic);
+
+    if (!pic || pic->width <= 0 || pic->height <= 0 || pic->planeCount <= 0) {
+        qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        return;
+    }
+
+    static std::vector<uint8_t> rgba;
+    if (!convertRawPicToRGBA(*pic, rgba)) {
+        qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        return;
+    }
+
+    const GLsizei width = static_cast<GLsizei>(pic->width);
+    const GLsizei height = static_cast<GLsizei>(pic->height);
+    qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
 }
 
 void R_TileClear(int x, int y, int w, int h, qhandle_t pic)

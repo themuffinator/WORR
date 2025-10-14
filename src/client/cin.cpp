@@ -148,6 +148,59 @@ void SCR_InitCinematics(void)
 
 static void packet_queue_destroy(PacketQueue *q);
 
+static void SCR_SubmitRawFrame(const AVFrame *frame) {
+    if (!frame || frame->width <= 0 || frame->height <= 0) {
+        R_UpdateRawPic(NULL);
+        return;
+    }
+
+    rawPicUpload_t upload{};
+    upload.width = frame->width;
+    upload.height = frame->height;
+
+    auto strideForPlane = [](int linesize) -> size_t {
+        return linesize > 0 ? static_cast<size_t>(linesize) : 0u;
+    };
+
+    switch (frame->format) {
+    case AV_PIX_FMT_RGBA:
+        upload.format = RAW_PIC_FORMAT_RGBA8;
+        upload.planeCount = 1;
+        upload.planes[0] = frame->data[0];
+        upload.strides[0] = strideForPlane(frame->linesize[0]);
+        break;
+    case AV_PIX_FMT_YUV420P:
+        upload.format = RAW_PIC_FORMAT_YUV420P;
+        upload.planeCount = 3;
+        for (int i = 0; i < 3; ++i) {
+            upload.planes[i] = frame->data[i];
+            upload.strides[i] = strideForPlane(frame->linesize[i]);
+        }
+        break;
+    case AV_PIX_FMT_NV12:
+        upload.format = RAW_PIC_FORMAT_NV12;
+        upload.planeCount = 2;
+        upload.planes[0] = frame->data[0];
+        upload.strides[0] = strideForPlane(frame->linesize[0]);
+        upload.planes[1] = frame->data[1];
+        upload.strides[1] = strideForPlane(frame->linesize[1]);
+        break;
+    default:
+        upload.format = RAW_PIC_FORMAT_RGBA8;
+        upload.planeCount = 1;
+        upload.planes[0] = frame->data[0];
+        upload.strides[0] = strideForPlane(frame->linesize[0]);
+        break;
+    }
+
+    if (upload.planeCount <= 0 || !upload.planes[0] || upload.strides[0] == 0) {
+        R_UpdateRawPic(NULL);
+        return;
+    }
+
+    R_UpdateRawPic(&upload);
+}
+
 /*
 ==================
 SCR_StopCinematic
@@ -156,7 +209,7 @@ SCR_StopCinematic
 void SCR_StopCinematic(void)
 {
     if (cin.video.frame)
-        R_UpdateRawPic(0, 0, NULL);
+        R_UpdateRawPic(NULL);
 
     avcodec_free_context(&cin.video.dec_ctx);
     avcodec_free_context(&cin.audio.dec_ctx);
@@ -277,7 +330,7 @@ static int process_video(int frames)
     cin.crop = (cin.info && cin.framenum >= cin.info->start) ? cin.info->crop * 2 : 0;
     cin.framenum += frames;
 
-    R_UpdateRawPic(cin.width, cin.height, (uint32_t *)out->data[0]);
+    SCR_SubmitRawFrame(out);
     return 0;
 }
 
@@ -732,7 +785,7 @@ SCR_ReloadCinematic
 void SCR_ReloadCinematic(void)
 {
     if (cin.video.frame) {
-        R_UpdateRawPic(cin.width, cin.height, (uint32_t *)cin.video.frame->data[0]);
+        SCR_SubmitRawFrame(cin.video.frame);
     } else if (cl.mapname[0]) {
         cin.static_pic = R_RegisterTempPic(cl.mapname);
         R_GetPicSize(&cin.width, &cin.height, cin.static_pic);
