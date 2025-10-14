@@ -42,6 +42,7 @@ uint8_t colorBitsForFormat(VkFormat format) {
 
 constexpr int kDefaultCharWidth = 8;
 constexpr int kDefaultCharHeight = 8;
+constexpr float kTileDivisor = 1.0f / 64.0f;
 constexpr float kFontCellSize = 1.0f / 16.0f;
 constexpr float kShadowOffset = 1.0f;
 constexpr int kUIDropShadow = 1 << 4;
@@ -551,46 +552,36 @@ void VulkanRenderer::drawStretchChar(int x, int y, int w, int h, int flags, int 
         return;
     }
 
-    uint8_t glyph = static_cast<uint8_t>(ch);
-    if ((glyph & 127u) == 32u) {
-        return;
-    }
-
-    if (flags & kUIAltColor) {
-        glyph |= 0x80u;
-    }
-    if (flags & kUIXorColor) {
-        glyph ^= 0x80u;
-    }
-
     float scale = scale_;
     if (scale <= 0.0f) {
         return;
     }
 
-    float fx = static_cast<float>(x) * scale;
-    float fy = static_cast<float>(y) * scale;
-    float fw = static_cast<float>(w) * scale;
-    float fh = static_cast<float>(h) * scale;
+    AtlasGlyphParams params{};
+    params.x = x;
+    params.y = y;
+    params.width = w;
+    params.height = h;
+    params.flags = flags;
+    params.glyph = static_cast<uint8_t>(ch);
+    params.color = color;
 
-    float u0 = static_cast<float>(glyph & 15u) * kFontCellSize;
-    float v0 = static_cast<float>(glyph >> 4) * kFontCellSize;
-    auto uvs = makeUV(u0, v0, u0 + kFontCellSize, v0 + kFontCellSize);
-
-    if ((flags & kUIDropShadow) && glyph != 0x83u) {
-        float offset = kShadowOffset * scale;
-        color_t shadow = ColorA(color.a);
-        auto shadowPositions = makeQuad(fx + offset, fy + offset, fw, fh);
-        draw2d::submitQuad(shadowPositions, uvs, shadow.u32, font);
+    GlyphDrawData glyphData = Renderer_BuildAtlasGlyph(params);
+    if (!glyphData.visible) {
+        return;
     }
 
-    color_t finalColor = color;
-    if (glyph & 0x80u) {
-        finalColor = ColorSetAlpha(COLOR_WHITE, color.a);
+    auto submitGlyph = [&](const GlyphQuad &quad) {
+        auto positions = makeQuad(quad.x * scale, quad.y * scale, quad.w * scale, quad.h * scale);
+        auto uvs = makeUV(quad.s0, quad.t0, quad.s1, quad.t1);
+        draw2d::submitQuad(positions, uvs, quad.color.u32, font);
+    };
+
+    for (int i = 0; i < glyphData.shadowCount; ++i) {
+        submitGlyph(glyphData.shadows[i]);
     }
 
-    auto positions = makeQuad(fx, fy, fw, fh);
-    draw2d::submitQuad(positions, uvs, finalColor.u32, font);
+    submitGlyph(glyphData.primary);
 }
 
 int VulkanRenderer::drawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
@@ -657,34 +648,41 @@ int VulkanRenderer::drawKFontChar(int x, int y, int scale, int flags, uint32_t c
         return x;
     }
 
-    float sw = record ? record->sw : kfont->sw;
-    float sh = record ? record->sh : kfont->sh;
-    float s0 = metrics->x * sw;
-    float t0 = metrics->y * sh;
-    float s1 = s0 + metrics->w * sw;
-    float t1 = t0 + metrics->h * sh;
-
     float scaleFactor = scale_;
     if (scaleFactor <= 0.0f) {
         return x;
     }
 
-    float fx = static_cast<float>(x) * scaleFactor;
-    float fy = static_cast<float>(y) * scaleFactor;
-    float fw = static_cast<float>(w) * scaleFactor;
-    float fh = static_cast<float>(h) * scaleFactor;
+    float sw = record ? record->sw : kfont->sw;
+    float sh = record ? record->sh : kfont->sh;
 
-    auto uvs = makeUV(s0, t0, s1, t1);
+    KFontGlyphParams params{};
+    params.x = x;
+    params.y = y;
+    params.scale = effectiveScale;
+    params.flags = flags;
+    params.color = color;
+    params.metrics = metrics;
+    params.sw = sw;
+    params.sh = sh;
 
-    if (flags & kUIDropShadow) {
-        float offset = static_cast<float>(std::max(1, effectiveScale)) * scaleFactor;
-        color_t shadow = ColorA(color.a);
-        auto shadowPositions = makeQuad(fx + offset, fy + offset, fw, fh);
-        draw2d::submitQuad(shadowPositions, uvs, shadow.u32, texture);
+    GlyphDrawData glyphData = Renderer_BuildKFontGlyph(params);
+    if (!glyphData.visible) {
+        return x;
     }
 
-    auto positions = makeQuad(fx, fy, fw, fh);
-    draw2d::submitQuad(positions, uvs, color.u32, texture);
+    auto submitGlyph = [&](const GlyphQuad &quad) {
+        auto positions = makeQuad(quad.x * scaleFactor, quad.y * scaleFactor,
+                                  quad.w * scaleFactor, quad.h * scaleFactor);
+        auto uvs = makeUV(quad.s0, quad.t0, quad.s1, quad.t1);
+        draw2d::submitQuad(positions, uvs, quad.color.u32, texture);
+    };
+
+    for (int i = 0; i < glyphData.shadowCount; ++i) {
+        submitGlyph(glyphData.shadows[i]);
+    }
+
+    submitGlyph(glyphData.primary);
     return x + w;
 }
 

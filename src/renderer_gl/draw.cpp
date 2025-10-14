@@ -385,36 +385,29 @@ void R_DrawFill32(int x, int y, int w, int h, color_t color)
 
 static inline void draw_char(int x, int y, int w, int h, int flags, int c, color_t color, const image_t *image)
 {
-    float s, t;
+    AtlasGlyphParams params{};
+    params.x = x;
+    params.y = y;
+    params.width = w;
+    params.height = h;
+    params.flags = flags;
+    params.glyph = static_cast<uint8_t>(c);
+    params.color = color;
+    params.dropShadowStrength = gl_fontshadow ? gl_fontshadow->integer : 0;
 
-    if ((c & 127) == 32)
+    GlyphDrawData glyph = Renderer_BuildAtlasGlyph(params);
+    if (!glyph.visible)
         return;
 
-    if (flags & UI_ALTCOLOR)
-        c |= 0x80;
-
-    if (flags & UI_XORCOLOR)
-        c ^= 0x80;
-
-    s = (c & 15) * 0.0625f;
-    t = (c >> 4) * 0.0625f;
-
-    if (flags & UI_DROPSHADOW && c != 0x83) {
-        color_t black = ColorA(color.a);
-
-        GL_StretchPic(x + 1, y + 1, w, h, s, t,
-                      s + 0.0625f, t + 0.0625f, black, image);
-
-        if (gl_fontshadow->integer > 1)
-            GL_StretchPic(x + 2, y + 2, w, h, s, t,
-                          s + 0.0625f, t + 0.0625f, black, image);
+    for (int i = 0; i < glyph.shadowCount; ++i) {
+        const GlyphQuad &shadow = glyph.shadows[i];
+        GL_StretchPic(shadow.x, shadow.y, shadow.w, shadow.h,
+                      shadow.s0, shadow.t0, shadow.s1, shadow.t1, shadow.color, image);
     }
 
-    if (c >> 7)
-        color = ColorSetAlpha(COLOR_WHITE, color.a);
-
-    GL_StretchPic(x, y, w, h, s, t,
-                  s + 0.0625f, t + 0.0625f, color, image);
+    const GlyphQuad &primary = glyph.primary;
+    GL_StretchPic(primary.x, primary.y, primary.w, primary.h,
+                  primary.s0, primary.t0, primary.s1, primary.t1, primary.color, image);
 }
 
 void R_DrawChar(int x, int y, int flags, int c, color_t color, qhandle_t font)
@@ -461,35 +454,33 @@ static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t c
 
     if (!ch)
         return 0;
-    
+
     image_t *image = IMG_ForHandle(kfont->pic);
 
-    float s = ch->x * kfont->sw;
-    float t = ch->y * kfont->sh;
-    
-    float sw = ch->w * kfont->sw;
-    float sh = ch->h * kfont->sh;
+    KFontGlyphParams params{};
+    params.x = x;
+    params.y = y;
+    params.scale = scale;
+    params.flags = flags;
+    params.color = color;
+    params.metrics = ch;
+    params.sw = kfont->sw;
+    params.sh = kfont->sh;
+    params.dropShadowStrength = gl_fontshadow ? gl_fontshadow->integer : 0;
 
-    int w = ch->w * scale;
-    int h = ch->h * scale;
+    GlyphDrawData glyph = Renderer_BuildKFontGlyph(params);
+    if (!glyph.visible)
+        return 0;
 
-    int shadow_offset = 0;
-
-    if ((flags & UI_DROPSHADOW) || gl_fontshadow->integer > 0) {
-        shadow_offset = (1 * scale);
-        
-        color_t black = ColorA(color.a);
-
-        GL_StretchPic(x + shadow_offset, y + shadow_offset, w, h, s, t,
-                      s + sw, t + sh, black, image);
-
-        if (gl_fontshadow->integer > 1)
-            GL_StretchPic(x + (shadow_offset * 2), y + (shadow_offset * 2), w, h, s, t,
-                          s + sw, t + sh, black, image);
+    for (int i = 0; i < glyph.shadowCount; ++i) {
+        const GlyphQuad &shadow = glyph.shadows[i];
+        GL_StretchPic(shadow.x, shadow.y, shadow.w, shadow.h,
+                      shadow.s0, shadow.t0, shadow.s1, shadow.t1, shadow.color, image);
     }
 
-    GL_StretchPic(x, y, w, h, s, t,
-                  s + sw, t + sh, color, image);
+    const GlyphQuad &primary = glyph.primary;
+    GL_StretchPic(primary.x, primary.y, primary.w, primary.h,
+                  primary.s0, primary.t0, primary.s1, primary.t1, primary.color, image);
 
     return ch->w * scale;
 }
