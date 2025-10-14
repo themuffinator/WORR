@@ -101,6 +101,7 @@ private:
   
     enum class PipelineKind {
         InlineBsp,
+        Decal,
         Alias,
         Sprite,
         Weapon,
@@ -549,7 +550,7 @@ private:
     ModelRecord::BufferAllocationInfo worldVertexBuffer_{};
     ModelRecord::BufferAllocationInfo worldIndexBuffer_{};
     VkIndexType worldIndexType_ = VK_INDEX_TYPE_UINT16;
-    std::array<std::vector<WorldDrawCommand>, 3> worldSurfaceBuckets_{};
+    std::array<std::vector<WorldDrawCommand>, 4> worldSurfaceBuckets_{};
 
     struct VideoGeometry {
         int width = SCREEN_WIDTH;

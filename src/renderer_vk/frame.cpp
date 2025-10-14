@@ -195,6 +195,13 @@ VulkanRenderer::PipelineDesc VulkanRenderer::makePipeline(const PipelineKey &key
     case PipelineKind::InlineBsp:
         desc.debugName = "inline_bsp";
         break;
+    case PipelineKind::Decal:
+        desc.debugName = "decal";
+        desc.blend = PipelineDesc::BlendMode::Alpha;
+        desc.depthWrite = false;
+        desc.textured = true;
+        desc.usesFog = false;
+        break;
     case PipelineKind::Alias:
         desc.debugName = "alias";
         break;
@@ -289,6 +296,7 @@ VulkanRenderer::PipelineKey VulkanRenderer::buildPipelineKey(PipelineKind kind) 
 
     switch (kind) {
     case PipelineKind::InlineBsp:
+    case PipelineKind::Decal:
         key.fogBits = frameState_.fogBits;
         key.fogSkyBits = frameState_.fogBitsSky;
         key.perPixelLighting = frameState_.perPixelLighting;
@@ -2576,6 +2584,7 @@ void VulkanRenderer::gatherNodeSurfaces(const mnode_t *node, int clipFlags) {
     totalDraws += drawBucket(worldSurfaceBuckets_[0], "world.opaque");
     totalDraws += drawBucket(worldSurfaceBuckets_[1], "world.alpha");
     totalDraws += drawBucket(worldSurfaceBuckets_[2], "world.sky");
+    totalDraws += drawBucket(worldSurfaceBuckets_[3], "world.decal");
 
     if (totalDraws > 0) {
         frameState_.worldRendered = true;
