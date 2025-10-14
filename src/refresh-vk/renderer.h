@@ -95,6 +95,7 @@ private:
         Alias,
         Sprite,
         Weapon,
+        Draw2D,
     };
 
     struct PipelineDesc {
@@ -253,6 +254,16 @@ private:
         std::vector<uint32_t> pixels;
     };
 
+    struct Draw2DBatch {
+        ModelRecord::BufferAllocationInfo vertex;
+        ModelRecord::BufferAllocationInfo index;
+        ModelRecord::DescriptorReference descriptor;
+        VkIndexType indexType = VK_INDEX_TYPE_UINT16;
+        size_t vertexCount = 0;
+        size_t indexCount = 0;
+        qhandle_t texture = 0;
+    };
+
     using ModelMap = std::unordered_map<qhandle_t, ModelRecord>;
     using ImageMap = std::unordered_map<qhandle_t, ImageRecord>;
     using NameLookup = std::unordered_map<std::string, qhandle_t>;
@@ -320,6 +331,8 @@ private:
     bool canSubmit2D() const;
     qhandle_t ensureWhiteTexture();
     qhandle_t ensureRawTexture();
+    void destroy2DBatch(Draw2DBatch &batch);
+    void clear2DBatches();
 
     void initializePlatformHooks();
     void collectPlatformInstanceExtensions();
@@ -369,6 +382,7 @@ private:
     FrameState frameState_{};
     qhandle_t whiteTextureHandle_ = 0;
     qhandle_t rawTextureHandle_ = 0;
+    std::vector<Draw2DBatch> frame2DBatches_{};
 
     std::unordered_map<PipelineKind, PipelineDesc, EnumHash> pipelines_;
 
