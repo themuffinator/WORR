@@ -6,6 +6,11 @@
 
 #include "common/files.h"
 
+#include "vk_draw2d.h"
+
+#include <array>
+#include <cstddef>
+
 namespace refresh::vk {
 
 namespace {
@@ -167,6 +172,47 @@ bool PipelineLibrary::createGraphicsPipeline(PipelineObject &object) {
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 0;
+    vertexInput.pVertexBindingDescriptions = nullptr;
+    vertexInput.vertexAttributeDescriptionCount = 0;
+    vertexInput.pVertexAttributeDescriptions = nullptr;
+
+    std::array<VkVertexInputBindingDescription, 1> bindingDescriptions{};
+    std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+    switch (object.desc.key.kind) {
+    case VulkanRenderer::PipelineKind::Draw2D: {
+        VkVertexInputBindingDescription &binding = bindingDescriptions[0];
+        binding.binding = 0;
+        binding.stride = sizeof(draw2d::Vertex);
+        binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        VkVertexInputAttributeDescription &position = attributeDescriptions[0];
+        position.location = 0;
+        position.binding = 0;
+        position.format = VK_FORMAT_R32G32_SFLOAT;
+        position.offset = offsetof(draw2d::Vertex, position);
+
+        VkVertexInputAttributeDescription &uv = attributeDescriptions[1];
+        uv.location = 1;
+        uv.binding = 0;
+        uv.format = VK_FORMAT_R32G32_SFLOAT;
+        uv.offset = offsetof(draw2d::Vertex, uv);
+
+        VkVertexInputAttributeDescription &color = attributeDescriptions[2];
+        color.location = 2;
+        color.binding = 0;
+        color.format = VK_FORMAT_R8G8B8A8_UNORM;
+        color.offset = offsetof(draw2d::Vertex, color);
+
+        vertexInput.vertexBindingDescriptionCount = 1;
+        vertexInput.pVertexBindingDescriptions = bindingDescriptions.data();
+        vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInput.pVertexAttributeDescriptions = attributeDescriptions.data();
+        break;
+    }
+    default:
+        break;
+    }
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
