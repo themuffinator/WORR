@@ -50,6 +50,17 @@ Setup build directory (arbitrary name can be used instead of `builddir`):
 
     meson setup builddir
 
+If you prefer an automated helper that also prepares a Meson development
+environment shell, you can use the provided script:
+
+    ./dev/setup_meson_env.sh
+
+The script accepts a `-b` flag to choose a different build directory and passes
+any arguments after `--` straight to `meson setup`. By default it will spawn a
+shell inside `meson devenv` so the project can be built and run with the
+correct environment variables already configured. Use `-c "command"` to run a
+specific command inside the environment or `-n` to skip launching the shell.
+
 Review and configure options:
 
     meson configure builddir

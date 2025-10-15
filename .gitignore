@@ -1,6 +1,11 @@
 /subprojects/*/
 !/subprojects/packagefiles/
 !/subprojects/rerelease-game/
+/build*
+/builddir/
+/meson-info/
+/meson-logs/
+/meson-private/
 /tags
 /TAGS
 .vs/
