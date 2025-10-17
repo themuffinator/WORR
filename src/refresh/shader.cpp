@@ -966,11 +966,12 @@ static void shader_state_bits(glStateBits_t bits)
     }
 
     if (diff & GLS_BLOOM_GENERATE && glr.framebuffer_bound) {
-        int n = (bits & GLS_BLOOM_GENERATE) ? 2 : 1;
-        qglDrawBuffers(n, (const GLenum []) {
+        static constexpr GLenum bloom_targets[] = {
             GL_COLOR_ATTACHMENT0,
-            GL_COLOR_ATTACHMENT1
-        });
+            GL_COLOR_ATTACHMENT1,
+        };
+        int n = (bits & GLS_BLOOM_GENERATE) ? 2 : 1;
+        qglDrawBuffers(n, bloom_targets);
     }
 }
 
