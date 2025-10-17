@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "g_local.h"
 #include "g_ptrs.h"
 
+#include <cinttypes>
+
 #if USE_ZLIB
 #include <zlib.h>
 #else
@@ -521,25 +523,94 @@ static void write_index(gzFile f, void *p, size_t size, const void *start, int m
     write_int(f, (int)(diff / size));
 }
 
-static void write_pointer(gzFile f, void *p, ptr_type_t type)
+#define SAVE_POINTER_LIST(X)                                                         \
+    X(P_prethink, void (*)(edict_t *))                                               \
+    X(P_think, void (*)(edict_t *))                                                  \
+    X(P_blocked, void (*)(edict_t *, edict_t *))                                     \
+    X(P_touch, void (*)(edict_t *, edict_t *, cplane_t *, csurface_t *))             \
+    X(P_use, void (*)(edict_t *, edict_t *, edict_t *))                              \
+    X(P_pain, void (*)(edict_t *, edict_t *, float, int))                            \
+    X(P_die, void (*)(edict_t *, edict_t *, edict_t *, int, vec3_t))                 \
+    X(P_moveinfo_endfunc, void (*)(edict_t *))                                       \
+    X(P_monsterinfo_currentmove, const mmove_t *)                                    \
+    X(P_monsterinfo_stand, void (*)(edict_t *))                                      \
+    X(P_monsterinfo_idle, void (*)(edict_t *))                                       \
+    X(P_monsterinfo_search, void (*)(edict_t *))                                     \
+    X(P_monsterinfo_walk, void (*)(edict_t *))                                       \
+    X(P_monsterinfo_run, void (*)(edict_t *))                                        \
+    X(P_monsterinfo_dodge, void (*)(edict_t *, edict_t *, float))                    \
+    X(P_monsterinfo_attack, void (*)(edict_t *))                                     \
+    X(P_monsterinfo_melee, void (*)(edict_t *))                                      \
+    X(P_monsterinfo_sight, void (*)(edict_t *, edict_t *))                           \
+    X(P_monsterinfo_checkattack, bool (*)(edict_t *))
+
+static std::uintptr_t get_pointer_bits(ptr_type_t type, const void *field)
+{
+    switch (type) {
+#define CASE_GET_POINTER(enum_value, pointer_type)                                    \
+    case enum_value: {                                                               \
+        using pointer_t = pointer_type;                                              \
+        pointer_t value = *reinterpret_cast<pointer_t const *>(field);               \
+        if (value == nullptr) {                                                      \
+            return 0;                                                                \
+        }                                                                            \
+        return save_ptr_encode(value);                                               \
+    }
+        SAVE_POINTER_LIST(CASE_GET_POINTER)
+#undef CASE_GET_POINTER
+    case P_bad:
+    default:
+        gi.error("%s: unknown pointer type %d", __func__, type);
+        return 0;
+    }
+}
+
+static void set_pointer_bits(ptr_type_t type, void *field, std::uintptr_t bits)
+{
+    switch (type) {
+#define CASE_SET_POINTER(enum_value, pointer_type)                                    \
+    case enum_value: {                                                               \
+        using pointer_t = pointer_type;                                              \
+        auto &slot = *reinterpret_cast<pointer_t *>(field);                          \
+        if (bits == 0) {                                                             \
+            slot = nullptr;                                                          \
+        } else {                                                                     \
+            slot = save_ptr_decode<pointer_t>(bits);                                 \
+        }                                                                            \
+        return;                                                                      \
+    }
+        SAVE_POINTER_LIST(CASE_SET_POINTER)
+#undef CASE_SET_POINTER
+    case P_bad:
+    default:
+        gi.error("%s: unknown pointer type %d", __func__, type);
+        return;
+    }
+}
+
+#undef SAVE_POINTER_LIST
+
+static void write_pointer(gzFile f, const void *field, ptr_type_t type)
 {
     const save_ptr_t *ptr;
+    std::uintptr_t bits;
     int i;
 
-    if (!p) {
+    bits = get_pointer_bits(type, field);
+    if (bits == 0) {
         write_int(f, -1);
         return;
     }
 
     for (i = 0, ptr = save_ptrs; i < num_save_ptrs; i++, ptr++) {
-        if (ptr->type == type && ptr->ptr == p) {
+        if (ptr->type == type && ptr->value == bits) {
             write_int(f, i);
             return;
         }
     }
 
     gzclose(f);
-    gi.error("%s: unknown pointer: %p", __func__, p);
+    gi.error("%s: unknown pointer type %d value 0x%" PRIxPTR, __func__, type, bits);
 }
 
 static void write_field(gzFile f, const save_field_t *field, void *base)
@@ -593,7 +664,7 @@ static void write_field(gzFile f, const save_field_t *field, void *base)
         break;
 
     case F_POINTER:
-        write_pointer(f, *(void **)p, field->size);
+        write_pointer(f, p, (ptr_type_t)field->size);
         break;
 
     default:
@@ -710,14 +781,15 @@ static void *read_index(gzFile f, size_t size, const void *start, int max_index)
     return p;
 }
 
-static void *read_pointer(gzFile f, ptr_type_t type)
+static void read_pointer(gzFile f, ptr_type_t type, void *field)
 {
     int index;
     const save_ptr_t *ptr;
 
     index = read_int(f);
     if (index == -1) {
-        return NULL;
+        set_pointer_bits(type, field, 0);
+        return;
     }
 
     if (index < 0 || index >= num_save_ptrs) {
@@ -731,7 +803,7 @@ static void *read_pointer(gzFile f, ptr_type_t type)
         gi.error("%s: type mismatch", __func__);
     }
 
-    return (void *)ptr->ptr;
+    set_pointer_bits(type, field, ptr->value);
 }
 
 static void read_field(gzFile f, const save_field_t *field, void *base)
@@ -785,7 +857,7 @@ static void read_field(gzFile f, const save_field_t *field, void *base)
         break;
 
     case F_POINTER:
-        *(void **)p = read_pointer(f, field->size);
+        read_pointer(f, (ptr_type_t)field->size, p);
         break;
 
     default:
