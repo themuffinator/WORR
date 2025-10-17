@@ -335,6 +335,27 @@ static void tty_parse_input(const char *text)
             tty_show_input();
             break;
 
+        case SPACE ... DEL - 1:
+            if (f->cursorPos == f->maxChars - 1) {
+                // buffer limit reached, replace the character under cursor.
+                // when cursor is at the rightmost column, terminal may or may
+                // not advance it. force absolute position to keep it in the
+                // same place.
+                tty_printf("%c\r\033[%zuC", key, f->cursorPos + 1);
+                f->text[f->cursorPos + 0] = key;
+                f->text[f->cursorPos + 1] = 0;
+            } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
+                char ch = static_cast<char>(key);
+                tty_write(&ch, 1);
+                f->text[f->cursorPos + 0] = key;
+                f->text[f->cursorPos + 1] = 0;
+                f->cursorPos++;
+            } else {
+                tty_hide_input();
+                memmove(f->text + f->cursorPos + 1, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos - 1);
+                f->text[f->cursorPos++] = key;
+                f->text[f->maxChars] = 0;
+                tty_show_input();
         default:
             if (key >= SPACE && key < DEL) {
                 if (f->cursorPos == f->maxChars - 1) {
