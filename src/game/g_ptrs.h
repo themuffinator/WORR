@@ -1,3 +1,5 @@
+#include <cstdint>
+
 typedef enum {
     P_bad,
 
@@ -26,8 +28,20 @@ typedef enum {
 
 typedef struct {
     ptr_type_t type;
-    const void *ptr;
+    std::uintptr_t value;
 } save_ptr_t;
+
+template <typename T>
+constexpr std::uintptr_t save_ptr_encode(T ptr) noexcept
+{
+    return reinterpret_cast<std::uintptr_t>(ptr);
+}
+
+template <typename T>
+constexpr T save_ptr_decode(std::uintptr_t value) noexcept
+{
+    return reinterpret_cast<T>(value);
+}
 
 extern const save_ptr_t save_ptrs[];
 extern const int num_save_ptrs;

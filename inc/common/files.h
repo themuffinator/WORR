@@ -48,6 +48,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define FS_HashPath(s, size)            Com_HashStringLen(s, SIZE_MAX, size)
 #define FS_HashPathLen(s, len, size)    Com_HashStringLen(s, len, size)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void    FS_Init(void);
 void    FS_Shutdown(void);
 void    FS_Restart(bool total);
@@ -131,3 +135,7 @@ FILE *Q_fopen(const char *path, const char *mode);
 extern cvar_t   *fs_game;
 
 extern char     fs_gamedir[];
+
+#ifdef __cplusplus
+}
+#endif

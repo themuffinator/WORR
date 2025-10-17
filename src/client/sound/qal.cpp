@@ -25,6 +25,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <AL/alc.h>
 
+#include <functional>
+
 #define QALAPI
 #include "qal.h"
 
@@ -52,6 +54,27 @@ typedef struct {
     alassign_t assign_builtin;
     alassign_t assign_null;
 } alfunction_t;
+struct alfunction_t {
+    const char *name;
+    std::function<void()> assign_builtin;
+    std::function<void()> assign_null;
+    std::function<bool(void *)> assign_from_proc;
+};
+
+template <typename T>
+static alfunction_t make_alfunction(const char *name, T &destination, T builtin)
+{
+    T *dest_ptr = &destination;
+    return {
+        name,
+        [dest_ptr, builtin]() { *dest_ptr = builtin; },
+        [dest_ptr]() { *dest_ptr = nullptr; },
+        [dest_ptr](void *address) {
+            *dest_ptr = reinterpret_cast<T>(address);
+            return *dest_ptr != nullptr;
+        }
+    };
+}
 
 typedef struct {
     const char *extension;
@@ -103,6 +126,8 @@ typedef struct {
             *typed_dest = nullptr;                                              \
         }                                                                       \
     }
+#define QALC_FN(x)  make_alfunction("alc"#x, qalc##x, alc##x)
+#define QAL_FN(x)   make_alfunction("al"#x, qal##x, al##x)
 
 static const alsection_t sections[] = {
     {
@@ -325,6 +350,7 @@ int QAL_Init(void)
                 void *addr = qalGetProcAddress(func->name);
                 if (!func->assign_from_address(func->dest, addr))
                     break;
+                func->assign_from_proc(addr);
             }
 
             if (func->name) {

@@ -73,6 +73,6 @@ if __name__ == "__main__":
     for k, v in types.items():
         for p in sorted(v, key=str.lower):
             amp = '&' if k == 'monsterinfo_currentmove' else ''
-            print('{ %s, %s%s },' % ('P_' + k, amp, p))
+            print('{ %s, save_ptr_encode(%s%s) },' % ('P_' + k, amp, p))
     print('};')
     print('const int num_save_ptrs = sizeof(save_ptrs) / sizeof(save_ptrs[0]);')

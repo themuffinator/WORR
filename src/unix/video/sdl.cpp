@@ -39,7 +39,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 static struct {
     SDL_Window      *window;
-    SDL_GLContext   *context;
+    SDL_GLContext   context;
     vidFlags_t      flags;
 
     int             width;
