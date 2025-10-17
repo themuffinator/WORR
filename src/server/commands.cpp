@@ -486,7 +486,7 @@ static void SV_Map_f(void)
 static void SV_Map_c(genctx_t *ctx, int argnum)
 {
     const char *path;
-    void **list;
+    char **list;
     int count;
 
     if (argnum != 1)
@@ -500,7 +500,7 @@ static void SV_Map_c(genctx_t *ctx, int argnum)
     if (!*path)
         return;
 
-    list = FS_ListFiles(path, ".bsp.override", FS_SEARCH_RECURSIVE, &count);
+    list = reinterpret_cast<char **>(FS_ListFiles(path, ".bsp.override", FS_SEARCH_RECURSIVE, &count));
     if (!list)
         return;
 
