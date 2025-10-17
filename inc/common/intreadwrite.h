@@ -56,7 +56,7 @@ struct unaligned64 { uint64_t u; } __attribute__((packed, may_alias));
 
 #endif
 
-#if USE_LITTLE_ENDIAN
+#if defined(USE_LITTLE_ENDIAN)
 // We only optimize for little-endian arches here.
 
 #ifdef RN16
