@@ -335,26 +335,28 @@ static void tty_parse_input(const char *text)
             tty_show_input();
             break;
 
-        case SPACE ... DEL - 1:
-            if (f->cursorPos == f->maxChars - 1) {
-                // buffer limit reached, replace the character under cursor.
-                // when cursor is at the rightmost column, terminal may or may
-                // not advance it. force absolute position to keep it in the
-                // same place.
-                tty_printf("%c\r\033[%zuC", key, f->cursorPos + 1);
-                f->text[f->cursorPos + 0] = key;
-                f->text[f->cursorPos + 1] = 0;
-            } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
-                tty_write(&(char){ key }, 1);
-                f->text[f->cursorPos + 0] = key;
-                f->text[f->cursorPos + 1] = 0;
-                f->cursorPos++;
-            } else {
-                tty_hide_input();
-                memmove(f->text + f->cursorPos + 1, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos - 1);
-                f->text[f->cursorPos++] = key;
-                f->text[f->maxChars] = 0;
-                tty_show_input();
+        default:
+            if (key >= SPACE && key < DEL) {
+                if (f->cursorPos == f->maxChars - 1) {
+                    // buffer limit reached, replace the character under cursor.
+                    // when cursor is at the rightmost column, terminal may or may
+                    // not advance it. force absolute position to keep it in the
+                    // same place.
+                    tty_printf("%c\r\033[%zuC", key, f->cursorPos + 1);
+                    f->text[f->cursorPos + 0] = key;
+                    f->text[f->cursorPos + 1] = 0;
+                } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
+                    tty_write(&(char){ key }, 1);
+                    f->text[f->cursorPos + 0] = key;
+                    f->text[f->cursorPos + 1] = 0;
+                    f->cursorPos++;
+                } else {
+                    tty_hide_input();
+                    memmove(f->text + f->cursorPos + 1, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos - 1);
+                    f->text[f->cursorPos++] = key;
+                    f->text[f->maxChars] = 0;
+                    tty_show_input();
+                }
             }
             break;
 
@@ -436,26 +438,7 @@ static void tty_parse_input(const char *text)
                 if (!*text)
                     return;
                 key = Q_toupper(*text++);
-                switch (key) {
-                case 'A':
-                    tty_history_up();
-                    break;
-                case 'B':
-                    tty_history_down();
-                    break;
-                case 'C':
-                    tty_move_right(f);
-                    break;
-                case 'D':
-                    tty_move_left(f);
-                    break;
-                case 'F':
-                    tty_move_cursor(f, strlen(f->text));
-                    break;
-                case 'H':
-                    tty_move_cursor(f, 0);
-                    break;
-                case '0' ... '9':
+                if (key >= '0' && key <= '9') {
                     key = strtoul(text - 1, &s, 10);
                     if (*s == ';') {
                         strtoul(s + 1, &s, 10);
@@ -480,6 +463,27 @@ static void tty_parse_input(const char *text)
                         tty_move_cursor(f, strlen(f->text));
                         break;
                     }
+                    break;
+                }
+
+                switch (key) {
+                case 'A':
+                    tty_history_up();
+                    break;
+                case 'B':
+                    tty_history_down();
+                    break;
+                case 'C':
+                    tty_move_right(f);
+                    break;
+                case 'D':
+                    tty_move_left(f);
+                    break;
+                case 'F':
+                    tty_move_cursor(f, strlen(f->text));
+                    break;
+                case 'H':
+                    tty_move_cursor(f, 0);
                     break;
                 case '[':
                     if (*text)
