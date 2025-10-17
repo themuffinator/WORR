@@ -18,6 +18,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <ctime>
+
+#include "shared/shared.h"
+
 #if USE_CLIENT
 extern const char com_env_suf[6][3];
 #endif
