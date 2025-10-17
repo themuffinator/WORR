@@ -225,22 +225,24 @@ static int remove_file(const char *dir, const char *name)
     return remove(path);
 }
 
-static void **list_save_dir(const char *dir, int *count)
+static char **list_save_dir(const char *dir, int *count)
 {
-    return FS_ListFiles(va("save/%s", dir), ".ssv;.sav;.sv2",
-        SAVE_LOOKUP_FLAGS | FS_SEARCH_RECURSIVE, count);
+    return reinterpret_cast<char **>(FS_ListFiles(va("save/%s", dir), ".ssv;.sav;.sv2",
+        SAVE_LOOKUP_FLAGS | FS_SEARCH_RECURSIVE, count));
 }
 
 static int wipe_save_dir(const char *dir)
 {
-    void **list;
+    char **list;
     int i, count, ret = 0;
 
     if ((list = list_save_dir(dir, &count)) == NULL)
         return 0;
 
-    for (i = 0; i < count; i++)
-        ret |= remove_file(dir, list[i]);
+    for (i = 0; i < count; i++) {
+        const char *name = list[i];
+        ret |= remove_file(dir, name);
+    }
 
     FS_FreeList(list);
     return ret;
@@ -248,14 +250,16 @@ static int wipe_save_dir(const char *dir)
 
 static int copy_save_dir(const char *src, const char *dst)
 {
-    void **list;
+    char **list;
     int i, count, ret = 0;
 
     if ((list = list_save_dir(src, &count)) == NULL)
         return -1;
 
-    for (i = 0; i < count; i++)
-        ret |= copy_file(src, dst, list[i]);
+    for (i = 0; i < count; i++) {
+        const char *name = list[i];
+        ret |= copy_file(src, dst, name);
+    }
 
     FS_FreeList(list);
     return ret;
