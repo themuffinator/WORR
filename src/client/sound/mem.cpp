@@ -456,7 +456,7 @@ static void ConvertSamples(void)
         return;
     }
 
-#if USE_BIG_ENDIAN
+#if defined(USE_BIG_ENDIAN)
     if (s_info.width == 2) {
         for (int i = 0; i < count; i++)
             data[i] = LittleShort(data[i]);

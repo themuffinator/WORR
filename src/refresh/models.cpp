@@ -199,7 +199,7 @@ void MOD_FreeAll(void)
 static void LittleBlock(void *out, const void *in, size_t size)
 {
     memcpy(out, in, size);
-#if USE_BIG_ENDIAN
+#if defined(USE_BIG_ENDIAN)
     for (int i = 0; i < size / 4; i++)
         ((uint32_t *)out)[i] = LittleLong(((uint32_t *)out)[i]);
 #endif

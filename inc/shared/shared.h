@@ -716,6 +716,48 @@ size_t Q_scnprintf(char *dest, size_t size, const char *fmt, ...) q_printf(3, 4)
 char    *va(const char *format, ...) q_printf(1, 2);
 char    *vtos(const vec3_t v);
 
+#if !defined(USE_LITTLE_ENDIAN) && !defined(USE_BIG_ENDIAN)
+#if defined(__cplusplus)
+#if defined(__has_include)
+#if __has_include(<bit>)
+#include <bit>
+#define WORR_HAVE_STD_ENDIAN 1
+#endif
+#elif __cplusplus >= 202002L
+#include <bit>
+#define WORR_HAVE_STD_ENDIAN 1
+#endif
+#endif
+
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__)
+#if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define USE_LITTLE_ENDIAN 1
+#elif (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define USE_BIG_ENDIAN 1
+#endif
+#elif defined(_WIN32)
+#define USE_LITTLE_ENDIAN 1
+#elif defined(__LITTLE_ENDIAN__) && !defined(__BIG_ENDIAN__)
+#define USE_LITTLE_ENDIAN 1
+#elif defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
+#define USE_BIG_ENDIAN 1
+#endif
+
+#if defined(WORR_HAVE_STD_ENDIAN) && defined(__cpp_lib_endian)
+#if defined(USE_LITTLE_ENDIAN)
+static_assert(std::endian::native == std::endian::little,
+    "USE_LITTLE_ENDIAN disagrees with std::endian");
+#elif defined(USE_BIG_ENDIAN)
+static_assert(std::endian::native == std::endian::big,
+    "USE_BIG_ENDIAN disagrees with std::endian");
+#endif
+#endif
+
+#ifdef WORR_HAVE_STD_ENDIAN
+#undef WORR_HAVE_STD_ENDIAN
+#endif
+#endif
+
 //=============================================
 
 static inline uint16_t ShortSwap(uint16_t s)
@@ -767,7 +809,7 @@ static inline int32_t SignExtend(uint32_t v, int bits)
     return (int32_t)(v << (32 - bits)) >> (32 - bits);
 }
 
-#if USE_LITTLE_ENDIAN
+#if defined(USE_LITTLE_ENDIAN)
 #define BigShort(x)     ShortSwap(x)
 #define BigLong(x)      LongSwap(x)
 #define BigFloat(x)     FloatSwap(x)
@@ -776,7 +818,7 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define LittleFloat(x)  ((float)(x))
 #define MakeRawLong(b1,b2,b3,b4) MakeLittleLong(b1,b2,b3,b4)
 #define MakeRawShort(b1,b2) (((b2)<<8)|(b1))
-#elif USE_BIG_ENDIAN
+#elif defined(USE_BIG_ENDIAN)
 #define BigShort(x)     ((uint16_t)(x))
 #define BigLong(x)      ((uint32_t)(x))
 #define BigFloat(x)     ((float)(x))
@@ -785,8 +827,6 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define LittleFloat(x)  FloatSwap(x)
 #define MakeRawLong(b1,b2,b3,b4) MakeBigLong(b1,b2,b3,b4)
 #define MakeRawShort(b1,b2) (((b1)<<8)|(b2))
-#else
-#error Unknown byte order
 #endif
 
 #define MakeLittleLong(b1,b2,b3,b4) (((uint32_t)(b4)<<24)|((uint32_t)(b3)<<16)|((uint32_t)(b2)<<8)|(uint32_t)(b1))
