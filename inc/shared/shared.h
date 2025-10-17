@@ -48,16 +48,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 #include "shared/platform.h"
+#include "shared/types.h"
 
 #define q_countof(a)        (sizeof(a) / sizeof(a[0]))
 
-#define BIT(n)          (1U << (n))
-#define BIT_ULL(n)      (1ULL << (n))
-
-typedef unsigned char byte;
 typedef intptr_t ssize_t;
 typedef enum { qfalse, qtrue } qboolean;    // ABI compat only, don't use
-typedef int qhandle_t;
 
 // angle indexes
 #define PITCH               0       // up / down
@@ -177,13 +173,6 @@ MATHLIB
 ==============================================================
 */
 
-typedef float vec_t;
-typedef vec_t vec2_t[2];
-typedef vec_t vec3_t[3];
-typedef vec_t vec4_t[4];
-
-typedef float mat4_t[16];
-
 typedef union {
     uint32_t u32;
     uint8_t u8[4];
@@ -193,10 +182,6 @@ typedef union {
 } color_t;
 
 extern const vec3_t vec3_origin;
-
-typedef struct {
-    int x, y, width, height;
-} vrect_t;
 
 #ifndef M_PIf
 #define M_PIf       3.14159265358979323846f

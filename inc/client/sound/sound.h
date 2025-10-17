@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include "../../shared/types.h"
+
 void S_Init(void);
 void S_Shutdown(void);
 
