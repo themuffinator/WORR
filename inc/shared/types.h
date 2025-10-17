@@ -16,36 +16,36 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+/* Minimal shared type definitions used by both client and server headers. */
 #pragma once
 
-#include "../../shared/types.h"
+#include <stdint.h>
 
-typedef struct {
-    int         channels;
-    int         samples;                // mono samples in buffer
-    int         submission_chunk;       // don't mix less than this #
-    int         samplepos;              // in mono samples
-    int         samplebits;
-    int         speed;
-    byte        *buffer;
-} dma_t;
+#ifndef BIT
+#define BIT(n)          (1U << (n))
+#endif
 
-typedef enum {
-    SIS_SUCCESS,
-    SIS_FAILURE,
-    SIS_NOTAVAIL
-} sndinitstat_t;
+#ifndef BIT_ULL
+#define BIT_ULL(n)      (1ULL << (n))
+#endif
 
-typedef struct {
-    const char *name;
-    sndinitstat_t (*init)(void);
-    void (*shutdown)(void);
-    void (*begin_painting)(void);
-    void (*submit)(void);
-    void (*activate)(bool active);
-} snddma_driver_t;
+typedef unsigned char byte;
 
-extern dma_t    dma;
-extern int      s_paintedtime;
+typedef int qhandle_t;
 
-extern cvar_t   *s_khz;
+typedef float vec_t;
+typedef vec_t vec2_t[2];
+typedef vec_t vec3_t[3];
+typedef vec_t vec4_t[4];
+
+typedef float mat4_t[16];
+
+typedef struct vrect_s {
+    int x;
+    int y;
+    int width;
+    int height;
+} vrect_t;
+
+struct cvar_s;
+typedef struct cvar_s cvar_t;

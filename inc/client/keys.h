@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include "../shared/types.h"
+
 //
 // these are the key numbers that should be passed to Key_Event
 //
