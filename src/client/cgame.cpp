@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "client.h"
+#include "client/proc_address.h"
 #include "cgame_classic.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
@@ -428,7 +429,7 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
                 Sys_FreeLibrary(cgame_library);
             cgame_library = GameDll_Load();
             if (cgame_library)
-                entry = Sys_GetProcAddress(cgame_library, "GetCGameAPI");
+                entry = Sys_GetFunctionAddress<cgame_entry_t>(cgame_library, "GetCGameAPI");
         } else {
             // if we're connected to a "classic" Q2PRO server, always use builtin cgame
             entry = GetClassicCGameAPI;

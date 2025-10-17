@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "system/system.h"
+#include "client/proc_address.h"
 #include "common/cvar.h"
 #include "common/common.h"
 #include "common/files.h"
@@ -41,10 +42,15 @@ static LPALCISEXTENSIONPRESENT qalcIsExtensionPresent;
 static LPALCMAKECONTEXTCURRENT qalcMakeContextCurrent;
 static LPALCOPENDEVICE qalcOpenDevice;
 
+typedef bool (*alassignproc_t)(void *dest, void *address);
+typedef void (*alassign_t)(void *dest);
+
 typedef struct {
     const char *name;
     void *dest;
-    void *builtin;
+    alassignproc_t assign_from_address;
+    alassign_t assign_builtin;
+    alassign_t assign_null;
 } alfunction_t;
 
 typedef struct {
@@ -52,8 +58,51 @@ typedef struct {
     const alfunction_t *functions;
 } alsection_t;
 
-#define QALC_FN(x)  { "alc"#x, &qalc##x, alc##x }
-#define QAL_FN(x)   { "al"#x, &qal##x, al##x }
+#define QALC_FN(x)                                                              \
+    {                                                                           \
+        "alc" #x,                                                              \
+        &qalc##x,                                                               \
+        [](void *dest, void *address) -> bool {                                 \
+            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
+            auto proc = Sys_CastFunctionAddress<decltype(qalc##x)>(address);    \
+            if (!proc) {                                                        \
+                return false;                                                   \
+            }                                                                   \
+            *typed_dest = proc;                                                 \
+            return true;                                                        \
+        },                                                                      \
+        [](void *dest) {                                                        \
+            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
+            *typed_dest = alc##x;                                               \
+        },                                                                      \
+        [](void *dest) {                                                        \
+            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
+            *typed_dest = nullptr;                                              \
+        }                                                                       \
+    }
+
+#define QAL_FN(x)                                                               \
+    {                                                                           \
+        "al" #x,                                                               \
+        &qal##x,                                                                \
+        [](void *dest, void *address) -> bool {                                 \
+            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
+            auto proc = Sys_CastFunctionAddress<decltype(qal##x)>(address);     \
+            if (!proc) {                                                        \
+                return false;                                                   \
+            }                                                                   \
+            *typed_dest = proc;                                                 \
+            return true;                                                        \
+        },                                                                      \
+        [](void *dest) {                                                        \
+            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
+            *typed_dest = al##x;                                                \
+        },                                                                      \
+        [](void *dest) {                                                        \
+            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
+            *typed_dest = nullptr;                                              \
+        }                                                                       \
+    }
 
 static const alsection_t sections[] = {
     {
@@ -94,7 +143,7 @@ static const alsection_t sections[] = {
             QAL_FN(Sourcef),
             QAL_FN(Sourcei),
             QAL_FN(Source3i),
-            { NULL }
+            { NULL, NULL, NULL, NULL, NULL }
         }
     },
     {
@@ -113,7 +162,7 @@ static const alsection_t sections[] = {
             QAL_FN(GenAuxiliaryEffectSlots),
             QAL_FN(DeleteAuxiliaryEffectSlots),
             QAL_FN(AuxiliaryEffectSloti),
-            { NULL }
+            { NULL, NULL, NULL, NULL, NULL }
         }
     },
 };
@@ -142,7 +191,7 @@ void QAL_Shutdown(void)
         const alfunction_t *func;
 
         for (func = sec->functions; func->name; func++)
-            *(void **)func->dest = NULL;
+            func->assign_null(func->dest);
     }
 
     if (handle) {
@@ -202,7 +251,7 @@ int QAL_Init(void)
     if (!*al_device->string) {
         for (i = 0, sec = sections; i < q_countof(sections); i++, sec++)
             for (func = sec->functions; func->name; func++)
-                *(void **)func->dest = func->builtin;
+                func->assign_builtin(func->dest);
     } else {
         for (i = 0; i < q_countof(al_drivers); i++) {
             Com_DPrintf("Trying %s\n", al_drivers[i]);
@@ -219,9 +268,8 @@ int QAL_Init(void)
 
             for (func = sec->functions; func->name; func++) {
                 void *addr = Sys_GetProcAddress(handle, func->name);
-                if (!addr)
+                if (!func->assign_from_address(func->dest, addr))
                     goto fail;
-                *(void **)func->dest = addr;
             }
         }
     }
@@ -275,14 +323,13 @@ int QAL_Init(void)
 
             for (func = sec->functions; func->name; func++) {
                 void *addr = qalGetProcAddress(func->name);
-                if (!addr)
+                if (!func->assign_from_address(func->dest, addr))
                     break;
-                *(void **)func->dest = addr;
             }
 
             if (func->name) {
                 for (func = sec->functions; func->name; func++)
-                    *(void **)func->dest = NULL;
+                    func->assign_null(func->dest);
 
                 Com_EPrintf("Couldn't load extension %s\n", sec->extension);
                 continue;
