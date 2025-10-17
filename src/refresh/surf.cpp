@@ -26,6 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 lightmap_builder_t lm;
 static byte lm_buffer[0x4000000];
+static constexpr lightstyle_t kFallbackLightstyle{1.0f};
 
 /*
 =============================================================================
@@ -1209,7 +1210,7 @@ void GL_LoadWorld(const char *name)
     if ((bsp->has_bspx || n64surfs > 100) && gl_static.use_shaders)
         gl_static.nolm_mask = SURF_NOLM_MASK_REMASTER;
 
-    glr.fd.lightstyles = &(lightstyle_t){ 1 };
+    glr.fd.lightstyles = &kFallbackLightstyle;
 
     // post process all surfaces
     upload_world_surfaces();
