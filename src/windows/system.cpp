@@ -118,9 +118,9 @@ static void show_console_input(void)
 
         size_t len = strlen(text);
         DWORD res, nch = min(len, f->visibleChars);
-        WriteConsoleOutputCharacterA(houtput,  "]",   1, (COORD){ 0, info.dwCursorPosition.Y }, &res);
-        WriteConsoleOutputCharacterA(houtput, text, nch, (COORD){ 1, info.dwCursorPosition.Y }, &res);
-        SetConsoleCursorPosition(houtput, (COORD){ pos + 1, info.dwCursorPosition.Y });
+        WriteConsoleOutputCharacterA(houtput,  "]",   1, COORD{ 0, info.dwCursorPosition.Y }, &res);
+        WriteConsoleOutputCharacterA(houtput, text, nch, COORD{ 1, info.dwCursorPosition.Y }, &res);
+        SetConsoleCursorPosition(houtput, COORD{ static_cast<SHORT>(pos + 1), info.dwCursorPosition.Y });
     }
 }
 
@@ -141,7 +141,7 @@ static void console_move_cursor(inputField_t *f, size_t pos)
     if (oldpos < f->visibleChars && pos < f->visibleChars) {
         CONSOLE_SCREEN_BUFFER_INFO info;
         if (GetConsoleScreenBufferInfo(houtput, &info)) {
-            SetConsoleCursorPosition(houtput, (COORD){ pos + 1, info.dwCursorPosition.Y });
+            SetConsoleCursorPosition(houtput, COORD{ static_cast<SHORT>(pos + 1), info.dwCursorPosition.Y });
         }
     } else {
         hide_console_input();
@@ -186,8 +186,10 @@ static void scroll_console_window(int key)
             case VK_PRIOR: rows = max(-page, lo); break;
             case VK_NEXT:  rows = min( page, hi); break;
         }
-        if (rows)
-            SetConsoleWindowInfo(houtput, FALSE, &(SMALL_RECT){ .Top = rows, .Bottom = rows });
+        if (rows) {
+            SMALL_RECT rect{ 0, static_cast<SHORT>(rows), 0, static_cast<SHORT>(rows) };
+            SetConsoleWindowInfo(houtput, FALSE, &rect);
+        }
     }
 }
 
@@ -485,7 +487,8 @@ void Sys_RunConsole(void)
                     f->text[f->cursorPos + 0] = ch;
                     f->text[f->cursorPos + 1] = 0;
                 } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
-                    write_console_data(&(char){ ch }, 1);
+                    char chBuf[1]{ static_cast<char>(ch) };
+                    write_console_data(chBuf, 1);
                     f->text[f->cursorPos + 0] = ch;
                     f->text[f->cursorPos + 1] = 0;
                     f->cursorPos++;
