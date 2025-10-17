@@ -1037,6 +1037,132 @@ void SpawnItem(edict_t *ent, const gitem_t *item)
 
 //======================================================================
 
+static const char *const power_armor_precaches[] = {
+    "misc/power1.wav",
+    "misc/power2.wav",
+    NULL
+};
+
+static const char *const weapon_blaster_precaches[] = {
+    "models/objects/laser/tris.md2",
+    "weapons/blastf1a.wav",
+    "misc/lasfly.wav",
+    NULL
+};
+
+static const char *const weapon_shotgun_precaches[] = {
+    "weapons/shotgf1b.wav",
+    "weapons/shotgr1b.wav",
+    NULL
+};
+
+static const char *const weapon_supershotgun_precaches[] = {
+    "weapons/sshotf1b.wav",
+    NULL
+};
+
+static const char *const weapon_machinegun_precaches[] = {
+    "weapons/machgf1b.wav",
+    "weapons/machgf2b.wav",
+    "weapons/machgf3b.wav",
+    "weapons/machgf4b.wav",
+    "weapons/machgf5b.wav",
+    NULL
+};
+
+static const char *const weapon_chaingun_precaches[] = {
+    "weapons/machgf1b.wav",
+    "weapons/machgf2b.wav",
+    "weapons/machgf3b.wav",
+    "weapons/machgf4b.wav",
+    "weapons/machgf5b.wav",
+    "weapons/chngnu1a.wav",
+    "weapons/chngnl1a.wav",
+    "weapons/chngnd1a.wav",
+    NULL
+};
+
+static const char *const ammo_grenades_precaches[] = {
+    "models/objects/grenade2/tris.md2",
+    "weapons/hgrent1a.wav",
+    "weapons/hgrena1b.wav",
+    "weapons/hgrenc1b.wav",
+    "weapons/hgrenb1a.wav",
+    "weapons/hgrenb2a.wav",
+    NULL
+};
+
+static const char *const weapon_grenadelauncher_precaches[] = {
+    "models/objects/grenade/tris.md2",
+    "weapons/grenlf1a.wav",
+    "weapons/grenlr1b.wav",
+    "weapons/grenlb1b.wav",
+    NULL
+};
+
+static const char *const weapon_rocketlauncher_precaches[] = {
+    "models/objects/rocket/tris.md2",
+    "models/objects/debris2/tris.md2",
+    "weapons/rockfly.wav",
+    "weapons/rocklf1a.wav",
+    "weapons/rocklr1b.wav",
+    NULL
+};
+
+static const char *const weapon_hyperblaster_precaches[] = {
+    "models/objects/laser/tris.md2",
+    "weapons/hyprbu1a.wav",
+    "weapons/hyprbl1a.wav",
+    "weapons/hyprbf1a.wav",
+    "weapons/hyprbd1a.wav",
+    "misc/lasfly.wav",
+    NULL
+};
+
+static const char *const weapon_railgun_precaches[] = {
+    "weapons/railgf1a.wav",
+    "weapons/rg_hum.wav",
+    NULL
+};
+
+static const char *const weapon_bfg_precaches[] = {
+    "sprites/s_bfg1.sp2",
+    "sprites/s_bfg2.sp2",
+    "sprites/s_bfg3.sp2",
+    "weapons/bfg__f1y.wav",
+    "weapons/bfg__l1a.wav",
+    "weapons/bfg__x1b.wav",
+    "weapons/bfg_hum.wav",
+    NULL
+};
+
+static const char *const item_quad_precaches[] = {
+    "items/damage.wav",
+    "items/damage2.wav",
+    "items/damage3.wav",
+    NULL
+};
+
+static const char *const item_invulnerability_precaches[] = {
+    "items/protect.wav",
+    "items/protect2.wav",
+    "items/protect4.wav",
+    NULL
+};
+
+static const char *const item_airout_precaches[] = {
+    "items/airout.wav",
+    NULL
+};
+
+static const char *const health_precaches[] = {
+    "items/s_health.wav",
+    "items/n_health.wav",
+    "items/l_health.wav",
+    "items/m_health.wav",
+    NULL
+};
+
 const gitem_t itemlist[] = {
     {
         NULL
@@ -1123,11 +1249,7 @@ const gitem_t itemlist[] = {
         .pickup_name        = "Power Screen",
         .quantity           = 60,
         .flags              = IT_ARMOR,
-        .precaches          = (const char *const []) {
-            "misc/power1.wav",
-            "misc/power2.wav",
-            NULL
-        },
+        .precaches          = power_armor_precaches,
     },
 
     /*QUAKED item_power_shield (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1144,11 +1266,7 @@ const gitem_t itemlist[] = {
         .pickup_name        = "Power Shield",
         .quantity           = 60,
         .flags              = IT_ARMOR,
-        .precaches          = (const char *const []) {
-            "misc/power1.wav",
-            "misc/power2.wav",
-            NULL
-        },
+        .precaches          = power_armor_precaches,
     },
 
     //
@@ -1168,12 +1286,7 @@ const gitem_t itemlist[] = {
         .pickup_name        = "Blaster",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_BLASTER,
-        .precaches          = (const char *const []) {
-            "models/objects/laser/tris.md2",
-            "weapons/blastf1a.wav",
-            "misc/lasfly.wav",
-            NULL
-        },
+        .precaches          = weapon_blaster_precaches,
     },
 
     /*QUAKED weapon_shotgun (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1194,11 +1307,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Shells",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_SHOTGUN,
-        .precaches          = (const char *const []) {
-            "weapons/shotgf1b.wav",
-            "weapons/shotgr1b.wav",
-            NULL
-        },
+        .precaches          = weapon_shotgun_precaches,
     },
 
     /*QUAKED weapon_supershotgun (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1219,10 +1328,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Shells",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_SUPERSHOTGUN,
-        .precaches          = (const char *const []) {
-            "weapons/sshotf1b.wav",
-            NULL
-        },
+        .precaches          = weapon_supershotgun_precaches,
     },
 
     /*QUAKED weapon_machinegun (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1243,14 +1349,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Bullets",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_MACHINEGUN,
-        .precaches          = (const char *const []) {
-            "weapons/machgf1b.wav",
-            "weapons/machgf2b.wav",
-            "weapons/machgf3b.wav",
-            "weapons/machgf4b.wav",
-            "weapons/machgf5b.wav",
-            NULL
-        },
+        .precaches          = weapon_machinegun_precaches,
     },
 
     /*QUAKED weapon_chaingun (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1271,17 +1370,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Bullets",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_CHAINGUN,
-        .precaches          = (const char *const []) {
-            "weapons/machgf1b.wav",
-            "weapons/machgf2b.wav",
-            "weapons/machgf3b.wav",
-            "weapons/machgf4b.wav",
-            "weapons/machgf5b.wav",
-            "weapons/chngnu1a.wav",
-            "weapons/chngnl1a.wav",
-            "weapons/chngnd1a.wav",
-            NULL
-        },
+        .precaches          = weapon_chaingun_precaches,
     },
 
     /*QUAKED ammo_grenades (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1303,15 +1392,7 @@ const gitem_t itemlist[] = {
         .flags              = IT_AMMO | IT_WEAPON,
         .weapmodel          = WEAP_GRENADES,
         .tag                = AMMO_GRENADES,
-        .precaches          = (const char *const []) {
-            "models/objects/grenade2/tris.md2",
-            "weapons/hgrent1a.wav",
-            "weapons/hgrena1b.wav",
-            "weapons/hgrenc1b.wav",
-            "weapons/hgrenb1a.wav",
-            "weapons/hgrenb2a.wav",
-            NULL
-        },
+        .precaches          = ammo_grenades_precaches,
     },
 
     /*QUAKED weapon_grenadelauncher (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1332,13 +1413,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Grenades",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_GRENADELAUNCHER,
-        .precaches          = (const char *const []) {
-            "models/objects/grenade/tris.md2",
-            "weapons/grenlf1a.wav",
-            "weapons/grenlr1b.wav",
-            "weapons/grenlb1b.wav",
-            NULL
-        },
+        .precaches          = weapon_grenadelauncher_precaches,
     },
 
     /*QUAKED weapon_rocketlauncher (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1359,14 +1434,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Rockets",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_ROCKETLAUNCHER,
-        .precaches          = (const char *const []) {
-            "models/objects/rocket/tris.md2",
-            "models/objects/debris2/tris.md2",
-            "weapons/rockfly.wav",
-            "weapons/rocklf1a.wav",
-            "weapons/rocklr1b.wav",
-            NULL
-        },
+        .precaches          = weapon_rocketlauncher_precaches,
     },
 
     /*QUAKED weapon_hyperblaster (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1387,15 +1455,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Cells",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_HYPERBLASTER,
-        .precaches          = (const char *const []) {
-            "models/objects/laser/tris.md2",
-            "weapons/hyprbu1a.wav",
-            "weapons/hyprbl1a.wav",
-            "weapons/hyprbf1a.wav",
-            "weapons/hyprbd1a.wav",
-            "misc/lasfly.wav",
-            NULL
-        },
+        .precaches          = weapon_hyperblaster_precaches,
     },
 
     /*QUAKED weapon_railgun (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1416,11 +1476,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Slugs",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_RAILGUN,
-        .precaches          = (const char *const []) {
-            "weapons/railgf1a.wav",
-            "weapons/rg_hum.wav",
-            NULL
-        },
+        .precaches          = weapon_railgun_precaches,
     },
 
     /*QUAKED weapon_bfg (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1441,16 +1497,7 @@ const gitem_t itemlist[] = {
         .ammo               = "Cells",
         .flags              = IT_WEAPON | IT_STAY_COOP,
         .weapmodel          = WEAP_BFG,
-        .precaches          = (const char *const []) {
-            "sprites/s_bfg1.sp2",
-            "sprites/s_bfg2.sp2",
-            "sprites/s_bfg3.sp2",
-            "weapons/bfg__f1y.wav",
-            "weapons/bfg__l1a.wav",
-            "weapons/bfg__x1b.wav",
-            "weapons/bfg_hum.wav",
-            NULL
-        },
+        .precaches          = weapon_bfg_precaches,
     },
 
     //
@@ -1555,12 +1602,7 @@ const gitem_t itemlist[] = {
         .count_width        = 2,
         .quantity           = 60,
         .flags              = IT_POWERUP,
-        .precaches          = (const char *const []) {
-            "items/damage.wav",
-            "items/damage2.wav",
-            "items/damage3.wav",
-            NULL
-        },
+        .precaches          = item_quad_precaches,
     },
 
     /*QUAKED item_invulnerability (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1578,12 +1620,7 @@ const gitem_t itemlist[] = {
         .count_width        = 2,
         .quantity           = 300,
         .flags              = IT_POWERUP,
-        .precaches          = (const char *const []) {
-            "items/protect.wav",
-            "items/protect2.wav",
-            "items/protect4.wav",
-            NULL
-        },
+        .precaches          = item_invulnerability_precaches,
     },
 
     /*QUAKED item_silencer (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1618,10 +1655,7 @@ const gitem_t itemlist[] = {
         .count_width        = 2,
         .quantity           = 60,
         .flags              = IT_STAY_COOP | IT_POWERUP,
-        .precaches          = (const char *const []) {
-            "items/airout.wav",
-            NULL
-        },
+        .precaches          = item_airout_precaches,
     },
 
     /*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1639,10 +1673,7 @@ const gitem_t itemlist[] = {
         .count_width        = 2,
         .quantity           = 60,
         .flags              = IT_STAY_COOP | IT_POWERUP,
-        .precaches          = (const char *const []) {
-            "items/airout.wav",
-            NULL
-        },
+        .precaches          = item_airout_precaches,
     },
 
     /*QUAKED item_ancient_head (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1856,13 +1887,7 @@ const gitem_t itemlist[] = {
         .icon               = "i_health",
         .pickup_name        = "Health",
         .count_width        = 3,
-        .precaches          = (const char *const []) {
-            "items/s_health.wav",
-            "items/n_health.wav",
-            "items/l_health.wav",
-            "items/m_health.wav",
-            NULL
-        },
+        .precaches          = health_precaches,
     },
 
     // end of list marker
