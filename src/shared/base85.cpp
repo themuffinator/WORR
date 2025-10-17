@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include "shared/base85.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,6 +240,8 @@ base85_can_skip (uint8_t c, b85_state_t state)
 static ptrdiff_t
 base85_context_bytes_remaining (struct base85_context_t *ctx)
 {
+  assert (ctx->out_pos >= ctx->out);
+  assert (ctx->out_pos <= ctx->out + ctx->out_cb);
   return (ctx->out + ctx->out_cb) - ctx->out_pos;
 }
 
@@ -250,19 +253,20 @@ base85_context_grow (struct base85_context_t *ctx)
   static const size_t SMALL_DELTA = 256;
 
   // TODO: Refine size, and fallback strategy.
-  size_t size = ctx->out_cb * 2;
+  size_t requested = ctx->out_cb * 2;
   ptrdiff_t offset = ctx->out_pos - ctx->out;
-  uint8_t *buffer = static_cast<uint8_t *>(realloc (ctx->out, size));
+  uint8_t *buffer = static_cast<uint8_t *>(realloc (ctx->out, requested));
   if (!buffer)
   {
     // Try a smaller allocation.
-    buffer = static_cast<uint8_t *>(realloc (ctx->out, ctx->out_cb + SMALL_DELTA));
+    requested = ctx->out_cb + SMALL_DELTA;
+    buffer = static_cast<uint8_t *>(realloc (ctx->out, requested));
     if (!buffer)
       return B85_E_BAD_ALLOC;
   }
 
   ctx->out = buffer;
-  ctx->out_cb = size;
+  ctx->out_cb = requested;
   ctx->out_pos = ctx->out + offset;
   return B85_E_OK;
 }
