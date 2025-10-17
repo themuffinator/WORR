@@ -16,6 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <type_traits>
+
 #define QGLAPI
 #include "gl.h"
 
@@ -29,56 +31,247 @@ typedef struct {
     uint16_t ver_es;
     uint16_t excl_gl;
     uint16_t excl_es;
-    uint32_t caps;
-    char suffix[4];
+    glcap_t caps;
+    char suffix[5];
     const char *extension;
     const glfunction_t *functions;
 } glsection_t;
 
+template <typename Enum>
+constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
+{
+    return static_cast<std::underlying_type_t<Enum>>(value);
+}
+
+static constexpr glcap_t add_caps(glcap_t lhs, glcap_t rhs) noexcept
+{
+    return static_cast<glcap_t>(to_underlying(lhs) | to_underlying(rhs));
+}
+
+static constexpr glcap_t remove_caps(glcap_t lhs, glcap_t rhs) noexcept
+{
+    return static_cast<glcap_t>(to_underlying(lhs) & ~to_underlying(rhs));
+}
+
 #define QGL_FN(x)   { "gl"#x, &qgl##x }
+
+static constexpr glfunction_t kGl11Functions[] = {
+    QGL_FN(BindTexture),
+    QGL_FN(BlendFunc),
+    QGL_FN(Clear),
+    QGL_FN(ClearColor),
+    QGL_FN(ClearStencil),
+    QGL_FN(ColorMask),
+    QGL_FN(CullFace),
+    QGL_FN(DeleteTextures),
+    QGL_FN(DepthFunc),
+    QGL_FN(DepthMask),
+    QGL_FN(Disable),
+    QGL_FN(DrawArrays),
+    QGL_FN(DrawElements),
+    QGL_FN(Enable),
+    QGL_FN(Finish),
+    QGL_FN(FrontFace),
+    QGL_FN(GenTextures),
+    QGL_FN(GetError),
+    QGL_FN(GetFloatv),
+    QGL_FN(GetIntegerv),
+    QGL_FN(GetString),
+    QGL_FN(IsEnabled),
+    QGL_FN(LineWidth),
+    QGL_FN(PixelStorei),
+    QGL_FN(PolygonOffset),
+    QGL_FN(ReadPixels),
+    QGL_FN(Scissor),
+    QGL_FN(StencilFunc),
+    QGL_FN(StencilOp),
+    QGL_FN(TexImage2D),
+    QGL_FN(TexParameterf),
+    QGL_FN(TexParameteri),
+    QGL_FN(TexSubImage2D),
+    QGL_FN(Viewport),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl11CompatFunctions[] = {
+    QGL_FN(AlphaFunc),
+    QGL_FN(Color4f),
+    QGL_FN(ColorPointer),
+    QGL_FN(DisableClientState),
+    QGL_FN(EnableClientState),
+    QGL_FN(LoadIdentity),
+    QGL_FN(LoadMatrixf),
+    QGL_FN(MatrixMode),
+    QGL_FN(MultMatrixf),
+    QGL_FN(Scalef),
+    QGL_FN(ShadeModel),
+    QGL_FN(TexCoordPointer),
+    QGL_FN(TexEnvf),
+    QGL_FN(Translatef),
+    QGL_FN(VertexPointer),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl11NoEsFunctions[] = {
+    QGL_FN(ClearDepth),
+    QGL_FN(DepthRange),
+    QGL_FN(PolygonMode),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl13MultitextureFunctions[] = {
+    QGL_FN(ActiveTexture),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl13MultitextureCompatFunctions[] = {
+    QGL_FN(ClientActiveTexture),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl15VboFunctions[] = {
+    QGL_FN(BindBuffer),
+    QGL_FN(BufferData),
+    QGL_FN(BufferSubData),
+    QGL_FN(DeleteBuffers),
+    QGL_FN(GenBuffers),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl15OcclusionQueryFunctions[] = {
+    QGL_FN(BeginQuery),
+    QGL_FN(DeleteQueries),
+    QGL_FN(EndQuery),
+    QGL_FN(GenQueries),
+    QGL_FN(GetQueryObjectuiv),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl20Functions[] = {
+    QGL_FN(AttachShader),
+    QGL_FN(BindAttribLocation),
+    QGL_FN(CompileShader),
+    QGL_FN(CreateProgram),
+    QGL_FN(CreateShader),
+    QGL_FN(DeleteProgram),
+    QGL_FN(DeleteShader),
+    QGL_FN(DrawBuffers),
+    QGL_FN(DisableVertexAttribArray),
+    QGL_FN(EnableVertexAttribArray),
+    QGL_FN(GetProgramInfoLog),
+    QGL_FN(GetProgramiv),
+    QGL_FN(GetShaderInfoLog),
+    QGL_FN(GetShaderiv),
+    QGL_FN(GetUniformLocation),
+    QGL_FN(LinkProgram),
+    QGL_FN(ShaderSource),
+    QGL_FN(Uniform1i),
+    QGL_FN(UseProgram),
+    QGL_FN(VertexAttrib4f),
+    QGL_FN(VertexAttribPointer),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl30FramebufferFunctions[] = {
+    QGL_FN(BindFramebuffer),
+    QGL_FN(BindRenderbuffer),
+    QGL_FN(CheckFramebufferStatus),
+    QGL_FN(DeleteFramebuffers),
+    QGL_FN(DeleteRenderbuffers),
+    QGL_FN(FramebufferRenderbuffer),
+    QGL_FN(FramebufferTexture2D),
+    QGL_FN(GenFramebuffers),
+    QGL_FN(GenRenderbuffers),
+    QGL_FN(GenerateMipmap),
+    QGL_FN(GetFramebufferAttachmentParameteriv),
+    QGL_FN(RenderbufferStorage),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl30Es30Functions[] = {
+    QGL_FN(BindBufferBase),
+    QGL_FN(BindBufferRange),
+    QGL_FN(BindVertexArray),
+    QGL_FN(ClearBufferfv),
+    QGL_FN(DeleteVertexArrays),
+    QGL_FN(GenVertexArrays),
+    QGL_FN(GetStringi),
+    QGL_FN(VertexAttribIPointer),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl30NoEsFunctions[] = {
+    QGL_FN(BindFragDataLocation),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl31Es32Functions[] = {
+    QGL_FN(TexBuffer),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl31UboFunctions[] = {
+    QGL_FN(GetActiveUniformBlockiv),
+    QGL_FN(GetUniformBlockIndex),
+    QGL_FN(UniformBlockBinding),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl32SyncFunctions[] = {
+    QGL_FN(ClientWaitSync),
+    QGL_FN(DeleteSync),
+    QGL_FN(FenceSync),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl41Functions[] = {
+    QGL_FN(ClearDepthf),
+    QGL_FN(DepthRangef),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl43DebugFunctions[] = {
+    QGL_FN(DebugMessageCallback),
+    QGL_FN(DebugMessageControl),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl44MultiBindFunctions[] = {
+    QGL_FN(BindTextures),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl45DsaFunctions[] = {
+    QGL_FN(BindTextureUnit),
+    { nullptr }
+};
+
+static constexpr glfunction_t kGl45RobustnessFunctions[] = {
+    QGL_FN(ReadnPixels),
+    { nullptr }
+};
+
+static constexpr glfunction_t kArbFragmentProgramFunctions[] = {
+    QGL_FN(BindProgramARB),
+    QGL_FN(DeleteProgramsARB),
+    QGL_FN(GenProgramsARB),
+    QGL_FN(ProgramLocalParameter4fvARB),
+    QGL_FN(ProgramStringARB),
+    { nullptr }
+};
+
+static constexpr glfunction_t kExtCompiledVertexArrayFunctions[] = {
+    QGL_FN(LockArraysEXT),
+    QGL_FN(UnlockArraysEXT),
+    { nullptr }
+};
 
 static const glsection_t sections[] = {
     // GL 1.1
     {
         .ver_gl = QGL_VER(1, 1),
         .ver_es = QGL_VER(1, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindTexture),
-            QGL_FN(BlendFunc),
-            QGL_FN(Clear),
-            QGL_FN(ClearColor),
-            QGL_FN(ClearStencil),
-            QGL_FN(ColorMask),
-            QGL_FN(CullFace),
-            QGL_FN(DeleteTextures),
-            QGL_FN(DepthFunc),
-            QGL_FN(DepthMask),
-            QGL_FN(Disable),
-            QGL_FN(DrawArrays),
-            QGL_FN(DrawElements),
-            QGL_FN(Enable),
-            QGL_FN(Finish),
-            QGL_FN(FrontFace),
-            QGL_FN(GenTextures),
-            QGL_FN(GetError),
-            QGL_FN(GetFloatv),
-            QGL_FN(GetIntegerv),
-            QGL_FN(GetString),
-            QGL_FN(IsEnabled),
-            QGL_FN(LineWidth),
-            QGL_FN(PixelStorei),
-            QGL_FN(PolygonOffset),
-            QGL_FN(ReadPixels),
-            QGL_FN(Scissor),
-            QGL_FN(StencilFunc),
-            QGL_FN(StencilOp),
-            QGL_FN(TexImage2D),
-            QGL_FN(TexParameterf),
-            QGL_FN(TexParameteri),
-            QGL_FN(TexSubImage2D),
-            QGL_FN(Viewport),
-            { NULL }
-        }
+        .functions = kGl11Functions
     },
 
     // GL 1.1, compat
@@ -87,36 +280,14 @@ static const glsection_t sections[] = {
         .ver_es = QGL_VER(1, 0),
         .excl_gl = QGL_VER(3, 1),
         .excl_es = QGL_VER(2, 0),
-        .caps = QGL_CAP_LEGACY | QGL_CAP_CLIENT_VA,
-        .functions = (const glfunction_t []) {
-            QGL_FN(AlphaFunc),
-            QGL_FN(Color4f),
-            QGL_FN(ColorPointer),
-            QGL_FN(DisableClientState),
-            QGL_FN(EnableClientState),
-            QGL_FN(LoadIdentity),
-            QGL_FN(LoadMatrixf),
-            QGL_FN(MatrixMode),
-            QGL_FN(MultMatrixf),
-            QGL_FN(Scalef),
-            QGL_FN(ShadeModel),
-            QGL_FN(TexCoordPointer),
-            QGL_FN(TexEnvf),
-            QGL_FN(Translatef),
-            QGL_FN(VertexPointer),
-            { NULL }
-        }
+        .caps = static_cast<glcap_t>(QGL_CAP_LEGACY | QGL_CAP_CLIENT_VA),
+        .functions = kGl11CompatFunctions
     },
 
     // GL 1.1, not ES
     {
         .ver_gl = QGL_VER(1, 1),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ClearDepth),
-            QGL_FN(DepthRange),
-            QGL_FN(PolygonMode),
-            { NULL }
-        }
+        .functions = kGl11NoEsFunctions
     },
 
     // GL 1.1, not ES, compat
@@ -129,19 +300,19 @@ static const glsection_t sections[] = {
     // GL 1.1, ES 3.0
     // EXT_unpack_subimage
     {
-        .extension = "GL_EXT_unpack_subimage",
         .ver_gl = QGL_VER(1, 1),
         .ver_es = QGL_VER(3, 0),
         .caps = QGL_CAP_UNPACK_SUBIMAGE,
+        .extension = "GL_EXT_unpack_subimage",
     },
 
     // GL 1.1, ES 3.0
     // OES_element_index_uint
     {
-        .extension = "GL_OES_element_index_uint",
         .ver_gl = QGL_VER(1, 1),
         .ver_es = QGL_VER(3, 0),
         .caps = QGL_CAP_ELEMENT_INDEX_UINT,
+        .extension = "GL_OES_element_index_uint",
     },
 
     // GL 1.1, ES 1.0 up to 2.0
@@ -155,41 +326,35 @@ static const glsection_t sections[] = {
     // ES 1.1
     {
         .ver_es = QGL_VER(1, 1),
-        .caps = QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_CLIENT_VA,
+        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_CLIENT_VA),
     },
 
     // GL 1.2
     {
         .ver_gl = QGL_VER(1, 2),
-        .caps = QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_TEXTURE_MAX_LEVEL,
+        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_TEXTURE_MAX_LEVEL),
     },
 
     // GL 1.3
     // ARB_multitexture
     {
-        .extension = "GL_ARB_multitexture",
-        .suffix = "ARB",
         .ver_gl = QGL_VER(1, 3),
         .ver_es = QGL_VER(1, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ActiveTexture),
-            { NULL }
-        }
+        .suffix = "ARB",
+        .extension = "GL_ARB_multitexture",
+        .functions = kGl13MultitextureFunctions
     },
 
     // GL 1.3, compat
     // ARB_multitexture
     {
-        .extension = "GL_ARB_multitexture",
-        .suffix = "ARB",
         .ver_gl = QGL_VER(1, 3),
         .ver_es = QGL_VER(1, 0),
         .excl_gl = QGL_VER(3, 1),
         .excl_es = QGL_VER(2, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ClientActiveTexture),
-            { NULL }
-        }
+        .suffix = "ARB",
+        .extension = "GL_ARB_multitexture",
+        .functions = kGl13MultitextureCompatFunctions
     },
 
     // GL 1.4, compat
@@ -202,86 +367,35 @@ static const glsection_t sections[] = {
     // GL 1.5
     // ARB_vertex_buffer_object
     {
-        .extension = "GL_ARB_vertex_buffer_object",
-        .suffix = "ARB",
         .ver_gl = QGL_VER(1, 5),
         .ver_es = QGL_VER(1, 1),
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindBuffer),
-            QGL_FN(BufferData),
-            QGL_FN(BufferSubData),
-            QGL_FN(DeleteBuffers),
-            QGL_FN(GenBuffers),
-            { NULL }
-        }
+        .suffix = "ARB",
+        .extension = "GL_ARB_vertex_buffer_object",
+        .functions = kGl15VboFunctions
     },
 
     // GL 1.5, ES 3.0
     // ARB_occlusion_query
     {
-        .extension = "GL_ARB_occlusion_query",
-        .suffix = "ARB",
         .ver_gl = QGL_VER(1, 5),
         .ver_es = QGL_VER(3, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(BeginQuery),
-            QGL_FN(DeleteQueries),
-            QGL_FN(EndQuery),
-            QGL_FN(GenQueries),
-            QGL_FN(GetQueryObjectuiv),
-            { NULL }
-        }
+        .suffix = "ARB",
+        .extension = "GL_ARB_occlusion_query",
+        .functions = kGl15OcclusionQueryFunctions
     },
 
     // GL 2.0
     {
         .ver_gl = QGL_VER(2, 0),
         .ver_es = QGL_VER(2, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(AttachShader),
-            QGL_FN(BindAttribLocation),
-            QGL_FN(CompileShader),
-            QGL_FN(CreateProgram),
-            QGL_FN(CreateShader),
-            QGL_FN(DeleteProgram),
-            QGL_FN(DeleteShader),
-            QGL_FN(DrawBuffers),
-            QGL_FN(DisableVertexAttribArray),
-            QGL_FN(EnableVertexAttribArray),
-            QGL_FN(GetProgramInfoLog),
-            QGL_FN(GetProgramiv),
-            QGL_FN(GetShaderInfoLog),
-            QGL_FN(GetShaderiv),
-            QGL_FN(GetUniformLocation),
-            QGL_FN(LinkProgram),
-            QGL_FN(ShaderSource),
-            QGL_FN(Uniform1i),
-            QGL_FN(UseProgram),
-            QGL_FN(VertexAttrib4f),
-            QGL_FN(VertexAttribPointer),
-            { NULL }
-        }
+        .functions = kGl20Functions
     },
 
     // GL 3.0, ES 2.0
     {
         .ver_gl = QGL_VER(3, 0),
         .ver_es = QGL_VER(2, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindFramebuffer),
-            QGL_FN(BindRenderbuffer),
-            QGL_FN(CheckFramebufferStatus),
-            QGL_FN(DeleteFramebuffers),
-            QGL_FN(DeleteRenderbuffers),
-            QGL_FN(FramebufferRenderbuffer),
-            QGL_FN(FramebufferTexture2D),
-            QGL_FN(GenFramebuffers),
-            QGL_FN(GenRenderbuffers),
-            QGL_FN(GenerateMipmap),
-            QGL_FN(GetFramebufferAttachmentParameteriv),
-            QGL_FN(RenderbufferStorage),
-            { NULL }
-        }
+        .functions = kGl30FramebufferFunctions
     },
 
     // GL 3.0, ES 3.0
@@ -290,27 +404,14 @@ static const glsection_t sections[] = {
         .ver_es = QGL_VER(3, 0),
         // NPOT textures are technically GL 2.0, but only enable them on 3.0 to
         // ensure full hardware support, including mipmaps.
-        .caps = QGL_CAP_TEXTURE_MAX_LEVEL | QGL_CAP_TEXTURE_NON_POWER_OF_TWO,
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindBufferBase),
-            QGL_FN(BindBufferRange),
-            QGL_FN(BindVertexArray),
-            QGL_FN(ClearBufferfv),
-            QGL_FN(DeleteVertexArrays),
-            QGL_FN(GenVertexArrays),
-            QGL_FN(GetStringi),
-            QGL_FN(VertexAttribIPointer),
-            { NULL }
-        }
+        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_MAX_LEVEL | QGL_CAP_TEXTURE_NON_POWER_OF_TWO),
+        .functions = kGl30Es30Functions
     },
 
     // GL 3.0, not ES
     {
         .ver_gl = QGL_VER(3, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindFragDataLocation),
-            { NULL }
-        }
+        .functions = kGl30NoEsFunctions
     },
 
     // GL 3.1
@@ -319,64 +420,43 @@ static const glsection_t sections[] = {
         .ver_gl = QGL_VER(3, 1),
         .ver_es = QGL_VER(3, 2),
         .caps = QGL_CAP_BUFFER_TEXTURE,
-        .functions = (const glfunction_t []) {
-            QGL_FN(TexBuffer),
-            { NULL }
-        }
+        .functions = kGl31Es32Functions
     },
 
     // GL 3.1
     // ARB_uniform_buffer_object
     {
-        .extension = "GL_ARB_uniform_buffer_object",
         .ver_gl = QGL_VER(3, 1),
         .ver_es = QGL_VER(3, 0),
         .caps = QGL_CAP_SHADER,
-        .functions = (const glfunction_t []) {
-            QGL_FN(GetActiveUniformBlockiv),
-            QGL_FN(GetUniformBlockIndex),
-            QGL_FN(UniformBlockBinding),
-            { NULL }
-        }
+        .extension = "GL_ARB_uniform_buffer_object",
+        .functions = kGl31UboFunctions
     },
 
     // GL 3.2, ES 3.0
     // GL_ARB_sync
     {
-        .extension = "GL_ARB_sync",
         .ver_gl = QGL_VER(3, 2),
         .ver_es = QGL_VER(3, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ClientWaitSync),
-            QGL_FN(DeleteSync),
-            QGL_FN(FenceSync),
-            { NULL }
-        }
+        .extension = "GL_ARB_sync",
+        .functions = kGl32SyncFunctions
     },
 
     // GL 4.1
     {
         .ver_gl = QGL_VER(4, 1),
         .ver_es = QGL_VER(1, 0),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ClearDepthf),
-            QGL_FN(DepthRangef),
-            { NULL }
-        }
+        .functions = kGl41Functions
     },
 
     // GL 4.3
     // KHR_debug
     {
-        .extension = "GL_KHR_debug",
-        .suffix = "?KHR",
         .ver_gl = QGL_VER(4, 3),
         .ver_es = QGL_VER(3, 2),
-        .functions = (const glfunction_t []) {
-            QGL_FN(DebugMessageCallback),
-            QGL_FN(DebugMessageControl),
-            { NULL }
-        }
+        .suffix = "?KHR",
+        .extension = "GL_KHR_debug",
+        .functions = kGl43DebugFunctions
     },
 
     // GL 4.3
@@ -398,10 +478,7 @@ static const glsection_t sections[] = {
     {
         .ver_gl = QGL_VER(4, 4),
         .extension = "GL_ARB_multi_bind",
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindTextures),
-            { NULL }
-        }
+        .functions = kGl44MultiBindFunctions
     },
 
     // GL 4.5
@@ -409,54 +486,37 @@ static const glsection_t sections[] = {
     {
         .ver_gl = QGL_VER(4, 5),
         .extension = "GL_ARB_direct_state_access",
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindTextureUnit),
-            { NULL }
-        }
+        .functions = kGl45DsaFunctions
     },
 
     // GL 4.5
     // ARB_robustness
     {
-        .extension = "GL_ARB_robustness",
-        .suffix = "ARB",
         .ver_gl = QGL_VER(4, 5),
         .ver_es = QGL_VER(3, 2),
-        .functions = (const glfunction_t []) {
-            QGL_FN(ReadnPixels),
-            { NULL }
-        }
+        .suffix = "ARB",
+        .extension = "GL_ARB_robustness",
+        .functions = kGl45RobustnessFunctions
     },
 
     // GL 4.6
     // EXT_texture_filter_anisotropic
     {
-        .extension = "GL_EXT_texture_filter_anisotropic",
         .ver_gl = QGL_VER(4, 6),
-        .caps = QGL_CAP_TEXTURE_ANISOTROPY
+        .caps = QGL_CAP_TEXTURE_ANISOTROPY,
+        .extension = "GL_EXT_texture_filter_anisotropic",
     },
 
     // ARB_fragment_program
     {
         .extension = "GL_ARB_fragment_program",
-        .functions = (const glfunction_t []) {
-            QGL_FN(BindProgramARB),
-            QGL_FN(DeleteProgramsARB),
-            QGL_FN(GenProgramsARB),
-            QGL_FN(ProgramLocalParameter4fvARB),
-            QGL_FN(ProgramStringARB),
-            { NULL }
-        }
+        .functions = kArbFragmentProgramFunctions
     },
 
     // EXT_compiled_vertex_array
     {
         .extension = "GL_EXT_compiled_vertex_array",
-        .functions = (const glfunction_t []) {
-            QGL_FN(LockArraysEXT),
-            QGL_FN(UnlockArraysEXT),
-            { NULL }
-        }
+        .functions = kExtCompiledVertexArrayFunctions
     },
 };
 
@@ -485,7 +545,7 @@ static bool parse_gl_version(void)
     int ver;
     bool gl_es = false;
 
-    qglGetString = vid->get_proc_addr("glGetString");
+    qglGetString = reinterpret_cast<decltype(qglGetString)>(vid->get_proc_addr("glGetString"));
     if (!qglGetString)
         return false;
 
@@ -624,8 +684,8 @@ bool QGL_Init(void)
     }
 
     if (gl_config.ver_gl >= QGL_VER(3, 0) || gl_config.ver_es >= QGL_VER(3, 0)) {
-        qglGetStringi = vid->get_proc_addr("glGetStringi");
-        qglGetIntegerv = vid->get_proc_addr("glGetIntegerv");
+        qglGetStringi = reinterpret_cast<decltype(qglGetStringi)>(vid->get_proc_addr("glGetStringi"));
+        qglGetIntegerv = reinterpret_cast<decltype(qglGetIntegerv)>(vid->get_proc_addr("glGetIntegerv"));
         if (!qglGetStringi || !qglGetIntegerv) {
             Com_EPrintf("Required OpenGL entry points not found\n");
             return false;
@@ -731,17 +791,17 @@ bool QGL_Init(void)
         if (!core)
             Com_DPrintf("Loaded extension %s\n", sec->extension);
 
-        gl_config.caps |= sec->caps;
+        gl_config.caps = add_caps(gl_config.caps, sec->caps);
     }
 
     if (gl_config.ver_es) {
         // don't ever attempt to use shaders with GL ES < 3.0, or GLSL ES < 3.0
         if (gl_config.ver_es < QGL_VER(3, 0) || gl_config.ver_sl < QGL_VER(3, 0))
-            gl_config.caps &= ~QGL_CAP_SHADER;
+            gl_config.caps = remove_caps(gl_config.caps, QGL_CAP_SHADER);
     } else {
         // don't ever attempt to use shaders with GL < 3.0, or GLSL < 1.30
         if (gl_config.ver_gl < QGL_VER(3, 0) || gl_config.ver_sl < QGL_VER(1, 30))
-            gl_config.caps &= ~QGL_CAP_SHADER;
+            gl_config.caps = remove_caps(gl_config.caps, QGL_CAP_SHADER);
     }
 
     // reject unsupported configurations, such as GL ES 2.0
@@ -774,7 +834,7 @@ bool QGL_Init(void)
     // disable client vertex arrays in WebGL contexts
     if (gl_config.webgl) {
         Com_DPrintf("Detected WebGL compatible context\n");
-        gl_config.caps &= ~QGL_CAP_CLIENT_VA;
+        gl_config.caps = remove_caps(gl_config.caps, QGL_CAP_CLIENT_VA);
     }
 
     Com_DPrintf("Detected OpenGL capabilities: %#x\n", gl_config.caps);
