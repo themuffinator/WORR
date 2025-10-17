@@ -1081,8 +1081,9 @@ game_export_t *GetGame3Proxy(game_import_t *import, void *game3_entry, void *gam
     game_import = *import;
 
     game3_import_t import3;
-    game3_export_t *(*entry)(game3_import_t *) = game3_entry;
-    const game3_export_ex_t *(*entry_ex)(const game3_import_ex_t *) = game3_ex_entry;
+    game3_export_t *(*entry)(game3_import_t *) = reinterpret_cast<game3_export_t *(*)(game3_import_t *)>(game3_entry);
+    const game3_export_ex_t *(*entry_ex)(const game3_import_ex_t *) =
+        reinterpret_cast<const game3_export_ex_t *(*)(const game3_import_ex_t *)>(game3_ex_entry);
 
     import3.multicast = wrap_multicast;
     import3.unicast = wrap_unicast;
