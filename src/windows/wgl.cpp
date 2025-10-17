@@ -213,7 +213,7 @@ hard:
 
 static unsigned get_fake_window_extensions(void)
 {
-    static const char class[] = PRODUCT " FAKE WINDOW CLASS";
+    static const char wndClass[] = PRODUCT " FAKE WINDOW CLASS";
     static const char name[] = PRODUCT " FAKE WINDOW NAME";
     unsigned extensions = 0;
 
@@ -221,13 +221,13 @@ static unsigned get_fake_window_extensions(void)
         .cbSize = sizeof(wc),
         .lpfnWndProc = DefWindowProc,
         .hInstance = hGlobalInstance,
-        .lpszClassName = class,
+        .lpszClassName = wndClass,
     };
 
     if (!RegisterClassExA(&wc))
         goto fail0;
 
-    HWND wnd = CreateWindowA(class, name, 0, 0, 0, 0, 0,
+    HWND wnd = CreateWindowA(wndClass, name, 0, 0, 0, 0, 0,
                              NULL, NULL, hGlobalInstance, NULL);
     if (!wnd)
         goto fail1;
@@ -281,7 +281,7 @@ fail3:
 fail2:
     DestroyWindow(wnd);
 fail1:
-    UnregisterClassA(class, hGlobalInstance);
+    UnregisterClassA(wndClass, hGlobalInstance);
 fail0:
     return extensions;
 }
