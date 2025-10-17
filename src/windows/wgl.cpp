@@ -83,7 +83,7 @@ static void print_error(const char *what)
 
 static int wgl_setup_gl(r_opengl_config_t cfg)
 {
-    PIXELFORMATDESCRIPTOR pfd;
+    PIXELFORMATDESCRIPTOR pfd{};
     int pixelformat;
 
     // create the main window
@@ -114,15 +114,33 @@ static int wgl_setup_gl(r_opengl_config_t cfg)
             goto soft;
         }
     } else {
-        pfd = (PIXELFORMATDESCRIPTOR) {
-            .nSize = sizeof(pfd),
-            .nVersion = 1,
-            .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-            .iPixelType = PFD_TYPE_RGBA,
-            .cColorBits = cfg.colorbits,
-            .cDepthBits = cfg.depthbits,
-            .cStencilBits = cfg.stencilbits,
-            .iLayerType = PFD_MAIN_PLANE,
+        pfd = PIXELFORMATDESCRIPTOR{
+            sizeof(pfd),
+            1,
+            PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+            PFD_TYPE_RGBA,
+            static_cast<BYTE>(cfg.colorbits),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            static_cast<BYTE>(cfg.depthbits),
+            static_cast<BYTE>(cfg.stencilbits),
+            0,
+            PFD_MAIN_PLANE,
+            0,
+            0,
+            0,
+            0,
         };
 
         if (!(pixelformat = ChoosePixelFormat(win.dc, &pfd))) {
