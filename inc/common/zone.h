@@ -67,6 +67,10 @@ typedef enum {
     TAG_MAX
 } memtag_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void    Z_Init(void);
 void    Z_Free(void *ptr);
 void    Z_Freep(void *ptr);
@@ -88,3 +92,7 @@ void    Z_Stats_f(void);
 
 // may return pointer to static memory
 char    *Z_CvarCopyString(const char *in);
+
+#ifdef __cplusplus
+}
+#endif
