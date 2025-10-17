@@ -1096,7 +1096,7 @@ void SV_InitGameProgs(void)
 
     game_library = GameDll_Load();
     if (game_library)
-        entry = Sys_GetProcAddress(game_library, "GetGameAPI");
+        entry = reinterpret_cast<game_entry_t>(Sys_GetProcAddress(game_library, "GetGameAPI"));
     if (!entry)
         Com_Error(ERR_DROP, "Failed to load game library");
 
