@@ -345,7 +345,8 @@ static void tty_parse_input(const char *text)
                 f->text[f->cursorPos + 0] = key;
                 f->text[f->cursorPos + 1] = 0;
             } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
-                tty_write(&(char){ key }, 1);
+                char ch = static_cast<char>(key);
+                tty_write(&ch, 1);
                 f->text[f->cursorPos + 0] = key;
                 f->text[f->cursorPos + 1] = 0;
                 f->cursorPos++;
