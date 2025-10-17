@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <array>
+
 enum {
     MZ2_TANK_BLASTER_1 = 1,
     MZ2_TANK_BLASTER_2,
@@ -350,4 +352,4 @@ enum {
 
 typedef uint16_t monster_muzzleflash_id_t;
 
-extern const vec3_t monster_flash_offset[MZ2_LAST];
+extern const std::array<vec3_t, MZ2_LAST> monster_flash_offset;
