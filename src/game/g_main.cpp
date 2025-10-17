@@ -196,6 +196,7 @@ Returns a pointer to the structure with all entry points
 and global variables
 =================
 */
+extern "C" {
 q_exported game3_export_t *GetGameAPI(game3_import_t *import)
 {
     gi = *import;
@@ -224,6 +225,7 @@ q_exported game3_export_t *GetGameAPI(game3_import_t *import)
     globals.edict_size = sizeof(edict_t);
 
     return &globals;
+}
 }
 
 #ifndef GAME_HARD_LINKED
