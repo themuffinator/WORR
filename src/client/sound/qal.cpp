@@ -24,6 +24,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <AL/alc.h>
 
+#include <functional>
+
 #define QALAPI
 #include "qal.h"
 
@@ -41,19 +43,35 @@ static LPALCISEXTENSIONPRESENT qalcIsExtensionPresent;
 static LPALCMAKECONTEXTCURRENT qalcMakeContextCurrent;
 static LPALCOPENDEVICE qalcOpenDevice;
 
-typedef struct {
+struct alfunction_t {
     const char *name;
-    void *dest;
-    void *builtin;
-} alfunction_t;
+    std::function<void()> assign_builtin;
+    std::function<void()> assign_null;
+    std::function<bool(void *)> assign_from_proc;
+};
+
+template <typename T>
+static alfunction_t make_alfunction(const char *name, T &destination, T builtin)
+{
+    T *dest_ptr = &destination;
+    return {
+        name,
+        [dest_ptr, builtin]() { *dest_ptr = builtin; },
+        [dest_ptr]() { *dest_ptr = nullptr; },
+        [dest_ptr](void *address) {
+            *dest_ptr = reinterpret_cast<T>(address);
+            return *dest_ptr != nullptr;
+        }
+    };
+}
 
 typedef struct {
     const char *extension;
     const alfunction_t *functions;
 } alsection_t;
 
-#define QALC_FN(x)  { "alc"#x, &qalc##x, alc##x }
-#define QAL_FN(x)   { "al"#x, &qal##x, al##x }
+#define QALC_FN(x)  make_alfunction("alc"#x, qalc##x, alc##x)
+#define QAL_FN(x)   make_alfunction("al"#x, qal##x, al##x)
 
 static const alsection_t sections[] = {
     {
@@ -142,7 +160,7 @@ void QAL_Shutdown(void)
         const alfunction_t *func;
 
         for (func = sec->functions; func->name; func++)
-            *(void **)func->dest = NULL;
+            func->assign_null();
     }
 
     if (handle) {
@@ -202,7 +220,7 @@ int QAL_Init(void)
     if (!*al_device->string) {
         for (i = 0, sec = sections; i < q_countof(sections); i++, sec++)
             for (func = sec->functions; func->name; func++)
-                *(void **)func->dest = func->builtin;
+                func->assign_builtin();
     } else {
         for (i = 0; i < q_countof(al_drivers); i++) {
             Com_DPrintf("Trying %s\n", al_drivers[i]);
@@ -219,9 +237,8 @@ int QAL_Init(void)
 
             for (func = sec->functions; func->name; func++) {
                 void *addr = Sys_GetProcAddress(handle, func->name);
-                if (!addr)
+                if (!func->assign_from_proc(addr))
                     goto fail;
-                *(void **)func->dest = addr;
             }
         }
     }
@@ -277,12 +294,12 @@ int QAL_Init(void)
                 void *addr = qalGetProcAddress(func->name);
                 if (!addr)
                     break;
-                *(void **)func->dest = addr;
+                func->assign_from_proc(addr);
             }
 
             if (func->name) {
                 for (func = sec->functions; func->name; func++)
-                    *(void **)func->dest = NULL;
+                    func->assign_null();
 
                 Com_EPrintf("Couldn't load extension %s\n", sec->extension);
                 continue;
