@@ -1,6 +1,9 @@
 #pragma once
 
-#include <bit>
+#if defined(__cpp_lib_bit_cast)
+#    include <bit>
+#endif
+#include <cstring>
 #include <type_traits>
 
 #include "system/system.h"
@@ -16,7 +19,13 @@ template <typename Func>
     }
 
     static_assert(sizeof(Func) == sizeof(address), "Function pointer size mismatch");
+#if defined(__cpp_lib_bit_cast)
     return std::bit_cast<Func>(address);
+#else
+    Func ptr;
+    std::memcpy(&ptr, &address, sizeof ptr);
+    return ptr;
+#endif
 }
 
 // Helper to retrieve typed function pointers from dynamic libraries.
