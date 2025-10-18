@@ -21,6 +21,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.h"
 #include "common/zone.h"
 
+#ifdef __cplusplus
+#undef Z_Realloc
+#undef Z_ReallocArray
+#undef Z_Malloc
+#undef Z_Mallocz
+#undef Z_TagMalloc
+#undef Z_TagMallocz
+#endif
+
 #if USE_MEMORY_TRACES
 #define MAX_TRACE_SIZE 32
 #include "system/system.h"

@@ -1015,7 +1015,7 @@ void *Q_memccpy(void *dst, const void *src, int c, size_t size)
 #ifndef HAVE_STRNLEN
 size_t Q_strnlen(const char *s, size_t maxlen)
 {
-    char *p = memchr(s, 0, maxlen);
+    const char *p = static_cast<const char *>(memchr(s, 0, maxlen));
     return p ? p - s : maxlen;
 }
 #endif
