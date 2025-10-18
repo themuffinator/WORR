@@ -56,14 +56,18 @@ static const pmoveParams_t* CGX_GetPmoveParams(void)
     return &cl.pmp;
 }
 
-static cgame_q2pro_extended_support_ext_t cgame_q2pro_extended_support = {
-    .api_version = 3,
+static constexpr cgame_q2pro_extended_support_ext_t CGX_CreateExtendedSupport()
+{
+    return cgame_q2pro_extended_support_ext_t{
+        3,
+        CGX_IsExtendedServer,
+        CGX_GetMaxStats,
+        CGX_DrawCharEx,
+        CGX_GetPmoveParams,
+    };
+}
 
-    .IsExtendedServer = CGX_IsExtendedServer,
-    .GetMaxStats = CGX_GetMaxStats,
-    .DrawCharEx = CGX_DrawCharEx,
-    .GetPmoveParams = CGX_GetPmoveParams,
-};
+static cgame_q2pro_extended_support_ext_t cgame_q2pro_extended_support = CGX_CreateExtendedSupport();
 
 void CG_Init(void)
 {
@@ -331,7 +335,7 @@ static const char* CG_Localize (const char *base, const char **args, size_t num_
     return out_str;
 }
 
-static const rgba_t rgba_white = { .r = 255, .g = 255, .b = 255, .a = 255 };
+static const rgba_t rgba_white = {255, 255, 255, 255};
 
 static int32_t CG_SCR_DrawBind(int32_t isplit, const char *binding, const char *purpose, int x, int y, int scale)
 {

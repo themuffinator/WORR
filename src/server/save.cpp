@@ -244,7 +244,7 @@ static int wipe_save_dir(const char *dir)
         ret |= remove_file(dir, name);
     }
 
-    FS_FreeList(list);
+    FS_FreeList(reinterpret_cast<void **>(list));
     return ret;
 }
 
@@ -261,7 +261,7 @@ static int copy_save_dir(const char *src, const char *dst)
         ret |= copy_file(src, dst, name);
     }
 
-    FS_FreeList(list);
+    FS_FreeList(reinterpret_cast<void **>(list));
     return ret;
 }
 
@@ -398,7 +398,7 @@ char *SV_GetSaveInfo(const char *dir)
 
 static void abort_func(void *arg)
 {
-    CM_FreeMap(arg);
+    CM_FreeMap(static_cast<cm_t *>(arg));
 }
 
 static int read_server_file(void)
@@ -474,7 +474,7 @@ static int read_server_file(void)
     FS_LoadFile("save/" SAVE_CURRENT "/game.ssv", (void **)&buf);
     if (!buf)
         Com_Error(ERR_DROP, "Couldn't read game.ssv");
-    ge->ReadGameJson(buf);
+    ge->ReadGameJson(static_cast<const char *>(buf));
     Z_Free(buf);
 
     // clear pending CM
@@ -546,7 +546,7 @@ static int read_level_file(void)
     FS_LoadFile(name, (void **)&data);
     if (!data)
         Com_Error(ERR_DROP, "Couldn't read %s", name);
-    ge->ReadLevelJson(data);
+    ge->ReadLevelJson(static_cast<const char *>(data));
     Z_Free(data);
     return 0;
 }
@@ -687,7 +687,7 @@ static void SV_Savegame_c(genctx_t *ctx, int argnum)
 
 static void SV_Loadgame_f(void)
 {
-    char *dir;
+    const char *dir;
 
     if (Cmd_Argc() != 2) {
         Com_Printf("Usage: %s <directory>\n", Cmd_Argv(0));
@@ -728,7 +728,7 @@ static void SV_Loadgame_f(void)
 
 static void SV_Savegame_f(void)
 {
-    char *dir;
+    const char *dir;
     savetype_t type;
 
     if (sv.state != ss_game) {

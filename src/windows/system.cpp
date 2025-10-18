@@ -994,7 +994,7 @@ DLL LOADING
 
 void Sys_FreeLibrary(void *handle)
 {
-    if (handle && !FreeLibrary(handle)) {
+    if (handle && !FreeLibrary(reinterpret_cast<HMODULE>(handle))) {
         Com_Error(ERR_FATAL, "FreeLibrary failed on %p", handle);
     }
 }
@@ -1014,7 +1014,7 @@ void *Sys_LoadLibrary(const char *path, const char *sym, void **handle)
     }
 
     if (sym) {
-        entry = GetProcAddress(module, sym);
+        entry = reinterpret_cast<void *>(GetProcAddress(module, sym));
         if (!entry) {
             Com_SetLastError(va("%s: GetProcAddress(%s) failed: %s",
                                 path, sym, Sys_ErrorString(GetLastError())));
@@ -1025,7 +1025,7 @@ void *Sys_LoadLibrary(const char *path, const char *sym, void **handle)
         entry = NULL;
     }
 
-    *handle = module;
+    *handle = reinterpret_cast<void *>(module);
     return entry;
 }
 
@@ -1033,7 +1033,7 @@ void *Sys_GetProcAddress(void *handle, const char *sym)
 {
     void    *entry;
 
-    entry = GetProcAddress(handle, sym);
+    entry = reinterpret_cast<void *>(GetProcAddress(reinterpret_cast<HMODULE>(handle), sym));
     if (!entry)
         Com_SetLastError(va("GetProcAddress(%s) failed: %s",
                             sym, Sys_ErrorString(GetLastError())));
@@ -1298,7 +1298,7 @@ bool Sys_GetRereleaseHomeDir(char *path, size_t path_length)
 {
     bool result = false;
     PWSTR saved_games_path = NULL;
-    HRESULT hr = SHGetKnownFolderPath(&FOLDERID_SavedGames, KF_FLAG_CREATE | KF_FLAG_INIT, NULL, &saved_games_path);
+    HRESULT hr = SHGetKnownFolderPath(FOLDERID_SavedGames, KF_FLAG_CREATE | KF_FLAG_INIT, NULL, &saved_games_path);
     if (!SUCCEEDED(hr))
     {
         Com_WPrintf("Failed to retrieve Saved Games path (%.8lx)\n", (long)hr);

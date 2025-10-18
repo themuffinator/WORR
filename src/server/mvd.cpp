@@ -1340,13 +1340,13 @@ static void flush_stream(gtv_client_t *client, int flush)
     z->avail_in = 0;
 
     do {
-        data = FIFO_Reserve(fifo, &len);
+        data = static_cast<byte *>(FIFO_Reserve(fifo, &len));
         if (!len) {
             // FIXME: this is not an error when flushing
             return;
         }
 
-        z->next_out = data;
+        z->next_out = reinterpret_cast<Bytef *>(data);
         z->avail_out = (uInt)len;
 
         ret = deflate(z, flush);
@@ -1402,17 +1402,17 @@ static void write_stream(gtv_client_t *client, void *data, size_t len)
     if (client->z.state) {
         z_streamp z = &client->z;
 
-        z->next_in = data;
+        z->next_in = static_cast<Bytef *>(data);
         z->avail_in = (uInt)len;
 
         do {
-            data = FIFO_Reserve(fifo, &len);
+            data = static_cast<byte *>(FIFO_Reserve(fifo, &len));
             if (!len) {
                 drop_client(client, "overflowed");
                 return;
             }
 
-            z->next_out = data;
+            z->next_out = static_cast<Bytef *>(data);
             z->avail_out = (uInt)len;
 
             if (deflate(z, Z_NO_FLUSH) != Z_OK) {
@@ -1509,7 +1509,7 @@ static void parse_hello(gtv_client_t *client)
 
     // allocate larger send buffer
     size = MAX_GTS_MSGLEN * sv_mvd_bufsize->integer;
-    data = SV_Malloc(size);
+    data = static_cast<byte *>(SV_Malloc(size));
     client->stream.send.data = data;
     client->stream.send.size = size;
     client->data = data;

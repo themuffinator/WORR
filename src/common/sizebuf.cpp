@@ -25,7 +25,7 @@ void SZ_Init(sizebuf_t *buf, void *data, size_t size, const char *tag)
 {
     Q_assert(size <= INT32_MAX);
     memset(buf, 0, sizeof(*buf));
-    buf->data = data;
+    buf->data = static_cast<byte *>(data);
     buf->maxsize = size;
     buf->tag = tag;
 }

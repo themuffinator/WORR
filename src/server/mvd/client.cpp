@@ -1379,18 +1379,18 @@ static int inflate_stream(fifo_t *dst, fifo_t *src, z_streamp z)
     int     ret = Z_BUF_ERROR;
 
     do {
-        data = FIFO_Peek(src, &avail_in);
+        data = static_cast<byte *>(FIFO_Peek(src, &avail_in));
         if (!avail_in) {
             break;
         }
-        z->next_in = data;
+        z->next_in = reinterpret_cast<Bytef *>(data);
         z->avail_in = (uInt)avail_in;
 
-        data = FIFO_Reserve(dst, &avail_out);
+        data = static_cast<byte *>(FIFO_Reserve(dst, &avail_out));
         if (!avail_out) {
             break;
         }
-        z->next_out = data;
+        z->next_out = reinterpret_cast<Bytef *>(data);
         z->avail_out = (uInt)avail_out;
 
         ret = inflate(z, Z_SYNC_FLUSH);
