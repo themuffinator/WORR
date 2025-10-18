@@ -520,8 +520,8 @@ static void SCR_DrawHealthBar(vrect_t hud_vrect, int x, int y, int value)
     if (!value)
         return;
 
-    const rgba_t rgba_fg = ColorRGBA(239, 0, 0, 255);    // index 240
-    const rgba_t rgba_bg = ColorRGBA(63, 63, 63, 255);    // index 4
+    const rgba_t rgba_fg{ COLOR_U32_RGBA(239, 0, 0, 255) };    // index 240
+    const rgba_t rgba_bg{ COLOR_U32_RGBA(63, 63, 63, 255) };    // index 4
 
     int bar_width = hud_vrect.width / 3;
     float percent = (value - 1) / 254.0f;
@@ -938,25 +938,32 @@ static void CGC_NotifyMessage(int32_t isplit, const char *msg, bool is_chat)
 
 const char cgame_q2pro_extended_support_ext[] = "q2pro:extended_support";
 
-cgame_export_t cgame_classic = {
-    .apiversion = CGAME_API_VERSION,
+cgame_export_t cgame_classic{
+    CGAME_API_VERSION,
 
-    .Init = CGC_Init,
-    .Shutdown = CGC_Shutdown,
+    CGC_Init,
+    CGC_Shutdown,
 
-    .DrawHUD = CGC_DrawHUD,
-    .TouchPics = CGC_TouchPics,
+    CGC_DrawHUD,
+    CGC_TouchPics,
 
-    .GetOwnedWeaponWheelWeapons = CGC_GetOwnedWeaponWheelWeapons,
-    .GetHitMarkerDamage = CGC_GetHitMarkerDamage,
+    nullptr, // LayoutFlags
+    nullptr, // GetActiveWeaponWheelWeapon
+    CGC_GetOwnedWeaponWheelWeapons,
+    nullptr, // GetWeaponWheelAmmoCount
+    nullptr, // GetPowerupWheelCount
+    CGC_GetHitMarkerDamage,
 
-    .Pmove = CGC_Pmove,
+    CGC_Pmove,
 
-    .ParseConfigString = CGC_ParseConfigString,
+    CGC_ParseConfigString,
 
-    .ParseCenterPrint = CGC_ParseCenterPrint,
-    .ClearCenterprint = CGC_ClearCenterprint,
-    .NotifyMessage = CGC_NotifyMessage,
+    CGC_ParseCenterPrint,
+    nullptr, // ClearNotify
+    CGC_ClearCenterprint,
+    CGC_NotifyMessage,
+    nullptr, // GetMonsterFlashOffset
+    nullptr  // GetExtension
 };
 
 cgame_export_t *GetClassicCGameAPI(cgame_import_t *import)
