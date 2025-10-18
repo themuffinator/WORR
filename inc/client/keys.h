@@ -121,6 +121,11 @@ typedef enum {
     KEY_MENU    = BIT(2)
 } keydest_t;
 
+constexpr keydest_t Key_FromMask(int mask)
+{
+    return static_cast<keydest_t>(mask);
+}
+
 typedef bool (*keywaitcb_t)(void *arg, int key);
 
 void    Key_Init(void);
