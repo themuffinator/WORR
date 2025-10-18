@@ -769,7 +769,7 @@ static void Cvar_SetFlag_f(void)
     Cvar_FullSet(Cmd_Argv(1), Cmd_ArgsFrom(2), flags, Cmd_From());
 }
 
-#if USE_CLIENT
+#if defined(USE_CLIENT) && USE_CLIENT
 
 /*
 ============
@@ -797,6 +797,15 @@ void Cvar_WriteVariables(qhandle_t f, int mask, bool modified)
         a = !modified && (var->flags & CVAR_ARCHIVE) ? "a" : "";
         FS_FPrintf(f, "set%s %s \"%s\"\n", a, var->name, s);
     }
+}
+
+#else
+
+void Cvar_WriteVariables(qhandle_t f, int mask, bool modified)
+{
+    (void)f;
+    (void)mask;
+    (void)modified;
 }
 
 #endif
