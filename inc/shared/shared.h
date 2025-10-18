@@ -930,7 +930,7 @@ static inline color_t ColorSetAlpha(color_t c, float alpha)
         return ColorSetAlphaByte(c, 0);
     }
 
-    if (alpha < 1.0f) {
+    if (alpha <= 1.0f) {
         float scaled = alpha * 255.0f + 0.5f;
         if (scaled < 0.0f) {
             scaled = 0.0f;
