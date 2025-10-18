@@ -104,7 +104,9 @@ void    Z_Stats_f(void);
 // may return pointer to static memory
 char    *Z_CvarCopyString(const char *in);
 
-}
+#ifdef __cplusplus
+} // extern "C"
+} // namespace zone_c_api
 
 static inline z_allocation Z_Realloc_allocation(void *ptr, size_t size) noexcept
 {
@@ -143,4 +145,4 @@ static inline z_allocation Z_TagMallocz_allocation(size_t size, memtag_t tag) no
 #define Z_TagMalloc(size, tag) (Z_TagMalloc_allocation((size), (tag)))
 #define Z_TagMallocz(size, tag) (Z_TagMallocz_allocation((size), (tag)))
 
-#endif
+#endif // __cplusplus
