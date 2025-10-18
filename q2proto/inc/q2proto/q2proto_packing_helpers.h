@@ -25,6 +25,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "q2proto_valenc.h"
 
 #if defined(__cplusplus)
+#   ifndef restrict
+#       define restrict
+#   endif
 extern "C" {
 #endif
 
@@ -84,6 +87,61 @@ static inline void _q2p_packing_angle_float_to_int(int16_t *dest, const float *s
     dest[2] = _q2proto_valenc_angle2short(src[2]);
 }
 
+#if defined(__cplusplus)
+} // extern "C"
+
+static inline void _q2p_packing_pack_coord_vec_to_int_dispatch(int32_t *dest, const int16_t *src)
+{
+    _q2p_packing_coord_short_to_int(dest, src);
+}
+
+static inline void _q2p_packing_pack_coord_vec_to_int_dispatch(int32_t *dest, const int32_t *src)
+{
+    _q2p_packing_coord_int_to_int(dest, src);
+}
+
+static inline void _q2p_packing_pack_coord_vec_to_int_dispatch(int32_t *dest, const float *src)
+{
+    _q2p_packing_coord_float_to_int(dest, src);
+}
+
+static inline void
+_q2p_packing_pack_coord_vec_to_floatbits_dispatch(int32_t *dest, const int16_t *src)
+{
+    _q2p_packing_coord_short_to_floatbits(dest, src);
+}
+
+static inline void
+_q2p_packing_pack_coord_vec_to_floatbits_dispatch(int32_t *dest, const int32_t *src)
+{
+    _q2p_packing_coord_int_to_floatbits(dest, src);
+}
+
+static inline void
+_q2p_packing_pack_coord_vec_to_floatbits_dispatch(int32_t *dest, const float *src)
+{
+    _q2p_packing_coord_float_to_floatbits(dest, src);
+}
+
+static inline void _q2p_packing_pack_angle_vec_to_int_dispatch(int16_t *dest, const int16_t *src)
+{
+    _q2p_packing_angle_short_to_int(dest, src);
+}
+
+static inline void _q2p_packing_pack_angle_vec_to_int_dispatch(int16_t *dest, const float *src)
+{
+    _q2p_packing_angle_float_to_int(dest, src);
+}
+
+#define _Q2P_PACKING_PACK_COORD_VEC_TO_INT(DEST, SOURCE)                                        \
+    _q2p_packing_pack_coord_vec_to_int_dispatch((DEST), (SOURCE))
+#define _Q2P_PACKING_PACK_COORD_VEC_TO_FLOATBITS(DEST, SOURCE)                                   \
+    _q2p_packing_pack_coord_vec_to_floatbits_dispatch((DEST), (SOURCE))
+#define _Q2P_PACKING_PACK_ANGLE_VEC_TO_INT(DEST, SOURCE)                                        \
+    _q2p_packing_pack_angle_vec_to_int_dispatch((DEST), (SOURCE))
+
+#else
+
 // Helper macro: pack an input coordinate, based on returned data type, to encoded integer
 #define _Q2P_PACKING_PACK_COORD_VEC_TO_INT(DEST, SOURCE)                                   \
     _Generic((SOURCE),                                                                     \
@@ -102,8 +160,6 @@ static inline void _q2p_packing_angle_float_to_int(int16_t *dest, const float *s
         const int16_t *: _q2p_packing_angle_short_to_int(DEST, (const int16_t *)(SOURCE)), \
         const float *: _q2p_packing_angle_float_to_int(DEST, (const float *)(SOURCE)))
 
-#if defined(__cplusplus)
-} // extern "C"
 #endif
 
 #endif // Q2PROTO_PACKING_HELPERS_H_
