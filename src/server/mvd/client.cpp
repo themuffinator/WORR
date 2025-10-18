@@ -2327,7 +2327,7 @@ static void MVD_Seek_f(void)
     // clear dirty configstrings
     memset(mvd->dcs, 0, sizeof(mvd->dcs));
 
-    Com_DPrintf("[%d] seeking to %"PRId64"\n", mvd->framenum, dest);
+    Com_DPrintf("[%d] seeking to %" PRId64 "\n", mvd->framenum, dest);
 
     // seek to the previous most recent snapshot
     if (back_seek || mvd->last_snapshot > mvd->framenum) {

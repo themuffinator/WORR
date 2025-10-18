@@ -1231,7 +1231,7 @@ static void CL_Seek_f(void)
     // save previous server frame number
     prev = cl.frame.number;
 
-    Com_DPrintf("[%d] seeking to %"PRId64"\n", cls.demo.frames_read, dest);
+    Com_DPrintf("[%d] seeking to %" PRId64 "\n", cls.demo.frames_read, dest);
 
     // seek to the previous most recent snapshot
     if (back_seek || cls.demo.last_snapshot > cls.demo.frames_read) {

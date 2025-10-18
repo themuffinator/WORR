@@ -959,7 +959,7 @@ static int64_t open_file_write(file_t *file, const char *name)
         goto fail;
     }
 
-    FS_DPrintf("%s: %s: %"PRId64" bytes\n", __func__, fullpath.data(), pos);
+    FS_DPrintf("%s: %s: %" PRId64 " bytes\n", __func__, fullpath.data(), pos);
     return pos;
 
 fail:
@@ -1249,7 +1249,7 @@ static int64_t open_from_pack(file_t *file, pack_t *pack, packfile_t *entry)
         fs_non_uniq_open = true;
     }
 
-    FS_DPrintf("%s: %s/%s: %"PRId64" bytes\n",
+    FS_DPrintf("%s: %s/%s: %" PRId64 " bytes\n",
                __func__, pack->filename, pack->names + entry->nameofs, file->length);
 
     return file->length;
@@ -1355,7 +1355,7 @@ static int64_t open_from_disk(file_t *file, const char *fullpath)
     }
 #endif
 
-    FS_DPrintf("%s: %s: %"PRId64" bytes\n", __func__, fullpath, file->length);
+    FS_DPrintf("%s: %s: %" PRId64 " bytes\n", __func__, fullpath, file->length);
     return file->length;
 
 fail:
@@ -2599,7 +2599,7 @@ static pack_t *load_zip_file(const char *packfile)
 // non-zero for sfx?
     extra_bytes = header_pos - central_end;
     if (extra_bytes) {
-        Com_WPrintf("%s has %"PRId64" extra bytes at the beginning\n", packfile, extra_bytes);
+        Com_WPrintf("%s has %" PRId64 " extra bytes at the beginning\n", packfile, extra_bytes);
     }
 
     if (os_fseek(fp, central_ofs + extra_bytes, SEEK_SET)) {
@@ -3299,7 +3299,7 @@ recheck:
                 }
                 if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
                     // found it!
-                    Com_Printf("%s/%s (%"PRId64" bytes)\n", pak->filename,
+                    Com_Printf("%s/%s (%" PRId64 " bytes)\n", pak->filename,
                                normalized.data(), entry->filelen);
                     if (!report_all) {
                         return;
@@ -3345,7 +3345,7 @@ recheck:
 #endif
 
             if (ret == Q_ERR_SUCCESS) {
-                Com_Printf("%s (%"PRId64" bytes)\n", fullpath.data(), info.size);
+                Com_Printf("%s (%" PRId64 " bytes)\n", fullpath.data(), info.size);
                 if (!report_all) {
                     return;
                 }
