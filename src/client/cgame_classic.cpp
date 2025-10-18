@@ -136,8 +136,8 @@ DrawStringMulti
 */
 static void CG_DrawStringMulti(int x, int y, int flags, size_t maxlen, const char *s, color_t color)
 {
-    char    *p;
-    size_t  len;
+    const char *p;
+    size_t len;
 
     while (*s) {
         p = strchr(s, '\n');
@@ -520,8 +520,8 @@ static void SCR_DrawHealthBar(vrect_t hud_vrect, int x, int y, int value)
     if (!value)
         return;
 
-    const rgba_t rgba_fg = {.r = 239, .g = 0, .b = 0, .a = 255};    // index 240
-    const rgba_t rgba_bg = {.r = 63, .g = 63, .b = 63, .a = 255};   // index 4
+    const rgba_t rgba_fg{239, 0, 0, 255};    // index 240
+    const rgba_t rgba_bg{63, 63, 63, 255};   // index 4
 
     int bar_width = hud_vrect.width / 3;
     float percent = (value - 1) / 254.0f;
