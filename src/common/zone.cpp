@@ -21,6 +21,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.h"
 #include "common/zone.h"
 
+#ifdef __cplusplus
+#undef Z_Realloc
+#undef Z_ReallocArray
+#undef Z_Malloc
+#undef Z_Mallocz
+#undef Z_TagMalloc
+#undef Z_TagMallocz
+#endif
+
 #if USE_MEMORY_TRACES
 #define MAX_TRACE_SIZE 32
 #include "system/system.h"
@@ -175,7 +184,7 @@ void Z_Freep(void *ptr)
 Z_Realloc
 ========================
 */
-z_pointer Z_Realloc(void *ptr, size_t size)
+void *Z_Realloc(void *ptr, size_t size)
 {
     zhead_t *z;
 
@@ -220,7 +229,7 @@ z_pointer Z_Realloc(void *ptr, size_t size)
     return z + 1;
 }
 
-z_pointer Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
+void *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
 {
     Q_assert(!size || nmemb <= INT_MAX / size);
     if (!ptr)
@@ -317,22 +326,22 @@ static void *Z_TagMallocInternal(size_t size, memtag_t tag, bool init)
     return z + 1;
 }
 
-z_pointer Z_TagMalloc(size_t size, memtag_t tag)
+void *Z_TagMalloc(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, false);
 }
 
-z_pointer Z_TagMallocz(size_t size, memtag_t tag)
+void *Z_TagMallocz(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, true);
 }
 
-z_pointer Z_Malloc(size_t size)
+void *Z_Malloc(size_t size)
 {
     return Z_TagMalloc(size, TAG_GENERAL);
 }
 
-z_pointer Z_Mallocz(size_t size)
+void *Z_Mallocz(size_t size)
 {
     return Z_TagMallocz(size, TAG_GENERAL);
 }

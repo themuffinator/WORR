@@ -83,16 +83,16 @@ extern "C" {
 void    Z_Init(void);
 void    Z_Free(void *ptr);
 void    Z_Freep(void *ptr);
-z_pointer   Z_Realloc(void *ptr, size_t size);
-z_pointer   Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
+void   *Z_Realloc(void *ptr, size_t size);
+void   *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
 q_zone_allocator
-z_pointer   Z_Malloc(size_t size);
+void   *Z_Malloc(size_t size);
 q_zone_allocator
-z_pointer   Z_Mallocz(size_t size);
+void   *Z_Mallocz(size_t size);
 q_zone_allocator
-z_pointer   Z_TagMalloc(size_t size, memtag_t tag);
+void   *Z_TagMalloc(size_t size, memtag_t tag);
 q_zone_allocator
-z_pointer   Z_TagMallocz(size_t size, memtag_t tag);
+void   *Z_TagMallocz(size_t size, memtag_t tag);
 q_malloc
 char    *Z_TagCopyString(const char *in, memtag_t tag);
 #undef q_zone_allocator
@@ -105,4 +105,42 @@ char    *Z_CvarCopyString(const char *in);
 
 #ifdef __cplusplus
 }
+
+static inline z_allocation Z_Realloc_allocation(void *ptr, size_t size) noexcept
+{
+    return z_allocation{::Z_Realloc(ptr, size)};
+}
+
+static inline z_allocation Z_ReallocArray_allocation(void *ptr, size_t nmemb, size_t size, memtag_t tag) noexcept
+{
+    return z_allocation{::Z_ReallocArray(ptr, nmemb, size, tag)};
+}
+
+static inline z_allocation Z_Malloc_allocation(size_t size) noexcept
+{
+    return z_allocation{::Z_Malloc(size)};
+}
+
+static inline z_allocation Z_Mallocz_allocation(size_t size) noexcept
+{
+    return z_allocation{::Z_Mallocz(size)};
+}
+
+static inline z_allocation Z_TagMalloc_allocation(size_t size, memtag_t tag) noexcept
+{
+    return z_allocation{::Z_TagMalloc(size, tag)};
+}
+
+static inline z_allocation Z_TagMallocz_allocation(size_t size, memtag_t tag) noexcept
+{
+    return z_allocation{::Z_TagMallocz(size, tag)};
+}
+
+#define Z_Realloc(ptr, size) (Z_Realloc_allocation((ptr), (size)))
+#define Z_ReallocArray(ptr, nmemb, size, tag) (Z_ReallocArray_allocation((ptr), (nmemb), (size), (tag)))
+#define Z_Malloc(size) (Z_Malloc_allocation((size)))
+#define Z_Mallocz(size) (Z_Mallocz_allocation((size)))
+#define Z_TagMalloc(size, tag) (Z_TagMalloc_allocation((size), (tag)))
+#define Z_TagMallocz(size, tag) (Z_TagMallocz_allocation((size), (tag)))
+
 #endif
