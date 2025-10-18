@@ -71,21 +71,31 @@ typedef enum {
 extern "C" {
 #endif
 
+#if defined(_MSC_VER)
+// MSVC's __declspec(allocator) applies only to pointer or reference return types.
+// The custom z_pointer wrapper used in C++ builds does not satisfy this requirement,
+// so skip the attribute for these functions on that compiler.
+#define q_zone_allocator
+#else
+#define q_zone_allocator q_malloc
+#endif
+
 void    Z_Init(void);
 void    Z_Free(void *ptr);
 void    Z_Freep(void *ptr);
 z_pointer   Z_Realloc(void *ptr, size_t size);
 z_pointer   Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
-q_malloc
+q_zone_allocator
 z_pointer   Z_Malloc(size_t size);
-q_malloc
+q_zone_allocator
 z_pointer   Z_Mallocz(size_t size);
-q_malloc
+q_zone_allocator
 z_pointer   Z_TagMalloc(size_t size, memtag_t tag);
-q_malloc
+q_zone_allocator
 z_pointer   Z_TagMallocz(size_t size, memtag_t tag);
 q_malloc
 char    *Z_TagCopyString(const char *in, memtag_t tag);
+#undef q_zone_allocator
 void    Z_FreeTags(memtag_t tag);
 void    Z_LeakTest(memtag_t tag);
 void    Z_Stats_f(void);
