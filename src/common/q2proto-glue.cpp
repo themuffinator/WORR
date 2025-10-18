@@ -50,11 +50,11 @@ static byte deflate_buf[MAX_DEFLATED_SIZE];
 
 #endif // USE_ZLIB
 
-q2protoio_ioarg_t default_q2protoio_ioarg = {.sz_read = &msg_read, .sz_write = &msg_write, .max_msg_len = 1384 /* conservative default */ };
+q2protoio_ioarg_t default_q2protoio_ioarg{&msg_read, &msg_write, 1384 /* conservative default */, nullptr};
 
 #if USE_ZLIB
-static q2protoio_ioarg_t inflate_q2protoio_ioarg = {.sz_read = &msg_inflate, .sz_write = &msg_write};
-static q2protoio_ioarg_t deflate_q2protoio_ioarg = {.sz_write = &msg_deflate};
+static q2protoio_ioarg_t inflate_q2protoio_ioarg{&msg_inflate, &msg_write, 0, nullptr};
+static q2protoio_ioarg_t deflate_q2protoio_ioarg{nullptr, &msg_deflate, 0, nullptr};
 
 // I/O arg: read from inflated data
 #define IOARG_INFLATE      ((uintptr_t)&inflate_q2protoio_ioarg)
@@ -74,9 +74,9 @@ static byte* io_read_data(uintptr_t io_arg, size_t len, size_t *readcount)
     if (readcount) {
         len = min(len, sz->cursize - sz->readcount);
         *readcount = len;
-        return SZ_ReadData(sz, len);
+        return static_cast<byte*>(SZ_ReadData(sz, len));
     } else
-        return (byte*)SZ_ReadData(sz, len);
+        return static_cast<byte*>(SZ_ReadData(sz, len));
 }
 
 uint8_t q2protoio_read_u8(uintptr_t io_arg)
@@ -105,8 +105,8 @@ uint64_t q2protoio_read_u64(uintptr_t io_arg)
 
 q2proto_string_t q2protoio_read_string(uintptr_t io_arg)
 {
-    q2proto_string_t str = {.str = NULL, .len = 0};
-    str.str = (const char*)io_read_data(io_arg, 0, NULL);
+    q2proto_string_t str{nullptr, 0};
+    str.str = reinterpret_cast<const char*>(io_read_data(io_arg, 0, NULL));
     while (1) {
         byte *c = io_read_data(io_arg, 1, NULL);
         if (!c || *c == 0) {
@@ -276,25 +276,25 @@ static void* io_reserve_data(uintptr_t io_arg, size_t size)
 
 void q2protoio_write_u8(uintptr_t io_arg, uint8_t x)
 {
-    byte* buf = io_reserve_data(io_arg, 1);
+    auto* buf = static_cast<byte*>(io_reserve_data(io_arg, 1));
     buf[0] = x;
 }
 
 void q2protoio_write_u16(uintptr_t io_arg, uint16_t x)
 {
-    byte* buf = io_reserve_data(io_arg, 2);
+    auto* buf = static_cast<byte*>(io_reserve_data(io_arg, 2));
     WL16(buf, x);
 }
 
 void q2protoio_write_u32(uintptr_t io_arg, uint32_t x)
 {
-    byte* buf = io_reserve_data(io_arg, 4);
+    auto* buf = static_cast<byte*>(io_reserve_data(io_arg, 4));
     WL32(buf, x);
 }
 
 void q2protoio_write_u64(uintptr_t io_arg, uint64_t x)
 {
-    byte* buf = io_reserve_data(io_arg, 8);
+    auto* buf = static_cast<byte*>(io_reserve_data(io_arg, 8));
     WL64(buf, x);
 }
 
@@ -311,7 +311,7 @@ void q2protoio_write_raw(uintptr_t io_arg, const void* data, size_t size, size_t
     if (io_data->deflate && written)
     {
         // Deflating as much as possble: write data in a loop
-        const byte *data_bytes = data;
+        const byte *data_bytes = static_cast<const byte*>(data);
         size_t in_remaining = size;
         size_t out_remaining = q2protoio_write_available(io_arg);
         size_t in_consumed = 0;
