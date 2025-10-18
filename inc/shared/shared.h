@@ -809,7 +809,7 @@ static inline int32_t SignExtend(uint32_t v, int bits)
     return (int32_t)(v << (32 - bits)) >> (32 - bits);
 }
 
-#if defined(USE_LITTLE_ENDIAN)
+#if USE_LITTLE_ENDIAN
 #define BigShort(x)     ShortSwap(x)
 #define BigLong(x)      LongSwap(x)
 #define BigFloat(x)     FloatSwap(x)
@@ -818,7 +818,7 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define LittleFloat(x)  ((float)(x))
 #define MakeRawLong(b1,b2,b3,b4) MakeLittleLong(b1,b2,b3,b4)
 #define MakeRawShort(b1,b2) (((b2)<<8)|(b1))
-#elif defined(USE_BIG_ENDIAN)
+#elif USE_BIG_ENDIAN
 #define BigShort(x)     ((uint16_t)(x))
 #define BigLong(x)      ((uint32_t)(x))
 #define BigFloat(x)     ((float)(x))
