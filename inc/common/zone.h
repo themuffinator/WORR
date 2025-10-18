@@ -108,32 +108,32 @@ char    *Z_CvarCopyString(const char *in);
 
 static inline z_allocation Z_Realloc_allocation(void *ptr, size_t size) noexcept
 {
-    return z_allocation{::Z_Realloc(ptr, size)};
+    return z_allocation{zone_c_api::Z_Realloc(ptr, size)};
 }
 
 static inline z_allocation Z_ReallocArray_allocation(void *ptr, size_t nmemb, size_t size, memtag_t tag) noexcept
 {
-    return z_allocation{::Z_ReallocArray(ptr, nmemb, size, tag)};
+    return z_allocation{zone_c_api::Z_ReallocArray(ptr, nmemb, size, tag)};
 }
 
 static inline z_allocation Z_Malloc_allocation(size_t size) noexcept
 {
-    return z_allocation{::Z_Malloc(size)};
+    return z_allocation{zone_c_api::Z_Malloc(size)};
 }
 
 static inline z_allocation Z_Mallocz_allocation(size_t size) noexcept
 {
-    return z_allocation{::Z_Mallocz(size)};
+    return z_allocation{zone_c_api::Z_Mallocz(size)};
 }
 
 static inline z_allocation Z_TagMalloc_allocation(size_t size, memtag_t tag) noexcept
 {
-    return z_allocation{::Z_TagMalloc(size, tag)};
+    return z_allocation{zone_c_api::Z_TagMalloc(size, tag)};
 }
 
 static inline z_allocation Z_TagMallocz_allocation(size_t size, memtag_t tag) noexcept
 {
-    return z_allocation{::Z_TagMallocz(size, tag)};
+    return z_allocation{zone_c_api::Z_TagMallocz(size, tag)};
 }
 
 #define Z_Realloc(ptr, size) (Z_Realloc_allocation((ptr), (size)))
