@@ -18,8 +18,58 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <type_traits>
+
 #include "common/protocol.h"
 #include "common/sizebuf.h"
+
+template <typename Enum>
+constexpr auto enum_value(Enum value) noexcept
+{
+    return static_cast<std::underlying_type_t<Enum>>(value);
+}
+
+template <typename Enum>
+constexpr Enum enum_from_value(std::underlying_type_t<Enum> value) noexcept
+{
+    return static_cast<Enum>(value);
+}
+
+template <typename Enum>
+constexpr Enum enum_bit_or(Enum lhs, Enum rhs) noexcept
+{
+    return enum_from_value<Enum>(enum_value(lhs) | enum_value(rhs));
+}
+
+template <typename Enum>
+constexpr Enum enum_bit_or(Enum lhs, std::underlying_type_t<Enum> rhs) noexcept
+{
+    return enum_from_value<Enum>(enum_value(lhs) | rhs);
+}
+
+template <typename Enum>
+constexpr Enum enum_bit_and(Enum lhs, Enum rhs) noexcept
+{
+    return enum_from_value<Enum>(enum_value(lhs) & enum_value(rhs));
+}
+
+template <typename Enum>
+constexpr Enum enum_bit_and(Enum lhs, std::underlying_type_t<Enum> rhs) noexcept
+{
+    return enum_from_value<Enum>(enum_value(lhs) & rhs);
+}
+
+template <typename Enum>
+constexpr Enum enum_bit_not(Enum value) noexcept
+{
+    return enum_from_value<Enum>(~enum_value(value));
+}
+
+template <typename Enum>
+constexpr bool enum_has(Enum value, Enum flag) noexcept
+{
+    return (enum_value(value) & enum_value(flag)) != 0;
+}
 
 #define MAX_PACKETENTITY_BYTES  70  // 68 bytes worst case + 2 byte eof
 

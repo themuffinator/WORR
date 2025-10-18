@@ -777,8 +777,12 @@ void MVD_BroadcastPrintf(mvd_t *mvd, int level, int mask, const char *fmt, ...)
     SZ_Clear(&msg_write);
 }
 
-#define ES_MASK     (MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS | MSG_ES_EXTENSIONS_2)
-#define PS_MASK     (MSG_PS_EXTENSIONS | MSG_PS_EXTENSIONS_2 | MSG_PS_MOREBITS)
+static constexpr msgEsFlags_t ES_MASK = enum_bit_or(
+    MSG_ES_SHORTANGLES,
+    enum_bit_or(MSG_ES_EXTENSIONS, MSG_ES_EXTENSIONS_2));
+static constexpr msgPsFlags_t PS_MASK = enum_bit_or(
+    MSG_PS_EXTENSIONS,
+    enum_bit_or(MSG_PS_EXTENSIONS_2, MSG_PS_MOREBITS));
 
 static void MVD_SetServerState(client_t *cl, mvd_t *mvd)
 {
@@ -797,13 +801,13 @@ static void MVD_SetServerState(client_t *cl, mvd_t *mvd)
     cl->spawncount = mvd->servercount;
     cl->maxclients = mvd->maxclients;
 
-    enum_and_assign(cl->esFlags, ~ES_MASK);
-    enum_and_assign(cl->psFlags, ~PS_MASK);
-    enum_or_assign(cl->esFlags, enum_value(mvd->esFlags) & ES_MASK);
-    enum_or_assign(cl->psFlags, enum_value(mvd->psFlags) & PS_MASK);
+    cl->esFlags = enum_bit_and(cl->esFlags, enum_bit_not(ES_MASK));
+    cl->psFlags = enum_bit_and(cl->psFlags, enum_bit_not(PS_MASK));
+    cl->esFlags = enum_bit_or(cl->esFlags, enum_bit_and(mvd->esFlags, ES_MASK));
+    cl->psFlags = enum_bit_or(cl->psFlags, enum_bit_and(mvd->psFlags, PS_MASK));
 
-    enum_or_assign(cl->esFlags, MSG_ES_SHORTANGLES);
-    enum_or_assign(cl->esFlags, MSG_ES_EXTENSIONS);
+    cl->esFlags = enum_bit_or(cl->esFlags, MSG_ES_SHORTANGLES);
+    cl->esFlags = enum_bit_or(cl->esFlags, MSG_ES_EXTENSIONS);
 }
 
 void MVD_SwitchChannel(mvd_client_t *client, mvd_t *mvd)
