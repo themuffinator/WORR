@@ -170,6 +170,7 @@ client_src = [
   'inc/client/client.h',
   'inc/client/input.h',
   'inc/client/keys.h',
+  'inc/client/proc_address.h',
   'inc/client/ui.h',
   'inc/client/video.h',
 
