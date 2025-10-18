@@ -114,6 +114,9 @@ static inline void Z_CountAlloc(const zhead_t *z)
 #define Z_Validate(z) \
     Q_assert((z)->magic == Z_MAGIC && (z)->tag != TAG_FREE)
 
+namespace zone_c_api {
+extern "C" {
+
 void Z_LeakTest(memtag_t tag)
 {
     zhead_t *z;
@@ -400,3 +403,6 @@ char *Z_CvarCopyString(const char *in)
     Z_CountAlloc(&z->z);
     return (char *)z->data;
 }
+
+} // extern "C"
+} // namespace zone_c_api

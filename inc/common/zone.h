@@ -68,6 +68,7 @@ typedef enum {
 } memtag_t;
 
 #ifdef __cplusplus
+namespace zone_c_api {
 extern "C" {
 #endif
 
@@ -103,7 +104,6 @@ void    Z_Stats_f(void);
 // may return pointer to static memory
 char    *Z_CvarCopyString(const char *in);
 
-#ifdef __cplusplus
 }
 
 static inline z_allocation Z_Realloc_allocation(void *ptr, size_t size) noexcept
