@@ -727,7 +727,7 @@ static void MVD_ParsePacketPlayers(mvd_t *mvd)
 
         bits = MSG_ReadWord();
         if (bits & PPS_MOREBITS) {
-            if (mvd->psFlags & MSG_PS_MOREBITS)
+            if (enum_has(mvd->psFlags, MSG_PS_MOREBITS))
                 bits |= (uint32_t)MSG_ReadByte() << 16;
             else
                 bits |= PPS_REMOVE; // MOREBITS == REMOVE for old demos
@@ -911,33 +911,33 @@ static void MVD_ParseServerData(mvd_t *mvd, int extrabits)
     }
     mvd->clientNum = MSG_ReadShort();
     mvd->esFlags = MSG_ES_UMASK;
-    enum_or_assign(mvd->esFlags, MSG_ES_BEAMORIGIN);
+    mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_BEAMORIGIN);
     mvd->psFlags = static_cast<msgPsFlags_t>(0);
     mvd->csr = &cs_remap_old;
 
     if (mvd->version == PROTOCOL_VERSION_MVD_RERELEASE) {
-        enum_or_assign(mvd->esFlags, MSG_ES_LONGSOLID);
-        enum_or_assign(mvd->esFlags, MSG_ES_SHORTANGLES);
-        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS);
-        enum_or_assign(mvd->esFlags, MSG_ES_RERELEASE);
-        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS);
-        enum_or_assign(mvd->psFlags, MSG_PS_RERELEASE);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_LONGSOLID);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_SHORTANGLES);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_EXTENSIONS);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_RERELEASE);
+        mvd->psFlags = enum_bit_or(mvd->psFlags, MSG_PS_EXTENSIONS);
+        mvd->psFlags = enum_bit_or(mvd->psFlags, MSG_PS_RERELEASE);
         mvd->csr = &cs_remap_rerelease;
     } else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS && enum_has(mvd->flags, MVF_EXTLIMITS)) {
-        enum_or_assign(mvd->esFlags, MSG_ES_LONGSOLID);
-        enum_or_assign(mvd->esFlags, MSG_ES_SHORTANGLES);
-        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS);
-        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_LONGSOLID);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_SHORTANGLES);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_EXTENSIONS);
+        mvd->psFlags = enum_bit_or(mvd->psFlags, MSG_PS_EXTENSIONS);
         mvd->csr = &cs_remap_q2pro_new;
     }
     if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2 && enum_has(mvd->flags, MVF_EXTLIMITS_2)) {
-        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS_2);
-        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS_2);
+        mvd->esFlags = enum_bit_or(mvd->esFlags, MSG_ES_EXTENSIONS_2);
+        mvd->psFlags = enum_bit_or(mvd->psFlags, MSG_PS_EXTENSIONS_2);
         if (!enum_has(mvd->flags, MVF_EXTLIMITS)) {
             MVD_Destroyf(mvd, "MVF_EXTLIMITS_2 without MVF_EXTLIMITS");
         }
         if (mvd->version >= PROTOCOL_VERSION_MVD_PLAYERFOG)
-            enum_or_assign(mvd->psFlags, MSG_PS_MOREBITS);
+            mvd->psFlags = enum_bit_or(mvd->psFlags, MSG_PS_MOREBITS);
     }
 
     /* HACKY: is_game_rerelease must match the value that was used on the server

@@ -1831,26 +1831,28 @@ void MVD_StreamedStop_f(void)
     Com_Printf("[%s] Stopped recording.\n", mvd->name);
 }
 
-static inline int player_flags(mvd_t *mvd, mvd_player_t *player)
+static inline msgPsFlags_t player_flags(mvd_t *mvd, mvd_player_t *player)
 {
-    auto flags = enum_value(mvd->psFlags);
+    auto flags = mvd->psFlags;
 
-    if (!player->inuse)
-        flags |= enum_value(MSG_PS_REMOVE);
+    if (!player->inuse) {
+        flags = enum_bit_or(flags, MSG_PS_REMOVE);
+    }
 
     return flags;
 }
 
-static inline int entity_flags(mvd_t *mvd, edict_t *ent)
+static inline msgEsFlags_t entity_flags(mvd_t *mvd, edict_t *ent)
 {
-    auto flags = enum_value(mvd->esFlags);
+    auto flags = mvd->esFlags;
 
     if (!ent->inuse) {
-        flags |= enum_value(MSG_ES_REMOVE);
+        flags = enum_bit_or(flags, MSG_ES_REMOVE);
     } else if (ent->s.number <= mvd->maxclients) {
         mvd_player_t *player = &mvd->players[ent->s.number - 1];
-        if (player->inuse && player->ps.pmove.pm_type == PM_NORMAL)
-            flags |= MSG_ES_FIRSTPERSON;
+        if (player->inuse && player->ps.pmove.pm_type == PM_NORMAL) {
+            flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
+        }
     }
 
     return flags;
