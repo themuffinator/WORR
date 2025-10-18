@@ -145,7 +145,7 @@ void Con_Close(bool force)
     Con_ClearTyping();
     Con_ClearNotify_f();
 
-    Key_SetDest(cls.key_dest & ~KEY_CONSOLE);
+    Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_CONSOLE));
 
     con.destHeight = con.currentHeight = 0;
     con.mode = CON_POPUP;
@@ -165,7 +165,7 @@ void Con_Popup(bool force)
         con.mode = CON_POPUP;
     }
 
-    Key_SetDest(cls.key_dest | KEY_CONSOLE);
+    Key_SetDest(Key_FromMask(cls.key_dest | KEY_CONSOLE));
     Con_RunConsole();
 }
 
@@ -184,14 +184,14 @@ static void toggle_console(consoleMode_t mode, chatMode_t chat)
     Con_ClearNotify_f();
 
     if (cls.key_dest & KEY_CONSOLE) {
-        Key_SetDest(cls.key_dest & ~KEY_CONSOLE);
+        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_CONSOLE));
         con.mode = CON_POPUP;
         con.chat = CHAT_NONE;
         return;
     }
 
     // toggling console discards chat message
-    Key_SetDest((cls.key_dest | KEY_CONSOLE) & ~KEY_MESSAGE);
+    Key_SetDest(Key_FromMask((cls.key_dest | KEY_CONSOLE) & ~KEY_MESSAGE));
     con.mode = mode;
     con.chat = chat;
 }
@@ -302,7 +302,7 @@ static void start_message_mode(chatMode_t mode)
 
     con.chat = mode;
     IF_Replace(&con.chatPrompt.inputLine, COM_StripQuotes(Cmd_RawArgs()));
-    Key_SetDest(cls.key_dest | KEY_MESSAGE);
+    Key_SetDest(Key_FromMask(cls.key_dest | KEY_MESSAGE));
 }
 
 static void Con_MessageMode_f(void)
@@ -1333,12 +1333,12 @@ void Key_Message(int key)
         if (cmd) {
             Con_Say(cmd);
         }
-        Key_SetDest(cls.key_dest & ~KEY_MESSAGE);
+        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
         return;
     }
 
     if (key == K_ESCAPE) {
-        Key_SetDest(cls.key_dest & ~KEY_MESSAGE);
+        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
         IF_Clear(&con.chatPrompt.inputLine);
         return;
     }

@@ -71,7 +71,7 @@ void UI_PushMenu(menuFrameWork_t *menu)
 
     Menu_Init(menu);
 
-    Key_SetDest((Key_GetDest() & ~KEY_CONSOLE) | KEY_MENU);
+    Key_SetDest(Key_FromMask((Key_GetDest() & ~KEY_CONSOLE) | KEY_MENU));
 
     Con_Close(true);
 
@@ -127,7 +127,7 @@ void UI_ForceMenuOff(void)
         }
     }
 
-    Key_SetDest(Key_GetDest() & ~KEY_MENU);
+    Key_SetDest(Key_FromMask(Key_GetDest() & ~KEY_MENU));
     uis.menuDepth = 0;
     uis.activeMenu = NULL;
     uis.mouseTracker = NULL;
