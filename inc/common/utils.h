@@ -86,7 +86,7 @@ color_index_t Com_ParseColor(const char *s);
 unsigned Com_ParseExtensionString(const char *s, const char *const extnames[]);
 #endif
 
-extern const char com_hexchars[16];
+extern const char com_hexchars[];
 
 size_t Com_EscapeString(char *dst, const char *src, size_t size);
 
