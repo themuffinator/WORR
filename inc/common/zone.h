@@ -145,4 +145,13 @@ static inline z_allocation Z_TagMallocz_allocation(size_t size, memtag_t tag) no
 #define Z_TagMalloc(size, tag) (Z_TagMalloc_allocation((size), (tag)))
 #define Z_TagMallocz(size, tag) (Z_TagMallocz_allocation((size), (tag)))
 
+using zone_c_api::Z_CvarCopyString;
+using zone_c_api::Z_Free;
+using zone_c_api::Z_FreeTags;
+using zone_c_api::Z_Freep;
+using zone_c_api::Z_Init;
+using zone_c_api::Z_LeakTest;
+using zone_c_api::Z_Stats_f;
+using zone_c_api::Z_TagCopyString;
+
 #endif // __cplusplus
