@@ -20,6 +20,43 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "../server.h"
 #include <setjmp.h>
+#include <type_traits>
+
+template <typename Enum>
+constexpr auto enum_value(Enum value) noexcept
+{
+    return static_cast<std::underlying_type_t<Enum>>(value);
+}
+
+template <typename Enum>
+constexpr Enum enum_from_value(std::underlying_type_t<Enum> value) noexcept
+{
+    return static_cast<Enum>(value);
+}
+
+template <typename Enum>
+constexpr void enum_or_assign(Enum &lhs, Enum rhs) noexcept
+{
+    lhs = enum_from_value<Enum>(enum_value(lhs) | enum_value(rhs));
+}
+
+template <typename Enum>
+constexpr void enum_or_assign(Enum &lhs, std::underlying_type_t<Enum> rhs) noexcept
+{
+    lhs = enum_from_value<Enum>(enum_value(lhs) | rhs);
+}
+
+template <typename Enum>
+constexpr void enum_and_assign(Enum &lhs, std::underlying_type_t<Enum> rhs) noexcept
+{
+    lhs = enum_from_value<Enum>(enum_value(lhs) & rhs);
+}
+
+template <typename Enum>
+constexpr bool enum_has(Enum value, Enum flag) noexcept
+{
+    return (enum_value(value) & enum_value(flag)) != 0;
+}
 
 #define MVD_Malloc(size)    Z_TagMalloc(size, TAG_MVD)
 #define MVD_Mallocz(size)   Z_TagMallocz(size, TAG_MVD)
@@ -162,7 +199,7 @@ typedef struct mvd_s {
     cm_t            cm;
     vec3_t          spawnOrigin;
     vec3_t          spawnAngles;
-    int             pm_type;
+    pmtype_t        pm_type;
     size_t          dcs[BC_COUNT(MAX_CONFIGSTRINGS)];
     configstring_t  baseconfigstrings[MAX_CONFIGSTRINGS];
     configstring_t  configstrings[MAX_CONFIGSTRINGS];

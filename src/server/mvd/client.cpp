@@ -793,7 +793,7 @@ static void demo_play_next(gtv_t *gtv, string_entry_t *entry)
 
     // parse gamestate
     MVD_ParseMessage(gtv->mvd);
-    if (!gtv->mvd->state) {
+    if (gtv->mvd->state == MVD_DEAD) {
         gtv_destroyf(gtv, "First message of %s does not contain gamestate", entry->string);
     }
 
@@ -1233,7 +1233,7 @@ static void parse_stream_data(gtv_t *gtv)
         gtv->mvd = mvd;
     }
 
-    if (!mvd->state) {
+    if (mvd->state == MVD_DEAD) {
         // parse it in place until we get a gamestate
         MVD_ParseMessage(mvd);
     } else {
@@ -1288,7 +1288,7 @@ static bool parse_message(gtv_t *gtv, fifo_t *fifo)
 {
     uint32_t magic;
     uint16_t msglen;
-    int cmd;
+    gtv_serverop_t cmd;
 
     // check magic
     if (gtv->state < GTV_PREPARING) {
@@ -1325,7 +1325,7 @@ static bool parse_message(gtv_t *gtv, fifo_t *fifo)
 
     gtv->msglen = 0;
 
-    cmd = MSG_ReadByte();
+    cmd = static_cast<gtv_serverop_t>(MSG_ReadByte());
 
     switch (cmd) {
     case GTS_HELLO:
@@ -1360,7 +1360,7 @@ static bool parse_message(gtv_t *gtv, fifo_t *fifo)
         gtv_dropf(gtv, "Server has been restarted.");
         break;
     default:
-        gtv_destroyf(gtv, "Unknown command byte");
+        gtv_destroyf(gtv, va("Unknown command byte %d", static_cast<int>(cmd)));
     }
 
     if (msg_read.readcount > msg_read.cursize) {
@@ -1607,7 +1607,7 @@ static void gtv_destroy(gtv_t *gtv)
     // drop any associated MVD channel
     if (mvd) {
         mvd->gtv = NULL; // don't double destroy
-        if (!mvd->state) {
+        if (mvd->state == MVD_DEAD) {
             // free it here, since it is not yet
             // added to global channel list
             MVD_Free(mvd);
@@ -1833,20 +1833,20 @@ void MVD_StreamedStop_f(void)
 
 static inline int player_flags(mvd_t *mvd, mvd_player_t *player)
 {
-    int flags = mvd->psFlags;
+    auto flags = enum_value(mvd->psFlags);
 
     if (!player->inuse)
-        flags |= MSG_PS_REMOVE;
+        flags |= enum_value(MSG_PS_REMOVE);
 
     return flags;
 }
 
 static inline int entity_flags(mvd_t *mvd, edict_t *ent)
 {
-    int flags = mvd->esFlags;
+    auto flags = enum_value(mvd->esFlags);
 
     if (!ent->inuse) {
-        flags |= MSG_ES_REMOVE;
+        flags |= enum_value(MSG_ES_REMOVE);
     } else if (ent->s.number <= mvd->maxclients) {
         mvd_player_t *player = &mvd->players[ent->s.number - 1];
         if (player->inuse && player->ps.pmove.pm_type == PM_NORMAL)
