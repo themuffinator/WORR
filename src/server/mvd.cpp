@@ -351,7 +351,7 @@ static int dummy_create(void)
     client_t *newcl;
     char userinfo[MAX_INFO_STRING * 2];
     const char *s;
-    qboolean allow;
+    bool allow;
     int number;
 
     // do nothing if already created
@@ -399,7 +399,7 @@ static int dummy_create(void)
     // get the game a chance to reject this connection or modify the userinfo
     sv_client = newcl;
     sv_player = newcl->edict;
-    allow = ge->ClientConnect(newcl->edict, userinfo, "", false);
+    allow = ge->ClientConnect(newcl->edict, userinfo, "", false) != false;
     sv_client = NULL;
     sv_player = NULL;
     if (!allow) {
