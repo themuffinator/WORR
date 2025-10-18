@@ -68,8 +68,87 @@ typedef enum {
 } memtag_t;
 
 #ifdef __cplusplus
+namespace zone_c_api {
 extern "C" {
 #endif
+
+#if defined(_MSC_VER)
+// MSVC's __declspec(allocator) applies only to pointer or reference return types.
+// The custom z_pointer wrapper used in C++ builds does not satisfy this requirement,
+// so skip the attribute for these functions on that compiler.
+#define q_zone_allocator
+#else
+#define q_zone_allocator q_malloc
+#endif
+
+void    Z_Init(void);
+void    Z_Free(void *ptr);
+void    Z_Freep(void *ptr);
+void   *Z_Realloc(void *ptr, size_t size);
+void   *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag);
+q_zone_allocator
+void   *Z_Malloc(size_t size);
+q_zone_allocator
+void   *Z_Mallocz(size_t size);
+q_zone_allocator
+void   *Z_TagMalloc(size_t size, memtag_t tag);
+q_zone_allocator
+void   *Z_TagMallocz(size_t size, memtag_t tag);
+q_malloc
+char    *Z_TagCopyString(const char *in, memtag_t tag);
+#undef q_zone_allocator
+void    Z_FreeTags(memtag_t tag);
+void    Z_LeakTest(memtag_t tag);
+void    Z_Stats_f(void);
+
+// may return pointer to static memory
+char    *Z_CvarCopyString(const char *in);
+
+#ifdef __cplusplus
+}
+} // namespace zone_c_api
+
+using zone_c_api::Z_Init;
+using zone_c_api::Z_Free;
+using zone_c_api::Z_Freep;
+using zone_c_api::Z_TagCopyString;
+using zone_c_api::Z_FreeTags;
+using zone_c_api::Z_LeakTest;
+using zone_c_api::Z_Stats_f;
+using zone_c_api::Z_CvarCopyString;
+
+inline z_allocation Z_Realloc(void *ptr, size_t size)
+{
+    return z_allocation{ zone_c_api::Z_Realloc(ptr, size) };
+}
+
+inline z_allocation Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
+{
+    return z_allocation{ zone_c_api::Z_ReallocArray(ptr, nmemb, size, tag) };
+}
+
+inline z_allocation Z_Malloc(size_t size)
+{
+    return z_allocation{ zone_c_api::Z_Malloc(size) };
+}
+
+inline z_allocation Z_Mallocz(size_t size)
+{
+    return z_allocation{ zone_c_api::Z_Mallocz(size) };
+}
+
+inline z_allocation Z_TagMalloc(size_t size, memtag_t tag)
+{
+    return z_allocation{ zone_c_api::Z_TagMalloc(size, tag) };
+}
+
+inline z_allocation Z_TagMallocz(size_t size, memtag_t tag)
+{
+    return z_allocation{ zone_c_api::Z_TagMallocz(size, tag) };
+}
+
+#else
+extern "C" {
 
 #if defined(_MSC_VER)
 // MSVC's __declspec(allocator) applies only to pointer or reference return types.
@@ -103,6 +182,5 @@ void    Z_Stats_f(void);
 // may return pointer to static memory
 char    *Z_CvarCopyString(const char *in);
 
-#ifdef __cplusplus
 }
 #endif

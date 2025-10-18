@@ -175,7 +175,7 @@ void Z_Freep(void *ptr)
 Z_Realloc
 ========================
 */
-z_pointer Z_Realloc(void *ptr, size_t size)
+void *Z_Realloc(void *ptr, size_t size)
 {
     zhead_t *z;
 
@@ -220,7 +220,7 @@ z_pointer Z_Realloc(void *ptr, size_t size)
     return z + 1;
 }
 
-z_pointer Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
+void *Z_ReallocArray(void *ptr, size_t nmemb, size_t size, memtag_t tag)
 {
     Q_assert(!size || nmemb <= INT_MAX / size);
     if (!ptr)
@@ -317,22 +317,22 @@ static void *Z_TagMallocInternal(size_t size, memtag_t tag, bool init)
     return z + 1;
 }
 
-z_pointer Z_TagMalloc(size_t size, memtag_t tag)
+void *Z_TagMalloc(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, false);
 }
 
-z_pointer Z_TagMallocz(size_t size, memtag_t tag)
+void *Z_TagMallocz(size_t size, memtag_t tag)
 {
     return Z_TagMallocInternal(size, tag, true);
 }
 
-z_pointer Z_Malloc(size_t size)
+void *Z_Malloc(size_t size)
 {
     return Z_TagMalloc(size, TAG_GENERAL);
 }
 
-z_pointer Z_Mallocz(size_t size)
+void *Z_Mallocz(size_t size)
 {
     return Z_TagMallocz(size, TAG_GENERAL);
 }
