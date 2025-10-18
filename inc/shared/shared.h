@@ -835,6 +835,7 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define COLOR_U32_MAGENTA COLOR_U32_RGB(255,   0, 255)
 #define COLOR_U32_WHITE   COLOR_U32_RGB(255, 255, 255)
 
+#ifdef __cplusplus
 inline constexpr color_t ColorU32(uint32_t value)
 {
     return color_t{ value };
@@ -881,6 +882,80 @@ inline constexpr color_t COLOR_BLUE = ColorU32(COLOR_U32_BLUE);
 inline constexpr color_t COLOR_CYAN = ColorU32(COLOR_U32_CYAN);
 inline constexpr color_t COLOR_MAGENTA = ColorU32(COLOR_U32_MAGENTA);
 inline constexpr color_t COLOR_WHITE = ColorU32(COLOR_U32_WHITE);
+#else
+static inline color_t ColorU32(uint32_t value)
+{
+    color_t c = { value };
+    return c;
+}
+
+static inline color_t ColorU24(uint32_t value)
+{
+    return ColorU32((value & 0x00FFFFFFu) | 0xFF000000u);
+}
+
+static inline color_t ColorRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+    color_t c;
+    c.r = r;
+    c.g = g;
+    c.b = b;
+    c.a = a;
+    return c;
+}
+
+static inline color_t ColorRGB(uint8_t r, uint8_t g, uint8_t b)
+{
+    return ColorRGBA(r, g, b, 255);
+}
+
+static inline color_t ColorA(uint8_t a)
+{
+    return ColorRGBA(0, 0, 0, a);
+}
+
+static const color_t COLOR_MASK_ALPHA = { COLOR_U32_RGBA(0, 0, 0, 255) };
+static const color_t COLOR_MASK_RGB = { COLOR_U32_RGBA(255, 255, 255, 0) };
+
+static inline color_t ColorSetAlphaByte(color_t c, uint8_t a)
+{
+    color_t alpha = ColorA(a);
+    c.u32 = (c.u32 & COLOR_MASK_RGB.u32) | alpha.u32;
+    return c;
+}
+
+static inline color_t ColorSetAlpha(color_t c, float alpha)
+{
+    if (alpha <= 0.0f) {
+        return ColorSetAlphaByte(c, 0);
+    }
+
+    if (alpha < 1.0f) {
+        float scaled = alpha * 255.0f + 0.5f;
+        if (scaled < 0.0f) {
+            scaled = 0.0f;
+        } else if (scaled > 255.0f) {
+            scaled = 255.0f;
+        }
+        return ColorSetAlphaByte(c, (uint8_t)scaled);
+    }
+
+    if (alpha >= 255.0f) {
+        return ColorSetAlphaByte(c, 255);
+    }
+
+    return ColorSetAlphaByte(c, (uint8_t)alpha);
+}
+
+static const color_t COLOR_BLACK = { COLOR_U32_BLACK };
+static const color_t COLOR_RED = { COLOR_U32_RED };
+static const color_t COLOR_GREEN = { COLOR_U32_GREEN };
+static const color_t COLOR_YELLOW = { COLOR_U32_YELLOW };
+static const color_t COLOR_BLUE = { COLOR_U32_BLUE };
+static const color_t COLOR_CYAN = { COLOR_U32_CYAN };
+static const color_t COLOR_MAGENTA = { COLOR_U32_MAGENTA };
+static const color_t COLOR_WHITE = { COLOR_U32_WHITE };
+#endif
 
 //=============================================
 
