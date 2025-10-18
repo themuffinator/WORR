@@ -311,7 +311,7 @@ static void MVD_UnicastPrint(mvd_t *mvd, bool reliable, mvd_player_t *player)
             continue;
         }
         // decide if message should be routed or not
-        target = (client->target && !(mvd->flags & MVF_NOMSGS)) ? client->target : mvd->dummy;
+        target = (client->target && !enum_has(mvd->flags, MVF_NOMSGS)) ? client->target : mvd->dummy;
         if (target == player) {
             cl->AddMessage(cl, data, length, reliable);
         }
@@ -353,7 +353,7 @@ static void MVD_ParseUnicast(mvd_t *mvd, bool reliable, int extrabits)
     uint32_t length, last;
     mvd_player_t *player;
     byte *data;
-    int cmd;
+    svc_ops_t cmd;
 
     length = MSG_ReadByte();
     length |= extrabits << 8;
@@ -371,9 +371,10 @@ static void MVD_ParseUnicast(mvd_t *mvd, bool reliable, int extrabits)
     player = &mvd->players[clientNum];
 
     while (msg_read.readcount < last) {
-        cmd = MSG_ReadByte();
+        const int commandValue = MSG_ReadByte();
+        cmd = static_cast<svc_ops_t>(commandValue);
 
-        SHOWNET(2, "%3u:%s\n", msg_read.readcount - 1, MSG_ServerCommandString(cmd, PROTOCOL_VERSION_MVD));
+        SHOWNET(2, "%3u:%s\n", msg_read.readcount - 1, MSG_ServerCommandString(commandValue, PROTOCOL_VERSION_MVD));
 
         switch (cmd) {
         case svc_layout:
@@ -782,7 +783,7 @@ static void MVD_ParseFrame(mvd_t *mvd)
 
     // update clients now so that effects datagram that
     // follows can reference current view positions
-    if (mvd->state && mvd->framenum && !mvd->demoseeking) {
+    if (mvd->state != MVD_DEAD && mvd->framenum && !mvd->demoseeking) {
         MVD_UpdateClients(mvd);
     }
 
@@ -899,9 +900,9 @@ static void MVD_ParseServerData(mvd_t *mvd, int extrabits)
 
     // parse MVD stream flags
     if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2) {
-        mvd->flags = MSG_ReadWord();
+        mvd->flags = static_cast<mvd_flags_t>(MSG_ReadWord());
     } else {
-        mvd->flags = extrabits;
+        mvd->flags = enum_from_value<mvd_flags_t>(extrabits);
     }
 
     mvd->servercount = MSG_ReadLong();
@@ -909,36 +910,43 @@ static void MVD_ParseServerData(mvd_t *mvd, int extrabits)
         MVD_Destroyf(mvd, "Oversize gamedir string");
     }
     mvd->clientNum = MSG_ReadShort();
-    mvd->esFlags = MSG_ES_UMASK | MSG_ES_BEAMORIGIN;
-    mvd->psFlags = 0;
+    mvd->esFlags = MSG_ES_UMASK;
+    enum_or_assign(mvd->esFlags, MSG_ES_BEAMORIGIN);
+    mvd->psFlags = static_cast<msgPsFlags_t>(0);
     mvd->csr = &cs_remap_old;
 
     if (mvd->version == PROTOCOL_VERSION_MVD_RERELEASE) {
-        mvd->esFlags |= MSG_ES_LONGSOLID | MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS | MSG_ES_RERELEASE;
-        mvd->psFlags |= MSG_PS_EXTENSIONS | MSG_PS_RERELEASE;
+        enum_or_assign(mvd->esFlags, MSG_ES_LONGSOLID);
+        enum_or_assign(mvd->esFlags, MSG_ES_SHORTANGLES);
+        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS);
+        enum_or_assign(mvd->esFlags, MSG_ES_RERELEASE);
+        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS);
+        enum_or_assign(mvd->psFlags, MSG_PS_RERELEASE);
         mvd->csr = &cs_remap_rerelease;
-    } else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS && mvd->flags & MVF_EXTLIMITS) {
-        mvd->esFlags |= MSG_ES_LONGSOLID | MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS;
-        mvd->psFlags |= MSG_PS_EXTENSIONS;
+    } else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS && enum_has(mvd->flags, MVF_EXTLIMITS)) {
+        enum_or_assign(mvd->esFlags, MSG_ES_LONGSOLID);
+        enum_or_assign(mvd->esFlags, MSG_ES_SHORTANGLES);
+        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS);
+        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS);
         mvd->csr = &cs_remap_q2pro_new;
     }
-    if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2 && mvd->flags & MVF_EXTLIMITS_2) {
-        mvd->esFlags |= MSG_ES_EXTENSIONS_2;
-        mvd->psFlags |= MSG_PS_EXTENSIONS_2;
-        if (!(mvd->flags & MVF_EXTLIMITS)) {
+    if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2 && enum_has(mvd->flags, MVF_EXTLIMITS_2)) {
+        enum_or_assign(mvd->esFlags, MSG_ES_EXTENSIONS_2);
+        enum_or_assign(mvd->psFlags, MSG_PS_EXTENSIONS_2);
+        if (!enum_has(mvd->flags, MVF_EXTLIMITS)) {
             MVD_Destroyf(mvd, "MVF_EXTLIMITS_2 without MVF_EXTLIMITS");
         }
         if (mvd->version >= PROTOCOL_VERSION_MVD_PLAYERFOG)
-            mvd->psFlags |= MSG_PS_MOREBITS;
+            enum_or_assign(mvd->psFlags, MSG_PS_MOREBITS);
     }
 
     /* HACKY: is_game_rerelease must match the value that was used on the server
      * so matching CS limits are used */
     if (mvd->version == PROTOCOL_VERSION_MVD_RERELEASE)
         svs.game_api = Q2PROTO_GAME_RERELEASE;
-    else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2 && mvd->flags & MVF_EXTLIMITS_2) {
+    else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS_2 && enum_has(mvd->flags, MVF_EXTLIMITS_2)) {
         svs.game_api = Q2PROTO_GAME_Q2PRO_EXTENDED_V2;
-    } else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS && mvd->flags & MVF_EXTLIMITS) {
+    } else if (mvd->version >= PROTOCOL_VERSION_MVD_EXTENDED_LIMITS && enum_has(mvd->flags, MVF_EXTLIMITS)) {
         svs.game_api = Q2PROTO_GAME_Q2PRO_EXTENDED;
     } else
         svs.game_api = Q2PROTO_GAME_VANILLA;
@@ -1048,7 +1056,7 @@ static void MVD_ParseServerData(mvd_t *mvd, int extrabits)
     mvd->last_snapshot = INT_MIN;
 
     // if the channel has been just created, init some things
-    if (!mvd->state) {
+    if (mvd->state == MVD_DEAD) {
         mvd_t *cur;
 
         // sort this one into the list of active channels
@@ -1067,7 +1075,7 @@ static void MVD_ParseServerData(mvd_t *mvd, int extrabits)
 
 bool MVD_ParseMessage(mvd_t *mvd)
 {
-    int     cmd, extrabits = 0;
+    int     extrabits = 0;
     bool    ret = false;
 
 #if USE_DEBUG
@@ -1091,11 +1099,11 @@ bool MVD_ParseMessage(mvd_t *mvd)
             break;
         }
 
-        cmd = MSG_ReadByte();
-        extrabits = cmd >> SVCMD_BITS;
-        cmd &= SVCMD_MASK;
+        const int commandByte = MSG_ReadByte();
+        extrabits = commandByte >> SVCMD_BITS;
+        const auto cmd = static_cast<mvd_ops_t>(commandByte & SVCMD_MASK);
 
-        SHOWNET(2, "%3u:%s\n", msg_read.readcount - 1, MVD_ServerCommandString(cmd));
+        SHOWNET(2, "%3u:%s\n", msg_read.readcount - 1, MVD_ServerCommandString(static_cast<int>(cmd)));
 
         switch (cmd) {
         case mvd_serverdata:
@@ -1105,12 +1113,12 @@ bool MVD_ParseMessage(mvd_t *mvd)
         case mvd_multicast_all:
         case mvd_multicast_pvs:
         case mvd_multicast_phs:
-            MVD_ParseMulticast(mvd, cmd - mvd_multicast_all, false, extrabits);
+            MVD_ParseMulticast(mvd, static_cast<multicast_t>(static_cast<int>(cmd) - static_cast<int>(mvd_multicast_all)), false, extrabits);
             break;
         case mvd_multicast_all_r:
         case mvd_multicast_pvs_r:
         case mvd_multicast_phs_r:
-            MVD_ParseMulticast(mvd, cmd - mvd_multicast_all_r, true, extrabits);
+            MVD_ParseMulticast(mvd, static_cast<multicast_t>(static_cast<int>(cmd) - static_cast<int>(mvd_multicast_all_r)), true, extrabits);
             break;
         case mvd_unicast:
         case mvd_unicast_r:
@@ -1132,7 +1140,7 @@ bool MVD_ParseMessage(mvd_t *mvd)
             break;
         default:
             MVD_Destroyf(mvd, "Illegible command at %u: %d",
-                         msg_read.readcount - 1, cmd);
+                         msg_read.readcount - 1, static_cast<int>(cmd));
         }
     }
 

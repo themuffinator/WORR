@@ -1641,7 +1641,7 @@ static bool parse_message(gtv_client_t *client)
 {
     uint32_t magic;
     uint16_t msglen;
-    int cmd;
+    gtv_clientop_t cmd;
 
     if (client->state <= cs_zombie) {
         return false;
@@ -1687,7 +1687,7 @@ static bool parse_message(gtv_client_t *client)
 
     client->msglen = 0;
 
-    cmd = MSG_ReadByte();
+    cmd = static_cast<gtv_clientop_t>(MSG_ReadByte());
     switch (cmd) {
     case GTC_HELLO:
         parse_hello(client);
@@ -1705,7 +1705,7 @@ static bool parse_message(gtv_client_t *client)
         parse_stringcmd(client);
         break;
     default:
-        drop_client(client, "unknown command byte");
+        drop_client(client, va("unknown command byte %d", static_cast<int>(cmd)));
         return false;
     }
 

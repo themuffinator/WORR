@@ -353,7 +353,7 @@ static void MVD_SetDefaultLayout(mvd_client_t *client)
         type = LAYOUT_CHANNELS;
     } else if (mvd->intermission) {
         type = LAYOUT_SCORES;
-    } else if (client->target && !(mvd->flags & MVF_SINGLEPOV)) {
+    } else if (client->target && !enum_has(mvd->flags, MVF_SINGLEPOV)) {
         type = LAYOUT_FOLLOW;
     } else {
         type = LAYOUT_NONE;
@@ -797,12 +797,13 @@ static void MVD_SetServerState(client_t *cl, mvd_t *mvd)
     cl->spawncount = mvd->servercount;
     cl->maxclients = mvd->maxclients;
 
-    cl->esFlags &= ~ES_MASK;
-    cl->psFlags &= ~PS_MASK;
-    cl->esFlags |= mvd->esFlags & ES_MASK;
-    cl->psFlags |= mvd->psFlags & PS_MASK;
+    enum_and_assign(cl->esFlags, ~ES_MASK);
+    enum_and_assign(cl->psFlags, ~PS_MASK);
+    enum_or_assign(cl->esFlags, enum_value(mvd->esFlags) & ES_MASK);
+    enum_or_assign(cl->psFlags, enum_value(mvd->psFlags) & PS_MASK);
 
-    cl->esFlags |= MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS;
+    enum_or_assign(cl->esFlags, MSG_ES_SHORTANGLES);
+    enum_or_assign(cl->esFlags, MSG_ES_EXTENSIONS);
 }
 
 void MVD_SwitchChannel(mvd_client_t *client, mvd_t *mvd)
@@ -1949,7 +1950,7 @@ static void MVD_GameClientBegin(edict_t *ent)
                                 "[MVD] %s entered the channel\n", client->cl->name);
         }
         target = MVD_MostFollowed(mvd);
-    } else if (mvd->flags & MVF_SINGLEPOV) {
+    } else if (enum_has(mvd->flags, MVF_SINGLEPOV)) {
         target = MVD_MostFollowed(mvd);
     } else {
         target = client->oldtarget;
@@ -2215,7 +2216,7 @@ static void MVD_IntermissionStop(mvd_t *mvd)
             continue;
         }
         if (client->layout_type == LAYOUT_SCORES) {
-            client->layout_type = 0;
+            client->layout_type = LAYOUT_NONE;
         }
         target = client->oldtarget;
         if (target && target->inuse) {
