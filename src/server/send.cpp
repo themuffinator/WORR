@@ -932,7 +932,7 @@ static void write_pending_download(client_t *client)
 
     q2proto_svc_message_t message{};
     message.type = Q2P_SVC_DOWNLOAD;
-    int download_err = q2proto_server_download_data(&client->download_state, &client->download_ptr, &client->download_remaining, chunk, &message.download);
+    q2proto_error_t download_err = q2proto_server_download_data(&client->download_state, &client->download_ptr, &client->download_remaining, chunk, &message.download);
     if (download_err == Q2P_ERR_SUCCESS || download_err == Q2P_ERR_DOWNLOAD_COMPLETE) {
         q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
         MSG_FlushTo(buf);
