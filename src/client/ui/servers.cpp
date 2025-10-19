@@ -45,8 +45,8 @@ SERVERS MENU
 // how many times to (re)ping
 #define PING_STAGES     3
 
-typedef struct {
-    enum {
+struct serverslot_t {
+    enum status_e {
         SLOT_IDLE,
         SLOT_PENDING,
         SLOT_ERROR,
@@ -61,7 +61,7 @@ typedef struct {
     unsigned    timestamp;
     color_t     color;
     char        name[1];
-} serverslot_t;
+};
 
 typedef struct {
     menuFrameWork_t menu;
@@ -69,6 +69,18 @@ typedef struct {
     menuList_t      info;
     menuList_t      players;
     void            *names[MAX_STATUS_SERVERS];
+    char            *menu_name;
+    char            *menu_title;
+    char            *column_hostname;
+    char            *column_mod;
+    char            *column_map;
+    char            *column_players;
+    char            *column_rtt;
+    char            *info_column_key;
+    char            *info_column_value;
+    char            *player_column_frag;
+    char            *player_column_rtt;
+    char            *player_column_name;
     char            *args;
     unsigned        timestamp;
     int             pingstage;
@@ -92,7 +104,7 @@ static void UpdateSelection(void)
     if (m_servers.list.numItems) {
         if (m_servers.list.curvalue >= 0) {
             s = m_servers.list.items[m_servers.list.curvalue];
-            if (s->status == SLOT_VALID) {
+            if (s->status == serverslot_t::SLOT_VALID) {
                 m_servers.status_c = "Press Enter to connect; Space to refresh";
             } else {
                 m_servers.status_c = "Press Space to refresh; Alt+Space to refresh all";
@@ -106,7 +118,7 @@ static void UpdateSelection(void)
         m_servers.status_c = "No servers found; Press Space to refresh";
     }
 
-    if (s && s->status == SLOT_VALID && s->numRules && uis.width >= 640) {
+    if (s && s->status == serverslot_t::SLOT_VALID && s->numRules && uis.width >= 640) {
         m_servers.info.generic.flags &= ~QMF_HIDDEN;
         if (m_servers.info.items != (void **)s->rules || m_servers.info.numItems != s->numRules) {
             m_servers.info.items = (void **)s->rules;
@@ -120,7 +132,7 @@ static void UpdateSelection(void)
         m_servers.info.numItems = 0;
     }
 
-    if (s && s->status == SLOT_VALID && s->numPlayers) {
+    if (s && s->status == serverslot_t::SLOT_VALID && s->numPlayers) {
         m_servers.players.generic.flags &= ~QMF_HIDDEN;
         if (m_servers.players.items != (void **)s->players || m_servers.players.numItems != s->numPlayers) {
             m_servers.players.items = (void **)s->players;
@@ -142,7 +154,7 @@ static void UpdateStatus(void)
 
     for (i = 0; i < m_servers.list.numItems; i++) {
         slot = m_servers.list.items[i];
-        if (slot->status == SLOT_VALID) {
+        if (slot->status == serverslot_t::SLOT_VALID) {
             totalservers++;
             totalplayers += slot->numPlayers;
         }
@@ -274,7 +286,7 @@ void UI_StatusEvent(const serverStatus_t *status)
                             va("%d/%s", status->numPlayers, maxclients),
                             va("%u", ping),
                             NULL));
-    slot->status = SLOT_VALID;
+    slot->status = serverslot_t::SLOT_VALID;
     slot->address = net_from;
     slot->hostname = hostname;
     slot->color = ColorForStatus(status, ping);
@@ -341,7 +353,7 @@ void UI_ErrorEvent(const netadr_t *from)
         return;
 
     // only mark unreplied slots as invalid
-    if (slot->status != SLOT_PENDING)
+    if (slot->status != serverslot_t::SLOT_PENDING)
         return;
 
     address = slot->address;
@@ -358,7 +370,7 @@ void UI_ErrorEvent(const netadr_t *from)
 
     slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
                             "???", "???", "down", va("%u", ping), NULL));
-    slot->status = SLOT_ERROR;
+    slot->status = serverslot_t::SLOT_ERROR;
     slot->address = address;
     slot->hostname = hostname;
     slot->color = COLOR_WHITE;
@@ -379,7 +391,7 @@ static menuSound_t SetRconAddress(void)
         return QMS_BEEP;
 
     slot = m_servers.list.items[m_servers.list.curvalue];
-    if (slot->status == SLOT_ERROR)
+    if (slot->status == serverslot_t::SLOT_ERROR)
         return QMS_BEEP;
 
     Cvar_Set("rcon_address", slot->hostname);
@@ -420,7 +432,7 @@ static menuSound_t PingSelected(void)
 
     slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
                             "???", "???", "?/?", "???", NULL));
-    slot->status = SLOT_PENDING;
+    slot->status = serverslot_t::SLOT_PENDING;
     slot->address = address;
     slot->hostname = hostname;
     slot->color = COLOR_WHITE;
@@ -473,7 +485,7 @@ static void AddServer(const netadr_t *address, const char *hostname)
 
     slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
                             "???", "???", "?/?", "???", NULL));
-    slot->status = SLOT_IDLE;
+    slot->status = serverslot_t::SLOT_IDLE;
     slot->address = *address;
     slot->hostname = UI_CopyString(hostname);
     slot->color = COLOR_WHITE;
@@ -702,9 +714,9 @@ void UI_Frame(int msec)
     // send out next status packet
     while (m_servers.pingindex < m_servers.list.numItems) {
         slot = m_servers.list.items[m_servers.pingindex++];
-        if (slot->status > SLOT_PENDING)
+        if (slot->status > serverslot_t::SLOT_PENDING)
             continue;
-        slot->status = SLOT_PENDING;
+        slot->status = serverslot_t::SLOT_PENDING;
         slot->timestamp = com_eventTime;
         CL_SendStatusRequest(&slot->address);
         break;
@@ -759,9 +771,9 @@ static int statuscmp(serverslot_t *s1, serverslot_t *s2)
 {
     if (s1->status == s2->status)
         return 0;
-    if (s1->status != SLOT_VALID && s2->status == SLOT_VALID)
+    if (s1->status != serverslot_t::SLOT_VALID && s2->status == serverslot_t::SLOT_VALID)
         return 1;
-    if (s2->status != SLOT_VALID && s1->status == SLOT_VALID)
+    if (s2->status != serverslot_t::SLOT_VALID && s1->status == serverslot_t::SLOT_VALID)
         return -1;
     return 0;
 }
@@ -878,7 +890,7 @@ static menuSound_t Connect(menuCommon_t *self)
         return QMS_BEEP;
 
     slot = m_servers.list.items[m_servers.list.curvalue];
-    if (slot->status == SLOT_ERROR)
+    if (slot->status == serverslot_t::SLOT_ERROR)
         return QMS_BEEP;
 
     Cbuf_AddText(&cmd_buffer, va("connect %s\n", slot->hostname));
@@ -1031,7 +1043,7 @@ static void DrawStatus(void)
 
     if (m_servers.list.numItems && m_servers.list.curvalue >= 0) {
         serverslot_t *slot = m_servers.list.items[m_servers.list.curvalue];
-        if (slot->status > SLOT_PENDING) {
+        if (slot->status > serverslot_t::SLOT_PENDING) {
             UI_DrawString(0, uis.height - CONCHAR_HEIGHT, UI_LEFT, COLOR_WHITE, slot->hostname);
         }
     }
@@ -1065,6 +1077,18 @@ static void Expose(menuFrameWork_t *self)
 static void Free(menuFrameWork_t *self)
 {
     Z_Free(m_servers.menu.items);
+    Z_Free(m_servers.menu_name);
+    Z_Free(m_servers.menu_title);
+    Z_Free(m_servers.column_hostname);
+    Z_Free(m_servers.column_mod);
+    Z_Free(m_servers.column_map);
+    Z_Free(m_servers.column_players);
+    Z_Free(m_servers.column_rtt);
+    Z_Free(m_servers.info_column_key);
+    Z_Free(m_servers.info_column_value);
+    Z_Free(m_servers.player_column_frag);
+    Z_Free(m_servers.player_column_rtt);
+    Z_Free(m_servers.player_column_name);
     memset(&m_servers, 0, sizeof(m_servers));
 }
 
@@ -1084,8 +1108,14 @@ void M_Menu_Servers(void)
     ui_colorservers->changed = ui_colorservers_changed;
     ui_pingrate = Cvar_Get("ui_pingrate", "0", 0);
 
-    m_servers.menu.name     = "servers";
-    m_servers.menu.title    = "Server Browser";
+    Z_Free(m_servers.menu_name);
+    Z_Free(m_servers.menu_title);
+
+    m_servers.menu_name = UI_CopyString("servers");
+    m_servers.menu_title = UI_CopyString("Server Browser");
+
+    m_servers.menu.name     = m_servers.menu_name;
+    m_servers.menu.title    = m_servers.menu_title;
 
     m_servers.menu.draw         = Draw;
     m_servers.menu.expose       = Expose;
@@ -1113,16 +1143,28 @@ void M_Menu_Servers(void)
     m_servers.list.extrasize            = SLOT_EXTRASIZE;
     m_servers.list.mlFlags              = MLF_HEADER | MLF_SCROLLBAR;
 
+    Z_Free(m_servers.column_hostname);
+    Z_Free(m_servers.column_mod);
+    Z_Free(m_servers.column_map);
+    Z_Free(m_servers.column_players);
+    Z_Free(m_servers.column_rtt);
+
+    m_servers.column_hostname          = UI_CopyString("Hostname");
+    m_servers.column_mod               = UI_CopyString("Mod");
+    m_servers.column_map               = UI_CopyString("Map");
+    m_servers.column_players           = UI_CopyString("Players");
+    m_servers.column_rtt               = UI_CopyString("RTT");
+
     m_servers.list.columns[0].uiFlags   = UI_LEFT;
-    m_servers.list.columns[0].name      = "Hostname";
+    m_servers.list.columns[0].name      = m_servers.column_hostname;
     m_servers.list.columns[1].uiFlags   = UI_CENTER;
-    m_servers.list.columns[1].name      = "Mod";
+    m_servers.list.columns[1].name      = m_servers.column_mod;
     m_servers.list.columns[2].uiFlags   = UI_CENTER;
-    m_servers.list.columns[2].name      = "Map";
+    m_servers.list.columns[2].name      = m_servers.column_map;
     m_servers.list.columns[3].uiFlags   = UI_CENTER;
-    m_servers.list.columns[3].name      = "Players";
+    m_servers.list.columns[3].name      = m_servers.column_players;
     m_servers.list.columns[4].uiFlags   = UI_RIGHT;
-    m_servers.list.columns[4].name      = "RTT";
+    m_servers.list.columns[4].name      = m_servers.column_rtt;
 
     ui_colorservers_changed(ui_colorservers);
 
@@ -1135,10 +1177,16 @@ void M_Menu_Servers(void)
     m_servers.info.numcolumns           = 2;
     m_servers.info.mlFlags              = MLF_HEADER | MLF_SCROLLBAR;
 
+    Z_Free(m_servers.info_column_key);
+    Z_Free(m_servers.info_column_value);
+
+    m_servers.info_column_key          = UI_CopyString("Key");
+    m_servers.info_column_value        = UI_CopyString("Value");
+
     m_servers.info.columns[0].uiFlags   = UI_LEFT;
-    m_servers.info.columns[0].name      = "Key";
+    m_servers.info.columns[0].name      = m_servers.info_column_key;
     m_servers.info.columns[1].uiFlags   = UI_LEFT;
-    m_servers.info.columns[1].name      = "Value";
+    m_servers.info.columns[1].name      = m_servers.info_column_value;
 
 //
 // player list
@@ -1149,12 +1197,20 @@ void M_Menu_Servers(void)
     m_servers.players.numcolumns        = 3;
     m_servers.players.mlFlags           = MLF_HEADER;
 
+    Z_Free(m_servers.player_column_frag);
+    Z_Free(m_servers.player_column_rtt);
+    Z_Free(m_servers.player_column_name);
+
+    m_servers.player_column_frag        = UI_CopyString("Frg");
+    m_servers.player_column_rtt         = UI_CopyString("RTT");
+    m_servers.player_column_name        = UI_CopyString("Name");
+
     m_servers.players.columns[0].uiFlags    = UI_RIGHT;
-    m_servers.players.columns[0].name       = "Frg";
+    m_servers.players.columns[0].name       = m_servers.player_column_frag;
     m_servers.players.columns[1].uiFlags    = UI_RIGHT;
-    m_servers.players.columns[1].name       = "RTT";
+    m_servers.players.columns[1].name       = m_servers.player_column_rtt;
     m_servers.players.columns[2].uiFlags    = UI_LEFT;
-    m_servers.players.columns[2].name       = "Name";
+    m_servers.players.columns[2].name       = m_servers.player_column_name;
 
     Menu_AddItem(&m_servers.menu, &m_servers.list);
     Menu_AddItem(&m_servers.menu, &m_servers.info);
