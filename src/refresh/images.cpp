@@ -2218,7 +2218,7 @@ void IMG_GetPalette(void)
     int         i, ret;
 
     // get the palette
-    ret = FS_LoadFile(R_COLORMAP_PCX, (void **)&data);
+    ret = FS_LoadFile(R_COLORMAP_PCX, reinterpret_cast<void **>(&data));
     if (!data)
         goto fail;
 

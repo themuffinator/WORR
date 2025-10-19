@@ -338,8 +338,9 @@ static void DS_BeginPainting(void)
     reps = 0;
     dma.buffer = NULL;
 
-    while ((hresult = IDirectSoundBuffer_Lock(pDSBuf, 0, gSndBufSize, (void **)&pbuf, &locksize,
-                      (void **)&pbuf2, &dwSize2, 0)) != DS_OK) {
+    while ((hresult = IDirectSoundBuffer_Lock(pDSBuf, 0, gSndBufSize,
+                      reinterpret_cast<void **>(&pbuf), &locksize,
+                      reinterpret_cast<void **>(&pbuf2), &dwSize2, 0)) != DS_OK) {
         if (hresult != DSERR_BUFFERLOST) {
             Com_EPrintf("DS_BeginPainting: Lock failed with error '%s'\n", DSoundError(hresult));
             DS_Shutdown();

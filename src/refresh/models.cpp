@@ -1140,7 +1140,7 @@ static void MD5_LoadScales(const md5_model_t *model, const char *path, joint_inf
     char *data;
     int len, ret;
 
-    len = FS_LoadFile(path, (void **)&data);
+    len = FS_LoadFile(path, reinterpret_cast<void **>(&data));
     if (!data) {
         if (len != Q_ERR(ENOENT))
             MOD_PrintError(path, len);
@@ -1586,7 +1586,7 @@ qhandle_t R_RegisterModel(const char *name)
         goto done;
     }
 
-    ret = FS_LoadFile(normalized, (void **)&rawdata);
+    ret = FS_LoadFile(normalized, reinterpret_cast<void **>(&rawdata));
     if (!rawdata)
         goto fail1;
 

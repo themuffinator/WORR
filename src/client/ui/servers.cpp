@@ -120,8 +120,9 @@ static void UpdateSelection(void)
 
     if (s && s->status == serverslot_t::SLOT_VALID && s->numRules && uis.width >= 640) {
         m_servers.info.generic.flags &= ~QMF_HIDDEN;
-        if (m_servers.info.items != (void **)s->rules || m_servers.info.numItems != s->numRules) {
-            m_servers.info.items = (void **)s->rules;
+        auto **rules = reinterpret_cast<void **>(s->rules);
+        if (m_servers.info.items != rules || m_servers.info.numItems != s->numRules) {
+            m_servers.info.items = rules;
             m_servers.info.numItems = s->numRules;
             m_servers.info.curvalue = -1;
             m_servers.info.prestep = 0;
@@ -134,8 +135,9 @@ static void UpdateSelection(void)
 
     if (s && s->status == serverslot_t::SLOT_VALID && s->numPlayers) {
         m_servers.players.generic.flags &= ~QMF_HIDDEN;
-        if (m_servers.players.items != (void **)s->players || m_servers.players.numItems != s->numPlayers) {
-            m_servers.players.items = (void **)s->players;
+        auto **players = reinterpret_cast<void **>(s->players);
+        if (m_servers.players.items != players || m_servers.players.numItems != s->numPlayers) {
+            m_servers.players.items = players;
             m_servers.players.numItems = s->numPlayers;
             m_servers.players.curvalue = -1;
             m_servers.players.prestep = 0;
@@ -814,8 +816,8 @@ static int addresscmp(serverslot_t *s1, serverslot_t *s2)
 
 static int slotcmp(const void *p1, const void *p2)
 {
-    serverslot_t *s1 = *(serverslot_t **)p1;
-    serverslot_t *s2 = *(serverslot_t **)p2;
+    auto s1 = *reinterpret_cast<serverslot_t *const *>(p1);
+    auto s2 = *reinterpret_cast<serverslot_t *const *>(p2);
     int r;
 
     // sort by validity

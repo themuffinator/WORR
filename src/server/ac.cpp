@@ -402,7 +402,7 @@ static bool AC_ParseFile(const char *path, ac_parse_t parse, int depth)
     int linenum = 1;
     int ret;
 
-    ret = FS_LoadFile(path, (void **)&raw);
+    ret = FS_LoadFile(path, reinterpret_cast<void **>(&raw));
     if (!raw) {
         if (ret != Q_ERR(ENOENT) || depth) {
             Com_WPrintf("ANTICHEAT: Could not %s %s: %s\n",

@@ -507,7 +507,7 @@ sfxcache_t *S_LoadSound(sfx_t *s)
     else
         name = s->name;
 
-    len = FS_LoadFile(name, (void **)&data);
+    len = FS_LoadFile(name, reinterpret_cast<void **>(&data));
     if (!data) {
         if (len != Q_ERR(ENOENT))
             Com_EPrintf("Couldn't load %s: %s\n", Com_MakePrintable(name), Q_ErrorString(len));

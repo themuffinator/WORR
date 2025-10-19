@@ -471,7 +471,7 @@ static int read_server_file(void)
         Com_Error(ERR_DROP, "Game does not support enhanced savegames");
 
     // read game state
-    FS_LoadFile("save/" SAVE_CURRENT "/game.ssv", (void **)&buf);
+    FS_LoadFile("save/" SAVE_CURRENT "/game.ssv", reinterpret_cast<void **>(&buf));
     if (!buf)
         Com_Error(ERR_DROP, "Couldn't read game.ssv");
     ge->ReadGameJson(static_cast<const char *>(buf));
@@ -543,7 +543,7 @@ static int read_level_file(void)
     if (Q_snprintf(name, MAX_OSPATH, "save/" SAVE_CURRENT "/%s.sav", sv.name) >= MAX_OSPATH)
         Com_Error(ERR_DROP, "Savegame path too long");
 
-    FS_LoadFile(name, (void **)&data);
+    FS_LoadFile(name, reinterpret_cast<void **>(&data));
     if (!data)
         Com_Error(ERR_DROP, "Couldn't read %s", name);
     ge->ReadLevelJson(static_cast<const char *>(data));
