@@ -397,8 +397,8 @@ void SV_InitGame(unsigned mvd_spawn)
 
     if (svs.initialized) {
         // cause any connected clients to reconnect
-        unsigned shutdown_flags = ERR_RECONNECT | mvd_spawn;
-        SV_Shutdown("Server restarted\n", static_cast<error_type_t>(shutdown_flags));
+        const error_type_t shutdown_type = SV_ErrorTypeWithMask(ERR_RECONNECT, mvd_spawn);
+        SV_Shutdown("Server restarted\n", shutdown_type);
     } else {
         // make sure the client is down
         CL_Disconnect(ERR_RECONNECT);

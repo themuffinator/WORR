@@ -102,6 +102,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define MVD_SPAWN_INTERNAL  BIT(31)
 #define MVD_SPAWN_MASK      (MVD_SPAWN_ENABLED | MVD_SPAWN_INTERNAL)
 
+static inline unsigned SV_ErrorTypeBits(error_type_t type)
+{
+    return static_cast<unsigned>(type);
+}
+
+static inline bool SV_ErrorTypeHasAny(error_type_t type, unsigned mask)
+{
+    return (SV_ErrorTypeBits(type) & mask) != 0u;
+}
+
+static inline error_type_t SV_ErrorTypeWithMask(error_type_t type, unsigned mask)
+{
+    const unsigned combined = SV_ErrorTypeBits(type) | mask;
+    return static_cast<error_type_t>(combined);
+}
+
+static inline error_type_t SV_ErrorTypeWithoutMask(error_type_t type, unsigned mask)
+{
+    const unsigned filtered = SV_ErrorTypeBits(type) & ~mask;
+    return static_cast<error_type_t>(filtered);
+}
+
 typedef struct {
     int         number;
     int         num_entities;

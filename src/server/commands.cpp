@@ -249,14 +249,13 @@ another level:
 
 static void abort_func(void *arg)
 {
-    CM_FreeMap(arg);
+    CM_FreeMap(static_cast<cm_t *>(arg));
 }
 
 static void SV_Map(bool restart)
 {
-    mapcmd_t cmd = {
-        .endofunit = restart,   // wipe savegames
-    };
+    mapcmd_t cmd{};
+    cmd.endofunit = restart;   // wipe savegames
 
     // save the mapcmd
     if (Cmd_ArgvBuffer(1, cmd.buffer, sizeof(cmd.buffer)) >= sizeof(cmd.buffer)) {
@@ -511,7 +510,7 @@ static void SV_Map_c(genctx_t *ctx, int argnum)
         Prompt_AddMatch(ctx, va("%.*s", len, s));
     }
 
-    FS_FreeList(list);
+    FS_FreeList(reinterpret_cast<void **>(list));
 }
 
 static void SV_DemoMap_c(genctx_t *ctx, int argnum)
