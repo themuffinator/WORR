@@ -1887,7 +1887,7 @@ MISC
 Common_DoEnter
 =================
 */
-static int Common_DoEnter(menuCommon_t *item)
+static menuSound_t Common_DoEnter(menuCommon_t *item)
 {
     if (item->activate) {
         menuSound_t sound = item->activate(item);
