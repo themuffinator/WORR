@@ -271,9 +271,9 @@ static void apply_playerstate(const q2proto_svc_playerstate_t *playerstate,
     if (playerstate->delta_bits & Q2P_PSD_PM_TYPE) {
         // assume PM type & flags are from rerelease when using Q2rePRO protocol, vanilla otherwise
         if (cls.serverProtocol == PROTOCOL_VERSION_RERELEASE)
-            to->pmove.pm_type = playerstate->pm_type;
+            to->pmove.pm_type = static_cast<pmtype_t>(playerstate->pm_type);
         else
-            to->pmove.pm_type = pmtype_from_game3(playerstate->pm_type);
+            to->pmove.pm_type = pmtype_from_game3(static_cast<game3_pmtype_t>(playerstate->pm_type));
     }
 
     q2proto_maybe_read_diff_apply_float(&playerstate->pm_origin, to->pmove.origin);
@@ -857,7 +857,7 @@ static void CL_ParseReconnect(void)
 #if USE_AUTOREPLY
 static void CL_CheckForVersion(const char *s)
 {
-    char *p;
+    const char *p;
 
     p = strstr(s, ": ");
     if (!p) {
@@ -1050,7 +1050,7 @@ static void CL_ParseDownload(const q2proto_svc_download_t *download)
         Com_Error(ERR_DROP, "%s: bad size: %d", __func__, size);
     }
 
-    CL_HandleDownload(download->data, size, percent);
+    CL_HandleDownload(static_cast<const byte *>(download->data), size, percent);
 }
 
 static void CL_ParseSetting(const q2proto_svc_setting_t *setting)

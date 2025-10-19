@@ -477,6 +477,8 @@ void CL_CheckForResend(void)
 
     Cvar_BitInfo(userinfo.data(), CVAR_USERINFO);
 
+    std::array<char, MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */> connect_args{};
+
     q2proto_connect_t connect;
     memset(&connect, 0, sizeof(connect));
     connect.protocol = q2proto_protocol_from_netver(cls.serverProtocol);
@@ -486,12 +488,10 @@ void CL_CheckForResend(void)
     connect.packet_length = maxmsglen;
     connect.q2pro_nctype = net_chantype->integer;
 
-    int err = q2proto_complete_connect(&connect);
+    q2proto_error_t err = q2proto_complete_connect(&connect);
     if (err != Q2P_ERR_SUCCESS)
         goto fail;
     cls.quakePort = connect.qport;
-
-    std::array<char, MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */> connect_args{};
 
     err = q2proto_get_connect_arguments(connect_args.data(), connect_args.size(), NULL, &connect);
     if (err != Q2P_ERR_SUCCESS)
@@ -1369,7 +1369,8 @@ static void CL_ConnectionlessPacket(void)
             } else if (!strncmp(s, "nc=", 3)) {
                 s += 3;
                 if (*s) {
-                    type = Q_atoi(s);
+                    const int parsed_type = Q_atoi(s);
+                    type = static_cast<netchan_type_t>(parsed_type);
                     if (type != NETCHAN_OLD && type != NETCHAN_NEW) {
                         Com_Error(ERR_DISCONNECT,
                                   "Server returned invalid netchan type");
@@ -1423,7 +1424,7 @@ static void CL_ConnectionlessPacket(void)
         CL_ClientCommand("new");
         cls.state = ca_connected;
         cls.connect_count = 0;
-        Q_strlcpy(cl.mapname, mapname, sizeof(cl.mapname)); // for levelshot screen
+        Q_strlcpy(cl.mapname, mapname.data(), sizeof(cl.mapname)); // for levelshot screen
         cl.csr = cs_remap_old;
         cl.max_stats = MAX_STATS_OLD;
         return;
@@ -2016,7 +2017,7 @@ static bool match_ignore_nick(const char *nick, const char *s)
         return true;
 
     if (*s == '[') {
-        char *p = strstr(s + 1, "] ");
+        const char *p = strstr(s + 1, "] ");
         if (p)
             return match_ignore_nick_2(nick, p + 2);
     }
@@ -2380,7 +2381,7 @@ Flush caches and restart the VFS.
 */
 void CL_RestartFilesystem(bool total)
 {
-    int cls_state;
+    connstate_t cls_state;
 
     if (!cl_running->integer) {
         FS_Restart(total);
@@ -2448,7 +2449,7 @@ void CL_RestartFilesystem(bool total)
 
 void CL_RestartRefresh(bool total)
 {
-    int cls_state;
+    connstate_t cls_state;
 
     if (!cls.ref_initialized) {
         return;

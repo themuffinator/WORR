@@ -508,7 +508,7 @@ static void SV_BeginDownload_f(void)
 #if USE_ZLIB
     deflate_args = &sv_client->q2proto_deflate;
 #endif
-    int err = q2proto_server_download_begin(&sv_client->q2proto_ctx, downloadsize, download_compress, deflate_args, &sv_client->download_state);
+    q2proto_error_t err = q2proto_server_download_begin(&sv_client->q2proto_ctx, downloadsize, download_compress, deflate_args, &sv_client->download_state);
     if (err != Q2P_ERR_SUCCESS) {
         Com_DPrintf("Couldn't download %s to %s: %s\n", name.data(), sv_client->name, q2proto_error_string(err));
         goto fail1;
