@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "client.h"
+#include "ffmpeg_utils.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -271,7 +272,7 @@ static int process_video(int frames)
 
     ret = sws_scale_frame(cin.sws_ctx, out, in);
     if (ret < 0) {
-        Com_EPrintf("Error scaling video: %s\n", av_err2str(ret));
+        Com_EPrintf("Error scaling video: %s\n", AvErrorString(ret).c_str());
         return ret;
     }
 
@@ -291,7 +292,7 @@ static int process_audio(void)
     out->nb_samples = MAX_RAW_SAMPLES;
     ret = swr_convert_frame(cin.swr_ctx, out, in);
     if (ret < 0) {
-        Com_EPrintf("Error converting audio: %s\n", av_err2str(ret));
+        Com_EPrintf("Error converting audio: %s\n", AvErrorString(ret).c_str());
         return ret;
     }
 
@@ -319,7 +320,7 @@ static int decode_frames(DecoderState *s)
     while (s->timestamp < cls.realtime - cin.start_time) {
         ret = avcodec_receive_frame(dec, frame);
         if (ret == AVERROR_EOF) {
-            Com_DPrintf("%s from %s decoder\n", av_err2str(ret),
+            Com_DPrintf("%s from %s decoder\n", AvErrorString(ret).c_str(),
                         av_get_media_type_string(dec->codec->type));
             s->eof = true;
             if (dec->codec->type == AVMEDIA_TYPE_AUDIO) {
@@ -348,7 +349,7 @@ static int decode_frames(DecoderState *s)
             }
             if (ret < 0) {
                 Com_EPrintf("Error submitting %s packet for decoding: %s\n",
-                            av_get_media_type_string(dec->codec->type), av_err2str(ret));
+                            av_get_media_type_string(dec->codec->type), AvErrorString(ret).c_str());
                 return ret;
             }
 
@@ -357,7 +358,7 @@ static int decode_frames(DecoderState *s)
 
         if (ret < 0) {
             Com_EPrintf("Error during decoding %s: %s\n",
-                        av_get_media_type_string(dec->codec->type), av_err2str(ret));
+                        av_get_media_type_string(dec->codec->type), AvErrorString(ret).c_str());
             return ret;
         }
 
@@ -414,12 +415,12 @@ static bool SCR_ReadNextFrame(void)
         ret = av_read_frame(cin.fmt_ctx, pkt);
         // idcin demuxer returns AVERROR(EIO) on EOF packet...
         if (ret == AVERROR_EOF || ret == AVERROR(EIO)) {
-            Com_DPrintf("%s from demuxer\n", av_err2str(ret));
+            Com_DPrintf("%s from demuxer\n", AvErrorString(ret).c_str());
             cin.eof = true;
             break;
         }
         if (ret < 0) {
-            Com_EPrintf("Error reading packet: %s\n", av_err2str(ret));
+            Com_EPrintf("Error reading packet: %s\n", AvErrorString(ret).c_str());
             return false;
         }
 
@@ -677,13 +678,13 @@ static bool SCR_StartCinematic(const char *name)
 
 done:
     if (ret < 0) {
-        Com_EPrintf("Couldn't open %s: %s\n", ret == AVERROR(ENOENT) ? name : fullname, av_err2str(ret));
+        Com_EPrintf("Couldn't open %s: %s\n", ret == AVERROR(ENOENT) ? name : fullname, AvErrorString(ret).c_str());
         return false;
     }
 
     ret = avformat_find_stream_info(cin.fmt_ctx, NULL);
     if (ret < 0) {
-        Com_EPrintf("Couldn't find stream info: %s\n", av_err2str(ret));
+        Com_EPrintf("Couldn't find stream info: %s\n", AvErrorString(ret).c_str());
         return false;
     }
 

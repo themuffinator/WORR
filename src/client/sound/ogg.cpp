@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sound.h"
 #include "common/hash_map.h"
+#include "../ffmpeg_utils.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -123,13 +124,13 @@ static bool ogg_play(const char *path)
 
     ret = avformat_open_input(&ogg.fmt_ctx, path, fmt, NULL);
     if (ret < 0) {
-        Com_EPrintf("Couldn't open %s: %s\n", path, av_err2str(ret));
+        Com_EPrintf("Couldn't open %s: %s\n", path, AvErrorString(ret).c_str());
         return false;
     }
 
     ret = avformat_find_stream_info(ogg.fmt_ctx, NULL);
     if (ret < 0) {
-        Com_EPrintf("Couldn't find stream info: %s\n", av_err2str(ret));
+        Com_EPrintf("Couldn't find stream info: %s\n", AvErrorString(ret).c_str());
         goto fail0;
     }
 
@@ -370,9 +371,9 @@ static bool decode_next_frame(void)
         return true;
 
     if (ret == AVERROR_EOF)
-        Com_DPrintf("%s decoding audio\n", av_err2str(ret));
+        Com_DPrintf("%s decoding audio\n", AvErrorString(ret).c_str());
     else
-        Com_EPrintf("Error decoding audio: %s\n", av_err2str(ret));
+        Com_EPrintf("Error decoding audio: %s\n", AvErrorString(ret).c_str());
 
     // try to rewind if possible
     if (ogg_rewind())
@@ -574,7 +575,7 @@ void OGG_Update(void)
 
     int ret = convert_audio();
     if (ret < 0) {
-        Com_EPrintf("Error converting audio: %s\n", av_err2str(ret));
+        Com_EPrintf("Error converting audio: %s\n", AvErrorString(ret).c_str());
         OGG_Stop();
     }
 }
