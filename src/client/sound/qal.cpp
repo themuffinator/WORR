@@ -25,7 +25,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <AL/alc.h>
 
+#include <array>
 #include <functional>
+#include <span>
 
 #define QALAPI
 #include "qal.h"
@@ -44,16 +46,6 @@ static LPALCISEXTENSIONPRESENT qalcIsExtensionPresent;
 static LPALCMAKECONTEXTCURRENT qalcMakeContextCurrent;
 static LPALCOPENDEVICE qalcOpenDevice;
 
-typedef bool (*alassignproc_t)(void *dest, void *address);
-typedef void (*alassign_t)(void *dest);
-
-typedef struct {
-    const char *name;
-    void *dest;
-    alassignproc_t assign_from_address;
-    alassign_t assign_builtin;
-    alassign_t assign_null;
-} alfunction_t;
 struct alfunction_t {
     const char *name;
     std::function<void()> assign_builtin;
@@ -70,127 +62,85 @@ static alfunction_t make_alfunction(const char *name, T &destination, T builtin)
         [dest_ptr, builtin]() { *dest_ptr = builtin; },
         [dest_ptr]() { *dest_ptr = nullptr; },
         [dest_ptr](void *address) {
-            *dest_ptr = reinterpret_cast<T>(address);
-            return *dest_ptr != nullptr;
+            auto proc = Sys_CastFunctionAddress<T>(address);
+            if (!proc) {
+                *dest_ptr = nullptr;
+                return false;
+            }
+
+            *dest_ptr = proc;
+            return true;
         }
     };
 }
 
-typedef struct {
-    const char *extension;
-    const alfunction_t *functions;
-} alsection_t;
-
-#define QALC_FN(x)                                                              \
-    {                                                                           \
-        "alc" #x,                                                              \
-        &qalc##x,                                                               \
-        [](void *dest, void *address) -> bool {                                 \
-            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
-            auto proc = Sys_CastFunctionAddress<decltype(qalc##x)>(address);    \
-            if (!proc) {                                                        \
-                return false;                                                   \
-            }                                                                   \
-            *typed_dest = proc;                                                 \
-            return true;                                                        \
-        },                                                                      \
-        [](void *dest) {                                                        \
-            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
-            *typed_dest = alc##x;                                               \
-        },                                                                      \
-        [](void *dest) {                                                        \
-            auto typed_dest = reinterpret_cast<decltype(&qalc##x)>(dest);       \
-            *typed_dest = nullptr;                                              \
-        }                                                                       \
-    }
-
-#define QAL_FN(x)                                                               \
-    {                                                                           \
-        "al" #x,                                                               \
-        &qal##x,                                                                \
-        [](void *dest, void *address) -> bool {                                 \
-            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
-            auto proc = Sys_CastFunctionAddress<decltype(qal##x)>(address);     \
-            if (!proc) {                                                        \
-                return false;                                                   \
-            }                                                                   \
-            *typed_dest = proc;                                                 \
-            return true;                                                        \
-        },                                                                      \
-        [](void *dest) {                                                        \
-            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
-            *typed_dest = al##x;                                                \
-        },                                                                      \
-        [](void *dest) {                                                        \
-            auto typed_dest = reinterpret_cast<decltype(&qal##x)>(dest);        \
-            *typed_dest = nullptr;                                              \
-        }                                                                       \
-    }
 #define QALC_FN(x)  make_alfunction("alc"#x, qalc##x, alc##x)
 #define QAL_FN(x)   make_alfunction("al"#x, qal##x, al##x)
 
-static const alsection_t sections[] = {
-    {
-        .functions = (const alfunction_t []) {
-            QALC_FN(CloseDevice),
-            QALC_FN(CreateContext),
-            QALC_FN(DestroyContext),
-            QALC_FN(GetIntegerv),
-            QALC_FN(GetString),
-            QALC_FN(IsExtensionPresent),
-            QALC_FN(MakeContextCurrent),
-            QALC_FN(OpenDevice),
-            QAL_FN(BufferData),
-            QAL_FN(Bufferiv),
-            QAL_FN(DeleteBuffers),
-            QAL_FN(DeleteSources),
-            QAL_FN(Disable),
-            QAL_FN(DistanceModel),
-            QAL_FN(Enable),
-            QAL_FN(GenBuffers),
-            QAL_FN(GenSources),
-            QAL_FN(GetEnumValue),
-            QAL_FN(GetError),
-            QAL_FN(GetProcAddress),
-            QAL_FN(GetSourcef),
-            QAL_FN(GetSourcei),
-            QAL_FN(GetString),
-            QAL_FN(IsExtensionPresent),
-            QAL_FN(Listener3f),
-            QAL_FN(Listenerf),
-            QAL_FN(Listenerfv),
-            QAL_FN(Source3f),
-            QAL_FN(SourcePause),
-            QAL_FN(SourcePlay),
-            QAL_FN(SourceQueueBuffers),
-            QAL_FN(SourceStop),
-            QAL_FN(SourceUnqueueBuffers),
-            QAL_FN(Sourcef),
-            QAL_FN(Sourcei),
-            QAL_FN(Source3i),
-            { NULL, NULL, NULL, NULL, NULL }
-        }
-    },
-    {
-        .extension = "ALC_EXT_EFX",
-        .functions = (const alfunction_t []) {
-            QAL_FN(DeleteFilters),
-            QAL_FN(Filterf),
-            QAL_FN(Filteri),
-            QAL_FN(GenFilters),
-            QAL_FN(GenEffects),
-            QAL_FN(DeleteEffects),
-            QAL_FN(Effecti),
-            QAL_FN(Effectiv),
-            QAL_FN(Effectf),
-            QAL_FN(Effectfv),
-            QAL_FN(GenAuxiliaryEffectSlots),
-            QAL_FN(DeleteAuxiliaryEffectSlots),
-            QAL_FN(AuxiliaryEffectSloti),
-            { NULL, NULL, NULL, NULL, NULL }
-        }
-    },
+struct alsection_t {
+    const char *extension;
+    std::span<const alfunction_t> functions;
 };
+
+static const std::array<alfunction_t, 36> core_functions = {
+    QALC_FN(CloseDevice),
+    QALC_FN(CreateContext),
+    QALC_FN(DestroyContext),
+    QALC_FN(GetIntegerv),
+    QALC_FN(GetString),
+    QALC_FN(IsExtensionPresent),
+    QALC_FN(MakeContextCurrent),
+    QALC_FN(OpenDevice),
+    QAL_FN(BufferData),
+    QAL_FN(Bufferiv),
+    QAL_FN(DeleteBuffers),
+    QAL_FN(DeleteSources),
+    QAL_FN(Disable),
+    QAL_FN(DistanceModel),
+    QAL_FN(Enable),
+    QAL_FN(GenBuffers),
+    QAL_FN(GenSources),
+    QAL_FN(GetEnumValue),
+    QAL_FN(GetError),
+    QAL_FN(GetProcAddress),
+    QAL_FN(GetSourcef),
+    QAL_FN(GetSourcei),
+    QAL_FN(GetString),
+    QAL_FN(IsExtensionPresent),
+    QAL_FN(Listener3f),
+    QAL_FN(Listenerf),
+    QAL_FN(Listenerfv),
+    QAL_FN(Source3f),
+    QAL_FN(SourcePause),
+    QAL_FN(SourcePlay),
+    QAL_FN(SourceQueueBuffers),
+    QAL_FN(SourceStop),
+    QAL_FN(SourceUnqueueBuffers),
+    QAL_FN(Sourcef),
+    QAL_FN(Sourcei),
+    QAL_FN(Source3i),
+};
+
+static const std::array<alfunction_t, 13> efx_functions = {
+    QAL_FN(DeleteFilters),
+    QAL_FN(Filterf),
+    QAL_FN(Filteri),
+    QAL_FN(GenFilters),
+    QAL_FN(GenEffects),
+    QAL_FN(DeleteEffects),
+    QAL_FN(Effecti),
+    QAL_FN(Effectiv),
+    QAL_FN(Effectf),
+    QAL_FN(Effectfv),
+    QAL_FN(GenAuxiliaryEffectSlots),
+    QAL_FN(DeleteAuxiliaryEffectSlots),
+    QAL_FN(AuxiliaryEffectSloti),
+};
+
+static const std::array<alsection_t, 2> sections = { {
+    { nullptr, std::span<const alfunction_t>(core_functions) },
+    { "ALC_EXT_EFX", std::span<const alfunction_t>(efx_functions) },
+} };
 
 static cvar_t   *al_device;
 static cvar_t   *al_hrtf;
@@ -211,12 +161,9 @@ void QAL_Shutdown(void)
         device = NULL;
     }
 
-    for (int i = 0; i < q_countof(sections); i++) {
-        const alsection_t *sec = &sections[i];
-        const alfunction_t *func;
-
-        for (func = sec->functions; func->name; func++)
-            func->assign_null(func->dest);
+    for (const auto &sec : sections) {
+        for (const auto &func : sec.functions)
+            func.assign_null();
     }
 
     if (handle) {
@@ -265,8 +212,6 @@ static void print_device_list(void)
 
 int QAL_Init(void)
 {
-    const alsection_t *sec;
-    const alfunction_t *func;
     ALCint major, minor;
     int i;
 
@@ -274,9 +219,9 @@ int QAL_Init(void)
     al_hrtf = Cvar_Get("al_hrtf", "0", 0);
 
     if (!*al_device->string) {
-        for (i = 0, sec = sections; i < q_countof(sections); i++, sec++)
-            for (func = sec->functions; func->name; func++)
-                func->assign_builtin(func->dest);
+        for (const auto &sec : sections)
+            for (const auto &func : sec.functions)
+                func.assign_builtin();
     } else {
         for (i = 0; i < q_countof(al_drivers); i++) {
             Com_DPrintf("Trying %s\n", al_drivers[i]);
@@ -287,13 +232,13 @@ int QAL_Init(void)
         if (!handle)
             return -1;
 
-        for (i = 0, sec = sections; i < q_countof(sections); i++, sec++) {
-            if (sec->extension)
+        for (const auto &sec : sections) {
+            if (sec.extension)
                 continue;
 
-            for (func = sec->functions; func->name; func++) {
-                void *addr = Sys_GetProcAddress(handle, func->name);
-                if (!func->assign_from_address(func->dest, addr))
+            for (const auto &func : sec.functions) {
+                void *addr = Sys_GetProcAddress(handle, func.name);
+                if (!func.assign_from_proc(addr))
                     goto fail;
             }
         }
@@ -340,28 +285,30 @@ int QAL_Init(void)
     }
     
     if (*al_device->string) {
-        for (i = 0, sec = sections; i < q_countof(sections); i++, sec++) {
-            if (!sec->extension)
+        for (const auto &sec : sections) {
+            if (!sec.extension)
                 continue;
-            if (!qalcIsExtensionPresent(device, sec->extension))
+            if (!qalcIsExtensionPresent(device, sec.extension))
                 continue;
 
-            for (func = sec->functions; func->name; func++) {
-                void *addr = qalGetProcAddress(func->name);
-                if (!func->assign_from_address(func->dest, addr))
+            bool loaded = true;
+            for (const auto &func : sec.functions) {
+                void *addr = qalGetProcAddress(func.name);
+                if (!func.assign_from_proc(addr)) {
+                    loaded = false;
                     break;
-                func->assign_from_proc(addr);
+                }
             }
 
-            if (func->name) {
-                for (func = sec->functions; func->name; func++)
-                    func->assign_null(func->dest);
+            if (!loaded) {
+                for (const auto &func : sec.functions)
+                    func.assign_null();
 
-                Com_EPrintf("Couldn't load extension %s\n", sec->extension);
+                Com_EPrintf("Couldn't load extension %s\n", sec.extension);
                 continue;
             }
 
-            Com_DPrintf("Loaded extension %s\n", sec->extension);
+            Com_DPrintf("Loaded extension %s\n", sec.extension);
         }
     }
 
