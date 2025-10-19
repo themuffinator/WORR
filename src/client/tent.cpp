@@ -48,8 +48,6 @@ qhandle_t   cl_mod_powerscreen;
 qhandle_t   cl_mod_laser;
 qhandle_t   cl_mod_dmspot;
 
-qhandle_t   cl_img_flare;
-
 qhandle_t   cl_mod_lightning;
 qhandle_t   cl_mod_heatbeam;
 
@@ -276,18 +274,18 @@ void CL_RegisterTEntSounds(void)
 }
 
 static const char *const muzzlenames[MFLASH_TOTAL] = {
-    [MFLASH_MACHN]     = "v_machn",
-    [MFLASH_SHOTG2]    = "v_shotg2",
-    [MFLASH_SHOTG]     = "v_shotg",
-    [MFLASH_ROCKET]    = "v_rocket",
-    [MFLASH_RAIL]      = "v_rail",
-    [MFLASH_LAUNCH]    = "v_launch",
-    [MFLASH_ETF_RIFLE] = "v_etf_rifle",
-    [MFLASH_DIST]      = "v_dist",
-    [MFLASH_BOOMER]    = "v_boomer",
-    [MFLASH_BLAST]     = "v_blast",
-    [MFLASH_BFG]       = "v_bfg",
-    [MFLASH_BEAMER]    = "v_beamer",
+    "v_machn",
+    "v_shotg2",
+    "v_shotg",
+    "v_rocket",
+    "v_rail",
+    "v_launch",
+    "v_etf_rifle",
+    "v_dist",
+    "v_boomer",
+    "v_blast",
+    "v_bfg",
+    "v_beamer",
 };
 
 /*
@@ -337,16 +335,18 @@ EXPLOSION MANAGEMENT
 
 #define MAX_EXPLOSIONS  256
 
+enum explosion_type_t {
+    ex_free,
+    ex_misc,
+    ex_flash,
+    ex_mflash,
+    ex_poly,
+    ex_light,
+    ex_marker
+};
+
 typedef struct {
-    enum {
-        ex_free,
-        ex_misc,
-        ex_flash,
-        ex_mflash,
-        ex_poly,
-        ex_light,
-        ex_marker
-    } type;
+    explosion_type_t type;
 
     entity_t    ent;
     int         frames;
