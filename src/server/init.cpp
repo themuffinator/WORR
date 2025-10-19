@@ -180,7 +180,7 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     } else {
         // no real map
         strcpy(sv.configstrings[svs.csr.mapchecksum], "0");
-        sv.cm.entitystring = "";
+        sv.cm.entitystring = const_cast<char *>(""); // maintain mutable pointer even for empty data
     }
 
     //
