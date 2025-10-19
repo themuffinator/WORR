@@ -680,10 +680,12 @@ static void CL_AddPacketEntities(void)
         if (effects & EF_BOB) {
             switch (cl_item_bob_style->integer) {
             case 1: // Q2RE sine
+            {
                 float bob = 5.0f * sinf(cl.time / 400.0f);
                 ent.origin[2] += bob;
                 ent.oldorigin[2] += bob;
                 break;
+            }
             case 2: // Q3A cosine
             {
                 float scale = 0.005f + s1->number * 0.00001f;
@@ -1027,7 +1029,8 @@ static void CL_AddPacketEntities(void)
             if (s1->modelindex2 == MODELINDEX_PLAYER) {
                 // custom weapon
                 if (cl.game_api == Q2PROTO_GAME_RERELEASE) {
-                    player_skinnum_t unpacked = { .skinnum = s1->skinnum };
+                    player_skinnum_t unpacked{};
+                    unpacked.skinnum = s1->skinnum;
                     ci = &cl.clientinfo[unpacked.client_num];
                     i = unpacked.vwep_index;
                 } else {
