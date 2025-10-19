@@ -538,8 +538,8 @@ void HTTP_SetServer(const char *url)
 
     pthread_mutex_init(&progress_mutex, NULL);
 
-    worker_terminate = false;
-    worker_status = 0;
+    atomic_store(&worker_terminate, false);
+    atomic_store(&worker_status, 0);
     if (pthread_create(&worker_thread, NULL, worker_func, NULL)) {
         Com_EPrintf("Couldn't create curl worker thread\n");
         pthread_mutex_destroy(&progress_mutex);
@@ -769,7 +769,7 @@ static void process_downloads(void)
 
     for (i = 0; i < MAX_DLHANDLES; i++) {
         dl = &download_handles[i];
-        state = atomic_load(&dl->state);
+        state = static_cast<dlstate_t>(atomic_load(&dl->state));
 
         if (state == DL_RUNNING) {
             running = true;
@@ -1029,7 +1029,7 @@ void HTTP_RunDownloads(void)
     if (!curl_multi)
         return;
 
-    ret = atomic_load(&worker_status);
+    ret = static_cast<CURLMcode>(atomic_load(&worker_status));
     if (ret != CURLM_OK) {
         Com_EPrintf("[HTTP] Error running downloads: %s.\n",
                     curl_multi_strerror(ret));
