@@ -270,10 +270,10 @@ void UI_StatusEvent(const serverStatus_t *status)
     if (ping > 999)
         ping = 999;
 
-    slot = UI_FormatColumns(SLOT_EXTRASIZE, host, mod, map,
+    slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, host, mod, map,
                             va("%d/%s", status->numPlayers, maxclients),
                             va("%u", ping),
-                            NULL);
+                            NULL));
     slot->status = SLOT_VALID;
     slot->address = net_from;
     slot->hostname = hostname;
@@ -294,17 +294,17 @@ void UI_StatusEvent(const serverStatus_t *status)
             strcpy(value, "<MISSING VALUE>");
 
         slot->rules[slot->numRules++] =
-            UI_FormatColumns(0, key, value, NULL);
+            static_cast<char *>(UI_FormatColumns(0, key, value, NULL));
     }
 
     slot->numPlayers = status->numPlayers;
     for (i = 0; i < status->numPlayers; i++) {
         slot->players[i] =
-            UI_FormatColumns(0,
+            static_cast<char *>(UI_FormatColumns(0,
                              va("%d", status->players[i].score),
                              va("%d", status->players[i].ping),
                              status->players[i].name,
-                             NULL);
+                             NULL));
     }
 
     slot->timestamp = timestamp;
@@ -356,8 +356,8 @@ void UI_ErrorEvent(const netadr_t *from)
     if (ping > 999)
         ping = 999;
 
-    slot = UI_FormatColumns(SLOT_EXTRASIZE, hostname,
-                            "???", "???", "down", va("%u", ping), NULL);
+    slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
+                            "???", "???", "down", va("%u", ping), NULL));
     slot->status = SLOT_ERROR;
     slot->address = address;
     slot->hostname = hostname;
@@ -418,8 +418,8 @@ static menuSound_t PingSelected(void)
     hostname = slot->hostname;
     FreeSlot(slot);
 
-    slot = UI_FormatColumns(SLOT_EXTRASIZE, hostname,
-                            "???", "???", "?/?", "???", NULL);
+    slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
+                            "???", "???", "?/?", "???", NULL));
     slot->status = SLOT_PENDING;
     slot->address = address;
     slot->hostname = hostname;
@@ -471,8 +471,8 @@ static void AddServer(const netadr_t *address, const char *hostname)
         return;
     }
 
-    slot = UI_FormatColumns(SLOT_EXTRASIZE, hostname,
-                            "???", "???", "?/?", "???", NULL);
+    slot = static_cast<serverslot_t *>(UI_FormatColumns(SLOT_EXTRASIZE, hostname,
+                            "???", "???", "?/?", "???", NULL));
     slot->status = SLOT_IDLE;
     slot->address = *address;
     slot->hostname = UI_CopyString(hostname);

@@ -165,7 +165,7 @@ static void Com_PrintJunk_f(void)
 static void BSP_Test_f(void)
 {
     void **list;
-    char *name;
+    const char *name;
     int i, count, errors;
     bsp_t *bsp;
     int ret;
@@ -181,7 +181,7 @@ static void BSP_Test_f(void)
 
     errors = 0;
     for (i = 0; i < count; i++) {
-        name = list[i];
+        name = static_cast<const char *>(list[i]);
         ret = BSP_Load(name, &bsp);
         if (!bsp) {
             Com_EPrintf("Couldn't load %s: %s\n", name, BSP_ErrorString(ret));
@@ -563,7 +563,7 @@ static void Com_TestModels_f(void)
             R_EndRegistration();
             R_BeginRegistration(NULL);
         }
-        if (!R_RegisterModel(list[i])) {
+        if (!R_RegisterModel(static_cast<const char *>(list[i]))) {
             errors++;
             continue;
         }
@@ -605,7 +605,8 @@ static void Com_TestImages_f(void)
             R_EndRegistration();
             R_BeginRegistration(NULL);
         }
-        if (!R_RegisterImage(va("/%s", (char *)list[i]), IT_PIC, IF_KEEP_EXTENSION)) {
+        const char *name = static_cast<const char *>(list[i]);
+        if (!R_RegisterImage(va("/%s", name), IT_PIC, IF_KEEP_EXTENSION)) {
             errors++;
             continue;
         }
@@ -645,7 +646,8 @@ static void Com_TestSounds_f(void)
             S_EndRegistration();
             S_BeginRegistration();
         }
-        if (!S_RegisterSound(va("#%s", (char *)list[i]))) {
+        const char *name = static_cast<const char *>(list[i]);
+        if (!S_RegisterSound(va("#%s", name))) {
             errors++;
             continue;
         }

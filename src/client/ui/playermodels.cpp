@@ -74,7 +74,7 @@ void PlayerModel_Load(void)
     Q_assert(!uis.numPlayerModels);
 
     // get a list of directories
-    if (!(dirnames = (char **)FS_ListFiles("players", NULL, FS_SEARCH_DIRSONLY, &ndirs))) {
+    if (!(dirnames = reinterpret_cast<char **>(FS_ListFiles("players", NULL, FS_SEARCH_DIRSONLY, &ndirs)))) {
         return;
     }
 
@@ -94,7 +94,7 @@ void PlayerModel_Load(void)
 
         // verify the existence of at least one pcx skin
         Q_concat(scratch, sizeof(scratch), "players/", dirnames[i]);
-        pcxnames = (char **)FS_ListFiles(scratch, ".pcx", 0, &npcxfiles);
+        pcxnames = reinterpret_cast<char **>(FS_ListFiles(scratch, ".pcx", 0, &npcxfiles));
         if (!pcxnames) {
             continue;
         }
@@ -109,7 +109,7 @@ void PlayerModel_Load(void)
         }
 
         if (!nskins) {
-            FS_FreeList((void **)pcxnames);
+            FS_FreeList(reinterpret_cast<void **>(pcxnames));
             continue;
         }
 
@@ -126,7 +126,7 @@ void PlayerModel_Load(void)
             }
         }
 
-        FS_FreeList((void **)pcxnames);
+        FS_FreeList(reinterpret_cast<void **>(pcxnames));
 
         // at this point we have a valid player model
         pmi = &uis.pmi[uis.numPlayerModels++];
@@ -138,7 +138,7 @@ void PlayerModel_Load(void)
             break;
     }
 
-    FS_FreeList((void **)dirnames);
+    FS_FreeList(reinterpret_cast<void **>(dirnames));
 
     qsort(uis.pmi, uis.numPlayerModels, sizeof(uis.pmi[0]), pmicmpfnc);
 }
