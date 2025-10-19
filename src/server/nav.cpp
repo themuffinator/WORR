@@ -864,25 +864,25 @@ static void Nav_DebugPath(const PathInfo *path, const PathRequest *request)
 
     int time = (request->debugging.drawTime * 1000) + 6000;
     
-    color_t path_color = ColorSetAlpha(COLOR_RED, 64);
-    color_t arrow_color = ColorSetAlpha(COLOR_YELLOW, 64);
+    color_t path_color = ColorSetAlpha(COLOR_RED, static_cast<uint8_t>(64));
+    color_t arrow_color = ColorSetAlpha(COLOR_YELLOW, static_cast<uint8_t>(64));
 
-    R_AddDebugSphere(request->start, 8.0f, path_color, time, false);
-    R_AddDebugSphere(request->goal, 8.0f, path_color, time, false);
+    R_AddDebugSphere(request->start, 8.0f, path_color, time, qfalse);
+    R_AddDebugSphere(request->goal, 8.0f, path_color, time, qfalse);
 
     if (request->pathPoints.count) {
-        R_AddDebugArrow(request->start, request->pathPoints.posArray[0], 8.0f, arrow_color, arrow_color, time, false);
+        R_AddDebugArrow(request->start, request->pathPoints.posArray[0], 8.0f, arrow_color, arrow_color, time, qfalse);
 
         for (int64_t i = 0; i < request->pathPoints.count - 1; i++)
-            R_AddDebugArrow(request->pathPoints.posArray[i], request->pathPoints.posArray[i + 1], 8.0f, arrow_color, arrow_color, time, false);
+            R_AddDebugArrow(request->pathPoints.posArray[i], request->pathPoints.posArray[i + 1], 8.0f, arrow_color, arrow_color, time, qfalse);
 
-        R_AddDebugArrow(request->pathPoints.posArray[request->pathPoints.count - 1], request->goal, 8.0f, arrow_color, arrow_color, time, false);
+        R_AddDebugArrow(request->pathPoints.posArray[request->pathPoints.count - 1], request->goal, 8.0f, arrow_color, arrow_color, time, qfalse);
     } else {
-        R_AddDebugArrow(request->start, request->goal, 8.0f, arrow_color, arrow_color, time, false);
+        R_AddDebugArrow(request->start, request->goal, 8.0f, arrow_color, arrow_color, time, qfalse);
     }
 
-    R_AddDebugSphere(path->firstMovePoint, 16.0f, path_color, time, false);
-    R_AddDebugArrow(path->firstMovePoint, path->secondMovePoint, 16.0f, path_color, path_color, time, false);
+    R_AddDebugSphere(path->firstMovePoint, 16.0f, path_color, time, qfalse);
+    R_AddDebugArrow(path->firstMovePoint, path->secondMovePoint, 16.0f, path_color, path_color, time, qfalse);
 }
 #endif
 
@@ -1128,27 +1128,27 @@ static inline void Nav_GetCurveControlPoint(const vec3_t a, const vec3_t b, vec3
 // just to reduce verbosity at call sites
 static inline void Nav_AddDebugLine(const vec3_t s, const vec3_t e, const color_t c)
 {
-    R_AddDebugLine(s, e, c, SV_FRAMETIME, true);
+    R_AddDebugLine(s, e, c, SV_FRAMETIME, qtrue);
 }
 static inline void Nav_AddDebugArrow(const vec3_t s, const vec3_t e, const color_t lc, const color_t ac)
 {
-    R_AddDebugArrow(s, e, 8.0f, lc, ac, SV_FRAMETIME, true);
+    R_AddDebugArrow(s, e, 8.0f, lc, ac, SV_FRAMETIME, qtrue);
 }
 static inline void Nav_AddDebugCurveArrow(const vec3_t s, const vec3_t c, const vec3_t e, const color_t lc, const color_t ac)
 {
-    R_AddDebugCurveArrow(s, c, e, 8.0f, lc, ac, SV_FRAMETIME, true);
+    R_AddDebugCurveArrow(s, c, e, 8.0f, lc, ac, SV_FRAMETIME, qtrue);
 }
 static inline void Nav_AddDebugCircle(const vec3_t o, const float r, const color_t c)
 {
-    R_AddDebugCircle(o, r, c, SV_FRAMETIME, true);
+    R_AddDebugCircle(o, r, c, SV_FRAMETIME, qtrue);
 }
 static inline void Nav_AddDebugBounds(const vec3_t min, const vec3_t max, const color_t c)
 {
-    R_AddDebugBounds(min, max, c, SV_FRAMETIME, true);
+    R_AddDebugBounds(min, max, c, SV_FRAMETIME, qtrue);
 }
 static inline void Nav_AddDebugText(const vec3_t o, const vec3_t a, const char *t, float s, color_t c)
 {
-    R_AddDebugText(o, a, t, s, c, SV_FRAMETIME, true);
+    R_AddDebugText(o, a, t, s, c, SV_FRAMETIME, qtrue);
 }
 
 static void Nav_RenderLinkEdict(const vec3_t start, const vec3_t end, const nav_edict_t *edict)
@@ -1159,9 +1159,9 @@ static void Nav_RenderLinkEdict(const vec3_t start, const vec3_t end, const nav_
     LerpVector(start, end, 0.5f, e);
     VectorMA(e, 24.f, u, e);
     
-    R_AddDebugLine(start, e, COLOR_BLUE, SV_FRAMETIME, true);
-    R_AddDebugLine(end, e, COLOR_BLUE, SV_FRAMETIME, true);
-    R_AddDebugSphere(e, 8.0f, COLOR_RED, SV_FRAMETIME, true);
+    R_AddDebugLine(start, e, COLOR_BLUE, SV_FRAMETIME, qtrue);
+    R_AddDebugLine(end, e, COLOR_BLUE, SV_FRAMETIME, qtrue);
+    R_AddDebugSphere(e, 8.0f, COLOR_RED, SV_FRAMETIME, qtrue);
 
     vec3_t d;
     VectorSubtract(glr.fd.vieworg, e, d);
@@ -1176,14 +1176,14 @@ static void Nav_RenderLinkEdict(const vec3_t start, const vec3_t end, const nav_
                      (e[i] > edict->game_edict->absmax[i]) ? edict->game_edict->absmax[i] :
                       e[i];
 
-        R_AddDebugLine(org, e, COLOR_GREEN, SV_FRAMETIME, false);
-        R_AddDebugBounds(edict->game_edict->absmin, edict->game_edict->absmax, COLOR_GREEN, SV_FRAMETIME, false);
+        R_AddDebugLine(org, e, COLOR_GREEN, SV_FRAMETIME, qfalse);
+        R_AddDebugBounds(edict->game_edict->absmin, edict->game_edict->absmax, COLOR_GREEN, SV_FRAMETIME, qfalse);
     }
     
     e[2] += 16.f;
     R_AddDebugText(e, NULL, va("entity %i\nmodel %i\nclassname %s", 
         edict->game_edict->s.number, edict->game_edict->s.modelindex, edict->game_edict->sv.classname ? edict->game_edict->sv.classname : "!noclass!"),
-        0.25f, COLOR_YELLOW, SV_FRAMETIME, false);
+        0.25f, COLOR_YELLOW, SV_FRAMETIME, qfalse);
 }
 
 static void Nav_RenderLink(const nav_node_t *node, int node_id, const vec3_t node_origin, const nav_link_t *link, uint8_t alpha)
@@ -1238,11 +1238,9 @@ static void Nav_RenderLink(const nav_node_t *node, int node_id, const vec3_t nod
             // raise the other side's points slightly
             ctrl[2] += 32.f;
 
-            Nav_AddDebugCurveArrow((const vec3_t) {
-                e[0], e[1], e[2] + 32.f
-            }, ctrl, (const vec3_t) {
-                node_origin[0], node_origin[1], node_origin[2] + 32.f
-            }, traversal_color, arrow_color);
+            vec3_t raised_start{ e[0], e[1], e[2] + 32.f };
+            vec3_t raised_end{ node_origin[0], node_origin[1], node_origin[2] + 32.f };
+            Nav_AddDebugCurveArrow(raised_start, ctrl, raised_end, traversal_color, arrow_color);
 
             return;
         }
@@ -1307,7 +1305,7 @@ static void Nav_Debug(void)
 
         t[2] -= 18;
 
-        R_AddDebugText(t, NULL, Nav_NodeFlagsToString(node->flags), 0.1f, ColorSetAlpha(COLOR_GREEN, alpha), SV_FRAMETIME, false);
+        R_AddDebugText(t, NULL, Nav_NodeFlagsToString(node->flags), 0.1f, ColorSetAlpha(COLOR_GREEN, alpha), SV_FRAMETIME, qfalse);
         
         for (const nav_link_t *link = node->links; link != node->links + node->num_links; link++)
             Nav_RenderLink(node, i, s, link, alpha);

@@ -158,7 +158,7 @@ static int IMG_Unpack8(uint32_t *out, const uint8_t *in, int width, int height)
                 else
                     p = 0;
                 // copy rgb components
-                *out = ColorSetAlpha(ColorU32(d_8to24table[p]), 0).u32;
+                *out = ColorSetAlpha(ColorU32(d_8to24table[p]), static_cast<uint8_t>(0)).u32;
             } else {
                 *out = d_8to24table[p];
             }
