@@ -425,7 +425,8 @@ CL_LoadWheelIcons
 */
 static cl_wheel_icon_t CL_LoadWheelIcons(int icon_index)
 {
-    cl_wheel_icon_t icons = { .main = cl.image_precache[icon_index] };
+    cl_wheel_icon_t icons{};
+    icons.main = cl.image_precache[icon_index];
 
     char path[MAX_QPATH];
     Q_snprintf(path, sizeof(path), "wheel/%s", cl.configstrings[cl.csr.images + icon_index]);
