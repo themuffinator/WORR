@@ -384,12 +384,14 @@ if cc.get_argument_syntax() == 'gcc'
 elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/wd4267', '/wd4018']
 
-  if cppc.has_argument('/std:c++20')
-    msvc_cpp_args += '/std:c++20'
-  elif cppc.has_argument('/std:c++latest')
-    msvc_cpp_args += '/std:c++latest'
-  else
-    error('MSVC does not support the required C++20 standard flag')
+  if not meson.version().version_compare('>=1.3.0')
+    if cppc.has_argument('/std:c++20')
+      msvc_cpp_args += '/std:c++20'
+    elif cppc.has_argument('/std:c++latest')
+      msvc_cpp_args += '/std:c++latest'
+    else
+      error('MSVC does not support the required C++20 standard flag')
+    endif
   endif
 endif
 
