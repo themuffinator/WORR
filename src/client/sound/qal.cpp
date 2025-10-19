@@ -26,6 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <AL/alc.h>
 
 #include <array>
+#include <cstddef>
 #include <functional>
 
 #define QALAPI
@@ -95,6 +96,19 @@ struct alsection_t {
     alfunction_range functions;
 };
 
+struct alfunction_view {
+    const alfunction_t *data = nullptr;
+    std::size_t size = 0;
+
+    const alfunction_t *begin() const { return data; }
+    const alfunction_t *end() const { return data + size; }
+};
+
+struct alsection_t {
+    const char *extension;
+    alfunction_view functions;
+};
+
 static const std::array<alfunction_t, 36> core_functions = {
     QALC_FN(CloseDevice),
     QALC_FN(CreateContext),
@@ -151,8 +165,8 @@ static const std::array<alfunction_t, 13> efx_functions = {
 };
 
 static const std::array<alsection_t, 2> sections = { {
-    { nullptr, make_alfunction_range(core_functions) },
-    { "ALC_EXT_EFX", make_alfunction_range(efx_functions) },
+    { nullptr, { core_functions.data(), core_functions.size() } },
+    { "ALC_EXT_EFX", { efx_functions.data(), efx_functions.size() } },
 } };
 
 static cvar_t   *al_device;
