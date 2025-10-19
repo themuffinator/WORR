@@ -55,11 +55,16 @@ static void wrap_RestartFilesystem(void)
 
 const char *game_q2pro_restart_filesystem_ext = "q2pro:restart_filesystem";
 
-static const game_q2pro_restart_filesystem_t game_q2pro_restart_filesystem = {
-    .api_version = 1,
+static game_q2pro_restart_filesystem_t make_game_q2pro_restart_filesystem()
+{
+    game_q2pro_restart_filesystem_t ext{};
+    ext.api_version = 1;
+    ext.RestartFilesystem = wrap_RestartFilesystem;
+    return ext;
+}
 
-    .RestartFilesystem = wrap_RestartFilesystem,
-};
+static const game_q2pro_restart_filesystem_t game_q2pro_restart_filesystem =
+    make_game_q2pro_restart_filesystem();
 
 static qboolean wrap_CustomizeEntityToClient(edict_t *client, edict_t *ent, customize_entity_t *temp)
 {
@@ -79,12 +84,16 @@ static qboolean wrap_EntityVisibleToClient(edict_t *client, edict_t *ent)
 
 const char *game_q2pro_customize_entity_ext = "q2pro:customize_entity";
 
-static const game_q2pro_customize_entity_t game_q2pro_customize_entity = {
-    .api_version = 1,
+static game_q2pro_customize_entity_t make_game_q2pro_customize_entity()
+{
+    game_q2pro_customize_entity_t ext{};
+    ext.api_version = 1;
+    ext.CustomizeEntityToClient = wrap_CustomizeEntityToClient;
+    ext.EntityVisibleToClient = wrap_EntityVisibleToClient;
+    return ext;
+}
 
-    .CustomizeEntityToClient = wrap_CustomizeEntityToClient,
-    .EntityVisibleToClient = wrap_EntityVisibleToClient,
-};
+static const game_q2pro_customize_entity_t game_q2pro_customize_entity = make_game_q2pro_customize_entity();
 
 // flag indicating if game uses gclient_new_t or gclient_old_t.
 // doesn't enable protocol extensions by itself.
@@ -1063,18 +1072,21 @@ static const shadow_light_data_t *wrap_GetShadowLightData(int32_t entity_number)
     return NULL;
 }
 
-static const game3_import_ex_t game3_import_ex = {
-    .apiversion = GAME3_API_VERSION_EX,
-    .structsize = sizeof(game3_import_ex_t),
+static game3_import_ex_t make_game3_import_ex()
+{
+    game3_import_ex_t import{};
+    import.apiversion = GAME3_API_VERSION_EX;
+    import.structsize = sizeof(game3_import_ex_t);
+    import.local_sound = wrap_local_sound;
+    import.get_configstring = wrap_get_configstring;
+    import.clip = wrap_clip;
+    import.inVIS = wrap_inVIS;
+    import.GetExtension = wrap_GetExtension_import;
+    import.TagRealloc = PF_TagRealloc;
+    return import;
+}
 
-    .local_sound = wrap_local_sound,
-    .get_configstring = wrap_get_configstring,
-    .clip = wrap_clip,
-    .inVIS = wrap_inVIS,
-
-    .GetExtension = wrap_GetExtension_import,
-    .TagRealloc = PF_TagRealloc,
-};
+static const game3_import_ex_t game3_import_ex = make_game3_import_ex();
 
 game_export_t *GetGame3Proxy(game_import_t *import, void *game3_entry, void *game3_ex_entry)
 {
