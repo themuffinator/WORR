@@ -77,6 +77,25 @@ static alfunction_t make_alfunction(const char *name, T &destination, T builtin)
 #define QALC_FN(x)  make_alfunction("alc"#x, qalc##x, alc##x)
 #define QAL_FN(x)   make_alfunction("al"#x, qal##x, al##x)
 
+struct alfunction_range {
+    const alfunction_t *begin_ptr;
+    const alfunction_t *end_ptr;
+
+    constexpr const alfunction_t *begin() const { return begin_ptr; }
+    constexpr const alfunction_t *end() const { return end_ptr; }
+};
+
+template <typename ArrayT>
+constexpr alfunction_range make_alfunction_range(const ArrayT &array)
+{
+    return { array.data(), array.data() + array.size() };
+}
+
+struct alsection_t {
+    const char *extension;
+    alfunction_range functions;
+};
+
 struct alfunction_view {
     const alfunction_t *data = nullptr;
     std::size_t size = 0;
