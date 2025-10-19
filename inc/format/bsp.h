@@ -71,8 +71,43 @@ typedef struct {
 
 typedef struct {
     uint32_t    numclusters;
-    uint32_t    bitofs[][2];    // bitofs[numclusters][2]
+    uint32_t    data[1];        // trailing storage (bit offsets + compressed data)
 } dvis_t;
+
+static inline uint32_t *DVis_BitOfsMutable(dvis_t *vis)
+{
+    return vis->data;
+}
+
+static inline const uint32_t *DVis_BitOfsConst(const dvis_t *vis)
+{
+    return vis->data;
+}
+
+static inline uint32_t DVis_BitOfsIndex(uint32_t cluster, int which)
+{
+    return cluster * 2u + (uint32_t)which;
+}
+
+static inline uint32_t DVis_GetBitOfs(const dvis_t *vis, uint32_t cluster, int which)
+{
+    return DVis_BitOfsConst(vis)[DVis_BitOfsIndex(cluster, which)];
+}
+
+static inline void DVis_SetBitOfs(dvis_t *vis, uint32_t cluster, int which, uint32_t value)
+{
+    DVis_BitOfsMutable(vis)[DVis_BitOfsIndex(cluster, which)] = value;
+}
+
+static inline unsigned char *DVis_VisData(dvis_t *vis)
+{
+    return (unsigned char *)(DVis_BitOfsMutable(vis) + vis->numclusters * 2u);
+}
+
+static inline const unsigned char *DVis_VisDataConst(const dvis_t *vis)
+{
+    return (const unsigned char *)(DVis_BitOfsConst(vis) + vis->numclusters * 2u);
+}
 
 //=============================================================================
 

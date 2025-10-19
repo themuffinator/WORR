@@ -1130,7 +1130,7 @@ void BSP_ClusterVis(const bsp_t *bsp, visrow_t *mask, int cluster, int vis)
     // decompress vis
     const auto *vis_bytes = reinterpret_cast<const byte *>(bsp->vis);
     in_end = vis_bytes + bsp->numvisibility;
-    in = vis_bytes + bsp->vis->bitofs[cluster][vis];
+    in = vis_bytes + DVis_GetBitOfs(bsp->vis, (uint32_t)cluster, vis);
     out_end = mask->b + bsp->visrowsize;
     out = mask->b;
     do {
