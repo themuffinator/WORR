@@ -305,8 +305,8 @@ static int wrap_BoxEdicts(const vec3_t mins, const vec3_t maxs, game3_edict_t **
 
 static void server_trace_to_game(game3_trace_t *tr, const trace_t *str)
 {
-    tr->allsolid = str->allsolid;
-    tr->startsolid = str->startsolid;
+    tr->allsolid = str->allsolid ? qtrue : qfalse;
+    tr->startsolid = str->startsolid ? qtrue : qfalse;
     tr->fraction = str->fraction;
     VectorCopy(str->endpos, tr->endpos);
     tr->plane = str->plane;
@@ -359,7 +359,7 @@ static qboolean wrap_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
     case VIS_PHS:
         return game_import.inPHS(p1, p2, (vis & VIS_NOAREAS) == 0);
     }
-    return false;
+    return qfalse;
 }
 
 static void *wrap_GetExtension_import(const char *name)
@@ -421,7 +421,7 @@ static void sync_single_edict_server_to_game(int index)
         return;
 
     bool is_new = !(game_edict->inuse || HAS_EFFECTS(game_edict));
-    game_edict->inuse = server_edict->inuse;
+    game_edict->inuse = server_edict->inuse ? qtrue : qfalse;
     // Don't change fields if edict became unused
     if(!game_edict->inuse)
         return;
@@ -841,7 +841,7 @@ static char* wrap_WriteGameJson(bool autosave, size_t* json_size)
 
     char game_fn[MAX_OSPATH];
     Q_snprintf(game_fn, sizeof(game_fn), "%s/game.ssv", save_dir);
-    game3_export->WriteGame(game_fn, autosave);
+    game3_export->WriteGame(game_fn, autosave ? qtrue : qfalse);
 
     char* result = read_as_base85(game_fn, json_size);
 
