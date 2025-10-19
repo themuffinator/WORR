@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/fifo.h>
 #include <libavutil/log.h>
 #include <libswresample/swresample.h>
@@ -135,7 +136,7 @@ void SCR_InitCinematics(void)
         if (!fmt_cache[i])
             continue;
         if (f->codec_id != AV_CODEC_ID_NONE &&
-            !avcodec_find_decoder(f->codec_id))
+            !avcodec_find_decoder(static_cast<AVCodecID>(f->codec_id)))
             continue;
         supported |= BIT(i);
         if (*extensions)
@@ -296,7 +297,7 @@ static int process_audio(void)
 
     if (out->nb_samples)
         S_RawSamples(out->nb_samples, out->sample_rate,
-                     av_get_bytes_per_sample(out->format),
+                     av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
                      out->ch_layout.nb_channels, out->data[0]);
     return 0;
 }
@@ -519,7 +520,7 @@ static bool open_codec_context(enum AVMediaType type)
     stream_index = ret;
     st = cin.fmt_ctx->streams[stream_index];
 
-    dec = avcodec_find_decoder(st->codecpar->codec_id);
+    dec = avcodec_find_decoder(static_cast<AVCodecID>(st->codecpar->codec_id));
     if (!dec) {
         Com_EPrintf("Failed to find %s codec %s\n", av_get_media_type_string(type), avcodec_get_name(st->codecpar->codec_id));
         return false;
@@ -603,10 +604,12 @@ static bool open_codec_context(enum AVMediaType type)
         if (!sample_rate)
             sample_rate = dec_ctx->sample_rate;
 
-        if (dec_ctx->ch_layout.nb_channels >= 2)
-            out->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO;
-        else
-            out->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
+        int out_channels = (dec_ctx->ch_layout.nb_channels >= 2) ? 2 : 1;
+        ret = av_channel_layout_default(&out->ch_layout, out_channels);
+        if (ret < 0) {
+            Com_EPrintf("Failed to set audio channel layout\n");
+            return false;
+        }
         out->format = S_SupportsFloat() ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_S16;
         out->sample_rate = sample_rate;
         out->nb_samples = MAX_RAW_SAMPLES;
