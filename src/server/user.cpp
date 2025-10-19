@@ -106,8 +106,12 @@ static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
 static void write_gamestate(void)
 {
-    msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : 0;
-    q2proto_gamestate_t gamestate = {.num_configstrings = 0, .configstrings = configstrings, .num_spawnbaselines = 0, .spawnbaselines = spawnbaselines};
+    msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : static_cast<msgEsFlags_t>(0);
+    q2proto_gamestate_t gamestate{};
+    gamestate.configstrings = configstrings;
+    gamestate.spawnbaselines = spawnbaselines;
+    gamestate.num_configstrings = 0;
+    gamestate.num_spawnbaselines = 0;
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     for (int i = 0; i < sv_client->csr->end; i++) {
@@ -157,7 +161,8 @@ static void stuff_cmds(const list_t *list)
     stuffcmd_t *stuff;
 
     LIST_FOR_EACH(stuffcmd_t, stuff, list, entry) {
-        q2proto_svc_message_t message = {.type = Q2P_SVC_STUFFTEXT};
+        q2proto_svc_message_t message{};
+        message.type = Q2P_SVC_STUFFTEXT;
         message.stufftext.string = q2proto_make_string(va("%s\n", stuff->string));
         q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
         SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
@@ -250,7 +255,8 @@ void SV_New_f(void)
     // create baselines for this client
     SV_CreateBaselines();
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_SERVERDATA, .serverdata = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_SERVERDATA;
     q2proto_server_fill_serverdata(&sv_client->q2proto_ctx, &message.serverdata);
     message.serverdata.servercount = sv_client->spawncount;
     message.serverdata.attractloop = false;
@@ -536,7 +542,8 @@ static void SV_BeginDownload_f(void)
         Com_DPrintf("Refusing download, %s already has %s (%d bytes)\n",
                     sv_client->name, name, offset);
         FS_CloseFile(f);
-        q2proto_svc_message_t message = {.type = Q2P_SVC_DOWNLOAD};
+        q2proto_svc_message_t message{};
+        message.type = Q2P_SVC_DOWNLOAD;
         q2proto_server_download_finish(&sv_client->download_state, &message.download);
         q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
         SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
@@ -567,7 +574,8 @@ fail3:
 fail2:
     FS_CloseFile(f);
 fail1:
-    q2proto_svc_message_t message = {.type = Q2P_SVC_DOWNLOAD};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_DOWNLOAD;
     q2proto_server_download_abort(download_state_ptr, &message.download);
     q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
     SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
@@ -579,7 +587,8 @@ static void SV_StopDownload_f(void)
     if (!sv_client->download)
         return;
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_DOWNLOAD};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_DOWNLOAD;
     q2proto_server_download_abort(&sv_client->download_state, &message.download);
     q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
     SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);

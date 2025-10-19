@@ -342,7 +342,8 @@ void CL_UpdateBlendSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOBLEND;
     message.setting.value = !cl_add_blend->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);

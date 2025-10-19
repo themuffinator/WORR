@@ -207,7 +207,8 @@ static void CL_UpdateGunSetting(void)
         nogun = 0;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOGUN;
     message.setting.value = nogun;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -220,7 +221,8 @@ static void CL_UpdateGibSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOGIBS;
     message.setting.value = !cl_gibs->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -233,7 +235,8 @@ static void CL_UpdateFootstepsSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOFOOTSTEPS;
     message.setting.value = !cl_footsteps->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -246,7 +249,8 @@ static void CL_UpdatePredictSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOPREDICT;
     message.setting.value = !cl_predict->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -261,7 +265,8 @@ static void CL_UpdateRateSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_FPS;
     message.setting.value = cl_updaterate->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -289,7 +294,8 @@ void CL_UpdateRecordingSetting(void)
     }
 #endif
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_RECORDING;
     message.setting.value = rec;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -305,7 +311,8 @@ static void CL_UpdateFlaresSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOFLARES;
     message.setting.value = !cl_flares->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -325,7 +332,8 @@ void CL_ClientCommand(const char *string)
 
     Com_DDPrintf("%s: %s\n", __func__, Com_MakePrintable(string));
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_STRINGCMD};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_STRINGCMD;
     message.stringcmd.cmd = q2proto_make_string(string);
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
     MSG_FlushTo(&cls.netchan.message);
@@ -746,7 +754,8 @@ void CL_Disconnect(error_type_t type)
 
     if (cls.netchan.protocol) {
         // send a disconnect message to the server
-        q2proto_clc_message_t message = {.type = Q2P_CLC_STRINGCMD};
+        q2proto_clc_message_t message{};
+        message.type = Q2P_CLC_STRINGCMD;
         message.stringcmd.cmd = q2proto_make_string("disconnect");
         q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
 
@@ -1389,8 +1398,7 @@ static void CL_ConnectionlessPacket(void)
 
 #if USE_AC_CLIENT
         if (anticheat) {
-            q2proto_clc_message_t nop_message;
-            memset(&nop_message, 0, sizeof(nop_message));
+            q2proto_clc_message_t nop_message{};
             nop_message.type = Q2P_CLC_NOP;
             q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &nop_message);
             MSG_FlushTo(&cls.netchan.message);

@@ -39,7 +39,8 @@ void SV_FlushRedirect(int redirected, const char *outputbuf, size_t len)
         memcpy(buffer + 10, outputbuf, len);
         NET_SendPacket(NS_SERVER, buffer, len + 10, &net_from);
     } else if (redirected == RD_CLIENT) {
-        q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
+        q2proto_svc_message_t message{};
+        message.type = Q2P_SVC_PRINT;
         message.print.level = PRINT_HIGH;
         message.print.string.str = outputbuf;
         message.print.string.len = len;
@@ -138,7 +139,8 @@ void SV_ClientPrintf(client_t *client, int level, const char *fmt, ...)
         return;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_PRINT;
     message.print.level = level;
     message.print.string = q2proto_make_string(string);
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
@@ -170,7 +172,8 @@ void SV_BroadcastPrintf(int level, const char *fmt, ...)
         return;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_PRINT;
     message.print.level = level;
     message.print.string = q2proto_make_string(string);
     q2proto_server_multicast_write(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, &message);
@@ -517,7 +520,9 @@ static void emit_snd(client_t *client, const message_packet_t *msg)
         flags |= SND_POS;   // entity is not present in frame
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_SOUND, .sound = msg->sound};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_SOUND;
+    message.sound = msg->sound;
     message.sound.flags = flags;
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
 }
@@ -715,7 +720,8 @@ static void write_datagram_old(client_t *client)
         int pad = min(MAX_PACKETLEN - 8, sv_pad_packets->integer);
 
         while (msg_write.cursize < pad) {
-            q2proto_svc_message_t message = {.type = Q2P_SVC_NOP};
+            q2proto_svc_message_t message{};
+            message.type = Q2P_SVC_NOP;
             q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
         }
     }
@@ -783,7 +789,8 @@ static void write_datagram_new(client_t *client)
         int pad = min(msg_write.maxsize, sv_pad_packets->integer);
 
         while (msg_write.cursize < pad) {
-            q2proto_svc_message_t message = {.type = Q2P_SVC_NOP};
+            q2proto_svc_message_t message{};
+            message.type = Q2P_SVC_NOP;
             q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
         }
     }
@@ -923,7 +930,8 @@ static void write_pending_download(client_t *client)
 
     client->downloadpending = false;
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_DOWNLOAD};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_DOWNLOAD;
     int download_err = q2proto_server_download_data(&client->download_state, &client->download_ptr, &client->download_remaining, chunk, &message.download);
     if (download_err == Q2P_ERR_SUCCESS || download_err == Q2P_ERR_DOWNLOAD_COMPLETE) {
         q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);

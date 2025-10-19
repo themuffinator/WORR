@@ -1028,7 +1028,8 @@ static void CL_SendDefaultCmd(void)
     cl.lastTransmitCmdNumberReal = cl.cmdNumber;
 
     // begin a client move command
-    q2proto_clc_message_t move_message = {.type = Q2P_CLC_MOVE};
+    q2proto_clc_message_t move_message{};
+    move_message.type = Q2P_CLC_MOVE;
 
     // let the server know what the last frame we
     // got was, so the next message can be delta compressed
@@ -1098,7 +1099,8 @@ static void CL_SendBatchedCmd(void)
     cl.lastTransmitCmdNumber = cl.cmdNumber;
     cl.lastTransmitCmdNumberReal = cl.cmdNumber;
 
-    q2proto_clc_message_t move_message = {.type = Q2P_CLC_BATCH_MOVE, .batch_move = {0}};
+    q2proto_clc_message_t move_message{};
+    move_message.type = Q2P_CLC_BATCH_MOVE;
     if (cl_nodelta->integer || !cl.frame.valid /*|| cls.demowaiting*/) {
         move_message.batch_move.lastframe = -1; // no compression
     } else {
@@ -1193,7 +1195,8 @@ static void CL_SendUserinfo(void)
     if (cls.userinfo_modified == MAX_PACKET_USERINFOS) {
         size_t len = Cvar_BitInfo(userinfo, CVAR_USERINFO);
         Com_DDPrintf("%s: %u: full update\n", __func__, com_framenum);
-        q2proto_clc_message_t message = {.type = Q2P_CLC_USERINFO};
+        q2proto_clc_message_t message{};
+        message.type = Q2P_CLC_USERINFO;
         message.userinfo.str.str = userinfo;
         message.userinfo.str.len = len;
         q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -1201,7 +1204,8 @@ static void CL_SendUserinfo(void)
     } else if (cls.q2proto_ctx.features.userinfo_delta) {
         Com_DDPrintf("%s: %u: %d updates\n", __func__, com_framenum,
                      cls.userinfo_modified);
-        q2proto_clc_message_t message = {.type = Q2P_CLC_USERINFO_DELTA};
+        q2proto_clc_message_t message{};
+        message.type = Q2P_CLC_USERINFO_DELTA;
         for (i = 0; i < cls.userinfo_modified; i++) {
             var = cls.userinfo_updates[i];
             message.userinfo_delta.name = q2proto_make_string(var->name);

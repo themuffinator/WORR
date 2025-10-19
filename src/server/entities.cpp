@@ -246,7 +246,8 @@ static void make_playerstate_delta(client_t *client, const q2proto_packed_player
 
 static void write_entity_delta(client_t *client, const server_entity_packed_t *from, const server_entity_packed_t *to, msgEsFlags_t flags)
 {
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME_ENTITY_DELTA;
 
     if (!to) {
         Q_assert(from);
@@ -263,7 +264,7 @@ static void write_entity_delta(client_t *client, const server_entity_packed_t *f
     message.frame_entity_delta.newnum = to->number;
 
     if (client->q2proto_ctx.features.has_beam_old_origin_fix)
-        flags |= MSG_ES_BEAMORIGIN;
+        flags = enum_bit_or(flags, MSG_ES_BEAMORIGIN);
     bool entity_differs = Q2PROTO_MakeEntityDelta(&client->q2proto_ctx, &message.frame_entity_delta.entity_delta, from ? &from->e : NULL, &to->e, flags);
     if (!(flags & MSG_ES_FORCE) && !entity_differs)
         return;
@@ -320,12 +321,12 @@ static bool emit_packet_entities(client_t               *client,
             // not changed at all. Note that players are always 'newentities',
             // this updates their old_origin always and prevents warping in case
             // of packet loss.
-            int flags = 0;
+            msgEsFlags_t flags = static_cast<msgEsFlags_t>(0);
             if (newnum <= client->maxclients) {
-                flags |= MSG_ES_NEWENTITY;
+                flags = enum_bit_or(flags, MSG_ES_NEWENTITY);
             }
             if (newnum == clientEntityNum) {
-                flags |= MSG_ES_FIRSTPERSON;
+                flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
                 VectorCopy(oldent->e.origin, newent->e.origin);
                 VectorCopy(oldent->e.angles, newent->e.angles);
             }
@@ -341,21 +342,22 @@ static bool emit_packet_entities(client_t               *client,
             if (oldent) {
                 oldent += (newnum & SV_BASELINES_MASK);
             }
-            write_entity_delta(client, oldent, newent, MSG_ES_NEWENTITY | MSG_ES_FORCE);
+            write_entity_delta(client, oldent, newent, enum_bit_or(MSG_ES_NEWENTITY, MSG_ES_FORCE));
             newindex++;
             continue;
         }
 
         if (newnum > oldnum) {
             // the old entity isn't present in the new message
-            write_entity_delta(client, oldent, NULL, 0);
+            write_entity_delta(client, oldent, NULL, static_cast<msgEsFlags_t>(0));
             oldindex++;
             continue;
         }
     }
 
     // end of packetentities
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME_ENTITY_DELTA;
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
     return ret;
 }
@@ -387,7 +389,8 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
         lastframe = -1;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME, .frame = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME;
     message.frame.serverframe = client->framenum;
     message.frame.deltaframe = lastframe;
     message.frame.suppress_count = client->suppress_count;
@@ -400,21 +403,21 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
     psFlags = client->psFlags;
     if (!client->settings[CLS_RECORDING]) {
         if (client->settings[CLS_NOGUN]) {
-            psFlags |= MSG_PS_IGNORE_GUNFRAMES;
+            psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_GUNFRAMES);
             if (client->settings[CLS_NOGUN] != 2) {
-                psFlags |= MSG_PS_IGNORE_GUNINDEX;
+                psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_GUNINDEX);
             }
         }
         if (client->settings[CLS_NOBLEND]) {
-            psFlags |= MSG_PS_IGNORE_BLEND;
+            psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_BLEND);
         }
         if (frame->ps.pm_type < PM_DEAD) {
             if (!(frame->ps.pm_flags & PMF_NO_PREDICTION)) {
-                psFlags |= MSG_PS_IGNORE_VIEWANGLES;
+                psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_VIEWANGLES);
             }
         } else {
             // lying dead on a rotating platform?
-            psFlags |= MSG_PS_IGNORE_DELTAANGLES;
+            psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_DELTAANGLES);
         }
     }
 
@@ -423,10 +426,10 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
         clientEntityNum = frame->clientNum + 1;
     }
     if (client->settings[CLS_NOPREDICT]) {
-        psFlags |= MSG_PS_IGNORE_PREDICTION;
+        psFlags = enum_bit_or(psFlags, MSG_PS_IGNORE_PREDICTION);
     }
-    psFlags |= MSG_PS_EXTENSIONS;
-    psFlags |= MSG_PS_RERELEASE;
+    psFlags = enum_bit_or(psFlags, MSG_PS_EXTENSIONS);
+    psFlags = enum_bit_or(psFlags, MSG_PS_RERELEASE);
 
     // delta encode the playerstate
     make_playerstate_delta(client, oldstate, &frame->ps, &message.frame.playerstate, psFlags);
