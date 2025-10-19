@@ -64,6 +64,12 @@ typedef struct {
     int             widest_map, widest_pov;
     uint64_t        total_bytes;
     char            status[32];
+    char            *menu_name;
+    char            *menu_title;
+    char            *status_no_demos;
+    char            *status_play_demo;
+    char            *status_change_dir;
+    char            *status_building;
 } m_demos_t;
 
 static m_demos_t    m_demos;
@@ -78,6 +84,7 @@ static void BuildName(const file_info_t *info, char **cache)
     demoInfo_t demo;
     demoEntry_t *e;
     struct tm *tm;
+    time_t tmp;
     size_t len;
 
     memset(&demo, 0, sizeof(demo));
@@ -123,7 +130,9 @@ static void BuildName(const file_info_t *info, char **cache)
 
     // format date
     len = 0;
-    if ((tm = localtime(&(time_t){info->mtime})) != NULL) {
+    tmp = info->mtime;
+    tm = localtime(&tmp);
+    if (tm != NULL) {
         if (tm->tm_year == m_demos.year) {
             len = strftime(date, sizeof(date), "%b %d %H:%M", tm);
         } else {
@@ -136,8 +145,8 @@ static void BuildName(const file_info_t *info, char **cache)
 
     Com_FormatSize(buffer, sizeof(buffer), info->size);
 
-    e = UI_FormatColumns(DEMO_EXTRASIZE,
-                         info->name, date, buffer, demo.map, demo.pov, NULL);
+    e = static_cast<demoEntry_t *>(UI_FormatColumns(DEMO_EXTRASIZE,
+                         info->name, date, buffer, demo.map, demo.pov, NULL));
     e->type = ENTRY_DEMO;
     e->size = info->size;
     e->mtime = info->mtime;
@@ -149,7 +158,8 @@ static void BuildName(const file_info_t *info, char **cache)
 
 static void BuildDir(const char *name, int type)
 {
-    demoEntry_t *e = UI_FormatColumns(DEMO_EXTRASIZE, name, "-", DEMO_DIR_SIZE, "-", "-", NULL);
+    demoEntry_t *e = static_cast<demoEntry_t *>(
+        UI_FormatColumns(DEMO_EXTRASIZE, name, "-", DEMO_DIR_SIZE, "-", "-", NULL));
 
     e->type = type;
     e->size = 0;
@@ -241,7 +251,7 @@ static void CalcHash(void **list)
 
     mdfour_begin(&md);
     while (*list) {
-        info = *list++;
+        info = static_cast<file_info_t *>(*list++);
         len = sizeof(*info) + strlen(info->name) - 1;
         mdfour_update(&md, reinterpret_cast<const uint8_t *>(info), len);
     }
@@ -253,17 +263,17 @@ static menuSound_t Change(menuCommon_t *self)
     demoEntry_t *e;
 
     if (!m_demos.list.numItems) {
-        m_demos.menu.status = "No demos found";
+        m_demos.menu.status = m_demos.status_no_demos;
         return QMS_BEEP;
     }
 
     e = m_demos.list.items[m_demos.list.curvalue];
     switch (e->type) {
     case ENTRY_DEMO:
-        m_demos.menu.status = "Press Enter to play demo";
+        m_demos.menu.status = m_demos.status_play_demo;
         break;
     default:
-        m_demos.menu.status = "Press Enter to change directory";
+        m_demos.menu.status = m_demos.status_change_dir;
         break;
     }
 
@@ -282,7 +292,7 @@ static void BuildList(void)
     // this can be a lengthy process
     S_StopAllSounds();
 
-    m_demos.menu.status = "Building list...";
+    m_demos.menu.status = m_demos.status_building;
     SCR_UpdateScreen();
 
     // list files
@@ -313,7 +323,7 @@ static void BuildList(void)
     // add directories
     if (dirlist) {
         for (i = 0; i < numDirs; i++) {
-            BuildDir(dirlist[i], ENTRY_DN);
+            BuildDir(static_cast<const char *>(dirlist[i]), ENTRY_DN);
         }
         FS_FreeList(dirlist);
     }
@@ -326,12 +336,12 @@ static void BuildList(void)
         if ((cache = LoadCache()) != NULL) {
             p = cache + 32 + 1;
             for (i = 0; i < numDemos; i++) {
-                BuildName(demolist[i], &p);
+                BuildName(static_cast<file_info_t *>(demolist[i]), &p);
             }
             FS_FreeFile(cache);
         } else {
             for (i = 0; i < numDemos; i++) {
-                BuildName(demolist[i], NULL);
+                BuildName(static_cast<file_info_t *>(demolist[i]), NULL);
                 if ((i & 7) == 0) {
                     m_demos.menu.size(&m_demos.menu);
                     SCR_UpdateScreen();
@@ -616,6 +626,12 @@ static void Expose(menuFrameWork_t *self)
 static void Free(menuFrameWork_t *self)
 {
     Z_Free(m_demos.menu.items);
+    Z_Free(m_demos.menu_name);
+    Z_Free(m_demos.menu_title);
+    Z_Free(m_demos.status_no_demos);
+    Z_Free(m_demos.status_play_demo);
+    Z_Free(m_demos.status_change_dir);
+    Z_Free(m_demos.status_building);
     memset(&m_demos, 0, sizeof(m_demos));
 }
 
@@ -649,8 +665,16 @@ void M_Menu_Demos(void)
 
     ui_listalldemos = Cvar_Get("ui_listalldemos", "0", 0);
 
-    m_demos.menu.name = "demos";
-    m_demos.menu.title = "Demo Browser";
+    m_demos.menu_name = UI_CopyString("demos");
+    m_demos.menu_title = UI_CopyString("Demo Browser");
+    m_demos.status_no_demos = UI_CopyString("No demos found");
+    m_demos.status_play_demo = UI_CopyString("Press Enter to play demo");
+    m_demos.status_change_dir = UI_CopyString("Press Enter to change directory");
+    m_demos.status_building = UI_CopyString("Building list...");
+
+    m_demos.menu.name = m_demos.menu_name;
+    m_demos.menu.title = m_demos.menu_title;
+    m_demos.menu.status = m_demos.status_no_demos;
 
     strcpy(m_demos.browse, "/demos");
 

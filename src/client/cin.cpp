@@ -823,7 +823,9 @@ void SCR_Cinematic_g(genctx_t *ctx)
 
     ctx->ignoredups = true;
     list = FS_ListFiles("video", extensions, flags, &count);
-    for (int i = 0; i < count; i++)
-        Prompt_AddMatch(ctx, va("%s.cin", (char *)list[i]));
+    for (int i = 0; i < count; i++) {
+        const char *name = static_cast<const char *>(list[i]);
+        Prompt_AddMatch(ctx, va("%s.cin", name));
+    }
     FS_FreeList(list);
 }
