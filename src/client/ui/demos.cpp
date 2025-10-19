@@ -177,7 +177,8 @@ static char *LoadCache(void)
     if (Q_concat(buffer, sizeof(buffer), m_demos.browse, "/" COM_DEMOCACHE_NAME) >= sizeof(buffer)) {
         return NULL;
     }
-    len = FS_LoadFileEx(buffer, (void **)&cache, FS_TYPE_REAL | FS_PATH_GAME | FS_DIR_HOME, TAG_FILESYSTEM);
+    len = FS_LoadFileEx(buffer, reinterpret_cast<void **>(&cache),
+                        FS_TYPE_REAL | FS_PATH_GAME | FS_DIR_HOME, TAG_FILESYSTEM);
     if (!cache) {
         return NULL;
     }

@@ -77,12 +77,12 @@ static void load_entstring_override(cm_t *cm)
         ret = Q_ERR(ENAMETOOLONG);
         goto fail;
     }
-    ret = FS_LoadFileEx(buffer, (void **)&data, 0, TAG_CMODEL);
+    ret = FS_LoadFileEx(buffer, reinterpret_cast<void **>(&data), 0, TAG_CMODEL);
 
     // fall back to no hash
     if (ret == Q_ERR(ENOENT)) {
         Q_snprintf(buffer, sizeof(buffer), "%s/%s.ent", path, name);
-        ret = FS_LoadFileEx(buffer, (void **)&data, 0, TAG_CMODEL);
+        ret = FS_LoadFileEx(buffer, reinterpret_cast<void **>(&data), 0, TAG_CMODEL);
     }
     if (ret == Q_ERR(ENOENT))
         return;
@@ -132,7 +132,7 @@ void CM_LoadOverride(cm_t *cm, char *server, size_t server_size)
         goto fail;
     }
 
-    ret = FS_LoadFile(buffer, (void **)&data);
+    ret = FS_LoadFile(buffer, reinterpret_cast<void **>(&data));
     if (!data) {
         if (ret == Q_ERR(ENOENT))
             return;

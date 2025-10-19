@@ -1910,9 +1910,11 @@ void Menu_AddItem(menuFrameWork_t *menu, void *item)
     Q_assert(menu->nitems < MAX_MENU_ITEMS);
 
     if (!menu->nitems) {
-        menu->items = UI_Malloc(MIN_MENU_ITEMS * sizeof(void *));
+        menu->items = reinterpret_cast<void **>(
+            UI_Malloc(MIN_MENU_ITEMS * sizeof(void *)));
     } else {
-        menu->items = Z_Realloc(menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
+        menu->items = reinterpret_cast<void **>(Z_Realloc(
+            menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *)));
     }
 
     menu->items[menu->nitems++] = item;

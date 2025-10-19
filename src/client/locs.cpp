@@ -68,7 +68,7 @@ void LOC_LoadLocations(void)
     // load from main directory
     Q_concat(path, sizeof(path), "locs/", cl.mapname, ".loc");
 
-    ret = FS_LoadFile(path, (void **)&buffer);
+    ret = FS_LoadFile(path, reinterpret_cast<void **>(&buffer));
     if (!buffer) {
         if (ret != Q_ERR(ENOENT)) {
             Com_EPrintf("Couldn't load %s: %s\n", path, Q_ErrorString(ret));

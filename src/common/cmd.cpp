@@ -1654,7 +1654,7 @@ int Cmd_ExecuteFile(const char *path, unsigned flags)
     int len, ret;
     cmdbuf_t *buf;
 
-    len = FS_LoadFileEx(path, (void **)&f, flags, TAG_FILESYSTEM);
+    len = FS_LoadFileEx(path, reinterpret_cast<void **>(&f), flags, TAG_FILESYSTEM);
     if (!f) {
         return len;
     }

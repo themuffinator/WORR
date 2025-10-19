@@ -532,7 +532,7 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 
     char *buffer;
 
-    if (FS_LoadFile(filename, (void **) &buffer) < 0)
+    if (FS_LoadFile(filename, reinterpret_cast<void **>(&buffer)) < 0)
         return;
 
     const char *data = buffer;

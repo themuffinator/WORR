@@ -1790,7 +1790,7 @@ void CL_LoadFilterList(string_entry_t **list, const char *name, const char *comm
     *list = NULL;
 
     // load new list
-    len = FS_LoadFileEx(name, (void **)&raw, FS_TYPE_REAL, TAG_FILESYSTEM);
+    len = FS_LoadFileEx(name, reinterpret_cast<void **>(&raw), FS_TYPE_REAL, TAG_FILESYSTEM);
     if (!raw) {
         if (len != Q_ERR(ENOENT))
             Com_EPrintf("Couldn't load %s: %s\n", name, Q_ErrorString(len));

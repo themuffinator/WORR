@@ -460,7 +460,7 @@ static void check_skins(const char *name)
     uint32_t        ident;
     char            fn[MAX_QPATH];
 
-    len = FS_LoadFile(name, (void **)&model);
+    len = FS_LoadFile(name, reinterpret_cast<void **>(&model));
     if (!model) {
         // couldn't load it
         return;
