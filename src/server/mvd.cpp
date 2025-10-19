@@ -703,8 +703,10 @@ as well as local recorder.
 */
 static void emit_frame(void)
 {
-    player_packed_t *oldps, newps = { 0 };
-    entity_packed_t *oldes, newes = { 0 };
+    player_packed_t *oldps = nullptr;
+    player_packed_t newps{};
+    entity_packed_t *oldes = nullptr;
+    entity_packed_t newes{};
     edict_t *ent;
     int portalbytes;
     byte portalbits[MAX_MAP_PORTAL_BYTES];
@@ -773,7 +775,7 @@ static void emit_frame(void)
 
         // calculate flags
         msgEsFlags_t entityFlags = mvd.esFlags;
-        oldps = NULL; // shut up compiler
+        oldps = nullptr; // shut up compiler
         if (i <= svs.maxclients) {
             oldps = &mvd.players[i - 1];
             if (PPS_INUSE(oldps) && oldps->pmove.pm_type == PM_NORMAL) {
