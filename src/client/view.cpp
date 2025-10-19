@@ -155,7 +155,8 @@ void V_AddLightEx(cl_shadow_light_t *light)
     if (r_numdlights >= MAX_DLIGHTS)
         return;
     
-    float fade = fade_distance_to_light((const vec2_t) { light->fade_start, light->fade_end }, light->origin, cl.refdef.vieworg);
+    const vec2_t fade_range = { light->fade_start, light->fade_end };
+    float fade = fade_distance_to_light(fade_range, light->origin, cl.refdef.vieworg);
 
     if (fade <= 0.0f)
         return;
