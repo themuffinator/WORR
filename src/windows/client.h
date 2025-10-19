@@ -102,12 +102,14 @@ typedef struct {
 
     bool    alttab_disabled;
 
-    enum {
+    enum ModeChangedFlags : unsigned {
         MODE_SIZE       = BIT(0),
         MODE_POS        = BIT(1),
         MODE_STYLE      = BIT(2),
         MODE_REPOSITION = BIT(3),
-    } mode_changed;
+    };
+
+    unsigned mode_changed;
 
     struct {
         bool        initialized;

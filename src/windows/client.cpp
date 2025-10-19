@@ -340,7 +340,7 @@ static LONG set_fullscreen_mode(void)
     win.flags |= QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
-    win.mode_changed = 0;
+    win.mode_changed = 0u;
 
     return ret;
 }
@@ -399,7 +399,7 @@ void Win_SetMode(void)
     win.flags &= ~QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
-    win.mode_changed = 0;
+    win.mode_changed = 0u;
 }
 
 /*
@@ -916,7 +916,7 @@ void Win_PumpEvents(void)
         if (win.mode_changed & win_state_t::MODE_SIZE) {
             Win_ModeChanged();
         }
-        win.mode_changed = 0;
+        win.mode_changed = 0u;
     }
 }
 
