@@ -94,13 +94,21 @@ static bool egl_init(void)
     // create the main window
     Win_Init();
 
+    EGLint egl_major = 0, egl_minor = 0;
+    r_opengl_config_t cfg{};
+    std::array<EGLint, 5> ctx_attr = {
+        EGL_CONTEXT_MAJOR_VERSION, 3,
+        EGL_CONTEXT_OPENGL_DEBUG, 0,
+        EGL_NONE
+    };
+    EGLConfig config = nullptr;
+
     egl.dpy = qeglGetDisplay(win.dc);
     if (!egl.dpy) {
         Com_EPrintf("eglGetDisplay failed\n");
         goto fail;
     }
 
-    EGLint egl_major, egl_minor;
     if (!qeglInitialize(egl.dpy, &egl_major, &egl_minor)) {
         print_error("eglInitialize");
         goto fail;
@@ -119,12 +127,12 @@ static bool egl_init(void)
         goto fail;
     }
 
-    r_opengl_config_t cfg = R_GetGLConfig();
-
-    EGLConfig config;
+    cfg = R_GetGLConfig();
+    ctx_attr[3] = static_cast<EGLint>(cfg.debug);
     if (!choose_config(cfg, &config)) {
         Com_Printf("Falling back to failsafe config\n");
-        r_opengl_config_t failsafe{0, 24, 0, 0, false, 0, 0, 0};
+        r_opengl_config_t failsafe{};
+        failsafe.depthbits = 24;
         if (!choose_config(failsafe, &config))
             goto fail;
     }
@@ -135,11 +143,6 @@ static bool egl_init(void)
         goto fail;
     }
 
-    std::array<EGLint, 5> ctx_attr = {
-        EGL_CONTEXT_MAJOR_VERSION, 3,
-        EGL_CONTEXT_OPENGL_DEBUG, cfg.debug,
-        EGL_NONE
-    };
     egl.ctx = qeglCreateContext(egl.dpy, config, EGL_NO_CONTEXT, ctx_attr.data());
     if (!egl.ctx) {
         print_error("eglCreateContext");

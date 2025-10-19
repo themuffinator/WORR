@@ -762,6 +762,7 @@ static sfxcache_t *AL_UploadSfx(sfx_t *s)
     ALsizei size = s_info.samples * s_info.width * s_info.channels;
     ALenum format = AL_GetSampleFormat(s_info.width, s_info.channels);
     ALuint buffer = 0;
+    sfxcache_t *sc = nullptr;
 
     if (!format) {
         Com_SetLastError("Unsupported sample format");
@@ -789,7 +790,7 @@ static sfxcache_t *AL_UploadSfx(sfx_t *s)
     }
 
     // allocate placeholder sfxcache
-    sfxcache_t *sc = s->cache = S_Malloc(sizeof(*sc));
+    sc = s->cache = S_Malloc(sizeof(*sc));
     sc->length = s_info.samples * 1000LL / s_info.rate; // in msec
     sc->loopstart = s_info.loopstart;
     sc->width = s_info.width;
@@ -826,9 +827,10 @@ static void AL_Spatialize(channel_t *ch)
 
     // anything coming from the view entity will always be full volume
     bool fullvolume = S_IsFullVolume(ch);
+    bool channel_fullvolume = ch->fullvolume != 0;
 
     // update fullvolume flag if needed
-    if (ch->fullvolume != fullvolume) {
+    if (channel_fullvolume != fullvolume) {
         if (s_source_spatialize) {
             qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, !fullvolume);
         }
@@ -838,11 +840,12 @@ static void AL_Spatialize(channel_t *ch)
         } else if (ch->fixed_origin) {
             qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(ch->origin));
         }
-        ch->fullvolume = fullvolume;
+        ch->fullvolume = fullvolume ? 1 : 0;
+        channel_fullvolume = fullvolume;
     }
 
     // update position if needed
-    if (!ch->fixed_origin && !ch->fullvolume) {
+    if (!ch->fixed_origin && !channel_fullvolume) {
         vec3_t origin;
         CL_GetEntitySoundOrigin(ch->entnum, origin);
         qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
@@ -1335,23 +1338,29 @@ static void AL_EndRegistration(void)
         AL_SetReverbStepIDs();
 }
 
-const sndapi_t snd_openal = {
-    .init = AL_Init,
-    .shutdown = AL_Shutdown,
-    .update = AL_Update,
-    .activate = AL_Activate,
-    .sound_info = AL_SoundInfo,
-    .upload_sfx = AL_UploadSfx,
-    .delete_sfx = AL_DeleteSfx,
-    .raw_samples = AL_RawSamples,
-    .need_raw_samples = AL_NeedRawSamples,
-    .have_raw_samples = AL_HaveRawSamples,
-    .drop_raw_samples = AL_StreamStop,
-    .pause_raw_samples = AL_StreamPause,
-    .get_begin_ofs = AL_GetBeginofs,
-    .play_channel = AL_PlayChannel,
-    .stop_channel = AL_StopChannel,
-    .stop_all_sounds = AL_StopAllSounds,
-    .end_registration = AL_EndRegistration,
-    .get_sample_rate = QAL_GetSampleRate,
-};
+static constexpr sndapi_t MakeOpenALSndApi()
+{
+    return sndapi_t{
+        AL_Init,
+        AL_Shutdown,
+        AL_Update,
+        AL_Activate,
+        AL_SoundInfo,
+        AL_UploadSfx,
+        AL_DeleteSfx,
+        nullptr,
+        AL_RawSamples,
+        AL_NeedRawSamples,
+        AL_HaveRawSamples,
+        AL_StreamStop,
+        AL_StreamPause,
+        AL_GetBeginofs,
+        AL_PlayChannel,
+        AL_StopChannel,
+        AL_StopAllSounds,
+        QAL_GetSampleRate,
+        AL_EndRegistration,
+    };
+}
+
+const sndapi_t snd_openal = MakeOpenALSndApi();
