@@ -2315,12 +2315,12 @@ void SV_Shutdown(const char *finalmsg, error_type_t type)
     R_ClearDebugLines();    // for local system
 
 #if USE_MVD_CLIENT
-    if (ge != &mvd_ge && !(type & MVD_SPAWN_INTERNAL)) {
+    if (ge != &mvd_ge && !SV_ErrorTypeHasAny(type, MVD_SPAWN_INTERNAL)) {
         // shutdown MVD client now if not already running the built-in MVD game module
         // don't shutdown if called from internal MVD spawn function (ugly hack)!
         MVD_Shutdown();
     }
-    type &= ~MVD_SPAWN_MASK;
+    type = SV_ErrorTypeWithoutMask(type, MVD_SPAWN_MASK);
 #endif
 
     AC_Disconnect();
