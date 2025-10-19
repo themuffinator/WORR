@@ -250,10 +250,13 @@ static void wrap_Pmove_import(void *pmove)
 {
     const pmoveParams_t *pmp = sv_client ? &sv_client->pmp : &svs.pmp;
 
-    if (IS_NEW_GAME_API)
-        game3_PmoveNew(pmove, &((game3_pmove_new_t*)pmove)->groundplane, pmp);
-    else
-        game3_PmoveOld(pmove, NULL, pmp);
+    if (IS_NEW_GAME_API) {
+        auto *pmove_new = static_cast<game3_pmove_new_t *>(pmove);
+        game3_PmoveNew(pmove_new, &pmove_new->groundplane, pmp);
+    } else {
+        auto *pmove_old = static_cast<game3_pmove_old_t *>(pmove);
+        game3_PmoveOld(pmove_old, NULL, pmp);
+    }
 }
 
 static void wrap_sound(game3_edict_t *gent, int channel,
@@ -292,7 +295,7 @@ static void wrap_linkentity(game3_edict_t *ent)
 
 static int wrap_BoxEdicts(const vec3_t mins, const vec3_t maxs, game3_edict_t **glist, int maxcount, int areatype)
 {
-    edict_t **list = alloca(maxcount * sizeof(edict_t *));
+    edict_t **list = static_cast<edict_t **>(alloca(maxcount * sizeof(edict_t *)));
     size_t num_edicts = game_import.BoxEdicts(mins, maxs, list, maxcount, areatype, NULL, NULL);
     for (size_t i = 0; i < min(num_edicts, maxcount); i++) {
         glist[i] = translate_edict_to_game(list[i]);
@@ -656,12 +659,12 @@ static void sync_single_edict_game_to_server(int index)
             server_edict->client = Z_Mallocz(sizeof(struct gclient_s));
         }
         if (IS_NEW_GAME_API) {
-            game_client_new_to_server(server_edict->client, game_edict->client);
+            game_client_new_to_server(server_edict->client, static_cast<const struct game3_gclient_new_s *>(game_edict->client));
             // deal with fog
             sync_fog(server_edict, &((const struct game3_gclient_new_s *)game_edict->client)->ps);
         }
         else
-            game_client_old_to_server(server_edict->client, game_edict->client);
+            game_client_old_to_server(server_edict->client, static_cast<const struct game3_gclient_old_s *>(game_edict->client));
     } else if (server_edict->client) {
         Z_Free(server_edict->client);
         server_edict->client = NULL;
