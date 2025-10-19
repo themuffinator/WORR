@@ -949,12 +949,12 @@ static void init_pmove_and_es_flags(client_t *newcl)
     }
     newcl->pmp.flyhack = true;
     newcl->pmp.flyfriction = 4;
-    newcl->esFlags |= MSG_ES_UMASK | MSG_ES_LONGSOLID;
-    newcl->esFlags |= MSG_ES_BEAMORIGIN;
-    newcl->esFlags |= MSG_ES_SHORTANGLES;
-    newcl->esFlags |= MSG_ES_EXTENSIONS;
-    newcl->esFlags |= MSG_ES_RERELEASE;
-    newcl->psFlags = MSG_PS_RERELEASE | MSG_PS_EXTENSIONS;
+    newcl->esFlags = enum_bit_or(newcl->esFlags, enum_bit_or(MSG_ES_UMASK, MSG_ES_LONGSOLID));
+    newcl->esFlags = enum_bit_or(newcl->esFlags, MSG_ES_BEAMORIGIN);
+    newcl->esFlags = enum_bit_or(newcl->esFlags, MSG_ES_SHORTANGLES);
+    newcl->esFlags = enum_bit_or(newcl->esFlags, MSG_ES_EXTENSIONS);
+    newcl->esFlags = enum_bit_or(newcl->esFlags, MSG_ES_RERELEASE);
+    newcl->psFlags = enum_bit_or(MSG_PS_RERELEASE, MSG_PS_EXTENSIONS);
     newcl->pmp.waterhack = sv_waterjump_hack->integer >= 1;
 }
 

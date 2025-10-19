@@ -53,12 +53,14 @@ static void build_gamestate(void)
     }
 
     // set protocol flags
-    cls.gtv.esFlags = enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN);
-    cls.gtv.esFlags = enum_bit_or(cls.gtv.esFlags, static_cast<msgEsFlags_t>(cl.esFlags & CL_ES_EXTENDED_MASK_2));
-    cls.gtv.psFlags = enum_bit_or(MSG_PS_FORCE, MSG_PS_RERELEASE);
-    cls.gtv.psFlags = enum_bit_or(cls.gtv.psFlags, static_cast<msgPsFlags_t>(cl.psFlags & CL_PS_EXTENDED_MASK_2));
+    cls.gtv.esFlags = enum_bit_or(
+        enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN),
+        enum_bit_and(cl.esFlags, CL_ES_EXTENDED_MASK_2));
+    cls.gtv.psFlags = enum_bit_or(
+        enum_bit_or(MSG_PS_FORCE, MSG_PS_RERELEASE),
+        enum_bit_and(cl.psFlags, CL_PS_EXTENDED_MASK_2));
 
-    if (cls.gtv.psFlags & MSG_PS_EXTENSIONS_2)
+    if (enum_has(cls.gtv.psFlags, MSG_PS_EXTENSIONS_2))
         cls.gtv.psFlags = enum_bit_or(cls.gtv.psFlags, MSG_PS_MOREBITS);
 }
 
@@ -176,7 +178,7 @@ void CL_GTV_EmitFrame(void)
 
         if (!oldes->number) {
             // this is a new entity, send it from the last state
-            flags |= MSG_ES_FORCE | MSG_ES_NEWENTITY;
+            flags = enum_bit_or(flags, enum_bit_or(MSG_ES_FORCE, MSG_ES_NEWENTITY));
         }
 
         // quantize

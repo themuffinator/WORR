@@ -29,7 +29,7 @@ static cvar_t   *cl_demomsglen;
 static cvar_t   *cl_demowait;
 static cvar_t   *cl_demosuspendtoggle;
 
-q2protoio_ioarg_t demo_q2protoio_ioarg = {.sz_write = &cls.demo.buffer};
+q2protoio_ioarg_t demo_q2protoio_ioarg{nullptr, &cls.demo.buffer, 0, nullptr};
 
 // =========================================================================
 
@@ -161,7 +161,7 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
             // of packet loss.
             msgEsFlags_t flags = cls.demo.esFlags;
             if (newent->number <= cl.maxclients)
-                flags |= MSG_ES_NEWENTITY;
+                flags = enum_bit_or(flags, MSG_ES_NEWENTITY);
             CL_PackEntity_q2proto(&oldpack, oldent);
             CL_PackEntity_q2proto(&newpack, newent);
             write_delta_entity(&oldpack, &newpack, newnum, flags);
@@ -174,7 +174,7 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
             // this is a new entity, send it from the baseline
             CL_PackEntity_q2proto(&oldpack, &cl.baselines[newnum]);
             CL_PackEntity_q2proto(&newpack, newent);
-            write_delta_entity(&oldpack, &newpack, newnum, MSG_ES_FORCE | MSG_ES_NEWENTITY);
+            write_delta_entity(&oldpack, &newpack, newnum, enum_bit_or(MSG_ES_FORCE, MSG_ES_NEWENTITY));
             newindex++;
             continue;
         }
@@ -566,7 +566,11 @@ static void CL_Record_f(void)
     message_svcdata.serverdata.q2repro.server_fps = cl.frametime_inv * 1000;
     q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message_svcdata);
 
-    q2proto_gamestate_t gamestate = {.num_configstrings = 0, .configstrings = configstrings, .num_spawnbaselines = 0, .spawnbaselines = spawnbaselines};
+    q2proto_gamestate_t gamestate{};
+    gamestate.configstrings = configstrings;
+    gamestate.spawnbaselines = spawnbaselines;
+    gamestate.num_configstrings = 0;
+    gamestate.num_spawnbaselines = 0;
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     // configstrings
@@ -591,7 +595,7 @@ static void CL_Record_f(void)
         baseline->entnum = ent->number;
         q2proto_packed_entity_state_t packed_entity;
         PackEntity(&cls.demo.q2proto_context, ent, &packed_entity);
-        Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &baseline->delta_state, NULL, &packed_entity, 0);
+        Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &baseline->delta_state, NULL, &packed_entity, static_cast<msgEsFlags_t>(0));
     }
 
     int write_result;
@@ -991,7 +995,11 @@ void CL_EmitDemoSnapshot(void)
     if (pos < cls.demo.file_offset)
         return;
 
-    q2proto_gamestate_t gamestate = {.num_configstrings = 0, .configstrings = configstrings, .num_spawnbaselines = 0, .spawnbaselines = spawnbaselines};
+    q2proto_gamestate_t gamestate{};
+    gamestate.configstrings = configstrings;
+    gamestate.spawnbaselines = spawnbaselines;
+    gamestate.num_configstrings = 0;
+    gamestate.num_spawnbaselines = 0;
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     // configstrings
@@ -1022,7 +1030,7 @@ void CL_EmitDemoSnapshot(void)
         baseline->entnum = ent->number;
         q2proto_packed_entity_state_t packed_entity;
         PackEntity(&cls.demo.q2proto_context, ent, &packed_entity);
-        Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &baseline->delta_state, NULL, &packed_entity, 0);
+        Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &baseline->delta_state, NULL, &packed_entity, static_cast<msgEsFlags_t>(0));
     }
 
     q2protoio_deflate_args_t *deflate_args = NULL;

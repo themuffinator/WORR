@@ -666,9 +666,9 @@ static void emit_gamestate(void)
 
     // send player states
     for (i = 0, ps = mvd.players; i < svs.maxclients; i++, ps++) {
-        flags = mvd.psFlags;
+        msgPsFlags_t flags = mvd.psFlags;
         if (!PPS_INUSE(ps)) {
-            flags |= MSG_PS_REMOVE;
+            flags = enum_bit_or(flags, MSG_PS_REMOVE);
         }
         MSG_WriteDeltaPlayerstate_Packet(NULL, ps, i, flags);
     }
@@ -676,16 +676,16 @@ static void emit_gamestate(void)
 
     // send entity states
     for (i = 1, es = mvd.entities + 1; i < ge->num_edicts; i++, es++) {
-        flags = mvd.esFlags;
+        msgEsFlags_t flags = mvd.esFlags;
         if ((j = es->number) != 0) {
             if (i <= svs.maxclients) {
                 ps = &mvd.players[i - 1];
                 if (PPS_INUSE(ps) && ps->pmove.pm_type == PM_NORMAL) {
-                    flags |= MSG_ES_FIRSTPERSON;
+                    flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
                 }
             }
         } else {
-            flags |= MSG_ES_REMOVE;
+            flags = enum_bit_or(flags, MSG_ES_REMOVE);
         }
         es->number = i;
         MSG_WriteDeltaEntity(NULL, es, flags);
@@ -740,7 +740,7 @@ static void emit_frame(void)
         } else {
             // this is a new player, send it from the last state
             MSG_WriteDeltaPlayerstate_Packet(oldps, &newps, i,
-                                             mvd.psFlags | MSG_PS_FORCE);
+                                             enum_bit_or(mvd.psFlags, MSG_PS_FORCE));
         }
 
         // shuffle current state to previous
@@ -767,20 +767,20 @@ static void emit_frame(void)
         SV_CheckEntityNumber(ent, i);
 
         // calculate flags
-        flags = mvd.esFlags;
+        msgEsFlags_t flags = mvd.esFlags;
         oldps = NULL; // shut up compiler
         if (i <= svs.maxclients) {
             oldps = &mvd.players[i - 1];
             if (PPS_INUSE(oldps) && oldps->pmove.pm_type == PM_NORMAL) {
                 // do not waste bandwidth on origin/angle updates,
                 // client will recover them from player state
-                flags |= MSG_ES_FIRSTPERSON;
+                flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
             }
         }
 
         if (!oldes->number) {
             // this is a new entity, send it from the last state
-            flags |= MSG_ES_FORCE | MSG_ES_NEWENTITY;
+            flags = enum_bit_or(flags, enum_bit_or(MSG_ES_FORCE, MSG_ES_NEWENTITY));
         }
 
         // quantize
@@ -2130,29 +2130,30 @@ void SV_MvdPostInit(void)
     mvd.entities = SV_Malloc(sizeof(mvd.entities[0]) * svs.csr.max_edicts);
 
     // setup protocol flags
-    mvd.esFlags = MSG_ES_UMASK | MSG_ES_BEAMORIGIN;
-    mvd.psFlags = 0;
+    mvd.esFlags = enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN);
+    mvd.psFlags = static_cast<msgPsFlags_t>(0);
 
     if (sv_mvd_noblend->integer) {
-        mvd.psFlags |= MSG_PS_IGNORE_BLEND;
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_IGNORE_BLEND);
     }
 
     if (sv_mvd_nogun->integer) {
-        mvd.psFlags |= MSG_PS_IGNORE_GUNINDEX | MSG_PS_IGNORE_GUNFRAMES;
+        mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_IGNORE_GUNINDEX, MSG_PS_IGNORE_GUNFRAMES));
     }
 
     if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED || svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
-        mvd.esFlags |= MSG_ES_LONGSOLID | MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS;
-        mvd.psFlags |= MSG_PS_EXTENSIONS;
+        mvd.esFlags = enum_bit_or(mvd.esFlags, enum_bit_or(MSG_ES_LONGSOLID, enum_bit_or(MSG_ES_SHORTANGLES, MSG_ES_EXTENSIONS)));
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_EXTENSIONS);
 
         if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
-            mvd.esFlags |= MSG_ES_EXTENSIONS_2;
-            mvd.psFlags |= MSG_PS_EXTENSIONS_2 | MSG_PS_MOREBITS;
+            mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_EXTENSIONS_2);
+            mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_EXTENSIONS_2, MSG_PS_MOREBITS));
         }
     }
     if (svs.game_api == Q2PROTO_GAME_RERELEASE) {
-        mvd.esFlags |= MSG_ES_LONGSOLID | MSG_ES_SHORTANGLES | MSG_ES_EXTENSIONS | MSG_ES_RERELEASE;
-        mvd.psFlags |= MSG_PS_EXTENSIONS | MSG_PS_RERELEASE;
+        mvd.esFlags = enum_bit_or(mvd.esFlags, enum_bit_or(MSG_ES_LONGSOLID,
+            enum_bit_or(MSG_ES_SHORTANGLES, enum_bit_or(MSG_ES_EXTENSIONS, MSG_ES_RERELEASE))));
+        mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_EXTENSIONS, MSG_PS_RERELEASE));
     }
 }
 

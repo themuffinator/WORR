@@ -1399,8 +1399,7 @@ static void CL_ConnectionlessPacket(void)
 
 #if USE_AC_CLIENT
         if (anticheat) {
-            q2proto_clc_message_t nop_message;
-            memset(&nop_message, 0, sizeof(nop_message));
+            q2proto_clc_message_t nop_message{};
             nop_message.type = Q2P_CLC_NOP;
             q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &nop_message);
             MSG_FlushTo(&cls.netchan.message);

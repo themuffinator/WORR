@@ -514,7 +514,7 @@ static void SV_StartSound(const vec3_t origin, edict_t *edict,
     client_t    *client;
     visrow_t    mask;
     const mleaf_t       *leaf1, *leaf2;
-    q2proto_sound_t snd = {0};
+    q2proto_sound_t snd{};
     message_packet_t    *msg;
     bool        force_pos;
 
@@ -558,6 +558,7 @@ static void SV_StartSound(const vec3_t origin, edict_t *edict,
     // prepare multicast message
     q2proto_svc_message_t sound_msg{};
     sound_msg.type = Q2P_SVC_SOUND;
+    sound_msg.sound = {};
     q2proto_sound_encode_message(&snd, &sound_msg.sound);
 
     q2proto_server_multicast_write(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, &sound_msg);
@@ -648,7 +649,8 @@ static void PF_LocalSound(edict_t *target, const vec3_t origin,
 {
     int entnum = NUM_FOR_EDICT(target);
 
-    q2proto_sound_t snd = {.index = soundindex};
+    q2proto_sound_t snd{};
+    snd.index = soundindex;
     // always send the entity number for channel overrides
     snd.has_entity_channel = true;
     snd.entity = entnum;
@@ -659,6 +661,7 @@ static void PF_LocalSound(edict_t *target, const vec3_t origin,
 
     q2proto_svc_message_t message{};
     message.type = Q2P_SVC_SOUND;
+    message.sound = {};
     q2proto_sound_encode_message(&snd, &message.sound);
 
     int clientNum = entnum - 1;

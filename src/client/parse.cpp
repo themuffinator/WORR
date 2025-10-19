@@ -689,8 +689,7 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
                 cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_MOREBITS);
             PmoveEnableExt(&cl.pmp);
         }
-        cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_UMASK);
-        cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_LONGSOLID);
+        cl.esFlags = enum_bit_or(cl.esFlags, enum_bit_or(MSG_ES_UMASK, MSG_ES_LONGSOLID));
         if (cls.protocolVersion >= PROTOCOL_VERSION_Q2PRO_BEAM_ORIGIN) {
             cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_BEAMORIGIN);
         }
@@ -709,12 +708,10 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
             cl.csr = cs_remap_rerelease;
         else if (cl.game_api >= Q2PROTO_GAME_Q2PRO_EXTENDED)
             cl.csr = cs_remap_q2pro_new;
-        cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_RERELEASE);
-        cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS);
+        cl.psFlags = enum_bit_or(cl.psFlags, enum_bit_or(MSG_PS_RERELEASE, MSG_PS_EXTENSIONS));
         if (cl.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2)
             cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS_2);
-        cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_RERELEASE);
-        cl.esFlags = enum_bit_or(cl.esFlags, CL_ES_EXTENDED_MASK);
+        cl.esFlags = enum_bit_or(cl.esFlags, enum_bit_or(MSG_ES_RERELEASE, CL_ES_EXTENDED_MASK));
         set_server_fps(serverdata->q2repro.server_fps);
         /* Rerelease game assumes client & server framerate is in sync,
          * non-rerelease games w/ variable FPS (eg OpenFFA) seem to assume
@@ -760,7 +757,7 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
         cls.demo.esFlags = cl.esFlags;
     } else {
         // use full extended flags unless writing backward compatible demo
-        cls.demo.esFlags = cl.csr.extended ? CL_ES_EXTENDED_MASK_2 : 0;
+        cls.demo.esFlags = cl.csr.extended ? enum_from_value<msgEsFlags_t>(CL_ES_EXTENDED_MASK_2) : static_cast<msgEsFlags_t>(0);
         cls.demo.psFlags = cl.csr.extended ? CL_PS_EXTENDED_MASK_2 : 0;
     }
 

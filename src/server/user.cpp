@@ -106,8 +106,12 @@ static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
 static void write_gamestate(void)
 {
-    msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : 0;
-    q2proto_gamestate_t gamestate = {.num_configstrings = 0, .configstrings = configstrings, .num_spawnbaselines = 0, .spawnbaselines = spawnbaselines};
+    msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : static_cast<msgEsFlags_t>(0);
+    q2proto_gamestate_t gamestate{};
+    gamestate.configstrings = configstrings;
+    gamestate.spawnbaselines = spawnbaselines;
+    gamestate.num_configstrings = 0;
+    gamestate.num_spawnbaselines = 0;
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     for (int i = 0; i < sv_client->csr->end; i++) {
