@@ -445,14 +445,14 @@ static qboolean PF_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
 
     leaf2 = CM_PointLeaf(&sv.cm, p2);
     if (leaf2->cluster == -1)
-        return false;
+        return qfalse;
     if (!Q_IsBitSet(mask.b, leaf2->cluster))
-        return false;
+        return qfalse;
     if (vis & VIS_NOAREAS)
-        return true;
+        return qtrue;
     if (!CM_AreasConnected(&sv.cm, leaf1->area, leaf2->area))
-        return false;       // a door blocks it
-    return true;
+        return qfalse;      // a door blocks it
+    return qtrue;
 }
 
 
@@ -465,7 +465,8 @@ Also checks portalareas so that doors block sight
 */
 static qboolean PF_inPVS(const vec3_t p1, const vec3_t p2, bool portals)
 {
-    return PF_inVIS(p1, p2, VIS_PVS | (portals ? 0 : VIS_NOAREAS));
+    const vis_t vis = static_cast<vis_t>(VIS_PVS | (portals ? 0 : VIS_NOAREAS));
+    return PF_inVIS(p1, p2, vis);
 }
 
 /*
@@ -477,7 +478,8 @@ Also checks portalareas so that doors block sound
 */
 static qboolean PF_inPHS(const vec3_t p1, const vec3_t p2, bool portals)
 {
-    return PF_inVIS(p1, p2, VIS_PHS | (portals ? 0 : VIS_NOAREAS));
+    const vis_t vis = static_cast<vis_t>(VIS_PHS | (portals ? 0 : VIS_NOAREAS));
+    return PF_inVIS(p1, p2, vis);
 }
 
 /*
@@ -729,7 +731,7 @@ static void PF_SetAreaPortalState(int portalnum, bool open)
 
 static qboolean PF_AreasConnected(int area1, int area2)
 {
-    return CM_AreasConnected(&sv.cm, area1, area2);
+    return CM_AreasConnected(&sv.cm, area1, area2) ? qtrue : qfalse;
 }
 
 static void *PF_TagMalloc(size_t size, int tag)
@@ -845,45 +847,55 @@ static void PF_Loc_Print(edict_t* ent, int level, const char* base, const char**
 
 static void PF_Draw_Line(const vec3_t start, const vec3_t end, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugLine(start, end, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugLine(start, end, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Point(const vec3_t point, const float size, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugPoint(point, size, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugPoint(point, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Circle(const vec3_t origin, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugCircle(origin, radius, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugCircle(origin, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Bounds(const vec3_t mins, const vec3_t maxs, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugBounds(mins, maxs, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugBounds(mins, maxs, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Sphere(const vec3_t origin, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugSphere(origin, radius, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugSphere(origin, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_OrientedWorldText(const vec3_t origin, const char * text, const rgba_t* color, const float size, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugText(origin, NULL, text, size, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugText(origin, NULL, text, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_StaticWorldText(const vec3_t origin, const vec3_t angles, const char * text, const rgba_t* color, const float size, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugText(origin, angles, text, size, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugText(origin, angles, text, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Cylinder(const vec3_t origin, const float halfHeight, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugCylinder(origin, halfHeight, radius, *((color_t *) color), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugCylinder(origin, halfHeight, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Ray(const vec3_t origin, const vec3_t direction, const float length, const float size, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
+    const qboolean depth = depthTest ? qtrue : qfalse;
     vec3_t end;
     VectorMA(origin, length, direction, end);
-    R_AddDebugArrow(origin, end, size, *((color_t *) color), *((color_t *) color), lifeTime * 1000, depthTest);
+    R_AddDebugArrow(origin, end, size, *((color_t *) color), *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Arrow(const vec3_t start, const vec3_t end, const float size, const rgba_t* lineColor, const rgba_t* arrowColor, const float lifeTime, const bool depthTest)
 {
-    R_AddDebugArrow(start, end, size, *((color_t *) lineColor), *((color_t *) arrowColor), lifeTime * 1000, depthTest);
+    const qboolean depth = depthTest ? qtrue : qfalse;
+    R_AddDebugArrow(start, end, size, *((color_t *) lineColor), *((color_t *) arrowColor), lifeTime * 1000, depth);
 }
 #else
 static void PF_Draw_Line(const vec3_t start, const vec3_t end, const rgba_t* color, const float lifeTime, const bool depthTest) {}
