@@ -36,11 +36,18 @@ OGG loading
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/error.h>
 #include <libswresample/swresample.h>
+
+static const char *AvErrorString(int err)
+{
+    static char buf[AV_ERROR_MAX_STRING_SIZE];
+    return av_make_error_string(buf, sizeof(buf), err);
+}
 
 static int sz_read_packet(void *opaque, uint8_t *buf, int size)
 {
-    sizebuf_t *sz = opaque;
+    sizebuf_t *sz = static_cast<sizebuf_t *>(opaque);
 
     if (size < 0)
         return AVERROR(EINVAL);
@@ -56,7 +63,7 @@ static int sz_read_packet(void *opaque, uint8_t *buf, int size)
 
 static int64_t sz_seek(void *opaque, int64_t offset, int whence)
 {
-    sizebuf_t *sz = opaque;
+    sizebuf_t *sz = static_cast<sizebuf_t *>(opaque);
 
     switch (whence) {
     case SEEK_SET:
@@ -92,6 +99,10 @@ static bool OGG_Load(sizebuf_t *sz)
     AVStream *st;
     bool res = false;
     int ret, sample_rate;
+    int64_t nb_samples = 0;
+    int bufsize = 0;
+    int offset = 0;
+    bool eof = false;
 
     const AVInputFormat *fmt = av_find_input_format("ogg");
     if (!fmt) {
@@ -111,7 +122,7 @@ static bool OGG_Load(sizebuf_t *sz)
         return false;
     }
 
-    avio_ctx_buffer = av_malloc(avio_ctx_buffer_size);
+    avio_ctx_buffer = static_cast<uint8_t *>(av_malloc(avio_ctx_buffer_size));
     if (!avio_ctx_buffer) {
         Com_SetLastError("Failed to allocate avio buffer");
         goto fail;
@@ -128,7 +139,7 @@ static bool OGG_Load(sizebuf_t *sz)
 
     ret = avformat_open_input(&fmt_ctx, NULL, fmt, NULL);
     if (ret < 0) {
-        Com_SetLastError(av_err2str(ret));
+        Com_SetLastError(AvErrorString(ret));
         goto fail;
     }
 
@@ -206,20 +217,19 @@ static bool OGG_Load(sizebuf_t *sz)
         goto fail;
     }
 
-    int64_t nb_samples = st->duration;
-
+    nb_samples = st->duration;
     if (out->sample_rate != dec_ctx->sample_rate)
         nb_samples = av_rescale_rnd(st->duration + 2, out->sample_rate, dec_ctx->sample_rate, AV_ROUND_UP) + 2;
 
-    int bufsize = nb_samples << out->ch_layout.nb_channels;
-    int offset = 0;
-    bool eof = false;
+    bufsize = static_cast<int>(nb_samples << out->ch_layout.nb_channels);
+    offset = 0;
+    eof = false;
 
     s_info.channels = out->ch_layout.nb_channels;
     s_info.rate = out->sample_rate;
     s_info.width = 2;
     s_info.loopstart = -1;
-    s_info.data = FS_AllocTempMem(bufsize);
+    s_info.data = static_cast<uint8_t *>(FS_AllocTempMem(bufsize));
 
     while (!eof) {
         ret = avcodec_receive_frame(dec_ctx, frame);
@@ -258,7 +268,7 @@ static bool OGG_Load(sizebuf_t *sz)
     }
 
     if (ret < 0) {
-        Com_SetLastError(av_err2str(ret));
+        Com_SetLastError(AvErrorString(ret));
         Z_Freep(&s_info.data);
         goto fail;
     }
