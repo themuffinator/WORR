@@ -27,7 +27,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 #include <functional>
-#include <span>
 
 #define QALAPI
 #include "qal.h"
@@ -77,9 +76,23 @@ static alfunction_t make_alfunction(const char *name, T &destination, T builtin)
 #define QALC_FN(x)  make_alfunction("alc"#x, qalc##x, alc##x)
 #define QAL_FN(x)   make_alfunction("al"#x, qal##x, al##x)
 
+struct alfunction_range {
+    const alfunction_t *begin_ptr;
+    const alfunction_t *end_ptr;
+
+    constexpr const alfunction_t *begin() const { return begin_ptr; }
+    constexpr const alfunction_t *end() const { return end_ptr; }
+};
+
+template <typename ArrayT>
+constexpr alfunction_range make_alfunction_range(const ArrayT &array)
+{
+    return { array.data(), array.data() + array.size() };
+}
+
 struct alsection_t {
     const char *extension;
-    std::span<const alfunction_t> functions;
+    alfunction_range functions;
 };
 
 static const std::array<alfunction_t, 36> core_functions = {
@@ -138,8 +151,8 @@ static const std::array<alfunction_t, 13> efx_functions = {
 };
 
 static const std::array<alsection_t, 2> sections = { {
-    { nullptr, std::span<const alfunction_t>(core_functions) },
-    { "ALC_EXT_EFX", std::span<const alfunction_t>(efx_functions) },
+    { nullptr, make_alfunction_range(core_functions) },
+    { "ALC_EXT_EFX", make_alfunction_range(efx_functions) },
 } };
 
 static cvar_t   *al_device;

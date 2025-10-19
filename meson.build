@@ -4,10 +4,15 @@ project('worr', ['cpp', 'c'],
   meson_version: '>= 0.60.0',
   default_options: [
     meson.version().version_compare('>=1.3.0') ? 'c_std=gnu11,c11' : 'c_std=gnu11',
-    'cpp_std=c++latest',
+    'cpp_std=c++17',
     'buildtype=debugoptimized',
   ],
 )
+
+cpp_compiler = meson.get_compiler('cpp')
+if cpp_compiler.get_id() == 'msvc'
+  add_project_arguments('/std:c++17', language: 'cpp')
+endif
 
 common_src = [
   'src/common/bsp.cpp',
