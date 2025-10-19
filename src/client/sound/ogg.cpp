@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>
 
 typedef struct {
     AVFormatContext     *fmt_ctx;
@@ -68,7 +70,7 @@ static void init_formats(void)
         if (!av_find_input_format(f->fmt))
             continue;
         if (f->codec_id != AV_CODEC_ID_NONE &&
-            !avcodec_find_decoder(f->codec_id))
+            !avcodec_find_decoder(static_cast<AVCodecID>(f->codec_id)))
             continue;
         if (*extensions)
             Q_strlcat(extensions, ";", sizeof(extensions));
@@ -145,9 +147,9 @@ static bool ogg_play(const char *path)
     ogg.stream_index = ret;
     st = ogg.fmt_ctx->streams[ogg.stream_index];
 
-    dec = avcodec_find_decoder(st->codecpar->codec_id);
+    dec = avcodec_find_decoder(static_cast<AVCodecID>(st->codecpar->codec_id));
     if (!dec) {
-        Com_EPrintf("Failed to find audio codec %s\n", avcodec_get_name(st->codecpar->codec_id));
+        Com_EPrintf("Failed to find audio codec %s\n", avcodec_get_name(static_cast<AVCodecID>(st->codecpar->codec_id)));
         goto fail0;
     }
 
@@ -398,7 +400,9 @@ static int reconfigure_swr(void)
     swr_close(ogg_swr_ctx);
     av_frame_unref(out);
 
-    out->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO;
+    ret = av_channel_layout_default(&out->ch_layout, 2);
+    if (ret < 0)
+        return ret;
     out->format = s_supports_float ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_S16;
     out->sample_rate = sample_rate;
     out->nb_samples = MAX_RAW_SAMPLES;
@@ -410,9 +414,9 @@ static int reconfigure_swr(void)
                  "Input : %d Hz, %s, %s\n"
                  "Output: %d Hz, stereo, %s\n",
                  in->sample_rate, buf,
-                 av_get_sample_fmt_name(in->format),
+                 av_get_sample_fmt_name(static_cast<AVSampleFormat>(in->format)),
                  out->sample_rate,
-                 av_get_sample_fmt_name(out->format));
+                 av_get_sample_fmt_name(static_cast<AVSampleFormat>(out->format)));
 
     ret = swr_config_frame(ogg_swr_ctx, out, in);
     if (ret < 0)
@@ -434,7 +438,7 @@ static void flush_samples(const AVFrame *out)
     Com_DDDPrintf("%d raw samples\n", out->nb_samples);
 
     if (!s_api->raw_samples(out->nb_samples, out->sample_rate,
-                            av_get_bytes_per_sample(out->format),
+                            av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
                             out->ch_layout.nb_channels,
                             out->data[0], ogg_volume->value))
         s_api->drop_raw_samples();
