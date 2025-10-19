@@ -22,6 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/loc.h"
 #include "common/gamedll.h"
 
+#include <limits>
+#include <type_traits>
+
 static cvar_t   *scr_alpha;
 static cvar_t   *scr_font;
 
@@ -95,20 +98,40 @@ static void CG_Com_Error(const char *message)
     Com_Error(ERR_DROP, "%s", message);
 }
 
+namespace
+{
+
+static memtag_t CG_ValidateGameTag(int tag, const char *func)
+{
+    using underlying_tag_t = std::underlying_type_t<memtag_t>;
+
+    if (tag < 0) {
+        Com_Error(ERR_DROP, "%s: bad tag", func);
+    }
+
+    constexpr underlying_tag_t offset = static_cast<underlying_tag_t>(TAG_MAX);
+    const long long converted = static_cast<long long>(tag) + static_cast<long long>(offset);
+    const long long max_value = static_cast<long long>(std::numeric_limits<underlying_tag_t>::max());
+
+    if (converted > max_value) {
+        Com_Error(ERR_DROP, "%s: bad tag", func);
+    }
+
+    return static_cast<memtag_t>(static_cast<underlying_tag_t>(converted));
+}
+
+} // namespace
+
 static void *CG_TagMalloc(size_t size, int tag)
 {
-    if (tag > UINT16_MAX - TAG_MAX) {
-        Com_Error(ERR_DROP, "%s: bad tag", __func__);
-    }
-    return Z_TagMallocz(size, tag + TAG_MAX);
+    const memtag_t memtag = CG_ValidateGameTag(tag, __func__);
+    return Z_TagMallocz(size, memtag);
 }
 
 static void CG_FreeTags(int tag)
 {
-    if (tag > UINT16_MAX - TAG_MAX) {
-        Com_Error(ERR_DROP, "%s: bad tag", __func__);
-    }
-    Z_FreeTags(tag + TAG_MAX);
+    const memtag_t memtag = CG_ValidateGameTag(tag, __func__);
+    Z_FreeTags(memtag);
 }
 
 static cvar_t *CG_cvar(const char *var_name, const char *value, cvar_flags_t flags)
@@ -286,7 +309,7 @@ static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
         str = p + 1;
     }
 
-    return (cg_vec2_t) { max_width, num_lines * CG_SCR_FontLineHeight(scale) };
+    return cg_vec2_t{ static_cast<float>(max_width), static_cast<float>(num_lines) * CG_SCR_FontLineHeight(scale) };
 }
 
 static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, const rgba_t *color, bool shadow, text_align_t align)
@@ -335,7 +358,7 @@ static const char* CG_Localize (const char *base, const char **args, size_t num_
     return out_str;
 }
 
-static const rgba_t rgba_white = {255, 255, 255, 255};
+static const rgba_t rgba_white = ColorRGBA(255, 255, 255, 255);
 
 static int32_t CG_SCR_DrawBind(int32_t isplit, const char *binding, const char *purpose, int x, int y, int scale)
 {
@@ -370,62 +393,61 @@ typedef cgame_export_t *(*cgame_entry_t)(cgame_import_t *);
 void CG_Load(const char* new_game, bool is_rerelease_server)
 {
     if (!current_game || strcmp(current_game, new_game) != 0 || current_rerelease_server != is_rerelease_server) {
-        cgame_import_t cgame_imports = {
-            .tick_rate = 1000 / CL_FRAMETIME,
-            .frame_time_s = CL_FRAMETIME * 0.001f,
-            .frame_time_ms = CL_FRAMETIME,
+        cgame_import_t cgame_imports{};
+        cgame_imports.tick_rate = 1000 / CL_FRAMETIME;
+        cgame_imports.frame_time_s = CL_FRAMETIME * 0.001f;
+        cgame_imports.frame_time_ms = CL_FRAMETIME;
 
-            .Com_Print = CG_Print,
+        cgame_imports.Com_Print = CG_Print;
 
-            .get_configstring = CG_get_configstring,
+        cgame_imports.get_configstring = CG_get_configstring;
 
-            .Com_Error = CG_Com_Error,
+        cgame_imports.Com_Error = CG_Com_Error;
 
-            .TagMalloc = CG_TagMalloc,
-            .TagFree = Z_Free,
-            .FreeTags = CG_FreeTags,
+        cgame_imports.TagMalloc = CG_TagMalloc;
+        cgame_imports.TagFree = Z_Free;
+        cgame_imports.FreeTags = CG_FreeTags;
 
-            .cvar = CG_cvar,
-            .cvar_set = Cvar_UserSet,
-            .cvar_forceset = Cvar_Set,
+        cgame_imports.cvar = CG_cvar;
+        cgame_imports.cvar_set = Cvar_UserSet;
+        cgame_imports.cvar_forceset = Cvar_Set;
 
-            .AddCommandString = CG_AddCommandString,
+        cgame_imports.AddCommandString = CG_AddCommandString;
 
-            .GetExtension = CG_GetExtension,
+        cgame_imports.GetExtension = CG_GetExtension;
 
-            .CL_FrameValid = CG_CL_FrameValid,
+        cgame_imports.CL_FrameValid = CG_CL_FrameValid;
 
-            .CL_FrameTime = CG_CL_FrameTime,
+        cgame_imports.CL_FrameTime = CG_CL_FrameTime;
 
-            .CL_ClientTime = CG_CL_ClientTime,
-            .CL_ClientRealTime = CG_CL_ClientRealTime,
-            .CL_ServerFrame = CG_CL_ServerFrame,
-            .CL_ServerProtocol = CG_CL_ServerProtocol,
-            .CL_GetClientName = CG_CL_GetClientName,
-            .CL_GetClientPic = CG_CL_GetClientPic,
-            .CL_GetClientDogtag = CG_CL_GetClientDogtag,
-            .CL_GetKeyBinding = CG_CL_GetKeyBinding,
-            .Draw_RegisterPic = CG_Draw_RegisterPic,
-            .Draw_GetPicSize = CG_Draw_GetPicSize,
-            .SCR_DrawChar = CG_SCR_DrawChar,
-            .SCR_DrawPic = CG_SCR_DrawPic,
-            .SCR_DrawColorPic = CG_SCR_DrawColorPic,
+        cgame_imports.CL_ClientTime = CG_CL_ClientTime;
+        cgame_imports.CL_ClientRealTime = CG_CL_ClientRealTime;
+        cgame_imports.CL_ServerFrame = CG_CL_ServerFrame;
+        cgame_imports.CL_ServerProtocol = CG_CL_ServerProtocol;
+        cgame_imports.CL_GetClientName = CG_CL_GetClientName;
+        cgame_imports.CL_GetClientPic = CG_CL_GetClientPic;
+        cgame_imports.CL_GetClientDogtag = CG_CL_GetClientDogtag;
+        cgame_imports.CL_GetKeyBinding = CG_CL_GetKeyBinding;
+        cgame_imports.Draw_RegisterPic = CG_Draw_RegisterPic;
+        cgame_imports.Draw_GetPicSize = CG_Draw_GetPicSize;
+        cgame_imports.SCR_DrawChar = CG_SCR_DrawChar;
+        cgame_imports.SCR_DrawPic = CG_SCR_DrawPic;
+        cgame_imports.SCR_DrawColorPic = CG_SCR_DrawColorPic;
 
-            .SCR_SetAltTypeface = CG_SCR_SetAltTypeface,
-            .SCR_DrawFontString = CG_SCR_DrawFontString,
-            .SCR_MeasureFontString = CG_SCR_MeasureFontString,
-            .SCR_FontLineHeight = CG_SCR_FontLineHeight,
+        cgame_imports.SCR_SetAltTypeface = CG_SCR_SetAltTypeface;
+        cgame_imports.SCR_DrawFontString = CG_SCR_DrawFontString;
+        cgame_imports.SCR_MeasureFontString = CG_SCR_MeasureFontString;
+        cgame_imports.SCR_FontLineHeight = CG_SCR_FontLineHeight;
 
-            .CL_GetTextInput = CG_CL_GetTextInput,
+        cgame_imports.CL_GetTextInput = CG_CL_GetTextInput;
 
-            .CL_GetWarnAmmoCount = CG_CL_GetWarnAmmoCount,
+        cgame_imports.CL_GetWarnAmmoCount = CG_CL_GetWarnAmmoCount;
 
-            .Localize = CG_Localize,
+        cgame_imports.Localize = CG_Localize;
 
-            .SCR_DrawBind = CG_SCR_DrawBind,
+        cgame_imports.SCR_DrawBind = CG_SCR_DrawBind;
 
-            .CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop,
-        };
+        cgame_imports.CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop;
 
         cgame_entry_t entry = NULL;
         if (is_rerelease_server) {
