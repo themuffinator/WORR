@@ -943,122 +943,140 @@ static size_t PF_Info_ValueForKey (const char *s, const char *key, char *buffer,
 
 //==============================================
 
-static const game_import_t game_import = {
-    .multicast = SV_Multicast,
-    .unicast = PF_Unicast,
-    .Broadcast_Print = PF_Broadcast_Print,
-    .Com_Print = PF_Com_Print,
-    .Client_Print = PF_Client_Print,
-    .Center_Print = PF_Center_Print,
-    .Com_Error = PF_error,
+static game_import_t CreateGameImport()
+{
+    game_import_t import{};
+    import.multicast = SV_Multicast;
+    import.unicast = PF_Unicast;
+    import.Broadcast_Print = PF_Broadcast_Print;
+    import.Com_Print = PF_Com_Print;
+    import.Client_Print = PF_Client_Print;
+    import.Center_Print = PF_Center_Print;
+    import.Com_Error = PF_error;
 
-    .linkentity = PF_LinkEdict,
-    .unlinkentity = PF_UnlinkEdict,
-    .BoxEdicts = SV_AreaEdicts,
-    .trace = SV_Trace,
-    .clip = PF_Clip,
-    .pointcontents = SV_PointContents,
-    .setmodel = PF_setmodel,
-    .inPVS = PF_inPVS,
-    .inPHS = PF_inPHS,
+    import.linkentity = PF_LinkEdict;
+    import.unlinkentity = PF_UnlinkEdict;
+    import.BoxEdicts = SV_AreaEdicts;
+    import.trace = SV_Trace;
+    import.clip = PF_Clip;
+    import.pointcontents = SV_PointContents;
+    import.setmodel = PF_setmodel;
+    import.inPVS = PF_inPVS;
+    import.inPHS = PF_inPHS;
 
-    .modelindex = PF_ModelIndex,
-    .soundindex = PF_SoundIndex,
-    .imageindex = PF_ImageIndex,
+    import.modelindex = PF_ModelIndex;
+    import.soundindex = PF_SoundIndex;
+    import.imageindex = PF_ImageIndex;
 
-    .configstring = PF_configstring,
-    .get_configstring = PF_GetConfigstring,
-    .sound = PF_StartSound,
-    .positioned_sound = SV_StartSound,
-    .local_sound = PF_LocalSound,
+    import.configstring = PF_configstring;
+    import.get_configstring = PF_GetConfigstring;
+    import.sound = PF_StartSound;
+    import.positioned_sound = SV_StartSound;
+    import.local_sound = PF_LocalSound;
 
-    .WriteChar = MSG_WriteChar,
-    .WriteByte = MSG_WriteByte,
-    .WriteShort = MSG_WriteShort,
-    .WriteLong = MSG_WriteLong,
-    .WriteFloat = PF_WriteFloat,
-    .WriteString = MSG_WriteString,
-    .WritePosition = PF_WritePos,
-    .WriteDir = MSG_WriteDir,
-    .WriteAngle = MSG_WriteAngle,
-    .WriteEntity = PF_WriteEntity,
+    import.WriteChar = MSG_WriteChar;
+    import.WriteByte = MSG_WriteByte;
+    import.WriteShort = MSG_WriteShort;
+    import.WriteLong = MSG_WriteLong;
+    import.WriteFloat = PF_WriteFloat;
+    import.WriteString = MSG_WriteString;
+    import.WritePosition = PF_WritePos;
+    import.WriteDir = MSG_WriteDir;
+    import.WriteAngle = MSG_WriteAngle;
+    import.WriteEntity = PF_WriteEntity;
 
-    .TagMalloc = PF_TagMalloc,
-    .TagFree = Z_Free,
-    .FreeTags = PF_FreeTags,
+    import.TagMalloc = PF_TagMalloc;
+    import.TagFree = Z_Free;
+    import.FreeTags = PF_FreeTags;
 
-    .cvar = PF_cvar,
-    .cvar_set = Cvar_UserSet,
-    .cvar_forceset = Cvar_Set,
+    import.cvar = PF_cvar;
+    import.cvar_set = Cvar_UserSet;
+    import.cvar_forceset = Cvar_Set;
 
-    .argc = Cmd_Argc,
-    .argv = PF_Argv,
-    .args = PF_RawArgs,
-    .AddCommandString = PF_AddCommandString,
+    import.argc = Cmd_Argc;
+    import.argv = PF_Argv;
+    import.args = PF_RawArgs;
+    import.AddCommandString = PF_AddCommandString;
 
-    .DebugGraph = SCR_DebugGraph,
-    .SetAreaPortalState = PF_SetAreaPortalState,
-    .AreasConnected = PF_AreasConnected,
-    .GetExtension = PF_GetExtension,
+    import.DebugGraph = SCR_DebugGraph;
+    import.SetAreaPortalState = PF_SetAreaPortalState;
+    import.AreasConnected = PF_AreasConnected;
+    import.GetExtension = PF_GetExtension;
 
-    .Bot_RegisterEdict = PF_Bot_RegisterEdict,
-    .Bot_UnRegisterEdict = PF_Bot_UnRegisterEdict,
-    .Bot_MoveToPoint = PF_Bot_MoveToPoint,
-    .Bot_FollowActor = PF_Bot_FollowActor,
-    .GetPathToGoal = PF_GetPathToGoal,
+    import.Bot_RegisterEdict = PF_Bot_RegisterEdict;
+    import.Bot_UnRegisterEdict = PF_Bot_UnRegisterEdict;
+    import.Bot_MoveToPoint = PF_Bot_MoveToPoint;
+    import.Bot_FollowActor = PF_Bot_FollowActor;
+    import.GetPathToGoal = PF_GetPathToGoal;
 
-    .Loc_Print = PF_Loc_Print,
-    .Draw_Line = PF_Draw_Line,
-    .Draw_Point = PF_Draw_Point,
-    .Draw_Circle = PF_Draw_Circle,
-    .Draw_Bounds = PF_Draw_Bounds,
-    .Draw_Sphere = PF_Draw_Sphere,
-    .Draw_OrientedWorldText = PF_Draw_OrientedWorldText,
-    .Draw_StaticWorldText = PF_Draw_StaticWorldText,
-    .Draw_Cylinder = PF_Draw_Cylinder,
-    .Draw_Ray = PF_Draw_Ray,
-    .Draw_Arrow = PF_Draw_Arrow,
-    .ReportMatchDetails_Multicast = PF_ReportMatchDetails_Multicast,
-    .ServerFrame = PF_ServerFrame,
-    .SendToClipBoard = PF_SendToClipboard,
+    import.Loc_Print = PF_Loc_Print;
+    import.Draw_Line = PF_Draw_Line;
+    import.Draw_Point = PF_Draw_Point;
+    import.Draw_Circle = PF_Draw_Circle;
+    import.Draw_Bounds = PF_Draw_Bounds;
+    import.Draw_Sphere = PF_Draw_Sphere;
+    import.Draw_OrientedWorldText = PF_Draw_OrientedWorldText;
+    import.Draw_StaticWorldText = PF_Draw_StaticWorldText;
+    import.Draw_Cylinder = PF_Draw_Cylinder;
+    import.Draw_Ray = PF_Draw_Ray;
+    import.Draw_Arrow = PF_Draw_Arrow;
+    import.ReportMatchDetails_Multicast = PF_ReportMatchDetails_Multicast;
+    import.ServerFrame = PF_ServerFrame;
+    import.SendToClipBoard = PF_SendToClipboard;
 
-    .Info_ValueForKey = PF_Info_ValueForKey,
-    .Info_RemoveKey = Info_RemoveKey,
-    .Info_SetValueForKey = Info_SetValueForKey,
-};
+    import.Info_ValueForKey = PF_Info_ValueForKey;
+    import.Info_RemoveKey = Info_RemoveKey;
+    import.Info_SetValueForKey = Info_SetValueForKey;
 
-static const filesystem_api_v1_t filesystem_api_v1 = {
-    .OpenFile = FS_OpenFile,
-    .CloseFile = FS_CloseFile,
-    .LoadFile = PF_LoadFile,
+    return import;
+}
 
-    .ReadFile = FS_Read,
-    .WriteFile = FS_Write,
-    .FlushFile = FS_Flush,
-    .TellFile = FS_Tell,
-    .SeekFile = FS_Seek,
-    .ReadLine = FS_ReadLine,
+static const game_import_t game_import = CreateGameImport();
 
-    .ListFiles = FS_ListFiles,
-    .FreeFileList = FS_FreeList,
+static filesystem_api_v1_t CreateFilesystemApi()
+{
+    filesystem_api_v1_t api{};
+    api.OpenFile = FS_OpenFile;
+    api.CloseFile = FS_CloseFile;
+    api.LoadFile = PF_LoadFile;
 
-    .ErrorString = Q_ErrorString,
-};
+    api.ReadFile = FS_Read;
+    api.WriteFile = FS_Write;
+    api.FlushFile = FS_Flush;
+    api.TellFile = FS_Tell;
+    api.SeekFile = FS_Seek;
+    api.ReadLine = FS_ReadLine;
+
+    api.ListFiles = FS_ListFiles;
+    api.FreeFileList = FS_FreeList;
+
+    api.ErrorString = Q_ErrorString;
+
+    return api;
+}
+
+static const filesystem_api_v1_t filesystem_api_v1 = CreateFilesystemApi();
 
 #if USE_REF && USE_DEBUG
-static const debug_draw_api_v1_t debug_draw_api_v1 = {
-    .ClearDebugLines = R_ClearDebugLines,
-    .AddDebugLine = R_AddDebugLine,
-    .AddDebugPoint = R_AddDebugPoint,
-    .AddDebugAxis = R_AddDebugAxis,
-    .AddDebugBounds = R_AddDebugBounds,
-    .AddDebugSphere = R_AddDebugSphere,
-    .AddDebugCircle = R_AddDebugCircle,
-    .AddDebugCylinder = R_AddDebugCylinder,
-    .AddDebugArrow = R_AddDebugArrow,
-    .AddDebugCurveArrow = R_AddDebugCurveArrow,
-    .AddDebugText = R_AddDebugText,
-};
+static debug_draw_api_v1_t CreateDebugDrawApi()
+{
+    debug_draw_api_v1_t api{};
+    api.ClearDebugLines = R_ClearDebugLines;
+    api.AddDebugLine = R_AddDebugLine;
+    api.AddDebugPoint = R_AddDebugPoint;
+    api.AddDebugAxis = R_AddDebugAxis;
+    api.AddDebugBounds = R_AddDebugBounds;
+    api.AddDebugSphere = R_AddDebugSphere;
+    api.AddDebugCircle = R_AddDebugCircle;
+    api.AddDebugCylinder = R_AddDebugCylinder;
+    api.AddDebugArrow = R_AddDebugArrow;
+    api.AddDebugCurveArrow = R_AddDebugCurveArrow;
+    api.AddDebugText = R_AddDebugText;
+
+    return api;
+}
+
+static const debug_draw_api_v1_t debug_draw_api_v1 = CreateDebugDrawApi();
 #endif
 
 static void *PF_GetExtension(const char *name)
