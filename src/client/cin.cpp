@@ -606,7 +606,7 @@ static bool open_codec_context(enum AVMediaType type)
             sample_rate = dec_ctx->sample_rate;
 
         int out_channels = (dec_ctx->ch_layout.nb_channels >= 2) ? 2 : 1;
-        ret = av_channel_layout_default(&out->ch_layout, out_channels);
+        ret = Q_AVChannelLayoutDefault(&out->ch_layout, out_channels);
         if (ret < 0) {
             Com_EPrintf("Failed to set audio channel layout\n");
             return false;

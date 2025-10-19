@@ -340,7 +340,7 @@ static LONG set_fullscreen_mode(void)
     win.flags |= QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
-    win.mode_changed = 0;
+    win.mode_changed = 0u;
 
     return ret;
 }
@@ -399,7 +399,7 @@ void Win_SetMode(void)
     win.flags &= ~QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
-    win.mode_changed = 0;
+    win.mode_changed = 0u;
 }
 
 /*
@@ -916,7 +916,7 @@ void Win_PumpEvents(void)
         if (win.mode_changed & win_state_t::MODE_SIZE) {
             Win_ModeChanged();
         }
-        win.mode_changed = 0;
+        win.mode_changed = 0u;
     }
 }
 
@@ -1165,32 +1165,28 @@ Win_GetClipboardData
 */
 char *Win_GetClipboardData(void)
 {
-    HANDLE clipdata;
-    WCHAR *cliptext;
-    char *data;
+    char *data = NULL;
 
     if (!OpenClipboard(NULL)) {
         Com_DPrintf("Couldn't open clipboard.\n");
         return NULL;
     }
 
-    data = NULL;
-    if (!(clipdata = GetClipboardData(CF_UNICODETEXT)))
-        goto fail;
-    cliptext = static_cast<WCHAR *>(GlobalLock(clipdata));
-    if (!cliptext)
-        goto fail;
-
-    int len = WideCharToMultiByte(CP_UTF8, 0, cliptext, -1, NULL, 0, NULL, NULL);
-    if (len > 0) {
-        char *text = Z_Malloc(len);
-        if (WideCharToMultiByte(CP_UTF8, 0, cliptext, -1, text, len, NULL, NULL) == len)
-            data = UTF8_TranslitString(text);
-        Z_Free(text);
+    HANDLE clipdata = GetClipboardData(CF_UNICODETEXT);
+    if (clipdata) {
+        WCHAR *cliptext = static_cast<WCHAR *>(GlobalLock(clipdata));
+        if (cliptext) {
+            int len = WideCharToMultiByte(CP_UTF8, 0, cliptext, -1, NULL, 0, NULL, NULL);
+            if (len > 0) {
+                char *text = Z_Malloc(len);
+                if (WideCharToMultiByte(CP_UTF8, 0, cliptext, -1, text, len, NULL, NULL) == len)
+                    data = UTF8_TranslitString(text);
+                Z_Free(text);
+            }
+            GlobalUnlock(clipdata);
+        }
     }
-    GlobalUnlock(clipdata);
 
-fail:
     CloseClipboard();
     return data;
 }

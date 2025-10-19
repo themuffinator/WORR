@@ -401,7 +401,7 @@ static int reconfigure_swr(void)
     swr_close(ogg_swr_ctx);
     av_frame_unref(out);
 
-    ret = av_channel_layout_default(&out->ch_layout, 2);
+    ret = Q_AVChannelLayoutDefault(&out->ch_layout, 2);
     if (ret < 0)
         return ret;
     out->format = s_supports_float ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_S16;
@@ -518,8 +518,11 @@ drain:
         }
 
         // work around swr channel layout bug
-        if (in->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC)
-            av_channel_layout_default(&in->ch_layout, in->ch_layout.nb_channels);
+        if (in->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
+            ret = Q_AVChannelLayoutDefault(&in->ch_layout, in->ch_layout.nb_channels);
+            if (ret < 0)
+                return ret;
+        }
 
         // now that we have a frame, configure swr
         if (!swr_is_initialized(ogg_swr_ctx)) {
