@@ -861,10 +861,10 @@ static bool parse_userinfo(const q2proto_connect_t *parsed_connect, conn_params_
 
     // reject if there is a kickable userinfo ban
     if ((ban = SV_CheckInfoBans(userinfo, true)) != NULL) {
-        s = ban->comment;
-        if (!s)
-            s = "Userinfo banned.";
-        return reject("%s\nConnection refused.\n", s);
+        const char *reason = ban->comment;
+        if (!reason)
+            reason = "Userinfo banned.";
+        return reject("%s\nConnection refused.\n", reason);
     }
 
     return true;
