@@ -639,7 +639,7 @@ typedef struct {
     int         challenge;
 
     int         maxlength;
-    int         nctype;
+    netchan_type_t  nctype;
     bool        has_zlib;
 
     int         maxclients; // hidden client slots
@@ -771,10 +771,12 @@ static bool parse_enhanced_params(const q2proto_connect_t *parsed_connect, conn_
 {
     p->version = parsed_connect->version;
     p->has_zlib = parsed_connect->has_zlib;
-    p->nctype = parsed_connect->q2pro_nctype;
+    const int parsed_type = parsed_connect->q2pro_nctype;
 
-    if (p->nctype != NETCHAN_NEW)
+    if (parsed_type != NETCHAN_NEW)
         return reject("Invalid netchan type.\n");
+
+    p->nctype = static_cast<netchan_type_t>(parsed_type);
 
     return true;
 }
@@ -958,7 +960,7 @@ static void init_pmove_and_es_flags(client_t *newcl)
     newcl->pmp.waterhack = sv_waterjump_hack->integer >= 1;
 }
 
-static void send_connect_packet(client_t *newcl, int nctype)
+static void send_connect_packet(client_t *newcl, netchan_type_t nctype)
 {
     const char *ncstring    = "";
     const char *acstring    = "";
@@ -997,7 +999,7 @@ static void append_extra_userinfo(conn_params_t *params, char *userinfo)
                "\\major\\%d\\minor\\%d\\netchan\\%d"
                "\\packetlen\\%d\\qport\\%d\\zlib\\%d",
                params->challenge, userinfo_ip_string(),
-               params->protocol, params->version, params->nctype,
+               params->protocol, params->version, static_cast<int>(params->nctype),
                params->maxlength, params->qport, params->has_zlib);
 }
 
@@ -1007,7 +1009,7 @@ static void SVC_DirectConnect(void)
     conn_params_t   params;
     client_t        *newcl;
     int             number;
-    qboolean        allow;
+    bool            allow;
     char            *reason;
 
     q2proto_connect_t parsed_connect;
@@ -1086,7 +1088,7 @@ static void SVC_DirectConnect(void)
     // get the game a chance to reject this connection or modify the userinfo
     sv_client = newcl;
     sv_player = newcl->edict;
-    allow = ge->ClientConnect(newcl->edict, userinfo.data(), "", false);
+    allow = ge->ClientConnect(newcl->edict, userinfo.data(), "", false) != false;
     sv_client = NULL;
     sv_player = NULL;
     if (!allow) {
@@ -1101,7 +1103,7 @@ static void SVC_DirectConnect(void)
 
     // setup netchan
     Netchan_Setup(&newcl->netchan, NS_SERVER, params.nctype, &net_from,
-                  params.qport, params.maxlength, params.protocol);
+                  params.qport, static_cast<size_t>(params.maxlength), params.protocol);
     newcl->numpackets = 1;
 
     newcl->io_data.sz_read = &msg_read;
