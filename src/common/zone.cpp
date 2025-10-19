@@ -177,7 +177,7 @@ void Z_Freep(void *ptr)
 
     Q_assert(p);
     if (*p) {
-        Z_Free(*p);
+        zone_c_api::Z_Free(*p);
         *p = NULL;
     }
 }
@@ -196,7 +196,7 @@ void *Z_Realloc(void *ptr, size_t size)
     }
 
     if (!size) {
-        Z_Free(ptr);
+        zone_c_api::Z_Free(ptr);
         return NULL;
     }
 
@@ -280,7 +280,7 @@ void Z_FreeTags(memtag_t tag)
     LIST_FOR_EACH_SAFE(zhead_t, z, n, &z_chain, entry) {
         Z_Validate(z);
         if (z->tag == tag) {
-            Z_Free(z + 1);
+            zone_c_api::Z_Free(z + 1);
         }
     }
 }
@@ -395,7 +395,7 @@ char *Z_CvarCopyString(const char *in)
     } else if (!in[1] && Q_isdigit(in[0])) {
         i = in[0] - '0';
     } else {
-        return Z_TagCopyString(in, TAG_CVAR);
+        return zone_c_api::Z_TagCopyString(in, TAG_CVAR);
     }
 
     // return static storage
