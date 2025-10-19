@@ -608,7 +608,8 @@ static void emit_gamestate(void)
     player_packed_t *ps;
     entity_packed_t *es;
     size_t      length;
-    int         flags, portalbytes;
+    mvd_flags_t streamFlags = mvd_flags_t{};
+    int         portalbytes;
     byte        portalbits[MAX_MAP_PORTAL_BYTES];
 
     // don't bother writing if there are no active MVD clients
@@ -617,25 +618,26 @@ static void emit_gamestate(void)
     }
 
     // setup MVD stream flags
-    flags = 0;
-    if (sv_mvd_nomsgs->integer && mvd.dummy)
-        flags |= MVF_NOMSGS;
+    if (sv_mvd_nomsgs->integer && mvd.dummy) {
+        streamFlags = enum_bit_or(streamFlags, MVF_NOMSGS);
+    }
 
     // send the serverdata
     if (svs.game_api == Q2PROTO_GAME_RERELEASE) {
-        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteByte(mvd_serverdata | (static_cast<int>(streamFlags) << SVCMD_BITS));
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_RERELEASE);
     } else if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED || svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
-        flags |= MVF_EXTLIMITS;
-        if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2)
-            flags |= MVF_EXTLIMITS_2;
+        streamFlags = enum_bit_or(streamFlags, MVF_EXTLIMITS);
+        if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
+            streamFlags = enum_bit_or(streamFlags, MVF_EXTLIMITS_2);
+        }
         MSG_WriteByte(mvd_serverdata);
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_CURRENT);
-        MSG_WriteShort(flags);
+        MSG_WriteShort(static_cast<int>(streamFlags));
     } else {
-        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteByte(mvd_serverdata | (static_cast<int>(streamFlags) << SVCMD_BITS));
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_DEFAULT);
     }
@@ -666,29 +668,29 @@ static void emit_gamestate(void)
 
     // send player states
     for (i = 0, ps = mvd.players; i < svs.maxclients; i++, ps++) {
-        msgPsFlags_t flags = mvd.psFlags;
+        msgPsFlags_t playerFlags = mvd.psFlags;
         if (!PPS_INUSE(ps)) {
-            flags = enum_bit_or(flags, MSG_PS_REMOVE);
+            playerFlags = enum_bit_or(playerFlags, MSG_PS_REMOVE);
         }
-        MSG_WriteDeltaPlayerstate_Packet(NULL, ps, i, flags);
+        MSG_WriteDeltaPlayerstate_Packet(NULL, ps, i, playerFlags);
     }
     MSG_WriteByte(CLIENTNUM_NONE);
 
     // send entity states
     for (i = 1, es = mvd.entities + 1; i < ge->num_edicts; i++, es++) {
-        msgEsFlags_t flags = mvd.esFlags;
+        msgEsFlags_t entityFlags = mvd.esFlags;
         if ((j = es->number) != 0) {
             if (i <= svs.maxclients) {
                 ps = &mvd.players[i - 1];
                 if (PPS_INUSE(ps) && ps->pmove.pm_type == PM_NORMAL) {
-                    flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
+                    entityFlags = enum_bit_or(entityFlags, MSG_ES_FIRSTPERSON);
                 }
             }
         } else {
-            flags = enum_bit_or(flags, MSG_ES_REMOVE);
+            entityFlags = enum_bit_or(entityFlags, MSG_ES_REMOVE);
         }
         es->number = i;
-        MSG_WriteDeltaEntity(NULL, es, flags);
+        MSG_WriteDeltaEntity(NULL, es, entityFlags);
         es->number = j;
     }
     MSG_WriteShort(0);
@@ -704,7 +706,7 @@ static void emit_frame(void)
     player_packed_t *oldps, newps = { 0 };
     entity_packed_t *oldes, newes = { 0 };
     edict_t *ent;
-    int flags, portalbytes;
+    int portalbytes;
     byte portalbits[MAX_MAP_PORTAL_BYTES];
     int i;
 
@@ -739,8 +741,11 @@ static void emit_frame(void)
             MSG_WriteDeltaPlayerstate_Packet(oldps, &newps, i, mvd.psFlags);
         } else {
             // this is a new player, send it from the last state
-            MSG_WriteDeltaPlayerstate_Packet(oldps, &newps, i,
-                                             enum_bit_or(mvd.psFlags, MSG_PS_FORCE));
+            MSG_WriteDeltaPlayerstate_Packet(
+                oldps,
+                &newps,
+                i,
+                enum_bit_or(mvd.psFlags, MSG_PS_FORCE));
         }
 
         // shuffle current state to previous
@@ -767,32 +772,33 @@ static void emit_frame(void)
         SV_CheckEntityNumber(ent, i);
 
         // calculate flags
-        msgEsFlags_t flags = mvd.esFlags;
+        msgEsFlags_t entityFlags = mvd.esFlags;
         oldps = NULL; // shut up compiler
         if (i <= svs.maxclients) {
             oldps = &mvd.players[i - 1];
             if (PPS_INUSE(oldps) && oldps->pmove.pm_type == PM_NORMAL) {
                 // do not waste bandwidth on origin/angle updates,
                 // client will recover them from player state
-                flags = enum_bit_or(flags, MSG_ES_FIRSTPERSON);
+                entityFlags = enum_bit_or(entityFlags, MSG_ES_FIRSTPERSON);
             }
         }
 
         if (!oldes->number) {
             // this is a new entity, send it from the last state
-            flags = enum_bit_or(flags, enum_bit_or(MSG_ES_FORCE, MSG_ES_NEWENTITY));
+            entityFlags = enum_bit_or(entityFlags, MSG_ES_FORCE);
+            entityFlags = enum_bit_or(entityFlags, MSG_ES_NEWENTITY);
         }
 
         // quantize
         MSG_PackEntity(&newes, &ent->s, svs.csr.extended);
 
-        MSG_WriteDeltaEntity(oldes, &newes, flags);
+        MSG_WriteDeltaEntity(oldes, &newes, entityFlags);
 
         // shuffle current state to previous
         *oldes = newes;
 
         // fixup origin for next delta
-        if (flags & MSG_ES_FIRSTPERSON)
+        if (enum_has(entityFlags, MSG_ES_FIRSTPERSON))
             VectorCopy(oldps->pmove.origin, oldes->origin);
     }
 
@@ -1127,15 +1133,15 @@ void SV_MvdMulticast(const mleaf_t *leaf, multicast_t to, bool reliable)
     }
 
     if (reliable) {
-        op = mvd_multicast_all_r + to;
+        op = static_cast<mvd_ops_t>(static_cast<int>(mvd_multicast_all_r) + static_cast<int>(to));
         buf = &mvd.datagram;
     } else {
-        op = mvd_multicast_all + to;
+        op = static_cast<mvd_ops_t>(static_cast<int>(mvd_multicast_all) + static_cast<int>(to));
         buf = &mvd.message;
     }
     bits = (msg_write.cursize >> 8) & 7;
 
-    SZ_WriteByte(buf, op | (bits ? 128 : 0));
+    SZ_WriteByte(buf, static_cast<int>(op) | (bits ? 128 : 0));
     if (bits)
         SZ_WriteByte(buf, bits);
     SZ_WriteByte(buf, msg_write.cursize & 255);
@@ -1220,7 +1226,7 @@ void SV_MvdUnicast(const edict_t *ent, int clientNum, bool reliable)
 
     // write it
     bits = (msg_write.cursize >> 8) & 7;
-    SZ_WriteByte(buf, op | (bits ? 128 : 0));
+    SZ_WriteByte(buf, static_cast<int>(op) | (bits ? 128 : 0));
     if (bits)
         SZ_WriteByte(buf, bits);
     SZ_WriteByte(buf, msg_write.cursize & 255);
@@ -2138,22 +2144,29 @@ void SV_MvdPostInit(void)
     }
 
     if (sv_mvd_nogun->integer) {
-        mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_IGNORE_GUNINDEX, MSG_PS_IGNORE_GUNFRAMES));
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_IGNORE_GUNINDEX);
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_IGNORE_GUNFRAMES);
     }
 
     if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED || svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
-        mvd.esFlags = enum_bit_or(mvd.esFlags, enum_bit_or(MSG_ES_LONGSOLID, enum_bit_or(MSG_ES_SHORTANGLES, MSG_ES_EXTENSIONS)));
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_LONGSOLID);
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_SHORTANGLES);
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_EXTENSIONS);
         mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_EXTENSIONS);
 
         if (svs.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2) {
             mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_EXTENSIONS_2);
-            mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_EXTENSIONS_2, MSG_PS_MOREBITS));
+            mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_EXTENSIONS_2);
+            mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_MOREBITS);
         }
     }
     if (svs.game_api == Q2PROTO_GAME_RERELEASE) {
-        mvd.esFlags = enum_bit_or(mvd.esFlags, enum_bit_or(MSG_ES_LONGSOLID,
-            enum_bit_or(MSG_ES_SHORTANGLES, enum_bit_or(MSG_ES_EXTENSIONS, MSG_ES_RERELEASE))));
-        mvd.psFlags = enum_bit_or(mvd.psFlags, enum_bit_or(MSG_PS_EXTENSIONS, MSG_PS_RERELEASE));
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_LONGSOLID);
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_SHORTANGLES);
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_EXTENSIONS);
+        mvd.esFlags = enum_bit_or(mvd.esFlags, MSG_ES_RERELEASE);
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_EXTENSIONS);
+        mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_RERELEASE);
     }
 }
 

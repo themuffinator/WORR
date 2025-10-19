@@ -53,15 +53,14 @@ static void build_gamestate(void)
     }
 
     // set protocol flags
-    cls.gtv.esFlags = enum_bit_or(
-        enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN),
-        enum_bit_and(cl.esFlags, CL_ES_EXTENDED_MASK_2));
-    cls.gtv.psFlags = enum_bit_or(
-        enum_bit_or(MSG_PS_FORCE, MSG_PS_RERELEASE),
-        enum_bit_and(cl.psFlags, CL_PS_EXTENDED_MASK_2));
+    cls.gtv.esFlags = enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN);
+    cls.gtv.esFlags = enum_bit_or(cls.gtv.esFlags, enum_bit_and(cl.esFlags, CL_ES_EXTENDED_MASK_2));
+    cls.gtv.psFlags = enum_bit_or(MSG_PS_FORCE, MSG_PS_RERELEASE);
+    cls.gtv.psFlags = enum_bit_or(cls.gtv.psFlags, enum_bit_and(cl.psFlags, CL_PS_EXTENDED_MASK_2));
 
-    if (enum_has(cls.gtv.psFlags, MSG_PS_EXTENSIONS_2))
+    if (enum_has(cls.gtv.psFlags, MSG_PS_EXTENSIONS_2)) {
         cls.gtv.psFlags = enum_bit_or(cls.gtv.psFlags, MSG_PS_MOREBITS);
+    }
 }
 
 static void emit_gamestate(void)
@@ -69,27 +68,29 @@ static void emit_gamestate(void)
     char        *string;
     entity_packed_t *es;
     size_t      length;
-    int         i, flags;
+    int         i;
+    auto        flags = MVF_SINGLEPOV;
 
     // send the serverdata
-    flags = MVF_SINGLEPOV;
     if (cl.csr.extended) {
-        flags |= MVF_EXTLIMITS;
-    MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        flags = enum_bit_or(flags, MVF_EXTLIMITS);
+    }
+    MSG_WriteByte(mvd_serverdata | (static_cast<int>(flags) << SVCMD_BITS));
     MSG_WriteLong(PROTOCOL_VERSION_MVD);
     if (cl.is_rerelease_game) {
-        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteByte(mvd_serverdata | (static_cast<int>(flags) << SVCMD_BITS));
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_RERELEASE);
     } else if (cl.csr.extended) {
-        if (cl.esFlags & MSG_ES_EXTENSIONS_2)
-            flags |= MVF_EXTLIMITS_2;
+        if (enum_has(cl.esFlags, MSG_ES_EXTENSIONS_2)) {
+            flags = enum_bit_or(flags, MVF_EXTLIMITS_2);
+        }
         MSG_WriteByte(mvd_serverdata);
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_CURRENT);
-        MSG_WriteShort(flags);
+        MSG_WriteShort(static_cast<int>(flags));
     } else {
-        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteByte(mvd_serverdata | (static_cast<int>(flags) << SVCMD_BITS));
         MSG_WriteLong(PROTOCOL_VERSION_MVD);
         MSG_WriteShort(PROTOCOL_VERSION_MVD_DEFAULT);
     }
@@ -178,7 +179,8 @@ void CL_GTV_EmitFrame(void)
 
         if (!oldes->number) {
             // this is a new entity, send it from the last state
-            flags = enum_bit_or(flags, enum_bit_or(MSG_ES_FORCE, MSG_ES_NEWENTITY));
+            flags = enum_bit_or(flags, MSG_ES_FORCE);
+            flags = enum_bit_or(flags, MSG_ES_NEWENTITY);
         }
 
         // quantize
