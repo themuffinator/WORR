@@ -140,10 +140,10 @@ static void Activate(bool active)
 }
 
 const snddma_driver_t snddma_sdl = {
-    .name = "sdl",
-    .init = Init,
-    .shutdown = Shutdown,
-    .begin_painting = BeginPainting,
-    .submit = Submit,
-    .activate = Activate,
+    "sdl",
+    Init,
+    Shutdown,
+    BeginPainting,
+    Submit,
+    Activate,
 };

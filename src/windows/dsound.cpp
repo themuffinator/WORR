@@ -396,10 +396,10 @@ static void DS_Activate(bool active)
 }
 
 const snddma_driver_t snddma_dsound = {
-    .name = "dsound",
-    .init = DS_Init,
-    .shutdown = DS_Shutdown,
-    .begin_painting = DS_BeginPainting,
-    .submit = DS_Submit,
-    .activate = DS_Activate,
+    "dsound",
+    DS_Init,
+    DS_Shutdown,
+    DS_BeginPainting,
+    DS_Submit,
+    DS_Activate,
 };
