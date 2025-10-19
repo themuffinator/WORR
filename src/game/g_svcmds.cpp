@@ -109,7 +109,7 @@ static bool StringToFilter(char *s, ipfilter_t *f)
 SV_FilterPacket
 =================
 */
-bool SV_FilterPacket(char *from)
+bool SV_FilterPacket(const char *from)
 {
     int     i;
     unsigned    in;
@@ -117,7 +117,7 @@ bool SV_FilterPacket(char *from)
         byte b[4];
         unsigned u32;
     } m;
-    char *p;
+    const char *p;
 
     m.u32 = 0;
 

@@ -767,7 +767,7 @@ void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage
 // g_svcmds.c
 //
 void ServerCommand(void);
-bool SV_FilterPacket(char *from);
+bool SV_FilterPacket(const char *from);
 
 //
 // p_view.c
