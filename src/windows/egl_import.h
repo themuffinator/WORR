@@ -57,7 +57,9 @@ static bool egl_init_import(void)
     if (!egl.handle)
         return false;
 
-#define QEGL(type, func)    if ((q##func = Sys_GetProcAddress(egl.handle, #func)) == NULL) goto fail;
+#define QEGL(type, func)    \
+    q##func = reinterpret_cast<type>(Sys_GetProcAddress(egl.handle, #func)); \
+    if (q##func == NULL) goto fail;
     QEGL_IMP
 #undef QEGL
 
