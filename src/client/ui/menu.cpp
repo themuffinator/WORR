@@ -577,7 +577,7 @@ static void EpisodeControl_Init(menuEpisodeSelector_t *s)
 EpisodeControl_Init
 =================
 */
-static void UnitControl_Init(menuEpisodeSelector_t *s)
+static void UnitControl_Init(menuUnitSelector_t *s)
 {
     SpinControl_Init(&s->spin);
 }
