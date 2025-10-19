@@ -758,7 +758,8 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
     } else {
         // use full extended flags unless writing backward compatible demo
         cls.demo.esFlags = cl.csr.extended ? enum_from_value<msgEsFlags_t>(CL_ES_EXTENDED_MASK_2) : static_cast<msgEsFlags_t>(0);
-        cls.demo.psFlags = cl.csr.extended ? CL_PS_EXTENDED_MASK_2 : 0;
+        cls.demo.psFlags = cl.csr.extended ? enum_from_value<msgPsFlags_t>(CL_PS_EXTENDED_MASK_2)
+                                           : static_cast<msgPsFlags_t>(0);
     }
 
     cl.max_stats = (cl.game_api >= Q2PROTO_GAME_Q2PRO_EXTENDED_V2) ? MAX_STATS_NEW : MAX_STATS_OLD;
