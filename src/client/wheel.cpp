@@ -243,8 +243,8 @@ static cvar_t *ww_ammo_scale;
 
 static int wheel_slot_compare(const void *a, const void *b)
 {
-    const cl_wheel_slot_t *sa = a;
-    const cl_wheel_slot_t *sb = b;
+    const cl_wheel_slot_t *sa = static_cast<const cl_wheel_slot_t *>(a);
+    const cl_wheel_slot_t *sb = static_cast<const cl_wheel_slot_t *>(b);
 
     if (sa->sort_id == sb->sort_id)
         return sa->item_index - sb->item_index;
