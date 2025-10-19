@@ -34,16 +34,12 @@ OGG loading
 
 #ifdef USE_AVCODEC
 
+#include "../ffmpeg_utils.h"
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
 #include <libswresample/swresample.h>
-
-static const char *AvErrorString(int err)
-{
-    static char buf[AV_ERROR_MAX_STRING_SIZE];
-    return av_make_error_string(buf, sizeof(buf), err);
-}
 
 static int sz_read_packet(void *opaque, uint8_t *buf, int size)
 {
@@ -139,7 +135,7 @@ static bool OGG_Load(sizebuf_t *sz)
 
     ret = avformat_open_input(&fmt_ctx, NULL, fmt, NULL);
     if (ret < 0) {
-        Com_SetLastError(AvErrorString(ret));
+        Com_SetLastError(AvErrorString(ret).c_str());
         goto fail;
     }
 
@@ -268,7 +264,7 @@ static bool OGG_Load(sizebuf_t *sz)
     }
 
     if (ret < 0) {
-        Com_SetLastError(AvErrorString(ret));
+        Com_SetLastError(AvErrorString(ret).c_str());
         Z_Freep(&s_info.data);
         goto fail;
     }
