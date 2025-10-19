@@ -741,7 +741,7 @@ static void G_SetClientSound(edict_t *ent)
     if (ent->client->pers.weapon)
         weap = ent->client->pers.weapon->classname;
     else
-        weap = "";
+        weap = const_cast<char *>(""); // point at immutable empty string literal safely
 
     if (ent->waterlevel && (ent->watertype & (CONTENTS_LAVA | CONTENTS_SLIME)))
         ent->s.sound = gi.soundindex("player/fry.wav");

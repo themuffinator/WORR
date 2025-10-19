@@ -205,7 +205,7 @@ static void ClientObituary(edict_t *self, edict_t *inflictor, edict_t *attacker)
         ff = meansOfDeath & MOD_FRIENDLY_FIRE;
         mod = meansOfDeath & ~MOD_FRIENDLY_FIRE;
         message = NULL;
-        message2 = "";
+        message2 = const_cast<char *>(""); // safe placeholder for optional second message
 
         switch (mod) {
         case MOD_SUICIDE:
@@ -788,7 +788,7 @@ static edict_t *SelectCoopSpawnPoint(edict_t *ent)
 
         target = spot->targetname;
         if (!target)
-            target = "";
+            target = const_cast<char *>(""); // safe placeholder when target name is absent
         if (Q_stricmp(game.spawnpoint, target) == 0) {
             // this is a coop spawn point for one of the clients here
             index--;

@@ -180,7 +180,7 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     } else {
         // no real map
         strcpy(sv.configstrings[svs.csr.mapchecksum], "0");
-        sv.cm.entitystring = "";
+        sv.cm.entitystring = const_cast<char *>(""); // maintain mutable pointer even for empty data
     }
 
     //
@@ -397,7 +397,8 @@ void SV_InitGame(unsigned mvd_spawn)
 
     if (svs.initialized) {
         // cause any connected clients to reconnect
-        SV_Shutdown("Server restarted\n", ERR_RECONNECT | mvd_spawn);
+        unsigned shutdown_flags = ERR_RECONNECT | mvd_spawn;
+        SV_Shutdown("Server restarted\n", static_cast<error_type_t>(shutdown_flags));
     } else {
         // make sure the client is down
         CL_Disconnect(ERR_RECONNECT);

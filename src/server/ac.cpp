@@ -1575,7 +1575,7 @@ void AC_Info_f(void)
             return;
         }
         cl = sv_client;
-        filesubstring = "";
+        filesubstring = const_cast<char *>(""); // safe default when no file substring is provided
     } else {
         substring = Cmd_Argv(1);
         filesubstring = Cmd_Argv(2);
