@@ -240,7 +240,8 @@ void SV_DropClient(client_t *client, const char *reason)
         print_drop_reason(client, reason, oldstate);
 
     // add the disconnect
-    q2proto_svc_message_t message = {.type = Q2P_SVC_DISCONNECT};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_DISCONNECT;
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
     SV_ClientAddMessage(client, MSG_RELIABLE | MSG_CLEAR);
 
@@ -2257,13 +2258,15 @@ static void SV_FinalMessage(const char *message, error_type_t type)
         return;
 
     if (message) {
-        q2proto_svc_message_t print_msg = {.type = Q2P_SVC_PRINT, .print = {0}};
+        q2proto_svc_message_t print_msg{};
+        print_msg.type = Q2P_SVC_PRINT;
         print_msg.print.level = PRINT_HIGH;
         print_msg.print.string = q2proto_make_string(message);
         q2proto_server_multicast_write(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, &print_msg);
     }
 
-    q2proto_svc_message_t goodbye_msg = {.type = type == ERR_RECONNECT ? Q2P_SVC_RECONNECT : Q2P_SVC_DISCONNECT};
+    q2proto_svc_message_t goodbye_msg{};
+    goodbye_msg.type = type == ERR_RECONNECT ? Q2P_SVC_RECONNECT : Q2P_SVC_DISCONNECT;
     q2proto_server_multicast_write(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, &goodbye_msg);
 
     // send it twice

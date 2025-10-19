@@ -207,7 +207,8 @@ static void CL_UpdateGunSetting(void)
         nogun = 0;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOGUN;
     message.setting.value = nogun;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -220,7 +221,8 @@ static void CL_UpdateGibSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOGIBS;
     message.setting.value = !cl_gibs->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -233,7 +235,8 @@ static void CL_UpdateFootstepsSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOFOOTSTEPS;
     message.setting.value = !cl_footsteps->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -246,7 +249,8 @@ static void CL_UpdatePredictSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOPREDICT;
     message.setting.value = !cl_predict->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -261,7 +265,8 @@ static void CL_UpdateRateSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_FPS;
     message.setting.value = cl_updaterate->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -289,7 +294,8 @@ void CL_UpdateRecordingSetting(void)
     }
 #endif
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_RECORDING;
     message.setting.value = rec;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -305,7 +311,8 @@ static void CL_UpdateFlaresSetting(void)
         return;
     }
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_SETTING, .setting = {0}};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_SETTING;
     message.setting.index = CLS_NOFLARES;
     message.setting.value = !cl_flares->integer;
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
@@ -325,7 +332,8 @@ void CL_ClientCommand(const char *string)
 
     Com_DDPrintf("%s: %s\n", __func__, Com_MakePrintable(string));
 
-    q2proto_clc_message_t message = {.type = Q2P_CLC_STRINGCMD};
+    q2proto_clc_message_t message{};
+    message.type = Q2P_CLC_STRINGCMD;
     message.stringcmd.cmd = q2proto_make_string(string);
     q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
     MSG_FlushTo(&cls.netchan.message);
@@ -469,6 +477,8 @@ void CL_CheckForResend(void)
 
     Cvar_BitInfo(userinfo.data(), CVAR_USERINFO);
 
+    std::array<char, MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */> connect_args{};
+
     q2proto_connect_t connect;
     memset(&connect, 0, sizeof(connect));
     connect.protocol = q2proto_protocol_from_netver(cls.serverProtocol);
@@ -478,12 +488,10 @@ void CL_CheckForResend(void)
     connect.packet_length = maxmsglen;
     connect.q2pro_nctype = net_chantype->integer;
 
-    int err = q2proto_complete_connect(&connect);
+    q2proto_error_t err = q2proto_complete_connect(&connect);
     if (err != Q2P_ERR_SUCCESS)
         goto fail;
     cls.quakePort = connect.qport;
-
-    std::array<char, MAX_PACKETLEN_DEFAULT - 16 /* space for command etc */> connect_args{};
 
     err = q2proto_get_connect_arguments(connect_args.data(), connect_args.size(), NULL, &connect);
     if (err != Q2P_ERR_SUCCESS)
@@ -746,7 +754,8 @@ void CL_Disconnect(error_type_t type)
 
     if (cls.netchan.protocol) {
         // send a disconnect message to the server
-        q2proto_clc_message_t message = {.type = Q2P_CLC_STRINGCMD};
+        q2proto_clc_message_t message{};
+        message.type = Q2P_CLC_STRINGCMD;
         message.stringcmd.cmd = q2proto_make_string("disconnect");
         q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &message);
 
@@ -1360,7 +1369,8 @@ static void CL_ConnectionlessPacket(void)
             } else if (!strncmp(s, "nc=", 3)) {
                 s += 3;
                 if (*s) {
-                    type = Q_atoi(s);
+                    const int parsed_type = Q_atoi(s);
+                    type = static_cast<netchan_type_t>(parsed_type);
                     if (type != NETCHAN_OLD && type != NETCHAN_NEW) {
                         Com_Error(ERR_DISCONNECT,
                                   "Server returned invalid netchan type");
@@ -1415,7 +1425,7 @@ static void CL_ConnectionlessPacket(void)
         CL_ClientCommand("new");
         cls.state = ca_connected;
         cls.connect_count = 0;
-        Q_strlcpy(cl.mapname, mapname, sizeof(cl.mapname)); // for levelshot screen
+        Q_strlcpy(cl.mapname, mapname.data(), sizeof(cl.mapname)); // for levelshot screen
         cl.csr = cs_remap_old;
         cl.max_stats = MAX_STATS_OLD;
         return;
@@ -2372,7 +2382,7 @@ Flush caches and restart the VFS.
 */
 void CL_RestartFilesystem(bool total)
 {
-    int cls_state;
+    connstate_t cls_state;
 
     if (!cl_running->integer) {
         FS_Restart(total);
@@ -2440,7 +2450,7 @@ void CL_RestartFilesystem(bool total)
 
 void CL_RestartRefresh(bool total)
 {
-    int cls_state;
+    connstate_t cls_state;
 
     if (!cls.ref_initialized) {
         return;
