@@ -2008,7 +2008,7 @@ static bool match_ignore_nick(const char *nick, const char *s)
         return true;
 
     if (*s == '[') {
-        char *p = strstr(s + 1, "] ");
+        const char *p = strstr(s + 1, "] ");
         if (p)
             return match_ignore_nick_2(nick, p + 2);
     }
