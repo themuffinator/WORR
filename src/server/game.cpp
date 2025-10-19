@@ -174,7 +174,8 @@ void PF_Broadcast_Print(int level, const char *msg)
 
     SV_MvdBroadcastPrint(level, string);
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_PRINT;
     message.print.level = level;
     message.print.string.str = string;
     message.print.string.len = len;
@@ -243,7 +244,8 @@ static void PF_Client_Print(edict_t *ent, int level, const char *msg)
         return;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_PRINT;
     message.print.level = level;
     message.print.string = q2proto_make_string(msg);
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
@@ -285,7 +287,8 @@ static void PF_Center_Print(edict_t *ent, const char *msg)
         return;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_CENTERPRINT, .centerprint = {{0}}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_CENTERPRINT;
     message.centerprint.message = q2proto_make_string(msg);
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
 
@@ -391,7 +394,8 @@ static void PF_configstring(int index, const char *val)
     SV_MvdConfigstring(index, val, len);
 
     // send the update to everyone
-    q2proto_svc_message_t message = {.type = Q2P_SVC_CONFIGSTRING, .configstring = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_CONFIGSTRING;
     message.configstring.index = index;
     message.configstring.value.str = val;
     message.configstring.value.len = len;
@@ -552,7 +556,8 @@ static void SV_StartSound(const vec3_t origin, edict_t *edict,
     snd.timeofs = timeofs;
 
     // prepare multicast message
-    q2proto_svc_message_t sound_msg = {.type = Q2P_SVC_SOUND, .sound = {0}};
+    q2proto_svc_message_t sound_msg{};
+    sound_msg.type = Q2P_SVC_SOUND;
     q2proto_sound_encode_message(&snd, &sound_msg.sound);
 
     q2proto_server_multicast_write(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, &sound_msg);
@@ -652,7 +657,8 @@ static void PF_LocalSound(edict_t *target, const vec3_t origin,
     snd.attenuation = attenuation;
     snd.timeofs = timeofs;
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_SOUND, .sound = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_SOUND;
     q2proto_sound_encode_message(&snd, &message.sound);
 
     int clientNum = entnum - 1;

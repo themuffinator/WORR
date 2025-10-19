@@ -246,7 +246,8 @@ static void make_playerstate_delta(client_t *client, const q2proto_packed_player
 
 static void write_entity_delta(client_t *client, const server_entity_packed_t *from, const server_entity_packed_t *to, msgEsFlags_t flags)
 {
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME_ENTITY_DELTA;
 
     if (!to) {
         Q_assert(from);
@@ -355,7 +356,8 @@ static bool emit_packet_entities(client_t               *client,
     }
 
     // end of packetentities
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME_ENTITY_DELTA;
     q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
     return ret;
 }
@@ -387,7 +389,8 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
         lastframe = -1;
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME, .frame = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME;
     message.frame.serverframe = client->framenum;
     message.frame.deltaframe = lastframe;
     message.frame.suppress_count = client->suppress_count;

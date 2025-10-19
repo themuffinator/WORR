@@ -100,7 +100,8 @@ static void CL_PackEntity_q2proto(q2proto_packed_entity_state_t *out, const enti
 
 static void write_delta_entity(const q2proto_packed_entity_state_t *oldpack, const q2proto_packed_entity_state_t *newpack, int newnum, msgEsFlags_t flags)
 {
-    q2proto_svc_message_t message_entity_delta = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message_entity_delta{};
+    message_entity_delta.type = Q2P_SVC_FRAME_ENTITY_DELTA;
     bool entity_differs = Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &message_entity_delta.frame_entity_delta.entity_delta, oldpack, newpack, flags);
     message_entity_delta.frame_entity_delta.newnum = newnum;
 
@@ -111,7 +112,8 @@ static void write_delta_entity(const q2proto_packed_entity_state_t *oldpack, con
 
 static void write_entity_remove(int num)
 {
-    q2proto_svc_message_t message_entity_delta = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message_entity_delta{};
+    message_entity_delta.type = Q2P_SVC_FRAME_ENTITY_DELTA;
     message_entity_delta.frame_entity_delta.remove = true;
     message_entity_delta.frame_entity_delta.newnum = num;
     q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message_entity_delta);
@@ -186,14 +188,16 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
     }
 
     // end of packetentities
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME_ENTITY_DELTA;
     q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message);
 }
 
 static void emit_delta_frame(const server_frame_t *from, const server_frame_t *to,
                              int fromnum, int tonum)
 {
-    q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME, .frame = {0}};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_FRAME;
 
     message.frame.serverframe = tonum;
     message.frame.deltaframe = fromnum;
@@ -381,7 +385,8 @@ static void fill_message_fog(q2proto_svc_fog_t *msg_fog, const cl_fog_params_t *
 
 static void write_current_fog(void)
 {
-    q2proto_svc_message_t fog_message = {.type = Q2P_SVC_FOG};
+    q2proto_svc_message_t fog_message{};
+    fog_message.type = Q2P_SVC_FOG;
 
     if (cl.fog.lerp_time == 0 || cl.time > cl.fog.lerp_time_start + cl.fog.lerp_time) {
         // No fog lerping
@@ -550,7 +555,8 @@ static void CL_Record_f(void)
     //
 
     // send the serverdata
-    q2proto_svc_message_t message_svcdata = {.type = Q2P_SVC_SERVERDATA, .serverdata = {0}};
+    q2proto_svc_message_t message_svcdata{};
+    message_svcdata.type = Q2P_SVC_SERVERDATA;
     q2proto_server_fill_serverdata(&cls.demo.q2proto_context, &message_svcdata.serverdata);
     message_svcdata.serverdata.servercount = cl.servercount;
     message_svcdata.serverdata.attractloop = true; // demos are always attract loops
@@ -597,7 +603,8 @@ static void CL_Record_f(void)
     // write fog
     write_current_fog();
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_STUFFTEXT};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_STUFFTEXT;
     message.stufftext.string = q2proto_make_string("precache\n");
     q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message);
 
@@ -634,7 +641,8 @@ static void resume_record(void)
                 // multiple packets = not seamless
             }
 
-            q2proto_svc_message_t message = {.type = Q2P_SVC_CONFIGSTRING};
+            q2proto_svc_message_t message{};
+            message.type = Q2P_SVC_CONFIGSTRING;
             message.configstring.index = index;
             message.configstring.value.str = s;
             message.configstring.value.len = len;
@@ -1041,7 +1049,8 @@ void CL_EmitDemoSnapshot(void)
     }
 
     // write layout
-    q2proto_svc_message_t message = {.type = Q2P_SVC_LAYOUT};
+    q2proto_svc_message_t message{};
+    message.type = Q2P_SVC_LAYOUT;
     message.layout.layout_str = q2proto_make_string(cl.cgame_data.layout);
     q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message);
 
