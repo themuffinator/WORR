@@ -25,6 +25,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <limits>
 #include <type_traits>
 
+#ifdef max
+#undef max
+#endif
+
 static cvar_t   *scr_alpha;
 static cvar_t   *scr_font;
 
