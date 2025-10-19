@@ -166,7 +166,7 @@ static sndinitstat_t WAVE_Init(void)
     Com_DPrintf("ok\n");
 
     Com_DPrintf("...locking waveform buffer: ");
-    lpData = GlobalLock(hData);
+    lpData = static_cast<HPSTR>(GlobalLock(hData));
     if (!lpData) {
         Com_DPrintf(" failed with error %#lx\n", GetLastError());
         WAVE_Shutdown();
@@ -191,7 +191,7 @@ static sndinitstat_t WAVE_Init(void)
     Com_DPrintf("ok\n");
 
     Com_DPrintf("...locking waveform header: ");
-    lpWaveHdr = (LPWAVEHDR) GlobalLock(hWaveHdr);
+    lpWaveHdr = static_cast<LPWAVEHDR>(GlobalLock(hWaveHdr));
     if (lpWaveHdr == NULL) {
         Com_DPrintf("failed with error %#lx\n", GetLastError());
         WAVE_Shutdown();
@@ -322,11 +322,4 @@ static void WAVE_Activate(bool active)
 {
 }
 
-const snddma_driver_t snddma_wave = {
-    .name = "wave",
-    .init = WAVE_Init,
-    .shutdown = WAVE_Shutdown,
-    .begin_painting = WAVE_BeginPainting,
-    .submit = WAVE_Submit,
-    .activate = WAVE_Activate,
-};
+const snddma_driver_t snddma_wave{"wave", WAVE_Init, WAVE_Shutdown, WAVE_BeginPainting, WAVE_Submit, WAVE_Activate};
