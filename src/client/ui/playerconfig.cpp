@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ui.h"
 #include "../client.h"
 
+#include <cstring>
+
 /*
 =============================================================================
 
@@ -55,6 +57,22 @@ static const char *const handedness[] = {
     "center",
     NULL
 };
+
+static void UI_SetString(char **dest, const char *src)
+{
+    if (*dest && src && strcmp(*dest, src) == 0) {
+        return;
+    }
+
+    if (*dest) {
+        Z_Free(*dest);
+        *dest = NULL;
+    }
+
+    if (src) {
+        *dest = UI_CopyString(src);
+    }
+}
 
 static void ReloadMedia(void)
 {
@@ -163,9 +181,9 @@ static void Size(menuFrameWork_t *self)
 
     if (uis.width < 640) {
         x -= CONCHAR_WIDTH * 10;
-        m_player.hand.generic.name = "hand";
+        UI_SetString(&m_player.hand.generic.name, "hand");
     } else {
-        m_player.hand.generic.name = "handedness";
+        UI_SetString(&m_player.hand.generic.name, "handedness");
     }
 
     m_player.name.generic.x     = x;
@@ -282,9 +300,9 @@ static bool Push(menuFrameWork_t *self)
     if (m_player.menu.banner) {
         R_GetPicSize(&m_player.menu.banner_rc.width,
                      &m_player.menu.banner_rc.height, m_player.menu.banner);
-        m_player.menu.title = NULL;
+        UI_SetString(&m_player.menu.title, NULL);
     } else {
-        m_player.menu.title = "Player Setup";
+        UI_SetString(&m_player.menu.title, "Player Setup");
     }
 
     ReloadMedia();
@@ -299,6 +317,16 @@ static bool Push(menuFrameWork_t *self)
 
 static void Free(menuFrameWork_t *self)
 {
+    UI_SetString(&m_player.menu.name, NULL);
+    UI_SetString(&m_player.menu.title, NULL);
+    UI_SetString(&m_player.name.generic.name, NULL);
+    UI_SetString(&m_player.model.generic.name, NULL);
+    UI_SetString(&m_player.skin.generic.name, NULL);
+    UI_SetString(&m_player.hand.generic.name, NULL);
+    UI_SetString(&m_player.dogtag.generic.name, NULL);
+    UI_SetString(&m_player.dogtag.path, NULL);
+    UI_SetString(&m_player.dogtag.filter, NULL);
+
     Z_Free(m_player.menu.items);
     memset(&m_player, 0, sizeof(m_player));
 }
@@ -308,7 +336,7 @@ void M_Menu_PlayerConfig(void)
     static const vec3_t origin = { 40.0f, 0.0f, 0.0f };
     static const vec3_t angles = { 0.0f, 260.0f, 0.0f };
 
-    m_player.menu.name = "players";
+    UI_SetString(&m_player.menu.name, "players");
     m_player.menu.push = Push;
     m_player.menu.pop = Pop;
     m_player.menu.size = Size;
@@ -334,30 +362,30 @@ void M_Menu_PlayerConfig(void)
 
     m_player.name.generic.type = MTYPE_FIELD;
     m_player.name.generic.flags = QMF_HASFOCUS;
-    m_player.name.generic.name = "name";
+    UI_SetString(&m_player.name.generic.name, "name");
     m_player.name.width = MAX_CLIENT_NAME - 1;
 
     m_player.model.generic.type = MTYPE_SPINCONTROL;
     m_player.model.generic.id = ID_MODEL;
-    m_player.model.generic.name = "model";
+    UI_SetString(&m_player.model.generic.name, "model");
     m_player.model.generic.change = Change;
 
     m_player.skin.generic.type = MTYPE_SPINCONTROL;
     m_player.skin.generic.id = ID_SKIN;
-    m_player.skin.generic.name = "skin";
+    UI_SetString(&m_player.skin.generic.name, "skin");
     m_player.skin.generic.change = Change;
 
     m_player.hand.generic.type = MTYPE_SPINCONTROL;
-    m_player.hand.generic.name = "handedness";
+    UI_SetString(&m_player.hand.generic.name, "handedness");
     m_player.hand.itemnames = (char **)handedness;
 
     m_player.dogtag.generic.type = MTYPE_IMAGESPINCONTROL;
-    m_player.dogtag.generic.name = "dogtag";
+    UI_SetString(&m_player.dogtag.generic.name, "dogtag");
     m_player.dogtag.generic.width = 192;
     m_player.dogtag.generic.height = 32;
     m_player.dogtag.cvar = info_dogtag;
-    m_player.dogtag.path = "tags";
-    m_player.dogtag.filter = "*";
+    UI_SetString(&m_player.dogtag.path, "tags");
+    UI_SetString(&m_player.dogtag.filter, "*");
 
     Menu_AddItem(&m_player.menu, &m_player.name);
     Menu_AddItem(&m_player.menu, &m_player.model);
