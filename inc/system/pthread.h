@@ -24,6 +24,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <windows.h>
 #include <process.h>
 #include <errno.h>
+#include <cstdlib>
 
 #define PTHREAD_MUTEX_INITIALIZER   {0}
 #define PTHREAD_COND_INITIALIZER    {0}
@@ -40,15 +41,17 @@ typedef struct {
     CONDITION_VARIABLE cond;
 } pthread_cond_t;
 
-typedef struct {
+typedef struct pthread_thread {
     void *(*func)(void *);
     void *arg, *ret;
     HANDLE handle;
-} *pthread_t;
+} pthread_thread;
+
+typedef pthread_thread *pthread_t;
 
 static unsigned __stdcall thread_func(void *arg)
 {
-    pthread_t t = arg;
+    pthread_thread *t = static_cast<pthread_thread *>(arg);
     t->ret = t->func(t->arg);
     return 0;
 }
@@ -56,12 +59,13 @@ static unsigned __stdcall thread_func(void *arg)
 static inline int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                                  void *(*start_routine)(void *), void *arg)
 {
-    pthread_t t = calloc(1, sizeof(*t));
+    pthread_thread *t = static_cast<pthread_thread *>(calloc(1, sizeof(*t)));
     if (!t)
         return EAGAIN;
     t->func = start_routine;
     t->arg = arg;
-    t->handle = (HANDLE)_beginthreadex(NULL, 0, thread_func, t, 0, NULL);
+    t->handle = reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, thread_func,
+                                                       static_cast<void *>(t), 0, NULL));
     if (!t->handle) {
         free(t);
         return EAGAIN;
