@@ -119,18 +119,19 @@ void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_
         l->bits |= GLS_DEPTHTEST_DISABLE;
 }
 
-#define GL_DRAWLINE(sx, sy, sz, ex, ey, ez) \
-    R_AddDebugLine((const vec3_t) { (sx), (sy), (sz) }, (const vec3_t) { (ex), (ey), (ez) }, color, time, depth_test)
-
-#define GL_DRAWLINEV(s, e) \
-    R_AddDebugLine(s, e, color, time, depth_test)
+static inline void R_DebugDrawLine(float sx, float sy, float sz, float ex, float ey, float ez, color_t color, uint32_t time, qboolean depth_test)
+{
+    vec3_t start{ sx, sy, sz };
+    vec3_t end{ ex, ey, ez };
+    R_AddDebugLine(start, end, color, time, depth_test);
+}
 
 void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, qboolean depth_test)
 {
     size *= 0.5f;
-    GL_DRAWLINE(point[0] - size, point[1], point[2], point[0] + size, point[1], point[2]);
-    GL_DRAWLINE(point[0], point[1] - size, point[2], point[0], point[1] + size, point[2]);
-    GL_DRAWLINE(point[0], point[1], point[2] - size, point[0], point[1], point[2] + size);
+    R_DebugDrawLine(point[0] - size, point[1], point[2], point[0] + size, point[1], point[2], color, time, depth_test);
+    R_DebugDrawLine(point[0], point[1] - size, point[2], point[0], point[1] + size, point[2], color, time, depth_test);
+    R_DebugDrawLine(point[0], point[1], point[2] - size, point[0], point[1], point[2] + size, color, time, depth_test);
 }
 
 void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test)
@@ -149,15 +150,15 @@ void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32
 
     color = COLOR_RED;
     VectorMA(origin, size, axis[0], end);
-    GL_DRAWLINEV(origin, end);
+    R_AddDebugLine(origin, end, color, time, depth_test);
 
     color = COLOR_GREEN;
     VectorMA(origin, size, axis[1], end);
-    GL_DRAWLINEV(origin, end);
+    R_AddDebugLine(origin, end, color, time, depth_test);
 
     color = COLOR_BLUE;
     VectorMA(origin, size, axis[2], end);
-    GL_DRAWLINEV(origin, end);
+    R_AddDebugLine(origin, end, color, time, depth_test);
 }
 
 void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, qboolean depth_test)
@@ -166,14 +167,14 @@ void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint3
         // draw column
         float x = ((i > 1) ? mins : maxs)[0];
         float y = ((((i + 1) % 4) > 1) ? mins : maxs)[1];
-        GL_DRAWLINE(x, y, mins[2], x, y, maxs[2]);
+        R_DebugDrawLine(x, y, mins[2], x, y, maxs[2], color, time, depth_test);
 
         // draw bottom & top
         int n = (i + 1) % 4;
         float x2 = ((n > 1) ? mins : maxs)[0];
         float y2 = ((((n + 1) % 4) > 1) ? mins : maxs)[1];
-        GL_DRAWLINE(x, y, mins[2], x2, y2, mins[2]);
-        GL_DRAWLINE(x, y, maxs[2], x2, y2, maxs[2]);
+        R_DebugDrawLine(x, y, mins[2], x2, y2, mins[2], color, time, depth_test);
+        R_DebugDrawLine(x, y, maxs[2], x2, y2, maxs[2], color, time, depth_test);
     }
 }
 
@@ -209,14 +210,14 @@ void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t
     for (int i = 0; i < n_slices; i++) {
         int i0 = i + 1;
         int i1 = (i + 1) % n_slices + 1;
-        GL_DRAWLINEV(verts[v0], verts[i1]);
-        GL_DRAWLINEV(verts[i1], verts[i0]);
-        GL_DRAWLINEV(verts[i0], verts[v0]);
+        R_AddDebugLine(verts[v0], verts[i1], color, time, depth_test);
+        R_AddDebugLine(verts[i1], verts[i0], color, time, depth_test);
+        R_AddDebugLine(verts[i0], verts[v0], color, time, depth_test);
         i0 = i + n_slices * (n_stacks - 2) + 1;
         i1 = (i + 1) % n_slices + n_slices * (n_stacks - 2) + 1;
-        GL_DRAWLINEV(verts[v1], verts[i0]);
-        GL_DRAWLINEV(verts[i0], verts[i1]);
-        GL_DRAWLINEV(verts[i1], verts[v1]);
+        R_AddDebugLine(verts[v1], verts[i0], color, time, depth_test);
+        R_AddDebugLine(verts[i0], verts[i1], color, time, depth_test);
+        R_AddDebugLine(verts[i1], verts[v1], color, time, depth_test);
     }
 
     for (int j = 0; j < n_stacks - 2; j++) {
@@ -227,10 +228,10 @@ void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t
             int i1 = j0 + (i + 1) % n_slices;
             int i2 = j1 + (i + 1) % n_slices;
             int i3 = j1 + i;
-            GL_DRAWLINEV(verts[i0], verts[i1]);
-            GL_DRAWLINEV(verts[i1], verts[i2]);
-            GL_DRAWLINEV(verts[i2], verts[i3]);
-            GL_DRAWLINEV(verts[i3], verts[i0]);
+            R_AddDebugLine(verts[i0], verts[i1], color, time, depth_test);
+            R_AddDebugLine(verts[i1], verts[i2], color, time, depth_test);
+            R_AddDebugLine(verts[i2], verts[i3], color, time, depth_test);
+            R_AddDebugLine(verts[i3], verts[i0], color, time, depth_test);
         }
     }
 }
@@ -253,7 +254,7 @@ void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t
         float x2 = c * radius + origin[0];
         float y2 = s * radius + origin[1];
 
-        GL_DRAWLINE(x, y, origin[2], x2, y2, origin[2]);
+        R_DebugDrawLine(x, y, origin[2], x2, y2, origin[2], color, time, depth_test);
     }
 }
 
@@ -275,9 +276,9 @@ void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, co
         float x2 = c * radius + origin[0];
         float y2 = s * radius + origin[1];
 
-        GL_DRAWLINE(x, y, origin[2] - half_height, x2, y2, origin[2] - half_height);
-        GL_DRAWLINE(x, y, origin[2] + half_height, x2, y2, origin[2] + half_height);
-        GL_DRAWLINE(x, y, origin[2] - half_height, x,  y,  origin[2] + half_height);
+        R_DebugDrawLine(x, y, origin[2] - half_height, x2, y2, origin[2] - half_height, color, time, depth_test);
+        R_DebugDrawLine(x, y, origin[2] + half_height, x2, y2, origin[2] + half_height, color, time, depth_test);
+        R_DebugDrawLine(x, y, origin[2] - half_height, x, y, origin[2] + half_height, color, time, depth_test);
     }
 }
 

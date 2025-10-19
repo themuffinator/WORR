@@ -217,7 +217,7 @@ void GL_Blend(void)
         outer.b = glr.fd.damage_blend[2] * 255;
         outer.a = glr.fd.damage_blend[3] * 255;
 
-        inner = ColorSetAlpha(outer, 0);
+        inner = ColorSetAlpha(outer, static_cast<uint8_t>(0));
 
         if (gl_damageblend_frac->value > 0)
             GL_DrawVignette(Cvar_ClampValue(gl_damageblend_frac, 0, 0.5f), outer, inner);
