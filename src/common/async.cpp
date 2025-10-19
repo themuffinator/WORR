@@ -72,7 +72,7 @@ void Com_QueueAsyncWork(asyncwork_t *work)
     }
 
     pthread_mutex_lock(&work_lock);
-    append_work(&pend_head, Z_CopyStruct(work));
+    append_work(&pend_head, (asyncwork_t *)Z_CopyStruct(work));
     pthread_mutex_unlock(&work_lock);
 
     pthread_cond_signal(&work_cond);
