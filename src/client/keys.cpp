@@ -177,21 +177,25 @@ Key_SetDest
 */
 void Key_SetDest(keydest_t dest)
 {
-    int diff;
+    const int menu_console_mask = static_cast<int>(KEY_MENU) | static_cast<int>(KEY_CONSOLE);
+    int dest_mask = static_cast<int>(dest);
 
 // if not connected, console or menu should be up
-    if (cls.state < ca_active && !(dest & (KEY_MENU | KEY_CONSOLE))) {
-        dest |= KEY_CONSOLE;
+    if (cls.state < ca_active && !(dest_mask & menu_console_mask)) {
+        dest_mask |= static_cast<int>(KEY_CONSOLE);
+        dest = Key_FromMask(dest_mask);
     }
 
-    diff = cls.key_dest ^ dest;
-    cls.key_dest = dest;
+    const int diff = static_cast<int>(cls.key_dest) ^ dest_mask;
+    cls.key_dest = Key_FromMask(dest_mask);
 
 // activate or deactivate mouse
-    if (diff & (KEY_CONSOLE | KEY_MENU)) {
+    if (diff & menu_console_mask) {
         IN_Activate();
         CL_CheckForPause();
     }
+
+    dest = cls.key_dest;
 
     if (dest == KEY_GAME) {
         anykeydown = 0;
