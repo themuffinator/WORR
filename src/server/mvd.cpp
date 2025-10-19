@@ -2137,7 +2137,7 @@ void SV_MvdPostInit(void)
 
     // setup protocol flags
     mvd.esFlags = enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN);
-    mvd.psFlags = msgPsFlags_t{};
+    mvd.psFlags = static_cast<msgPsFlags_t>(0);
 
     if (sv_mvd_noblend->integer) {
         mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_IGNORE_BLEND);

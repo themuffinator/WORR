@@ -271,9 +271,9 @@ static void apply_playerstate(const q2proto_svc_playerstate_t *playerstate,
     if (playerstate->delta_bits & Q2P_PSD_PM_TYPE) {
         // assume PM type & flags are from rerelease when using Q2rePRO protocol, vanilla otherwise
         if (cls.serverProtocol == PROTOCOL_VERSION_RERELEASE)
-            to->pmove.pm_type = playerstate->pm_type;
+            to->pmove.pm_type = static_cast<pmtype_t>(playerstate->pm_type);
         else
-            to->pmove.pm_type = pmtype_from_game3(playerstate->pm_type);
+            to->pmove.pm_type = pmtype_from_game3(static_cast<game3_pmtype_t>(playerstate->pm_type));
     }
 
     q2proto_maybe_read_diff_apply_float(&playerstate->pm_origin, to->pmove.origin);
@@ -642,9 +642,9 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
             Com_DPrintf("R1Q2 strafejump hack enabled\n");
             cl.pmp.strafehack = true;
         }
-        cl.esFlags |= MSG_ES_BEAMORIGIN;
+        cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_BEAMORIGIN);
         if (cls.q2proto_ctx.features.has_solid32) {
-            cl.esFlags |= MSG_ES_LONGSOLID;
+            cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_LONGSOLID);
         }
         cl.pmp.speedmult = 2;
     } else if (cls.serverProtocol == PROTOCOL_VERSION_Q2PRO) {
@@ -683,18 +683,18 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
                 Com_Error(ERR_DROP, "Q2PRO_PF_EXTENSIONS_2 without Q2PRO_PF_EXTENSIONS");
             }
             Com_DPrintf("WORR protocol extensions v2 enabled\n");
-            cl.esFlags |= MSG_ES_EXTENSIONS_2;
-            cl.psFlags |= MSG_PS_EXTENSIONS_2;
+            cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_EXTENSIONS_2);
+            cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS_2);
             if (cls.protocolVersion >= PROTOCOL_VERSION_Q2PRO_PLAYERFOG)
-                cl.psFlags |= MSG_PS_MOREBITS;
+                cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_MOREBITS);
             PmoveEnableExt(&cl.pmp);
         }
-        cl.esFlags |= MSG_ES_UMASK | MSG_ES_LONGSOLID;
+        cl.esFlags = enum_bit_or(cl.esFlags, enum_bit_or(MSG_ES_UMASK, MSG_ES_LONGSOLID));
         if (cls.protocolVersion >= PROTOCOL_VERSION_Q2PRO_BEAM_ORIGIN) {
-            cl.esFlags |= MSG_ES_BEAMORIGIN;
+            cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_BEAMORIGIN);
         }
         if (cls.protocolVersion >= PROTOCOL_VERSION_Q2PRO_SHORT_ANGLES) {
-            cl.esFlags |= MSG_ES_SHORTANGLES;
+            cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_SHORTANGLES);
         }
         cl.pmp.speedmult = 2;
         cl.pmp.flyhack = true; // fly hack is unconditionally enabled
@@ -708,10 +708,10 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
             cl.csr = cs_remap_rerelease;
         else if (cl.game_api >= Q2PROTO_GAME_Q2PRO_EXTENDED)
             cl.csr = cs_remap_q2pro_new;
-        cl.psFlags |= MSG_PS_RERELEASE | MSG_PS_EXTENSIONS;
+        cl.psFlags = enum_bit_or(cl.psFlags, enum_bit_or(MSG_PS_RERELEASE, MSG_PS_EXTENSIONS));
         if (cl.game_api == Q2PROTO_GAME_Q2PRO_EXTENDED_V2)
-            cl.psFlags |= MSG_PS_EXTENSIONS_2;
-        cl.esFlags |= MSG_ES_RERELEASE | CL_ES_EXTENDED_MASK;
+            cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS_2);
+        cl.esFlags = enum_bit_or(cl.esFlags, enum_bit_or(MSG_ES_RERELEASE, CL_ES_EXTENDED_MASK));
         set_server_fps(serverdata->q2repro.server_fps);
         /* Rerelease game assumes client & server framerate is in sync,
          * non-rerelease games w/ variable FPS (eg OpenFFA) seem to assume
@@ -736,17 +736,17 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
     }
 
     if (cl.csr.extended) {
-        cl.esFlags |= CL_ES_EXTENDED_MASK;
-        cl.psFlags |= MSG_PS_EXTENSIONS;
+        cl.esFlags = enum_bit_or(cl.esFlags, CL_ES_EXTENDED_MASK);
+        cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS);
 
         // hack for demo playback
         if (EXTENDED_SUPPORTED(protocol)) {
             if (protocol >= PROTOCOL_VERSION_EXTENDED_LIMITS_2) {
-                cl.esFlags |= MSG_ES_EXTENSIONS_2;
-                cl.psFlags |= MSG_PS_EXTENSIONS_2;
+                cl.esFlags = enum_bit_or(cl.esFlags, MSG_ES_EXTENSIONS_2);
+                cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_EXTENSIONS_2);
             }
             if (protocol >= PROTOCOL_VERSION_EXTENDED_PLAYERFOG)
-                cl.psFlags |= MSG_PS_MOREBITS;
+                cl.psFlags = enum_bit_or(cl.psFlags, MSG_PS_MOREBITS);
         }
 
         cl.pmp.extended_server_ver = cl.psFlags & MSG_PS_EXTENSIONS_2 ? 2 : 1;
@@ -757,7 +757,7 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
         cls.demo.esFlags = cl.esFlags;
     } else {
         // use full extended flags unless writing backward compatible demo
-        cls.demo.esFlags = cl.csr.extended ? CL_ES_EXTENDED_MASK_2 : 0;
+        cls.demo.esFlags = cl.csr.extended ? enum_from_value<msgEsFlags_t>(CL_ES_EXTENDED_MASK_2) : static_cast<msgEsFlags_t>(0);
         cls.demo.psFlags = cl.csr.extended ? CL_PS_EXTENDED_MASK_2 : 0;
     }
 
@@ -857,7 +857,7 @@ static void CL_ParseReconnect(void)
 #if USE_AUTOREPLY
 static void CL_CheckForVersion(const char *s)
 {
-    char *p;
+    const char *p;
 
     p = strstr(s, ": ");
     if (!p) {
@@ -1050,7 +1050,7 @@ static void CL_ParseDownload(const q2proto_svc_download_t *download)
         Com_Error(ERR_DROP, "%s: bad size: %d", __func__, size);
     }
 
-    CL_HandleDownload(download->data, size, percent);
+    CL_HandleDownload(static_cast<const byte *>(download->data), size, percent);
 }
 
 static void CL_ParseSetting(const q2proto_svc_setting_t *setting)
