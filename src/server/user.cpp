@@ -412,17 +412,35 @@ SV_BeginDownload_f
 static void SV_BeginDownload_f(void)
 {
     std::array<char, MAX_QPATH> name{};
-    byte    *download;
+    byte    *download = nullptr;
     int64_t downloadsize = 0;
     int     maxdownloadsize, result, offset = 0;
     cvar_t  *allow;
     size_t  len;
-    qhandle_t f;
+    qhandle_t f = 0;
     q2proto_download_compress_t download_compress = Q2PROTO_DOWNLOAD_COMPRESS_AUTO;
     q2proto_server_download_state_t *download_state_ptr = NULL;
 
+    const auto abort_download = [&]() {
+        if (download) {
+            Z_Free(download);
+            download = nullptr;
+        }
+        if (f) {
+            FS_CloseFile(f);
+            f = 0;
+        }
+        q2proto_svc_message_t message{};
+        message.type = Q2P_SVC_DOWNLOAD;
+        q2proto_server_download_abort(download_state_ptr, &message.download);
+        q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
+        SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
+        q2proto_server_download_end(download_state_ptr);
+    };
+
     if (Cmd_ArgvBuffer(1, name.data(), name.size()) >= name.size()) {
-        goto fail1;
+        abort_download();
+        return;
     }
 
     // hack for 'status' command
@@ -452,7 +470,8 @@ static void SV_BeginDownload_f(void)
         // MUST be in a subdirectory
         || !strchr(name.data(), '/')) {
         Com_DPrintf("Refusing download of %s to %s\n", name.data(), sv_client->name);
-        goto fail1;
+        abort_download();
+        return;
     }
 
     if (FS_pathcmpn(name.data(), CONST_STR_LEN("players/")) == 0) {
@@ -475,7 +494,8 @@ static void SV_BeginDownload_f(void)
 
     if (!allow->integer) {
         Com_DPrintf("Refusing download of %s to %s\n", name.data(), sv_client->name);
-        goto fail1;
+        abort_download();
+        return;
     }
 
     if (sv_client->download) {
@@ -500,7 +520,8 @@ static void SV_BeginDownload_f(void)
         downloadsize = FS_OpenFile(name.data(), &f, FS_MODE_READ);
         if (!f) {
             Com_DPrintf("Couldn't download %s to %s\n", name.data(), sv_client->name);
-            goto fail1;
+            abort_download();
+            return;
         }
     }
 
@@ -511,7 +532,8 @@ static void SV_BeginDownload_f(void)
     q2proto_error_t err = q2proto_server_download_begin(&sv_client->q2proto_ctx, downloadsize, download_compress, deflate_args, &sv_client->download_state);
     if (err != Q2P_ERR_SUCCESS) {
         Com_DPrintf("Couldn't download %s to %s: %s\n", name.data(), sv_client->name, q2proto_error_string(err));
-        goto fail1;
+        abort_download();
+        return;
     }
     download_state_ptr = &sv_client->download_state;
 
@@ -522,12 +544,14 @@ static void SV_BeginDownload_f(void)
 
     if (downloadsize == 0) {
         Com_DPrintf("Refusing empty download of %s to %s\n", name.data(), sv_client->name);
-        goto fail2;
+        abort_download();
+        return;
     }
 
     if (downloadsize > maxdownloadsize) {
         Com_DPrintf("Refusing oversize download of %s to %s\n", name, sv_client->name);
-        goto fail2;
+        abort_download();
+        return;
     }
 
     if (offset > downloadsize) {
@@ -535,13 +559,15 @@ static void SV_BeginDownload_f(void)
                     sv_client->name, name, offset, (int)downloadsize);
         SV_ClientPrintf(sv_client, PRINT_HIGH, "File size differs from server.\n"
                         "Please delete the corresponding .tmp file from your system.\n");
-        goto fail2;
+        abort_download();
+        return;
     }
 
     if (offset == downloadsize) {
         Com_DPrintf("Refusing download, %s already has %s (%d bytes)\n",
                     sv_client->name, name, offset);
         FS_CloseFile(f);
+        f = 0;
         q2proto_svc_message_t message{};
         message.type = Q2P_SVC_DOWNLOAD;
         q2proto_server_download_finish(&sv_client->download_state, &message.download);
@@ -555,31 +581,23 @@ static void SV_BeginDownload_f(void)
     result = FS_Read(download, downloadsize, f);
     if (result != downloadsize) {
         Com_DPrintf("Couldn't download %s to %s\n", name, sv_client->name);
-        goto fail3;
+        abort_download();
+        return;
     }
 
     FS_CloseFile(f);
+    f = 0;
 
     sv_client->download = download;
     sv_client->download_ptr = (uint8_t *)download + offset;
     sv_client->download_remaining = downloadsize - offset;
-    sv_client->downloadname = SV_CopyString(name);
+    sv_client->downloadname = SV_CopyString(name.data());
     sv_client->downloadpending = true;
+
+    download = nullptr;
 
     Com_DPrintf("Downloading %s to %s\n", name, sv_client->name);
     return;
-
-fail3:
-    Z_Free(download);
-fail2:
-    FS_CloseFile(f);
-fail1:
-    q2proto_svc_message_t message{};
-    message.type = Q2P_SVC_DOWNLOAD;
-    q2proto_server_download_abort(download_state_ptr, &message.download);
-    q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
-    SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
-    q2proto_server_download_end(download_state_ptr);
 }
 
 static void SV_StopDownload_f(void)
