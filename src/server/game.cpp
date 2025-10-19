@@ -685,7 +685,7 @@ void PF_Pmove(void *pm)
 {
     const pmoveParams_t *pmp = sv_client ? &sv_client->pmp : &svs.pmp;
 
-    Pmove(pm, pmp);
+    Pmove(static_cast<pmove_t *>(pm), pmp);
 }
 
 static void PF_WriteEntity(const edict_t *entity)
@@ -737,7 +737,8 @@ static void *PF_TagMalloc(size_t size, int tag)
     if (tag > UINT16_MAX - TAG_MAX) {
         Com_Error(ERR_DROP, "%s: bad tag", __func__);
     }
-    return Z_TagMallocz(size, tag + TAG_MAX);
+    const memtag_t memtag = static_cast<memtag_t>(tag + TAG_MAX);
+    return Z_TagMallocz(size, memtag);
 }
 
 static void PF_FreeTags(int tag)
@@ -745,7 +746,8 @@ static void PF_FreeTags(int tag)
     if (tag > UINT16_MAX - TAG_MAX) {
         Com_Error(ERR_DROP, "%s: bad tag", __func__);
     }
-    Z_FreeTags(tag + TAG_MAX);
+    const memtag_t memtag = static_cast<memtag_t>(tag + TAG_MAX);
+    Z_FreeTags(memtag);
 }
 
 static int PF_LoadFile(const char *path, void **buffer, unsigned flags, unsigned tag)
@@ -753,7 +755,8 @@ static int PF_LoadFile(const char *path, void **buffer, unsigned flags, unsigned
     if (tag > UINT16_MAX - TAG_MAX) {
         Com_Error(ERR_DROP, "%s: bad tag", __func__);
     }
-    return FS_LoadFileEx(path, buffer, flags, tag + TAG_MAX);
+    const memtag_t memtag = static_cast<memtag_t>(tag + TAG_MAX);
+    return FS_LoadFileEx(path, buffer, flags, memtag);
 }
 
 static void *PF_GetExtension(const char *name);
