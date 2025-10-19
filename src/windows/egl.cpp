@@ -94,13 +94,21 @@ static bool egl_init(void)
     // create the main window
     Win_Init();
 
+    EGLint egl_major = 0, egl_minor = 0;
+    r_opengl_config_t cfg{};
+    std::array<EGLint, 5> ctx_attr = {
+        EGL_CONTEXT_MAJOR_VERSION, 3,
+        EGL_CONTEXT_OPENGL_DEBUG, 0,
+        EGL_NONE
+    };
+    EGLConfig config = nullptr;
+
     egl.dpy = qeglGetDisplay(win.dc);
     if (!egl.dpy) {
         Com_EPrintf("eglGetDisplay failed\n");
         goto fail;
     }
 
-    EGLint egl_major, egl_minor;
     if (!qeglInitialize(egl.dpy, &egl_major, &egl_minor)) {
         print_error("eglInitialize");
         goto fail;
@@ -119,12 +127,12 @@ static bool egl_init(void)
         goto fail;
     }
 
-    r_opengl_config_t cfg = R_GetGLConfig();
-
-    EGLConfig config;
+    cfg = R_GetGLConfig();
+    ctx_attr[3] = static_cast<EGLint>(cfg.debug);
     if (!choose_config(cfg, &config)) {
         Com_Printf("Falling back to failsafe config\n");
-        r_opengl_config_t failsafe = { .depthbits = 24 };
+        r_opengl_config_t failsafe{};
+        failsafe.depthbits = 24;
         if (!choose_config(failsafe, &config))
             goto fail;
     }
@@ -135,11 +143,6 @@ static bool egl_init(void)
         goto fail;
     }
 
-    std::array<EGLint, 5> ctx_attr = {
-        EGL_CONTEXT_MAJOR_VERSION, 3,
-        EGL_CONTEXT_OPENGL_DEBUG, cfg.debug,
-        EGL_NONE
-    };
     egl.ctx = qeglCreateContext(egl.dpy, config, EGL_NO_CONTEXT, ctx_attr.data());
     if (!egl.ctx) {
         print_error("eglCreateContext");
@@ -180,28 +183,25 @@ static bool egl_probe(void)
 }
 
 const vid_driver_t vid_win32egl = {
-    .name = "win32egl",
-
-    .probe = egl_probe,
-    .init = egl_init,
-    .shutdown = egl_shutdown,
-    .pump_events = Win_PumpEvents,
-
-    .get_mode_list = Win_GetModeList,
-    .get_dpi_scale = Win_GetDpiScale,
-    .set_mode = Win_SetMode,
-    .update_gamma = Win_UpdateGamma,
-
-    .get_proc_addr = egl_get_proc_addr,
-    .swap_buffers = egl_swap_buffers,
-    .swap_interval = egl_swap_interval,
-
-    .get_clipboard_data = Win_GetClipboardData,
-    .set_clipboard_data = Win_SetClipboardData,
-
-    .init_mouse = Win_InitMouse,
-    .shutdown_mouse = Win_ShutdownMouse,
-    .grab_mouse = Win_GrabMouse,
-    .warp_mouse = Win_WarpMouse,
-    .get_mouse_motion = Win_GetMouseMotion,
+    "win32egl",
+    egl_probe,
+    egl_init,
+    egl_shutdown,
+    nullptr,
+    Win_PumpEvents,
+    Win_GetModeList,
+    Win_GetDpiScale,
+    Win_SetMode,
+    Win_UpdateGamma,
+    egl_get_proc_addr,
+    egl_swap_buffers,
+    egl_swap_interval,
+    nullptr,
+    Win_GetClipboardData,
+    Win_SetClipboardData,
+    Win_InitMouse,
+    Win_ShutdownMouse,
+    Win_GrabMouse,
+    Win_WarpMouse,
+    Win_GetMouseMotion,
 };
