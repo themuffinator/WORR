@@ -2297,7 +2297,8 @@ void IMG_Init(void)
     r_numImages = R_NUM_AUTO_IMG;
     
     // &r_images[R_NUM_AUTO_IMG] == white pic
-    R_RegisterImage("_white", IT_PIC, IF_PERMANENT | IF_REPEAT | IF_SPECIAL);
+    R_RegisterImage("_white", IT_PIC,
+        static_cast<imageflags_t>(IF_PERMANENT | IF_REPEAT | IF_SPECIAL));
 }
 
 void IMG_Shutdown(void)

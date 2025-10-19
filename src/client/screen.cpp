@@ -81,8 +81,8 @@ static float    fps_counter = 0;
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
 const color_t colorTable[8] = {
-    { .u32 = COLOR_U32_BLACK }, { .u32 = COLOR_U32_RED }, { .u32 = COLOR_U32_GREEN }, { .u32 = COLOR_U32_YELLOW },
-    { .u32 = COLOR_U32_BLUE }, { .u32 = COLOR_U32_CYAN }, { .u32 = COLOR_U32_MAGENTA }, { .u32 = COLOR_U32_WHITE }
+    color_t{ COLOR_U32_BLACK }, color_t{ COLOR_U32_RED }, color_t{ COLOR_U32_GREEN }, color_t{ COLOR_U32_YELLOW },
+    color_t{ COLOR_U32_BLUE }, color_t{ COLOR_U32_CYAN }, color_t{ COLOR_U32_MAGENTA }, color_t{ COLOR_U32_WHITE }
 };
 
 cl_scr_t scr;
@@ -127,7 +127,7 @@ SCR_DrawStringMultiStretch
 void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen,
                                 const char *s, color_t color, qhandle_t font)
 {
-    char    *p;
+    const char *p;
     size_t  len;
     int     last_x = x;
     int     last_y = y;
@@ -1259,7 +1259,8 @@ void SCR_RegisterMedia(void)
 
     scr.inven_pic = R_RegisterPic("inventory");
     scr.field_pic = R_RegisterPic("field_3");
-    scr.backtile_pic = R_RegisterImage("backtile", IT_PIC, IF_PERMANENT | IF_REPEAT);
+    scr.backtile_pic = R_RegisterImage("backtile", IT_PIC,
+        static_cast<imageflags_t>(IF_PERMANENT | IF_REPEAT));
     scr.pause_pic = R_RegisterPic("pause");
     scr.loading_pic = R_RegisterPic("loading");
 
@@ -1267,7 +1268,8 @@ void SCR_RegisterMedia(void)
     R_GetPicSize(&scr.damage_display_width, &scr.damage_display_height, scr.damage_display_pic);
 
     scr.net_pic = R_RegisterPic("net");
-    scr.hit_marker_pic = R_RegisterImage("marker", IT_PIC, IF_PERMANENT | IF_OPTIONAL);
+    scr.hit_marker_pic = R_RegisterImage("marker", IT_PIC,
+        static_cast<imageflags_t>(IF_PERMANENT | IF_OPTIONAL));
 
     scr_crosshair_changed(scr_crosshair);
 
@@ -1947,7 +1949,7 @@ static void SCR_DrawPOIs(color_t base_color)
         sp[0] = Q_clipf(sp[0], 0, scr.hud_width - hw);
         sp[1] = Q_clipf(sp[1], 0, scr.hud_height - hh);
 
-        color_t c = { .u32 = d_8to24table[poi->color] };
+        color_t c{ d_8to24table[poi->color] };
 
         // calculate alpha if necessary
         if (poi->flags & POI_FLAG_HIDE_ON_AIM) {
@@ -2084,8 +2086,8 @@ static void SCR_Draw2D(void)
 
     // The safe zone is relative to the new 4:3 canvas
     vrect_t hud_safe = {
-        scr.virtual_width * scr_safe_zone->value,
-        scr.virtual_height * scr_safe_zone->value
+        static_cast<int>(scr.virtual_width * scr_safe_zone->value),
+        static_cast<int>(scr.virtual_height * scr_safe_zone->value)
     };
 
     // The crosshair is centered on the full screen, not the 4:3 canvas
