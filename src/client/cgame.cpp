@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/loc.h"
 #include "common/gamedll.h"
 
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 
@@ -111,6 +112,12 @@ static memtag_t CG_ValidateGameTag(int tag, const char *func)
 
     constexpr underlying_tag_t offset = static_cast<underlying_tag_t>(TAG_MAX);
     const long long converted = static_cast<long long>(tag) + static_cast<long long>(offset);
+    const long long allocator_limit = static_cast<long long>(std::numeric_limits<std::uint16_t>::max());
+
+    if (converted > allocator_limit) {
+        Com_Error(ERR_DROP, "%s: bad tag", func);
+    }
+
     const long long max_value = static_cast<long long>(std::numeric_limits<underlying_tag_t>::max());
 
     if (converted > max_value) {
