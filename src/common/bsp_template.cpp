@@ -80,11 +80,11 @@ BSP_LOAD(Visibility)
         for (int j = 0; j < 2; ++j) {
             const uint32_t bitofs = BSP_Long();
             BSP_ENSURE(bitofs >= hdrsize && bitofs < count, "Bad bitofs");
-            bsp->vis->bitofs[i][j] = bitofs;
+            DVis_SetBitOfs(bsp->vis, i, j, bitofs);
         }
     }
 
-    memcpy(bsp->vis->bitofs + numclusters, in, count - hdrsize);
+    memcpy(DVis_VisData(bsp->vis), in, count - hdrsize);
 
     return Q_ERR_SUCCESS;
 }
