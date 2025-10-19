@@ -200,7 +200,7 @@ void S_Init(void)
     OGG_Play();
 
 fail:
-    Cvar_SetInteger(s_enable, s_started, FROM_CODE);
+    Cvar_SetInteger(s_enable, static_cast<int>(s_started), FROM_CODE);
     Com_Printf("----------------------\n");
 }
 
@@ -268,7 +268,7 @@ void S_Activate(void)
     if (!s_started)
         return;
 
-    level = Cvar_ClampInteger(s_auto_focus, ACT_MINIMIZED, ACT_ACTIVATED);
+    level = static_cast<active_t>(Cvar_ClampInteger(s_auto_focus, ACT_MINIMIZED, ACT_ACTIVATED));
 
     active = cls.active >= level;
 
