@@ -97,7 +97,7 @@ static void Win_SetPosition(void)
     // clip to monitor work area
     if (!(win.flags & QVF_FULLSCREEN)) {
         OffsetRect(&r, x, y);
-        MONITORINFO mi = { .cbSize = sizeof(mi) };
+        MONITORINFO mi{ sizeof(mi) };
         if (GetMonitorInfoA(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
             x = max(mi.rcWork.left, min(mi.rcWork.right  - w, x));
             y = max(mi.rcWork.top,  min(mi.rcWork.bottom - h, y));
@@ -791,15 +791,15 @@ static void pos_changed_event(HWND wnd, const WINDOWPOS *pos)
         return;
 
     if (!pos) {
-        win.mode_changed |= MODE_STYLE;
+        win.mode_changed |= win_state_t::MODE_STYLE;
         return;
     }
 
     if (!(pos->flags & SWP_NOSIZE))
-        win.mode_changed |= MODE_SIZE;
+        win.mode_changed |= win_state_t::MODE_SIZE;
 
     if (!(pos->flags & SWP_NOMOVE))
-        win.mode_changed |= MODE_POS;
+        win.mode_changed |= win_state_t::MODE_POS;
 }
 
 // main window procedure
@@ -873,7 +873,7 @@ static LRESULT WINAPI Win_MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
         break;
 
     case WM_DPICHANGED:
-        win.mode_changed |= MODE_SIZE;
+        win.mode_changed |= win_state_t::MODE_SIZE;
         break;
 
     default:
@@ -904,16 +904,16 @@ void Win_PumpEvents(void)
     }
 
     if (win.mode_changed) {
-        if (win.mode_changed & MODE_REPOSITION) {
+        if (win.mode_changed & win_state_t::MODE_REPOSITION) {
             Win_SetPosition();
         }
-        if (win.mode_changed & (MODE_SIZE | MODE_POS | MODE_STYLE)) {
+        if (win.mode_changed & (win_state_t::MODE_SIZE | win_state_t::MODE_POS | win_state_t::MODE_STYLE)) {
             VID_SetGeometry(&win.rc);
             if (win.mouse.grabbed) {
                 Win_ClipCursor();
             }
         }
-        if (win.mode_changed & MODE_SIZE) {
+        if (win.mode_changed & win_state_t::MODE_SIZE) {
             Win_ModeChanged();
         }
         win.mode_changed = 0;
@@ -923,7 +923,7 @@ void Win_PumpEvents(void)
 static void win_style_changed(cvar_t *self)
 {
     if (win.wnd && !(win.flags & QVF_FULLSCREEN)) {
-        win.mode_changed |= MODE_REPOSITION;
+        win.mode_changed |= win_state_t::MODE_REPOSITION;
     }
 }
 
@@ -954,19 +954,24 @@ void Win_Init(void)
 
     win_disablewinkey_changed(win_disablewinkey);
 
-    win.GetDpiForWindow = (PVOID)GetProcAddress(GetModuleHandle("user32"), "GetDpiForWindow");
+    if (HMODULE user32 = GetModuleHandle("user32")) {
+        win.GetDpiForWindow = reinterpret_cast<decltype(win.GetDpiForWindow)>(
+            GetProcAddress(user32, "GetDpiForWindow"));
+    } else {
+        win.GetDpiForWindow = NULL;
+    }
 
     // register the frame class
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = Win_MainWndProc;
     wc.hInstance = hGlobalInstance;
-    wc.hIcon = LoadImage(hGlobalInstance, MAKEINTRESOURCE(IDI_APP),
-                         IMAGE_ICON, 32, 32, LR_CREATEDIBSECTION);
-    wc.hIconSm = LoadImage(hGlobalInstance, MAKEINTRESOURCE(IDI_APP),
-                           IMAGE_ICON, 16, 16, LR_CREATEDIBSECTION);
+    wc.hIcon = static_cast<HICON>(LoadImage(hGlobalInstance, MAKEINTRESOURCE(IDI_APP),
+                                           IMAGE_ICON, 32, 32, LR_CREATEDIBSECTION));
+    wc.hIconSm = static_cast<HICON>(LoadImage(hGlobalInstance, MAKEINTRESOURCE(IDI_APP),
+                                             IMAGE_ICON, 16, 16, LR_CREATEDIBSECTION));
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = GetStockObject(BLACK_BRUSH);
+    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
     if (!RegisterClassExA(&wc)) {
@@ -1082,15 +1087,13 @@ bool Win_GetMouseMotion(int *dx, int *dy)
 
 static BOOL register_raw_mouse(bool enable)
 {
-    RAWINPUTDEVICE rid = {
-        .usUsagePage = HID_USAGE_PAGE_GENERIC,
-        .usUsage = HID_USAGE_GENERIC_MOUSE,
-    };
+    RAWINPUTDEVICE rid{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, 0, NULL};
 
-    if (enable)
+    if (enable) {
         rid.hwndTarget = win.wnd;
-    else
+    } else {
         rid.dwFlags = RIDEV_REMOVE;
+    }
 
     return RegisterRawInputDevices(&rid, 1, sizeof(rid));
 }
@@ -1174,7 +1177,8 @@ char *Win_GetClipboardData(void)
     data = NULL;
     if (!(clipdata = GetClipboardData(CF_UNICODETEXT)))
         goto fail;
-    if (!(cliptext = GlobalLock(clipdata)))
+    cliptext = static_cast<WCHAR *>(GlobalLock(clipdata));
+    if (!cliptext)
         goto fail;
 
     int len = WideCharToMultiByte(CP_UTF8, 0, cliptext, -1, NULL, 0, NULL, NULL);
@@ -1215,7 +1219,8 @@ void Win_SetClipboardData(const char *data)
 
     length = strlen(data) + 1;
     if ((clipdata = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, length)) != NULL) {
-        if ((cliptext = GlobalLock(clipdata)) != NULL) {
+        cliptext = static_cast<char *>(GlobalLock(clipdata));
+        if (cliptext != NULL) {
             memcpy(cliptext, data, length);
             GlobalUnlock(clipdata);
             SetClipboardData(CF_TEXT, clipdata);

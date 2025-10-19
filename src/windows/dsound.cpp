@@ -242,8 +242,8 @@ static sndinitstat_t DS_Init(void)
         Com_DPrintf("ok\n");
     }
 
-    pDirectSoundCreate = (LPDIRECTSOUNDCREATE)
-                         GetProcAddress(hInstDS, "DirectSoundCreate");
+    pDirectSoundCreate = reinterpret_cast<LPDIRECTSOUNDCREATE>(
+        GetProcAddress(hInstDS, "DirectSoundCreate"));
     if (!pDirectSoundCreate) {
         Com_DPrintf("...couldn't get DS proc addr\n");
         return SIS_FAILURE;

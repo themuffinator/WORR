@@ -135,12 +135,12 @@ static LONG WINAPI exception_filter(LPEXCEPTION_POINTERS exceptionInfo)
         }                                       \
     } while(0)
 
-#define GPA(x, y)                                   \
-    do {                                            \
-        p##y = (x)GetProcAddress(moduleHandle, #y); \
-        if (!p##y) {                                \
-            return EXCEPTION_CONTINUE_SEARCH;       \
-        }                                           \
+#define GPA(x, y)                                                   \
+    do {                                                            \
+        p##y = reinterpret_cast<x>(GetProcAddress(moduleHandle, #y)); \
+        if (!p##y) {                                                \
+            return EXCEPTION_CONTINUE_SEARCH;                       \
+        }                                                           \
     } while(0)
 
     LL("dbghelp.dll");

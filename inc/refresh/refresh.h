@@ -149,6 +149,33 @@ typedef enum {
     QVF_VIDEOSYNC       = BIT(2),
 } vidFlags_t;
 
+constexpr vidFlags_t operator|(vidFlags_t lhs, vidFlags_t rhs) noexcept
+{
+    return static_cast<vidFlags_t>(static_cast<int>(lhs) | static_cast<int>(rhs));
+}
+
+constexpr vidFlags_t operator&(vidFlags_t lhs, vidFlags_t rhs) noexcept
+{
+    return static_cast<vidFlags_t>(static_cast<int>(lhs) & static_cast<int>(rhs));
+}
+
+constexpr vidFlags_t operator~(vidFlags_t value) noexcept
+{
+    return static_cast<vidFlags_t>(~static_cast<int>(value));
+}
+
+constexpr vidFlags_t &operator|=(vidFlags_t &lhs, vidFlags_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr vidFlags_t &operator&=(vidFlags_t &lhs, vidFlags_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
 typedef struct {
     int         width;
     int         height;

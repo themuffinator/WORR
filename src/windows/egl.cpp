@@ -124,7 +124,7 @@ static bool egl_init(void)
     EGLConfig config;
     if (!choose_config(cfg, &config)) {
         Com_Printf("Falling back to failsafe config\n");
-        r_opengl_config_t failsafe = { .depthbits = 24 };
+        r_opengl_config_t failsafe{0, 24, 0, 0, false, 0, 0, 0};
         if (!choose_config(failsafe, &config))
             goto fail;
     }
@@ -180,28 +180,25 @@ static bool egl_probe(void)
 }
 
 const vid_driver_t vid_win32egl = {
-    .name = "win32egl",
-
-    .probe = egl_probe,
-    .init = egl_init,
-    .shutdown = egl_shutdown,
-    .pump_events = Win_PumpEvents,
-
-    .get_mode_list = Win_GetModeList,
-    .get_dpi_scale = Win_GetDpiScale,
-    .set_mode = Win_SetMode,
-    .update_gamma = Win_UpdateGamma,
-
-    .get_proc_addr = egl_get_proc_addr,
-    .swap_buffers = egl_swap_buffers,
-    .swap_interval = egl_swap_interval,
-
-    .get_clipboard_data = Win_GetClipboardData,
-    .set_clipboard_data = Win_SetClipboardData,
-
-    .init_mouse = Win_InitMouse,
-    .shutdown_mouse = Win_ShutdownMouse,
-    .grab_mouse = Win_GrabMouse,
-    .warp_mouse = Win_WarpMouse,
-    .get_mouse_motion = Win_GetMouseMotion,
+    "win32egl",
+    egl_probe,
+    egl_init,
+    egl_shutdown,
+    nullptr,
+    Win_PumpEvents,
+    Win_GetModeList,
+    Win_GetDpiScale,
+    Win_SetMode,
+    Win_UpdateGamma,
+    egl_get_proc_addr,
+    egl_swap_buffers,
+    egl_swap_interval,
+    nullptr,
+    Win_GetClipboardData,
+    Win_SetClipboardData,
+    Win_InitMouse,
+    Win_ShutdownMouse,
+    Win_GrabMouse,
+    Win_WarpMouse,
+    Win_GetMouseMotion,
 };
