@@ -652,7 +652,7 @@ typedef struct {
 
 // small hack to permit one-line return statement :)
 #define reject(...) reject_printf(__VA_ARGS__), false
-#define reject_ptr(...) reject_printf(__VA_ARGS__), NULL
+#define reject_ptr(...) reject_printf(__VA_ARGS__), nullptr
 
 static bool parse_basic_params(const q2proto_connect_t *parsed_connect, conn_params_t *p)
 {
@@ -889,7 +889,7 @@ static client_t *redirect(const char *addr)
 static client_t *find_client_slot(conn_params_t *params)
 {
     client_t *cl;
-    char *s;
+    const char *s;
     int i;
 
     // if there is already a slot for this ip, reuse it
