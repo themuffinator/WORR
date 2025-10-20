@@ -193,6 +193,35 @@ typedef enum {
     QGL_CAP_SKELETON_MASK               = QGL_CAP_BUFFER_TEXTURE | QGL_CAP_SHADER_STORAGE,
 } glcap_t;
 
+typedef enum {
+    VERT_ATTR_POS,
+    VERT_ATTR_TC,
+    VERT_ATTR_LMTC,
+    VERT_ATTR_COLOR,
+    VERT_ATTR_NORMAL,
+    VERT_ATTR_COUNT,
+
+    // MD2
+    VERT_ATTR_MESH_TC = 0,
+    VERT_ATTR_MESH_NEW_POS = 1,
+    VERT_ATTR_MESH_OLD_POS = 2,
+
+    // MD5
+    VERT_ATTR_MESH_NORM = VERT_ATTR_NORMAL,
+    VERT_ATTR_MESH_VERT = 1,
+} glVertexAttr_t;
+
+typedef enum {
+    GLA_NONE        = 0,
+    GLA_VERTEX      = BIT(VERT_ATTR_POS),
+    GLA_TC          = BIT(VERT_ATTR_TC),
+    GLA_LMTC        = BIT(VERT_ATTR_LMTC),
+    GLA_COLOR       = BIT(VERT_ATTR_COLOR),
+    GLA_NORMAL      = BIT(VERT_ATTR_NORMAL),
+    GLA_MESH_STATIC = MASK(2),
+    GLA_MESH_LERP   = MASK(3),
+} glArrayBits_t;
+
 constexpr glArrayBits_t operator|(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
 {
     using U = std::underlying_type_t<glArrayBits_t>;
@@ -684,35 +713,6 @@ void GL_LoadWorld(const char *name);
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
-
-typedef enum {
-    VERT_ATTR_POS,
-    VERT_ATTR_TC,
-    VERT_ATTR_LMTC,
-    VERT_ATTR_COLOR,
-    VERT_ATTR_NORMAL,
-    VERT_ATTR_COUNT,
-
-    // MD2
-    VERT_ATTR_MESH_TC = 0,
-    VERT_ATTR_MESH_NEW_POS = 1,
-    VERT_ATTR_MESH_OLD_POS = 2,
-
-    // MD5
-    VERT_ATTR_MESH_NORM = VERT_ATTR_NORMAL,
-    VERT_ATTR_MESH_VERT = 1,
-} glVertexAttr_t;
-
-typedef enum {
-    GLA_NONE        = 0,
-    GLA_VERTEX      = BIT(VERT_ATTR_POS),
-    GLA_TC          = BIT(VERT_ATTR_TC),
-    GLA_LMTC        = BIT(VERT_ATTR_LMTC),
-    GLA_COLOR       = BIT(VERT_ATTR_COLOR),
-    GLA_NORMAL      = BIT(VERT_ATTR_NORMAL),
-    GLA_MESH_STATIC = MASK(2),
-    GLA_MESH_LERP   = MASK(3),
-} glArrayBits_t;
 
 typedef enum {
     VA_NONE,
