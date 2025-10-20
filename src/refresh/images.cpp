@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.h"
 #include "common/files.h"
 #include "common/intreadwrite.h"
+#include "common/msg.h"
 #include "common/sizebuf.h"
 #include "system/system.h"
 #include "format/pcx.h"
@@ -55,6 +56,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 static bool check_image_size(unsigned w, unsigned h)
 {
     return (w < 1 || h < 1 || w > MAX_TEXTURE_SIZE || h > MAX_TEXTURE_SIZE);
+}
+
+static imagetype_t image_get_type(const image_t *image)
+{
+    return static_cast<imagetype_t>(image->type);
+}
+
+static void image_set_type(image_t *image, imagetype_t type)
+{
+    image->type = static_cast<uint8_t>(type);
+}
+
+static imageflags_t image_get_flags(const image_t *image)
+{
+    return static_cast<imageflags_t>(image->flags);
+}
+
+static void image_set_flags(image_t *image, imageflags_t flags)
+{
+    image->flags = static_cast<uint16_t>(flags);
+}
+
+static void image_add_flags(image_t *image, imageflags_t flags)
+{
+    image_set_flags(image, enum_bit_or(image_get_flags(image), flags));
 }
 
 /*
@@ -128,7 +154,7 @@ static void IMG_FloodFill(byte *skin, int skinwidth, int skinheight)
 IMG_Unpack8
 ===============
 */
-static int IMG_Unpack8(uint32_t *out, const uint8_t *in, int width, int height)
+static imageflags_t IMG_Unpack8(uint32_t *out, const uint8_t *in, int width, int height)
 {
     int         x, y, p;
     bool        has_alpha = false;
@@ -169,9 +195,9 @@ static int IMG_Unpack8(uint32_t *out, const uint8_t *in, int width, int height)
     }
 
     if (has_alpha)
-        return IF_PALETTED | IF_TRANSPARENT;
+        return static_cast<imageflags_t>(IF_PALETTED | IF_TRANSPARENT);
 
-    return IF_PALETTED | IF_OPAQUE;
+    return static_cast<imageflags_t>(IF_PALETTED | IF_OPAQUE);
 }
 
 /*
@@ -221,7 +247,7 @@ static int load_pcx(const byte *rawdata, size_t rawlen,
     if (rawlen < sizeof(dpcx_t))
         return Q_ERR_FILE_TOO_SMALL;
 
-    pcx = (const dpcx_t *)rawdata;
+    pcx = reinterpret_cast<const dpcx_t *>(rawdata);
 
     if (pcx->manufacturer != 10 || pcx->version != 5)
         return Q_ERR_UNKNOWN_FORMAT;
@@ -302,18 +328,18 @@ static int load_pcx(const byte *rawdata, size_t rawlen,
             if (SZ_Remaining(&s) < PCX_PALETTE_SIZE)
                 Com_WPrintf("PCX file %s possibly corrupted\n", image->name);
 
-            if (image->type == IT_SKIN)
+            if (image_get_type(image) == IT_SKIN)
                 IMG_FloodFill(pixels, w, h);
 
             *pic = IMG_AllocPixels(w * h * 4);
 
-            image->flags |= IMG_Unpack8((uint32_t *)*pic, pixels, w, h);
+            image_add_flags(image, IMG_Unpack8(reinterpret_cast<uint32_t *>(*pic), pixels, w, h));
 
             IMG_FreePixels(pixels);
         } else {
             Com_DWPrintf("%s is a 24-bit PCX file. This is not portable.\n", image->name);
             *pic = pixels;
-            image->flags |= IF_OPAQUE;
+            image_add_flags(image, IF_OPAQUE);
         }
 
         image->upload_width = image->width = w;
@@ -344,7 +370,7 @@ IMG_LOAD(WAL)
     if (rawlen < sizeof(miptex_t))
         return Q_ERR_FILE_TOO_SMALL;
 
-    mt = (const miptex_t *)rawdata;
+    mt = reinterpret_cast<const miptex_t *>(rawdata);
 
     w = LittleLong(mt->width);
     h = LittleLong(mt->height);
@@ -363,7 +389,7 @@ IMG_LOAD(WAL)
 
     image->upload_width = image->width = w;
     image->upload_height = image->height = h;
-    image->flags |= IMG_Unpack8((uint32_t *)*pic, rawdata + offset, w, h);
+    image_add_flags(image, IMG_Unpack8(reinterpret_cast<uint32_t *>(*pic), rawdata + offset, w, h));
 
     return Q_ERR_SUCCESS;
 }
@@ -422,9 +448,7 @@ static int tga_decode_raw(sizebuf_t *s, uint32_t **row_pointers,
 {
     int col, row;
     uint32_t *out_row;
-    const byte *in;
-
-    in = SZ_ReadData(s, cols * rows * bpp);
+    const byte *in = static_cast<const byte *>(SZ_ReadData(s, cols * rows * bpp));
     if (!in)
         return Q_ERR_UNEXPECTED_EOF;
 
@@ -460,7 +484,7 @@ static int tga_decode_rle(sizebuf_t *s, uint32_t **row_pointers,
         packet_size = 1 + (packet_header & 0x7f);
 
         if (packet_header & 0x80) {
-            in = SZ_ReadData(s, bpp);
+            in = static_cast<const byte *>(SZ_ReadData(s, bpp));
             if (!in)
                 return Q_ERR_UNEXPECTED_EOF;
 
@@ -480,7 +504,7 @@ static int tga_decode_rle(sizebuf_t *s, uint32_t **row_pointers,
                 }
             } while (packet_size);
         } else {
-            in = SZ_ReadData(s, bpp * packet_size);
+            in = static_cast<const byte *>(SZ_ReadData(s, bpp * packet_size));
             if (!in)
                 return Q_ERR_UNEXPECTED_EOF;
 
@@ -620,7 +644,7 @@ IMG_LOAD(TGA)
             return Q_ERR_INVALID_FORMAT;
         }
 
-        in = SZ_ReadData(&s, colormap_length * colormap_bpp);
+        in = static_cast<const byte *>(SZ_ReadData(&s, colormap_length * colormap_bpp));
         if (!in)
             return Q_ERR_UNEXPECTED_EOF;
 
@@ -645,7 +669,7 @@ IMG_LOAD(TGA)
     }
 
     for (i = j = 0; i < h; i++) {
-        row_pointers[i] = (uint32_t *)(start + j * stride);
+        row_pointers[i] = reinterpret_cast<uint32_t *>(start + j * stride);
         j += interleave;
         if (j >= h)
             j = (j + 1) & (interleave - 1);
@@ -674,14 +698,14 @@ IMG_LOAD(TGA)
     image->upload_height = image->height = h;
 
     if (image_type == TGA_Colormap) {
-        image->flags |= IF_PALETTED;
+        image_add_flags(image, IF_PALETTED);
         pixel_size = colormap_size;
     }
 
     if (pixel_size == 8)
-        image->flags |= IF_TRANSPARENT;
+        image_add_flags(image, IF_TRANSPARENT);
     else if (pixel_size != 32)
-        image->flags |= IF_OPAQUE;
+        image_add_flags(image, IF_OPAQUE);
 
     return Q_ERR_SUCCESS;
 }
@@ -742,7 +766,7 @@ typedef struct my_error_mgr {
 static void my_output_message_2(j_common_ptr cinfo, bool err_exit)
 {
     char buffer[JMSG_LENGTH_MAX];
-    my_error_ptr jerr = (my_error_ptr)cinfo->err;
+    my_error_ptr jerr = reinterpret_cast<my_error_ptr>(cinfo->err);
 
     if (!jerr->filename)
         return;
@@ -835,13 +859,13 @@ IMG_LOAD(JPG)
 
     image->upload_width = image->width = cinfo.output_width;
     image->upload_height = image->height = cinfo.output_height;
-    image->flags |= IF_OPAQUE;
+    image_add_flags(image, IF_OPAQUE);
 
     rowbytes = cinfo.output_width * 4;
     pixels = IMG_AllocPixels(cinfo.output_height * rowbytes);
 
     for (row = 0; row < cinfo.output_height; row++)
-        row_pointers[row] = (JSAMPROW)(pixels + row * rowbytes);
+        row_pointers[row] = reinterpret_cast<JSAMPROW>(pixels + row * rowbytes);
 
     ret = my_jpeg_finish_decompress(&cinfo, row_pointers);
     if (ret < 0) {
@@ -897,7 +921,7 @@ static int IMG_SaveJPG(const screenshot_t *s)
         return Q_ERR(ENOMEM);
 
     for (i = 0; i < s->height; i++)
-        row_pointers[i] = (JSAMPROW)(s->pixels + (s->height - i - 1) * s->rowbytes);
+        row_pointers[i] = reinterpret_cast<JSAMPROW>(s->pixels + (s->height - i - 1) * s->rowbytes);
 
     ret = my_jpeg_compress(&cinfo, row_pointers, s);
     free(row_pointers);
@@ -929,7 +953,7 @@ typedef struct {
 
 static void my_png_read_fn(png_structp png_ptr, png_bytep buf, png_size_t size)
 {
-    my_png_io *io = png_get_io_ptr(png_ptr);
+    auto *io = static_cast<my_png_io *>(png_get_io_ptr(png_ptr));
 
     if (size > io->avail_in) {
         png_error(png_ptr, "read error");
@@ -942,7 +966,7 @@ static void my_png_read_fn(png_structp png_ptr, png_bytep buf, png_size_t size)
 
 static void my_png_error_fn(png_structp png_ptr, png_const_charp error_msg)
 {
-    my_png_error *err = png_get_error_ptr(png_ptr);
+    auto *err = static_cast<my_png_error *>(png_get_error_ptr(png_ptr));
 
     if (err->filename)
         Com_SetLastError(error_msg);
@@ -952,7 +976,7 @@ static void my_png_error_fn(png_structp png_ptr, png_const_charp error_msg)
 
 static void my_png_warning_fn(png_structp png_ptr, png_const_charp warning_msg)
 {
-    my_png_error *err = png_get_error_ptr(png_ptr);
+    auto *err = static_cast<my_png_error *>(png_get_error_ptr(png_ptr));
 
     if (err->filename)
         Com_WPrintf("libpng: %s: %s\n", err->filename, warning_msg);
@@ -961,7 +985,7 @@ static void my_png_warning_fn(png_structp png_ptr, png_const_charp warning_msg)
 static int my_png_read_header(png_structp png_ptr, png_infop info_ptr,
                               png_voidp io_ptr, image_t *image)
 {
-    my_png_error *err = png_get_error_ptr(png_ptr);
+    auto *err = static_cast<my_png_error *>(png_get_error_ptr(png_ptr));
     png_uint_32 w, h, has_tRNS;
     int bitdepth, colortype;
 
@@ -1012,17 +1036,17 @@ static int my_png_read_header(png_structp png_ptr, png_infop info_ptr,
     image->upload_height = image->height = h;
 
     if (colortype == PNG_COLOR_TYPE_PALETTE)
-        image->flags |= IF_PALETTED;
+        image_add_flags(image, IF_PALETTED);
 
     if (!has_tRNS && !(colortype & PNG_COLOR_MASK_ALPHA))
-        image->flags |= IF_OPAQUE;
+        image_add_flags(image, IF_OPAQUE);
 
     return Q_ERR_SUCCESS;
 }
 
 static int my_png_read_image(png_structp png_ptr, png_infop info_ptr, png_bytepp row_pointers)
 {
-    my_png_error *err = png_get_error_ptr(png_ptr);
+    auto *err = static_cast<my_png_error *>(png_get_error_ptr(png_ptr));
 
     if (setjmp(err->setjmp_buffer))
         return Q_ERR_LIBRARY_ERROR;
@@ -1050,7 +1074,7 @@ IMG_LOAD(PNG)
 
     my_err.filename = image->name;
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
-                                     (png_voidp)&my_err, my_png_error_fn, my_png_warning_fn);
+                                     static_cast<png_voidp>(&my_err), my_png_error_fn, my_png_warning_fn);
     if (!png_ptr) {
         Com_SetLastError("png_create_read_struct failed");
         return Q_ERR_LIBRARY_ERROR;
@@ -1064,9 +1088,9 @@ IMG_LOAD(PNG)
         goto fail;
     }
 
-    my_io.next_in = rawdata;
+    my_io.next_in = reinterpret_cast<png_const_bytep>(rawdata);
     my_io.avail_in = rawlen;
-    ret = my_png_read_header(png_ptr, info_ptr, (png_voidp)&my_io, image);
+    ret = my_png_read_header(png_ptr, info_ptr, static_cast<png_voidp>(&my_io), image);
     if (ret < 0)
         goto fail;
 
@@ -1075,7 +1099,7 @@ IMG_LOAD(PNG)
     pixels = IMG_AllocPixels(h * rowbytes);
 
     for (row = 0; row < h; row++)
-        row_pointers[row] = (png_bytep)(pixels + row * rowbytes);
+        row_pointers[row] = reinterpret_cast<png_bytep>(pixels + row * rowbytes);
 
     ret = my_png_read_image(png_ptr, info_ptr, row_pointers);
     if (ret < 0) {
@@ -1092,7 +1116,7 @@ fail:
 static int my_png_write_image(png_structp png_ptr, png_infop info_ptr,
                               png_bytepp row_pointers, const screenshot_t *s)
 {
-    my_png_error *err = png_get_error_ptr(png_ptr);
+    auto *err = static_cast<my_png_error *>(png_get_error_ptr(png_ptr));
 
     if (setjmp(err->setjmp_buffer))
         return Q_ERR_LIBRARY_ERROR;
@@ -1116,7 +1140,7 @@ static int IMG_SavePNG(const screenshot_t *s)
 
     my_err.filename = s->async ? NULL : s->filename;
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
-                                      (png_voidp)&my_err, my_png_error_fn, my_png_warning_fn);
+                                      static_cast<png_voidp>(&my_err), my_png_error_fn, my_png_warning_fn);
     if (!png_ptr) {
         if (!s->async)
             Com_SetLastError("png_create_write_struct failed");
@@ -1136,7 +1160,7 @@ static int IMG_SavePNG(const screenshot_t *s)
     }
 
     for (i = 0; i < s->height; i++)
-        row_pointers[i] = (png_bytep)(s->pixels + (s->height - i - 1) * s->rowbytes);
+        row_pointers[i] = reinterpret_cast<png_bytep>(s->pixels + (s->height - i - 1) * s->rowbytes);
 
     ret = my_png_write_image(png_ptr, info_ptr, row_pointers, s);
     free(row_pointers);
@@ -1251,13 +1275,13 @@ static int create_screenshot(char *buffer, size_t size, FILE **f,
 
 static void screenshot_work_cb(void *arg)
 {
-    screenshot_t *s = arg;
+    auto *s = static_cast<screenshot_t *>(arg);
     s->status = s->save_cb(s);
 }
 
 static void screenshot_done_cb(void *arg)
 {
-    screenshot_t *s = arg;
+    auto *s = static_cast<screenshot_t *>(arg);
 
     if (fclose(s->fp) && !s->status)
         s->status = Q_ERRNO;
@@ -1296,14 +1320,13 @@ static void make_screenshot(const char *name, const char *ext,
         return;
     }
 
-    screenshot_t s = {
-        .save_cb = save_cb,
-        .fp = fp,
-        .filename = async ? Z_CopyString(buffer) : buffer,
-        .status = -1,
-        .param = param,
-        .async = async,
-    };
+    screenshot_t s{};
+    s.save_cb = save_cb;
+    s.fp = fp;
+    s.filename = async ? Z_CopyString(buffer) : buffer;
+    s.status = -1;
+    s.param = param;
+    s.async = async;
 
     ret = IMG_ReadPixels(&s);
     if (ret < 0) {
@@ -1313,11 +1336,10 @@ static void make_screenshot(const char *name, const char *ext,
     }
 
     if (async) {
-        asyncwork_t work = {
-            .work_cb = screenshot_work_cb,
-            .done_cb = screenshot_done_cb,
-            .cb_arg = Z_CopyStruct(&s),
-        };
+        asyncwork_t work{};
+        work.work_cb = screenshot_work_cb;
+        work.done_cb = screenshot_done_cb;
+        work.cb_arg = Z_CopyStruct(&s);
         Com_QueueAsyncWork(&work);
     } else {
         screenshot_work_cb(&s);
@@ -1510,7 +1532,7 @@ IMG_List_f
 */
 static void IMG_List_f(void)
 {
-    static const char types[8] = "PFMSWY??";
+    static const char types[9] = "PFMSWY??";
     const image_t   *image;
     const char      *wildcard = NULL;
     bool            missing = false;
@@ -1562,25 +1584,29 @@ static void IMG_List_f(void)
     for (i = R_NUM_AUTO_IMG, image = r_images + i; i < r_numImages; i++, image++) {
         if (!image->name[0])
             continue;
-        if (mask && !(mask & BIT(image->type)))
+        const imagetype_t imageType = image_get_type(image);
+        const imageflags_t imageFlags = image_get_flags(image);
+
+        if (mask && !(mask & BIT(static_cast<int>(imageType))))
             continue;
         if (wildcard && !Com_WildCmp(wildcard, image->name))
             continue;
         if ((image->width && image->height) == missing)
             continue;
-        if (paletted == 1 && !(image->flags & IF_PALETTED))
+        if (paletted == 1 && !enum_has(imageFlags, IF_PALETTED))
             continue;
-        if (paletted == -1 && (image->flags & IF_PALETTED))
+        if (paletted == -1 && enum_has(imageFlags, IF_PALETTED))
             continue;
 
+        const int typeIndex = imageType < IT_MAX ? static_cast<int>(imageType) : static_cast<int>(IT_MAX);
         Com_Printf("%c%c%c%c %4i %4i %s: %s\n",
-                   types[image->type > IT_MAX ? IT_MAX : image->type],
-                   (image->flags & IF_TRANSPARENT) ? 'T' : ' ',
-                   (image->flags & IF_SCRAP) ? 'S' : image->texnum2 ? 'G' : ' ',
-                   (image->flags & IF_PERMANENT) ? '*' : ' ',
+                   types[typeIndex],
+                   enum_has(imageFlags, IF_TRANSPARENT) ? 'T' : ' ',
+                   enum_has(imageFlags, IF_SCRAP) ? 'S' : image->texnum2 ? 'G' : ' ',
+                   enum_has(imageFlags, IF_PERMANENT) ? '*' : ' ',
                    image->upload_width,
                    image->upload_height,
-                   (image->flags & IF_PALETTED) ? "PAL" : "RGB",
+                   enum_has(imageFlags, IF_PALETTED) ? "PAL" : "RGB",
                    image->name);
 
         texels += image->upload_width * image->upload_height;
@@ -1629,7 +1655,7 @@ static image_t *lookup_image(const char *name,
 
     // look for it
     LIST_FOR_EACH(image_t, image, &r_imageHash[hash], entry) {
-        if (image->type != type)
+        if (image_get_type(image) != type)
             continue;
         if (image->baselen != baselen)
             continue;
@@ -1642,18 +1668,20 @@ static image_t *lookup_image(const char *name,
 
 static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
 {
-    void    *data;
-    int     ret;
+    void *raw = nullptr;
+    int ret;
 
     // load the file
-    ret = FS_LoadFile(image->name, &data);
-    if (!data)
+    ret = FS_LoadFile(image->name, &raw);
+    if (!raw)
         return ret;
+
+    const auto *data = static_cast<const byte *>(raw);
 
     // decompress the image
     ret = img_loaders[fmt].load(data, ret, image, pic);
 
-    FS_FreeFile(data);
+    FS_FreeFile(raw);
 
     return ret < 0 ? ret : fmt;
 }
@@ -1685,7 +1713,8 @@ static int try_other_formats(imageformat_t orig, image_t *image, byte **pic)
     }
 
     // fall back to 8-bit formats
-    fmt = (image->type == IT_WALL) ? IM_WAL : IM_PCX;
+    const imagetype_t imageType = image_get_type(image);
+    fmt = (imageType == IT_WALL) ? IM_WAL : IM_PCX;
     if (fmt == orig)
         return Q_ERR(ENOENT); // don't retry twice
 
@@ -1790,8 +1819,9 @@ static bool need_override_image(imagetype_t type, imageformat_t fmt)
 
 static void print_error(const char *name, imageflags_t flags, int err)
 {
+    constexpr imageflags_t IGNORE_FLAGS = static_cast<imageflags_t>(-1);
     const char *msg;
-    int level = PRINT_ERROR;
+    print_type_t level = PRINT_ERROR;
 
     switch (err) {
     case Q_ERR_INVALID_FORMAT:
@@ -1799,9 +1829,9 @@ static void print_error(const char *name, imageflags_t flags, int err)
         msg = Com_GetLastError();
         break;
     case Q_ERR(ENOENT):
-        if (flags == -1) {
+        if (flags == IGNORE_FLAGS) {
             return;
-        } else if ((flags & (IF_PERMANENT | IF_OPTIONAL)) == IF_PERMANENT) {
+        } else if (enum_has(flags, IF_PERMANENT) && !enum_has(flags, IF_OPTIONAL)) {
             // ugly hack for console code
             if (strcmp(name, "pics/conchars.pcx"))
                 level = PRINT_WARNING;
@@ -1831,7 +1861,7 @@ static int load_image_data(image_t *image, imageformat_t fmt, bool need_dimensio
             // not found, change error to invalid path
             ret = Q_ERR_INVALID_PATH;
         }
-    } else if (need_override_image(image->type, fmt)) {
+    } else if (need_override_image(image_get_type(image), fmt)) {
         // forcibly replace the extension
         ret = try_other_formats(IM_MAX, image, pic);
     } else {
@@ -1860,7 +1890,7 @@ static int load_image_data(image_t *image, imageformat_t fmt, bool need_dimensio
 static void check_for_glow_map(image_t *image)
 {
     extern cvar_t *gl_shaders;
-    imagetype_t type = image->type;
+    imagetype_t type = image_get_type(image);
     byte *glow_pic;
     size_t len;
     int ret;
@@ -1872,23 +1902,22 @@ static void check_for_glow_map(image_t *image)
 
     // use a temporary image_t to hold glow map stuff.
     // it doesn't need to be registered.
-    image_t temporary = {
-        .type = type,
-        .flags = IF_TURBULENT,  // avoid post-processing
-    };
+    image_t temporary{};
+    image_set_type(&temporary, type);
+    image_set_flags(&temporary, IF_TURBULENT);  // avoid post-processing
 
     COM_StripExtension(temporary.name, image->name, sizeof(temporary.name));
     len = Q_strlcat(temporary.name, "_glow.pcx", sizeof(temporary.name));
     if (len >= sizeof(temporary.name))
         return;
-    temporary.baselen = len - 4;
+    temporary.baselen = static_cast<uint8_t>(len - 4);
 
     // load the pic from disk
     glow_pic = NULL;
 
     ret = load_image_data(&temporary, IM_PCX, false, &glow_pic);
     if (ret < 0) {
-        print_error(temporary.name, -1, ret);
+        print_error(temporary.name, static_cast<imageflags_t>(-1), ret);
         return;
     }
 
@@ -1945,7 +1974,8 @@ static image_t *find_or_load_image(const char *name, size_t len,
     if ((image = lookup_image(name, type, hash, baselen)) != NULL) {
         image->registration_sequence = r_registration_sequence;
         if (image->upload_width && image->upload_height) {
-            image->flags |= flags & IF_PERMANENT;
+            if (enum_has(flags, IF_PERMANENT))
+                image_add_flags(image, IF_PERMANENT);
             return image;
         }
         return NULL;
@@ -1960,21 +1990,24 @@ static image_t *find_or_load_image(const char *name, size_t len,
 
     // fill in some basic info
     memcpy(image->name, name, len + 1);
-    image->baselen = baselen;
-    image->type = type;
-    image->flags = flags;
+    image->baselen = static_cast<uint8_t>(baselen);
+    image_set_type(image, type);
+    image_set_flags(image, flags);
     image->registration_sequence = r_registration_sequence;
 
-    if (!(flags & IF_SPECIAL)) {
+    if (!enum_has(flags, IF_SPECIAL)) {
         // find out original extension
-        for (fmt = 0; fmt < IM_MAX; fmt++)
-            if (!Q_stricmp(image->name + image->baselen + 1, img_loaders[fmt].ext))
+        int fmtIndex;
+        for (fmtIndex = 0; fmtIndex < IM_MAX; ++fmtIndex) {
+            if (!Q_stricmp(image->name + image->baselen + 1, img_loaders[fmtIndex].ext))
                 break;
+        }
+        fmt = fmtIndex < IM_MAX ? static_cast<imageformat_t>(fmtIndex) : IM_MAX;
 
         // load the pic from disk
         pic = NULL;
 
-        if (flags & IF_KEEP_EXTENSION) {
+        if (enum_has(flags, IF_KEEP_EXTENSION)) {
             // direct load requested (for testing code)
             if (fmt == IM_MAX)
                 ret = Q_ERR_INVALID_PATH;
@@ -2003,13 +2036,13 @@ static image_t *find_or_load_image(const char *name, size_t len,
 
     List_Append(&r_imageHash[hash], &image->entry);
     
-    if (!(flags & IF_SPECIAL)) {
+    if (!enum_has(flags, IF_SPECIAL)) {
         // check for glow maps
         if (r_glowmaps->integer && (type == IT_SKIN || type == IT_WALL))
             check_for_glow_map(image);
     }
 
-    if (type == IT_SKY && flags & IF_CLASSIC_SKY) {
+    if (type == IT_SKY && enum_has(flags, IF_CLASSIC_SKY)) {
         // upload the top half of the image (solid)
         image->height /= 2;
         image->upload_height /= 2;
@@ -2017,14 +2050,13 @@ static image_t *find_or_load_image(const char *name, size_t len,
         IMG_Load(image, pic + (image->width * image->height * 4));
 
         // upload the bottom half (alpha)
-        image_t temporary = {
-            .type = type,
-            .flags = flags,
-            .width = image->width,
-            .height = image->height,
-            .upload_width = image->upload_width,
-            .upload_height = image->upload_height
-        };
+        image_t temporary{};
+        image_set_type(&temporary, type);
+        image_set_flags(&temporary, flags);
+        temporary.width = image->width;
+        temporary.height = image->height;
+        temporary.upload_width = image->upload_width;
+        temporary.upload_height = image->upload_height;
 
         IMG_Load(&temporary, pic);
         image->texnum2 = temporary.texnum;
@@ -2059,7 +2091,7 @@ image_t *IMG_Find(const char *name, imagetype_t type, imageflags_t flags)
     if (type == IT_SKY) {
         if (!image)
             return R_SKYTEXTURE;
-        if (~image->flags & flags & IF_CUBEMAP)
+        if (!enum_has(image_get_flags(image), IF_CUBEMAP) && enum_has(flags, IF_CUBEMAP))
             return R_SKYTEXTURE;
     }
 
@@ -2145,7 +2177,7 @@ bool R_GetPicSize(int *w, int *h, qhandle_t pic)
     if (h)
         *h = image->height;
 
-    return image->flags & IF_TRANSPARENT;
+    return enum_has(image_get_flags(image), IF_TRANSPARENT);
 }
 
 /*
@@ -2166,7 +2198,7 @@ void IMG_FreeUnused(void)
             continue;        // free image_t slot
         if (image->registration_sequence == r_registration_sequence)
             continue;        // used this sequence
-        if (image->flags & (IF_PERMANENT | IF_SCRAP))
+        if (enum_has(image_get_flags(image), enum_bit_or(IF_PERMANENT, IF_SCRAP)))
             continue;        // don't free pics
 
         // delete it from hash table
@@ -2216,17 +2248,20 @@ R_GetPalette
 */
 void IMG_GetPalette(void)
 {
-    byte        pal[PCX_PALETTE_SIZE], *src, *data;
+    byte        pal[PCX_PALETTE_SIZE], *src;
+    const byte  *data;
     int         i, ret;
 
     // get the palette
-    ret = FS_LoadFile(R_COLORMAP_PCX, reinterpret_cast<void **>(&data));
-    if (!data)
+    void *raw = nullptr;
+    ret = FS_LoadFile(R_COLORMAP_PCX, &raw);
+    if (!raw)
         goto fail;
 
+    data = static_cast<const byte *>(raw);
     ret = load_pcx(data, ret, NULL, pal, NULL);
 
-    FS_FreeFile(data);
+    FS_FreeFile(raw);
 
     if (ret < 0)
         goto fail;
