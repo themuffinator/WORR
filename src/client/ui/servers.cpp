@@ -103,7 +103,7 @@ static void UpdateSelection(void)
 
     if (m_servers.list.numItems) {
         if (m_servers.list.curvalue >= 0) {
-            s = m_servers.list.items[m_servers.list.curvalue];
+            s = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
             if (s->status == serverslot_t::SLOT_VALID) {
                 m_servers.status_c = "Press Enter to connect; Space to refresh";
             } else {
@@ -155,7 +155,7 @@ static void UpdateStatus(void)
     int i, totalplayers = 0, totalservers = 0;
 
     for (i = 0; i < m_servers.list.numItems; i++) {
-        slot = m_servers.list.items[i];
+        slot = static_cast<serverslot_t *>(m_servers.list.items[i]);
         if (slot->status == serverslot_t::SLOT_VALID) {
             totalservers++;
             totalplayers += slot->numPlayers;
@@ -186,7 +186,7 @@ static serverslot_t *FindSlot(const netadr_t *search, int *index_p)
     int i;
 
     for (i = 0; i < m_servers.list.numItems; i++) {
-        slot = m_servers.list.items[i];
+        slot = static_cast<serverslot_t *>(m_servers.list.items[i]);
         if (!NET_IsEqualBaseAdr(search, &slot->address))
             continue;
         if (search->port && search->port != slot->address.port)
@@ -392,7 +392,7 @@ static menuSound_t SetRconAddress(void)
     if (m_servers.list.curvalue < 0)
         return QMS_BEEP;
 
-    slot = m_servers.list.items[m_servers.list.curvalue];
+    slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
     if (slot->status == serverslot_t::SLOT_ERROR)
         return QMS_BEEP;
 
@@ -409,7 +409,7 @@ static menuSound_t CopyAddress(void)
     if (m_servers.list.curvalue < 0)
         return QMS_BEEP;
 
-    slot = m_servers.list.items[m_servers.list.curvalue];
+    slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
 
     if (vid && vid->set_clipboard_data)
         vid->set_clipboard_data(slot->hostname);
@@ -427,7 +427,7 @@ static menuSound_t PingSelected(void)
     if (m_servers.list.curvalue < 0)
         return QMS_BEEP;
 
-    slot = m_servers.list.items[m_servers.list.curvalue];
+    slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
     address = slot->address;
     hostname = slot->hostname;
     FreeSlot(slot);
@@ -505,7 +505,7 @@ static void ParsePlain(void *data, size_t len, size_t chunk)
     if (!data)
         return;
 
-    list = data;
+    list = static_cast<char *>(data);
     while (*list) {
         p = strchr(list, '\n');
         if (p) {
@@ -534,7 +534,7 @@ static void ParseBinary(void *data, size_t len, size_t chunk)
     memset(&address, 0, sizeof(address));
     address.type = NA_IP;
 
-    ptr = data;
+    ptr = static_cast<byte *>(data);
     while (len >= chunk) {
         memcpy(address.ip.u8, ptr, 4);
         memcpy(&address.port, ptr + 4, 2);
@@ -650,7 +650,7 @@ static void ClearServers(void)
     int i;
 
     for (i = 0; i < m_servers.list.numItems; i++) {
-        slot = m_servers.list.items[i];
+        slot = static_cast<serverslot_t *>(m_servers.list.items[i]);
         m_servers.list.items[i] = NULL;
         Z_Free(slot->hostname);
         FreeSlot(slot);
@@ -715,7 +715,7 @@ void UI_Frame(int msec)
 
     // send out next status packet
     while (m_servers.pingindex < m_servers.list.numItems) {
-        slot = m_servers.list.items[m_servers.pingindex++];
+        slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.pingindex++]);
         if (slot->status > serverslot_t::SLOT_PENDING)
             continue;
         slot->status = serverslot_t::SLOT_PENDING;
@@ -891,7 +891,7 @@ static menuSound_t Connect(menuCommon_t *self)
     if (m_servers.list.curvalue < 0)
         return QMS_BEEP;
 
-    slot = m_servers.list.items[m_servers.list.curvalue];
+    slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
     if (slot->status == serverslot_t::SLOT_ERROR)
         return QMS_BEEP;
 
@@ -1044,7 +1044,7 @@ static void DrawStatus(void)
         UI_DrawString(uis.width, uis.height - CONCHAR_HEIGHT, UI_RIGHT, COLOR_WHITE, m_servers.status_r);
 
     if (m_servers.list.numItems && m_servers.list.curvalue >= 0) {
-        serverslot_t *slot = m_servers.list.items[m_servers.list.curvalue];
+        serverslot_t *slot = static_cast<serverslot_t *>(m_servers.list.items[m_servers.list.curvalue]);
         if (slot->status > serverslot_t::SLOT_PENDING) {
             UI_DrawString(0, uis.height - CONCHAR_HEIGHT, UI_LEFT, COLOR_WHITE, slot->hostname);
         }
