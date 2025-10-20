@@ -302,7 +302,7 @@ static void Keybind_Remove(const char *cmd)
 
 static bool keybind_cb(void *arg, int key)
 {
-    menuKeybind_t *k = arg;
+    auto *k = static_cast<menuKeybind_t *>(arg);
     menuFrameWork_t *menu = k->generic.parent;
 
     // console key is hardcoded
@@ -1909,14 +1909,15 @@ void Menu_AddItem(menuFrameWork_t *menu, void *item)
 {
     Q_assert(menu->nitems < MAX_MENU_ITEMS);
 
+    z_allocation allocation;
     if (!menu->nitems) {
-        menu->items = reinterpret_cast<void **>(
-            UI_Malloc(MIN_MENU_ITEMS * sizeof(void *)));
+        allocation = z_allocation{UI_Malloc(MIN_MENU_ITEMS * sizeof(void *))};
     } else {
-        menu->items = reinterpret_cast<void **>(Z_Realloc(
-            menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *)));
+        allocation = Z_Realloc_allocation(
+            menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
     }
 
+    menu->items = static_cast<void **>(allocation);
     menu->items[menu->nitems++] = item;
     static_cast<menuCommon_t *>(item)->parent = menu;
 }
