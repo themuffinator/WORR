@@ -824,19 +824,21 @@ static GLuint create_and_use_program(glStateBits_t bits)
         return 0;
     }
 
+    GLuint shader_v = 0;
+    GLuint shader_f = 0;
+    GLint status = 0;
+
     SZ_Init(&sb, buffer, sizeof(buffer), "GLSL");
     write_vertex_shader(&sb, bits);
-    GLuint shader_v = create_shader(GL_VERTEX_SHADER, &sb);
+    shader_v = create_shader(GL_VERTEX_SHADER, &sb);
     if (!shader_v)
         goto fail;
 
     SZ_Clear(&sb);
     write_fragment_shader(&sb, bits);
-    GLuint shader_f = create_shader(GL_FRAGMENT_SHADER, &sb);
-    if (!shader_f) {
-        qglDeleteShader(shader_v);
+    shader_f = create_shader(GL_FRAGMENT_SHADER, &sb);
+    if (!shader_f)
         goto fail;
-    }
 
     qglAttachShader(program, shader_v);
     qglAttachShader(program, shader_f);
@@ -873,9 +875,10 @@ static GLuint create_and_use_program(glStateBits_t bits)
     qglLinkProgram(program);
 
     qglDeleteShader(shader_v);
+    shader_v = 0;
     qglDeleteShader(shader_f);
+    shader_f = 0;
 
-    GLint status = 0;
     qglGetProgramiv(program, GL_LINK_STATUS, &status);
     if (!status) {
         char buffer[MAX_STRING_CHARS];
@@ -931,6 +934,10 @@ static GLuint create_and_use_program(glStateBits_t bits)
     return program;
 
 fail:
+    if (shader_v)
+        qglDeleteShader(shader_v);
+    if (shader_f)
+        qglDeleteShader(shader_f);
     qglDeleteProgram(program);
     return 0;
 }
@@ -980,9 +987,11 @@ static void shader_array_bits(glArrayBits_t bits)
     glArrayBits_t diff = bits ^ gls.array_bits;
 
     for (int i = 0; i < VERT_ATTR_COUNT; i++) {
-        if (!(diff & BIT(i)))
+        const auto attr_bit = static_cast<glArrayBits_t>(BIT(i));
+
+        if (!(diff & attr_bit))
             continue;
-        if (bits & BIT(i))
+        if (bits & attr_bit)
             qglEnableVertexAttribArray(i);
         else
             qglDisableVertexAttribArray(i);
