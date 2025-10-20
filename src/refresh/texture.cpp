@@ -89,16 +89,19 @@ static void update_image_params(unsigned mask)
         if (!image->texnum)
             continue;
 
+        const auto type = static_cast<imagetype_t>(image->type);
+        const auto flags = static_cast<imageflags_t>(image->flags);
+
         if (image->flags & IF_CUBEMAP) {
             GL_ForceCubemap(image->texnum);
             GL_SetCubemapFilterAndRepeat();
         } else {
             GL_ForceTexture(TMU_TEXTURE, image->texnum);
-            GL_SetFilterAndRepeat(image->type, image->flags);
+            GL_SetFilterAndRepeat(type, flags);
 
             if (image->texnum2) {
                 GL_ForceTexture(TMU_TEXTURE, image->texnum2);
-                GL_SetFilterAndRepeat(image->type, image->flags);
+                GL_SetFilterAndRepeat(type, flags);
             }
         }
     }
@@ -685,7 +688,7 @@ static void GL_SetFilterAndRepeat(imagetype_t type, imageflags_t flags)
     }
 }
 
-static const char gl_env_suf[6][2] = {
+static const char gl_env_suf[6][3] = {
     "rt", "lf", "up", "dn", "bk", "ft"
 };
 
@@ -748,6 +751,9 @@ static bool GL_UploadSkyboxSide(image_t *image, byte *pic)
     int height = image->upload_height;
     int i;
 
+    const auto type = static_cast<imagetype_t>(image->type);
+    const auto flags = static_cast<imageflags_t>(image->flags);
+
     // it should be safe to assume non-cube skyboxes don't exist,
     // so don't bother with resampling.
     if (width != height)
@@ -768,7 +774,7 @@ static bool GL_UploadSkyboxSide(image_t *image, byte *pic)
         GL_RotateImageCCW((uint32_t *)pic, width);
 
     GL_ForceCubemap(TEXNUM_CUBEMAP_DEFAULT);
-    GL_Upload32(pic, width, height, 0, image->type, image->flags);
+    GL_Upload32(pic, width, height, 0, type, flags);
 
     image->upload_width = upload_width;
     image->upload_height = upload_height;
@@ -782,6 +788,9 @@ static bool GL_UploadCubemap(image_t *image, byte *pic)
     const byte *ofs, *src;
     byte *buffer, *dst;
     int i, s, t, size;
+
+    const auto type = static_cast<imagetype_t>(image->type);
+    const auto flags = static_cast<imageflags_t>(image->flags);
 
     if (image->flags & IF_TURBULENT)
         return GL_UploadSkyboxSide(image, pic);
@@ -815,7 +824,7 @@ static bool GL_UploadCubemap(image_t *image, byte *pic)
             dst += size  * 4;
         }
         upload_target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + i;
-        GL_Upload32(buffer, size, size, 0, image->type, image->flags);
+        GL_Upload32(buffer, size, size, 0, type, flags);
     }
 
     FS_FreeTempMem(buffer);
@@ -842,6 +851,9 @@ void IMG_Load(image_t *image, byte *pic)
 
     width = image->upload_width;
     height = image->upload_height;
+
+    const auto type = static_cast<imagetype_t>(image->type);
+    const auto flags = static_cast<imageflags_t>(image->flags);
 
     // load small pics onto the scrap
     if (image->type == IT_PIC && !(image->flags & IF_SPECIAL) && width < 64 && height < 64 &&
@@ -870,15 +882,16 @@ void IMG_Load(image_t *image, byte *pic)
         qglGenTextures(1, &image->texnum);
         GL_ForceTexture(TMU_TEXTURE, image->texnum);
 
-        maxlevel = GL_UpscaleLevel(width, height, image->type, image->flags);
+        maxlevel = GL_UpscaleLevel(width, height, type, flags);
         if (maxlevel) {
-            GL_Upscale32(pic, width, height, maxlevel, image->type, image->flags);
+            GL_Upscale32(pic, width, height, maxlevel, type, flags);
             image->flags |= IF_UPSCALED;
         } else {
-            GL_Upload32(pic, width, height, maxlevel, image->type, image->flags);
+            GL_Upload32(pic, width, height, maxlevel, type, flags);
         }
 
-        GL_SetFilterAndRepeat(image->type, image->flags);
+        const auto final_flags = static_cast<imageflags_t>(image->flags);
+        GL_SetFilterAndRepeat(type, final_flags);
 
         if (upload_alpha)
             image->flags |= IF_TRANSPARENT;
