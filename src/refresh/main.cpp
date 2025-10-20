@@ -95,7 +95,6 @@ cvar_t *gl_vertexlight;
 cvar_t *gl_lightgrid;
 cvar_t *gl_polyblend;
 cvar_t *gl_showerrors;
-cvar_t *gl_damageblend_frac;
 
 int32_t gl_shaders_modified;
 
@@ -473,11 +472,11 @@ static void GL_OccludeFlares(void)
                     continue;
             }
         } else {
-            glquery_t new = { 0 };
+            glquery_t new_query{};
             uint32_t map_size = HashMap_Size(gl_static.queries);
             Q_assert(map_size < MAX_EDICTS);
-            qglGenQueries(1, &new.query);
-            HashMap_Insert(gl_static.queries, &ent->skinnum, &new);
+            qglGenQueries(1, &new_query.query);
+            HashMap_Insert(gl_static.queries, &ent->skinnum, &new_query);
             q = HashMap_GetValue(glquery_t, gl_static.queries, map_size);
         }
 
@@ -1231,7 +1230,7 @@ static void GL_Unregister(void)
 static void APIENTRY myDebugProc(GLenum source, GLenum type, GLuint id, GLenum severity,
                                  GLsizei length, const GLchar *message, const void *userParam)
 {
-    int level = PRINT_DEVELOPER;
+    print_type_t level = PRINT_DEVELOPER;
 
     switch (severity) {
         case GL_DEBUG_SEVERITY_HIGH:   level = PRINT_ERROR;   break;
@@ -1529,13 +1528,12 @@ r_opengl_config_t R_GetGLConfig(void)
 #define GET_CVAR(name, def, min, max) \
     Cvar_ClampInteger(Cvar_Get(name, def, CVAR_REFRESH), min, max)
 
-    r_opengl_config_t cfg = {
-        .colorbits    = GET_CVAR("gl_colorbits",    "0", 0, 32),
-        .depthbits    = GET_CVAR("gl_depthbits",    "0", 0, 32),
-        .stencilbits  = GET_CVAR("gl_stencilbits",  "8", 0,  8),
-        .multisamples = GET_CVAR("gl_multisamples", "0", 0, 32),
-        .debug        = GET_CVAR("gl_debug",        "0", 0,  2),
-    };
+    r_opengl_config_t cfg{};
+    cfg.colorbits = GET_CVAR("gl_colorbits", "0", 0, 32);
+    cfg.depthbits = GET_CVAR("gl_depthbits", "0", 0, 32);
+    cfg.stencilbits = GET_CVAR("gl_stencilbits", "8", 0, 8);
+    cfg.multisamples = GET_CVAR("gl_multisamples", "0", 0, 32);
+    cfg.debug = GET_CVAR("gl_debug", "0", 0, 2);
 
     if (cfg.colorbits == 0)
         cfg.colorbits = 24;
@@ -1613,10 +1611,11 @@ R_ModeChanged
 */
 void R_ModeChanged(int width, int height, int flags)
 {
+    vidFlags_t vid_flags = static_cast<vidFlags_t>(flags);
     if (qglFenceSync)
-        flags |= QVF_VIDEOSYNC;
+        vid_flags |= QVF_VIDEOSYNC;
 
     r_config.width = width;
     r_config.height = height;
-    r_config.flags = flags;
+    r_config.flags = vid_flags;
 }
