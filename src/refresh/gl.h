@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <type_traits>
+
 #include "shared/shared.h"
 #include "common/bsp.h"
 #include "common/cmd.h"
@@ -51,6 +53,12 @@ typedef GLuint glIndex_t;
 #endif
 
 typedef uint64_t glStateBits_t;
+
+template <typename Enum>
+constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
+{
+    return static_cast<std::underlying_type_t<Enum>>(value);
+}
 
 #define TAB_SIN(x)  gl_static.sintab[(x) & 255]
 #define TAB_COS(x)  gl_static.sintab[((x) + 64) & 255]
@@ -184,6 +192,90 @@ typedef enum {
     QGL_CAP_SHADER_STORAGE              = BIT(14),
     QGL_CAP_SKELETON_MASK               = QGL_CAP_BUFFER_TEXTURE | QGL_CAP_SHADER_STORAGE,
 } glcap_t;
+
+constexpr glArrayBits_t operator|(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glArrayBits_t>;
+    return static_cast<glArrayBits_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
+}
+
+constexpr glArrayBits_t operator&(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glArrayBits_t>;
+    return static_cast<glArrayBits_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
+}
+
+constexpr glArrayBits_t operator^(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glArrayBits_t>;
+    return static_cast<glArrayBits_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
+}
+
+constexpr glArrayBits_t operator~(glArrayBits_t value) noexcept
+{
+    using U = std::underlying_type_t<glArrayBits_t>;
+    return static_cast<glArrayBits_t>(~static_cast<U>(value));
+}
+
+constexpr glArrayBits_t &operator|=(glArrayBits_t &lhs, glArrayBits_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr glArrayBits_t &operator&=(glArrayBits_t &lhs, glArrayBits_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+constexpr glArrayBits_t &operator^=(glArrayBits_t &lhs, glArrayBits_t rhs) noexcept
+{
+    lhs = lhs ^ rhs;
+    return lhs;
+}
+
+constexpr glcap_t operator|(glcap_t lhs, glcap_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glcap_t>;
+    return static_cast<glcap_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
+}
+
+constexpr glcap_t operator&(glcap_t lhs, glcap_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glcap_t>;
+    return static_cast<glcap_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
+}
+
+constexpr glcap_t operator^(glcap_t lhs, glcap_t rhs) noexcept
+{
+    using U = std::underlying_type_t<glcap_t>;
+    return static_cast<glcap_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
+}
+
+constexpr glcap_t operator~(glcap_t value) noexcept
+{
+    using U = std::underlying_type_t<glcap_t>;
+    return static_cast<glcap_t>(~static_cast<U>(value));
+}
+
+constexpr glcap_t &operator|=(glcap_t &lhs, glcap_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr glcap_t &operator&=(glcap_t &lhs, glcap_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+constexpr glcap_t &operator^=(glcap_t &lhs, glcap_t rhs) noexcept
+{
+    lhs = lhs ^ rhs;
+    return lhs;
+}
 
 #define QGL_VER(major, minor)   ((major) * 100 + (minor))
 #define QGL_UNPACK_VER(ver)     (ver) / 100, (ver) % 100

@@ -16,8 +16,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include <type_traits>
-
 #define QGLAPI
 #include "gl.h"
 
@@ -37,20 +35,14 @@ typedef struct {
     const glfunction_t *functions;
 } glsection_t;
 
-template <typename Enum>
-constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
-{
-    return static_cast<std::underlying_type_t<Enum>>(value);
-}
-
 static constexpr glcap_t add_caps(glcap_t lhs, glcap_t rhs) noexcept
 {
-    return static_cast<glcap_t>(to_underlying(lhs) | to_underlying(rhs));
+    return lhs | rhs;
 }
 
 static constexpr glcap_t remove_caps(glcap_t lhs, glcap_t rhs) noexcept
 {
-    return static_cast<glcap_t>(to_underlying(lhs) & ~to_underlying(rhs));
+    return lhs & ~rhs;
 }
 
 #define QGL_FN(x)   { "gl"#x, &qgl##x }
@@ -280,7 +272,7 @@ static const glsection_t sections[] = {
         .ver_es = QGL_VER(1, 0),
         .excl_gl = QGL_VER(3, 1),
         .excl_es = QGL_VER(2, 0),
-        .caps = static_cast<glcap_t>(QGL_CAP_LEGACY | QGL_CAP_CLIENT_VA),
+        .caps = QGL_CAP_LEGACY | QGL_CAP_CLIENT_VA,
         .functions = kGl11CompatFunctions
     },
 
@@ -326,13 +318,13 @@ static const glsection_t sections[] = {
     // ES 1.1
     {
         .ver_es = QGL_VER(1, 1),
-        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_CLIENT_VA),
+        .caps = QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_CLIENT_VA,
     },
 
     // GL 1.2
     {
         .ver_gl = QGL_VER(1, 2),
-        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_TEXTURE_MAX_LEVEL),
+        .caps = QGL_CAP_TEXTURE_CLAMP_TO_EDGE | QGL_CAP_TEXTURE_MAX_LEVEL,
     },
 
     // GL 1.3
@@ -404,7 +396,7 @@ static const glsection_t sections[] = {
         .ver_es = QGL_VER(3, 0),
         // NPOT textures are technically GL 2.0, but only enable them on 3.0 to
         // ensure full hardware support, including mipmaps.
-        .caps = static_cast<glcap_t>(QGL_CAP_TEXTURE_MAX_LEVEL | QGL_CAP_TEXTURE_NON_POWER_OF_TWO),
+        .caps = QGL_CAP_TEXTURE_MAX_LEVEL | QGL_CAP_TEXTURE_NON_POWER_OF_TWO,
         .functions = kGl30Es30Functions
     },
 
