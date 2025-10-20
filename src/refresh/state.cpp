@@ -22,7 +22,12 @@ glState_t gls;
 
 const glbackend_t *gl_backend;
 
-const mat4_t gl_identity = { [0] = 1, [5] = 1, [10] = 1, [15] = 1 };
+const mat4_t gl_identity = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f,
+};
 
 // for uploading
 void GL_ForceTexture(glTmu_t tmu, GLuint texnum)
