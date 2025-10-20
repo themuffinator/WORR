@@ -8,10 +8,6 @@ project('quake2-rerelease-dll', 'cpp',
   ],
 )
 
-cpp_compiler = meson.get_compiler('cpp')
-if cpp_compiler.get_id() == 'msvc'
-  add_project_arguments('/std:c++23', language: 'cpp')
-endif
 
 src = [
   'rerelease/cg_local.h',
