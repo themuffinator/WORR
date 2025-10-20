@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <type_traits>
+
 #include "common/cvar.h"
 #include "common/error.h"
 
@@ -209,6 +211,48 @@ typedef enum {
     IF_OPTIONAL         = BIT(16),  // don't warn if not found
     IF_KEEP_EXTENSION   = BIT(17),  // don't override extension
 } imageflags_t;
+
+constexpr imageflags_t operator|(imageflags_t lhs, imageflags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<imageflags_t>;
+    return static_cast<imageflags_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
+}
+
+constexpr imageflags_t operator&(imageflags_t lhs, imageflags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<imageflags_t>;
+    return static_cast<imageflags_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
+}
+
+constexpr imageflags_t operator^(imageflags_t lhs, imageflags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<imageflags_t>;
+    return static_cast<imageflags_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
+}
+
+constexpr imageflags_t operator~(imageflags_t value) noexcept
+{
+    using U = std::underlying_type_t<imageflags_t>;
+    return static_cast<imageflags_t>(~static_cast<U>(value));
+}
+
+constexpr imageflags_t &operator|=(imageflags_t &lhs, imageflags_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr imageflags_t &operator&=(imageflags_t &lhs, imageflags_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+constexpr imageflags_t &operator^=(imageflags_t &lhs, imageflags_t rhs) noexcept
+{
+    lhs = lhs ^ rhs;
+    return lhs;
+}
 
 typedef enum {
     IT_PIC,

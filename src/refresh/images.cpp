@@ -32,6 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "format/pcx.h"
 #include "format/wal.h"
 #include <array>
+#include <type_traits>
 #include "images.h"
 
 #if USE_PNG
@@ -1781,7 +1782,8 @@ static bool need_override_image(imagetype_t type, imageformat_t fmt)
         return false;
     if (r_override_textures->integer == 1 && fmt > IM_WAL)
         return false;
-    return r_texture_overrides->integer & (1 << type);
+    using U = std::underlying_type_t<imagetype_t>;
+    return r_texture_overrides->integer & (1 << static_cast<U>(type));
 }
 
 #endif // USE_PNG || USE_JPG || USE_TGA
@@ -2298,7 +2300,7 @@ void IMG_Init(void)
     
     // &r_images[R_NUM_AUTO_IMG] == white pic
     R_RegisterImage("_white", IT_PIC,
-        static_cast<imageflags_t>(IF_PERMANENT | IF_REPEAT | IF_SPECIAL));
+        IF_PERMANENT | IF_REPEAT | IF_SPECIAL);
 }
 
 void IMG_Shutdown(void)
