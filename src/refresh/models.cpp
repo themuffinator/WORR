@@ -25,15 +25,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 #include "format/sp2.h"
 
-#define MOD_GpuMalloc(size) \
-    Hunk_TryAlloc(gl_static.use_gpu_lerp ? &temp_hunk[0] : &model->hunk, size, gl_static.hunk_align)
-
-#define MOD_GpuMallocIndices(size) \
-    Hunk_TryAlloc(gl_static.use_gpu_lerp ? &temp_hunk[1] : &model->hunk, size, gl_static.hunk_align)
-
-#define MOD_CpuMalloc(size) \
-    (gl_static.use_gpu_lerp ? R_Mallocz(size) : Hunk_TryAlloc(&model->hunk, size, gl_static.hunk_align))
-
 #define ENSURE(x, e)    if (!(x)) return e
 
 // this used to be MAX_MODELS * 2, but not anymore. MAX_MODELS is 8192 now and
@@ -44,6 +35,24 @@ static model_t      r_models[MAX_RMODELS];
 static int          r_numModels;
 
 static memhunk_t    temp_hunk[2];
+
+static inline void *MOD_GpuMalloc(model_t *model, size_t size)
+{
+    return Hunk_TryAlloc(gl_static.use_gpu_lerp ? &temp_hunk[0] : &model->hunk,
+                         size, gl_static.hunk_align);
+}
+
+static inline void *MOD_GpuMallocIndices(model_t *model, size_t size)
+{
+    return Hunk_TryAlloc(gl_static.use_gpu_lerp ? &temp_hunk[1] : &model->hunk,
+                         size, gl_static.hunk_align);
+}
+
+static inline void *MOD_CpuMalloc(model_t *model, size_t size)
+{
+    return gl_static.use_gpu_lerp ? R_Mallocz(size)
+                                  : Hunk_TryAlloc(&model->hunk, size, gl_static.hunk_align);
+}
 
 static model_t *MOD_Alloc(void)
 {
@@ -80,7 +89,7 @@ static model_t *MOD_Find(const char *name)
 
 static void MOD_List_f(void)
 {
-    static const char types[4] = "FASE";
+    static constexpr char types[] = "FASE";
     int     i, count;
     model_t *model;
     size_t  bytes;
@@ -200,15 +209,17 @@ static void LittleBlock(void *out, const void *in, size_t size)
 {
     memcpy(out, in, size);
 #if defined(USE_BIG_ENDIAN)
+    auto *out32 = static_cast<uint32_t *>(out);
     for (int i = 0; i < size / 4; i++)
-        ((uint32_t *)out)[i] = LittleLong(((uint32_t *)out)[i]);
+        out32[i] = LittleLong(out32[i]);
 #endif
 }
 
 static int MOD_LoadSP2(model_t *model, const void *rawdata, size_t length)
 {
     dsp2header_t header;
-    dsp2frame_t *src_frame;
+    const byte *raw_bytes;
+    const dsp2frame_t *src_frame;
     mspriteframe_t *dst_frame;
     char buffer[SP2_MAX_FRAMENAME];
     int i;
@@ -241,7 +252,8 @@ static int MOD_LoadSP2(model_t *model, const void *rawdata, size_t length)
     model->spriteframes = R_Malloc(sizeof(model->spriteframes[0]) * header.numframes);
     model->numframes = header.numframes;
 
-    src_frame = (dsp2frame_t *)((byte *)rawdata + sizeof(dsp2header_t));
+    raw_bytes = static_cast<const byte *>(rawdata);
+    src_frame = reinterpret_cast<const dsp2frame_t *>(raw_bytes + sizeof(dsp2header_t));
     dst_frame = model->spriteframes;
     for (i = 0; i < header.numframes; i++) {
         dst_frame->width = (int32_t)LittleLong(src_frame->width);
@@ -302,19 +314,37 @@ static void MOD_HunkBegin(model_t *model)
 
 static bool MOD_AllocMesh(model_t *model, maliasmesh_t *mesh)
 {
-    if (!(mesh->verts = MOD_GpuMalloc(sizeof(mesh->verts[0]) * mesh->numverts * model->numframes)))
+    auto *verts = static_cast<maliasvert_t *>(
+        MOD_GpuMalloc(model, sizeof(mesh->verts[0]) * mesh->numverts * model->numframes));
+    if (!verts)
         return false;
-    if (!(mesh->tcoords = MOD_GpuMalloc(sizeof(mesh->tcoords[0]) * mesh->numverts)))
+    mesh->verts = verts;
+
+    auto *tcoords = static_cast<maliastc_t *>(
+        MOD_GpuMalloc(model, sizeof(mesh->tcoords[0]) * mesh->numverts));
+    if (!tcoords)
         return false;
-    if (!(mesh->indices = MOD_GpuMallocIndices(sizeof(mesh->indices[0]) * mesh->numindices)))
+    mesh->tcoords = tcoords;
+
+    auto *indices = static_cast<uint16_t *>(
+        MOD_GpuMallocIndices(model, sizeof(mesh->indices[0]) * mesh->numindices));
+    if (!indices)
         return false;
+    mesh->indices = indices;
+
     if (!mesh->numskins)
         return true;
-    if (!(mesh->skins = MOD_CpuMalloc(sizeof(mesh->skins[0]) * mesh->numskins)))
+    auto **skins = static_cast<image_t **>(
+        MOD_CpuMalloc(model, sizeof(mesh->skins[0]) * mesh->numskins));
+    if (!skins)
         return false;
+    mesh->skins = skins;
 #if USE_MD5
-    if (!(mesh->skinnames = MOD_CpuMalloc(sizeof(mesh->skinnames[0]) * mesh->numskins)))
+    auto *skin_names = static_cast<maliasskinname_t *>(
+        MOD_CpuMalloc(model, sizeof(mesh->skinnames[0]) * mesh->numskins));
+    if (!skin_names)
         return false;
+    mesh->skinnames = skin_names;
 #endif
     return true;
 }
@@ -322,11 +352,12 @@ static bool MOD_AllocMesh(model_t *model, maliasmesh_t *mesh)
 static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
 {
     dmd2header_t    header;
-    dmd2frame_t     *src_frame;
-    dmd2trivertx_t  *src_vert;
-    dmd2triangle_t  *src_tri;
-    dmd2stvert_t    *src_tc;
-    char            *src_skin;
+    const byte      *raw_bytes;
+    const dmd2frame_t *src_frame;
+    const dmd2trivertx_t *src_vert;
+    const dmd2triangle_t *src_tri;
+    const dmd2stvert_t *src_tc;
+    const char      *src_skin;
     maliasframe_t   *dst_frame;
     maliasvert_t    *dst_vert;
     maliastc_t      *dst_tc;
@@ -366,9 +397,11 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
         return Q_ERR_INVALID_FORMAT;
     }
 
+    raw_bytes = static_cast<const byte *>(rawdata);
+
     // load all triangle indices
     numindices = 0;
-    src_tri = (dmd2triangle_t *)((byte *)rawdata + header.ofs_tris);
+    src_tri = reinterpret_cast<const dmd2triangle_t *>(raw_bytes + header.ofs_tris);
     for (i = 0; i < header.num_tris; i++) {
         for (j = 0; j < 3; j++) {
             uint16_t idx_xyz = LittleShort(src_tri->index_xyz[j]);
@@ -398,7 +431,7 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
 
     // remap all triangle indices
     numverts = 0;
-    src_tc = (dmd2stvert_t *)((byte *)rawdata + header.ofs_st);
+    src_tc = reinterpret_cast<const dmd2stvert_t *>(raw_bytes + header.ofs_st);
     for (i = 0; i < numindices; i++) {
         if (remap[i] != 0xFFFF)
             continue; // already remapped
@@ -428,9 +461,12 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
     model->type = MOD_ALIAS;
     model->nummeshes = 1;
     model->numframes = header.num_frames;
-    model->meshes = MOD_CpuMalloc(sizeof(model->meshes[0]));
-    model->frames = MOD_CpuMalloc(sizeof(model->frames[0]) * header.num_frames);
-    if (!model->meshes || !model->frames)
+    auto *meshes = static_cast<maliasmesh_t *>(MOD_CpuMalloc(model, sizeof(model->meshes[0])));
+    auto *frames = static_cast<maliasframe_t *>(
+        MOD_CpuMalloc(model, sizeof(model->frames[0]) * header.num_frames));
+    model->meshes = meshes;
+    model->frames = frames;
+    if (!meshes || !frames)
         return Q_ERR(ENOMEM);
 
     mesh = model->meshes;
@@ -449,7 +485,7 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
         mesh->indices[i] = finalIndices[i];
 
     // load all skins
-    src_skin = (char *)rawdata + header.ofs_skins;
+    src_skin = reinterpret_cast<const char *>(raw_bytes + header.ofs_skins);
     for (i = 0; i < header.num_skins; i++) {
 #if USE_MD5
         char *skinname = mesh->skinnames[i];
@@ -463,7 +499,7 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
     }
 
     // load all tcoords
-    src_tc = (dmd2stvert_t *)((byte *)rawdata + header.ofs_st);
+    src_tc = reinterpret_cast<const dmd2stvert_t *>(raw_bytes + header.ofs_st);
     dst_tc = mesh->tcoords;
     scale_s = 1.0f / header.skinwidth;
     scale_t = 1.0f / header.skinheight;
@@ -477,9 +513,10 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
     }
 
     // load all frames
-    src_frame = (dmd2frame_t *)((byte *)rawdata + header.ofs_frames);
+    const byte *frame_bytes = raw_bytes + header.ofs_frames;
     dst_frame = model->frames;
     for (j = 0; j < header.num_frames; j++) {
+        src_frame = reinterpret_cast<const dmd2frame_t *>(frame_bytes);
         LittleVector(src_frame->scale, dst_frame->scale);
         LittleVector(src_frame->translate, dst_frame->translate);
 
@@ -522,7 +559,7 @@ static int MOD_LoadMD2(model_t *model, const void *rawdata, size_t length)
         VectorAdd(mins, dst_frame->translate, dst_frame->bounds[0]);
         VectorAdd(maxs, dst_frame->translate, dst_frame->bounds[1]);
 
-        src_frame = (dmd2frame_t *)((byte *)src_frame + header.framesize);
+        frame_bytes += header.framesize;
         dst_frame++;
     }
 
@@ -557,10 +594,10 @@ static int MOD_LoadMD3Mesh(model_t *model, maliasmesh_t *mesh,
                            const byte *rawdata, size_t length, size_t *offset_p)
 {
     dmd3mesh_t      header;
-    dmd3vertex_t    *src_vert;
-    dmd3coord_t     *src_tc;
-    dmd3skin_t      *src_skin;
-    uint32_t        *src_idx;
+    const dmd3vertex_t *src_vert;
+    const dmd3coord_t  *src_tc;
+    const dmd3skin_t   *src_skin;
+    const uint32_t     *src_idx;
     maliasvert_t    *dst_vert;
     maliastc_t      *dst_tc;
     uint16_t        *dst_idx;
@@ -589,7 +626,7 @@ static int MOD_LoadMD3Mesh(model_t *model, maliasmesh_t *mesh,
         return Q_ERR(ENOMEM);
 
     // load all skins
-    src_skin = (dmd3skin_t *)(rawdata + header.ofs_skins);
+    src_skin = reinterpret_cast<const dmd3skin_t *>(rawdata + header.ofs_skins);
     for (i = 0; i < header.num_skins; i++) {
 #if USE_MD5
         char *skinname = mesh->skinnames[i];
@@ -603,7 +640,7 @@ static int MOD_LoadMD3Mesh(model_t *model, maliasmesh_t *mesh,
     }
 
     // load all vertices
-    src_vert = (dmd3vertex_t *)(rawdata + header.ofs_verts);
+    src_vert = reinterpret_cast<const dmd3vertex_t *>(rawdata + header.ofs_verts);
     dst_vert = mesh->verts;
     for (i = 0; i < model->numframes; i++) {
         maliasframe_t *f = &model->frames[i];
@@ -626,7 +663,7 @@ static int MOD_LoadMD3Mesh(model_t *model, maliasmesh_t *mesh,
     }
 
     // load all texture coords
-    src_tc = (dmd3coord_t *)(rawdata + header.ofs_tcs);
+    src_tc = reinterpret_cast<const dmd3coord_t *>(rawdata + header.ofs_tcs);
     dst_tc = mesh->tcoords;
     for (i = 0; i < header.num_verts; i++) {
         dst_tc->st[0] = LittleFloat(src_tc->st[0]);
@@ -635,7 +672,7 @@ static int MOD_LoadMD3Mesh(model_t *model, maliasmesh_t *mesh,
     }
 
     // load all triangle indices
-    src_idx = (uint32_t *)(rawdata + header.ofs_indexes);
+    src_idx = reinterpret_cast<const uint32_t *>(rawdata + header.ofs_indexes);
     dst_idx = mesh->indices;
     for (i = 0; i < header.num_tris * 3; i++) {
         index = LittleLong(*src_idx++);
@@ -667,8 +704,9 @@ static int MOD_LoadMD3(model_t *model, const void *rawdata, size_t length)
 {
     dmd3header_t    header;
     size_t          offset, remaining;
-    dmd3frame_t     *src_frame;
+    const dmd3frame_t *src_frame;
     maliasframe_t   *dst_frame;
+    const byte      *raw_bytes;
     const byte      *src_mesh;
     int             i, ret;
     const char      *err;
@@ -697,13 +735,18 @@ static int MOD_LoadMD3(model_t *model, const void *rawdata, size_t length)
     model->type = MOD_ALIAS;
     model->numframes = header.num_frames;
     model->nummeshes = header.num_meshes;
-    model->meshes = MOD_CpuMalloc(sizeof(model->meshes[0]) * header.num_meshes);
-    model->frames = MOD_CpuMalloc(sizeof(model->frames[0]) * header.num_frames);
-    if (!model->meshes || !model->frames)
+    auto *meshes = static_cast<maliasmesh_t *>(
+        MOD_CpuMalloc(model, sizeof(model->meshes[0]) * header.num_meshes));
+    auto *frames = static_cast<maliasframe_t *>(
+        MOD_CpuMalloc(model, sizeof(model->frames[0]) * header.num_frames));
+    model->meshes = meshes;
+    model->frames = frames;
+    if (!meshes || !frames)
         return Q_ERR(ENOMEM);
 
     // load all frames
-    src_frame = (dmd3frame_t *)((byte *)rawdata + header.ofs_frames);
+    raw_bytes = static_cast<const byte *>(rawdata);
+    src_frame = reinterpret_cast<const dmd3frame_t *>(raw_bytes + header.ofs_frames);
     dst_frame = model->frames;
     for (i = 0; i < header.num_frames; i++) {
         LittleVector(src_frame->translate, dst_frame->translate);
@@ -715,7 +758,7 @@ static int MOD_LoadMD3(model_t *model, const void *rawdata, size_t length)
     }
 
     // load all meshes
-    src_mesh = (const byte *)rawdata + header.ofs_meshes;
+    src_mesh = raw_bytes + header.ofs_meshes;
     remaining = length - header.ofs_meshes;
     for (i = 0; i < header.num_meshes; i++) {
         ret = MOD_LoadMD3Mesh(model, &model->meshes[i], src_mesh, remaining, &offset);
@@ -960,7 +1003,8 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
     MD5_ParseExpect(&s, "MD5Version");
     MD5_ParseExpect(&s, "10");
 
-    model->skeleton = mdl = MD5_CpuMalloc(sizeof(*mdl));
+    mdl = static_cast<md5_model_t *>(MD5_CpuMalloc(sizeof(*mdl)));
+    model->skeleton = mdl;
 
     MD5_ParseExpect(&s, "commandline");
     COM_SkipToken(&s);
@@ -991,7 +1035,7 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 
     MD5_ParseExpect(&s, "}");
 
-    mdl->meshes = MD5_CpuMalloc(mdl->num_meshes * sizeof(mdl->meshes[0]));
+    mdl->meshes = static_cast<md5_mesh_t *>(MD5_CpuMalloc(mdl->num_meshes * sizeof(mdl->meshes[0])));
     for (i = 0; i < mdl->num_meshes; i++) {
         md5_mesh_t *mesh = &mdl->meshes[i];
 
@@ -1003,8 +1047,10 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 
         MD5_ParseExpect(&s, "numverts");
         mesh->num_verts = MD5_ParseUint(&s, 0, TESS_MAX_VERTICES);
-        mesh->vertices  = MD5_GpuMalloc(mesh->num_verts * sizeof(mesh->vertices[0]));
-        mesh->tcoords   = MD5_GpuMalloc(mesh->num_verts * sizeof(mesh->tcoords [0]));
+        mesh->vertices = static_cast<md5_vertex_t *>(
+            MD5_GpuMalloc(mesh->num_verts * sizeof(mesh->vertices[0])));
+        mesh->tcoords = static_cast<maliastc_t *>(
+            MD5_GpuMalloc(mesh->num_verts * sizeof(mesh->tcoords[0])));
 
         for (j = 0; j < mesh->num_verts; j++) {
             MD5_ParseExpect(&s, "vert");
@@ -1024,7 +1070,8 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 
         MD5_ParseExpect(&s, "numtris");
         uint32_t num_tris = MD5_ParseUint(&s, 0, TESS_MAX_INDICES / 3);
-        mesh->indices = MD5_GpuMallocIndices(num_tris * 3 * sizeof(mesh->indices[0]));
+        mesh->indices = static_cast<uint16_t *>(
+            MD5_GpuMallocIndices(num_tris * 3 * sizeof(mesh->indices[0])));
         mesh->num_indices = num_tris * 3;
 
         for (j = 0; j < num_tris; j++) {
@@ -1036,8 +1083,10 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 
         MD5_ParseExpect(&s, "numweights");
         mesh->num_weights = MD5_ParseUint(&s, 0, MD5_MAX_WEIGHTS);
-        mesh->weights     = MD5_GpuMalloc(mesh->num_weights * sizeof(mesh->weights  [0]));
-        mesh->jointnums   = MD5_GpuMalloc(mesh->num_weights * sizeof(mesh->jointnums[0]));
+        mesh->weights = static_cast<md5_weight_t *>(
+            MD5_GpuMalloc(mesh->num_weights * sizeof(mesh->weights[0])));
+        mesh->jointnums = static_cast<uint8_t *>(
+            MD5_GpuMalloc(mesh->num_weights * sizeof(mesh->jointnums[0])));
 
         for (j = 0; j < mesh->num_weights; j++) {
             MD5_ParseExpect(&s, "weight");
@@ -1317,7 +1366,8 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
 
     MD5_ParseExpect(&s, "}");
 
-    mdl->skeleton_frames = MD5_CpuMalloc(sizeof(mdl->skeleton_frames[0]) * mdl->num_frames * mdl->num_joints);
+    mdl->skeleton_frames = static_cast<md5_joint_t *>(
+        MD5_CpuMalloc(sizeof(mdl->skeleton_frames[0]) * mdl->num_frames * mdl->num_joints));
 
     // initialize scales
     for (i = 0; i < mdl->num_frames * mdl->num_joints; i++)
@@ -1377,8 +1427,10 @@ static bool MD5_LoadSkins(model_t *model)
         return true;
 
     mdl->num_skins = mesh->numskins;
-    mdl->skins = MOD_CpuMalloc(sizeof(mdl->skins[0]) * mdl->num_skins);
-    if (!mdl->skins) {
+    auto **skins = static_cast<image_t **>(
+        MOD_CpuMalloc(model, sizeof(mdl->skins[0]) * mdl->num_skins));
+    mdl->skins = skins;
+    if (!skins) {
         Com_EPrintf("Out of memory for MD5 skins\n");
         return false;
     }
@@ -1596,7 +1648,8 @@ qhandle_t R_RegisterModel(const char *name)
     }
 
     // check ident
-    switch (LittleLong(*(uint32_t *)rawdata)) {
+    const auto raw_tag = LittleLong(*static_cast<const uint32_t *>(rawdata));
+    switch (raw_tag) {
     case MD2_IDENT:
         load = MOD_LoadMD2;
         break;
