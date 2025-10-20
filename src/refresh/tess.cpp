@@ -18,6 +18,90 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.h"
 #include <array>
+#include <type_traits>
+
+namespace {
+
+template <typename Enum>
+constexpr auto enum_to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
+{
+    return static_cast<std::underlying_type_t<Enum>>(value);
+}
+
+constexpr glArrayBits_t operator|(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
+{
+    return static_cast<glArrayBits_t>(enum_to_underlying(lhs) | enum_to_underlying(rhs));
+}
+
+inline glArrayBits_t &operator|=(glArrayBits_t &lhs, glArrayBits_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr glVaDesc_t AttrFloat(uint8_t size, int stride, int offset) noexcept
+{
+    return glVaDesc_t{
+        size,
+        false,
+        static_cast<uint8_t>(stride * sizeof(GLfloat)),
+        static_cast<uint8_t>(offset * sizeof(GLfloat)),
+    };
+}
+
+constexpr glVaDesc_t AttrUByte(uint8_t size, int stride, int offset) noexcept
+{
+    return glVaDesc_t{
+        size,
+        true,
+        static_cast<uint8_t>(stride * sizeof(GLfloat)),
+        static_cast<uint8_t>(offset * sizeof(GLfloat)),
+    };
+}
+
+using ArrayDescs = std::array<std::array<glVaDesc_t, VERT_ATTR_COUNT>, VA_TOTAL>;
+
+constexpr ArrayDescs MakeArrayDescs() noexcept
+{
+    ArrayDescs desc{};
+
+    desc[VA_SPRITE][VERT_ATTR_POS] = AttrFloat(3, 5, 0);
+    desc[VA_SPRITE][VERT_ATTR_TC] = AttrFloat(2, 5, 3);
+
+    desc[VA_EFFECT][VERT_ATTR_POS] = AttrFloat(3, 6, 0);
+    desc[VA_EFFECT][VERT_ATTR_TC] = AttrFloat(2, 6, 3);
+    desc[VA_EFFECT][VERT_ATTR_COLOR] = AttrUByte(4, 6, 5);
+
+    desc[VA_NULLMODEL][VERT_ATTR_POS] = AttrFloat(3, 4, 0);
+    desc[VA_NULLMODEL][VERT_ATTR_COLOR] = AttrUByte(4, 4, 3);
+
+    desc[VA_OCCLUDE][VERT_ATTR_POS] = AttrFloat(3, 3, 0);
+
+    desc[VA_POSTPROCESS][VERT_ATTR_POS] = AttrFloat(2, 4, 0);
+    desc[VA_POSTPROCESS][VERT_ATTR_TC] = AttrFloat(2, 4, 2);
+
+    desc[VA_MESH_SHADE][VERT_ATTR_POS] = AttrFloat(3, VERTEX_SIZE, 0);
+    desc[VA_MESH_SHADE][VERT_ATTR_COLOR] = AttrFloat(4, VERTEX_SIZE, 4);
+
+    desc[VA_MESH_FLAT][VERT_ATTR_POS] = AttrFloat(3, 8, 0);
+    desc[VA_MESH_FLAT][VERT_ATTR_NORMAL] = AttrFloat(3, 8, 4);
+
+    desc[VA_2D][VERT_ATTR_POS] = AttrFloat(2, 5, 0);
+    desc[VA_2D][VERT_ATTR_TC] = AttrFloat(2, 5, 2);
+    desc[VA_2D][VERT_ATTR_COLOR] = AttrUByte(4, 5, 4);
+
+    desc[VA_3D][VERT_ATTR_POS] = AttrFloat(3, VERTEX_SIZE, 0);
+    desc[VA_3D][VERT_ATTR_TC] = AttrFloat(2, VERTEX_SIZE, 4);
+    desc[VA_3D][VERT_ATTR_LMTC] = AttrFloat(2, VERTEX_SIZE, 6);
+    desc[VA_3D][VERT_ATTR_COLOR] = AttrUByte(4, VERTEX_SIZE, 3);
+    desc[VA_3D][VERT_ATTR_NORMAL] = AttrFloat(3, VERTEX_SIZE, 8);
+
+    return desc;
+}
+
+constexpr ArrayDescs arraydescs = MakeArrayDescs();
+
+} // namespace
 
 tesselator_t tess;
 
@@ -342,7 +426,7 @@ void GL_DrawBeams(void)
         if (ent->flags & RF_GLOW)
             GL_DrawLightningBeam(segs[0], segs[1], color, width);
         else if (gl_beamstyle->integer)
-            GL_DrawPolyBeam(segs, 1, color, width);
+            GL_DrawPolyBeam(segs.data(), 1, color, width);
         else
             GL_DrawSimpleBeam(segs[0], segs[1], color, width);
     }
@@ -490,51 +574,6 @@ void GL_DrawFlares(void)
     GL_FlushFlares();
 }
 
-#define ATTR_FLOAT(a, b, c) { a, false, b * sizeof(GLfloat), c * sizeof(GLfloat) }
-#define ATTR_UBYTE(a, b, c) { a, true,  b * sizeof(GLfloat), c * sizeof(GLfloat) }
-
-static const glVaDesc_t arraydescs[VA_TOTAL][VERT_ATTR_COUNT] = {
-    [VA_SPRITE] = {
-        [VERT_ATTR_POS] = ATTR_FLOAT(3, 5, 0),
-        [VERT_ATTR_TC]  = ATTR_FLOAT(2, 5, 3),
-    },
-    [VA_EFFECT] = {
-        [VERT_ATTR_POS]   = ATTR_FLOAT(3, 6, 0),
-        [VERT_ATTR_TC]    = ATTR_FLOAT(2, 6, 3),
-        [VERT_ATTR_COLOR] = ATTR_UBYTE(4, 6, 5),
-    },
-    [VA_NULLMODEL] = {
-        [VERT_ATTR_POS]   = ATTR_FLOAT(3, 4, 0),
-        [VERT_ATTR_COLOR] = ATTR_UBYTE(4, 4, 3),
-    },
-    [VA_OCCLUDE] = {
-        [VERT_ATTR_POS] = ATTR_FLOAT(3, 3, 0),
-    },
-    [VA_POSTPROCESS] = {
-        [VERT_ATTR_POS] = ATTR_FLOAT(2, 4, 0),
-        [VERT_ATTR_TC]  = ATTR_FLOAT(2, 4, 2),
-    },
-    [VA_MESH_SHADE] = {
-        [VERT_ATTR_POS]   = ATTR_FLOAT(3, VERTEX_SIZE, 0),
-        [VERT_ATTR_COLOR] = ATTR_FLOAT(4, VERTEX_SIZE, 4),
-    },
-    [VA_MESH_FLAT] = {
-        [VERT_ATTR_POS]    = ATTR_FLOAT(3, 8, 0),
-        [VERT_ATTR_NORMAL] = ATTR_FLOAT(3, 8, 4),
-    },
-    [VA_2D] = {
-        [VERT_ATTR_POS]   = ATTR_FLOAT(2, 5, 0),
-        [VERT_ATTR_TC]    = ATTR_FLOAT(2, 5, 2),
-        [VERT_ATTR_COLOR] = ATTR_UBYTE(4, 5, 4),
-    },
-    [VA_3D] = {
-        [VERT_ATTR_POS]    = ATTR_FLOAT(3, VERTEX_SIZE, 0),
-        [VERT_ATTR_TC]     = ATTR_FLOAT(2, VERTEX_SIZE, 4),
-        [VERT_ATTR_LMTC]   = ATTR_FLOAT(2, VERTEX_SIZE, 6),
-        [VERT_ATTR_COLOR]  = ATTR_UBYTE(4, VERTEX_SIZE, 3),
-        [VERT_ATTR_NORMAL] = ATTR_FLOAT(3, VERTEX_SIZE, 8),
-    },
-};
 
 void GL_BindArrays(glVertexArray_t va)
 {
@@ -554,7 +593,7 @@ void GL_BindArrays(glVertexArray_t va)
         }
 
         GL_BindBuffer(GL_ARRAY_BUFFER, buffer);
-        gl_backend->array_pointers(arraydescs[va], ptr);
+        gl_backend->array_pointers(arraydescs[va].data(), ptr);
     }
 
     gls.currentva = va;
@@ -571,7 +610,7 @@ void GL_LockArrays(GLsizei count)
         if (qglLockArraysEXT)
             qglLockArraysEXT(0, count);
     } else {
-        const glVaDesc_t *desc = &arraydescs[gls.currentva][VERT_ATTR_POS];
+        const glVaDesc_t *desc = arraydescs[gls.currentva].data() + VERT_ATTR_POS;
         GL_BindBuffer(GL_ARRAY_BUFFER, gl_static.vertex_buffer);
         qglBufferData(GL_ARRAY_BUFFER, count * desc->stride, tess.vertices, GL_STREAM_DRAW);
     }
