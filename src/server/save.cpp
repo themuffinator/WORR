@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "server.h"
-#include "common/mapdb.h"
+#include "server.hpp"
+#include "common/mapdb.hpp"
 
 #define SAVE_MAGIC1     MakeLittleLong('S','S','V','2')
 #define SAVE_MAGIC2     MakeLittleLong('S','A','V','2')

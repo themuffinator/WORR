@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "gl.h"
-#include "arbfp.h"
+#include "gl.hpp"
+#include "arbfp.hpp"
 
 static void legacy_state_bits(glStateBits_t bits)
 {

@@ -23,8 +23,8 @@ brain
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_brain.h"
+#include "g_local.hpp"
+#include "m_brain.hpp"
 
 static int  sound_chest_open;
 static int  sound_tentacles_extend;

@@ -19,14 +19,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "server.h"
-#include "server/nav.h"
-#include "common/error.h"
+#include "server.hpp"
+#include "server/nav.hpp"
+#include "common/error.hpp"
 #if USE_REF
-#include "refresh/refresh.h"
+#include "refresh/refresh.hpp"
 // ugly but necessary to hook into nav system without
 // exposing this into a mess of spaghetti
-#include "../refresh/gl.h"
+#include "../refresh/gl.hpp"
 
 static cvar_t *nav_debug;
 static cvar_t *nav_debug_range;

@@ -16,14 +16,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "cgame_classic.h"
-#include "client/client.h"
+#include "shared/shared.hpp"
+#include "cgame_classic.hpp"
+#include "client/client.hpp"
 
-#include "common/cvar.h"
-#include "common/game3_convert.h"
-#include "common/game3_pmove.h"
-#include "common/utils.h"
+#include "common/cvar.hpp"
+#include "common/game3_convert.hpp"
+#include "common/game3_pmove.hpp"
+#include "common/utils.hpp"
 
 #if HAVE_MALLOC_H
 #include <malloc.h>

@@ -23,8 +23,8 @@ SOLDIER
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_soldier.h"
+#include "g_local.hpp"
+#include "m_soldier.hpp"
 
 static int  sound_idle;
 static int  sound_sight1;

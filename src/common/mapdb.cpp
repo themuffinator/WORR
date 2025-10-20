@@ -16,11 +16,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/common.h"
-#include "common/files.h"
-#include "common/json.h"
-#include "common/mapdb.h"
+#include "shared/shared.hpp"
+#include "common/common.hpp"
+#include "common/files.hpp"
+#include "common/json.hpp"
+#include "common/mapdb.hpp"
 
 #define MapDB_Mallocz(size) Z_TagMallocz((size), TAG_MAPDB)
 

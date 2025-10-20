@@ -17,18 +17,18 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#include "shared/shared.h"
-#include "common/cvar.h"
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/zone.h"
-#include "client/client.h"
-#include "client/keys.h"
-#include "client/video.h"
-#include "client/ui.h"
-#include "refresh/refresh.h"
-#include "system/system.h"
-#include "keytables/keytables.h"
+#include "shared/shared.hpp"
+#include "common/cvar.hpp"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/zone.hpp"
+#include "client/client.hpp"
+#include "client/keys.hpp"
+#include "client/video.hpp"
+#include "client/ui.hpp"
+#include "refresh/refresh.hpp"
+#include "system/system.hpp"
+#include "keytables/keytables.hpp"
 
 #include <wayland-client.h>
 #include <wayland-cursor.h>
@@ -36,9 +36,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <libdecor.h>
 
-#include "relative-pointer-unstable-v1.h"
-#include "pointer-constraints-unstable-v1.h"
-#include "primary-selection-unstable-v1.h"
+#include "relative-pointer-unstable-v1.hpp"
+#include "pointer-constraints-unstable-v1.hpp"
+#include "primary-selection-unstable-v1.hpp"
 
 #include <linux/input-event-codes.h>
 

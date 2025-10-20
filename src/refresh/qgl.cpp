@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #define QGLAPI
-#include "gl.h"
+#include "gl.hpp"
 
 typedef struct {
     const char *name;

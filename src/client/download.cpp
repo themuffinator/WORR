@@ -20,9 +20,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_download.c -- queue manager and UDP downloads
 //
 
-#include "client.h"
-#include "format/md2.h"
-#include "format/sp2.h"
+#include "client.hpp"
+#include "format/md2.hpp"
+#include "format/sp2.hpp"
 
 typedef enum {
     PRECACHE_MODELS,

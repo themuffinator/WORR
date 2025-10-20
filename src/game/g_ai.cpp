@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // g_ai.c
 
-#include "g_local.h"
+#include "g_local.hpp"
 
 static bool ai_checkattack(edict_t *self, float dist);
 

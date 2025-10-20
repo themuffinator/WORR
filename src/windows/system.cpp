@@ -16,12 +16,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "client.h"
-#include "common/cvar.h"
-#include "common/field.h"
-#include "common/prompt.h"
-#include "common/steam.h"
-#include "shared/atomic.h"
+#include "client.hpp"
+#include "common/cvar.hpp"
+#include "common/field.hpp"
+#include "common/prompt.hpp"
+#include "common/steam.hpp"
+#include "shared/atomic.hpp"
 
 #include <array>
 

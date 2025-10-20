@@ -20,7 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // r1ch.net anticheat support
 //
 
-#include "client.h"
+#include "client.hpp"
 
 typedef PVOID (*FNINIT)(void);
 

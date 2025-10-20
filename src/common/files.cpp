@@ -16,21 +16,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "shared/list.h"
+#include "shared/shared.hpp"
+#include "shared/list.hpp"
 
 #include <array>
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/error.h"
-#include "common/files.h"
-#include "common/prompt.h"
-#include "common/intreadwrite.h"
-#include "common/mapdb.h"
-#include "system/system.h"
-#include "client/client.h"
-#include "server/server.h"
-#include "format/pak.h"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/error.hpp"
+#include "common/files.hpp"
+#include "common/prompt.hpp"
+#include "common/intreadwrite.hpp"
+#include "common/mapdb.hpp"
+#include "system/system.hpp"
+#include "client/client.hpp"
+#include "server/server.hpp"
+#include "format/pak.hpp"
 
 #include <fcntl.h>
 
@@ -38,7 +38,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <zlib.h>
 #endif
 
-#include "common/loc.h"
+#include "common/loc.hpp"
 
 /*
 =============================================================================

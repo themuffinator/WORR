@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // g_utils.c -- misc utility functions for game module
 
-#include "g_local.h"
+#include "g_local.hpp"
 
 void G_ProjectSource(const vec3_t point, const vec3_t distance, const vec3_t forward, const vec3_t right, vec3_t result)
 {

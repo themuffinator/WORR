@@ -23,8 +23,8 @@ hover
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_hover.h"
+#include "g_local.hpp"
+#include "m_hover.hpp"
 
 static int  sound_pain1;
 static int  sound_pain2;

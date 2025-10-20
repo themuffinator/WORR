@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "ui.h"
-#include "common/mapdb.h"
+#include "ui.hpp"
+#include "common/mapdb.hpp"
 
 static cvar_t *mapdb_episode;
 static cvar_t *mapdb_level;

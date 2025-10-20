@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // m_flash.c
 
-#include "shared/shared.h"
-#include "shared/m_flash.h"
+#include "shared/shared.hpp"
+#include "shared/m_flash.hpp"
 
 // this file is included in both the game dll and quake2,
 // the game needs it to source shot locations, the client

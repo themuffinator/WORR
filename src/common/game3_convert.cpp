@@ -16,7 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "common/game3_convert.h"
+#include "common/game3_convert.hpp"
 
 void ConvertToGame3_pmove_state_old(game3_pmove_state_old_t *game_pmove_state, const pmove_state_t *server_pmove_state, bool extended)
 {

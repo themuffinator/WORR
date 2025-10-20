@@ -22,8 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "server.h"
-#include "server/mvd/protocol.h"
+#include "server.hpp"
+#include "server/mvd/protocol.hpp"
 
 #define FOR_EACH_GTV(client) \
     LIST_FOR_EACH(gtv_client_t, client, &gtv_client_list, entry)

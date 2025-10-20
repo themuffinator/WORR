@@ -20,8 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  * gl_surf.c -- surface post-processing code
  *
  */
-#include "gl.h"
-#include "common/mdfour.h"
+#include "gl.hpp"
+#include "common/mdfour.hpp"
 #include <array>
 
 lightmap_builder_t lm;

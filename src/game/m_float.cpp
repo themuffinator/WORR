@@ -23,8 +23,8 @@ floater
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_float.h"
+#include "g_local.hpp"
+#include "m_float.hpp"
 
 static int  sound_attack2;
 static int  sound_attack3;

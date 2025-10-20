@@ -21,20 +21,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // images.c -- image reading and writing functions
 //
 
-#include "shared/shared.h"
-#include "common/async.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/intreadwrite.h"
-#include "common/msg.h"
-#include "common/sizebuf.h"
-#include "system/system.h"
-#include "format/pcx.h"
-#include "format/wal.h"
+#include "shared/shared.hpp"
+#include "common/async.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/intreadwrite.hpp"
+#include "common/msg.hpp"
+#include "common/sizebuf.hpp"
+#include "system/system.hpp"
+#include "format/pcx.hpp"
+#include "format/wal.hpp"
 #include <array>
 #include <type_traits>
-#include "images.h"
+#include "images.hpp"
 
 #if USE_PNG
 #define PNG_SKIP_SETJMP_CHECK

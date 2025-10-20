@@ -20,12 +20,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // prompt.c
 //
 
-#include "shared/shared.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/field.h"
-#include "common/files.h"
-#include "common/prompt.h"
+#include "shared/shared.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/field.hpp"
+#include "common/files.hpp"
+#include "common/prompt.hpp"
 
 #include <array>
 

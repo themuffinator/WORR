@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/sizebuf.h"
-#include "common/intreadwrite.h"
-#include "common/zone.h"
+#include "shared/shared.hpp"
+#include "common/sizebuf.hpp"
+#include "common/intreadwrite.hpp"
+#include "common/zone.hpp"
 
 void SZ_Init(sizebuf_t *buf, void *data, size_t size, const char *tag)
 {

@@ -17,17 +17,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cvar.c -- dynamic variable tracking
 
-#include "shared/shared.h"
+#include "shared/shared.hpp"
 
 #include <array>
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/prompt.h"
-#include "common/utils.h"
-#include "common/zone.h"
-#include "client/client.h"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/prompt.hpp"
+#include "common/utils.hpp"
+#include "common/zone.hpp"
+#include "client/client.hpp"
 
 cvar_t  *cvar_vars;
 

@@ -23,8 +23,8 @@ SUPERTANK
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_supertank.h"
+#include "g_local.hpp"
+#include "m_supertank.hpp"
 
 static int  sound_pain1;
 static int  sound_pain2;

@@ -23,8 +23,8 @@ BERSERK
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_berserk.h"
+#include "g_local.hpp"
+#include "m_berserk.hpp"
 
 static int sound_pain;
 static int sound_die;

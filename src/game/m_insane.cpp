@@ -23,8 +23,8 @@ insane
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_insane.h"
+#include "g_local.hpp"
+#include "m_insane.hpp"
 
 static int  sound_fist;
 static int  sound_shake;

@@ -33,7 +33,7 @@
 #include <stddef.h>     /* size_t */
 #include <ctype.h>
 
-#include "common/natsort.h"
+#include "common/natsort.hpp"
 
 
 /* These are defined as macros to make it easier to adapt this code to

@@ -18,12 +18,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #define CURL_DISABLE_DEPRECATION
 
-#include "client.h"
+#include "client.hpp"
 #include <assert.h>
 #include <curl/curl.h>
 
-#include "shared/atomic.h"
-#include "system/pthread.h"
+#include "shared/atomic.hpp"
+#include "system/pthread.hpp"
 
 static cvar_t  *cl_http_downloads;
 static cvar_t  *cl_http_filelists;

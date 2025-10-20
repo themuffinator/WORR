@@ -23,8 +23,8 @@ Makron -- Final Boss
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_boss32.h"
+#include "g_local.hpp"
+#include "m_boss32.hpp"
 
 static void MakronRailgun(edict_t *self);
 static void MakronSaveloc(edict_t *self);

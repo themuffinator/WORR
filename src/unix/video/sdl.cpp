@@ -20,18 +20,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // video.c
 //
 
-#include "shared/shared.h"
-#include "common/cvar.h"
-#include "common/common.h"
-#include "common/files.h"
-#include "common/zone.h"
-#include "client/client.h"
-#include "client/input.h"
-#include "client/keys.h"
-#include "client/ui.h"
-#include "client/video.h"
-#include "refresh/refresh.h"
-#include "system/system.h"
+#include "shared/shared.hpp"
+#include "common/cvar.hpp"
+#include "common/common.hpp"
+#include "common/files.hpp"
+#include "common/zone.hpp"
+#include "client/client.hpp"
+#include "client/input.hpp"
+#include "client/keys.hpp"
+#include "client/ui.hpp"
+#include "client/video.hpp"
+#include "refresh/refresh.hpp"
+#include "system/system.hpp"
 #include "../res/q2pro.xbm"
 #include <SDL.h>
 
@@ -407,7 +407,7 @@ static void window_event(SDL_WindowEvent *event)
 }
 
 static const byte scantokey[] = {
-    #include "keytables/sdl.h"
+    #include "keytables/sdl.hpp"
 };
 
 static const byte scantokey2[] = {

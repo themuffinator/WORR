@@ -16,21 +16,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/bsp.h"
+#include "shared/shared.hpp"
+#include "common/bsp.hpp"
 
 #include <algorithm>
 #include <array>
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/files.h"
-#include "common/mdfour.h"
-#include "common/tests.h"
-#include "common/utils.h"
-#include "refresh/refresh.h"
-#include "system/system.h"
-#include "client/client.h"
-#include "client/sound/sound.h"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/files.hpp"
+#include "common/mdfour.hpp"
+#include "common/tests.hpp"
+#include "common/utils.hpp"
+#include "refresh/refresh.hpp"
+#include "system/system.hpp"
+#include "client/client.hpp"
+#include "client/sound/sound.hpp"
 
 // test error shutdown procedures
 static void Com_Error_f(void)

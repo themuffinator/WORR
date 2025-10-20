@@ -21,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  *
  */
 
-#include "gl.h"
+#include "gl.hpp"
 #include <array>
 
 glRefdef_t glr;

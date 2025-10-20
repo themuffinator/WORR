@@ -21,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // Quake refresh engine.
 
 
-#include "client.h"
+#include "client.hpp"
 
 // Console variables that we need to access from this module
 cvar_t      *vid_geometry;

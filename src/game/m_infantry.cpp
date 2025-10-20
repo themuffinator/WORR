@@ -23,8 +23,8 @@ INFANTRY
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_infantry.h"
+#include "g_local.hpp"
+#include "m_infantry.hpp"
 
 static void InfantryMachineGun(edict_t *self);
 

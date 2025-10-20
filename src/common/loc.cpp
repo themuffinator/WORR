@@ -16,11 +16,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/common.h"
-#include "common/loc.h"
+#include "shared/shared.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/common.hpp"
+#include "common/loc.hpp"
 
 static cvar_t *loc_file;
 

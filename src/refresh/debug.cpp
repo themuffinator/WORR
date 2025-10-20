@@ -16,11 +16,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "gl.h"
-#include "../client/client.h"
-#include "../server/server.h"
-#include "shared/list.h"
-#include "common/prompt.h"
+#include "gl.hpp"
+#include "../client/client.hpp"
+#include "../server/server.hpp"
+#include "shared/list.hpp"
+#include "common/prompt.hpp"
 #include <assert.h>
 #include <array>
 

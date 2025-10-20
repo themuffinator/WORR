@@ -16,7 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "g_local.h"
+#include "g_local.hpp"
 
 game_locals_t   game;
 level_locals_t  level;

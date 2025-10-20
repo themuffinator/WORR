@@ -16,17 +16,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/steam.h"
+#include "shared/shared.hpp"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/steam.hpp"
 #if USE_REF
-#include "client/video.h"
+#include "client/video.hpp"
 #endif
-#include "system/system.h"
-#include "tty.h"
+#include "system/system.hpp"
+#include "tty.hpp"
 
 #include <sys/types.h>
 #include <sys/stat.h>

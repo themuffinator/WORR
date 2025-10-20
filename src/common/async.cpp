@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/async.h"
-#include "common/zone.h"
-#include "system/pthread.h"
+#include "shared/shared.hpp"
+#include "common/async.hpp"
+#include "common/zone.hpp"
+#include "system/pthread.hpp"
 
 static bool work_initialized;
 static bool work_terminate;

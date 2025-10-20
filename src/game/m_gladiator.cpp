@@ -23,8 +23,8 @@ GLADIATOR
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_gladiator.h"
+#include "g_local.hpp"
+#include "m_gladiator.hpp"
 
 static int  sound_pain1;
 static int  sound_pain2;

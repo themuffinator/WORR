@@ -18,13 +18,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "../server.h"
-#include "shared/game3_shared.h"
-#include "shared/game3.h"
-#include "game3_proxy.h"
-#include "shared/base85.h"
-#include "common/game3_pmove.h"
-#include "common/game3_convert.h"
+#include "../server.hpp"
+#include "shared/game3_shared.hpp"
+#include "shared/game3.hpp"
+#include "game3_proxy.hpp"
+#include "shared/base85.hpp"
+#include "common/game3_pmove.hpp"
+#include "common/game3_convert.hpp"
 
 #include <assert.h>
 #if HAVE_MALLOC_H

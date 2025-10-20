@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/gamedll.h"
-#include "system/system.h"
-#include "common/common.h"
+#include "shared/shared.hpp"
+#include "common/gamedll.hpp"
+#include "system/system.hpp"
+#include "common/common.hpp"
 
 #include <errno.h>
 

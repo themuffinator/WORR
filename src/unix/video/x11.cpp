@@ -18,17 +18,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include "shared/shared.h"
-#include "common/cvar.h"
-#include "common/common.h"
-#include "common/zone.h"
-#include "client/client.h"
-#include "client/keys.h"
-#include "client/video.h"
-#include "client/ui.h"
-#include "refresh/refresh.h"
-#include "system/system.h"
-#include "keytables/keytables.h"
+#include "shared/shared.hpp"
+#include "common/cvar.hpp"
+#include "common/common.hpp"
+#include "common/zone.hpp"
+#include "client/client.hpp"
+#include "client/keys.hpp"
+#include "client/video.hpp"
+#include "client/ui.hpp"
+#include "refresh/refresh.hpp"
+#include "system/system.hpp"
+#include "keytables/keytables.hpp"
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>

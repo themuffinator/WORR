@@ -20,7 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_demo.c - demo recording and playback
 //
 
-#include "client.h"
+#include "client.hpp"
 
 static byte     demo_buffer[MAX_MSGLEN];
 

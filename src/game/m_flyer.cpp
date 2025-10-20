@@ -23,8 +23,8 @@ flyer
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_flyer.h"
+#include "g_local.hpp"
+#include "m_flyer.hpp"
 
 static int  sound_sight;
 static int  sound_idle;

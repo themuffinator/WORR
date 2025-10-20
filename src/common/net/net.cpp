@@ -20,20 +20,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // net.c
 //
 
-#include "shared/shared.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/fifo.h"
+#include "shared/shared.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/fifo.hpp"
 #if USE_DEBUG
-#include "common/files.h"
+#include "common/files.hpp"
 #endif
-#include "common/msg.h"
-#include "common/net/net.h"
-#include "common/protocol.h"
-#include "common/zone.h"
-#include "client/client.h"
-#include "server/server.h"
-#include "system/system.h"
+#include "common/msg.hpp"
+#include "common/net/net.hpp"
+#include "common/protocol.hpp"
+#include "common/zone.hpp"
+#include "client/client.hpp"
+#include "server/server.hpp"
+#include "system/system.hpp"
 
 #include <array>
 
@@ -644,9 +644,9 @@ static void NET_ErrorEvent(qsocket_t sock, const netadr_t *from,
 
 // include our wrappers to hide platfrom-specific details
 #ifdef _WIN32
-#include "win.h"
+#include "win.hpp"
 #else
-#include "unix.h"
+#include "unix.hpp"
 #endif
 
 /*

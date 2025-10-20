@@ -16,9 +16,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "sound.h"
-#include "common/hash_map.h"
-#include "../ffmpeg_utils.h"
+#include "sound.hpp"
+#include "common/hash_map.hpp"
+#include "../ffmpeg_utils.hpp"
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>

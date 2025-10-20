@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // snd_main.c -- common sound functions
 
-#include "sound.h"
+#include "sound.hpp"
 
 // =======================================================================
 // Internal sound data & structures

@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "shared/list.h"
-#include "common/common.h"
-#include "common/zone.h"
+#include "shared/shared.hpp"
+#include "shared/list.hpp"
+#include "common/common.hpp"
+#include "common/zone.hpp"
 
 #ifdef __cplusplus
 #undef Z_Realloc
@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #if USE_MEMORY_TRACES
 #define MAX_TRACE_SIZE 32
-#include "system/system.h"
+#include "system/system.hpp"
 #endif
 
 #define Z_MAGIC     0x1d0d
