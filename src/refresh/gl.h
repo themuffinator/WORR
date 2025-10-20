@@ -542,13 +542,15 @@ typedef struct {
 
 #endif
 
+enum modtype_t {
+    MOD_FREE,
+    MOD_ALIAS,
+    MOD_SPRITE,
+    MOD_EMPTY
+};
+
 typedef struct {
-    enum {
-        MOD_FREE,
-        MOD_ALIAS,
-        MOD_SPRITE,
-        MOD_EMPTY
-    } type;
+    modtype_t type;
 
     char name[MAX_QPATH];
     unsigned registration_sequence;
