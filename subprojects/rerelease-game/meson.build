@@ -2,7 +2,7 @@ project('quake2-rerelease-dll', 'cpp',
   license: 'GPL-2.0-or-later',
   version: run_command(find_program('python3'), 'version.py', check: true).stdout().strip(),
   default_options: [
-    'cpp_std=c++17',
+    'cpp_std=c++23',
     'buildtype=debugoptimized',
     'b_vscrt=static_from_buildtype',
   ],
@@ -10,7 +10,7 @@ project('quake2-rerelease-dll', 'cpp',
 
 cpp_compiler = meson.get_compiler('cpp')
 if cpp_compiler.get_id() == 'msvc'
-  add_project_arguments('/std:c++17', language: 'cpp')
+  add_project_arguments('/std:c++23', language: 'cpp')
 endif
 
 src = [
