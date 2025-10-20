@@ -9,10 +9,6 @@ project('worr', ['cpp', 'c'],
   ],
 )
 
-cpp_compiler = meson.get_compiler('cpp')
-if cpp_compiler.get_id() == 'msvc'
-  add_project_arguments('/std:c++latest', language: 'cpp')
-endif
 
 common_src = [
   'src/common/bsp.cpp',
