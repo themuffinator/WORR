@@ -217,7 +217,6 @@ static void WriteCache(void)
     qhandle_t f;
     int i;
     char *map, *pov;
-    demoEntry_t *e;
 
     if (m_demos.list.numItems == m_demos.numDirs) {
         return;
@@ -236,7 +235,7 @@ static void WriteCache(void)
     FS_FPrintf(f, "\\");
 
     for (i = m_demos.numDirs; i < m_demos.list.numItems; i++) {
-        e = m_demos.list.items[i];
+        auto *e = static_cast<demoEntry_t *>(m_demos.list.items[i]);
         map = UI_GetColumn(e->name, COL_MAP);
         pov = UI_GetColumn(e->name, COL_POV);
         FS_FPrintf(f, "%s\\%s\\", map, pov);
@@ -261,14 +260,13 @@ static void CalcHash(void **list)
 
 static menuSound_t Change(menuCommon_t *self)
 {
-    demoEntry_t *e;
-
     if (!m_demos.list.numItems) {
         m_demos.menu.status = m_demos.status_no_demos;
         return QMS_BEEP;
     }
 
-    e = m_demos.list.items[m_demos.list.curvalue];
+    auto *e = static_cast<demoEntry_t *>(
+        m_demos.list.items[m_demos.list.curvalue]);
     switch (e->type) {
     case ENTRY_DEMO:
         m_demos.menu.status = m_demos.status_play_demo;
@@ -408,7 +406,7 @@ static menuSound_t LeaveDirectory(void)
 
     // move cursor to the previous directory
     for (i = 0; i < m_demos.numDirs; i++) {
-        demoEntry_t *e = m_demos.list.items[i];
+        auto *e = static_cast<demoEntry_t *>(m_demos.list.items[i]);
         if (!strcmp(e->name, s + 1)) {
             MenuList_SetValue(&m_demos.list, i);
             break;
@@ -469,13 +467,12 @@ static menuSound_t PlayDemo(demoEntry_t *e)
 
 static menuSound_t Activate(menuCommon_t *self)
 {
-    demoEntry_t *e;
-
     if (!m_demos.list.numItems) {
         return QMS_BEEP;
     }
 
-    e = m_demos.list.items[m_demos.list.curvalue];
+    auto *e = static_cast<demoEntry_t *>(
+        m_demos.list.items[m_demos.list.curvalue]);
     switch (e->type) {
     case ENTRY_UP:
         return LeaveDirectory();
