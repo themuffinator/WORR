@@ -1,0 +1,8 @@
+--- a/pngconf.h
++++ b/pngconf.h
+@@
+-#        define PNG_ALLOCATED __declspec(PNG_RESTRICT)
++#        define PNG_ALLOCATED __declspec(restrict)
+@@
+-#        define PNG_ALLOCATED __declspec(__restrict)
++#        define PNG_ALLOCATED __declspec(restrict)

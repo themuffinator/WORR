@@ -10,6 +10,8 @@ project('worr', ['cpp', 'c'],
 )
 
 
+c_compiler = meson.get_compiler('c')
+
 common_src = [
   'src/common/bsp.cpp',
   'src/common/cmd.cpp',
@@ -434,6 +436,12 @@ endif
 
 config.set10('USE_ZLIB', zlib.found())
 config.set10('USE_PNG', png.found())
+
+if host_machine.system() == 'windows' and c_compiler.get_id() == 'msvc' and png.found() and png.type_name() == 'internal'
+  python_mod = import('python')
+  python3 = python_mod.find_installation('python3')
+  meson.add_postconf_script(python3, files('tools/fix_libpng_msvc.py'))
+endif
 
 curl = dependency('libcurl',
   version:         '>= 7.68.0',
