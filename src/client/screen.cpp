@@ -1260,7 +1260,7 @@ void SCR_RegisterMedia(void)
     scr.inven_pic = R_RegisterPic("inventory");
     scr.field_pic = R_RegisterPic("field_3");
     scr.backtile_pic = R_RegisterImage("backtile", IT_PIC,
-        static_cast<imageflags_t>(IF_PERMANENT | IF_REPEAT));
+        IF_PERMANENT | IF_REPEAT);
     scr.pause_pic = R_RegisterPic("pause");
     scr.loading_pic = R_RegisterPic("loading");
 
@@ -1269,7 +1269,7 @@ void SCR_RegisterMedia(void)
 
     scr.net_pic = R_RegisterPic("net");
     scr.hit_marker_pic = R_RegisterImage("marker", IT_PIC,
-        static_cast<imageflags_t>(IF_PERMANENT | IF_OPTIONAL));
+        IF_PERMANENT | IF_OPTIONAL);
 
     scr_crosshair_changed(scr_crosshair);
 

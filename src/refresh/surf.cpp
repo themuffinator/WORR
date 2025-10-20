@@ -826,7 +826,7 @@ static void calc_surface_hash(mface_t *surf)
     std::array<uint32_t, 3> args = {
         static_cast<uint32_t>(surf->texinfo->image - r_images),
         static_cast<uint32_t>(surf->light_m ? surf->light_m - lm.lightmaps : 0),
-        surf->statebits
+        static_cast<uint32_t>(surf->statebits)
     };
     struct mdfour md;
     std::array<uint8_t, 16> out{};
@@ -1139,7 +1139,8 @@ void GL_LoadWorld(const char *name)
                 info->image = R_NOTEXTURE;
             } else if (Q_stristr(info->name, "env/sky")) {
                 Q_concat(buffer, sizeof(buffer), "textures/", info->name, ".tga");
-                info->image = IMG_Find(buffer, IT_SKY, IF_REPEAT | IF_CLASSIC_SKY);
+                const imageflags_t sky_flags = IF_REPEAT | IF_CLASSIC_SKY;
+                info->image = IMG_Find(buffer, IT_SKY, sky_flags);
             } else if (Q_stricmpn(info->name, CONST_STR_LEN("sky/")) == 0) {
                 Q_concat(buffer, sizeof(buffer), info->name, ".tga");
                 info->image = IMG_Find(buffer, IT_SKY, IF_CUBEMAP);
@@ -1210,7 +1211,8 @@ void GL_LoadWorld(const char *name)
     if ((bsp->has_bspx || n64surfs > 100) && gl_static.use_shaders)
         gl_static.nolm_mask = SURF_NOLM_MASK_REMASTER;
 
-    glr.fd.lightstyles = &kFallbackLightstyle;
+    // Safe: the renderer treats the fallback lightstyle as read-only.
+    glr.fd.lightstyles = const_cast<lightstyle_t *>(&kFallbackLightstyle);
 
     // post process all surfaces
     upload_world_surfaces();

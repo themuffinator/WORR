@@ -752,6 +752,48 @@ typedef enum {
     PP_BLOOM     = BIT(1),
 } pp_flags_t;
 
+constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator&(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator^(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator~(pp_flags_t value) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(~static_cast<U>(value));
+}
+
+constexpr pp_flags_t &operator|=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr pp_flags_t &operator&=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs ^ rhs;
+    return lhs;
+}
+
 static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
