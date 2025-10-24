@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // g_weapon.c
 
-#include "g_local.h"
-#include "m_player.h"
+#include "g_local.hpp"
+#include "m_player.hpp"
 
 static bool     is_quad;
 static byte     is_silenced;

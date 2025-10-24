@@ -16,12 +16,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "system/system.h"
-#include "client/proc_address.h"
-#include "common/cvar.h"
-#include "common/common.h"
-#include "common/files.h"
+#include "shared/shared.hpp"
+#include "system/system.hpp"
+#include "client/proc_address.hpp"
+#include "common/cvar.hpp"
+#include "common/common.hpp"
+#include "common/files.hpp"
 
 #include <AL/alc.h>
 
@@ -30,7 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <functional>
 
 #define QALAPI
-#include "qal.h"
+#include "qal.hpp"
 
 #ifndef ALC_SOFT_output_mode
 #define ALC_OUTPUT_MODE_SOFT    0x19AC

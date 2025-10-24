@@ -41,7 +41,7 @@ common_src = [
   'src/common/steam.cpp',
   'src/common/utils.cpp',
   'src/common/zone.cpp',
-  'src/common/features.h',
+  'src/common/features.hpp',
   'src/common/mapdb.cpp',
   'src/shared/shared.cpp',
 
@@ -71,57 +71,57 @@ common_src = [
   'src/common/q2proto-glue.cpp',
   'src/common/q2proto-packing.cpp',
 
-  'inc/shared/atomic.h',
-  'inc/shared/base85.h',
-  'inc/shared/files.h',
-  'inc/shared/game.h',
-  'inc/shared/game3_shared.h',
-  'inc/shared/list.h',
-  'inc/shared/m_flash.h',
-  'inc/shared/platform.h',
-  'inc/shared/shared.h',
+  'inc/shared/atomic.hpp',
+  'inc/shared/base85.hpp',
+  'inc/shared/files.hpp',
+  'inc/shared/game.hpp',
+  'inc/shared/game3_shared.hpp',
+  'inc/shared/list.hpp',
+  'inc/shared/m_flash.hpp',
+  'inc/shared/platform.hpp',
+  'inc/shared/shared.hpp',
 
-  'inc/common/natsort.h',
-  'inc/common/async.h',
-  'inc/common/bsp.h',
-  'inc/common/cmd.h',
-  'inc/common/cmodel.h',
-  'inc/common/common.h',
-  'inc/common/cvar.h',
-  'inc/common/error.h',
-  'inc/common/field.h',
-  'inc/common/fifo.h',
-  'inc/common/files.h',
-  'inc/common/gamedll.h',
-  'inc/common/hash_map.h',
-  'inc/common/intreadwrite.h',
-  'inc/common/loc.h',
-  'inc/common/math.h',
-  'inc/common/mdfour.h',
-  'inc/common/msg.h',
-  'inc/common/pmove.h',
-  'inc/common/prompt.h',
-  'inc/common/protocol.h',
-  'inc/common/sizebuf.h',
-  'inc/common/steam.h',
-  'inc/common/tests.h',
-  'inc/common/utils.h',
-  'inc/common/zone.h',
+  'inc/common/natsort.hpp',
+  'inc/common/async.hpp',
+  'inc/common/bsp.hpp',
+  'inc/common/cmd.hpp',
+  'inc/common/cmodel.hpp',
+  'inc/common/common.hpp',
+  'inc/common/cvar.hpp',
+  'inc/common/error.hpp',
+  'inc/common/field.hpp',
+  'inc/common/fifo.hpp',
+  'inc/common/files.hpp',
+  'inc/common/gamedll.hpp',
+  'inc/common/hash_map.hpp',
+  'inc/common/intreadwrite.hpp',
+  'inc/common/loc.hpp',
+  'inc/common/math.hpp',
+  'inc/common/mdfour.hpp',
+  'inc/common/msg.hpp',
+  'inc/common/pmove.hpp',
+  'inc/common/prompt.hpp',
+  'inc/common/protocol.hpp',
+  'inc/common/sizebuf.hpp',
+  'inc/common/steam.hpp',
+  'inc/common/tests.hpp',
+  'inc/common/utils.hpp',
+  'inc/common/zone.hpp',
 
-  'inc/common/net/chan.h',
-  'inc/common/net/net.h',
+  'inc/common/net/chan.hpp',
+  'inc/common/net/net.hpp',
 
-  'inc/format/bsp.h',
-  'inc/format/md2.h',
-  'inc/format/md3.h',
-  'inc/format/pak.h',
-  'inc/format/pcx.h',
-  'inc/format/sp2.h',
-  'inc/format/wal.h',
+  'inc/format/bsp.hpp',
+  'inc/format/md2.hpp',
+  'inc/format/md3.hpp',
+  'inc/format/pak.hpp',
+  'inc/format/pcx.hpp',
+  'inc/format/sp2.hpp',
+  'inc/format/wal.hpp',
 
-  'inc/system/hunk.h',
-  'inc/system/pthread.h',
-  'inc/system/system.h',
+  'inc/system/hunk.hpp',
+  'inc/system/pthread.hpp',
+  'inc/system/system.hpp',
 ]
 
 client_src = [
@@ -146,14 +146,14 @@ client_src = [
   'src/client/screen.cpp',
   'src/client/sound/main.cpp',
   'src/client/sound/mem.cpp',
-  'src/client/sound/qal.h',
-  'src/client/sound/sound.h',
+  'src/client/sound/qal.hpp',
+  'src/client/sound/sound.hpp',
   'src/client/tent.cpp',
   'src/client/view.cpp',
   'src/client/wheel.cpp',
-  'src/client/client.h',
-  'src/client/ffmpeg_utils.h',
-  'src/client/cgame_classic.h',
+  'src/client/client.hpp',
+  'src/client/ffmpeg_utils.hpp',
+  'src/client/cgame_classic.hpp',
   'src/common/async.cpp',
   'src/common/gamedll.cpp',
   'src/server/commands.cpp',
@@ -166,21 +166,21 @@ client_src = [
   'src/server/user.cpp',
   'src/server/nav.cpp',
   'src/server/world.cpp',
-  'src/server/server.h',
+  'src/server/server.hpp',
   'src/shared/base85.cpp',
   'src/shared/m_flash.cpp',
 
-  'inc/server/server.h',
+  'inc/server/server.hpp',
 
-  'inc/client/client.h',
-  'inc/client/input.h',
-  'inc/client/keys.h',
-  'inc/client/proc_address.h',
-  'inc/client/ui.h',
-  'inc/client/video.h',
+  'inc/client/client.hpp',
+  'inc/client/input.hpp',
+  'inc/client/keys.hpp',
+  'inc/client/proc_address.hpp',
+  'inc/client/ui.hpp',
+  'inc/client/video.hpp',
 
-  'inc/client/sound/dma.h',
-  'inc/client/sound/sound.h',
+  'inc/client/sound/dma.hpp',
+  'inc/client/sound/sound.hpp',
 ]
 
 ui_src = [
@@ -192,7 +192,7 @@ ui_src = [
   'src/client/ui/servers.cpp',
   'src/client/ui/mapdb.cpp',
   'src/client/ui/ui.cpp',
-  'src/client/ui/ui.h',
+  'src/client/ui/ui.hpp',
 ]
 
 refresh_src = [
@@ -213,12 +213,12 @@ refresh_src = [
   'src/refresh/world.cpp',
   'src/refresh/debug.cpp',
   'src/refresh/debug_text.cpp',
-  'src/refresh/arbfp.h',
-  'src/refresh/gl.h',
-  'src/refresh/images.h',
-  'src/refresh/qgl.h',
+  'src/refresh/arbfp.hpp',
+  'src/refresh/gl.hpp',
+  'src/refresh/images.hpp',
+  'src/refresh/qgl.hpp',
 
-  'inc/refresh/refresh.h',
+  'inc/refresh/refresh.hpp',
 ]
 
 server_src = [
@@ -234,10 +234,10 @@ server_src = [
   'src/server/user.cpp',
   'src/server/nav.cpp',
   'src/server/world.cpp',
-  'src/server/server.h',
+  'src/server/server.hpp',
   'src/shared/base85.cpp',
 
-  'inc/server/server.h',
+  'inc/server/server.hpp',
 ]
 
 game_src = [
@@ -335,7 +335,7 @@ else
   default_prefix = get_option('prefix')
 endif
 
-common_args = ['-DHAVE_CONFIG_H', '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"']
+common_args = ['-DHAVE_CONFIG_H', '-DQ2PROTO_CONFIG_H="common/q2proto_config.hpp"']
 if win32
   common_args += '-D_USE_MATH_DEFINES'
 else
@@ -495,7 +495,7 @@ openal = dependency('openal',
   default_options: fallback_opt,
 )
 if openal.found()
-  client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.h' ]
+  client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.hpp' ]
   client_deps += openal
   config.set10('USE_OPENAL', true)
 endif
@@ -625,8 +625,8 @@ endif
 if get_option('mvd-server')
   common_src += [
     'src/server/mvd.cpp',
-    'inc/server/mvd/client.h',
-    'inc/server/mvd/protocol.h'
+    'inc/server/mvd/client.hpp',
+    'inc/server/mvd/protocol.hpp'
   ]
   config.set10('USE_MVD_SERVER', true)
 endif

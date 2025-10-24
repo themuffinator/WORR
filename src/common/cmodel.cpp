@@ -17,18 +17,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cmodel.c -- model loading
 
-#include "shared/shared.h"
-#include "common/bsp.h"
-#include "common/cmd.h"
-#include "common/cmodel.h"
-#include "common/common.h"
-#include "common/crc.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/math.h"
-#include "common/sizebuf.h"
-#include "common/zone.h"
-#include "system/hunk.h"
+#include "shared/shared.hpp"
+#include "common/bsp.hpp"
+#include "common/cmd.hpp"
+#include "common/cmodel.hpp"
+#include "common/common.hpp"
+#include "common/crc.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/math.hpp"
+#include "common/sizebuf.hpp"
+#include "common/zone.hpp"
+#include "system/hunk.hpp"
 
 mtexinfo_t nulltexinfo;
 

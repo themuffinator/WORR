@@ -16,13 +16,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "shared/game3_shared.h"
-#include "common/msg.h"
-#include "common/protocol.h"
-#include "common/sizebuf.h"
-#include "common/math.h"
-#include "common/intreadwrite.h"
+#include "shared/shared.hpp"
+#include "shared/game3_shared.hpp"
+#include "common/msg.hpp"
+#include "common/protocol.hpp"
+#include "common/sizebuf.hpp"
+#include "common/math.hpp"
+#include "common/intreadwrite.hpp"
 
 #include "q2proto/q2proto_sound.h"
 

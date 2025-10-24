@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_scrn.c -- master for refresh, status bar, console, chat, notify, etc
 
-#include "client.h"
+#include "client.hpp"
 
 static cvar_t   *scr_viewsize;
 static cvar_t   *scr_showpause;

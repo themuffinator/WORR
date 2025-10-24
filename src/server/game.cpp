@@ -17,16 +17,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // sv_game.c -- interface to the game dll
 
-#include "server.h"
-#include "game3_proxy/game3_proxy.h"
-#include "common/loc.h"
-#include "common/gamedll.h"
+#include "server.hpp"
+#include "game3_proxy/game3_proxy.hpp"
+#include "common/loc.hpp"
+#include "common/gamedll.hpp"
 
 #if USE_CLIENT
-#include "client/video.h"
+#include "client/video.hpp"
 #endif
 
-#include "server/nav.h"
+#include "server/nav.hpp"
 
 const game_export_t     *ge;
 const game_q2pro_restart_filesystem_t *g_restart_fs;
@@ -846,7 +846,7 @@ static void PF_Loc_Print(edict_t* ent, int level, const char* base, const char**
 }
 
 #if USE_REF
-#include "refresh/refresh.h"
+#include "refresh/refresh.hpp"
 
 static void PF_Draw_Line(const vec3_t start, const vec3_t end, const rgba_t* color, const float lifeTime, const bool depthTest)
 {

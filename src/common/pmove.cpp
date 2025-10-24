@@ -16,12 +16,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "shared/game.h"
-#include "shared/game3_shared.h"
-#include "common/game3_convert.h"
-#include "common/game3_pmove.h"
-#include "common/pmove.h"
+#include "shared/shared.hpp"
+#include "shared/game.hpp"
+#include "shared/game3_shared.hpp"
+#include "common/game3_convert.hpp"
+#include "common/game3_pmove.hpp"
+#include "common/pmove.hpp"
 
 static trace_t (* q_gameabi current_pmove_trace)(const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, const struct edict_s* passent, contents_t contentmask);
 static contents_t (* current_pmove_pointcontents)(const vec3_t point);

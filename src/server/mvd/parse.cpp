@@ -22,8 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "client.h"
-#include "server/mvd/protocol.h"
+#include "client.hpp"
+#include "server/mvd/protocol.hpp"
 
 static bool match_ended_hack;
 

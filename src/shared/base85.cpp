@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "shared/base85.h"
+#include "shared/base85.hpp"
 
 #include <assert.h>
 #include <stdbool.h>

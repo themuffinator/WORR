@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_tent.c -- client side temporary entities
 
-#include "client.h"
-#include "common/mdfour.h"
+#include "client.hpp"
+#include "common/mdfour.hpp"
 
 static cvar_t *cl_compass_time;
 

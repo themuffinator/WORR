@@ -17,13 +17,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "gl.h"
+#include "gl.hpp"
 #include <array>
-#include "format/md2.h"
+#include "format/md2.hpp"
 #if USE_MD3
-#include "format/md3.h"
+#include "format/md3.hpp"
 #endif
-#include "format/sp2.h"
+#include "format/sp2.hpp"
 
 #define ENSURE(x, e)    if (!(x)) return e
 
@@ -812,7 +812,7 @@ static void MOD_PrintError(const char *path, int err)
 
 #include <setjmp.h>
 
-#include "common/json.h"
+#include "common/json.hpp"
 
 static jmp_buf md5_jmpbuf;
 

@@ -16,11 +16,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "client.h"
-#include "client/proc_address.h"
-#include "cgame_classic.h"
-#include "common/loc.h"
-#include "common/gamedll.h"
+#include "client.hpp"
+#include "client/proc_address.hpp"
+#include "cgame_classic.hpp"
+#include "common/loc.hpp"
+#include "common/gamedll.hpp"
 
 #include <limits>
 #include <type_traits>

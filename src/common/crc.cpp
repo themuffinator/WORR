@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 /* crc.c */
 
-#include "shared/shared.h"
-#include "common/crc.h"
+#include "shared/shared.hpp"
+#include "common/crc.hpp"
 
 // this is a 16 bit, non-reflected CRC using the polynomial 0x1021
 // and the initial and final xor values shown below...  in other words, the

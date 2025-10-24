@@ -17,11 +17,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_parse.c  -- parse a message received from the server
 
-#include "client.h"
+#include "client.hpp"
 #include "q2proto/q2proto.h"
-#include "shared/m_flash.h"
-#include "shared/game3_shared.h"
-#include "common/loc.h"
+#include "shared/m_flash.hpp"
+#include "shared/game3_shared.hpp"
+#include "common/loc.hpp"
 
 /*
 =====================================================================

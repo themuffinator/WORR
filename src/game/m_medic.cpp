@@ -23,8 +23,8 @@ MEDIC
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_medic.h"
+#include "g_local.hpp"
+#include "m_medic.hpp"
 
 static int  sound_idle1;
 static int  sound_pain1;

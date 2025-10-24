@@ -16,9 +16,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "sound.h"
-#include "qal.h"
-#include "common/json.h"
+#include "sound.hpp"
+#include "qal.hpp"
+#include "common/json.hpp"
 
 // translates from AL coordinate system to quake
 #define AL_UnpackVector(v)  -v[1],v[2],-v[0]

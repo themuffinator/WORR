@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "gl.h"
-#include "common/sizebuf.h"
+#include "gl.hpp"
+#include "common/sizebuf.hpp"
 
 #define MAX_SHADER_CHARS    4096
 

@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/common.h"
-#include "common/utils.h"
-#include "common/zone.h"
+#include "shared/shared.hpp"
+#include "common/common.hpp"
+#include "common/utils.hpp"
+#include "common/zone.hpp"
 
 /*
 ==============================================================================
@@ -697,7 +697,7 @@ uint32_t Com_SlowRand(void)
 
 #define QCHAR_BOX   11
 
-#include "unicode_translit.h"
+#include "unicode_translit.hpp"
 
 /*
 ==================

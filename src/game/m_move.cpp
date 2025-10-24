@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // m_move.c -- monster movement
 
-#include "g_local.h"
+#include "g_local.hpp"
 
 #define STEPSIZE    18
 

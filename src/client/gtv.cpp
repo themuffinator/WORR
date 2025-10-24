@@ -20,9 +20,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // gtv.c
 //
 
-#include "client.h"
-#include "common/intreadwrite.h"
-#include "server/mvd/protocol.h"
+#include "client.hpp"
+#include "common/intreadwrite.hpp"
+#include "server/mvd/protocol.hpp"
 
 static byte     gtv_recv_buffer[MAX_GTC_MSGLEN];
 static byte     gtv_send_buffer[MAX_GTS_MSGLEN*2];

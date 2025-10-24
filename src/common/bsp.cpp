@@ -21,19 +21,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <limits>
 
-#include "shared/shared.h"
-#include "shared/list.h"
-#include "common/bsp.h"
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/files.h"
-#include "common/intreadwrite.h"
-#include "common/math.h"
-#include "common/mdfour.h"
-#include "common/sizebuf.h"
-#include "common/utils.h"
-#include "system/hunk.h"
+#include "shared/shared.hpp"
+#include "shared/list.hpp"
+#include "common/bsp.hpp"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/files.hpp"
+#include "common/intreadwrite.hpp"
+#include "common/math.hpp"
+#include "common/mdfour.hpp"
+#include "common/sizebuf.hpp"
+#include "common/utils.hpp"
+#include "system/hunk.hpp"
 
 extern mtexinfo_t nulltexinfo;
 

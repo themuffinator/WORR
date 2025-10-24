@@ -19,8 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_null.c -- this file can stub out the entire client system
 // for pure dedicated servers
 
-#include "shared/shared.h"
-#include "client/client.h"
+#include "shared/shared.hpp"
+#include "client/client.hpp"
 
 static const char *const nullcmds[] = {
     "bind", "unbind", "unbindall",

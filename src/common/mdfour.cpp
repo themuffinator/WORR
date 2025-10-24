@@ -16,11 +16,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/mdfour.h"
+#include "shared/shared.hpp"
+#include "common/mdfour.hpp"
 
 #include <array>
-#include "common/intreadwrite.h"
+#include "common/intreadwrite.hpp"
 
 /* NOTE: This code makes no attempt to be fast!
 

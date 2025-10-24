@@ -18,9 +18,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include "shared/shared.h"
-#include "common/zone.h"
-#include "common/hash_map.h"
+#include "shared/shared.hpp"
+#include "common/zone.hpp"
+#include "common/hash_map.hpp"
 
 #define MIN_KEY_VALUE_STORAGE_SIZE 16
 #define MIN_HASH_SIZE              32

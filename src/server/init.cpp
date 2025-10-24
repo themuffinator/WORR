@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "server.h"
-#include "server/nav.h"
+#include "server.hpp"
+#include "server/nav.hpp"
 
 server_static_t svs;                // persistent server info
 server_t        sv;                 // local server

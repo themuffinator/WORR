@@ -16,8 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "client.h"
-#include "common/loc.h"
+#include "client.hpp"
+#include "common/loc.hpp"
 
 /* Draw item/ammo count for carousel and weapons/items wheel.
  * Notably, the count should be drawn a bit smaller than usual

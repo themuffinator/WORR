@@ -23,8 +23,8 @@ TANK
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_tank.h"
+#include "g_local.hpp"
+#include "m_tank.hpp"
 
 static void tank_refire_rocket(edict_t *self);
 static void tank_doattack_rocket(edict_t *self);

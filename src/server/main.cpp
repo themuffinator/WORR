@@ -18,14 +18,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "server.h"
-#include "client/input.h"
+#include "server.hpp"
+#include "client/input.hpp"
 
 #include <array>
 #if USE_CLIENT
-#include "refresh/refresh.h"
+#include "refresh/refresh.hpp"
 #endif
-#include "server/nav.h"
+#include "server/nav.hpp"
 #include "q2proto/q2proto.h"
 
 master_t    sv_masters[MAX_MASTERS];   // address of group servers

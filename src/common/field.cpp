@@ -20,13 +20,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // field.c
 //
 
-#include "shared/shared.h"
-#include "common/common.h"
-#include "common/field.h"
-#include "client/client.h"
-#include "client/keys.h"
-#include "client/video.h"
-#include "refresh/refresh.h"
+#include "shared/shared.hpp"
+#include "common/common.hpp"
+#include "common/field.hpp"
+#include "client/client.hpp"
+#include "client/keys.hpp"
+#include "client/video.hpp"
+#include "refresh/refresh.hpp"
 
 /*
 ================

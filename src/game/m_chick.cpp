@@ -23,8 +23,8 @@ chick
 ==============================================================================
 */
 
-#include "g_local.h"
-#include "m_chick.h"
+#include "g_local.hpp"
+#include "m_chick.hpp"
 
 void chick_stand(edict_t *self);
 void chick_run(edict_t *self);

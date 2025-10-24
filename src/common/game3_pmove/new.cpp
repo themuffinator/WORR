@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/pmove.h"
-#include "shared/game3_shared.h"
-#include "common/game3_pmove.h"
+#include "shared/shared.hpp"
+#include "common/pmove.hpp"
+#include "shared/game3_shared.hpp"
+#include "common/game3_pmove.hpp"
 
 #define PMOVE_NEW 1
 #define PMOVE_TYPE game3_pmove_new_t

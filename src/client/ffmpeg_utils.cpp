@@ -1,4 +1,4 @@
-#include "ffmpeg_utils.h"
+#include "ffmpeg_utils.hpp"
 
 #ifdef USE_AVCODEC
 

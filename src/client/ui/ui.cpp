@@ -16,9 +16,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "ui.h"
-#include "client/input.h"
-#include "common/prompt.h"
+#include "ui.hpp"
+#include "client/input.hpp"
+#include "common/prompt.hpp"
 
 uiStatic_t    uis;
 

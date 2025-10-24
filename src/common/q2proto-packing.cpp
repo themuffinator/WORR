@@ -18,8 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/q2proto_shared.h"
+#include "shared/shared.hpp"
+#include "common/q2proto_shared.hpp"
 
 #define Q2P_PACK_ENTITY_FUNCTION_NAME    PackEntity
 #define Q2P_PACK_ENTITY_TYPE             entity_state_t *

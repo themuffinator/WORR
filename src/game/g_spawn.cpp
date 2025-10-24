@@ -16,7 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "g_local.h"
+#include "g_local.hpppp"
 
 typedef struct {
     char    *name;
@@ -989,7 +989,7 @@ void SP_worldspawn(edict_t *ent)
     gi.soundindex("*pain100_2.wav");
 
     // sexed models
-    // THIS ORDER MUST MATCH THE DEFINES IN g_local.h
+    // THIS ORDER MUST MATCH THE DEFINES IN g_local.hpp
     // you can add more, max 15
     gi.modelindex("#w_blaster.md2");
     gi.modelindex("#w_shotgun.md2");

@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl.input.c  -- builds an intended movement command to send to the server
 
-#include "client.h"
-#include "common/crc.h"
+#include "client.hpp"
+#include "common/crc.hpp"
 
 static cvar_t    *cl_nodelta;
 static cvar_t    *cl_maxpackets;

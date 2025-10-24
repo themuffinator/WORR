@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
-#include "client.h"
+#include "client.hpp"
 
 static cvar_t   *mvd_admin_password;
 static cvar_t   *mvd_part_filter;

@@ -17,9 +17,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#include "shared/shared.h"
-#include "client/keys.h"
-#include "keytables.h"
+#include "shared/shared.hpp"
+#include "client/keys.hpp"
+#include "keytables.hpp"
 
 // matches keycodes from xf86-input-keyboard/src/atKeynames.h
 static const uint8_t keys[] = {

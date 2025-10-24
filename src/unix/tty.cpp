@@ -16,15 +16,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/cmd.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/field.h"
-#include "common/net/net.h"
-#include "common/prompt.h"
-#include "system/system.h"
-#include "tty.h"
+#include "shared/shared.hpp"
+#include "common/cmd.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/field.hpp"
+#include "common/net/net.hpp"
+#include "common/prompt.hpp"
+#include "system/system.hpp"
+#include "tty.hpp"
 
 #include <sys/time.h>
 #include <sys/types.h>

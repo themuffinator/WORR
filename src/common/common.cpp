@@ -20,42 +20,42 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // common.c -- misc functions used in client and server
 //
 
-#include "shared/shared.h"
+#include "shared/shared.hpp"
 
-#include "common/async.h"
-#include "common/bsp.h"
-#include "common/cmd.h"
-#include "common/cmodel.h"
-#include "common/common.h"
-#include "common/cvar.h"
-#include "common/error.h"
-#include "common/field.h"
-#include "common/fifo.h"
-#include "common/files.h"
-#include "common/math.h"
-#include "common/mdfour.h"
-#include "common/msg.h"
-#include "common/net/chan.h"
-#include "common/net/net.h"
-#include "common/pmove.h"
-#include "common/prompt.h"
-#include "common/protocol.h"
-#include "common/tests.h"
-#include "common/utils.h"
-#include "common/zone.h"
+#include "common/async.hpp"
+#include "common/bsp.hpp"
+#include "common/cmd.hpp"
+#include "common/cmodel.hpp"
+#include "common/common.hpp"
+#include "common/cvar.hpp"
+#include "common/error.hpp"
+#include "common/field.hpp"
+#include "common/fifo.hpp"
+#include "common/files.hpp"
+#include "common/math.hpp"
+#include "common/mdfour.hpp"
+#include "common/msg.hpp"
+#include "common/net/chan.hpp"
+#include "common/net/net.hpp"
+#include "common/pmove.hpp"
+#include "common/prompt.hpp"
+#include "common/protocol.hpp"
+#include "common/tests.hpp"
+#include "common/utils.hpp"
+#include "common/zone.hpp"
 
-#include "client/client.h"
-#include "server/server.h"
-#include "system/system.h"
-#include "system/hunk.h"
+#include "client/client.hpp"
+#include "server/server.hpp"
+#include "system/system.hpp"
+#include "system/hunk.hpp"
 
 #if USE_DEBUG
-#include "features.h"
+#include "features.hpp"
 #endif
 
 #include <setjmp.h>
 
-#include "common/jsmn.h"
+#include "common/jsmn.hpp"
 
 static jmp_buf  com_abortframe;    // an ERR_DROP occurred, exit the entire frame
 

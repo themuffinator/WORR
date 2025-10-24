@@ -16,9 +16,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "common/msg.h"
-#include "common/q2proto_shared.h"
+#include "shared/shared.hpp"
+#include "common/msg.hpp"
+#include "common/q2proto_shared.hpp"
 
 static const q2proto_packed_entity_state_t nullServerEntityState;
 

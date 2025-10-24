@@ -16,7 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "client.h"
+#include "client.hpp"
 #include <EGL/egl.h>
 
 #include <array>
@@ -28,7 +28,7 @@ static struct {
     EGLContext  ctx;
 } egl;
 
-#include "egl_import.h"
+#include "egl_import.hpp"
 
 static void egl_shutdown(void)
 {

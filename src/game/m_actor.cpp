@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // g_actor.c
 
-#include "g_local.h"
-#include "m_actor.h"
+#include "g_local.hpp"
+#include "m_actor.hpp"
 
 #define MAX_ACTOR_NAMES     8
 static const char *const actor_names[MAX_ACTOR_NAMES] = {
