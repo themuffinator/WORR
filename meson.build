@@ -454,7 +454,7 @@ config.set10('USE_PNG', png.found())
 
 if host_machine.system() == 'windows' and c_compiler.get_id() == 'msvc' and png.found() and png.type_name() == 'internal'
   python_mod = import('python')
-  python3 = python_mod.find_installation('python3')
+  python3 = python_mod.find_installation()
   meson.add_postconf_script(python3, files('tools/fix_libpng_msvc.py'))
 endif
 
