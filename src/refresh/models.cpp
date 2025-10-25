@@ -839,8 +839,13 @@ static void *MD5_HunkAlloc(memhunk_t *hunk, size_t size)
 #define MD5_GpuMallocIndices(size) \
     MD5_HunkAlloc(gl_static.use_gpu_lerp ? &temp_hunk[1] : &model->hunk, size)
 
-#define MD5_CpuMalloc(size) \
-    (gl_static.use_gpu_lerp ? static_cast<void *>(R_Mallocz(size)) : MD5_HunkAlloc(&model->hunk, size))
+static void *MD5_CpuMalloc(model_t *model, size_t size)
+{
+    if (gl_static.use_gpu_lerp)
+        return static_cast<void *>(R_Mallocz(size));
+
+    return MD5_HunkAlloc(&model->hunk, size);
+}
 
 static void MD5_ParseExpect(const char **buffer, const char *expect)
 {
@@ -1003,7 +1008,7 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
     MD5_ParseExpect(&s, "MD5Version");
     MD5_ParseExpect(&s, "10");
 
-    mdl = static_cast<md5_model_t *>(MD5_CpuMalloc(sizeof(*mdl)));
+    mdl = static_cast<md5_model_t *>(MD5_CpuMalloc(model, sizeof(*mdl)));
     model->skeleton = mdl;
 
     MD5_ParseExpect(&s, "commandline");
@@ -1035,7 +1040,7 @@ static bool MD5_ParseMesh(model_t *model, const char *s, const char *path)
 
     MD5_ParseExpect(&s, "}");
 
-    mdl->meshes = static_cast<md5_mesh_t *>(MD5_CpuMalloc(mdl->num_meshes * sizeof(mdl->meshes[0])));
+    mdl->meshes = static_cast<md5_mesh_t *>(MD5_CpuMalloc(model, mdl->num_meshes * sizeof(mdl->meshes[0])));
     for (i = 0; i < mdl->num_meshes; i++) {
         md5_mesh_t *mesh = &mdl->meshes[i];
 
@@ -1367,7 +1372,7 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
     MD5_ParseExpect(&s, "}");
 
     mdl->skeleton_frames = static_cast<md5_joint_t *>(
-        MD5_CpuMalloc(sizeof(mdl->skeleton_frames[0]) * mdl->num_frames * mdl->num_joints));
+        MD5_CpuMalloc(model, sizeof(mdl->skeleton_frames[0]) * mdl->num_frames * mdl->num_joints));
 
     // initialize scales
     for (i = 0; i < mdl->num_frames * mdl->num_joints; i++)
@@ -1606,7 +1611,6 @@ qhandle_t R_RegisterModel(const char *name)
     model_t *model;
     byte *rawdata;
     int (*load)(model_t *, const void *, size_t);
-    uint32_t raw_tag = 0;
     int ret;
 
     Q_assert(name);
@@ -1653,8 +1657,7 @@ qhandle_t R_RegisterModel(const char *name)
     }
 
     // check ident
-    raw_tag = LittleLong(*reinterpret_cast<const uint32_t *>(rawdata));
-    switch (raw_tag) {
+    switch (LittleLong(*reinterpret_cast<const uint32_t *>(rawdata))) {
     case MD2_IDENT:
         load = MOD_LoadMD2;
         break;
