@@ -794,7 +794,7 @@ void ai_run(edict_t *self, float dist)
     vec3_t      v;
     edict_t     *tempgoal;
     edict_t     *save;
-    bool        new;
+    bool        has_new_target;
     edict_t     *marker;
     float       d1, d2;
     trace_t     tr;
@@ -855,13 +855,13 @@ void ai_run(edict_t *self, float dist)
     tempgoal = G_Spawn();
     self->goalentity = tempgoal;
 
-    new = false;
+    has_new_target = false;
 
     if (!(self->monsterinfo.aiflags & AI_LOST_SIGHT)) {
         // just lost sight of the player, decide where to go first
         self->monsterinfo.aiflags |= (AI_LOST_SIGHT | AI_PURSUIT_LAST_SEEN);
         self->monsterinfo.aiflags &= ~(AI_PURSUE_NEXT | AI_PURSUE_TEMP);
-        new = true;
+        has_new_target = true;
     }
 
     if (self->monsterinfo.aiflags & AI_PURSUE_NEXT) {
@@ -874,7 +874,7 @@ void ai_run(edict_t *self, float dist)
             self->monsterinfo.aiflags &= ~AI_PURSUE_TEMP;
             marker = NULL;
             VectorCopy(self->monsterinfo.saved_goal, self->monsterinfo.last_sighting);
-            new = true;
+            has_new_target = true;
         } else if (self->monsterinfo.aiflags & AI_PURSUIT_LAST_SEEN) {
             self->monsterinfo.aiflags &= ~AI_PURSUIT_LAST_SEEN;
             marker = PlayerTrail_PickFirst(self);
@@ -886,7 +886,7 @@ void ai_run(edict_t *self, float dist)
             VectorCopy(marker->s.origin, self->monsterinfo.last_sighting);
             self->monsterinfo.trail_framenum = marker->timestamp;
             self->s.angles[YAW] = self->ideal_yaw = marker->s.angles[YAW];
-            new = true;
+            has_new_target = true;
         }
     }
 
@@ -899,7 +899,7 @@ void ai_run(edict_t *self, float dist)
 
     VectorCopy(self->monsterinfo.last_sighting, self->goalentity->s.origin);
 
-    if (new) {
+    if (has_new_target) {
         tr = gi.trace(self->s.origin, self->mins, self->maxs, self->monsterinfo.last_sighting, self, MASK_PLAYERSOLID);
         if (tr.fraction < 1) {
             VectorSubtract(self->goalentity->s.origin, self->s.origin, v);
