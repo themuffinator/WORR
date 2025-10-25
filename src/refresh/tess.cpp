@@ -495,7 +495,7 @@ void GL_DrawFlares(void)
         if (def)
             tess.flags |= GLS_DEFAULT_FLARE;
 
-        scale = (25 << def) * (ent->scale[0] * q->frac);
+        scale = (25 << static_cast<int>(def)) * (ent->scale[0] * q->frac);
 
         if (ent->flags & RF_FLARE_LOCK_ANGLE) {
             VectorScale(glr.viewaxis[1],  scale, left);
