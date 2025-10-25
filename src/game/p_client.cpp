@@ -1377,7 +1377,7 @@ Changing levels will NOT cause this to be called again, but
 loadgames will.
 ============
 */
-qboolean ClientConnect(edict_t *ent, char *userinfo)
+bool ClientConnect(edict_t *ent, char *userinfo)
 {
     char    *value;
 
@@ -1424,7 +1424,7 @@ qboolean ClientConnect(edict_t *ent, char *userinfo)
 
     // if there is already a body waiting for us (a loadgame), just
     // take it, otherwise spawn one from scratch
-    if (ent->inuse == false) {
+    if (!ent->inuse) {
         // clear the respawning variables
         InitClientResp(ent->client);
         if (!game.autosaved || !ent->client->pers.weapon)

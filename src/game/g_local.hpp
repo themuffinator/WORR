@@ -760,7 +760,7 @@ void respawn(edict_t *self);
 void InitBodyQue(void);
 void ClientBeginServerFrame(edict_t *ent);
 void ClientBegin(edict_t *ent);
-qboolean ClientConnect(edict_t *ent, char *userinfo);
+bool ClientConnect(edict_t *ent, char *userinfo);
 void ClientDisconnect(edict_t *ent);
 void ClientThink(edict_t *ent, usercmd_t *ucmd);
 void ClientUserinfoChanged(edict_t *ent, char *userinfo);

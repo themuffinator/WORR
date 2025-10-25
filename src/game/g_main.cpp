@@ -74,6 +74,7 @@ cvar_t  *sv_maplist;
 cvar_t  *sv_features;
 
 static void G_RunFrame(void);
+static qboolean ClientConnect_qboolean(edict_t *ent, char *userinfo);
 
 //===================================================================
 
@@ -85,6 +86,11 @@ static void ShutdownGame(void)
 
     gi.FreeTags(TAG_LEVEL);
     gi.FreeTags(TAG_GAME);
+}
+
+static qboolean ClientConnect_qboolean(edict_t *ent, char *userinfo)
+{
+    return ClientConnect(ent, userinfo) ? qtrue : qfalse;
 }
 
 /*
@@ -212,7 +218,7 @@ q_exported game3_export_t *GetGameAPI(game3_import_t *import)
     globals.ReadLevel = ReadLevel;
 
     globals.ClientThink = ClientThink;
-    globals.ClientConnect = ClientConnect;
+    globals.ClientConnect = ClientConnect_qboolean;
     globals.ClientUserinfoChanged = ClientUserinfoChanged;
     globals.ClientDisconnect = ClientDisconnect;
     globals.ClientBegin = ClientBegin;
