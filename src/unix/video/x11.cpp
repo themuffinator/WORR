@@ -60,7 +60,7 @@ static struct {
     int         dpi_scale;
 
     struct {
-        Atom    delete;
+        Atom    delete_window;
         Atom    wm_state;
         Atom    fs;
         Atom    hidden;
@@ -366,8 +366,8 @@ static bool init(void)
     XStoreName(x11.dpy, x11.win, PRODUCT);
     XSetIconName(x11.dpy, x11.win, PRODUCT);
 
-    x11.atom.delete = XA(WM_DELETE_WINDOW);
-    XSetWMProtocols(x11.dpy, x11.win, &x11.atom.delete, 1);
+    x11.atom.delete_window = XA(WM_DELETE_WINDOW);
+    XSetWMProtocols(x11.dpy, x11.win, &x11.atom.delete_window, 1);
 
     x11.atom.wm_state = XA(_NET_WM_STATE);
 
@@ -570,7 +570,7 @@ static void button_event(XButtonEvent *event)
 
 static void message_event(XClientMessageEvent *event)
 {
-    if (event->format == 32 && event->data.l[0] == x11.atom.delete)
+    if (event->format == 32 && event->data.l[0] == x11.atom.delete_window)
         Com_Quit(NULL, ERR_DISCONNECT);
 }
 
