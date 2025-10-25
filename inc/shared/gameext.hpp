@@ -50,18 +50,18 @@ typedef struct {
 
 typedef struct {
     void (*ClearDebugLines)(void);
-    void (*AddDebugLine)(const vec3_t start, const vec3_t end, color_t color, uint32_t time, qboolean depth_test);
-    void (*AddDebugPoint)(const vec3_t point, float size, color_t color, uint32_t time, qboolean depth_test);
-    void (*AddDebugAxis)(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test);
-    void (*AddDebugBounds)(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, qboolean depth_test);
-    void (*AddDebugSphere)(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test);
-    void (*AddDebugCircle)(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test);
+    void (*AddDebugLine)(const vec3_t start, const vec3_t end, color_t color, uint32_t time, bool depth_test);
+    void (*AddDebugPoint)(const vec3_t point, float size, color_t color, uint32_t time, bool depth_test);
+    void (*AddDebugAxis)(const vec3_t origin, const vec3_t angles, float size, uint32_t time, bool depth_test);
+    void (*AddDebugBounds)(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, bool depth_test);
+    void (*AddDebugSphere)(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test);
+    void (*AddDebugCircle)(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test);
     void (*AddDebugCylinder)(const vec3_t origin, float half_height, float radius, color_t color, uint32_t time,
-                             qboolean depth_test);
+                             bool depth_test);
     void (*AddDebugArrow)(const vec3_t start, const vec3_t end, float size, color_t line_color,
-                          color_t arrow_color, uint32_t time, qboolean depth_test);
+                          color_t arrow_color, uint32_t time, bool depth_test);
     void (*AddDebugCurveArrow)(const vec3_t start, const vec3_t ctrl, const vec3_t end, float size,
-                               color_t line_color, color_t arrow_color, uint32_t time, qboolean depth_test);
+                               color_t line_color, color_t arrow_color, uint32_t time, bool depth_test);
     void (*AddDebugText)(const vec3_t origin, const vec3_t angles, const char *text,
-                         float size, color_t color, uint32_t time, qboolean depth_test);
+                         float size, color_t color, uint32_t time, bool depth_test);
 } debug_draw_api_v1_t;

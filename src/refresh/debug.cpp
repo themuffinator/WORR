@@ -81,7 +81,7 @@ static inline bool R_DebugTimeExpired(const uint32_t time)
     return time <= R_DebugCurrentTime();
 }
 
-void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, bool depth_test)
 {
     debug_line_t *l = LIST_FIRST(debug_line_t, &debug_lines_free, entry);
 
@@ -119,14 +119,14 @@ void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_
         l->bits |= GLS_DEPTHTEST_DISABLE;
 }
 
-static inline void R_DebugDrawLine(float sx, float sy, float sz, float ex, float ey, float ez, color_t color, uint32_t time, qboolean depth_test)
+static inline void R_DebugDrawLine(float sx, float sy, float sz, float ex, float ey, float ez, color_t color, uint32_t time, bool depth_test)
 {
     vec3_t start{ sx, sy, sz };
     vec3_t end{ ex, ey, ez };
     R_AddDebugLine(start, end, color, time, depth_test);
 }
 
-void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, bool depth_test)
 {
     size *= 0.5f;
     R_DebugDrawLine(point[0] - size, point[1], point[2], point[0] + size, point[1], point[2], color, time, depth_test);
@@ -134,7 +134,7 @@ void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t tim
     R_DebugDrawLine(point[0], point[1], point[2] - size, point[0], point[1], point[2] + size, color, time, depth_test);
 }
 
-void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test)
+void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, bool depth_test)
 {
     std::array<vec3_t, 3> axis{};
     vec3_t end;
@@ -161,7 +161,7 @@ void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32
     R_AddDebugLine(origin, end, color, time, depth_test);
 }
 
-void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, bool depth_test)
 {
     for (int i = 0; i < 4; i++) {
         // draw column
@@ -179,7 +179,7 @@ void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint3
 }
 
 // https://danielsieger.com/blog/2021/03/27/generating-spheres.html
-void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test)
 {
     std::array<vec3_t, 160> verts{};
     const int n_stacks = min(4 + radius / 32, 10);
@@ -236,7 +236,7 @@ void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t
     }
 }
 
-void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test)
 {
     int vert_count = min(5 + radius / 8, 16);
     float rads = (2 * M_PIf) / vert_count;
@@ -258,7 +258,7 @@ void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t
     }
 }
 
-void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, color_t color, uint32_t time, qboolean depth_test)
+void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, color_t color, uint32_t time, bool depth_test)
 {
     int vert_count = min(5 + radius / 8, 16);
     float rads = (2 * M_PIf) / vert_count;
@@ -283,7 +283,7 @@ void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, co
 }
 
 void R_DrawArrowCap(const vec3_t apex, const vec3_t dir, float size,
-                    color_t color, uint32_t time, qboolean depth_test)
+                    color_t color, uint32_t time, bool depth_test)
 {
     vec3_t cap_end;
     VectorMA(apex, size, dir, cap_end);
@@ -301,7 +301,7 @@ void R_DrawArrowCap(const vec3_t apex, const vec3_t dir, float size,
 }
 
 void R_AddDebugArrow(const vec3_t start, const vec3_t end, float size, color_t line_color,
-                     color_t arrow_color, uint32_t time, qboolean depth_test)
+                     color_t arrow_color, uint32_t time, bool depth_test)
 {
     vec3_t dir;
     VectorSubtract(end, start, dir);
@@ -318,7 +318,7 @@ void R_AddDebugArrow(const vec3_t start, const vec3_t end, float size, color_t l
 }
 
 void R_AddDebugCurveArrow(const vec3_t start, const vec3_t ctrl, const vec3_t end, float size,
-                          color_t line_color, color_t arrow_color, uint32_t time, qboolean depth_test)
+                          color_t line_color, color_t arrow_color, uint32_t time, bool depth_test)
 {
     int num_points = Q_clip(Distance(start, end) / 32, 3, 24);
     vec3_t last_point;
@@ -348,7 +348,7 @@ void R_AddDebugCurveArrow(const vec3_t start, const vec3_t ctrl, const vec3_t en
 
 static void R_AddDebugTextInternal(const vec3_t origin, const vec3_t angles, const char *text,
                                    size_t len, float size, color_t color, uint32_t time,
-                                   qboolean depth_test)
+                                   bool depth_test)
 {
     if (!len)
         return;
@@ -397,7 +397,7 @@ static void R_AddDebugTextInternal(const vec3_t origin, const vec3_t angles, con
 }
 
 static void R_AddDebugTextTexture(const vec3_t origin, const vec3_t angles, const char *text,
-                                  float size, color_t color, uint32_t time, qboolean depth_test)
+                                  float size, color_t color, uint32_t time, bool depth_test)
 {
     vec3_t down, pos, up;
     const char *s, *p;
@@ -430,7 +430,7 @@ static void R_AddDebugTextTexture(const vec3_t origin, const vec3_t angles, cons
 }
 
 void R_AddDebugText(const vec3_t origin, const vec3_t angles, const char *text,
-                    float size, color_t color, uint32_t time, qboolean depth_test)
+                    float size, color_t color, uint32_t time, bool depth_test)
 {
     if (debug_text_style == DEBUG_TEXT_LINES)
         GL_AddDebugTextLines(origin, angles, text, size, color, time, depth_test);

@@ -98,7 +98,7 @@ static cvar_t *gl_debug_font;
 #define GL_DRAWLINEV(s, e) \
     R_AddDebugLine(s, e, color, time, depth_test)
 
-void GL_AddDebugTextLines(const vec3_t origin, const vec3_t angles, const char *text, float size, color_t color, uint32_t time, qboolean depth_test)
+void GL_AddDebugTextLines(const vec3_t origin, const vec3_t angles, const char *text, float size, color_t color, uint32_t time, bool depth_test)
 {
     int total_lines = 1;
     float scale = (1.0f / dbg_font->height) * (size * 32);
