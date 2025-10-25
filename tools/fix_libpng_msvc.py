@@ -11,10 +11,16 @@ def _find_headers(source_root: Path, filename: str) -> list[Path]:
     headers: list[Path] = []
     seen: set[Path] = set()
 
-    for candidate in subprojects.glob(f'libpng-1.6.50*/**/{filename}'):
-        if candidate.is_file() and candidate not in seen:
-            seen.add(candidate)
-            headers.append(candidate)
+    search_patterns = [
+        subprojects.glob(f'libpng-1.6.50*/**/{filename}'),
+        (subprojects / 'packagecache').glob(f'libpng_*/*/**/{filename}'),
+    ]
+
+    for pattern in search_patterns:
+        for candidate in pattern:
+            if candidate.is_file() and candidate not in seen:
+                seen.add(candidate)
+                headers.append(candidate)
 
     return sorted(headers)
 
@@ -78,8 +84,13 @@ def main() -> int:
         ('__declspec(__restrict)', '__declspec(restrict)'),
     ])
 
+    any_changed = False
     for header in headers:
-        _apply_replacements(header, replacements)
+        if _apply_replacements(header, replacements):
+            any_changed = True
+
+    if not any_changed:
+        raise RuntimeError('Failed to update libpng headers: no replacements applied.')
 
     return 0
 
