@@ -828,7 +828,7 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
 //
 // g_save.c
 //
-void WriteGame(const char *filename, qboolean autosave);
+void WriteGame(const char *filename, bool autosave);
 void ReadGame(const char *filename);
 void WriteLevel(const char *filename);
 void ReadLevel(const char *filename);
@@ -985,7 +985,7 @@ struct game3_edict_s {
                                     // of gclient_s to be a player_state_t
                                     // but the rest of it is opaque
 
-    qboolean    inuse;
+    bool    inuse;
     int         linkcount;
 
     // FIXME: move these fields to a server private sv_entity_t
@@ -1020,8 +1020,8 @@ struct game3_edict_s {
     //
     // only used locally in game, not by server
     //
-    char        *message;
-    char        *classname;
+    const char  *message;
+    const char  *classname;
     int         spawnflags;
 
     int         timestamp;

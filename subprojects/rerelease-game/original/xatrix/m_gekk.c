@@ -49,13 +49,13 @@ extern mmove_t gekk_move_swim_loop;
 extern mmove_t gekk_move_spit;
 extern mmove_t gekk_move_run_start;
 
-extern qboolean gekk_check_jump (edict_t *self);
+extern bool gekk_check_jump (edict_t *self);
 
 //
 // CHECKATTACK
 //
 
-qboolean gekk_check_melee (edict_t *self)
+bool gekk_check_melee (edict_t *self)
 {
 	if (!self->enemy && self->enemy->health <= 0)
 		return false;
@@ -65,7 +65,7 @@ qboolean gekk_check_melee (edict_t *self)
 	return false;
 }
 
-qboolean gekk_check_jump (edict_t *self)
+bool gekk_check_jump (edict_t *self)
 {
 	vec3_t	v;
 	float	distance;
@@ -94,7 +94,7 @@ qboolean gekk_check_jump (edict_t *self)
 	return true;
 }
 
-qboolean gekk_check_jump_close (edict_t *self)
+bool gekk_check_jump_close (edict_t *self)
 {
 	vec3_t	v;
 	float	distance;
@@ -117,7 +117,7 @@ qboolean gekk_check_jump_close (edict_t *self)
 }
 
 
-qboolean gekk_checkattack (edict_t *self)
+bool gekk_checkattack (edict_t *self)
 {
 	if (!self->enemy || self->enemy->health <= 0)
 		return false;

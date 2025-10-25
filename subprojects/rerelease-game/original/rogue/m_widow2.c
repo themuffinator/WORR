@@ -37,7 +37,7 @@ static float sweep_angles[] = {
 
 extern vec3_t	stalker_mins, stalker_maxs;
 
-qboolean infront (edict_t *self, edict_t *other);
+bool infront (edict_t *self, edict_t *other);
 void WidowCalcSlots (edict_t *self);
 void WidowPowerups (edict_t *self);
 
@@ -58,9 +58,9 @@ void Widow2SaveBeamTarget(edict_t *self);
 void WidowExplode (edict_t *self);
 void gib_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point);
 void gib_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf);
-void ThrowWidowGibReal (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, qboolean large, int hitsound, qboolean fade);
-void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, qboolean fade);
-void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, qboolean fade);
+void ThrowWidowGibReal (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, bool large, int hitsound, bool fade);
+void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, bool fade);
+void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, bool fade);
 void WidowExplosion1 (edict_t *self);
 void WidowExplosion2 (edict_t *self);
 void WidowExplosion3 (edict_t *self);
@@ -462,7 +462,7 @@ mframe_t widow2_frames_spawn [] =
 };
 mmove_t widow2_move_spawn = {FRAME_spawn01, FRAME_spawn18, widow2_frames_spawn, NULL};
 
-static qboolean widow2_tongue_attack_ok (vec3_t start, vec3_t end, float range)
+static bool widow2_tongue_attack_ok (vec3_t start, vec3_t end, float range)
 {
 	vec3_t	dir, angles;
 
@@ -773,7 +773,7 @@ void widow2_melee (edict_t *self)
 void widow2_attack (edict_t *self)
 {
 	float	range, luck;
-	qboolean blocked = false;
+	bool blocked = false;
 
 	if (self->monsterinfo.aiflags & AI_BLOCKED)
 	{
@@ -1002,13 +1002,13 @@ void widow2_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damag
 	self->monsterinfo.currentmove = &widow2_move_death;
 }
 
-qboolean Widow2_CheckAttack (edict_t *self)
+bool Widow2_CheckAttack (edict_t *self)
 {
 	vec3_t		spot1, spot2;
 	vec3_t		temp;
 	float		chance;
 	trace_t		tr;
-	qboolean	enemy_infront;
+	bool	enemy_infront;
 	int			enemy_range;
 	float		enemy_yaw;
 	float		real_enemy_range;
@@ -1260,17 +1260,17 @@ void ThrowWidowGib (edict_t *self, char *gibname, int damage, int type)
 	ThrowWidowGibReal (self, gibname, damage, type, NULL, false, 0, true);
 }
 
-void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, qboolean fade)
+void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, bool fade)
 {
 	ThrowWidowGibReal (self, gibname, damage, type, startpos, false, 0, fade);
 }
 
-void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, qboolean fade)
+void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, bool fade)
 {
 	ThrowWidowGibReal (self, gibname, damage, type, startpos, true, hitsound, fade);
 }
 
-void ThrowWidowGibReal (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, qboolean sized, int hitsound, qboolean fade)
+void ThrowWidowGibReal (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, bool sized, int hitsound, bool fade)
 {
 	edict_t *gib;
 	vec3_t	vd;

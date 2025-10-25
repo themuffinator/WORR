@@ -52,7 +52,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 typedef unsigned char 		byte;
-typedef enum {false, true}	qboolean;
+typedef enum {false, true}	bool;
 
 
 #ifndef NULL
@@ -253,7 +253,7 @@ char	*va(char *format, ...);
 char *Info_ValueForKey (char *s, char *key);
 void Info_RemoveKey (char *s, char *key);
 void Info_SetValueForKey (char *s, char *key, char *value);
-qboolean Info_Validate (char *s);
+bool Info_Validate (char *s);
 
 /*
 ==============================================================
@@ -319,7 +319,7 @@ typedef struct cvar_s
 	char		*string;
 	char		*latched_string;	// for CVAR_LATCH vars
 	int			flags;
-	qboolean	modified;	// set each time the cvar is changed
+	bool	modified;	// set each time the cvar is changed
 	float		value;
 	struct cvar_s *next;
 } cvar_t;
@@ -444,8 +444,8 @@ typedef struct mapsurface_s  // used internally due to name len probs //ZOID
 // a trace is returned when a box is swept through the world
 typedef struct
 {
-	qboolean	allsolid;	// if true, plane is not valid
-	qboolean	startsolid;	// if true, the initial point was in a solid area
+	bool	allsolid;	// if true, plane is not valid
+	bool	startsolid;	// if true, the initial point was in a solid area
 	float		fraction;	// time completed, 1.0 = didn't hit anything
 	vec3_t		endpos;		// final position
 	cplane_t	plane;		// surface normal at impact
@@ -525,7 +525,7 @@ typedef struct
 
 	// command (in)
 	usercmd_t		cmd;
-	qboolean		snapinitial;	// if s has been changed outside pmove
+	bool		snapinitial;	// if s has been changed outside pmove
 
 	// results (out)
 	int			numtouch;

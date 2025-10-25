@@ -109,7 +109,7 @@ void PMenu_Do_Update(edict_t *ent)
 	int x;
 	pmenuhnd_t *hnd;
 	char *t;
-	qboolean alt = false;
+	bool alt = false;
 
 	if (!ent->client->menu) {
 		gi.dprintf("warning:  ent has no menu\n");

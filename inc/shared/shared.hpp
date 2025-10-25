@@ -53,7 +53,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define q_countof(a)        (sizeof(a) / sizeof(a[0]))
 
 typedef intptr_t ssize_t;
-typedef enum { qfalse, qtrue } qboolean;    // ABI compat only, don't use
 
 // angle indexes
 #define PITCH               0       // up / down

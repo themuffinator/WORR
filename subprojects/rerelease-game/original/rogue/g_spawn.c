@@ -495,7 +495,7 @@ ed should be a properly initialized empty edict.
 */
 char *ED_ParseEdict (char *data, edict_t *ent)
 {
-	qboolean	init;
+	bool	init;
 	char		keyname[256];
 	char		*com_token;
 
@@ -1293,7 +1293,7 @@ edict_t *CreateGroundMonster (vec3_t origin, vec3_t angles, vec3_t entMins, vec3
 // PMM - this is used by the medic commander (possibly by the carrier) to find a good spawn point
 // if the startpoint is bad, try above the startpoint for a bit
 
-qboolean FindSpawnPoint (vec3_t startpoint, vec3_t mins, vec3_t maxs, vec3_t spawnpoint, float maxMoveUp)
+bool FindSpawnPoint (vec3_t startpoint, vec3_t mins, vec3_t maxs, vec3_t spawnpoint, float maxMoveUp)
 {
 	trace_t		tr;
 	float		height;
@@ -1355,7 +1355,7 @@ qboolean FindSpawnPoint (vec3_t startpoint, vec3_t mins, vec3_t maxs, vec3_t spa
 //
 // This is all fliers should need
 
-qboolean CheckSpawnPoint (vec3_t origin, vec3_t mins, vec3_t maxs)
+bool CheckSpawnPoint (vec3_t origin, vec3_t mins, vec3_t maxs)
 {
 	trace_t	tr;
 
@@ -1390,7 +1390,7 @@ qboolean CheckSpawnPoint (vec3_t origin, vec3_t mins, vec3_t maxs)
 //		3)	is the ground flat enough to walk on?
 //
 
-qboolean CheckGroundSpawnPoint (vec3_t origin, vec3_t entMins, vec3_t entMaxs, float height, float gravity)
+bool CheckGroundSpawnPoint (vec3_t origin, vec3_t entMins, vec3_t entMaxs, float height, float gravity)
 {
 	trace_t		tr;
 	vec3_t		start, stop;
@@ -1668,8 +1668,8 @@ void SpawnGrow_Spawn (vec3_t startpos, int size)
 
 void ThrowMoreStuff (edict_t *self, vec3_t point);
 void ThrowSmallStuff (edict_t *self, vec3_t point);
-void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, qboolean fade);
-void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, qboolean fade);
+void ThrowWidowGibLoc (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, bool fade);
+void ThrowWidowGibSized (edict_t *self, char *gibname, int damage, int type, vec3_t startpos, int hitsound, bool fade);
 
 void widowlegs_think (edict_t *self)
 {

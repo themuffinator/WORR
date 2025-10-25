@@ -6,14 +6,14 @@
 #include "m_player.h"
 
 
-static qboolean	is_quad;
+static bool	is_quad;
 static byte		is_silenced;
 
 //PGM
 static byte		damage_multiplier;
 //PGM
 
-void weapon_grenade_fire (edict_t *ent, qboolean held);
+void weapon_grenade_fire (edict_t *ent, bool held);
 
 //========
 //ROGUE
@@ -152,7 +152,7 @@ void PlayerNoise(edict_t *who, vec3_t where, int type)
 }
 
 
-qboolean Pickup_Weapon (edict_t *ent, edict_t *other)
+bool Pickup_Weapon (edict_t *ent, edict_t *other)
 {
 	int			index;
 	gitem_t		*ammo;
@@ -612,7 +612,7 @@ GRENADE
 #define GRENADE_MINSPEED	400
 #define GRENADE_MAXSPEED	800
 
-void weapon_grenade_fire (edict_t *ent, qboolean held)
+void weapon_grenade_fire (edict_t *ent, bool held)
 {
 	vec3_t	offset;
 	vec3_t	forward, right, up;
@@ -804,7 +804,7 @@ void Weapon_Grenade (edict_t *ent)
 //									15                      48						5						11					12				29,34,39,48
 void Throw_Generic (edict_t *ent, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST, int FRAME_THROW_SOUND,
 					int FRAME_THROW_HOLD, int FRAME_THROW_FIRE, int *pause_frames, int EXPLODE,
-					void (*fire)(edict_t *ent, qboolean held))
+					void (*fire)(edict_t *ent, bool held))
 {
 	int n;
 
@@ -1124,7 +1124,7 @@ BLASTER / HYPERBLASTER
 ======================================================================
 */
 
-void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, int effect)
+void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, bool hyper, int effect)
 {
 	vec3_t	forward, right;
 	vec3_t	start;

@@ -19,7 +19,7 @@ TURRET
 #define SPAWN_INSTANT_WEAPON	0x0050
 #define SPAWN_WALL_UNIT			0x0080
 
-extern qboolean FindTarget (edict_t *self);
+extern bool FindTarget (edict_t *self);
 
 void turret_run (edict_t *self);
 void TurretAim (edict_t *self);
@@ -762,7 +762,7 @@ void turret_activate (edict_t *self, edict_t *other, edict_t *activator)
 
 // PMM
 // checkattack .. ignore range, just attack if available
-qboolean turret_checkattack (edict_t *self)
+bool turret_checkattack (edict_t *self)
 {
 	vec3_t	spot1, spot2;
 	float	chance, nexttime;

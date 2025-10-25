@@ -604,7 +604,7 @@ void infantry_jump (edict_t *self)
 		self->monsterinfo.currentmove = &infantry_move_jump;
 }
 
-qboolean infantry_blocked (edict_t *self, float dist)
+bool infantry_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

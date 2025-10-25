@@ -474,7 +474,7 @@ void berserk_jump (edict_t *self)
 		self->monsterinfo.currentmove = &berserk_move_jump;
 }
 
-qboolean berserk_blocked (edict_t *self, float dist)
+bool berserk_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkjump (self, dist, 256, 40))
 	{

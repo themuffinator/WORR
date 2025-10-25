@@ -45,7 +45,7 @@ typedef struct ctfgame_s
 	match_t match;		// match state
 	float matchtime;	// time for match start/end (depends on state)
 	int lasttime;		// last time update
-	qboolean countdown;	// has audio countdown started?
+	bool countdown;	// has audio countdown started?
 
 	elect_t election;	// election type
 	edict_t *etarget;	// for admin election, who's being elected
@@ -293,7 +293,7 @@ static void loc_buildboxpoints(vec3_t p[8], vec3_t org, vec3_t mins, vec3_t maxs
 	p[7][1] -= maxs[1];
 }
 
-static qboolean loc_CanSee (edict_t *targ, edict_t *inflictor)
+static bool loc_CanSee (edict_t *targ, edict_t *inflictor)
 {
 	trace_t	trace;
 	vec3_t	targpoints[8];
@@ -765,7 +765,7 @@ void CTFResetFlags(void)
 	CTFResetFlag(CTF_TEAM2);
 }
 
-qboolean CTFPickup_Flag(edict_t *ent, edict_t *other)
+bool CTFPickup_Flag(edict_t *ent, edict_t *other)
 {
 	int ctf_team;
 	int i;
@@ -923,7 +923,7 @@ void CTFDeadDropFlag(edict_t *self)
 	}
 }
 
-qboolean CTFDrop_Flag(edict_t *ent, gitem_t *item)
+bool CTFDrop_Flag(edict_t *ent, gitem_t *item)
 {
 	if (rand() & 1) 
 		gi.cprintf(ent, PRINT_HIGH, "Only lusers drop flags.\n");
@@ -1893,7 +1893,7 @@ gitem_t *CTFWhat_Tech(edict_t *ent)
 	return NULL;
 }
 
-qboolean CTFPickup_Tech (edict_t *ent, edict_t *other)
+bool CTFPickup_Tech (edict_t *ent, edict_t *other)
 {
 	gitem_t *tech;
 	int i;
@@ -2093,7 +2093,7 @@ int CTFApplyStrength(edict_t *ent, int dmg)
 	return dmg;
 }
 
-qboolean CTFApplyStrengthSound(edict_t *ent)
+bool CTFApplyStrengthSound(edict_t *ent)
 {
 	static gitem_t *tech = NULL;
 	float volume = 1.0;
@@ -2118,7 +2118,7 @@ qboolean CTFApplyStrengthSound(edict_t *ent)
 }
 
 
-qboolean CTFApplyHaste(edict_t *ent)
+bool CTFApplyHaste(edict_t *ent)
 {
 	static gitem_t *tech = NULL;
 
@@ -2151,7 +2151,7 @@ void CTFApplyHasteSound(edict_t *ent)
 void CTFApplyRegeneration(edict_t *ent)
 {
 	static gitem_t *tech = NULL;
-	qboolean noise = false;
+	bool noise = false;
 	gclient_t *client;
 	int index;
 	float volume = 1.0;
@@ -2191,7 +2191,7 @@ void CTFApplyRegeneration(edict_t *ent)
 	}
 }
 
-qboolean CTFHasRegeneration(edict_t *ent)
+bool CTFHasRegeneration(edict_t *ent)
 {
 	static gitem_t *tech = NULL;
 
@@ -2257,8 +2257,8 @@ static void CTFSay_Team_Location(edict_t *who, char *buf)
 	gitem_t *item;
 	int nearteam = -1;
 	edict_t *flag1, *flag2;
-	qboolean hotsee = false;
-	qboolean cansee;
+	bool hotsee = false;
+	bool cansee;
 
 	while ((what = loc_findradius(what, who->s.origin, 1024)) != NULL) {
 		// find what in loc_classnames
@@ -2612,7 +2612,7 @@ static void SetLevelName(pmenu_t *p)
 
 /* ELECTIONS */
 
-qboolean CTFBeginElection(edict_t *ent, elect_t type, char *msg)
+bool CTFBeginElection(edict_t *ent, elect_t type, char *msg)
 {
 	int i;
 	int count;
@@ -2806,7 +2806,7 @@ void CTFEndMatch(void)
 	EndDMLevel();
 }
 
-qboolean CTFNextMap(void)
+bool CTFNextMap(void)
 {
 	if (ctfgame.match == MATCH_POST) {
 		ctfgame.match = MATCH_SETUP;
@@ -3007,14 +3007,14 @@ void CTFGhost(edict_t *ent)
 	gi.cprintf(ent, PRINT_HIGH, "Invalid ghost code.\n");
 }
 
-qboolean CTFMatchSetup(void)
+bool CTFMatchSetup(void)
 {
 	if (ctfgame.match == MATCH_SETUP || ctfgame.match == MATCH_PREGAME)
 		return true;
 	return false;
 }
 
-qboolean CTFMatchOn(void)
+bool CTFMatchOn(void)
 {
 	if (ctfgame.match == MATCH_GAME)
 		return true;
@@ -3306,7 +3306,7 @@ void CTFCredits(edict_t *ent, pmenuhnd_t *p)
 	PMenu_Open(ent, creditsmenu, -1, sizeof(creditsmenu) / sizeof(pmenu_t), NULL);
 }
 
-qboolean CTFStartClient(edict_t *ent)
+bool CTFStartClient(edict_t *ent)
 {
 	if (ent->client->resp.ctf_team != CTF_NOTEAM)
 		return false;
@@ -3351,14 +3351,14 @@ void CTFObserver(edict_t *ent)
 	CTFOpenJoinMenu(ent);
 }
 
-qboolean CTFInMatch(void)
+bool CTFInMatch(void)
 {
 	if (ctfgame.match > MATCH_NONE)
 		return true;
 	return false;
 }
 
-qboolean CTFCheckRules(void)
+bool CTFCheckRules(void)
 {
 	int t;
 	int i, j;
@@ -3608,11 +3608,11 @@ typedef struct admin_settings_s {
 	int matchlen;
 	int matchsetuplen;
 	int matchstartlen;
-	qboolean weaponsstay;
-	qboolean instantitems;
-	qboolean quaddrop;
-	qboolean instantweap;
-	qboolean matchlock;
+	bool weaponsstay;
+	bool instantitems;
+	bool quaddrop;
+	bool instantweap;
+	bool matchlock;
 } admin_settings_t;
 
 #define SETMENU_SIZE (7 + 5)
@@ -3841,11 +3841,11 @@ pmenu_t def_setmenu[] = {
 	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//int matchlen;         
 	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//int matchsetuplen;    
 	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//int matchstartlen;    
-	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//qboolean weaponsstay; 
-	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//qboolean instantitems;
-	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//qboolean quaddrop;    
-	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//qboolean instantweap; 
-	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//qboolean matchlock; 
+	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//bool weaponsstay; 
+	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//bool instantitems;
+	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//bool quaddrop;    
+	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//bool instantweap; 
+	{ NULL,				PMENU_ALIGN_LEFT, NULL },	//bool matchlock; 
 	{ NULL,				PMENU_ALIGN_LEFT, NULL },
 	{ "Apply",			PMENU_ALIGN_LEFT, CTFAdmin_SettingsApply },
 	{ "Cancel",			PMENU_ALIGN_LEFT, CTFAdmin_SettingsCancel }

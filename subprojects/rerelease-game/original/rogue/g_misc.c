@@ -741,7 +741,7 @@ void func_explosive_explode (edict_t *self, edict_t *inflictor, edict_t *attacke
 	int		count;
 	int		mass;
 	edict_t	*master;
-	qboolean	done = false;
+	bool	done = false;
 
 	// bmodel origins are (0 0 0), we need to adjust that here
 	VectorScale (self->size, 0.5, size);

@@ -24,18 +24,18 @@
 #define STATE_UP			2
 #define STATE_DOWN			3
 
-qboolean face_wall (edict_t *self);
+bool face_wall (edict_t *self);
 void HuntTarget (edict_t *self);
 
 // PMM
-qboolean parasite_drain_attack_ok (vec3_t start, vec3_t end);
+bool parasite_drain_attack_ok (vec3_t start, vec3_t end);
 
 
 // blocked_checkshot
 //	shotchance: 0-1, chance they'll take the shot if it's clear.
-qboolean blocked_checkshot (edict_t *self, float shotChance)
+bool blocked_checkshot (edict_t *self, float shotChance)
 {
-	qboolean	playerVisible;
+	bool	playerVisible;
 
 	if(!self->enemy)
 		return false;
@@ -110,7 +110,7 @@ qboolean blocked_checkshot (edict_t *self, float shotChance)
 
 // blocked_checkplat
 //	dist: how far they are trying to walk.
-qboolean blocked_checkplat (edict_t *self, float dist)
+bool blocked_checkplat (edict_t *self, float dist)
 {
 	int			playerPosition;
 	trace_t		trace;
@@ -195,7 +195,7 @@ qboolean blocked_checkplat (edict_t *self, float dist)
 // blocked_checkjump
 //	dist: how far they are trying to walk.
 //  maxDown/maxUp: how far they'll ok a jump for. set to 0 to disable that direction.
-qboolean blocked_checkjump (edict_t *self, float dist, float maxDown, float maxUp)
+bool blocked_checkjump (edict_t *self, float dist, float maxDown, float maxUp)
 {
 	int			playerPosition;
 	trace_t		trace;
@@ -290,7 +290,7 @@ qboolean blocked_checkjump (edict_t *self, float dist, float maxDown, float maxU
 }
 
 // checks to see if another coop player is nearby, and will switch.
-qboolean blocked_checknewenemy (edict_t *self)
+bool blocked_checknewenemy (edict_t *self)
 {
 /*
 	int		player;
@@ -495,9 +495,9 @@ void hintpath_stop (edict_t *self)
 //		and the monster's enemy. if only one person is visible from the endpoints,
 //		it will not go for it.
 // =============
-qboolean monsterlost_checkhint2 (edict_t *self);
+bool monsterlost_checkhint2 (edict_t *self);
 
-qboolean monsterlost_checkhint (edict_t *self)
+bool monsterlost_checkhint (edict_t *self)
 {
 	edict_t		*e, *monster_pathchain, *target_pathchain, *checkpoint;
 	edict_t		*closest;
@@ -507,7 +507,7 @@ qboolean monsterlost_checkhint (edict_t *self)
 	int			count1=0, count2=0, count3=0, count4=0, count5=0;
 	float		r;
 	int			i;
-	qboolean	hint_path_represented[MAX_HINT_CHAINS];
+	bool	hint_path_represented[MAX_HINT_CHAINS];
 
 	// if there are no hint paths on this map, exit immediately.
 	if(!hint_paths_present)
@@ -906,7 +906,7 @@ qboolean monsterlost_checkhint (edict_t *self)
 	return true;
 }
 /*
-qboolean monsterlost_checkhint2 (edict_t *self)
+bool monsterlost_checkhint2 (edict_t *self)
 {
 	edict_t		*e, *e2, *goPoint;
 	int			field;
@@ -1001,7 +1001,7 @@ void hint_path_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t
 {
 	edict_t		*e, *goal, *next;
 //	int			chain;			 // direction - (-1) = upstream, (1) = downstream, (0) = done
-	qboolean	goalFound = false;
+	bool	goalFound = false;
 
 	// make sure we're the target of it's obsession
 	if(other->movetarget == self)
@@ -1209,7 +1209,7 @@ void InitHintPaths (void)
 {
 	edict_t		*e, *current;
 	int			field, i, count2;
-	qboolean	errors = false;
+	bool	errors = false;
 
 	hint_paths_present = 0;
 	
@@ -1324,7 +1324,7 @@ void InitHintPaths (void)
 // use to see if opponent is behind you (not to side)
 // if it looks a lot like infront, well, there's a reason
 
-qboolean inback (edict_t *self, edict_t *other)
+bool inback (edict_t *self, edict_t *other)
 {
 	vec3_t	vec;
 	float	dot;
@@ -1349,7 +1349,7 @@ float realrange (edict_t *self, edict_t *other)
 	return VectorLength(dir);
 }
 
-qboolean face_wall (edict_t *self)
+bool face_wall (edict_t *self)
 {
 	vec3_t	pt;
 	vec3_t	forward;
@@ -1455,7 +1455,7 @@ edict_t *CheckForBadArea(edict_t *ent)
 
 #define TESLA_DAMAGE_RADIUS		128
 
-qboolean MarkTeslaArea(edict_t *self, edict_t *tesla)
+bool MarkTeslaArea(edict_t *self, edict_t *tesla)
 {
 	vec3_t	mins, maxs;
 	edict_t *e;
@@ -1525,7 +1525,7 @@ qboolean MarkTeslaArea(edict_t *self, edict_t *tesla)
 // offset is how much time to miss by
 // aimdir is the resulting aim direction (pass in NULL if you don't want it)
 // aimpoint is the resulting aimpoint (pass in NULL if don't want it)
-void PredictAim (edict_t *target, vec3_t start, float bolt_speed, qboolean eye_height, float offset, vec3_t aimdir, vec3_t aimpoint)
+void PredictAim (edict_t *target, vec3_t start, float bolt_speed, bool eye_height, float offset, vec3_t aimdir, vec3_t aimpoint)
 {
 	vec3_t dir, vec;
 	float dist, time;
@@ -1561,7 +1561,7 @@ void PredictAim (edict_t *target, vec3_t start, float bolt_speed, qboolean eye_h
 }
 
 
-qboolean below (edict_t *self, edict_t *other)
+bool below (edict_t *self, edict_t *other)
 {
 	vec3_t	vec;
 	float	dot;
@@ -1657,7 +1657,7 @@ void M_MonsterDodge (edict_t *self, edict_t *attacker, float eta, trace_t *tr)
 {
 	float	r = random();
 	float	height;
-	qboolean	ducker = false, dodger = false;
+	bool	ducker = false, dodger = false;
 
 	// this needs to be here since this can be called after the monster has "died"
 	if (self->health < 1)
@@ -1820,7 +1820,7 @@ void monster_duck_up (edict_t *self)
 
 //=========================
 //=========================
-qboolean has_valid_enemy (edict_t *self)
+bool has_valid_enemy (edict_t *self)
 {
 	if (!self->enemy)
 		return false;
@@ -1984,7 +1984,7 @@ void monster_jump_start (edict_t *self)
 	self->timestamp = level.time;
 }
 
-qboolean monster_jump_finished (edict_t *self)
+bool monster_jump_finished (edict_t *self)
 {
 	if ((level.time - self->timestamp) > 3)
 	{

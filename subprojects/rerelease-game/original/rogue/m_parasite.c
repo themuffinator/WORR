@@ -277,8 +277,8 @@ void parasite_pain (edict_t *self, edict_t *other, float kick, int damage)
 }
 
 
-//static qboolean parasite_drain_attack_ok (vec3_t start, vec3_t end)
-qboolean parasite_drain_attack_ok (vec3_t start, vec3_t end)
+//static bool parasite_drain_attack_ok (vec3_t start, vec3_t end)
+bool parasite_drain_attack_ok (vec3_t start, vec3_t end)
 {
 	vec3_t	dir, angles;
 
@@ -502,7 +502,7 @@ void parasite_jump (edict_t *self)
 Blocked
 ===
 */
-qboolean parasite_blocked (edict_t *self, float dist)
+bool parasite_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;
@@ -520,11 +520,11 @@ qboolean parasite_blocked (edict_t *self, float dist)
 //================
 
 
-qboolean parasite_checkattack (edict_t *self)
+bool parasite_checkattack (edict_t *self)
 {
 	vec3_t	f, r, offset, start, end;
 	trace_t	tr;
-	qboolean retval;
+	bool retval;
 
 	retval = M_CheckAttack (self);
 

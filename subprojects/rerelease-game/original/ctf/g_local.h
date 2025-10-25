@@ -241,7 +241,7 @@ typedef struct
 typedef struct gitem_s
 {
 	char		*classname;	// spawning name
-	qboolean	(*pickup)(struct edict_s *ent, struct edict_s *other);
+	bool	(*pickup)(struct edict_s *ent, struct edict_s *other);
 	void		(*use)(struct edict_s *ent, struct gitem_s *item);
 	void		(*drop)(struct edict_s *ent, struct gitem_s *item);
 	void		(*weaponthink)(struct edict_s *ent);
@@ -297,7 +297,7 @@ typedef struct
 	// items
 	int			num_items;
 
-	qboolean	autosaved;
+	bool	autosaved;
 } game_locals_t;
 
 
@@ -437,7 +437,7 @@ typedef struct
 	void		(*attack)(edict_t *self);
 	void		(*melee)(edict_t *self);
 	void		(*sight)(edict_t *self, edict_t *other);
-	qboolean	(*checkattack)(edict_t *self);
+	bool	(*checkattack)(edict_t *self);
 
 	float		pausetime;
 	float		attack_finished;
@@ -562,7 +562,7 @@ extern	cvar_t	*flood_waitdelay;
 extern	cvar_t	*sv_maplist;
 
 //ZOID
-extern	qboolean	is_quad;
+extern	bool	is_quad;
 //ZOID
 
 #define world	(&g_edicts[0])
@@ -611,7 +611,7 @@ extern	gitem_t	itemlist[];
 //
 // g_cmds.c
 //
-qboolean CheckFlood(edict_t *ent);
+bool CheckFlood(edict_t *ent);
 void Cmd_Help_f (edict_t *ent);
 void Cmd_Score_f (edict_t *ent);
 
@@ -632,13 +632,13 @@ void Think_Weapon (edict_t *ent);
 int ArmorIndex (edict_t *ent);
 int PowerArmorType (edict_t *ent);
 gitem_t	*GetItemByIndex (int index);
-qboolean Add_Ammo (edict_t *ent, gitem_t *item, int count);
+bool Add_Ammo (edict_t *ent, gitem_t *item, int count);
 void Touch_Item (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf);
 
 //
 // g_utils.c
 //
-qboolean	KillBox (edict_t *ent);
+bool	KillBox (edict_t *ent);
 void	G_ProjectSource (vec3_t point, vec3_t distance, vec3_t forward, vec3_t right, vec3_t result);
 edict_t *G_Find (edict_t *from, int fieldofs, char *match);
 edict_t *findradius (edict_t *from, vec3_t org, float rad);
@@ -664,9 +664,9 @@ void vectoangles (vec3_t vec, vec3_t angles);
 //
 // g_combat.c
 //
-qboolean OnSameTeam (edict_t *ent1, edict_t *ent2);
-qboolean CanDamage (edict_t *targ, edict_t *inflictor);
-qboolean CheckTeamDamage (edict_t *targ, edict_t *attacker);
+bool OnSameTeam (edict_t *ent1, edict_t *ent2);
+bool CanDamage (edict_t *targ, edict_t *inflictor);
+bool CheckTeamDamage (edict_t *targ, edict_t *attacker);
 void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir, vec3_t point, vec3_t normal, int damage, int knockback, int dflags, int mod);
 void T_RadiusDamage (edict_t *inflictor, edict_t *attacker, float damage, edict_t *ignore, float radius, int mod);
 
@@ -704,7 +704,7 @@ void flymonster_start (edict_t *self);
 void AttackFinished (edict_t *self, float time);
 void monster_death_use (edict_t *self);
 void M_CatagorizePosition (edict_t *ent);
-qboolean M_CheckAttack (edict_t *self);
+bool M_CheckAttack (edict_t *self);
 void M_FlyCheck (edict_t *self);
 void M_CheckGround (edict_t *ent);
 
@@ -730,20 +730,20 @@ void ai_charge (edict_t *self, float dist);
 int range (edict_t *self, edict_t *other);
 
 void FoundTarget (edict_t *self);
-qboolean infront (edict_t *self, edict_t *other);
-qboolean visible (edict_t *self, edict_t *other);
-qboolean FacingIdeal(edict_t *self);
+bool infront (edict_t *self, edict_t *other);
+bool visible (edict_t *self, edict_t *other);
+bool FacingIdeal(edict_t *self);
 
 //
 // g_weapon.c
 //
 void ThrowDebris (edict_t *self, char *modelname, float speed, vec3_t origin);
-qboolean fire_hit (edict_t *self, vec3_t aim, int damage, int kick);
+bool fire_hit (edict_t *self, vec3_t aim, int damage, int kick);
 void fire_bullet (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int mod);
 void fire_shotgun (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int count, int mod);
-void fire_blaster (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, int effect, qboolean hyper);
+void fire_blaster (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, int effect, bool hyper);
 void fire_grenade (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius);
-void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, qboolean held);
+void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, bool held);
 void fire_rocket (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, float damage_radius, int radius_damage);
 void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick);
 void fire_bfg (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, float damage_radius);
@@ -805,8 +805,8 @@ void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 //
 // m_move.c
 //
-qboolean M_CheckBottom (edict_t *ent);
-qboolean M_walkmove (edict_t *ent, float yaw, float dist);
+bool M_CheckBottom (edict_t *ent);
+bool M_walkmove (edict_t *ent, float yaw, float dist);
 void M_MoveToGoal (edict_t *ent, float dist);
 void M_ChangeYaw (edict_t *ent);
 
@@ -825,7 +825,7 @@ void EndDMLevel (void);
 //
 // g_svcmds.c
 //
-qboolean SV_FilterPacket (char *from);
+bool SV_FilterPacket (char *from);
 
 //============================================================================
 
@@ -846,7 +846,7 @@ typedef struct
 	char		netname[16];
 	int			hand;
 
-	qboolean	connected;			// a loadgame will leave valid entities that
+	bool	connected;			// a loadgame will leave valid entities that
 									// just don't have a connection yet
 
 	// values saved and restored from edicts when changing levels
@@ -885,11 +885,11 @@ typedef struct
 	float		ctf_lastreturnedflag;
 	float		ctf_flagsince;
 	float		ctf_lastfraggedcarrier;
-	qboolean	id_state;
+	bool	id_state;
 	float		lastidtime;
-	qboolean	voted; // for elections
-	qboolean	ready;
-	qboolean	admin;
+	bool	voted; // for elections
+	bool	ready;
+	bool	admin;
 	struct ghost_s *ghost; // for ghost codes
 //ZOID
 	vec3_t		cmd_angles;			// angles sent over in the last command
@@ -910,14 +910,14 @@ struct gclient_s
 	client_respawn_t	resp;
 	pmove_state_t		old_pmove;	// for detecting out-of-pmove changes
 
-	qboolean	showscores;			// set layout stat
+	bool	showscores;			// set layout stat
 //ZOID
-	qboolean	inmenu;				// in menu
+	bool	inmenu;				// in menu
 	pmenuhnd_t	*menu;				// current menu
 //ZOID
-	qboolean	showinventory;		// set layout stat
-	qboolean	showhelp;
-	qboolean	showhelpicon;
+	bool	showinventory;		// set layout stat
+	bool	showhelp;
+	bool	showhelpicon;
 
 	int			ammo_index;
 
@@ -925,7 +925,7 @@ struct gclient_s
 	int			oldbuttons;
 	int			latched_buttons;
 
-	qboolean	weapon_thunk;
+	bool	weapon_thunk;
 
 	gitem_t		*newweapon;
 
@@ -961,8 +961,8 @@ struct gclient_s
 	// animation vars
 	int			anim_end;
 	int			anim_priority;
-	qboolean	anim_duck;
-	qboolean	anim_run;
+	bool	anim_duck;
+	bool	anim_run;
 
 	// powerup timers
 	float		quad_framenum;
@@ -970,7 +970,7 @@ struct gclient_s
 	float		breather_framenum;
 	float		enviro_framenum;
 
-	qboolean	grenade_blew_up;
+	bool	grenade_blew_up;
 	float		grenade_time;
 	int			silencer_shots;
 	int			weapon_sound;
@@ -991,9 +991,9 @@ struct gclient_s
 	float		ctf_techsndtime;
 	float		ctf_lasttechmsg;
 	edict_t		*chase_target;
-	qboolean	update_chase;
+	bool	update_chase;
 	float		menutime;			// time to update menu
-	qboolean	menudirty;
+	bool	menudirty;
 //ZOID
 };
 
@@ -1006,7 +1006,7 @@ struct edict_s
 									// of gclient_s to be a player_state_t
 									// but the rest of it is opaque
 
-	qboolean	inuse;
+	bool	inuse;
 	int			linkcount;
 
 	// FIXME: move these fields to a server private sv_entity_t
@@ -1091,7 +1091,7 @@ struct edict_s
 	int			max_health;
 	int			gib_health;
 	int			deadflag;
-	qboolean	show_hostile;
+	bool	show_hostile;
 
 	float		powerarmor_time;
 

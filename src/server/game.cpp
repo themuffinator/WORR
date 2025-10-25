@@ -435,7 +435,7 @@ static void PF_WritePos(const vec3_t pos)
     q2proto_server_write_pos(Q2P_PROTOCOL_MULTICAST_FLOAT, Q2PROTO_IOARG_SERVER_WRITE_MULTICAST, pos);
 }
 
-static qboolean PF_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
+static bool PF_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
 {
     const mleaf_t *leaf1, *leaf2;
     visrow_t mask;
@@ -445,14 +445,14 @@ static qboolean PF_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
 
     leaf2 = CM_PointLeaf(&sv.cm, p2);
     if (leaf2->cluster == -1)
-        return qfalse;
+        return false;
     if (!Q_IsBitSet(mask.b, leaf2->cluster))
-        return qfalse;
+        return false;
     if (vis & VIS_NOAREAS)
-        return qtrue;
+        return true;
     if (!CM_AreasConnected(&sv.cm, leaf1->area, leaf2->area))
-        return qfalse;      // a door blocks it
-    return qtrue;
+        return false;      // a door blocks it
+    return true;
 }
 
 
@@ -463,7 +463,7 @@ PF_inPVS
 Also checks portalareas so that doors block sight
 =================
 */
-static qboolean PF_inPVS(const vec3_t p1, const vec3_t p2, bool portals)
+static bool PF_inPVS(const vec3_t p1, const vec3_t p2, bool portals)
 {
     const vis_t vis = static_cast<vis_t>(VIS_PVS | (portals ? 0 : VIS_NOAREAS));
     return PF_inVIS(p1, p2, vis);
@@ -476,7 +476,7 @@ PF_inPHS
 Also checks portalareas so that doors block sound
 =================
 */
-static qboolean PF_inPHS(const vec3_t p1, const vec3_t p2, bool portals)
+static bool PF_inPHS(const vec3_t p1, const vec3_t p2, bool portals)
 {
     const vis_t vis = static_cast<vis_t>(VIS_PHS | (portals ? 0 : VIS_NOAREAS));
     return PF_inVIS(p1, p2, vis);
@@ -729,9 +729,9 @@ static void PF_SetAreaPortalState(int portalnum, bool open)
     CM_SetAreaPortalState(&sv.cm, portalnum, open);
 }
 
-static qboolean PF_AreasConnected(int area1, int area2)
+static bool PF_AreasConnected(int area1, int area2)
 {
-    return CM_AreasConnected(&sv.cm, area1, area2) ? qtrue : qfalse;
+    return CM_AreasConnected(&sv.cm, area1, area2) ? true : false;
 }
 
 static void *PF_TagMalloc(size_t size, int tag)

@@ -590,8 +590,8 @@ void SV_BuildClientFrame(client_t *client)
     int         max_packet_entities;
     edict_t     *edicts[MAX_EDICTS];
     int         num_edicts;
-    qboolean (*visible)(edict_t *, edict_t *) = NULL;
-    qboolean (*customize)(edict_t *, edict_t *, customize_entity_t *) = NULL;
+    bool (*visible)(edict_t *, edict_t *) = NULL;
+    bool (*customize)(edict_t *, edict_t *, customize_entity_t *) = NULL;
     customize_entity_t temp;
 
     clent = client->edict;

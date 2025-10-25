@@ -137,7 +137,7 @@ struct game3_gclient_new_s {
 struct game3_edict_s {
     game3_entity_state_t  s;
     void        *client;
-    qboolean    inuse;
+    bool    inuse;
     int         linkcount;
 
     // FIXME: move these fields to a server private sv_entity_t
@@ -206,10 +206,10 @@ typedef struct {
     // collision detection
     game3_trace_t (* q_gameabi trace)(const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, game3_edict_t *passent, int contentmask);
     int (*pointcontents)(const vec3_t point);
-    qboolean (*inPVS)(const vec3_t p1, const vec3_t p2);
-    qboolean (*inPHS)(const vec3_t p1, const vec3_t p2);
-    void (*SetAreaPortalState)(int portalnum, qboolean open);
-    qboolean (*AreasConnected)(int area1, int area2);
+    bool (*inPVS)(const vec3_t p1, const vec3_t p2);
+    bool (*inPHS)(const vec3_t p1, const vec3_t p2);
+    void (*SetAreaPortalState)(int portalnum, bool open);
+    bool (*AreasConnected)(int area1, int area2);
 
     // an entity will never be sent to a client or used for collision
     // if it is not passed to linkentity.  If the size, position, or
@@ -221,7 +221,7 @@ typedef struct {
 
     // network messaging
     void (*multicast)(const vec3_t origin, multicast_t to);
-    void (*unicast)(game3_edict_t *ent, qboolean reliable);
+    void (*unicast)(game3_edict_t *ent, bool reliable);
     void (*WriteChar)(int c);
     void (*WriteByte)(int c);
     void (*WriteShort)(int c);
@@ -273,7 +273,7 @@ typedef struct {
     // about the world state and the clients.
     // WriteGame is called every time a level is exited.
     // ReadGame is called on a loadgame.
-    void (*WriteGame)(const char *filename, qboolean autosave);
+    void (*WriteGame)(const char *filename, bool autosave);
     void (*ReadGame)(const char *filename);
 
     // ReadLevel is called after the default map information has been
@@ -281,7 +281,7 @@ typedef struct {
     void (*WriteLevel)(const char *filename);
     void (*ReadLevel)(const char *filename);
 
-    qboolean (*ClientConnect)(game3_edict_t *ent, char *userinfo);
+    bool (*ClientConnect)(game3_edict_t *ent, char *userinfo);
     void (*ClientBegin)(game3_edict_t *ent);
     void (*ClientUserinfoChanged)(game3_edict_t *ent, char *userinfo);
     void (*ClientDisconnect)(game3_edict_t *ent);
@@ -362,7 +362,7 @@ typedef struct {
     void        (*local_sound)(game3_edict_t *target, const vec3_t origin, game3_edict_t *ent, int channel, int soundindex, float volume, float attenuation, float timeofs);
     const char  *(*get_configstring)(int index);
     trace_t     (*q_gameabi clip)(const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, game3_edict_t *clip, int contentmask);
-    qboolean    (*inVIS)(const vec3_t p1, const vec3_t p2, vis_t vis);
+    bool    (*inVIS)(const vec3_t p1, const vec3_t p2, vis_t vis);
 
     void        *(*GetExtension)(const char *name);
     void        *(*TagRealloc)(void *ptr, size_t size);
@@ -373,11 +373,11 @@ typedef struct {
     uint32_t    structsize;
 
     void        *(*GetExtension)(const char *name);
-    qboolean    (*CanSave)(void);
+    bool    (*CanSave)(void);
     void        (*PrepFrame)(void);
     void        (*RestartFilesystem)(void); // called when fs_restart is issued
-    qboolean    (*CustomizeEntityToClient)(game3_edict_t *client, game3_edict_t *ent, game3_customize_entity_t *temp); // if true is returned, `temp' must be initialized
-    qboolean    (*EntityVisibleToClient)(game3_edict_t *client, game3_edict_t *ent);
+    bool    (*CustomizeEntityToClient)(game3_edict_t *client, game3_edict_t *ent, game3_customize_entity_t *temp); // if true is returned, `temp' must be initialized
+    bool    (*EntityVisibleToClient)(game3_edict_t *client, game3_edict_t *ent);
 } game3_export_ex_t;
 
 #endif // GAME3_H

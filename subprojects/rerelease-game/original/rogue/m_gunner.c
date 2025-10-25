@@ -36,7 +36,7 @@ void gunner_search (edict_t *self)
 }
 
 
-qboolean visible (edict_t *self, edict_t *other);
+bool visible (edict_t *self, edict_t *other);
 void GunnerGrenade (edict_t *self);
 void GunnerFire (edict_t *self);
 void gunner_fire_chain(edict_t *self);
@@ -427,7 +427,7 @@ void GunnerFire (edict_t *self)
 	monster_fire_bullet (self, start, aim, 3, 4, DEFAULT_BULLET_HSPREAD, DEFAULT_BULLET_VSPREAD, flash_number);
 }
 
-qboolean gunner_grenade_check(edict_t *self)
+bool gunner_grenade_check(edict_t *self)
 {
 	vec3_t		start;
 	vec3_t		forward, right;
@@ -492,7 +492,7 @@ void GunnerGrenade (edict_t *self)
 	float	pitch;
 	// PMM
 	vec3_t	target;	
-	qboolean blindfire;
+	bool blindfire;
 
 	if(!self->enemy || !self->enemy->inuse)		//PGM
 		return;									//PGM
@@ -921,7 +921,7 @@ void gunner_jump (edict_t *self)
 
 //===========
 //PGM
-qboolean gunner_blocked (edict_t *self, float dist)
+bool gunner_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

@@ -132,7 +132,7 @@ void Tag_Score (edict_t *attacker, edict_t *victim, int scoreChange)
 
 //=================
 //=================
-qboolean Tag_PickupToken (edict_t *ent, edict_t *other)
+bool Tag_PickupToken (edict_t *ent, edict_t *other)
 {
 	if(gamerules && (gamerules->value != 2))
 	{

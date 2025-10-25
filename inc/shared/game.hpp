@@ -351,10 +351,10 @@ typedef struct {
     trace_t (* q_gameabi trace)(const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, edict_t *passent, contents_t contentmask);
     trace_t (* q_gameabi clip)(edict_t *entity, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, contents_t contentmask);
     contents_t (*pointcontents)(const vec3_t point);
-    qboolean (*inPVS)(const vec3_t p1, const vec3_t p2, bool portals);
-    qboolean (*inPHS)(const vec3_t p1, const vec3_t p2, bool portals);
+    bool (*inPVS)(const vec3_t p1, const vec3_t p2, bool portals);
+    bool (*inPHS)(const vec3_t p1, const vec3_t p2, bool portals);
     void (*SetAreaPortalState)(int portalnum, bool open);
-    qboolean (*AreasConnected)(int area1, int area2);
+    bool (*AreasConnected)(int area1, int area2);
 
     // an entity will never be sent to a client or used for collision
     // if it is not passed to linkentity.  If the size, position, or
@@ -554,8 +554,8 @@ typedef struct {
 typedef struct {
     int api_version;
 
-    qboolean    (*CustomizeEntityToClient)(edict_t *client, edict_t *ent, customize_entity_t *temp); // if true is returned, `temp' must be initialized
-    qboolean    (*EntityVisibleToClient)(edict_t *client, edict_t *ent);
+    bool    (*CustomizeEntityToClient)(edict_t *client, edict_t *ent, customize_entity_t *temp); // if true is returned, `temp' must be initialized
+    bool    (*EntityVisibleToClient)(edict_t *client, edict_t *ent);
 } game_q2pro_customize_entity_t;
 
 //===============================================================

@@ -27,7 +27,7 @@ black widow
 
 void BossExplode (edict_t *self);
 
-qboolean infront (edict_t *self, edict_t *other);
+bool infront (edict_t *self, edict_t *other);
 
 static int	sound_pain1;
 static int	sound_pain2;
@@ -963,7 +963,7 @@ void widow_walk (edict_t *self)
 void widow_attack (edict_t *self)
 {
 	float	luck;
-	qboolean rail_frames = false, blaster_frames = false, blocked = false, anger = false;
+	bool rail_frames = false, blaster_frames = false, blocked = false, anger = false;
 
 	self->movetarget = NULL;
 
@@ -1410,13 +1410,13 @@ void WidowPowerups (edict_t *self)
 	}
 }
 
-qboolean Widow_CheckAttack (edict_t *self)
+bool Widow_CheckAttack (edict_t *self)
 {
 	vec3_t	spot1, spot2;
 	vec3_t	temp;
 	float	chance;
 	trace_t	tr;
-	qboolean	enemy_infront;
+	bool	enemy_infront;
 	int			enemy_range;
 	float		enemy_yaw;
 	float		real_enemy_range;
@@ -1544,7 +1544,7 @@ qboolean Widow_CheckAttack (edict_t *self)
 	return false;
 }
 
-qboolean widow_blocked (edict_t *self, float dist)
+bool widow_blocked (edict_t *self, float dist)
 {
 	// if we get blocked while we're in our run/attack mode, turn on a meaningless (in this context)AI flag, 
 	// and call attack to get a new attack sequence.  make sure to turn it off when we're done.

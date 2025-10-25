@@ -906,7 +906,7 @@ A single player death will automatically restore from the
 last save position.
 ============
 */
-void WriteGame(const char *filename, qboolean autosave)
+void WriteGame(const char *filename, bool autosave)
 {
     gzFile  f;
     int     i;
@@ -1118,7 +1118,7 @@ void ReadLevel(const char *filename)
                 ent->nextthink = level.framenum + ent->delay * BASE_FRAMERATE;
 
         if (ent->think == func_clock_think || ent->use == func_clock_use) {
-            char *msg = ent->message;
+            const char *msg = ent->message;
             ent->message = G_TagMalloc<char>(CLOCK_MESSAGE_SIZE, TAG_LEVEL);
             if (msg) {
                 Q_strlcpy(ent->message, msg, CLOCK_MESSAGE_SIZE);

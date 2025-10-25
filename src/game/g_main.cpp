@@ -74,7 +74,7 @@ cvar_t  *sv_maplist;
 cvar_t  *sv_features;
 
 static void G_RunFrame(void);
-static qboolean ClientConnect_qboolean(edict_t *ent, char *userinfo);
+static bool ClientConnect_qboolean(edict_t *ent, char *userinfo);
 
 //===================================================================
 
@@ -88,9 +88,9 @@ static void ShutdownGame(void)
     gi.FreeTags(TAG_GAME);
 }
 
-static qboolean ClientConnect_qboolean(edict_t *ent, char *userinfo)
+static bool ClientConnect_qboolean(edict_t *ent, char *userinfo)
 {
-    return ClientConnect(ent, userinfo) ? qtrue : qfalse;
+    return ClientConnect(ent, userinfo) ? true : false;
 }
 
 /*

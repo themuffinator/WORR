@@ -546,7 +546,7 @@ Kills all entities that would touch the proposed new positioning
 of ent.  Ent should be unlinked before calling this!
 =================
 */
-qboolean KillBox (edict_t *ent)
+bool KillBox (edict_t *ent)
 {
 	trace_t		tr;
 

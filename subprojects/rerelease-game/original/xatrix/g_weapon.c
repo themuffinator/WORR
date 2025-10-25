@@ -43,7 +43,7 @@ fire_hit
 Used for all impact (hit/punch/slash) attacks
 =================
 */
-qboolean fire_hit (edict_t *self, vec3_t aim, int damage, int kick)
+bool fire_hit (edict_t *self, vec3_t aim, int damage, int kick)
 {
 	trace_t		tr;
 	vec3_t		forward, right, up;
@@ -123,7 +123,7 @@ static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, i
 	float		r;
 	float		u;
 	vec3_t		water_start;
-	qboolean	water = false;
+	bool	water = false;
 	int			content_mask = MASK_SHOT | MASK_WATER;
 
 	tr = gi.trace (self->s.origin, NULL, NULL, start, self, MASK_SHOT);
@@ -329,7 +329,7 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 	G_FreeEdict (self);
 }
 
-void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, int effect, qboolean hyper)
+void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, int effect, bool hyper)
 {
 	edict_t	*bolt;
 	trace_t	tr;
@@ -545,7 +545,7 @@ void fire_grenade (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int s
 	gi.linkentity (grenade);
 }
 
-void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, qboolean held)
+void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, bool held)
 {
 	edict_t	*grenade;
 	vec3_t	dir;
@@ -691,7 +691,7 @@ void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick
 	trace_t		tr;
 	edict_t		*ignore;
 	int			mask;
-	qboolean	water;
+	bool	water;
 
 	VectorMA (start, 8192, aimdir, end);
 	VectorCopy (start, from);
@@ -1441,7 +1441,7 @@ static void Trap_Think (edict_t *ent)
 
 
 // RAFAEL
-void fire_trap (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, qboolean held)
+void fire_trap (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, bool held)
 {
 	edict_t	*trap;
 	vec3_t	dir;

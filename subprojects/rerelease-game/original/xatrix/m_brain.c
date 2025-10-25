@@ -491,7 +491,7 @@ void brain_melee(edict_t *self)
 		self->monsterinfo.currentmove = &brain_move_attack2;
 }
 
-static qboolean brain_tounge_attack_ok (vec3_t start, vec3_t end)
+static bool brain_tounge_attack_ok (vec3_t start, vec3_t end)
 {
 	vec3_t	dir, angles;
 

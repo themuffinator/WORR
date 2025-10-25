@@ -206,7 +206,7 @@ void G_UseTargets (edict_t *ent, edict_t *activator)
 {
 	edict_t		*t;
 	edict_t		*master;
-	qboolean	done = false;
+	bool	done = false;
 
 //
 // check for a delay
@@ -692,7 +692,7 @@ Kills all entities that would touch the proposed new positioning
 of ent.  Ent should be unlinked before calling this!
 =================
 */
-qboolean KillBox (edict_t *ent)
+bool KillBox (edict_t *ent)
 {
 	trace_t		tr;
 

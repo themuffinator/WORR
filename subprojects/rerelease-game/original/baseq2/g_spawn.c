@@ -413,7 +413,7 @@ ed should be a properly initialized empty edict.
 */
 char *ED_ParseEdict (char *data, edict_t *ent)
 {
-	qboolean	init;
+	bool	init;
 	char		keyname[256];
 	char		*com_token;
 

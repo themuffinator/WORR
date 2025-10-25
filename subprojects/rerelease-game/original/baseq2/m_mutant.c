@@ -396,14 +396,14 @@ void mutant_jump (edict_t *self)
 // CHECKATTACK
 //
 
-qboolean mutant_check_melee (edict_t *self)
+bool mutant_check_melee (edict_t *self)
 {
 	if (range (self, self->enemy) == RANGE_MELEE)
 		return true;
 	return false;
 }
 
-qboolean mutant_check_jump (edict_t *self)
+bool mutant_check_jump (edict_t *self)
 {
 	vec3_t	v;
 	float	distance;
@@ -430,7 +430,7 @@ qboolean mutant_check_jump (edict_t *self)
 	return true;
 }
 
-qboolean mutant_checkattack (edict_t *self)
+bool mutant_checkattack (edict_t *self)
 {
 	if (!self->enemy || self->enemy->health <= 0)
 		return false;

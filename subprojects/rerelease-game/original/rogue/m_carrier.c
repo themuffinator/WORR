@@ -23,9 +23,9 @@ carrier
 void BossExplode (edict_t *self);
 void Grenade_Explode (edict_t *ent);
 
-qboolean infront (edict_t *self, edict_t *other);
-qboolean inback (edict_t *self, edict_t *other);
-qboolean below (edict_t *self, edict_t *other);
+bool infront (edict_t *self, edict_t *other);
+bool inback (edict_t *self, edict_t *other);
+bool below (edict_t *self, edict_t *other);
 void drawbbox (edict_t *self);
 
 //char *ED_NewString (char *string);
@@ -836,7 +836,7 @@ void carrier_attack (edict_t *self)
 {
 	vec3_t	vec;
 	float	range, luck;
-	qboolean	enemy_inback, enemy_infront, enemy_below;
+	bool	enemy_inback, enemy_infront, enemy_below;
 
 //	gi.dprintf ("carrier attack\n");
 	
@@ -1021,7 +1021,7 @@ void carrier_reattack_gren (edict_t *self)
 
 void carrier_pain (edict_t *self, edict_t *other, float kick, int damage)
 {
-	qboolean changed = false;
+	bool changed = false;
 
 	if (self->health < (self->max_health / 2))
 		self->s.skinnum = 1;
@@ -1083,13 +1083,13 @@ void carrier_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int dama
 	self->monsterinfo.currentmove = &carrier_move_death;
 }
 
-qboolean Carrier_CheckAttack (edict_t *self)
+bool Carrier_CheckAttack (edict_t *self)
 {
 	vec3_t	spot1, spot2;
 	vec3_t	temp;
 	float	chance;
 	trace_t	tr;
-	qboolean	enemy_infront, enemy_inback, enemy_below;
+	bool	enemy_infront, enemy_inback, enemy_below;
 	int			enemy_range;
 	float		enemy_yaw;
 

@@ -262,13 +262,13 @@ void CL_PredictMovement(void)
     pm.pointcontents = CL_PointContents;
     pm.s = cl.frame.ps.pmove;
     VectorCopy(cl.frame.ps.viewoffset, pm.viewoffset);
-    pm.snapinitial = qtrue;
+    pm.snapinitial = true;
 
     // run framesgit 
     while (++ack <= current) {
         pm.cmd = cl.cmds[ack & CMD_MASK];
         cgame->Pmove(&pm);
-        pm.snapinitial = qfalse;
+        pm.snapinitial = false;
 
         // save for debug checking
         VectorCopy(pm.s.origin, cl.predicted_origins[ack & CMD_MASK]);

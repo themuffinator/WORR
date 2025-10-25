@@ -23,9 +23,9 @@ MEDIC
 //
 // 5/15/1998 I think I fixed these, keep an eye on them
 
-qboolean visible (edict_t *self, edict_t *other);
+bool visible (edict_t *self, edict_t *other);
 void M_SetEffects (edict_t *ent);
-qboolean FindTarget (edict_t *self);
+bool FindTarget (edict_t *self);
 void HuntTarget (edict_t *self);
 void FoundTarget (edict_t *self);
 char *ED_NewString (char *string);
@@ -99,7 +99,7 @@ vec3_t reinforcement_position[] = {
 	{0, -80, 0}
 };
 
-void cleanupHeal (edict_t *self, qboolean change_frame)
+void cleanupHeal (edict_t *self, bool change_frame)
 {
 	// clean up target, if we have one and it's legit
 	if (self->enemy && self->enemy->inuse)
@@ -114,7 +114,7 @@ void cleanupHeal (edict_t *self, qboolean change_frame)
 		self->monsterinfo.nextframe = FRAME_attack52;
 }
 
-void abortHeal (edict_t *self, qboolean change_frame, qboolean gib, qboolean mark)
+void abortHeal (edict_t *self, bool change_frame, bool gib, bool mark)
 {
 	int hurt;
 	static vec3_t	pain_normal = { 0, 0, 1 };
@@ -161,7 +161,7 @@ void abortHeal (edict_t *self, qboolean change_frame, qboolean gib, qboolean mar
 	self->monsterinfo.medicTries = 0;
 }
 
-qboolean canReach (edict_t *self, edict_t *other)
+bool canReach (edict_t *self, edict_t *other)
 {
 	vec3_t	spot1;
 	vec3_t	spot2;
@@ -1158,7 +1158,7 @@ void medic_spawngrows (edict_t *self)
 	int		num_summoned; // should be 1, 3, or 5
 	int		num_success = 0;
 	float	current_yaw;
-	qboolean	behind = false;
+	bool	behind = false;
 
 	// if we've been directed to turn around
 	if (self->monsterinfo.aiflags & AI_MANUAL_STEERING)
@@ -1231,7 +1231,7 @@ void medic_finish_spawn (edict_t *self)
 	int		count;
 	int		inc;
 	int		num_summoned; // should be 1, 3, or 5
-	qboolean	behind = false;
+	bool	behind = false;
 	edict_t	*designated_enemy;
 
 //	trace_t		tr;
@@ -1437,7 +1437,7 @@ void medic_attack(edict_t *self)
 	}
 }
 
-qboolean medic_checkattack (edict_t *self)
+bool medic_checkattack (edict_t *self)
 {
 	if (self->monsterinfo.aiflags & AI_MEDIC)
 	{
@@ -1675,7 +1675,7 @@ void medic_sidestep (edict_t *self)
 
 //===========
 //PGM
-qboolean medic_blocked (edict_t *self, float dist)
+bool medic_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

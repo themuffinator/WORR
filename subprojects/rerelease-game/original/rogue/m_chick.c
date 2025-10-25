@@ -15,7 +15,7 @@ chick
 #define LEAD_TARGET		1
 // ROGUE
 
-qboolean visible (edict_t *self, edict_t *other);
+bool visible (edict_t *self, edict_t *other);
 
 void chick_stand (edict_t *self);
 void chick_run (edict_t *self);
@@ -505,7 +505,7 @@ void ChickRocket (edict_t *self)
 	float	dist;
 	// pmm - blindfire
 	vec3_t	target;
-	qboolean blindfire = false;
+	bool blindfire = false;
 
 	if (self->monsterinfo.aiflags & AI_MANUAL_STEERING)
 		blindfire = true;
@@ -824,7 +824,7 @@ void chick_sight(edict_t *self, edict_t *other)
 
 //===========
 //PGM
-qboolean chick_blocked (edict_t *self, float dist)
+bool chick_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

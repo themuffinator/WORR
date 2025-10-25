@@ -638,7 +638,7 @@ void floater_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int dama
 
 //===========
 //PGM
-qboolean floater_blocked (edict_t *self, float dist)
+bool floater_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

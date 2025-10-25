@@ -359,7 +359,7 @@ void TankRocket (edict_t *self)
 	int		rocketSpeed;		// PGM
 	// pmm - blindfire support
 	vec3_t	target;
-	qboolean blindfire = false;
+	bool blindfire = false;
 
 	if(!self->enemy || !self->enemy->inuse)		//PGM
 		return;									//PGM
@@ -942,7 +942,7 @@ void tank_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damage,
 
 //===========
 //PGM
-qboolean tank_blocked (edict_t *self, float dist)
+bool tank_blocked (edict_t *self, float dist)
 {
 	if(blocked_checkshot (self, 0.25 + (0.05 * skill->value) ))
 		return true;

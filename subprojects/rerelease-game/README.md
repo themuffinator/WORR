@@ -57,7 +57,7 @@ Since C++ is now used in the game DLL, math functions were made constexpr where 
 
 ## Type Changes
 
-`qboolean`, which was aliased to `int32_t`, is now instead aliased to `bool`. This type should be equivalent to C's `_Bool`.
+`bool`, which was aliased to `int32_t`, is now instead aliased to `bool`. This type should be equivalent to C's `_Bool`.
 
 ## Info Keys
 
@@ -288,7 +288,7 @@ This is used to solve some epsilon issues with the player movement system.
 
 ### int32_t modified_count
 
-The old `qboolean modified;` has been changed into an integral value. This value is increased when the cvar has been changed, but is **never** zero. The reason for this is so that "is cvar modified" checks always succeed on the first check, assuming you initialize the last modified value to 0.
+The old `bool modified;` has been changed into an integral value. This value is increased when the cvar has been changed, but is **never** zero. The reason for this is so that "is cvar modified" checks always succeed on the first check, assuming you initialize the last modified value to 0.
 
 The function `Cvar_WasModified` is provided as a convenience function to perform this task for you.
 

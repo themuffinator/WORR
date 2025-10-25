@@ -32,17 +32,17 @@ void stalker_jump_straightup (edict_t *self);
 void stalker_jump_wait_land (edict_t *self);
 void stalker_false_death (edict_t *self);
 void stalker_false_death_start (edict_t *self);
-qboolean stalker_ok_to_transition (edict_t *self);
+bool stalker_ok_to_transition (edict_t *self);
 
 #define STALKER_ON_CEILING(ent)  ( ent->gravityVector[2] > 0 ? 1 : 0 )
 
-//extern qboolean SV_StepDirection (edict_t *ent, float yaw, float dist);
-extern qboolean SV_PointCloseEnough (edict_t *ent, vec3_t goal, float dist);
+//extern bool SV_StepDirection (edict_t *ent, float yaw, float dist);
+extern bool SV_PointCloseEnough (edict_t *ent, vec3_t goal, float dist);
 extern void drawbbox(edict_t *self);
 
 //=========================
 //=========================
-qboolean stalker_ok_to_transition (edict_t *self)
+bool stalker_ok_to_transition (edict_t *self)
 {
 	trace_t		trace;
 	vec3_t		pt, start;
@@ -476,7 +476,7 @@ void stalker_pain (edict_t *self, edict_t *other, float kick, int damage)
 // STALKER ATTACK
 // ******************
 
-//extern qboolean infront (edict_t *self, edict_t *other);
+//extern bool infront (edict_t *self, edict_t *other);
 
 void stalker_shoot_attack (edict_t *self)
 {
@@ -1021,9 +1021,9 @@ void stalker_jump (edict_t *self)
 // Blocked
 // ******************
 
-qboolean stalker_blocked (edict_t *self, float dist)
+bool stalker_blocked (edict_t *self, float dist)
 {
-	qboolean	onCeiling;
+	bool	onCeiling;
 
 //	gi.dprintf("stalker_blocked\n");
 	if(!has_valid_enemy(self))

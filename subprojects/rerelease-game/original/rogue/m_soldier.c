@@ -1170,7 +1170,7 @@ void soldier_dodge (edict_t *self, edict_t *attacker, float eta, trace_t *tr)
 */
 // pmm - blocking code
 
-qboolean soldier_blocked (edict_t *self, float dist)
+bool soldier_blocked (edict_t *self, float dist)
 {
 	// don't do anything if you're dodging
 	if ((self->monsterinfo.aiflags & AI_DODGING) || (self->monsterinfo.aiflags & AI_DUCKED))

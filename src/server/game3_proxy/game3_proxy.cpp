@@ -66,10 +66,10 @@ static game_q2pro_restart_filesystem_t make_game_q2pro_restart_filesystem()
 static const game_q2pro_restart_filesystem_t game_q2pro_restart_filesystem =
     make_game_q2pro_restart_filesystem();
 
-static qboolean wrap_CustomizeEntityToClient(edict_t *client, edict_t *ent, customize_entity_t *temp)
+static bool wrap_CustomizeEntityToClient(edict_t *client, edict_t *ent, customize_entity_t *temp)
 {
     game3_customize_entity_t new_temp;
-    qboolean result = game3_export_ex->CustomizeEntityToClient(translate_edict_to_game(client), translate_edict_to_game(ent), &new_temp);
+    bool result = game3_export_ex->CustomizeEntityToClient(translate_edict_to_game(client), translate_edict_to_game(ent), &new_temp);
     if (result)
     {
         game_entity_state_to_server(&temp->s, &new_temp.s);
@@ -77,7 +77,7 @@ static qboolean wrap_CustomizeEntityToClient(edict_t *client, edict_t *ent, cust
     return result;
 }
 
-static qboolean wrap_EntityVisibleToClient(edict_t *client, edict_t *ent)
+static bool wrap_EntityVisibleToClient(edict_t *client, edict_t *ent)
 {
     return game3_export_ex->EntityVisibleToClient(translate_edict_to_game(client), translate_edict_to_game(ent));
 }
@@ -132,7 +132,7 @@ static void wrap_multicast(const vec3_t origin, multicast_t to)
     game_import.multicast(origin, to, false);
 }
 
-static void wrap_unicast(game3_edict_t *gent, qboolean reliable)
+static void wrap_unicast(game3_edict_t *gent, bool reliable)
 {
     edict_t *ent = translate_edict_from_game(gent);
     game_import.unicast(ent, reliable, 0);
@@ -236,12 +236,12 @@ static void wrap_setmodel(game3_edict_t *gent, const char *name)
     sync_single_edict_server_to_game(ent_idx);
 }
 
-static qboolean wrap_inPVS(const vec3_t p1, const vec3_t p2)
+static bool wrap_inPVS(const vec3_t p1, const vec3_t p2)
 {
     return game_import.inPVS(p1, p2, true);
 }
 
-static qboolean wrap_inPHS(const vec3_t p1, const vec3_t p2)
+static bool wrap_inPHS(const vec3_t p1, const vec3_t p2)
 {
     return game_import.inPHS(p1, p2, true);
 }
@@ -305,8 +305,8 @@ static int wrap_BoxEdicts(const vec3_t mins, const vec3_t maxs, game3_edict_t **
 
 static void server_trace_to_game(game3_trace_t *tr, const trace_t *str)
 {
-    tr->allsolid = str->allsolid ? qtrue : qfalse;
-    tr->startsolid = str->startsolid ? qtrue : qfalse;
+    tr->allsolid = str->allsolid ? true : false;
+    tr->startsolid = str->startsolid ? true : false;
     tr->fraction = str->fraction;
     VectorCopy(str->endpos, tr->endpos);
     tr->plane = str->plane;
@@ -350,7 +350,7 @@ static trace_t wrap_clip(const vec3_t start, const vec3_t mins, const vec3_t max
     return game_import.clip(translate_edict_from_game(clip), start, mins, maxs, end, contentmask);
 }
 
-static qboolean wrap_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
+static bool wrap_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
 {
     switch(vis & ~VIS_NOAREAS)
     {
@@ -359,7 +359,7 @@ static qboolean wrap_inVIS(const vec3_t p1, const vec3_t p2, vis_t vis)
     case VIS_PHS:
         return game_import.inPHS(p1, p2, (vis & VIS_NOAREAS) == 0);
     }
-    return qfalse;
+    return false;
 }
 
 static void *wrap_GetExtension_import(const char *name)
@@ -397,7 +397,7 @@ static char* wrap_args(void)
     return (char *)game_import.args();
 }
 
-static void wrap_SetAreaPortalState(int portalnum, qboolean open)
+static void wrap_SetAreaPortalState(int portalnum, bool open)
 {
     game_import.SetAreaPortalState(portalnum, open);
 }
@@ -421,7 +421,7 @@ static void sync_single_edict_server_to_game(int index)
         return;
 
     bool is_new = !(game_edict->inuse || HAS_EFFECTS(game_edict));
-    game_edict->inuse = server_edict->inuse ? qtrue : qfalse;
+    game_edict->inuse = server_edict->inuse ? true : false;
     // Don't change fields if edict became unused
     if(!game_edict->inuse)
         return;
@@ -841,7 +841,7 @@ static char* wrap_WriteGameJson(bool autosave, size_t* json_size)
 
     char game_fn[MAX_OSPATH];
     Q_snprintf(game_fn, sizeof(game_fn), "%s/game.ssv", save_dir);
-    game3_export->WriteGame(game_fn, autosave ? qtrue : qfalse);
+    game3_export->WriteGame(game_fn, autosave ? true : false);
 
     char* result = read_as_base85(game_fn, json_size);
 

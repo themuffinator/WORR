@@ -28,7 +28,7 @@ Makron -- Final Boss
 #include "g_local.h"
 #include "m_boss32.h"
 
-qboolean visible (edict_t *self, edict_t *other);
+bool visible (edict_t *self, edict_t *other);
 
 void MakronRailgun (edict_t *self);
 void MakronSaveloc (edict_t *self);
@@ -708,13 +708,13 @@ void makron_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damag
 	
 }
 
-qboolean Makron_CheckAttack (edict_t *self)
+bool Makron_CheckAttack (edict_t *self)
 {
 	vec3_t	spot1, spot2;
 	vec3_t	temp;
 	float	chance;
 	trace_t	tr;
-	qboolean	enemy_infront;
+	bool	enemy_infront;
 	int			enemy_range;
 	float		enemy_yaw;
 
