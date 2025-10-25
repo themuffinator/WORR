@@ -16,6 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <cstring>
+
 #include "ui.hpp"
 #include "common/files.hpp"
 #include "common/net/net.hpp"
@@ -803,10 +805,26 @@ static int playercmp(serverslot_t *s1, serverslot_t *s2)
 
 static int addresscmp(serverslot_t *s1, serverslot_t *s2)
 {
-    if (s1->address.ip.u32 > s2->address.ip.u32)
-        return 1;
-    if (s1->address.ip.u32 < s2->address.ip.u32)
-        return -1;
+    if (s1->address.type != s2->address.type)
+        return s1->address.type < s2->address.type ? -1 : 1;
+
+    size_t addrlen;
+    switch (s1->address.type) {
+    case NA_IP:
+        addrlen = sizeof(s1->address.ip.u32[0]);
+        break;
+    case NA_IP6:
+        addrlen = sizeof(s1->address.ip.u8);
+        break;
+    default:
+        addrlen = sizeof(s1->address.ip.u8);
+        break;
+    }
+
+    const int cmp = std::memcmp(s1->address.ip.u8, s2->address.ip.u8, addrlen);
+    if (cmp)
+        return cmp < 0 ? -1 : 1;
+
     if (s1->address.port > s2->address.port)
         return 1;
     if (s1->address.port < s2->address.port)
