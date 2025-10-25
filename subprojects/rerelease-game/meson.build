@@ -2,7 +2,7 @@ project('quake2-rerelease-dll', 'cpp',
   license: 'GPL-2.0-or-later',
   version: run_command(find_program('python3'), 'version.py', check: true).stdout().strip(),
   default_options: [
-    'cpp_std=c++23',
+    'cpp_std=c++latest',
     'buildtype=debugoptimized',
     'b_vscrt=static_from_buildtype',
   ],
