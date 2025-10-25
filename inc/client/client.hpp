@@ -169,22 +169,22 @@ void SCR_Cinematic_g(genctx_t *ctx);
 
 #if USE_REF
 void R_ClearDebugLines(void);
-void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, qboolean depth_test);
-void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, qboolean depth_test);
-void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test);
-void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, qboolean depth_test);
-void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test);
-void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test);
+void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, bool depth_test);
+void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, bool depth_test);
+void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, bool depth_test);
+void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, bool depth_test);
+void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test);
+void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t time, bool depth_test);
 void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, color_t color, uint32_t time,
-                        qboolean depth_test);
+                        bool depth_test);
 void R_DrawArrowCap(const vec3_t apex, const vec3_t dir, float size,
-                    color_t color, uint32_t time, qboolean depth_test);
+                    color_t color, uint32_t time, bool depth_test);
 void R_AddDebugArrow(const vec3_t start, const vec3_t end, float size, color_t line_color,
-                     color_t arrow_color, uint32_t time, qboolean depth_test);
+                     color_t arrow_color, uint32_t time, bool depth_test);
 void R_AddDebugCurveArrow(const vec3_t start, const vec3_t ctrl, const vec3_t end, float size,
-                          color_t line_color, color_t arrow_color, uint32_t time, qboolean depth_test);
+                          color_t line_color, color_t arrow_color, uint32_t time, bool depth_test);
 void R_AddDebugText(const vec3_t origin, const vec3_t angles, const char *text,
-                    float size, color_t color, uint32_t time, qboolean depth_test);
+                    float size, color_t color, uint32_t time, bool depth_test);
 #else
 #define R_ClearDebugLines() (void)0
 #endif

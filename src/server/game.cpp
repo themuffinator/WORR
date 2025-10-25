@@ -850,54 +850,54 @@ static void PF_Loc_Print(edict_t* ent, int level, const char* base, const char**
 
 static void PF_Draw_Line(const vec3_t start, const vec3_t end, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugLine(start, end, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Point(const vec3_t point, const float size, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugPoint(point, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Circle(const vec3_t origin, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugCircle(origin, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Bounds(const vec3_t mins, const vec3_t maxs, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugBounds(mins, maxs, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Sphere(const vec3_t origin, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugSphere(origin, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_OrientedWorldText(const vec3_t origin, const char * text, const rgba_t* color, const float size, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugText(origin, NULL, text, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_StaticWorldText(const vec3_t origin, const vec3_t angles, const char * text, const rgba_t* color, const float size, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugText(origin, angles, text, size, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Cylinder(const vec3_t origin, const float halfHeight, const float radius, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugCylinder(origin, halfHeight, radius, *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Ray(const vec3_t origin, const vec3_t direction, const float length, const float size, const rgba_t* color, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     vec3_t end;
     VectorMA(origin, length, direction, end);
     R_AddDebugArrow(origin, end, size, *((color_t *) color), *((color_t *) color), lifeTime * 1000, depth);
 }
 static void PF_Draw_Arrow(const vec3_t start, const vec3_t end, const float size, const rgba_t* lineColor, const rgba_t* arrowColor, const float lifeTime, const bool depthTest)
 {
-    const qboolean depth = depthTest ? qtrue : qfalse;
+    const bool depth = depthTest;
     R_AddDebugArrow(start, end, size, *((color_t *) lineColor), *((color_t *) arrowColor), lifeTime * 1000, depth);
 }
 #else

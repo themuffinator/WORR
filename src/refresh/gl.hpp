@@ -1135,4 +1135,4 @@ void GL_ExpireDebugObjects(void);
  *
  */
 void GL_InitDebugTextLines(void);
-void GL_AddDebugTextLines(const vec3_t origin, const vec3_t angles, const char *text, float size, color_t color, uint32_t time, qboolean depth_test);
+void GL_AddDebugTextLines(const vec3_t origin, const vec3_t angles, const char *text, float size, color_t color, uint32_t time, bool depth_test);
