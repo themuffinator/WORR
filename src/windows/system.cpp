@@ -1444,8 +1444,10 @@ static void WINAPI ServiceMain(DWORD argc, LPSTR *argv)
     SetServiceStatus(statusHandle, &status);
 }
 
+static char serviceName[] = APPLICATION;
+
 static const SERVICE_TABLE_ENTRYA serviceTable[] = {
-    { APPLICATION, ServiceMain },
+    { serviceName, ServiceMain },
     { NULL, NULL }
 };
 
