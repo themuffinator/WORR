@@ -90,7 +90,7 @@ def main() -> int:
             any_changed = True
 
     if not any_changed:
-        raise RuntimeError('Failed to update libpng headers: no replacements applied.')
+        print('No libpng headers required updates; nothing to do.')
 
     return 0
 
