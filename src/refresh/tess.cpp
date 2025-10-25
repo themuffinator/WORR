@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.hpp"
+#include <algorithm>
 #include <array>
 #include <type_traits>
 
@@ -812,7 +813,7 @@ static void GL_DrawFace(const mface_t *surf)
     }
     tess.numindices += numindices;
 
-    memcpy(tess.texnum, texnum, sizeof(texnum));
+    std::copy(texnum.begin(), texnum.end(), tess.texnum);
     tess.flags = state;
 
     c.facesTris += numtris;
