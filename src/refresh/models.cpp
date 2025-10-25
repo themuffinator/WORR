@@ -50,7 +50,7 @@ static inline void *MOD_GpuMallocIndices(model_t *model, size_t size)
 
 static inline void *MOD_CpuMalloc(model_t *model, size_t size)
 {
-    return gl_static.use_gpu_lerp ? R_Mallocz(size)
+    return gl_static.use_gpu_lerp ? static_cast<void *>(R_Mallocz(size))
                                   : Hunk_TryAlloc(&model->hunk, size, gl_static.hunk_align);
 }
 
@@ -1401,16 +1401,16 @@ static bool MD5_ParseAnim(model_t *model, const char *s, const char *path)
 
 static bool MD5_LoadFile(model_t *model, const char *path, bool (*parse)(model_t *, const char *, const char *))
 {
-    void *data;
-    int ret = FS_LoadFile(path, &data);
+    char *data = nullptr;
+    int ret = FS_LoadFile(path, reinterpret_cast<void **>(&data));
     if (!data) {
-    MOD_PrintError(path, ret);
-    return false;
-}
+        MOD_PrintError(path, ret);
+        return false;
+    }
 
-    ret = parse(model, data, path);
+    const bool parsed = parse(model, static_cast<const char *>(data), path);
     FS_FreeFile(data);
-    if (!ret) {
+    if (!parsed) {
         MOD_PrintError(path, Q_ERR_INVALID_FORMAT);
         return false;
     }
@@ -1530,7 +1530,11 @@ static void MOD_Reference(model_t *model)
     model->registration_sequence = r_registration_sequence;
 }
 
-#define FIXUP_OFFSET(ptr) ((ptr) = (void *)((uintptr_t)(ptr) - base))
+template <typename T>
+static inline void FixupOffset(T *&ptr, uintptr_t base)
+{
+    ptr = reinterpret_cast<T *>(reinterpret_cast<uintptr_t>(ptr) - base);
+}
 
 // upload hunk to GPU and free it
 static bool MOD_UploadVertexBuffer(model_t *model, memhunk_t *hunk)
@@ -1545,19 +1549,19 @@ static bool MOD_UploadVertexBuffer(model_t *model, memhunk_t *hunk)
 
     for (int i = 0; i < model->nummeshes; i++) {
         maliasmesh_t *mesh = &model->meshes[i];
-        FIXUP_OFFSET(mesh->verts);
-        FIXUP_OFFSET(mesh->tcoords);
+        FixupOffset(mesh->verts, base);
+        FixupOffset(mesh->tcoords, base);
     }
 
 #if USE_MD5
-    const md5_model_t *skel = model->skeleton;
+    md5_model_t *skel = model->skeleton;
     if (skel) {
         for (int i = 0; i < skel->num_meshes; i++) {
             md5_mesh_t *mesh = &skel->meshes[i];
-            FIXUP_OFFSET(mesh->vertices);
-            FIXUP_OFFSET(mesh->tcoords);
-            FIXUP_OFFSET(mesh->weights);
-            FIXUP_OFFSET(mesh->jointnums);
+            FixupOffset(mesh->vertices, base);
+            FixupOffset(mesh->tcoords, base);
+            FixupOffset(mesh->weights, base);
+            FixupOffset(mesh->jointnums, base);
         }
     }
 #endif
@@ -1579,13 +1583,13 @@ static bool MOD_UploadIndexBuffer(model_t *model, memhunk_t *hunk)
     const uintptr_t base = (uintptr_t)hunk->base;
 
     for (int i = 0; i < model->nummeshes; i++)
-        FIXUP_OFFSET(model->meshes[i].indices);
+        FixupOffset(model->meshes[i].indices, base);
 
 #if USE_MD5
-    const md5_model_t *skel = model->skeleton;
+    md5_model_t *skel = model->skeleton;
     if (skel)
         for (int i = 0; i < skel->num_meshes; i++)
-            FIXUP_OFFSET(skel->meshes[i].indices);
+            FixupOffset(skel->meshes[i].indices, base);
 #endif
 
     model->hunk.mapped += hunk->cursize; // for statistics
@@ -1648,7 +1652,7 @@ qhandle_t R_RegisterModel(const char *name)
     }
 
     // check ident
-    const auto raw_tag = LittleLong(*static_cast<const uint32_t *>(rawdata));
+    const auto raw_tag = LittleLong(*reinterpret_cast<const uint32_t *>(rawdata));
     switch (raw_tag) {
     case MD2_IDENT:
         load = MOD_LoadMD2;
