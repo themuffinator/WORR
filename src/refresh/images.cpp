@@ -1785,7 +1785,7 @@ static void r_texture_formats_changed(cvar_t *self)
         // handle "png jpg tga" format
         for (i = IM_WAL + 1; i < IM_MAX; i++) {
             if (!Q_stricmp(tok, img_loaders[i].ext)) {
-                add_texture_format(i);
+                add_texture_format(static_cast<imageformat_t>(i));
                 break;
             }
         }
@@ -1796,7 +1796,7 @@ static void r_texture_formats_changed(cvar_t *self)
         while (*tok) {
             for (i = IM_WAL + 1; i < IM_MAX; i++) {
                 if (Q_tolower(*tok) == img_loaders[i].ext[0]) {
-                    add_texture_format(i);
+                    add_texture_format(static_cast<imageformat_t>(i));
                     break;
                 }
             }
