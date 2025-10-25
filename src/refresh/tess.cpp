@@ -723,7 +723,7 @@ void GL_Flush3D(void)
             qglBindTextures(0, count, tess.texnum);
     } else {
         for (int i = 0; i < MAX_TMUS && tess.texnum[i]; i++)
-            GL_BindTexture(i, tess.texnum[i]);
+            GL_BindTexture(static_cast<glTmu_t>(i), tess.texnum[i]);
     }
 
     GL_DrawIndexed(SHOWTRIS_WORLD);
