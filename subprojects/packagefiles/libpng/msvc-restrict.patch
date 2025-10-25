@@ -2,19 +2,10 @@
 +++ b/pngconf.h
 @@
 -#        define PNG_ALLOCATED __declspec(PNG_RESTRICT)
-+#        ifndef restrict
-+#          define restrict __restrict
-+#        endif
 +#        define PNG_ALLOCATED __declspec(restrict)
 @@
 -#        define PNG_ALLOCATED __declspec(__restrict)
-+#        ifndef restrict
-+#          define restrict __restrict
-+#        endif
 +#        define PNG_ALLOCATED __declspec(restrict)
-@@
--#        define PNG_RESTRICT __restrict
-+#        define PNG_RESTRICT restrict
 --- a/png.h
 +++ b/png.h
 @@
