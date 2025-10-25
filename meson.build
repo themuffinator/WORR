@@ -4,29 +4,23 @@ project('worr', ['cpp', 'c'],
   meson_version: '>= 0.60.0',
   default_options: [
     meson.version().version_compare('>=1.3.0') ? 'c_std=gnu11,c11' : 'c_std=gnu11',
-    meson.version().version_compare('>=0.63.0') ? 'cpp_std=c++latest' : 'cpp_std=c++20',
+    'cpp_std=c++20',
     'buildtype=debugoptimized',
   ],
 )
 
 cpp_compiler = meson.get_compiler('cpp')
 
-if meson.version().version_compare('>=0.63.0')
-  if cpp_compiler.get_id() == 'msvc'
-    meson.override_default_options({'cpp_std': 'c++20'})
+if cpp_compiler.get_id() != 'msvc'
+  cpp_latest_flags = []
+  if cpp_compiler.has_argument('-std=c++2b')
+    cpp_latest_flags += ['-std=c++2b']
+  elif cpp_compiler.has_argument('-std=c++2a')
+    cpp_latest_flags += ['-std=c++2a']
   endif
-else
-  if cpp_compiler.get_id() != 'msvc'
-    cpp_latest_flags = []
-    if cpp_compiler.has_argument('-std=c++2b')
-      cpp_latest_flags += ['-std=c++2b']
-    elif cpp_compiler.has_argument('-std=c++2a')
-      cpp_latest_flags += ['-std=c++2a']
-    endif
 
-    if cpp_latest_flags.length() > 0
-      add_project_arguments(cpp_latest_flags, language: 'cpp')
-    endif
+  if cpp_latest_flags.length() > 0
+    add_project_arguments(cpp_latest_flags, language: 'cpp')
   endif
 endif
 
