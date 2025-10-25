@@ -46,25 +46,35 @@ def _collect_patch_replacements(patch_path: Path) -> list[tuple[str, str]]:
     return replacements
 
 
-def _apply_replacements(header: Path, replacements: list[tuple[str, str]]) -> bool:
+def _apply_replacements(header: Path, replacements: list[tuple[str, str]]) -> tuple[bool, bool]:
     original = header.read_text(encoding='utf-8')
     updated = original
     changed = False
+    touched = False
 
     for old, new in replacements:
         if old in updated:
             updated = updated.replace(old, new)
             changed = True
+            touched = True
+        elif new in updated:
+            touched = True
 
     pattern = re.compile(r'(#\s*define\s+PNG_ALLOCATED\s+__declspec\()\s*PNG_RESTRICT\s*(\))')
+    if pattern.search(original):
+        touched = True
+    elif re.search(r'#\s*define\s+PNG_ALLOCATED\s+__declspec\(\s*restrict\s*\)', original):
+        touched = True
+
     updated, count = pattern.subn(r'\1restrict\2', updated)
     if count > 0:
         changed = True
+        touched = True
 
     if changed:
         header.write_text(updated, encoding='utf-8')
 
-    return changed
+    return changed, touched
 
 
 def main() -> int:
@@ -75,7 +85,7 @@ def main() -> int:
         headers.extend(_find_headers(source_root, name))
 
     if not headers:
-        return 0
+        raise RuntimeError('Failed to locate libpng headers to patch.')
 
     patch_path = source_root / 'subprojects' / 'packagefiles' / 'libpng' / 'msvc-restrict.patch'
     replacements = _collect_patch_replacements(patch_path)
@@ -84,13 +94,14 @@ def main() -> int:
         ('__declspec(__restrict)', '__declspec(restrict)'),
     ])
 
-    any_changed = False
+    any_touched = False
     for header in headers:
-        if _apply_replacements(header, replacements):
-            any_changed = True
+        _, touched = _apply_replacements(header, replacements)
+        if touched:
+            any_touched = True
 
-    if not any_changed:
-        raise RuntimeError('Failed to update libpng headers: no replacements applied.')
+    if not any_touched:
+        raise RuntimeError('Failed to update libpng headers: no matching content found.')
 
     return 0
 
