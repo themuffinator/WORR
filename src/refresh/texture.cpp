@@ -1054,7 +1054,7 @@ static void GL_InitParticleTexture(void)
     float x, y, f;
     int i, j;
     int shape = Cvar_ClampInteger(gl_partshape, 0, 2);
-    int flags = IF_TRANSPARENT;
+    imageflags_t flags = IF_TRANSPARENT;
 
     if (shape == 0 || shape == 2) {
         dst = pixels;
