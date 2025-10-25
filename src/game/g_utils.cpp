@@ -38,7 +38,7 @@ NULL will be returned if the end of the list is reached.
 
 =============
 */
-edict_t *G_Find(edict_t *from, int fieldofs, char *match)
+edict_t *G_Find(edict_t *from, int fieldofs, const char *match)
 {
     char    *s;
 
@@ -107,7 +107,7 @@ NULL will be returned if the end of the list is reached.
 */
 #define MAXCHOICES  8
 
-edict_t *G_PickTarget(char *targetname)
+edict_t *G_PickTarget(const char *targetname)
 {
     edict_t *ent = NULL;
     int     num_choices = 0;
@@ -297,7 +297,7 @@ void vectoangles(vec3_t value1, vec3_t angles)
     angles[ROLL] = 0;
 }
 
-char *G_CopyString(char *in)
+char *G_CopyString(const char *in)
 {
     char    *out;
 
