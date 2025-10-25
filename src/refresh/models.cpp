@@ -1606,6 +1606,7 @@ qhandle_t R_RegisterModel(const char *name)
     model_t *model;
     byte *rawdata;
     int (*load)(model_t *, const void *, size_t);
+    uint32_t raw_tag = 0;
     int ret;
 
     Q_assert(name);
@@ -1652,7 +1653,7 @@ qhandle_t R_RegisterModel(const char *name)
     }
 
     // check ident
-    const auto raw_tag = LittleLong(*reinterpret_cast<const uint32_t *>(rawdata));
+    raw_tag = LittleLong(*reinterpret_cast<const uint32_t *>(rawdata));
     switch (raw_tag) {
     case MD2_IDENT:
         load = MOD_LoadMD2;
