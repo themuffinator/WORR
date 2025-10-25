@@ -840,7 +840,7 @@ static void *MD5_HunkAlloc(memhunk_t *hunk, size_t size)
     MD5_HunkAlloc(gl_static.use_gpu_lerp ? &temp_hunk[1] : &model->hunk, size)
 
 #define MD5_CpuMalloc(size) \
-    (gl_static.use_gpu_lerp ? R_Mallocz(size) : MD5_HunkAlloc(&model->hunk, size))
+    (gl_static.use_gpu_lerp ? static_cast<void *>(R_Mallocz(size)) : MD5_HunkAlloc(&model->hunk, size))
 
 static void MD5_ParseExpect(const char **buffer, const char *expect)
 {
