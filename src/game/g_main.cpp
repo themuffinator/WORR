@@ -178,13 +178,13 @@ static void InitGame(void)
 
     // initialize all entities for this game
     game.maxentities = Q_clip(maxentities->value, (int)maxclients->value + 1, game.csr.max_edicts);
-    g_edicts = gi.TagMalloc(game.maxentities * sizeof(g_edicts[0]), TAG_GAME);
+    g_edicts = static_cast<edict_t *>(gi.TagMalloc(game.maxentities * sizeof(g_edicts[0]), TAG_GAME));
     globals.edicts = g_edicts;
     globals.max_edicts = game.maxentities;
 
     // initialize all clients for this game
     game.maxclients = maxclients->value;
-    game.clients = gi.TagMalloc(game.maxclients * sizeof(game.clients[0]), TAG_GAME);
+    game.clients = static_cast<gclient_t *>(gi.TagMalloc(game.maxclients * sizeof(game.clients[0]), TAG_GAME));
     globals.num_edicts = game.maxclients + 1;
 }
 

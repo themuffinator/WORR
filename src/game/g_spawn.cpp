@@ -386,7 +386,7 @@ static char *ED_NewString(const char *string)
 
     l = strlen(string) + 1;
 
-    newb = gi.TagMalloc(l, TAG_LEVEL);
+    newb = G_TagMalloc<char>(l, TAG_LEVEL);
 
     new_p = newb;
 
@@ -572,7 +572,7 @@ void G_AddPrecache(void (*func)(void))
         if (prec->func == func)
             return;
 
-    prec = gi.TagMalloc(sizeof(*prec), TAG_GAME);
+    prec = G_TagMalloc<precache_t>(sizeof(*prec), TAG_GAME);
     prec->func = func;
     prec->next = game.precaches;
     game.precaches = prec;

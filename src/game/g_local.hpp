@@ -460,6 +460,12 @@ typedef struct {
 extern  game_locals_t   game;
 extern  level_locals_t  level;
 extern  game3_import_t  gi;
+
+template <typename T>
+inline T *G_TagMalloc(size_t size, int tag)
+{
+    return static_cast<T *>(gi.TagMalloc(size, tag));
+}
 extern  game3_export_t  globals;
 extern  spawn_temp_t    st;
 
