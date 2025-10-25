@@ -22,23 +22,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace {
 
-template <typename Enum>
-constexpr auto enum_to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
-{
-    return static_cast<std::underlying_type_t<Enum>>(value);
-}
-
-constexpr glArrayBits_t operator|(glArrayBits_t lhs, glArrayBits_t rhs) noexcept
-{
-    return static_cast<glArrayBits_t>(enum_to_underlying(lhs) | enum_to_underlying(rhs));
-}
-
-inline glArrayBits_t &operator|=(glArrayBits_t &lhs, glArrayBits_t rhs) noexcept
-{
-    lhs = lhs | rhs;
-    return lhs;
-}
-
 constexpr glVaDesc_t AttrFloat(uint8_t size, int stride, int offset) noexcept
 {
     return glVaDesc_t{
