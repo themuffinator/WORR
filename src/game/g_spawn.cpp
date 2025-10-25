@@ -19,12 +19,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "g_local.hpp"
 
 typedef struct {
-    char    *name;
+    const char  *name;
     void (*spawn)(edict_t *ent);
 } spawn_func_t;
 
 typedef struct {
-    char    *name;
+    const char  *name;
     unsigned ofs;
     fieldtype_t type;
 } spawn_field_t;

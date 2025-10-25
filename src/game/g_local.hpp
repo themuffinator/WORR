@@ -635,9 +635,9 @@ void Touch_Item(edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 //
 bool    KillBox(edict_t *ent);
 void    G_ProjectSource(const vec3_t point, const vec3_t distance, const vec3_t forward, const vec3_t right, vec3_t result);
-edict_t *G_Find(edict_t *from, int fieldofs, char *match);
+edict_t *G_Find(edict_t *from, int fieldofs, const char *match);
 edict_t *findradius(edict_t *from, vec3_t org, float rad);
-edict_t *G_PickTarget(char *targetname);
+edict_t *G_PickTarget(const char *targetname);
 void    G_UseTargets(edict_t *ent, edict_t *activator);
 void    G_SetMovedir(vec3_t angles, vec3_t movedir);
 
@@ -647,7 +647,7 @@ void    G_FreeEdict(edict_t *e);
 
 void    G_TouchTriggers(edict_t *ent);
 
-char    *G_CopyString(char *in);
+char    *G_CopyString(const char *in);
 
 float vectoyaw(vec3_t vec);
 void vectoangles(vec3_t vec, vec3_t angles);
@@ -701,9 +701,9 @@ void M_CheckGround(edict_t *ent);
 //
 // g_misc.c
 //
-void ThrowHead(edict_t *self, char *gibname, int damage, int type);
+void ThrowHead(edict_t *self, const char *gibname, int damage, int type);
 void ThrowClientHead(edict_t *self, int damage);
-void ThrowGib(edict_t *self, char *gibname, int damage, int type);
+void ThrowGib(edict_t *self, const char *gibname, int damage, int type);
 void BecomeExplosion1(edict_t *self);
 
 #define CLOCK_MESSAGE_SIZE  16
@@ -732,7 +732,7 @@ bool FacingIdeal(edict_t *self);
 //
 // g_weapon.c
 //
-void ThrowDebris(edict_t *self, char *modelname, float speed, vec3_t origin);
+void ThrowDebris(edict_t *self, const char *modelname, float speed, vec3_t origin);
 bool fire_hit(edict_t *self, vec3_t aim, int damage, int kick);
 void fire_bullet(edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int mod);
 void fire_shotgun(edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int count, int mod);

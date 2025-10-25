@@ -35,7 +35,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 typedef struct {
     fieldtype_t type;
 #if USE_DEBUG
-    char *name;
+    const char  *name;
 #endif
     unsigned ofs;
     unsigned size;
