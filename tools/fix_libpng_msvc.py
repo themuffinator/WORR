@@ -6,21 +6,34 @@ import re
 from pathlib import Path
 
 
-def _find_headers(source_root: Path, filename: str) -> list[Path]:
-    subprojects = source_root / 'subprojects'
+def _iter_search_roots(source_root: Path, build_root: Path) -> list[Path]:
+    roots: list[Path] = []
+    seen: set[Path] = set()
+
+    for root in (source_root, build_root):
+        subprojects = root / 'subprojects'
+        if subprojects.exists() and subprojects not in seen:
+            seen.add(subprojects)
+            roots.append(subprojects)
+
+    return roots
+
+
+def _find_headers(source_root: Path, build_root: Path, filename: str) -> list[Path]:
     headers: list[Path] = []
     seen: set[Path] = set()
 
-    search_patterns = [
-        subprojects.glob(f'libpng-1.6.50*/**/{filename}'),
-        (subprojects / 'packagecache').glob(f'libpng_*/*/**/{filename}'),
-    ]
+    for root in _iter_search_roots(source_root, build_root):
+        search_patterns = [
+            root.glob(f'libpng-1.6.50*/**/{filename}'),
+            (root / 'packagecache').glob(f'libpng_*/*/**/{filename}'),
+        ]
 
-    for pattern in search_patterns:
-        for candidate in pattern:
-            if candidate.is_file() and candidate not in seen:
-                seen.add(candidate)
-                headers.append(candidate)
+        for pattern in search_patterns:
+            for candidate in pattern:
+                if candidate.is_file() and candidate not in seen:
+                    seen.add(candidate)
+                    headers.append(candidate)
 
     return sorted(headers)
 
@@ -69,10 +82,11 @@ def _apply_replacements(header: Path, replacements: list[tuple[str, str]]) -> bo
 
 def main() -> int:
     source_root = Path(os.environ.get('MESON_SOURCE_ROOT', Path(__file__).resolve().parents[1]))
+    build_root = Path(os.environ.get('MESON_BUILD_ROOT', source_root))
 
-    headers = []
+    headers: list[Path] = []
     for name in ('pngconf.h', 'png.h'):
-        headers.extend(_find_headers(source_root, name))
+        headers.extend(_find_headers(source_root, build_root, name))
 
     if not headers:
         return 0
