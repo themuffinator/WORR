@@ -9,6 +9,12 @@ project('worr', ['cpp', 'c'],
   ],
 )
 
+cpp_compiler = meson.get_compiler('cpp')
+
+if cpp_compiler.get_id() == 'msvc'
+  meson.override_default_options({'cpp_std': 'c++20'})
+endif
+
 
 c_compiler = meson.get_compiler('c')
 
