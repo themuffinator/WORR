@@ -9,6 +9,8 @@ project('worr', ['cpp', 'c'],
   ],
 )
 
+add_project_arguments('-DPNG_RESTRICT=__restrict', language : 'cpp')
+
 cpp_compiler = meson.get_compiler('cpp')
 
 if cpp_compiler.get_id() != 'msvc'
