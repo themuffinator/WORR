@@ -8,8 +8,9 @@ drop-in replacement of the Quake II re-release engine and intended for use
 with the upcoming and extensive [Muff Mode](https://github.com/themuffinator/muffmode)-based mod **WORR**.
 Future updates may break compatibility with non-**WORR** game modules.
 
-GOALS
-=====
+PROJECT GOALS
+-------------
+
 * Implement a bare-minimum C++ migration, buildable and bug-free (WIP)
 * Complete Vulkan renderer (covering GL feature set and compatibility), allow external binary build and renderer selector (WIP)
 * Implement a functional bot system - workable in campaigns and multiplayer alike
@@ -39,6 +40,9 @@ GOALS
 * Asset support:
   - IQM model support
   - Extended BSP support: IBSP29, BSP2, BSP2L, BSPX
+ 
+BUILDING
+--------
 
 For building **WORR**, consult the `BUILDING.md` file.
 
