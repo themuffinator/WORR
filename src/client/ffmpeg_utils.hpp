@@ -18,10 +18,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef USE_AVCODEC
+
 #include <string>
 #include <type_traits>
 
+extern "C" {
 #include <libavutil/channel_layout.h>
+}
 
 static inline int Q_AVChannelLayoutDefault(AVChannelLayout *layout, int nb_channels)
 {
@@ -34,8 +38,6 @@ static inline int Q_AVChannelLayoutDefault(AVChannelLayout *layout, int nb_chann
     av_channel_layout_default(layout, nb_channels);
     return 0;
 }
-
-#ifdef USE_AVCODEC
 
 std::string AvErrorString(int err);
 
