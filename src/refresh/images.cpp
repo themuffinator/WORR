@@ -39,7 +39,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #if USE_PNG
 #define PNG_SKIP_SETJMP_CHECK
 #if defined(_MSC_VER) && defined(__cplusplus) && !defined(PNG_ALLOCATED)
+#if defined(restrict)
+#pragma push_macro("restrict")
+#undef restrict
 #define PNG_ALLOCATED __declspec(restrict)
+#pragma pop_macro("restrict")
+#else
+#define PNG_ALLOCATED __declspec(restrict)
+#endif
 #endif
 #include <png.h>
 #endif // USE_PNG
