@@ -317,7 +317,7 @@ void path_corner_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_
         return;
 
     if (self->pathtarget) {
-        char *savetarget;
+        const char *savetarget;
 
         savetarget = self->target;
         self->target = self->pathtarget;
@@ -406,7 +406,7 @@ void point_combat_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface
     }
 
     if (self->pathtarget) {
-        char *savetarget;
+        const char *savetarget;
 
         savetarget = self->target;
         self->target = self->pathtarget;

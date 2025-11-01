@@ -423,7 +423,7 @@ static bool ED_ParseField(const spawn_field_t *fields, const char *key, const ch
             // found it
             switch (f->type) {
             case F_LSTRING:
-                *(char **)(b + f->ofs) = ED_NewString(value);
+                *(const char **)(b + f->ofs) = ED_NewString(value);
                 break;
             case F_VECTOR:
                 if (sscanf(value, "%f %f %f", &vec[0], &vec[1], &vec[2]) != 3) {

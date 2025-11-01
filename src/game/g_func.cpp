@@ -1397,7 +1397,7 @@ void train_blocked(edict_t *self, edict_t *other)
 void train_wait(edict_t *self)
 {
     if (self->target_ent->pathtarget) {
-        char    *savetarget;
+        const char  *savetarget;
         edict_t *ent;
 
         ent = self->target_ent;
