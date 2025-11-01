@@ -26,6 +26,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "q2proto_game_api.h"
 #include "q2proto_limits.h" // for Q2PROTO_STATS
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// Packed representation of entity state. Use with only server context used for packing!
 typedef struct q2proto_packed_entity_state_s {
     uint16_t modelindex;
@@ -147,5 +151,9 @@ typedef enum _q2proto_packing_flavor_e {
 Q2PROTO_PUBLIC_API _q2proto_packing_flavor_t _q2proto_get_packing_flavor(q2proto_servercontext_t *context,
                                                                          q2proto_game_api_t *game_api);
 /** @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // Q2PROTO_STRUCT_PACKING_H_

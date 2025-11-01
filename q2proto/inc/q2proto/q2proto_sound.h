@@ -27,6 +27,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**\name Sound messages
  * @{ */
 /// Sound parameters, as typically stored internally by engines
@@ -62,5 +66,9 @@ Q2PROTO_PUBLIC_API float q2proto_sound_decode_loop_attenuation(uint8_t protocol_
 /// Encode a loop attenuation for sending over network
 Q2PROTO_PUBLIC_API uint8_t q2proto_sound_encode_loop_attenuation(float loop_attenuation);
 /** @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // Q2PROTO_SOUND_H_
