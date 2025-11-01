@@ -6,9 +6,6 @@
 @@
 -#        define PNG_ALLOCATED __declspec(__restrict)
 +#        define PNG_ALLOCATED __declspec(restrict)
-@@
--#        define PNG_RESTRICT __restrict
-+#        define PNG_RESTRICT restrict
 --- a/png.h
 +++ b/png.h
 @@
