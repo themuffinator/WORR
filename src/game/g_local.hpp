@@ -238,23 +238,23 @@ typedef struct {
 #define WEAP_BFG                11
 
 typedef struct gitem_s {
-    char        *classname; // spawning name
+    const char  *classname; // spawning name
     bool        (*pickup)(struct game3_edict_s *ent, struct game3_edict_s *other);
     void        (*use)(struct game3_edict_s *ent, const struct gitem_s *item);
     void        (*drop)(struct game3_edict_s *ent, const struct gitem_s *item);
     void        (*weaponthink)(struct game3_edict_s *ent);
-    char        *pickup_sound;
-    char        *world_model;
+    const char  *pickup_sound;
+    const char  *world_model;
     int         world_model_flags;
-    char        *view_model;
+    const char  *view_model;
 
     // client side info
-    char        *icon;
-    char        *pickup_name;   // for printing on pickup
+    const char  *icon;
+    const char  *pickup_name;   // for printing on pickup
     int         count_width;    // number of digits to display by icon
 
     int         quantity;       // for ammo how much, for weapons how much is used per shot
-    char        *ammo;          // for weapons
+    const char  *ammo;          // for weapons
     int         flags;          // IT_* flags
 
     int         weapmodel;      // weapon model index (for weapons)
@@ -1014,7 +1014,7 @@ struct game3_edict_s {
     int         movetype;
     int         flags;
 
-    char        *model;
+    const char  *model;
     float       freetime;           // sv.time when the object was freed
 
     //
@@ -1027,13 +1027,13 @@ struct game3_edict_s {
     int         timestamp;
 
     float       angle;          // set in qe3, -1 = up, -2 = down
-    char        *target;
-    char        *targetname;
-    char        *killtarget;
-    char        *team;
-    char        *pathtarget;
-    char        *deathtarget;
-    char        *combattarget;
+    const char  *target;
+    const char  *targetname;
+    const char  *killtarget;
+    const char  *team;
+    const char  *pathtarget;
+    const char  *deathtarget;
+    const char  *combattarget;
     edict_t     *target_ent;
 
     float       speed, accel, decel;
@@ -1075,7 +1075,7 @@ struct game3_edict_s {
 
     int         powerarmor_framenum;
 
-    char        *map;           // target_changelevel
+    const char  *map;           // target_changelevel
 
     int         viewheight;     // height above origin where eyesight is determined
     int         takedamage;
