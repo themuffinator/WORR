@@ -1471,7 +1471,7 @@ void target_string_use(edict_t *self, edict_t *other, edict_t *activator)
 void SP_target_string(edict_t *self)
 {
     if (!self->message)
-        self->message = const_cast<char *>(""); // ensure mutable pointer even though data is static
+        self->message = "";
     self->use = target_string_use;
 }
 
@@ -1502,18 +1502,23 @@ static void func_clock_reset(edict_t *self)
 
 static void func_clock_format_countdown(edict_t *self)
 {
+    char *message = const_cast<char *>(self->message);
+
+    if (!message)
+        return;
+
     if (self->style == 0) {
-        Q_snprintf(self->message, CLOCK_MESSAGE_SIZE, "%2i", self->health);
+        Q_snprintf(message, CLOCK_MESSAGE_SIZE, "%2i", self->health);
         return;
     }
 
     if (self->style == 1) {
-        Q_snprintf(self->message, CLOCK_MESSAGE_SIZE, "%2i:%02i", self->health / 60, self->health % 60);
+        Q_snprintf(message, CLOCK_MESSAGE_SIZE, "%2i:%02i", self->health / 60, self->health % 60);
         return;
     }
 
     if (self->style == 2) {
-        Q_snprintf(self->message, CLOCK_MESSAGE_SIZE, "%2i:%02i:%02i", self->health / 3600, (self->health - (self->health / 3600) * 3600) / 60, self->health % 60);
+        Q_snprintf(message, CLOCK_MESSAGE_SIZE, "%2i:%02i:%02i", self->health / 3600, (self->health - (self->health / 3600) * 3600) / 60, self->health % 60);
         return;
     }
 }
@@ -1538,10 +1543,17 @@ void func_clock_think(edict_t *self)
 
         gmtime = time(NULL);
         ltime = localtime(&gmtime);
-        if (ltime)
-            Q_snprintf(self->message, CLOCK_MESSAGE_SIZE, "%2i:%02i:%02i", ltime->tm_hour, ltime->tm_min, ltime->tm_sec);
-        else
-            strcpy(self->message, "00:00:00");
+        if (ltime) {
+            char *message = const_cast<char *>(self->message);
+
+            if (message)
+                Q_snprintf(message, CLOCK_MESSAGE_SIZE, "%2i:%02i:%02i", ltime->tm_hour, ltime->tm_min, ltime->tm_sec);
+        } else {
+            char *message = const_cast<char *>(self->message);
+
+            if (message)
+                Q_strlcpy(message, "00:00:00", CLOCK_MESSAGE_SIZE);
+        }
     }
 
     self->enemy->message = self->message;
@@ -1550,8 +1562,8 @@ void func_clock_think(edict_t *self)
     if (((self->spawnflags & 1) && (self->health > self->wait)) ||
         ((self->spawnflags & 2) && (self->health < self->wait))) {
         if (self->pathtarget) {
-            char *savetarget;
-            char *savemessage;
+            const char *savetarget;
+            const char *savemessage;
 
             savetarget = self->target;
             savemessage = self->message;

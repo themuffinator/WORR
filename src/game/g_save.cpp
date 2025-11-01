@@ -847,13 +847,13 @@ static void read_field(gzFile f, const save_field_t *field, void *base)
         break;
 
     case F_EDICT:
-        *(edict_t **)p = read_index(f, sizeof(edict_t), g_edicts, game.maxentities - 1);
+        *(edict_t **)p = static_cast<edict_t *>(read_index(f, sizeof(edict_t), g_edicts, game.maxentities - 1));
         break;
     case F_CLIENT:
-        *(gclient_t **)p = read_index(f, sizeof(gclient_t), game.clients, game.maxclients - 1);
+        *(gclient_t **)p = static_cast<gclient_t *>(read_index(f, sizeof(gclient_t), game.clients, game.maxclients - 1));
         break;
     case F_ITEM:
-        *(gitem_t **)p = read_index(f, sizeof(gitem_t), itemlist, game.num_items - 1);
+        *(gitem_t **)p = static_cast<gitem_t *>(read_index(f, sizeof(gitem_t), itemlist, game.num_items - 1));
         break;
 
     case F_POINTER:
@@ -1119,10 +1119,11 @@ void ReadLevel(const char *filename)
 
         if (ent->think == func_clock_think || ent->use == func_clock_use) {
             const char *msg = ent->message;
-            ent->message = G_TagMalloc<char>(CLOCK_MESSAGE_SIZE, TAG_LEVEL);
+            char *message = G_TagMalloc<char>(CLOCK_MESSAGE_SIZE, TAG_LEVEL);
+            ent->message = message;
             if (msg) {
-                Q_strlcpy(ent->message, msg, CLOCK_MESSAGE_SIZE);
-                gi.TagFree(msg);
+                Q_strlcpy(message, msg, CLOCK_MESSAGE_SIZE);
+                gi.TagFree(const_cast<char *>(msg));
             }
         }
     }
