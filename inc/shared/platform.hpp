@@ -25,6 +25,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#if defined(_MSC_VER) && !defined(restrict)
+#define restrict __restrict
+#endif
+
 #ifdef _WIN32
 #include <io.h>
 #include <direct.h>
