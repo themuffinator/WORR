@@ -678,14 +678,16 @@ if ffmpeg_all_found and cc.get_id() == 'msvc' and avcodec_opt.allowed()
         converted_paths += [convert_target.full_path()]
       endforeach
 
-      converted_ffmpeg_deps[dep_name] = declare_dependency(
-        include_directories: dep_obj.get_include_directories(),
-        compile_args: dep_obj.get_compile_args(),
-        sources: dep_obj.get_sources(),
-        dependencies: dep_obj.get_dependencies(),
-        link_whole: dep_obj.get_link_whole(),
-        link_args: preserved_link_args + converted_paths,
-      )
+      converted_ffmpeg_deps += {
+        dep_name: declare_dependency(
+          include_directories: dep_obj.get_include_directories(),
+          compile_args: dep_obj.get_compile_args(),
+          sources: dep_obj.get_sources(),
+          dependencies: dep_obj.get_dependencies(),
+          link_whole: dep_obj.get_link_whole(),
+          link_args: preserved_link_args + converted_paths,
+        ),
+      }
     endif
   endforeach
 endif
