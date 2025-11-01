@@ -287,8 +287,8 @@ Draw help computer.
 */
 static void HelpComputer(edict_t *ent)
 {
-    char    string[1024];
-    char    *sk;
+    char        string[1024];
+    const char  *sk;
 
     if (skill->value == 0)
         sk = "easy";
