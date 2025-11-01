@@ -102,7 +102,7 @@ static const mframe_t flyer_frames_stand[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t flyer_move_stand = {FRAME_stand01, FRAME_stand45, flyer_frames_stand, NULL};
+DEFINE_MMOVE(flyer_move_stand, FRAME_stand01, FRAME_stand45, flyer_frames_stand, NULL);
 
 static const mframe_t flyer_frames_walk[] = {
     { ai_walk, 5, NULL },
@@ -151,7 +151,7 @@ static const mframe_t flyer_frames_walk[] = {
     { ai_walk, 5, NULL },
     { ai_walk, 5, NULL }
 };
-const mmove_t flyer_move_walk = {FRAME_stand01, FRAME_stand45, flyer_frames_walk, NULL};
+DEFINE_MMOVE(flyer_move_walk, FRAME_stand01, FRAME_stand45, flyer_frames_walk, NULL);
 
 static const mframe_t flyer_frames_run[] = {
     { ai_run, 10, NULL },
@@ -200,7 +200,7 @@ static const mframe_t flyer_frames_run[] = {
     { ai_run, 10, NULL },
     { ai_run, 10, NULL }
 };
-const mmove_t flyer_move_run = {FRAME_stand01, FRAME_stand45, flyer_frames_run, NULL};
+DEFINE_MMOVE(flyer_move_run, FRAME_stand01, FRAME_stand45, flyer_frames_run, NULL);
 
 void flyer_run(edict_t *self)
 {
@@ -231,7 +231,7 @@ static const mframe_t flyer_frames_rollright[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_rollright = {FRAME_rollr01, FRAME_rollr09, flyer_frames_rollright, NULL};
+DEFINE_MMOVE(flyer_move_rollright, FRAME_rollr01, FRAME_rollr09, flyer_frames_rollright, NULL);
 
 static const mframe_t flyer_frames_rollleft[] = {
     { ai_move, 0, NULL },
@@ -244,7 +244,7 @@ static const mframe_t flyer_frames_rollleft[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_rollleft = {FRAME_rollf01, FRAME_rollf09, flyer_frames_rollleft, NULL};
+DEFINE_MMOVE(flyer_move_rollleft, FRAME_rollf01, FRAME_rollf09, flyer_frames_rollleft, NULL);
 
 static const mframe_t flyer_frames_pain3[] = {
     { ai_move, 0, NULL },
@@ -252,7 +252,7 @@ static const mframe_t flyer_frames_pain3[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_pain3 = {FRAME_pain301, FRAME_pain304, flyer_frames_pain3, flyer_run};
+DEFINE_MMOVE(flyer_move_pain3, FRAME_pain301, FRAME_pain304, flyer_frames_pain3, flyer_run);
 
 static const mframe_t flyer_frames_pain2[] = {
     { ai_move, 0, NULL },
@@ -260,7 +260,7 @@ static const mframe_t flyer_frames_pain2[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_pain2 = {FRAME_pain201, FRAME_pain204, flyer_frames_pain2, flyer_run};
+DEFINE_MMOVE(flyer_move_pain2, FRAME_pain201, FRAME_pain204, flyer_frames_pain2, flyer_run);
 
 static const mframe_t flyer_frames_pain1[] = {
     { ai_move, 0, NULL },
@@ -273,7 +273,7 @@ static const mframe_t flyer_frames_pain1[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_pain1 = {FRAME_pain101, FRAME_pain109, flyer_frames_pain1, flyer_run};
+DEFINE_MMOVE(flyer_move_pain1, FRAME_pain101, FRAME_pain109, flyer_frames_pain1, flyer_run);
 
 static const mframe_t flyer_frames_defense[] = {
     { ai_move, 0, NULL },
@@ -283,7 +283,7 @@ static const mframe_t flyer_frames_defense[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_defense = {FRAME_defens01, FRAME_defens06, flyer_frames_defense, NULL};
+DEFINE_MMOVE(flyer_move_defense, FRAME_defens01, FRAME_defens06, flyer_frames_defense, NULL);
 
 static const mframe_t flyer_frames_bankright[] = {
     { ai_move, 0, NULL },
@@ -294,7 +294,7 @@ static const mframe_t flyer_frames_bankright[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_bankright = {FRAME_bankr01, FRAME_bankr07, flyer_frames_bankright, NULL};
+DEFINE_MMOVE(flyer_move_bankright, FRAME_bankr01, FRAME_bankr07, flyer_frames_bankright, NULL);
 
 static const mframe_t flyer_frames_bankleft[] = {
     { ai_move, 0, NULL },
@@ -305,7 +305,7 @@ static const mframe_t flyer_frames_bankleft[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t flyer_move_bankleft = {FRAME_bankl01, FRAME_bankl07, flyer_frames_bankleft, NULL};
+DEFINE_MMOVE(flyer_move_bankleft, FRAME_bankl01, FRAME_bankl07, flyer_frames_bankleft, NULL);
 
 static void flyer_fire(edict_t *self, int flash_number)
 {
@@ -358,7 +358,7 @@ static const mframe_t flyer_frames_attack2[] = {
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL }
 };
-const mmove_t flyer_move_attack2 = {FRAME_attak201, FRAME_attak217, flyer_frames_attack2, flyer_run};
+DEFINE_MMOVE(flyer_move_attack2, FRAME_attak201, FRAME_attak217, flyer_frames_attack2, flyer_run);
 
 static void flyer_slash_left(edict_t *self)
 {
@@ -384,14 +384,14 @@ static const mframe_t flyer_frames_start_melee[] = {
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL }
 };
-const mmove_t flyer_move_start_melee = {FRAME_attak101, FRAME_attak106, flyer_frames_start_melee, flyer_loop_melee};
+DEFINE_MMOVE(flyer_move_start_melee, FRAME_attak101, FRAME_attak106, flyer_frames_start_melee, flyer_loop_melee);
 
 static const mframe_t flyer_frames_end_melee[] = {
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL }
 };
-const mmove_t flyer_move_end_melee = {FRAME_attak119, FRAME_attak121, flyer_frames_end_melee, flyer_run};
+DEFINE_MMOVE(flyer_move_end_melee, FRAME_attak119, FRAME_attak121, flyer_frames_end_melee, flyer_run);
 
 static const mframe_t flyer_frames_loop_melee[] = {
     { ai_charge, 0, NULL },     // Loop Start
@@ -408,7 +408,7 @@ static const mframe_t flyer_frames_loop_melee[] = {
     { ai_charge, 0, NULL }      // Loop Ends
 
 };
-const mmove_t flyer_move_loop_melee = {FRAME_attak107, FRAME_attak118, flyer_frames_loop_melee, flyer_check_melee};
+DEFINE_MMOVE(flyer_move_loop_melee, FRAME_attak107, FRAME_attak118, flyer_frames_loop_melee, flyer_check_melee);
 
 static void flyer_loop_melee(edict_t *self)
 {

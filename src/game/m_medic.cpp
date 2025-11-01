@@ -200,7 +200,7 @@ static const mframe_t medic_frames_stand[] = {
     { ai_stand, 0, NULL },
 
 };
-const mmove_t medic_move_stand = {FRAME_wait1, FRAME_wait90, medic_frames_stand, NULL};
+DEFINE_MMOVE(medic_move_stand, FRAME_wait1, FRAME_wait90, medic_frames_stand, NULL);
 
 void medic_stand(edict_t *self)
 {
@@ -221,7 +221,7 @@ static const mframe_t medic_frames_walk[] = {
     { ai_walk, 14,    NULL },
     { ai_walk, 9.3,   NULL }
 };
-const mmove_t medic_move_walk = {FRAME_walk1, FRAME_walk12, medic_frames_walk, NULL};
+DEFINE_MMOVE(medic_move_walk, FRAME_walk1, FRAME_walk12, medic_frames_walk, NULL);
 
 void medic_walk(edict_t *self)
 {
@@ -237,7 +237,7 @@ static const mframe_t medic_frames_run[] = {
     { ai_run, 35.6,   NULL }
 
 };
-const mmove_t medic_move_run = {FRAME_run1, FRAME_run6, medic_frames_run, NULL};
+DEFINE_MMOVE(medic_move_run, FRAME_run1, FRAME_run6, medic_frames_run, NULL);
 
 void medic_run(edict_t *self)
 {
@@ -271,7 +271,7 @@ static const mframe_t medic_frames_pain1[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t medic_move_pain1 = {FRAME_paina1, FRAME_paina8, medic_frames_pain1, medic_run};
+DEFINE_MMOVE(medic_move_pain1, FRAME_paina1, FRAME_paina8, medic_frames_pain1, medic_run);
 
 static const mframe_t medic_frames_pain2[] = {
     { ai_move, 0, NULL },
@@ -290,7 +290,7 @@ static const mframe_t medic_frames_pain2[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t medic_move_pain2 = {FRAME_painb1, FRAME_painb15, medic_frames_pain2, medic_run};
+DEFINE_MMOVE(medic_move_pain2, FRAME_painb1, FRAME_painb15, medic_frames_pain2, medic_run);
 
 void medic_pain(edict_t *self, edict_t *other, float kick, int damage)
 {
@@ -381,7 +381,7 @@ static const mframe_t medic_frames_death[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t medic_move_death = {FRAME_death1, FRAME_death30, medic_frames_death, medic_dead};
+DEFINE_MMOVE(medic_move_death, FRAME_death1, FRAME_death30, medic_frames_death, medic_dead);
 
 void medic_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
 {
@@ -459,7 +459,7 @@ static const mframe_t medic_frames_duck[] = {
     { ai_move, -1,    NULL },
     { ai_move, -1,    NULL }
 };
-const mmove_t medic_move_duck = {FRAME_duck1, FRAME_duck16, medic_frames_duck, medic_run};
+DEFINE_MMOVE(medic_move_duck, FRAME_duck1, FRAME_duck16, medic_frames_duck, medic_run);
 
 void medic_dodge(edict_t *self, edict_t *attacker, float eta)
 {
@@ -490,7 +490,7 @@ static const mframe_t medic_frames_attackHyperBlaster[] = {
     { ai_charge, 0,   medic_fire_blaster },
     { ai_charge, 0,   medic_fire_blaster }
 };
-const mmove_t medic_move_attackHyperBlaster = {FRAME_attack15, FRAME_attack30, medic_frames_attackHyperBlaster, medic_run};
+DEFINE_MMOVE(medic_move_attackHyperBlaster, FRAME_attack15, FRAME_attack30, medic_frames_attackHyperBlaster, medic_run);
 
 static void medic_continue(edict_t *self)
 {
@@ -515,7 +515,7 @@ static const mframe_t medic_frames_attackBlaster[] = {
     { ai_charge, 0,   NULL },
     { ai_charge, 0,   medic_continue }  // Change to medic_continue... Else, go to frame 32
 };
-const mmove_t medic_move_attackBlaster = {FRAME_attack1, FRAME_attack14, medic_frames_attackBlaster, medic_run};
+DEFINE_MMOVE(medic_move_attackBlaster, FRAME_attack1, FRAME_attack14, medic_frames_attackBlaster, medic_run);
 
 static void medic_hook_launch(edict_t *self)
 {
@@ -644,7 +644,7 @@ static const mframe_t medic_frames_attackCable[] = {
     { ai_move, 1.2,   NULL },
     { ai_move, 1.3,   NULL }
 };
-const mmove_t medic_move_attackCable = {FRAME_attack33, FRAME_attack60, medic_frames_attackCable, medic_run};
+DEFINE_MMOVE(medic_move_attackCable, FRAME_attack33, FRAME_attack60, medic_frames_attackCable, medic_run);
 
 void medic_attack(edict_t *self)
 {

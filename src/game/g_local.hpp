@@ -424,6 +424,12 @@ typedef struct {
     void        (*endfunc)(edict_t *self);
 } mmove_t;
 
+#ifdef __cplusplus
+#define DEFINE_MMOVE(name, ...) extern const mmove_t name = { __VA_ARGS__ }
+#else
+#define DEFINE_MMOVE(name, ...) const mmove_t name = { __VA_ARGS__ }
+#endif
+
 typedef struct {
     const mmove_t   *currentmove;
     int         aiflags;

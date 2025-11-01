@@ -127,7 +127,7 @@ static const mframe_t floater_frames_stand1[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t floater_move_stand1 = {FRAME_stand101, FRAME_stand152, floater_frames_stand1, NULL};
+DEFINE_MMOVE(floater_move_stand1, FRAME_stand101, FRAME_stand152, floater_frames_stand1, NULL);
 
 static const mframe_t floater_frames_stand2[] = {
     { ai_stand, 0, NULL },
@@ -183,7 +183,7 @@ static const mframe_t floater_frames_stand2[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t floater_move_stand2 = {FRAME_stand201, FRAME_stand252, floater_frames_stand2, NULL};
+DEFINE_MMOVE(floater_move_stand2, FRAME_stand201, FRAME_stand252, floater_frames_stand2, NULL);
 
 void floater_stand(edict_t *self)
 {
@@ -225,7 +225,7 @@ static const mframe_t floater_frames_activate[] = {
     { ai_move,    0,  NULL },
     { ai_move,    0,  NULL }
 };
-const mmove_t floater_move_activate = {FRAME_actvat01, FRAME_actvat31, floater_frames_activate, NULL};
+DEFINE_MMOVE(floater_move_activate, FRAME_actvat01, FRAME_actvat31, floater_frames_activate, NULL);
 
 static const mframe_t floater_frames_attack1[] = {
     { ai_charge,  0,  NULL },           // Blaster attack
@@ -243,7 +243,7 @@ static const mframe_t floater_frames_attack1[] = {
     { ai_charge,  0,  NULL },
     { ai_charge,  0,  NULL }            //                          -- LOOP Ends
 };
-const mmove_t floater_move_attack1 = {FRAME_attak101, FRAME_attak114, floater_frames_attack1, floater_run};
+DEFINE_MMOVE(floater_move_attack1, FRAME_attak101, FRAME_attak114, floater_frames_attack1, floater_run);
 
 static const mframe_t floater_frames_attack2[] = {
     { ai_charge,  0,  NULL },           // Claws
@@ -272,7 +272,7 @@ static const mframe_t floater_frames_attack2[] = {
     { ai_charge,  0,  NULL },
     { ai_charge,  0,  NULL }
 };
-const mmove_t floater_move_attack2 = {FRAME_attak201, FRAME_attak225, floater_frames_attack2, floater_run};
+DEFINE_MMOVE(floater_move_attack2, FRAME_attak201, FRAME_attak225, floater_frames_attack2, floater_run);
 
 static const mframe_t floater_frames_attack3[] = {
     { ai_charge,  0,  NULL },
@@ -310,7 +310,7 @@ static const mframe_t floater_frames_attack3[] = {
     { ai_charge,  0,  NULL },
     { ai_charge,  0,  NULL }
 };
-const mmove_t floater_move_attack3 = {FRAME_attak301, FRAME_attak334, floater_frames_attack3, floater_run};
+DEFINE_MMOVE(floater_move_attack3, FRAME_attak301, FRAME_attak334, floater_frames_attack3, floater_run);
 
 static const mframe_t floater_frames_death[] = {
     { ai_move,    0,  NULL },
@@ -327,7 +327,7 @@ static const mframe_t floater_frames_death[] = {
     { ai_move,    0,  NULL },
     { ai_move,    0,  NULL }
 };
-const mmove_t floater_move_death = {FRAME_death01, FRAME_death13, floater_frames_death, floater_dead};
+DEFINE_MMOVE(floater_move_death, FRAME_death01, FRAME_death13, floater_frames_death, floater_dead);
 
 static const mframe_t floater_frames_pain1[] = {
     { ai_move,    0,  NULL },
@@ -338,7 +338,7 @@ static const mframe_t floater_frames_pain1[] = {
     { ai_move,    0,  NULL },
     { ai_move,    0,  NULL }
 };
-const mmove_t floater_move_pain1 = {FRAME_pain101, FRAME_pain107, floater_frames_pain1, floater_run};
+DEFINE_MMOVE(floater_move_pain1, FRAME_pain101, FRAME_pain107, floater_frames_pain1, floater_run);
 
 static const mframe_t floater_frames_pain2[] = {
     { ai_move,    0,  NULL },
@@ -350,7 +350,7 @@ static const mframe_t floater_frames_pain2[] = {
     { ai_move,    0,  NULL },
     { ai_move,    0,  NULL }
 };
-const mmove_t floater_move_pain2 = {FRAME_pain201, FRAME_pain208, floater_frames_pain2, floater_run};
+DEFINE_MMOVE(floater_move_pain2, FRAME_pain201, FRAME_pain208, floater_frames_pain2, floater_run);
 
 static const mframe_t floater_frames_pain3[] = {
     { ai_move,    0,  NULL },
@@ -366,7 +366,7 @@ static const mframe_t floater_frames_pain3[] = {
     { ai_move,    0,  NULL },
     { ai_move,    0,  NULL }
 };
-const mmove_t floater_move_pain3 = {FRAME_pain301, FRAME_pain312, floater_frames_pain3, floater_run};
+DEFINE_MMOVE(floater_move_pain3, FRAME_pain301, FRAME_pain312, floater_frames_pain3, floater_run);
 
 static const mframe_t floater_frames_walk[] = {
     { ai_walk, 5, NULL },
@@ -422,7 +422,7 @@ static const mframe_t floater_frames_walk[] = {
     { ai_walk, 5, NULL },
     { ai_walk, 5, NULL }
 };
-const mmove_t floater_move_walk = {FRAME_stand101, FRAME_stand152, floater_frames_walk, NULL};
+DEFINE_MMOVE(floater_move_walk, FRAME_stand101, FRAME_stand152, floater_frames_walk, NULL);
 
 static const mframe_t floater_frames_run[] = {
     { ai_run, 13, NULL },
@@ -478,7 +478,7 @@ static const mframe_t floater_frames_run[] = {
     { ai_run, 13, NULL },
     { ai_run, 13, NULL }
 };
-const mmove_t floater_move_run = {FRAME_stand101, FRAME_stand152, floater_frames_run, NULL};
+DEFINE_MMOVE(floater_move_run, FRAME_stand101, FRAME_stand152, floater_frames_run, NULL);
 
 void floater_run(edict_t *self)
 {

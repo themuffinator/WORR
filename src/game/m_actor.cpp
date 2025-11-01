@@ -77,7 +77,7 @@ static const mframe_t actor_frames_stand[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t actor_move_stand = {FRAME_stand101, FRAME_stand140, actor_frames_stand, NULL};
+DEFINE_MMOVE(actor_move_stand, FRAME_stand101, FRAME_stand140, actor_frames_stand, NULL);
 
 void actor_stand(edict_t *self)
 {
@@ -101,7 +101,7 @@ static const mframe_t actor_frames_walk[] = {
     { ai_walk, 0,  NULL },
     { ai_walk, 0,  NULL }
 };
-const mmove_t actor_move_walk = {FRAME_walk01, FRAME_walk08, actor_frames_walk, NULL};
+DEFINE_MMOVE(actor_move_walk, FRAME_walk01, FRAME_walk08, actor_frames_walk, NULL);
 
 void actor_walk(edict_t *self)
 {
@@ -122,7 +122,7 @@ static const mframe_t actor_frames_run[] = {
     { ai_run, -2, NULL },
     { ai_run, -1, NULL }
 };
-const mmove_t actor_move_run = {FRAME_run02, FRAME_run07, actor_frames_run, NULL};
+DEFINE_MMOVE(actor_move_run, FRAME_run02, FRAME_run07, actor_frames_run, NULL);
 
 void actor_run(edict_t *self)
 {
@@ -147,21 +147,21 @@ static const mframe_t actor_frames_pain1[] = {
     { ai_move, 4,  NULL },
     { ai_move, 1,  NULL }
 };
-const mmove_t actor_move_pain1 = {FRAME_pain101, FRAME_pain103, actor_frames_pain1, actor_run};
+DEFINE_MMOVE(actor_move_pain1, FRAME_pain101, FRAME_pain103, actor_frames_pain1, actor_run);
 
 static const mframe_t actor_frames_pain2[] = {
     { ai_move, -4, NULL },
     { ai_move, 4,  NULL },
     { ai_move, 0,  NULL }
 };
-const mmove_t actor_move_pain2 = {FRAME_pain201, FRAME_pain203, actor_frames_pain2, actor_run};
+DEFINE_MMOVE(actor_move_pain2, FRAME_pain201, FRAME_pain203, actor_frames_pain2, actor_run);
 
 static const mframe_t actor_frames_pain3[] = {
     { ai_move, -1, NULL },
     { ai_move, 1,  NULL },
     { ai_move, 0,  NULL }
 };
-const mmove_t actor_move_pain3 = {FRAME_pain301, FRAME_pain303, actor_frames_pain3, actor_run};
+DEFINE_MMOVE(actor_move_pain3, FRAME_pain301, FRAME_pain303, actor_frames_pain3, actor_run);
 
 static const mframe_t actor_frames_flipoff[] = {
     { ai_turn, 0,  NULL },
@@ -179,7 +179,7 @@ static const mframe_t actor_frames_flipoff[] = {
     { ai_turn, 0,  NULL },
     { ai_turn, 0,  NULL }
 };
-const mmove_t actor_move_flipoff = {FRAME_flip01, FRAME_flip14, actor_frames_flipoff, actor_run};
+DEFINE_MMOVE(actor_move_flipoff, FRAME_flip01, FRAME_flip14, actor_frames_flipoff, actor_run);
 
 static const mframe_t actor_frames_taunt[] = {
     { ai_turn, 0,  NULL },
@@ -200,7 +200,7 @@ static const mframe_t actor_frames_taunt[] = {
     { ai_turn, 0,  NULL },
     { ai_turn, 0,  NULL }
 };
-const mmove_t actor_move_taunt = {FRAME_taunt01, FRAME_taunt17, actor_frames_taunt, actor_run};
+DEFINE_MMOVE(actor_move_taunt, FRAME_taunt01, FRAME_taunt17, actor_frames_taunt, actor_run);
 
 static const char *const messages[] = {
     "Watch it",
@@ -288,7 +288,7 @@ static const mframe_t actor_frames_death1[] = {
     { ai_move, -2,  NULL },
     { ai_move, 1,   NULL }
 };
-const mmove_t actor_move_death1 = {FRAME_death101, FRAME_death107, actor_frames_death1, actor_dead};
+DEFINE_MMOVE(actor_move_death1, FRAME_death101, FRAME_death107, actor_frames_death1, actor_dead);
 
 static const mframe_t actor_frames_death2[] = {
     { ai_move, 0,   NULL },
@@ -305,7 +305,7 @@ static const mframe_t actor_frames_death2[] = {
     { ai_move, -13, NULL },
     { ai_move, 0,   NULL }
 };
-const mmove_t actor_move_death2 = {FRAME_death201, FRAME_death213, actor_frames_death2, actor_dead};
+DEFINE_MMOVE(actor_move_death2, FRAME_death201, FRAME_death213, actor_frames_death2, actor_dead);
 
 void actor_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
 {
@@ -354,7 +354,7 @@ static const mframe_t actor_frames_attack[] = {
     { ai_charge, 3,   NULL },
     { ai_charge, 2,   NULL }
 };
-const mmove_t actor_move_attack = {FRAME_attak01, FRAME_attak04, actor_frames_attack, actor_run};
+DEFINE_MMOVE(actor_move_attack, FRAME_attak01, FRAME_attak04, actor_frames_attack, actor_run);
 
 void actor_attack(edict_t *self)
 {
