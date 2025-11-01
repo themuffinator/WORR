@@ -362,19 +362,19 @@ typedef struct {
 // in edict_t during gameplay
 typedef struct {
     // world vars
-    char        *sky;
+    const char  *sky;
     float       skyrotate;
     vec3_t      skyaxis;
-    char        *nextmap;
-    char        *musictrack;
+    const char  *nextmap;
+    const char  *musictrack;
 
     int         lip;
     int         distance;
     int         height;
-    char        *noise;
+    const char  *noise;
     float       pausetime;
-    char        *item;
-    char        *gravity;
+    const char  *item;
+    const char  *gravity;
 
     float       minyaw;
     float       maxyaw;

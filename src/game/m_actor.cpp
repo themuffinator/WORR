@@ -506,7 +506,7 @@ void target_actor_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface
     }
 
     if (!(self->spawnflags & 6) && (self->pathtarget)) {
-        char *savetarget;
+        const char *savetarget;
 
         savetarget = self->target;
         self->target = self->pathtarget;
