@@ -83,18 +83,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define R_OK    4
 #endif
 
-#if defined(__cplusplus)
-#   if defined(_MSC_VER)
-#       ifndef restrict
-#           define restrict __restrict
-#       endif
-#   elif defined(__GNUC__)
-#       ifndef restrict
-#           define restrict __restrict__
-#       endif
-#   endif
-#endif
-
 #ifdef __has_builtin
 #define q_has_builtin(x)    __has_builtin(x)
 #else
