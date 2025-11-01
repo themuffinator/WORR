@@ -589,6 +589,24 @@ avformat = dependency('libavformat', version: '>= 59.27.100', default_options: f
 avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
+if cc.get_id() == 'msvc' and avcodec_opt.allowed()
+  ffmpeg_required = avcodec_opt.enabled()
+  if not avcodec.found()
+    avcodec = cc.find_library('avcodec', required: ffmpeg_required)
+  endif
+  if not avformat.found()
+    avformat = cc.find_library('avformat', required: ffmpeg_required)
+  endif
+  if not avutil.found()
+    avutil = cc.find_library('avutil', required: ffmpeg_required)
+  endif
+  if not swresample.found()
+    swresample = cc.find_library('swresample', required: ffmpeg_required)
+  endif
+  if not swscale.found()
+    swscale = cc.find_library('swscale', required: ffmpeg_required)
+  endif
+endif
 if avcodec.found() and avformat.found() and avutil.found() and swresample.found() and swscale.found()
   client_src += ['src/client/cin.cpp', 'src/client/sound/ogg.cpp']
   client_deps += [avcodec, avformat, avutil, swresample, swscale]
