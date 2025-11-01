@@ -1285,7 +1285,7 @@ static bool shader_use_per_pixel_lighting(void)
     return !!gl_per_pixel_lighting->integer;
 }
 
-const glbackend_t backend_shader = {
+extern const glbackend_t backend_shader = {
     .name = "GLSL",
 
     .init = shader_init,

@@ -413,7 +413,7 @@ static bool wgl_probe(void)
     return true;
 }
 
-const vid_driver_t vid_win32wgl = {
+extern const vid_driver_t vid_win32wgl = {
     "win32wgl",
     wgl_probe,
     wgl_init,

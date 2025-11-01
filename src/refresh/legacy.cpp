@@ -239,7 +239,7 @@ static bool legacy_use_per_pixel_lighting(void)
     return false;
 }
 
-const glbackend_t backend_legacy = {
+extern const glbackend_t backend_legacy = {
     .name = "legacy",
 
     .init = legacy_init,

@@ -182,7 +182,7 @@ static bool egl_probe(void)
     return os_access("libEGL.dll", X_OK) == 0;
 }
 
-const vid_driver_t vid_win32egl = {
+extern const vid_driver_t vid_win32egl = {
     "win32egl",
     egl_probe,
     egl_init,
