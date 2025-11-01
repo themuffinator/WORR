@@ -643,7 +643,7 @@ if ffmpeg_all_found and cc.get_id() == 'msvc' and avcodec_opt.allowed()
       preserved_link_args = []
       fallback_archives = []
 
-      foreach link_arg : dep_obj.get_link_args()
+      foreach link_arg : dep_obj.link_args()
         if link_arg.endswith('.a')
           fallback_archives += [link_arg]
         else
