@@ -672,7 +672,7 @@ if ffmpeg_all_found and cc.get_id() == 'msvc' and avcodec_opt.allowed()
             command: [coff_librarian, '/nologo', '/OUT:@OUTPUT@', '@INPUT@'],
             build_by_default: true,
           )
-          converted_archives[archive] = convert_target
+          converted_archives += { archive: convert_target }
         endif
 
         converted_paths += [convert_target.full_path()]
