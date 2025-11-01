@@ -322,4 +322,4 @@ static void WAVE_Activate(bool active)
 {
 }
 
-const snddma_driver_t snddma_wave{"wave", WAVE_Init, WAVE_Shutdown, WAVE_BeginPainting, WAVE_Submit, WAVE_Activate};
+extern const snddma_driver_t snddma_wave{"wave", WAVE_Init, WAVE_Shutdown, WAVE_BeginPainting, WAVE_Submit, WAVE_Activate};

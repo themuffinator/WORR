@@ -396,7 +396,7 @@ static void DS_Activate(bool active)
     }
 }
 
-const snddma_driver_t snddma_dsound = {
+extern const snddma_driver_t snddma_dsound = {
     "dsound",
     DS_Init,
     DS_Shutdown,
