@@ -584,11 +584,12 @@ ffmpeg_defaults = [
   'muxers=disabled',
 ]
 avcodec_opt = get_option('avcodec')
-avcodec = dependency('libavcodec', version: '>= 59.37.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-avformat = dependency('libavformat', version: '>= 59.27.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
+ffmpeg_pkg_required = avcodec_opt.enabled() and cc.get_id() != 'msvc'
+avcodec = dependency('libavcodec', version: '>= 59.37.100', default_options: ffmpeg_defaults, required: ffmpeg_pkg_required)
+avformat = dependency('libavformat', version: '>= 59.27.100', default_options: ffmpeg_defaults, required: ffmpeg_pkg_required)
+avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpeg_defaults, required: ffmpeg_pkg_required)
+swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: ffmpeg_pkg_required)
+swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: ffmpeg_pkg_required)
 if cc.get_id() == 'msvc' and avcodec_opt.allowed()
   ffmpeg_required = avcodec_opt.enabled()
   if not avcodec.found()
