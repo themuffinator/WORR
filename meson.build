@@ -607,10 +607,112 @@ if cc.get_id() == 'msvc' and avcodec_opt.allowed()
     swscale = cc.find_library('swscale', required: ffmpeg_required)
   endif
 endif
-if avcodec.found() and avformat.found() and avutil.found() and swresample.found() and swscale.found()
+ffmpeg_deps_list = [
+  ['avcodec', avcodec],
+  ['avformat', avformat],
+  ['avutil', avutil],
+  ['swresample', swresample],
+  ['swscale', swscale],
+]
+
+ffmpeg_all_found = true
+foreach dep_pair : ffmpeg_deps_list
+  ffmpeg_all_found = ffmpeg_all_found and dep_pair[1].found()
+endforeach
+
+ffmpeg_requires_conversion = false
+ffmpeg_conversion_success = true
+converted_ffmpeg_deps = {}
+
+if ffmpeg_all_found and cc.get_id() == 'msvc' and avcodec_opt.allowed()
+  coff_librarian = find_program(['lib', 'llvm-lib'], required: false)
+  converted_archives = {}
+
+  foreach dep_pair : ffmpeg_deps_list
+    dep_name = dep_pair[0]
+    dep_obj = dep_pair[1]
+
+    if dep_obj.type_name() == 'internal'
+      ffmpeg_requires_conversion = true
+
+      if not coff_librarian.found()
+        ffmpeg_conversion_success = false
+        break
+      endif
+
+      preserved_link_args = []
+      fallback_archives = []
+
+      foreach link_arg : dep_obj.get_link_args()
+        if link_arg.endswith('.a')
+          fallback_archives += [link_arg]
+        else
+          preserved_link_args += [link_arg]
+        endif
+      endforeach
+
+      if fallback_archives.length() == 0
+        ffmpeg_conversion_success = false
+        break
+      endif
+
+      converted_paths = []
+      idx = 0
+      foreach archive : fallback_archives
+        idx += 1
+
+        if archive in converted_archives
+          convert_target = converted_archives[archive]
+        else
+          convert_name = 'ffmpeg_@0@_coff_@1@'.format(dep_name, idx.to_string())
+          convert_target = custom_target(
+            convert_name,
+            input: archive,
+            output: '@BASENAME@.lib',
+            command: [coff_librarian, '/nologo', '/OUT:@OUTPUT@', '@INPUT@'],
+            build_by_default: true,
+          )
+          converted_archives[archive] = convert_target
+        endif
+
+        converted_paths += [convert_target.full_path()]
+      endforeach
+
+      converted_ffmpeg_deps[dep_name] = declare_dependency(
+        include_directories: dep_obj.get_include_directories(),
+        compile_args: dep_obj.get_compile_args(),
+        sources: dep_obj.get_sources(),
+        dependencies: dep_obj.get_dependencies(),
+        link_whole: dep_obj.get_link_whole(),
+        link_args: preserved_link_args + converted_paths,
+      )
+    endif
+  endforeach
+endif
+
+if ffmpeg_requires_conversion and not ffmpeg_conversion_success
+  warning('FFmpeg fallback libraries require conversion to COFF, but the conversion failed; disabling FFmpeg support')
+  ffmpeg_all_found = false
+endif
+
+if ffmpeg_all_found
+  final_ffmpeg_deps = []
+  foreach dep_pair : ffmpeg_deps_list
+    dep_name = dep_pair[0]
+
+    if dep_name in converted_ffmpeg_deps
+      final_ffmpeg_deps += [converted_ffmpeg_deps[dep_name]]
+    else
+      final_ffmpeg_deps += [dep_pair[1]]
+    endif
+  endforeach
+
   client_src += ['src/client/cin.cpp', 'src/client/sound/ogg.cpp']
-  client_deps += [avcodec, avformat, avutil, swresample, swscale]
-  config.set10('USE_AVCODEC', true)
+  client_deps += final_ffmpeg_deps
+
+  if not ffmpeg_requires_conversion or ffmpeg_conversion_success
+    config.set10('USE_AVCODEC', true)
+  endif
 endif
 
 if win32
