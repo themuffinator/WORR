@@ -42,13 +42,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #if defined(restrict)
 #pragma push_macro("restrict")
 #undef restrict
-#define PNG_ALLOCATED __declspec(restrict)
-#pragma pop_macro("restrict")
-#else
-#define PNG_ALLOCATED __declspec(restrict)
+#define WORR_RESTORE_RESTRICT 1
 #endif
+#define PNG_ALLOCATED __declspec(restrict)
 #endif
 #include <png.h>
+#ifdef WORR_RESTORE_RESTRICT
+#pragma pop_macro("restrict")
+#undef WORR_RESTORE_RESTRICT
+#endif
 #endif // USE_PNG
 
 #if USE_JPG
