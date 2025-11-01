@@ -170,7 +170,7 @@ void DeathmatchScoreboardMessage(edict_t *ent, edict_t *killer)
     int     x, y;
     gclient_t   *cl;
     edict_t     *cl_ent;
-    char    *tag;
+    const char  *tag;
 
     // sort the clients by score
     total = 0;

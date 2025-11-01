@@ -23,7 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <errno.h>
 
-extern cvar_t   *fs_game;
+extern "C" cvar_t   *fs_game;
 
 #if defined(_WIN64)
 // Official remaster game DLL is named "game_x64.dll"
