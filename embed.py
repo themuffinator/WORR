@@ -29,7 +29,7 @@ var_name = sys.argv[3]
 
 converted = [
     '#include <stddef.h>',
-    f'const char {var_name}[] ='
+    f'extern const char {var_name}[] ='
 ]
 
 chunk_size = 16384
@@ -38,7 +38,7 @@ for i in range(0, len(in_contents), chunk_size):
     converted.append(f'"{chunk}"')
 
 converted.append(';')
-converted.append(f'const size_t {var_name}_size = {size};')
+converted.append(f'extern const size_t {var_name}_size = {size};')
 in_contents = '\n'.join(converted)
 
 # write
