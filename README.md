@@ -20,6 +20,7 @@ PROJECT GOALS
   - Integrate full FT2 support and Q3 color escape sequences
   - Enhance aspect correction/screen positioning to be more robust and correct
   - Extend/enhance menu selection
+  - Graphical obituaries, chatbox
 * Online:
   - WEBSITE: Set up basic server browser, user environment, ladder, etc. 
   - ENGINE: Engine bootstrapper with auto-updater, set up cdn server for transfer
