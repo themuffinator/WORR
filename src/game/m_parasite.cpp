@@ -77,7 +77,7 @@ static const mframe_t parasite_frames_start_fidget[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t parasite_move_start_fidget = {FRAME_stand18, FRAME_stand21, parasite_frames_start_fidget, parasite_do_fidget};
+DEFINE_MMOVE(parasite_move_start_fidget, FRAME_stand18, FRAME_stand21, parasite_frames_start_fidget, parasite_do_fidget);
 
 static const mframe_t parasite_frames_fidget[] = {
     { ai_stand, 0, parasite_scratch },
@@ -87,7 +87,7 @@ static const mframe_t parasite_frames_fidget[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t parasite_move_fidget = {FRAME_stand22, FRAME_stand27, parasite_frames_fidget, parasite_refidget};
+DEFINE_MMOVE(parasite_move_fidget, FRAME_stand22, FRAME_stand27, parasite_frames_fidget, parasite_refidget);
 
 static const mframe_t parasite_frames_end_fidget[] = {
     { ai_stand, 0, parasite_scratch },
@@ -99,7 +99,7 @@ static const mframe_t parasite_frames_end_fidget[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t parasite_move_end_fidget = {FRAME_stand28, FRAME_stand35, parasite_frames_end_fidget, parasite_stand};
+DEFINE_MMOVE(parasite_move_end_fidget, FRAME_stand28, FRAME_stand35, parasite_frames_end_fidget, parasite_stand);
 
 static void parasite_do_fidget(edict_t *self)
 {
@@ -138,7 +138,7 @@ static const mframe_t parasite_frames_stand[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, parasite_tap }
 };
-const mmove_t parasite_move_stand = {FRAME_stand01, FRAME_stand17, parasite_frames_stand, parasite_stand};
+DEFINE_MMOVE(parasite_move_stand, FRAME_stand01, FRAME_stand17, parasite_frames_stand, parasite_stand);
 
 void parasite_stand(edict_t *self)
 {
@@ -154,13 +154,13 @@ static const mframe_t parasite_frames_run[] = {
     { ai_run, 28, NULL },
     { ai_run, 25, NULL }
 };
-const mmove_t parasite_move_run = {FRAME_run03, FRAME_run09, parasite_frames_run, NULL};
+DEFINE_MMOVE(parasite_move_run, FRAME_run03, FRAME_run09, parasite_frames_run, NULL);
 
 static const mframe_t parasite_frames_start_run[] = {
     { ai_run, 0,  NULL },
     { ai_run, 30, NULL },
 };
-const mmove_t parasite_move_start_run = {FRAME_run01, FRAME_run02, parasite_frames_start_run, parasite_run};
+DEFINE_MMOVE(parasite_move_start_run, FRAME_run01, FRAME_run02, parasite_frames_start_run, parasite_run);
 
 static const mframe_t parasite_frames_stop_run[] = {
     { ai_run, 20, NULL },
@@ -170,7 +170,7 @@ static const mframe_t parasite_frames_stop_run[] = {
     { ai_run, 0,  NULL },
     { ai_run, 0,  NULL }
 };
-const mmove_t parasite_move_stop_run = {FRAME_run10, FRAME_run15, parasite_frames_stop_run, NULL};
+DEFINE_MMOVE(parasite_move_stop_run, FRAME_run10, FRAME_run15, parasite_frames_stop_run, NULL);
 
 void parasite_start_run(edict_t *self)
 {
@@ -197,13 +197,13 @@ static const mframe_t parasite_frames_walk[] = {
     { ai_walk, 28, NULL },
     { ai_walk, 25, NULL }
 };
-const mmove_t parasite_move_walk = {FRAME_run03, FRAME_run09, parasite_frames_walk, parasite_walk};
+DEFINE_MMOVE(parasite_move_walk, FRAME_run03, FRAME_run09, parasite_frames_walk, parasite_walk);
 
 static const mframe_t parasite_frames_start_walk[] = {
     { ai_walk, 0, NULL },
     { ai_walk, 30, parasite_walk }
 };
-const mmove_t parasite_move_start_walk = {FRAME_run01, FRAME_run02, parasite_frames_start_walk, NULL};
+DEFINE_MMOVE(parasite_move_start_walk, FRAME_run01, FRAME_run02, parasite_frames_start_walk, NULL);
 
 static const mframe_t parasite_frames_stop_walk[] = {
     { ai_walk, 20, NULL },
@@ -213,7 +213,7 @@ static const mframe_t parasite_frames_stop_walk[] = {
     { ai_walk, 0,  NULL },
     { ai_walk, 0,  NULL }
 };
-const mmove_t parasite_move_stop_walk = {FRAME_run10, FRAME_run15, parasite_frames_stop_walk, NULL};
+DEFINE_MMOVE(parasite_move_stop_walk, FRAME_run10, FRAME_run15, parasite_frames_stop_walk, NULL);
 
 void parasite_start_walk(edict_t *self)
 {
@@ -238,7 +238,7 @@ static const mframe_t parasite_frames_pain1[] = {
     { ai_move, -7, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t parasite_move_pain1 = {FRAME_pain101, FRAME_pain111, parasite_frames_pain1, parasite_start_run};
+DEFINE_MMOVE(parasite_move_pain1, FRAME_pain101, FRAME_pain111, parasite_frames_pain1, parasite_start_run);
 
 void parasite_pain(edict_t *self, edict_t *other, float kick, int damage)
 {
@@ -345,7 +345,7 @@ static const mframe_t parasite_frames_drain[] = {
     { ai_charge, -3,  NULL },
     { ai_charge, 0,   NULL }
 };
-const mmove_t parasite_move_drain = {FRAME_drain01, FRAME_drain18, parasite_frames_drain, parasite_start_run};
+DEFINE_MMOVE(parasite_move_drain, FRAME_drain01, FRAME_drain18, parasite_frames_drain, parasite_start_run);
 
 void parasite_attack(edict_t *self)
 {
@@ -377,7 +377,7 @@ static const mframe_t parasite_frames_death[] = {
     { ai_move, 0,  NULL },
     { ai_move, 0,  NULL }
 };
-const mmove_t parasite_move_death = {FRAME_death101, FRAME_death107, parasite_frames_death, parasite_dead};
+DEFINE_MMOVE(parasite_move_death, FRAME_death101, FRAME_death107, parasite_frames_death, parasite_dead);
 
 void parasite_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
 {

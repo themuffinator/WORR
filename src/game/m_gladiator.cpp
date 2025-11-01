@@ -66,7 +66,7 @@ static const mframe_t gladiator_frames_stand[] = {
     { ai_stand, 0, NULL },
     { ai_stand, 0, NULL }
 };
-const mmove_t gladiator_move_stand = {FRAME_stand1, FRAME_stand7, gladiator_frames_stand, NULL};
+DEFINE_MMOVE(gladiator_move_stand, FRAME_stand1, FRAME_stand7, gladiator_frames_stand, NULL);
 
 void gladiator_stand(edict_t *self)
 {
@@ -91,7 +91,7 @@ static const mframe_t gladiator_frames_walk[] = {
     { ai_walk, 1,  NULL },
     { ai_walk, 8,  NULL }
 };
-const mmove_t gladiator_move_walk = {FRAME_walk1, FRAME_walk16, gladiator_frames_walk, NULL};
+DEFINE_MMOVE(gladiator_move_walk, FRAME_walk1, FRAME_walk16, gladiator_frames_walk, NULL);
 
 void gladiator_walk(edict_t *self)
 {
@@ -106,7 +106,7 @@ static const mframe_t gladiator_frames_run[] = {
     { ai_run, 12, NULL },
     { ai_run, 13, NULL }
 };
-const mmove_t gladiator_move_run = {FRAME_run1, FRAME_run6, gladiator_frames_run, NULL};
+DEFINE_MMOVE(gladiator_move_run, FRAME_run1, FRAME_run6, gladiator_frames_run, NULL);
 
 void gladiator_run(edict_t *self)
 {
@@ -145,7 +145,7 @@ static const mframe_t gladiator_frames_attack_melee[] = {
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL }
 };
-const mmove_t gladiator_move_attack_melee = {FRAME_melee1, FRAME_melee17, gladiator_frames_attack_melee, gladiator_run};
+DEFINE_MMOVE(gladiator_move_attack_melee, FRAME_melee1, FRAME_melee17, gladiator_frames_attack_melee, gladiator_run);
 
 void gladiator_melee(edict_t *self)
 {
@@ -179,7 +179,7 @@ static const mframe_t gladiator_frames_attack_gun[] = {
     { ai_charge, 0, NULL },
     { ai_charge, 0, NULL }
 };
-const mmove_t gladiator_move_attack_gun = {FRAME_attack1, FRAME_attack9, gladiator_frames_attack_gun, gladiator_run};
+DEFINE_MMOVE(gladiator_move_attack_gun, FRAME_attack1, FRAME_attack9, gladiator_frames_attack_gun, gladiator_run);
 
 void gladiator_attack(edict_t *self)
 {
@@ -207,7 +207,7 @@ static const mframe_t gladiator_frames_pain[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t gladiator_move_pain = {FRAME_pain1, FRAME_pain6, gladiator_frames_pain, gladiator_run};
+DEFINE_MMOVE(gladiator_move_pain, FRAME_pain1, FRAME_pain6, gladiator_frames_pain, gladiator_run);
 
 static const mframe_t gladiator_frames_pain_air[] = {
     { ai_move, 0, NULL },
@@ -218,7 +218,7 @@ static const mframe_t gladiator_frames_pain_air[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t gladiator_move_pain_air = {FRAME_painup1, FRAME_painup7, gladiator_frames_pain_air, gladiator_run};
+DEFINE_MMOVE(gladiator_move_pain_air, FRAME_painup1, FRAME_painup7, gladiator_frames_pain_air, gladiator_run);
 
 void gladiator_pain(edict_t *self, edict_t *other, float kick, int damage)
 {
@@ -281,7 +281,7 @@ static const mframe_t gladiator_frames_death[] = {
     { ai_move, 0, NULL },
     { ai_move, 0, NULL }
 };
-const mmove_t gladiator_move_death = {FRAME_death1, FRAME_death22, gladiator_frames_death, gladiator_dead};
+DEFINE_MMOVE(gladiator_move_death, FRAME_death1, FRAME_death22, gladiator_frames_death, gladiator_dead);
 
 void gladiator_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
 {
