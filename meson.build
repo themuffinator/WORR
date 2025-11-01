@@ -640,54 +640,9 @@ if ffmpeg_all_found and cc.get_id() == 'msvc' and avcodec_opt.allowed()
         break
       endif
 
-      preserved_link_args = []
-      fallback_archives = []
-
-      foreach link_arg : dep_obj.get_link_args()
-        if link_arg.endswith('.a')
-          fallback_archives += [link_arg]
-        else
-          preserved_link_args += [link_arg]
-        endif
-      endforeach
-
-      if fallback_archives.length() == 0
-        ffmpeg_conversion_success = false
-        break
-      endif
-
-      converted_paths = []
-      idx = 0
-      foreach archive : fallback_archives
-        idx += 1
-
-        if archive in converted_archives
-          convert_target = converted_archives[archive]
-        else
-          convert_name = 'ffmpeg_@0@_coff_@1@'.format(dep_name, idx.to_string())
-          convert_target = custom_target(
-            convert_name,
-            input: archive,
-            output: '@BASENAME@.lib',
-            command: [coff_librarian, '/nologo', '/OUT:@OUTPUT@', '@INPUT@'],
-            build_by_default: true,
-          )
-          converted_archives += { archive: convert_target }
-        endif
-
-        converted_paths += [convert_target.full_path()]
-      endforeach
-
-      converted_ffmpeg_deps += {
-        dep_name: declare_dependency(
-          include_directories: dep_obj.get_include_directories(),
-          compile_args: dep_obj.get_compile_args(),
-          sources: dep_obj.get_sources(),
-          dependencies: dep_obj.get_dependencies(),
-          link_whole: dep_obj.get_link_whole(),
-          link_args: preserved_link_args + converted_paths,
-        ),
-      }
+      warning('Meson no longer allows querying raw link arguments from internal FFmpeg fallbacks; disable the FFmpeg fallback or provide system libraries instead')
+      ffmpeg_conversion_success = false
+      break
     endif
   endforeach
 endif
