@@ -193,10 +193,10 @@ static bool IsNeutral(edict_t *ent)
 
 static void ClientObituary(edict_t *self, edict_t *inflictor, edict_t *attacker)
 {
-    int         mod;
-    char        *message;
-    char        *message2;
-    int         ff;
+    int             mod;
+    const char      *message;
+    const char      *message2;
+    int             ff;
 
     if (coop->value && attacker->client)
         meansOfDeath |= MOD_FRIENDLY_FIRE;
@@ -205,7 +205,7 @@ static void ClientObituary(edict_t *self, edict_t *inflictor, edict_t *attacker)
         ff = meansOfDeath & MOD_FRIENDLY_FIRE;
         mod = meansOfDeath & ~MOD_FRIENDLY_FIRE;
         message = NULL;
-        message2 = const_cast<char *>(""); // safe placeholder for optional second message
+        message2 = "";
 
         switch (mod) {
         case MOD_SUICIDE:
@@ -768,9 +768,9 @@ static edict_t *SelectDeathmatchSpawnPoint(void)
 
 static edict_t *SelectCoopSpawnPoint(edict_t *ent)
 {
-    int     index;
-    edict_t *spot = NULL;
-    char    *target;
+    int         index;
+    edict_t     *spot = NULL;
+    const char  *target;
 
     index = ent->client - game.clients;
 
@@ -788,7 +788,7 @@ static edict_t *SelectCoopSpawnPoint(edict_t *ent)
 
         target = spot->targetname;
         if (!target)
-            target = const_cast<char *>(""); // safe placeholder when target name is absent
+            target = "";
         if (Q_stricmp(game.spawnpoint, target) == 0) {
             // this is a coop spawn point for one of the clients here
             index--;
