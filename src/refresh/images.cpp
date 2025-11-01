@@ -39,14 +39,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #if USE_PNG
 #define PNG_SKIP_SETJMP_CHECK
 #if defined(_MSC_VER) && defined(__cplusplus) && !defined(PNG_ALLOCATED)
-#if defined(restrict)
-#pragma push_macro("restrict")
-#undef restrict
-#define PNG_ALLOCATED __declspec(restrict)
-#pragma pop_macro("restrict")
-#else
-#define PNG_ALLOCATED __declspec(restrict)
-#endif
+// MSVC does not allow applying __declspec(restrict) to const-qualified
+// return types when compiling as C++.  libpng uses PNG_ALLOCATED on several
+// APIs that return const pointers, which triggers compile errors when the
+// macro expands to __declspec(restrict).  An empty definition preserves
+// compatibility with libpng while keeping the code buildable with MSVC.
+#define PNG_ALLOCATED
 #endif
 #include <png.h>
 #endif // USE_PNG
