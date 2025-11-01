@@ -1227,6 +1227,8 @@ typedef struct {
     // NEW SCALING
     int         virtual_width, virtual_height;
     int         hud_x_offset, hud_y_offset;
+    float       virtual_scale;
+    vrect_t     virtual_screens[3];
     
     kfont_t     kfont;
 

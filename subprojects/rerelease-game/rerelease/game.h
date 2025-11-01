@@ -113,7 +113,7 @@ constexpr bit_t<n> bit_v = 1ull << n;
 // game.h -- game dll information visible to server
 // PARIL_NEW_API - value likely not used by any other Q2-esque engine in the wild
 constexpr int32_t GAME_API_VERSION = 2023;
-constexpr int32_t CGAME_API_VERSION = 2022;
+constexpr int32_t CGAME_API_VERSION = 2023;
 
 // forward declarations
 struct edict_t;

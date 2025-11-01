@@ -560,7 +560,7 @@ typedef struct {
 
 //===============================================================
 
-#define CGAME_API_VERSION   2022
+#define CGAME_API_VERSION   2023
 
 typedef enum
 {
@@ -659,6 +659,10 @@ typedef struct
 
     // [Paril-KEX]
     bool (*CL_InAutoDemoLoop) (void);
+
+    // Virtual screen helpers for aspect-correct HUD placement
+    const vrect_t *(*SCR_GetVirtualScreen)(text_align_t align);
+    float (*SCR_GetVirtualScale)(void);
 } cgame_import_t;
 
 //

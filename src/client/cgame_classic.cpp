@@ -38,6 +38,42 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define UI_LEFT             BIT(0)
 #define UI_RIGHT            BIT(1)
 #define UI_CENTER           (UI_LEFT | UI_RIGHT)
+
+namespace
+{
+
+struct hud_space_t
+{
+    const vrect_t &left;
+    const vrect_t &center;
+    const vrect_t &right;
+};
+
+static inline hud_space_t CGC_GetHudSpace()
+{
+    return {
+        *cgi.SCR_GetVirtualScreen(text_align_t::LEFT),
+        *cgi.SCR_GetVirtualScreen(text_align_t::CENTER),
+        *cgi.SCR_GetVirtualScreen(text_align_t::RIGHT)
+    };
+}
+
+static inline int CGC_LeftX(const hud_space_t &space, int base_x)
+{
+    return space.left.x + base_x;
+}
+
+static inline int CGC_RightX(const hud_space_t &space, int base_x)
+{
+    return space.right.x + space.right.width + base_x;
+}
+
+static inline int CGC_CenterX(const hud_space_t &space, int base_x, int half_width)
+{
+    return space.center.x + space.center.width / 2 + (base_x - half_width);
+}
+
+} // namespace
 #define UI_DROPSHADOW       BIT(4)
 #define UI_XORCOLOR         BIT(7)
 
@@ -322,8 +358,9 @@ static void layout_client(vrect_t hud_vrect, const char **s, const player_state_
     char    buffer[MAX_QPATH];
     int     score, ping, time;
 
+    const hud_space_t hud_space = CGC_GetHudSpace();
     char* token = COM_Parse(s);
-    x = hud_vrect.x + hud_vrect.width / 2 - 160 + atoi(token);
+    x = CGC_CenterX(hud_space, atoi(token), 160);
     token = COM_Parse(s);
     y = hud_vrect.y + hud_vrect.height / 2 - 120 + atoi(token);
 
@@ -360,8 +397,9 @@ static void layout_ctf(vrect_t hud_vrect, const char **s, int32_t playernum, con
     char    buffer[MAX_QPATH];
     int     score, ping;
 
+    const hud_space_t hud_space = CGC_GetHudSpace();
     char* token = COM_Parse(s);
-    x = hud_vrect.x + hud_vrect.width / 2 - 160 + atoi(token);
+    x = CGC_CenterX(hud_space, atoi(token), 160);
     token = COM_Parse(s);
     y = hud_vrect.y + hud_vrect.height / 2 - 120 + atoi(token);
 
@@ -545,25 +583,27 @@ static void SCR_ExecuteLayoutString(vrect_t hud_vrect, const char *s, int32_t pl
     x = 0;
     y = 0;
 
+    const hud_space_t hud_space = CGC_GetHudSpace();
+
     while (s) {
         token = COM_Parse(&s);
         if (token[2] == 0) {
             if (token[0] == 'x') {
                 if (token[1] == 'l') {
                     token = COM_Parse(&s);
-                    x = hud_vrect.x + atoi(token);
+                    x = CGC_LeftX(hud_space, atoi(token));
                     continue;
                 }
 
                 if (token[1] == 'r') {
                     token = COM_Parse(&s);
-                    x = hud_vrect.x + hud_vrect.width + atoi(token);
+                    x = CGC_RightX(hud_space, atoi(token));
                     continue;
                 }
 
                 if (token[1] == 'v') {
                     token = COM_Parse(&s);
-                    x = hud_vrect.x + hud_vrect.width / 2 - 160 + atoi(token);
+                    x = CGC_CenterX(hud_space, atoi(token), 160);
                     continue;
                 }
             }

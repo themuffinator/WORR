@@ -338,6 +338,19 @@ static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, cons
     }
 }
 
+static const vrect_t *CG_SCR_GetVirtualScreen(text_align_t align)
+{
+    if (align < LEFT || align > RIGHT)
+        return &scr.virtual_screens[CENTER];
+
+    return &scr.virtual_screens[align];
+}
+
+static float CG_SCR_GetVirtualScale(void)
+{
+    return scr.virtual_scale > 0.0f ? scr.virtual_scale : 1.0f;
+}
+
 static bool CG_CL_GetTextInput(const char **msg, bool *is_team)
 {
     // FIXME: Hook up with chat prompt
@@ -452,6 +465,8 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
         cgame_imports.SCR_DrawBind = CG_SCR_DrawBind;
 
         cgame_imports.CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop;
+        cgame_imports.SCR_GetVirtualScreen = CG_SCR_GetVirtualScreen;
+        cgame_imports.SCR_GetVirtualScale = CG_SCR_GetVirtualScale;
 
         cgame_entry_t entry = NULL;
         if (is_rerelease_server) {
