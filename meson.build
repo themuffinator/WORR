@@ -584,11 +584,15 @@ ffmpeg_defaults = [
   'muxers=disabled',
 ]
 avcodec_opt = get_option('avcodec')
-avcodec = dependency('libavcodec', version: '>= 59.37.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-avformat = dependency('libavformat', version: '>= 59.27.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
-swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
+ffmpeg_allow_fallback = true
+if cc.get_id() == 'msvc' and avcodec_opt.allowed()
+  ffmpeg_allow_fallback = false
+endif
+avcodec = dependency('libavcodec', version: '>= 59.37.100', default_options: ffmpeg_defaults, required: avcodec_opt, allow_fallback: ffmpeg_allow_fallback)
+avformat = dependency('libavformat', version: '>= 59.27.100', default_options: ffmpeg_defaults, required: avcodec_opt, allow_fallback: ffmpeg_allow_fallback)
+avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpeg_defaults, required: avcodec_opt, allow_fallback: ffmpeg_allow_fallback)
+swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt, allow_fallback: ffmpeg_allow_fallback)
+swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt, allow_fallback: ffmpeg_allow_fallback)
 if cc.get_id() == 'msvc' and avcodec_opt.allowed()
   ffmpeg_required = avcodec_opt.enabled()
   if not avcodec.found()
