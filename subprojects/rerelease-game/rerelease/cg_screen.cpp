@@ -49,6 +49,42 @@ static struct
 
 #include <vector>
 
+namespace
+{
+
+struct hud_space_t
+{
+    const vrect_t &left;
+    const vrect_t &center;
+    const vrect_t &right;
+};
+
+static inline hud_space_t CG_GetHudSpace()
+{
+    return {
+        *cgi.SCR_GetVirtualScreen(text_align_t::LEFT),
+        *cgi.SCR_GetVirtualScreen(text_align_t::CENTER),
+        *cgi.SCR_GetVirtualScreen(text_align_t::RIGHT)
+    };
+}
+
+static inline int CG_LeftX(const hud_space_t &space, int base_x)
+{
+    return space.left.x + base_x;
+}
+
+static inline int CG_RightX(const hud_space_t &space, int base_x)
+{
+    return space.right.x + space.right.width + base_x;
+}
+
+static inline int CG_CenterX(const hud_space_t &space, int base_x, int half_width)
+{
+    return space.center.x + space.center.width / 2 + (base_x - half_width);
+}
+
+} // namespace
+
 // max number of centerprints in the rotating buffer
 constexpr size_t MAX_CENTER_PRINTS = 4;
 
@@ -171,7 +207,8 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
     CG_Notify_CheckExpire(data);
 
     int y;
-    
+    const hud_space_t hud_space = CG_GetHudSpace();
+
     y = (hud_vrect.y * scale) + hud_safe.y;
 
     cgi.SCR_SetAltTypeface(ui_acc_alttypeface->integer && true);
@@ -185,7 +222,7 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
 
             vec2_t sz = cgi.SCR_MeasureFontString(msg.message.c_str(), scale);
             sz.x += 10; // extra padding for black bars
-            cgi.SCR_DrawColorPic((hud_vrect.x * scale) + hud_safe.x - 5, y, sz.x, 15 * scale, "_white", rgba_black);
+            cgi.SCR_DrawColorPic((CG_LeftX(hud_space, 0) * scale) + hud_safe.x - 5, y, sz.x, 15 * scale, "_white", rgba_black);
             y += 10 * scale;
         }
     }
@@ -196,7 +233,7 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
         if (!msg.is_active)
             break;
 
-        cgi.SCR_DrawFontString(msg.message.c_str(), (hud_vrect.x * scale) + hud_safe.x, y, scale, msg.is_chat ? alt_color : rgba_white, true, text_align_t::LEFT);
+        cgi.SCR_DrawFontString(msg.message.c_str(), (CG_LeftX(hud_space, 0) * scale) + hud_safe.x, y, scale, msg.is_chat ? alt_color : rgba_white, true, text_align_t::LEFT);
         y += 10 * scale;
     }
 
@@ -209,7 +246,7 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
         bool input_team;
 
         if (cgi.CL_GetTextInput(&input_msg, &input_team))
-            cgi.SCR_DrawFontString(G_Fmt("{}: {}", input_team ? "say_team" : "say", input_msg).data(), (hud_vrect.x * scale) + hud_safe.x, y, scale, rgba_white, true, text_align_t::LEFT);
+            cgi.SCR_DrawFontString(G_Fmt("{}: {}", input_team ? "say_team" : "say", input_msg).data(), (CG_LeftX(hud_space, 0) * scale) + hud_safe.x, y, scale, rgba_white, true, text_align_t::LEFT);
     }
 }
 
@@ -795,6 +832,8 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
     if (!s[0])
         return;
 
+    const hud_space_t hud_space = CG_GetHudSpace();
+
     x = hud_vrect.x;
     y = hud_vrect.y;
     width = 3;
@@ -816,21 +855,21 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
         {
             token = COM_Parse (&s);
             if (!skip_depth)
-                x = ((hud_vrect.x + atoi(token)) * scale) + hud_safe.x;
+                x = (CG_LeftX(hud_space, atoi(token)) * scale) + hud_safe.x;
             continue;
         }
         if (!strcmp(token, "xr"))
         {
             token = COM_Parse (&s);
             if (!skip_depth)
-                x = ((hud_vrect.x + hud_vrect.width + atoi(token)) * scale) - hud_safe.x;
+                x = (CG_RightX(hud_space, atoi(token)) * scale) - hud_safe.x;
             continue;
         }
         if (!strcmp(token, "xv"))
         {
             token = COM_Parse (&s);
             if (!skip_depth)
-                x = (hud_vrect.x + hud_vrect.width/2 + (atoi(token) - hx)) * scale;
+                x = CG_CenterX(hud_space, atoi(token), hx) * scale;
             continue;
         }
 

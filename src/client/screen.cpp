@@ -2017,23 +2017,49 @@ static void SCR_SetupHUD(void)
     R_SetScale(scr.hud_scale);
 
     // Calculate the dimensions of the physical screen in virtual pixels
-    float screen_v_width = r_config.width * scr.hud_scale;
-    float screen_v_height = r_config.height * scr.hud_scale;
+    const float screen_v_width = r_config.width * scr.hud_scale;
+    const float screen_v_height = r_config.height * scr.hud_scale;
 
-    // Now, calculate the 4:3 virtual canvas size
-    scr.virtual_height = screen_v_height;
-    scr.virtual_width = scr.virtual_height * (4.0f / 3.0f);
-
-    // If the 4:3 canvas is wider than the screen (for tall/portrait monitors),
-    // then we must constrain it by width instead (letterboxing).
-    if (scr.virtual_width > screen_v_width) {
-        scr.virtual_width = screen_v_width;
-        scr.virtual_height = scr.virtual_width * (3.0f / 4.0f);
+    // Determine the uniform scale needed to fit the 480x320 canvas.
+    const float base_width = SCREEN_WIDTH;
+    const float base_height = SCREEN_HEIGHT;
+    float virtual_scale = min(screen_v_width / base_width, screen_v_height / base_height);
+    if (virtual_scale <= 0.0f) {
+        virtual_scale = 1.0f;
     }
 
-    // Calculate the offsets to center the 4:3 canvas on the screen
-    scr.hud_x_offset = (screen_v_width - scr.virtual_width) / 2;
-    scr.hud_y_offset = (screen_v_height - scr.virtual_height) / 2;
+    scr.virtual_scale = virtual_scale;
+    scr.virtual_width = Q_rint(base_width * virtual_scale);
+    scr.virtual_height = Q_rint(base_height * virtual_scale);
+
+    scr.hud_x_offset = Q_rint((screen_v_width - scr.virtual_width) * 0.5f);
+    scr.hud_y_offset = Q_rint((screen_v_height - scr.virtual_height) * 0.5f);
+
+    if (scr.hud_x_offset < 0) {
+        scr.hud_x_offset = 0;
+    }
+    if (scr.hud_y_offset < 0) {
+        scr.hud_y_offset = 0;
+    }
+
+    const int full_width = Q_rint(screen_v_width);
+    const int full_height = Q_rint(screen_v_height);
+
+    if (scr.virtual_height > full_height) {
+        scr.virtual_height = full_height;
+    }
+
+    vrect_t &left_rect = scr.virtual_screens[LEFT];
+    vrect_t &center_rect = scr.virtual_screens[CENTER];
+    vrect_t &right_rect = scr.virtual_screens[RIGHT];
+
+    left_rect = { 0, scr.hud_y_offset, scr.virtual_width, scr.virtual_height };
+    center_rect = { scr.hud_x_offset, scr.hud_y_offset, scr.virtual_width, scr.virtual_height };
+    right_rect = { full_width - scr.virtual_width, scr.hud_y_offset, scr.virtual_width, scr.virtual_height };
+
+    if (right_rect.x < 0) {
+        right_rect.x = 0;
+    }
 }
 
 //=======================================================
@@ -2077,12 +2103,7 @@ static void SCR_Draw2D(void)
     SCR_DrawFPS(color);
 
     // Define the 4:3 safe drawing area for the cgame HUD
-    vrect_t hud_rect = {
-        scr.hud_x_offset,
-        scr.hud_y_offset,
-        scr.virtual_width,
-        scr.virtual_height
-    };
+    vrect_t hud_rect = scr.virtual_screens[CENTER];
 
     // The safe zone is relative to the new 4:3 canvas
     vrect_t hud_safe = {
