@@ -194,7 +194,10 @@ typedef struct {
 } symlink_t;
 
 // these point to user home directory
+extern "C" {
 char                fs_gamedir[MAX_OSPATH];
+cvar_t              *fs_game;
+}
 //static char       fs_basedir[MAX_OSPATH];
 
 static searchpath_t *fs_searchpaths;
@@ -229,8 +232,6 @@ static cvar_t       *fs_autoexec;
 #if USE_DEBUG
 static cvar_t       *fs_debug;
 #endif
-
-cvar_t              *fs_game;
 
 #if USE_ZLIB
 // local stream used for all file loads
