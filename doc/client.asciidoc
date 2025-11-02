@@ -741,14 +741,19 @@ r_enablefog::
     Enable re-release fog effect. Only effective when using GLSL backend.
     Default value is 1 (enabled).
 
-gl_bloom::
+r_bloom::
     Enable re-release bloom effect. Only effective when using GLSL backend.
-    Default value is 0 (disabled). Higher values specify number of blurring
-    filter iterations (typical value is 1).
+    Default value is 1 (enabled).
 
-gl_bloom_sigma::
-    Specifies strength parameter of gaussian blur filter used for the bloom
-    effect. Default value is 8.
+r_bloomBlurRadius::
+    Sets the radius of the gaussian blur kernel used by bloom. Values are
+    defined in pixels at 1080p and scale with the framebuffer size. Default
+    value is 12.
+
+r_bloomThreshold::
+    Minimum luminance for a fragment to contribute to bloom. Fragments below
+    this threshold are ignored during the bright-pass filter. Default value is
+    0.8.
 
 gl_flarespeed::
     Specifies flare fading effect speed. Default value is 8. Set this to 0
