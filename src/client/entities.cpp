@@ -1757,7 +1757,7 @@ bool CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org, vec3_t offset)
         return false;
     }
 
-    if (entnum == listener_entnum && !cl.thirdPersonView) {
+    if (entnum == listener_entnum) {
         VectorCopy(listener_origin, org);
         return false;
     }
