@@ -2233,6 +2233,8 @@ struct cgame_import_t
     void (*SCR_DrawPic) (int x, int y, int w, int h, const char *name);
     void (*SCR_DrawColorPic)(int x, int y, int w, int h, const char* name, const rgba_t &color);
 
+    const vrect_t *(*SCR_GetVirtualScreen)(text_align_t align);
+
     // [Paril-KEX] kfont stuff
     void(*SCR_SetAltTypeface)(bool enabled);
     void (*SCR_DrawFontString)(const char *str, int x, int y, int scale, const rgba_t &color, bool shadow, text_align_t align);
