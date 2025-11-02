@@ -269,89 +269,46 @@ static void CG_SCR_SetAltTypeface(bool enabled)
 
 static float CG_SCR_FontLineHeight(int scale)
 {
-    if (!scr.kfont.pic)
-    {
-#if USE_FREETYPE
-        ftfont_t ftFont{};
-        if (R_AcquireFreeTypeFont(scr.font_pic, &ftFont)) {
-            float height = R_FreeTypeFontLineHeight(scale, &ftFont);
-            R_ReleaseFreeTypeFont(&ftFont);
-            return height;
-        }
-#endif
-        return CONCHAR_HEIGHT * scale;
-    }
-
-    return scr.kfont.line_height;
-}
-
-static int CG_MeasureKFontWidth(const char *str, size_t maxlen)
-{
-    int x = 0;
-    for (const char *r = str; *r && maxlen > 0; r++, maxlen--) {
-        const kfont_char_t *ch = SCR_KFontLookup(&scr.kfont, *r);
-
-        if (ch)
-            x += ch->w;
-    }
-    return x;
+    return static_cast<float>(SCR_FontLineHeight(scale, SCR_DefaultFontHandle()));
 }
 
 static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
 {
     // TODO: 'str' may contain UTF-8, handle that.
-    size_t maxlen = strlen(str);
+    size_t remaining = strlen(str);
     int num_lines = 1;
     int max_width = 0;
+    const qhandle_t fontHandle = SCR_DefaultFontHandle();
+    const char *line = str;
 
-#if USE_FREETYPE
-    ftfont_t ftFont{};
-    bool haveFtFont = R_AcquireFreeTypeFont(scr.font_pic, &ftFont);
-#endif
-
-    while (*str) {
-        const char *p = strchr(str, '\n');
-        if (!p) {
-            int line_width;
-            if (scr.kfont.pic) {
-                line_width = CG_MeasureKFontWidth(str, maxlen);
-#if USE_FREETYPE
-            } else if (haveFtFont) {
-                line_width = R_MeasureFreeTypeString(scale, 0, maxlen, str, scr.font_pic, &ftFont);
-#endif
-            } else {
-                line_width = maxlen * CONCHAR_WIDTH * scale;
-            }
-            if (line_width > max_width)
-                max_width = line_width;
+    while (true) {
+        const char *newline = strchr(line, '\n');
+        if (!newline) {
+            int line_width = SCR_MeasureString(scale, 0, remaining, line, fontHandle);
+            max_width = max(max_width, line_width);
             break;
         }
 
-        size_t len = min(p - str, maxlen);
-        int line_width;
-        if (scr.kfont.pic) {
-            line_width = CG_MeasureKFontWidth(str, len);
-#if USE_FREETYPE
-        } else if (haveFtFont) {
-            line_width = R_MeasureFreeTypeString(scale, 0, len, str, scr.font_pic, &ftFont);
-#endif
-        } else {
-            line_width = len * CONCHAR_WIDTH * scale;
-        }
-        if (line_width > max_width)
-            max_width = line_width;
-        maxlen -= len;
+        size_t len = min(static_cast<size_t>(newline - line), remaining);
+        int line_width = SCR_MeasureString(scale, 0, len, line, fontHandle);
+        max_width = max(max_width, line_width);
 
+        if (remaining <= len)
+            break;
+
+        remaining -= (len + 1);
+        line = newline + 1;
         ++num_lines;
-        str = p + 1;
+
+        if (remaining == 0) {
+            int empty_width = SCR_MeasureString(scale, 0, 0, line, fontHandle);
+            max_width = max(max_width, empty_width);
+            break;
+        }
     }
 
-#if USE_FREETYPE
-    if (haveFtFont)
-        R_ReleaseFreeTypeFont(&ftFont);
-#endif
-
-    return cg_vec2_t{ static_cast<float>(max_width), static_cast<float>(num_lines) * CG_SCR_FontLineHeight(scale) };
+    const float line_height = CG_SCR_FontLineHeight(scale);
+    return cg_vec2_t{ static_cast<float>(max_width), line_height * num_lines };
 }
 
 static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, const rgba_t *color, bool shadow, text_align_t align)
@@ -369,11 +326,7 @@ static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, cons
     color_t draw_color = apply_scr_alpha(*color);
 
     // TODO: 'str' may contain UTF-8, handle that.
-    if (!scr.kfont.pic) {
-        SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, SCR_DefaultFontHandle());
-    } else {
-        SCR_DrawKStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, &scr.kfont);
-    }
+    SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, SCR_DefaultFontHandle());
 }
 
 static const vrect_t *CG_SCR_GetVirtualScreen(text_align_t align)
