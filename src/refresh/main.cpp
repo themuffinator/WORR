@@ -64,6 +64,8 @@ cvar_t *gl_damageblend_frac;
 cvar_t *gl_waterwarp;
 cvar_t *gl_fog;
 cvar_t *gl_bloom;
+cvar_t *gl_dof;
+cvar_t *gl_dof_sigma;
 cvar_t *gl_swapinterval;
 
 // development variables
@@ -696,8 +698,39 @@ static void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
     GL_UnlockArrays();
 }
 
-static void GL_DrawBloom(bool waterwarp)
+static void GL_GenerateDepthOfField(void)
 {
+    const int w = glr.fd.width;
+    const int h = glr.fd.height;
+
+    if (w <= 0 || h <= 0)
+        return;
+
+    GL_Setup2D();
+    qglViewport(0, 0, w, h);
+    GL_Ortho(0, w, h, 0, -1, 1);
+
+    gls.u_block.fog_color[0] = 1.0f / w;
+    gls.u_block.fog_color[1] = 0.0f;
+    gls.u_block_dirty = true;
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_0);
+    GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+
+    gls.u_block.fog_color[0] = 0.0f;
+    gls.u_block.fog_color[1] = 1.0f / h;
+    gls.u_block_dirty = true;
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_0);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_1);
+    GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+static void GL_DrawBloom(pp_flags_t flags)
+{
+    const bool waterwarp = (flags & PP_WATERWARP) != 0;
+    bool depth_of_field = (flags & PP_DEPTH_OF_FIELD) != 0;
     int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
     int w = glr.fd.width / 4;
     int h = glr.fd.height / 4;
@@ -725,17 +758,27 @@ static void GL_DrawBloom(bool waterwarp)
         GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
     }
 
+    const bool show_bloom = q_unlikely(gl_showbloom->integer);
+
+    if (depth_of_field && !show_bloom)
+        GL_GenerateDepthOfField();
+
     GL_Setup2D();
 
     glStateBits_t bits = GLS_BLOOM_OUTPUT;
-    if (q_unlikely(gl_showbloom->integer)) {
+    if (show_bloom) {
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
         bits = GLS_DEFAULT;
+        depth_of_field = false;
     } else {
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
         if (waterwarp)
             bits |= GLS_WARP_ENABLE;
+        if (depth_of_field) {
+            GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_1);
+            bits |= GLS_DOF_ENABLE;
+        }
     }
 
     // upscale & add
@@ -743,13 +786,34 @@ static void GL_DrawBloom(bool waterwarp)
     GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
 }
 
+static void GL_DrawDepthOfField(pp_flags_t flags)
+{
+    const bool waterwarp = (flags & PP_WATERWARP) != 0;
+
+    GL_GenerateDepthOfField();
+
+    GL_Setup2D();
+
+    glStateBits_t bits = GLS_DOF_ENABLE;
+    if (waterwarp)
+        bits |= GLS_WARP_ENABLE;
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_1);
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+}
+
 static int32_t gl_waterwarp_modified = 0;
 static int32_t gl_bloom_modified = 0;
+static int32_t gl_dof_modified = 0;
 
 typedef enum {
     PP_NONE      = 0,
     PP_WATERWARP = BIT(0),
     PP_BLOOM     = BIT(1),
+    PP_DEPTH_OF_FIELD = BIT(2),
 } pp_flags_t;
 
 constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
@@ -798,6 +862,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
     bool resized = false;
+    const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 
     if (!gl_static.use_shaders)
         return PP_NONE;
@@ -808,16 +873,22 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_bloom->integer)
         flags |= PP_BLOOM;
 
+    if (dof_active)
+        flags |= PP_DEPTH_OF_FIELD;
+
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
-    if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified || gl_bloom->modified_count != gl_bloom_modified) {
+    if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified ||
+        gl_bloom->modified_count != gl_bloom_modified ||
+        gl_dof->modified_count != gl_dof_modified) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
         gl_waterwarp_modified = gl_waterwarp->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
-        if (gl_bloom->integer)
+        gl_dof_modified = gl_dof->modified_count;
+        if (flags & (PP_BLOOM | PP_DEPTH_OF_FIELD))
             gl_backend->update_blur();
     }
 
@@ -919,8 +990,15 @@ void R_RenderFrame(const refdef_t *fd)
     // go back into 2D mode
     GL_Setup2D();
 
+    if (pp_flags & PP_DEPTH_OF_FIELD) {
+        Vector4Set(gls.u_block.dof_params, glr.fd.dof_blend, glr.fd.dof_focus, glr.fd.dof_strength, 0.0f);
+        gls.u_block_dirty = true;
+    }
+
     if (pp_flags & PP_BLOOM) {
-        GL_DrawBloom(pp_flags & PP_WATERWARP);
+        GL_DrawBloom(pp_flags);
+    } else if (pp_flags & PP_DEPTH_OF_FIELD) {
+        GL_DrawDepthOfField(pp_flags);
     } else if (pp_flags & PP_WATERWARP) {
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         GL_PostProcess(GLS_WARP_ENABLE, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
@@ -1169,6 +1247,8 @@ static void GL_Register(void)
     gl_waterwarp = Cvar_Get("gl_waterwarp", "1", 0);
     gl_fog = Cvar_Get("gl_fog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
+    gl_dof = Cvar_Get("gl_dof", "1", 0);
+    gl_dof_sigma = Cvar_Get("gl_dof_sigma", "12", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 

@@ -64,7 +64,7 @@ constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum
 #define TAB_COS(x)  gl_static.sintab[((x) + 64) & 255]
 
 // auto textures
-#define NUM_AUTO_TEXTURES       13
+#define NUM_AUTO_TEXTURES       15
 #define AUTO_TEX(n)             gl_static.texnums[n]
 
 #define TEXNUM_DEFAULT          AUTO_TEX(0)
@@ -80,12 +80,16 @@ constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum
 #define TEXNUM_PP_BLOOM         AUTO_TEX(10)
 #define TEXNUM_PP_BLUR_0        AUTO_TEX(11)
 #define TEXNUM_PP_BLUR_1        AUTO_TEX(12)
+#define TEXNUM_PP_DOF_0         AUTO_TEX(13)
+#define TEXNUM_PP_DOF_1         AUTO_TEX(14)
 
 // framebuffers
-#define FBO_COUNT   3
+#define FBO_COUNT   5
 #define FBO_SCENE   gl_static.framebuffers[0]
 #define FBO_BLUR_0  gl_static.framebuffers[1]
 #define FBO_BLUR_1  gl_static.framebuffers[2]
+#define FBO_DOF_0   gl_static.framebuffers[3]
+#define FBO_DOF_1   gl_static.framebuffers[4]
 
 typedef struct {
     GLuint query;
@@ -391,6 +395,8 @@ extern cvar_t *gl_damageblend_frac;
 extern cvar_t *gl_waterwarp;
 extern cvar_t *gl_bloom;
 extern cvar_t *gl_bloom_height;
+extern cvar_t *gl_dof;
+extern cvar_t *gl_dof_sigma;
 
 // development variables
 extern cvar_t *gl_znear;
@@ -697,6 +703,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_BLUR_BOX            BIT_ULL(33)
 
 #define GLS_DYNAMIC_LIGHTS      BIT_ULL(34)
+#define GLS_DOF_ENABLE          BIT_ULL(35)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
@@ -709,9 +716,9 @@ void GL_LoadWorld(const char *name);
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
-                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS)
+                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_DOF_ENABLE)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS)
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_DOF_ENABLE)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -809,6 +816,7 @@ typedef struct {
     GLfloat     heightfog_falloff;
     GLfloat     pad;
     GLfloat     pad2;
+    vec4_t      dof_params;
     vec4_t      vieworg;
 } glUniformBlock_t;
 

@@ -160,6 +160,11 @@ typedef struct {
 
     int         num_particles;
     particle_t  *particles;
+
+    bool        depth_of_field;
+    float       dof_blend;
+    float       dof_focus;
+    float       dof_strength;
 } refdef_t;
 
 enum {

@@ -1197,9 +1197,12 @@ static bool GL_CheckFramebufferStatus(bool check, const char *name)
 
 bool GL_InitFramebuffers(void)
 {
-    int scene_w = 0, scene_h = 0, bloom_w = 0, bloom_h = 0;
+    int scene_w = 0, scene_h = 0;
+    int bloom_w = 0, bloom_h = 0;
+    int dof_w = 0, dof_h = 0;
+    const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 
-    if (gl_waterwarp->integer || gl_bloom->integer) {
+    if (gl_waterwarp->integer || gl_bloom->integer || dof_active) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }
@@ -1207,6 +1210,11 @@ bool GL_InitFramebuffers(void)
     if (gl_bloom->integer) {
         bloom_w = glr.fd.width;
         bloom_h = glr.fd.height;
+    }
+
+    if (dof_active) {
+        dof_w = glr.fd.width;
+        dof_h = glr.fd.height;
     }
 
     GL_ClearErrors();
@@ -1222,6 +1230,12 @@ bool GL_InitFramebuffers(void)
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_1);
     GL_InitPostProcTexture(bloom_w / 4, bloom_h / 4);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_0);
+    GL_InitPostProcTexture(dof_w, dof_h);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_1);
+    GL_InitPostProcTexture(dof_w, dof_h);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_SCENE : GL_NONE, 0);
@@ -1244,6 +1258,16 @@ bool GL_InitFramebuffers(void)
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLUR_1 : GL_NONE, 0);
 
     CHECK_FB(bloom_w, "FBO_BLUR_1");
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_0 : GL_NONE, 0);
+
+    CHECK_FB(dof_w, "FBO_DOF_0");
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_1);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_1 : GL_NONE, 0);
+
+    CHECK_FB(dof_w, "FBO_DOF_1");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 

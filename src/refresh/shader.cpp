@@ -117,6 +117,7 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         float u_heightfog_falloff;
         float pad_5;
         float pad_4;
+        vec4 u_dof_params;
         vec4 u_vieworg;
     )
     GLSF("};\n");
@@ -582,6 +583,8 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(uniform sampler2D u_texture;)
         if (bits & GLS_BLOOM_OUTPUT)
             GLSL(uniform sampler2D u_bloom;)
+        if (bits & GLS_DOF_ENABLE)
+            GLSL(uniform sampler2D u_dof;)
     }
 
     if (bits & GLS_SKY_MASK)
@@ -737,6 +740,15 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & GLS_FOG_SKY)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
+
+    if (bits & GLS_DOF_ENABLE) {
+        GLSL(vec4 dof_sample = texture(u_dof, tc);)
+        GLSL(float dof_base = clamp(u_dof_params.x, 0.0, 1.0);)
+        GLSL(float dof_exp = max(u_dof_params.y, 0.0001);)
+        GLSL(float dof_strength = max(u_dof_params.z, 0.0);)
+        GLSL(float dof_amount = clamp(pow(dof_base, dof_exp) * dof_strength, 0.0, 1.0);)
+        GLSL(diffuse = mix(diffuse, dof_sample, dof_amount);)
+    }
 
     if (bits & GLS_BLOOM_OUTPUT)
         GLSL(diffuse.rgb += texture(u_bloom, tc).rgb;)
@@ -923,6 +935,8 @@ static GLuint create_and_use_program(glStateBits_t bits)
         bind_texture_unit(program, "u_texture", TMU_TEXTURE);
         if (bits & GLS_BLOOM_OUTPUT)
             bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
+        if (bits & GLS_DOF_ENABLE)
+            bind_texture_unit(program, "u_dof", TMU_GLOWMAP);
     }
 
     if (bits & GLS_LIGHTMAP_ENABLE)
@@ -1176,7 +1190,23 @@ static void shader_clear_state(void)
 
 static void shader_update_blur(void)
 {
-    float sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
+    float sigma = 0.0f;
+
+    if (gl_bloom->integer) {
+        float bloom_sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
+        if (sigma < bloom_sigma)
+            sigma = bloom_sigma;
+    }
+
+    if (gl_dof->integer && glr.fd.depth_of_field) {
+        float dof_sigma = Cvar_ClampValue(gl_dof_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
+        if (sigma < dof_sigma)
+            sigma = dof_sigma;
+    }
+
+    if (sigma <= 0.0f)
+        sigma = 1.0f;
+
     if (gl_static.bloom_sigma == sigma)
         return;
 
@@ -1200,7 +1230,13 @@ static void shader_update_blur(void)
 
 static void gl_bloom_sigma_changed(cvar_t *self)
 {
-    if (gl_bloom->integer)
+    if (gl_bloom->integer && glr.fd.height > 0)
+        shader_update_blur();
+}
+
+static void gl_dof_sigma_changed(cvar_t *self)
+{
+    if (gl_dof->integer && glr.fd.height > 0)
         shader_update_blur();
 }
 
@@ -1208,6 +1244,8 @@ static void shader_init(void)
 {
     gl_bloom_sigma = Cvar_Get("gl_bloom_sigma", "8", 0);
     gl_bloom_sigma->changed = gl_bloom_sigma_changed;
+    if (gl_dof_sigma)
+        gl_dof_sigma->changed = gl_dof_sigma_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 

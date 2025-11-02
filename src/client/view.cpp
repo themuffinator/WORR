@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.hpp"
 
+#include <algorithm>
+
 //=============
 //
 // development tools for weapons
@@ -32,6 +34,9 @@ static cvar_t   *cl_add_particles;
 static cvar_t   *cl_add_lights;
 static cvar_t   *cl_add_entities;
 static cvar_t   *cl_add_blend;
+static cvar_t   *cl_dof;
+static cvar_t   *cl_dof_strength;
+static cvar_t   *cl_dof_focus;
 
 #if USE_DEBUG
 static cvar_t   *cl_testparticles;
@@ -650,6 +655,23 @@ void V_RenderView(void)
         }
     }
 
+    if (cl_dof->integer) {
+        const float slow_scale = std::max(0.0f, 1.0f - CL_Wheel_TimeScale());
+        const float base_blend = Q_clipf(slow_scale, 0.0f, 1.0f);
+        const float strength = std::max(cl_dof_strength->value, 0.0f);
+        const float focus = std::max(cl_dof_focus->value, 0.001f);
+
+        cl.refdef.depth_of_field = base_blend > 0.0f && strength > 0.0f;
+        cl.refdef.dof_blend = base_blend;
+        cl.refdef.dof_focus = focus;
+        cl.refdef.dof_strength = strength;
+    } else {
+        cl.refdef.depth_of_field = false;
+        cl.refdef.dof_blend = 0.0f;
+        cl.refdef.dof_focus = 1.0f;
+        cl.refdef.dof_strength = 0.0f;
+    }
+
     R_RenderFrame(&cl.refdef);
 #if USE_DEBUG
     if (cl_stats->integer)
@@ -719,6 +741,9 @@ void V_Init(void)
     cl_add_particles = Cvar_Get("cl_particles", "1", 0);
     cl_add_entities = Cvar_Get("cl_entities", "1", 0);
     cl_add_blend = Cvar_Get("cl_blend", "1", 0);
+    cl_dof = Cvar_Get("cl_dof", "1", 0);
+    cl_dof_strength = Cvar_Get("cl_dof_strength", "1.0", 0);
+    cl_dof_focus = Cvar_Get("cl_dof_focus", "1.0", 0);
     cl_add_blend->changed = cl_add_blend_changed;
 
     cl_adjustfov = Cvar_Get("cl_adjustfov", "1", 0);
