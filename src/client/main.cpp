@@ -3269,8 +3269,10 @@ void CL_AddHitMarker(void)
         cl.hit_marker_time = cls.realtime;
         cl.hit_marker_count++;
 
-        if (cl_hit_markers->integer > 1)
-            S_GetSoundSystem().StartSound(NULL, listener_entnum, 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
+        if (cl_hit_markers->integer > 1) {
+            SoundSystem &soundSystem = S_GetSoundSystem();
+            soundSystem.StartSound(NULL, soundSystem.listener_entnum(), 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
+        }
     }
 }
 

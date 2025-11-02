@@ -195,6 +195,8 @@ static bool AL_EstimateDimensions(void)
         return false;
 
     s_reverb_probe_time = cl.time + 13;
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    const vec3_t &listener_origin = soundSystem.listener_origin();
     vec3_t end;
     VectorMA(listener_origin, 8192.0f, s_reverb_probes[s_reverb_probe_index], end);
 
@@ -256,6 +258,9 @@ static void AL_UpdateReverb(void)
         return;
 
     AL_EstimateDimensions();
+
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    const vec3_t &listener_origin = soundSystem.listener_origin();
 
     trace_t tr;
     const vec3_t mins = { -16, -16, 0 };
@@ -1310,6 +1315,9 @@ static void AL_Update(void)
     SoundSystem &soundSystem = S_GetSoundSystem();
     channel_t *channels = soundSystem.channels_data();
     int num_channels = soundSystem.num_channels();
+    const vec3_t &listener_origin = soundSystem.listener_origin();
+    const vec3_t &listener_forward = soundSystem.listener_forward();
+    const vec3_t &listener_up = soundSystem.listener_up();
 
     if (!s_active)
         return;
