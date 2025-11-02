@@ -605,6 +605,7 @@ static void s_volume_changed(cvar_t *self)
 static bool AL_Init(void)
 {
     int i;
+    int max_channels = 0;
 
     SoundSystem &soundSystem = S_GetSoundSystem();
 
@@ -622,7 +623,7 @@ static bool AL_Init(void)
     qalGetError();
     qalGenSources(1, &s_stream);
 
-    int max_channels = soundSystem.max_channels();
+    max_channels = soundSystem.max_channels();
     s_srcnums = Z_TagMalloc(sizeof(*s_srcnums) * max_channels, TAG_SOUND);
 
     for (i = 0; i < max_channels; i++) {

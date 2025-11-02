@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/keys.hpp"
 #include "client/sound/sound.hpp"
 #include "client/client.hpp"
+#include "../client.hpp"
 #include "client/ui.hpp"
 #include "refresh/refresh.hpp"
 
