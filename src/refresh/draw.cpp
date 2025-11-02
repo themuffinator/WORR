@@ -314,6 +314,53 @@ static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
     return static_cast<int>(std::lround(pen_x));
 }
 
+static void Ft_DrawGlyph(FtFont &font, int x, int y, int w, int h, int flags,
+                         unsigned char ch, color_t color)
+{
+    if (ch < 32)
+        return;
+
+    const float target_height = h > 0 ? static_cast<float>(h) : static_cast<float>(CONCHAR_HEIGHT);
+    const float scale_factor = target_height / static_cast<float>(font.pixel_height);
+    const float ascent = (font.ascent ? font.ascent : font.pixel_height) * scale_factor;
+
+    FtGlyph *glyph = Ft_LookupGlyph(font, ch);
+    if (!glyph || glyph->atlas_index < 0 || glyph->width <= 0 || glyph->height <= 0)
+        return;
+
+    const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
+    int shadow_offset = 0;
+    if (drop_shadow) {
+        const float base_scale = target_height / static_cast<float>(CONCHAR_HEIGHT);
+        shadow_offset = std::max(1, static_cast<int>(std::round(base_scale)));
+    }
+
+    const float xpos = static_cast<float>(x) + glyph->bearing_x * scale_factor;
+    const float ypos = static_cast<float>(y) + ascent - glyph->bearing_y * scale_factor;
+    const float gw = glyph->width * scale_factor;
+    const float gh = glyph->height * scale_factor;
+
+    const FtAtlas &atlas = font.atlases[glyph->atlas_index];
+
+    if (drop_shadow) {
+        color_t shadow_color = ColorA(color.a);
+
+        GL_StretchPic_(xpos + shadow_offset, ypos + shadow_offset, gw, gh,
+                       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+                       shadow_color, atlas.texnum, IF_TRANSPARENT);
+
+        if (gl_fontshadow->integer > 1) {
+            GL_StretchPic_(xpos + shadow_offset * 2, ypos + shadow_offset * 2, gw, gh,
+                           glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+                           shadow_color, atlas.texnum, IF_TRANSPARENT);
+        }
+    }
+
+    GL_StretchPic_(xpos, ypos, gw, gh,
+                   glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+                   color, atlas.texnum, IF_TRANSPARENT);
+}
+
 } // namespace
 
 bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
@@ -809,6 +856,22 @@ static inline void draw_char(int x, int y, int w, int h, int flags, int c, color
 
     if ((c & 127) == 32)
         return;
+
+#if USE_FREETYPE
+    if (FtFont *ft_font = Ft_FontForImage(image)) {
+        if (flags & UI_ALTCOLOR)
+            c |= 0x80;
+
+        if (flags & UI_XORCOLOR)
+            c ^= 0x80;
+
+        if (c >> 7)
+            color = ColorSetAlpha(COLOR_WHITE, color.a);
+
+        Ft_DrawGlyph(*ft_font, x, y, w, h, flags, static_cast<unsigned char>(c & 127), color);
+        return;
+    }
+#endif
 
     if (flags & UI_ALTCOLOR)
         c |= 0x80;
