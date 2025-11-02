@@ -243,7 +243,7 @@ void OGG_Play(void)
     const char *s, *path;
     bool force = cls.state < ca_connected;
 
-    if (!s_started || cls.state == ca_cinematic || ogg_manual_play)
+    if (s_started == SoundBackend::Not || cls.state == ca_cinematic || ogg_manual_play)
         return;
 
     if (cls.state >= ca_connected)
@@ -563,7 +563,7 @@ drain:
 
 void OGG_Update(void)
 {
-    if (!s_started || !s_active)
+    if (s_started == SoundBackend::Not || !s_active)
         return;
 
     if (!ogg.dec_ctx && !ogg_swr_draining) {
@@ -673,7 +673,7 @@ static void OGG_Play_f(void)
         return;
     }
 
-    if (!s_started) {
+    if (s_started == SoundBackend::Not) {
         Com_Printf("Sound system not started.\n");
         return;
     }
@@ -726,7 +726,7 @@ static void OGG_Cmd_c(genctx_t *ctx, int argnum)
 
 static void OGG_Next_f(void)
 {
-    if (!s_started) {
+    if (s_started == SoundBackend::Not) {
         Com_Printf("Sound system not started.\n");
         return;
     }

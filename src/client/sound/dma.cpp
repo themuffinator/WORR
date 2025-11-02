@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // snd_dma.c -- main control for any streaming sound output device
 
+#include "SoundSystem.hpp"
 #include "sound.hpp"
 #include "common/intreadwrite.hpp"
 
@@ -429,14 +430,16 @@ static void PaintChannels(int endtime)
     int i;
     bool underwater = S_IsUnderWater();
 
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
     while (s_paintedtime < endtime) {
         // if paintbuffer is smaller than DMA buffer
         int end = min(endtime, s_paintedtime + PAINTBUFFER_SIZE);
 
         // start any playsounds
         while (1) {
-            playsound_t *ps = PS_FIRST(&s_pendingplays);
-            if (PS_TERM(ps, &s_pendingplays))
+            playsound_t *ps = soundSystem.PeekPendingPlay();
+            if (!ps)
                 break;    // no more pending sounds
             if (ps->begin > s_paintedtime) {
                 end = min(end, ps->begin);  // stop here
@@ -449,7 +452,9 @@ static void PaintChannels(int endtime)
         memset(paintbuffer, 0, (end - s_paintedtime) * sizeof(paintbuffer[0]));
 
         // paint in the channels.
-        for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+        channel_t *channels = soundSystem.channels_data();
+        int num_channels = soundSystem.num_channels();
+        for (i = 0, ch = channels; ch && i < num_channels; i++, ch++) {
             int ltime = s_paintedtime;
 
             while (ltime < end) {
@@ -592,7 +597,8 @@ static bool DMA_Init(void)
     s_volume->changed = s_volume_changed;
     s_volume_changed(s_volume);
 
-    s_numchannels = s_maxchannels;
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    soundSystem.num_channels() = soundSystem.max_channels();
     s_supports_float = true;
 
     Com_Printf("sound sampling rate: %i\n", dma.speed);
@@ -604,7 +610,7 @@ static void DMA_Shutdown(void)
 {
     snddma->shutdown();
     snddma = NULL;
-    s_numchannels = 0;
+    S_GetSoundSystem().num_channels() = 0;
 
     s_underwater_gain_hf->changed = NULL;
     s_volume->changed = NULL;
@@ -812,8 +818,12 @@ static void DMA_Update(void)
     int         samples, soundtime, endtime;
     float       sec;
 
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+    int num_channels = soundSystem.num_channels();
+
     // update spatialization for dynamic sounds
-    for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
         if (!ch->sfx)
             continue;
 
@@ -836,7 +846,7 @@ static void DMA_Update(void)
 #if USE_DEBUG
     if (s_show->integer) {
         int total = 0;
-        for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+        for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
             if (ch->sfx && (ch->leftvol || ch->rightvol)) {
                 Com_Printf("%.3f %.3f %s\n", ch->leftvol, ch->rightvol, ch->sfx->name);
                 total++;
