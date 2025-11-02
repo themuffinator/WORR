@@ -66,7 +66,41 @@ cvar_t *r_skipUnderWaterFX;
 cvar_t *r_enablefog;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
-cvar_t *r_bloomThreshold;
+cvar_t *r_bloomBlurScale;
+cvar_t *r_bloomBlurFalloff;
+cvar_t *r_bloomBrightThreshold;
+cvar_t *r_bloomIntensity;
+cvar_t *r_bloomPasses;
+cvar_t *r_bloomSaturation;
+cvar_t *r_bloomSceneSaturation;
+cvar_t *r_colorCorrection;
+
+static cvar_t *r_bloomThresholdLegacy;
+static bool bloom_threshold_sync = false;
+
+static void r_bloom_threshold_primary_changed(cvar_t *self)
+{
+    (void)self;
+
+    if (!r_bloomBrightThreshold || bloom_threshold_sync)
+        return;
+
+    if (r_bloomThresholdLegacy) {
+        bloom_threshold_sync = true;
+        Cvar_SetValue(r_bloomThresholdLegacy, r_bloomBrightThreshold->value, FROM_CODE);
+        bloom_threshold_sync = false;
+    }
+}
+
+static void r_bloom_threshold_alias_changed(cvar_t *self)
+{
+    if (!self || !r_bloomBrightThreshold || bloom_threshold_sync)
+        return;
+
+    bloom_threshold_sync = true;
+    Cvar_SetValue(r_bloomBrightThreshold, self->value, FROM_CODE);
+    bloom_threshold_sync = false;
+}
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
 
@@ -868,6 +902,10 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     glStateBits_t bits = GLS_DEFAULT;
     if (waterwarp)
         bits |= GLS_WARP_ENABLE;
+    if (R_ColorCorrectionActive()) {
+        bits |= GLS_COLOR_CORRECTION;
+        R_SetPostProcessUniforms(0.0f, 0.0f);
+    }
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
 
@@ -878,12 +916,14 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
+static int32_t r_colorCorrection_modified = 0;
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
     bool resized = false;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+    const bool colorCorrection = R_ColorCorrectionActive();
 
     if (!gl_static.use_shaders)
         return PP_NONE;
@@ -891,7 +931,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
         flags |= PP_WATERWARP;
 
-    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && r_bloom->integer)
+    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && (r_bloom->integer || colorCorrection))
         flags |= PP_BLOOM;
 
     if (dof_active)
@@ -902,13 +942,16 @@ static pp_flags_t GL_BindFramebuffer(void)
 
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
-        gl_dof->modified_count != gl_dof_modified) {
+        gl_dof->modified_count != gl_dof_modified ||
+        (r_colorCorrection && r_colorCorrection->modified_count != r_colorCorrection_modified)) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         r_bloom_modified = r_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
+        if (r_colorCorrection)
+            r_colorCorrection_modified = r_colorCorrection->modified_count;
         if (flags & PP_BLOOM)
             gl_backend->update_blur();
     }
@@ -1270,7 +1313,24 @@ static void GL_Register(void)
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
-    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.8", 0);
+    r_bloomBlurScale = Cvar_Get("r_bloomBlurScale", "1.0", 0);
+    r_bloomBlurFalloff = Cvar_Get("r_bloomBlurFalloff", "0.75", 0);
+    r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.8", 0);
+    r_bloomIntensity = Cvar_Get("r_bloomIntensity", "1.0", 0);
+    r_bloomPasses = Cvar_Get("r_bloomPasses", "2", 0);
+    r_bloomSaturation = Cvar_Get("r_bloomSaturation", "1.0", 0);
+    r_bloomSceneSaturation = Cvar_Get("r_bloomSceneSaturation", "1.0", 0);
+    r_colorCorrection = Cvar_Get("r_colorCorrection", "0", 0);
+    r_bloomThresholdLegacy = Cvar_Get("r_bloomThreshold", "0.8", 0);
+
+    if (r_bloomBrightThreshold)
+        r_bloomBrightThreshold->changed = r_bloom_threshold_primary_changed;
+    if (r_bloomThresholdLegacy)
+        r_bloomThresholdLegacy->changed = r_bloom_threshold_alias_changed;
+    r_bloom_threshold_primary_changed(r_bloomBrightThreshold);
+
+    if (r_colorCorrection)
+        r_colorCorrection_modified = r_colorCorrection->modified_count;
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
