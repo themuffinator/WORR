@@ -78,7 +78,7 @@ static cvar_t   *scr_pois;
 static cvar_t   *scr_poi_edge_frac;
 static cvar_t   *scr_poi_max_scale;
 
-static cvar_t   *scr_safe_zone;
+static cvar_t   *scr_safezone;
 
 static cvar_t   *cl_drawfps;
 static float    fps_counter = 0;
@@ -1840,7 +1840,7 @@ void SCR_Init(void)
     scr_pois = Cvar_Get("scr_pois", "1", 0);
     scr_poi_edge_frac = Cvar_Get("scr_poi_edge_frac", "0.15", 0);
     scr_poi_max_scale = Cvar_Get("scr_poi_max_scale", "1.0", 0);
-    scr_safe_zone = Cvar_Get("scr_safe_zone", "0.02", 0);
+    scr_safezone = Cvar_Get("scr_safezone", "0.02", 0);
 
     cl_drawfps = Cvar_Get("cl_drawfps", "0", CVAR_ARCHIVE);
 
@@ -2444,8 +2444,8 @@ static void SCR_Draw2D(void)
 
     // The safe zone is relative to the new 4:3 canvas
     vrect_t hud_safe = {
-        static_cast<int>(scr.virtual_width * scr_safe_zone->value),
-        static_cast<int>(scr.virtual_height * scr_safe_zone->value)
+        static_cast<int>(scr.virtual_width * scr_safezone->value),
+        static_cast<int>(scr.virtual_height * scr_safezone->value)
     };
 
     // The crosshair is centered on the full screen, not the 4:3 canvas
