@@ -698,7 +698,8 @@ static void write_height_fog(sizebuf_t *buf, glStateBits_t bits)
         float density = (exp(-u_heightfog_falloff * eye) -
                          exp(-u_heightfog_falloff * pos)) / (u_heightfog_falloff * dir_z);
         float extinction = 1.0 - clamp(exp(-density), 0.0, 1.0);
-        float fraction = clamp((pos - u_heightfog_start.w) / (u_heightfog_end.w - u_heightfog_start.w), 0.0, 1.0);
+        float height_range = clamp(u_heightfog_end.w - u_heightfog_start.w, 0.00001, 1e30);
+        float fraction = clamp((v_world_pos.z - u_heightfog_start.w) / height_range, 0.0, 1.0);
         vec3 fog_color = mix(u_heightfog_start.rgb, u_heightfog_end.rgb, fraction) * extinction;
         float fog = (1.0 - exp(-(u_heightfog_density * frag_depth))) * extinction;
         diffuse.rgb = mix(diffuse.rgb, fog_color.rgb, fog);
