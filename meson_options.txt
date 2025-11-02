@@ -30,7 +30,7 @@ option('client-ui',
 
 option('freetype',
   type: 'feature',
-  value: 'auto',
+  value: 'enabled',
   description: 'FreeType2 font rendering support')
 
 option('default-game',

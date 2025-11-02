@@ -476,8 +476,18 @@ if sdl2.found()
   config.set('USE_SDL', 'USE_CLIENT')
 endif
 
+freetype = dependency('freetype2',
+  required:        get_option('freetype'),
+  default_options: fallback_opt,
+)
+
+config.set10('USE_FREETYPE', freetype.found())
+
 common_deps = [zlib]
 client_deps = [png, curl, sdl2]
+if freetype.found()
+  client_deps += freetype
+endif
 server_deps = []
 game_deps = [zlib]
 
@@ -876,6 +886,7 @@ summary({
   'debug'              : config.get('USE_DEBUG', 0) != 0,
   'game-abi-hack'      : config.get('USE_GAME_ABI_HACK', 0) != 0,
   'game-new-api'       : config.get('USE_NEW_GAME_API', 0) != 0,
+  'freetype'           : config.get('USE_FREETYPE', 0) != 0,
   'icmp-errors'        : config.get('USE_ICMP', 0) != 0,
   'libcurl'            : config.get('USE_CURL', 0) != 0,
   'libjpeg'            : config.get('USE_JPG', 0) != 0,
