@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <array>
 #include <type_traits>
 
 #include "shared/shared.hpp"
@@ -35,6 +36,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "system/hunk.hpp"
 #include "images.hpp"
 #include "qgl.hpp"
+
+#ifndef GL_HALF_FLOAT
+#define GL_HALF_FLOAT 0x140B
+#endif
 
 /*
  * gl_main.c
@@ -109,6 +114,32 @@ typedef struct {
     bool            use_bmodel_skies;
     bool            use_gpu_lerp;
     struct {
+        bool    supported;
+        bool    active;
+        bool    auto_exposure;
+        bool    debug_histogram;
+        bool    debug_tonemap;
+        int     mode;
+        int     tonemap;
+        int     max_mip_level;
+        float   exposure;
+        float   target_exposure;
+        float   average_luminance;
+        float   paper_white;
+        float   peak_white;
+        float   bloom_intensity;
+        float   exposure_key;
+        float   exposure_speed_up;
+        float   exposure_speed_down;
+        float   exposure_ev_min;
+        float   exposure_ev_max;
+        float   dither_strength;
+        float   ui_sdr_mix;
+        float   graph_max_input;
+        float   histogram_scale;
+        std::array<float, 64> histogram;
+    } hdr;
+    struct {
         bsp_t       *cache;
         vec_t       *vertices;
         GLuint      buffer;
@@ -130,6 +161,9 @@ typedef struct {
     GLenum          samples_passed;
     GLbitfield      stencil_buffer_bit;
     GLsync          sync;
+    GLenum          postprocess_internal_format;
+    GLenum          postprocess_format;
+    GLenum          postprocess_type;
     float           entity_modulate;
     float           bloom_sigma;
     uint32_t        inverse_intensity_33;
@@ -713,6 +747,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_BOKEH_DOWNSAMPLE    BIT_ULL(38)
 #define GLS_BOKEH_GATHER        BIT_ULL(39)
 #define GLS_BOKEH_COMBINE       BIT_ULL(40)
+#define GLS_TONEMAP_ENABLE      BIT_ULL(41)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -726,9 +761,11 @@ void GL_LoadWorld(const char *name);
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
-                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
+                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
+                                 GLS_TONEMAP_ENABLE)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
+                                 GLS_TONEMAP_ENABLE)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -830,6 +867,12 @@ typedef struct {
     vec4_t      dof_screen;
     vec4_t      dof_depth;
     vec4_t      vieworg;
+    vec4_t      hdr_exposure;
+    vec4_t      hdr_params0;
+    vec4_t      hdr_params1;
+    vec4_t      hdr_params2;
+    vec4_t      hdr_params3;
+    vec4_t      hdr_histogram[16];
 } glUniformBlock_t;
 
 typedef struct {

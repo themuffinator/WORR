@@ -1169,7 +1169,11 @@ static void GL_InitCubemaps(void)
 
 static void GL_InitPostProcTexture(int w, int h)
 {
-    qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    GLenum internal = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
+    GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
+    GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
+
+    qglTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, format, type, NULL);
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
