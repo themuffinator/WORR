@@ -821,6 +821,8 @@ static int AL_GetBeginofs(float timeofs)
 
 static void AL_Spatialize(channel_t *ch)
 {
+    ch->has_spatial_offset = false;
+
     // merged autosounds are handled differently
     if (ch->autosound && al_merge_looping->integer >= s_merge_looping_minval)
         return;
@@ -846,9 +848,20 @@ static void AL_Spatialize(channel_t *ch)
 
     // update position if needed
     if (!ch->fixed_origin && !channel_fullvolume) {
-        vec3_t origin;
-        CL_GetEntitySoundOrigin(ch->entnum, origin);
+        vec3_t origin, offset;
+        ch->has_spatial_offset = false;
+        if (CL_GetEntitySoundOrigin(ch->entnum, origin, offset)) {
+            ch->has_spatial_offset = true;
+            VectorCopy(offset, ch->spatial_offset);
+            if (s_debug_soundorigins->integer) {
+                vec3_t base;
+                VectorSubtract(origin, offset, base);
+                CL_DebugTrail(base, origin);
+            }
+        }
         qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
+    } else {
+        ch->has_spatial_offset = false;
     }
 
     if (al_timescale->integer) {
@@ -990,7 +1003,13 @@ static void AL_MergeLoopSounds(void)
         att = S_GetEntityLoopDistMult(ent);
 
         // find the total contribution of all sounds of this type
-        CL_GetEntitySoundOrigin(ent->number, origin);
+        vec3_t offset;
+        bool anchored = CL_GetEntitySoundOrigin(ent->number, origin, offset);
+        if (anchored && s_debug_soundorigins->integer) {
+            vec3_t base;
+            VectorSubtract(origin, offset, base);
+            CL_DebugTrail(base, origin);
+        }
         S_SpatializeOrigin(origin, vol, att,
                            &left_total, &right_total,
                            S_GetEntityLoopStereoPan(ent));
@@ -1002,7 +1021,12 @@ static void AL_MergeLoopSounds(void)
             num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
             ent = &cl.entityStates[num];
 
-            CL_GetEntitySoundOrigin(ent->number, origin);
+            anchored = CL_GetEntitySoundOrigin(ent->number, origin, offset);
+            if (anchored && s_debug_soundorigins->integer) {
+                vec3_t base;
+                VectorSubtract(origin, offset, base);
+                CL_DebugTrail(base, origin);
+            }
             S_SpatializeOrigin(origin,
                                S_GetEntityLoopVolume(ent),
                                S_GetEntityLoopDistMult(ent),

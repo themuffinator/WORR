@@ -64,6 +64,7 @@ cvar_t      *s_show;
 cvar_t      *s_underwater;
 cvar_t      *s_underwater_gain_hf;
 cvar_t      *s_num_channels;
+cvar_t      *s_debug_soundorigins;
 
 static cvar_t   *s_enable;
 static cvar_t   *s_auto_focus;
@@ -155,6 +156,7 @@ void S_Init(void)
     s_underwater = Cvar_Get("s_underwater", "1", 0);
     s_underwater_gain_hf = Cvar_Get("s_underwater_gain_hf", "0.25", 0);
     s_num_channels = Cvar_Get("s_num_channels", "64", CVAR_SOUND);
+    s_debug_soundorigins = Cvar_Get("s_debugSoundOrigins", "0", CVAR_DEVELOPER);
 
     s_maxchannels = Cvar_ClampInteger(s_num_channels, 16, 256);
     s_channels = Z_TagMalloc(sizeof(*s_channels) * s_maxchannels, TAG_SOUND);
@@ -575,6 +577,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
     if (s_api->stop_channel)
         s_api->stop_channel(ch);
     memset(ch, 0, sizeof(*ch));
+    ch->has_spatial_offset = false;
 
     return ch;
 }

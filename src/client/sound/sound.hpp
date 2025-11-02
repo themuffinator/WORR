@@ -82,6 +82,8 @@ typedef struct {
     float       master_vol;     // 0.0-1.0 master volume
     bool        fixed_origin;   // use origin instead of fetching entnum's origin
     bool        autosound;      // from an entity->sound, cleared each frame
+    bool        has_spatial_offset;
+    vec3_t      spatial_offset;
 #if USE_OPENAL
     byte        fullvolume;
     unsigned    autoframe;
@@ -171,9 +173,10 @@ extern cvar_t       *s_show;
 extern cvar_t       *s_underwater;
 extern cvar_t       *s_underwater_gain_hf;
 extern cvar_t       *s_num_channels;
+extern cvar_t       *s_debug_soundorigins;
 
 #define S_IsFullVolume(ch) \
-    ((ch)->entnum == -1 || (ch)->entnum == listener_entnum || (ch)->dist_mult == 0)
+    ((ch)->entnum == -1 || ((ch)->entnum == listener_entnum && !cl.thirdPersonView) || (ch)->dist_mult == 0)
 
 #define S_IsUnderWater() \
     (cls.state == ca_active && (cl.frame.ps.rdflags | cl.predicted_rdflags) & RDF_UNDERWATER && s_underwater->integer)
