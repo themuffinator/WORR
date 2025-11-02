@@ -278,7 +278,7 @@
           ]
         },
         { "type": "toggle", "label": "screen blending", "cvar": "gl_polyblend" },
-        { "type": "toggle", "label": "screen warping", "cvar": "gl_waterwarp" },
+        { "type": "toggle", "label": "screen warping", "cvar": "r_skipUnderWaterFX", "negate": true },
         { "type": "toggle", "label": "grenade explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 0 },
         { "type": "toggle", "label": "rocket explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 1 },
         { "type": "blank" },

@@ -733,9 +733,9 @@ gl_cubemaps::
     skies in re-release maps. Only effective if ‘gl_shaders’ is enabled.
     Default value is 0 (disabled).
 
-gl_waterwarp::
-    Enable screen warping effect when underwater. Only effective when using
-    GLSL backend. Default value is 0 (disabled).
+r_skipUnderWaterFX::
+    Skips rendering the underwater screen warping effect. Default value is 0
+    (render effect).
 
 gl_fog::
     Enable re-release fog effect. Only effective when using GLSL backend.
