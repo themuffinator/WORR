@@ -692,7 +692,7 @@ CL_ClearState
 */
 void CL_ClearState(void)
 {
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
     SCR_StopCinematic();
     CL_ClearEffects();
     CL_ClearTEnts();
@@ -1404,7 +1404,7 @@ static void CL_ConnectionlessPacket(void)
             q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &nop_message);
             MSG_FlushTo(&cls.netchan.message);
             Netchan_Transmit(&cls.netchan, 0, NULL, 3);
-            S_StopAllSounds();
+            S_GetSoundSystem().StopAllSounds();
             cls.connect_count = -1;
             Com_Printf("Loading anticheat, this may take a few moments...\n");
             SCR_UpdateScreen();
@@ -1750,7 +1750,7 @@ static void CL_Precache_f(void)
     cls.state = ca_loading;
     CL_LoadState(LOAD_MAP);
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 
     CL_RegisterVWepModels();
 
@@ -2400,7 +2400,7 @@ void CL_RestartFilesystem(bool total)
 
     UI_Shutdown();
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
     S_FreeAllSounds();
 
     // write current config before changing game directory
@@ -2463,7 +2463,7 @@ void CL_RestartRefresh(bool total)
 
     Con_Popup(false);
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 
     if (total) {
         IN_Shutdown();
@@ -3270,7 +3270,7 @@ void CL_AddHitMarker(void)
         cl.hit_marker_count++;
 
         if (cl_hit_markers->integer > 1)
-            S_StartSound(NULL, listener_entnum, 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
+            S_GetSoundSystem().StartSound(NULL, listener_entnum, 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
     }
 }
 
@@ -3434,11 +3434,11 @@ unsigned CL_Frame(unsigned msec)
         R_FRAMES++;
 
         // update audio after the 3D view was drawn
-        S_Update();
+        S_GetSoundSystem().Update();
     } else if (sync_mode == SYNC_SLEEP_10) {
         // force audio and effects update if not rendering
         CL_CalcViewValues();
-        S_Update();
+        S_GetSoundSystem().Update();
     }
 
     // check connection timeout

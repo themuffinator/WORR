@@ -572,7 +572,7 @@ void CL_LoadState(load_state_t state)
     SCR_UpdateScreen();
     if (vid)
         vid->pump_events();
-    S_Update();
+    S_GetSoundSystem().Update();
 }
 
 /*

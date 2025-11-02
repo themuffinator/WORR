@@ -739,7 +739,7 @@ static void PingServers(void)
 {
     netadr_t broadcast;
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 
     ClearServers();
     UpdateStatus();

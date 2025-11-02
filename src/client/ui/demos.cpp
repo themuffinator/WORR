@@ -289,7 +289,7 @@ static void BuildList(void)
     int i;
 
     // this can be a lengthy process
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 
     m_demos.menu.status = m_demos.status_building;
     SCR_UpdateScreen();
