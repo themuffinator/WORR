@@ -19,6 +19,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.hpp"
 
+#include <cstring>
+#include <string>
+#include <utility>
+
 static cvar_t   *scr_viewsize;
 static cvar_t   *scr_showpause;
 #if USE_DEBUG
@@ -78,6 +82,14 @@ static cvar_t   *scr_safe_zone;
 static cvar_t   *cl_drawfps;
 static float    fps_counter = 0;
 
+#if USE_FREETYPE
+static cvar_t   *scr_fontpath;
+
+static void SCR_FreeFreeTypeFonts(void);
+static bool SCR_LoadDefaultFreeTypeFont(void);
+static const ref_freetype_font_t *SCR_FTFontForHandle(qhandle_t handle);
+#endif
+
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
 const color_t colorTable[8] = {
@@ -86,6 +98,119 @@ const color_t colorTable[8] = {
 };
 
 cl_scr_t scr;
+
+#if USE_FREETYPE
+static bool SCR_EnsureFreeTypeLibrary()
+{
+    if (scr.freetype.library)
+        return true;
+
+    FT_Error error = FT_Init_FreeType(&scr.freetype.library);
+    if (error) {
+        Com_Printf("SCR: failed to initialize FreeType (error %d)\n", error);
+        scr.freetype.library = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
+static void SCR_FreeFreeTypeFonts(void)
+{
+    for (auto &entry : scr.freetype.fonts) {
+        if (entry.second.renderInfo.face) {
+            FT_Done_Face(entry.second.renderInfo.face);
+            entry.second.renderInfo.face = nullptr;
+        }
+    }
+
+    scr.freetype.fonts.clear();
+    scr.freetype.handleLookup.clear();
+    scr.freetype.activeFontKey.clear();
+}
+
+static bool SCR_LoadFreeTypeFont(const std::string &cacheKey, const std::string &fontPath,
+                                 int pixelHeight, qhandle_t handle)
+{
+    if (!SCR_EnsureFreeTypeLibrary())
+        return false;
+
+    void *fileBuffer = nullptr;
+    int length = FS_LoadFile(fontPath.c_str(), &fileBuffer);
+    if (length <= 0) {
+        Com_Printf("SCR: failed to load font '%s'\n", fontPath.c_str());
+        return false;
+    }
+
+    scr_freetype_font_entry_t entry;
+    entry.buffer.resize(length);
+    std::memcpy(entry.buffer.data(), fileBuffer, length);
+    FS_FreeFile(fileBuffer);
+
+    FT_Face face = nullptr;
+    FT_Error error = FT_New_Memory_Face(scr.freetype.library, entry.buffer.data(), length, 0, &face);
+    if (error) {
+        Com_Printf("SCR: failed to create FreeType face for '%s' (error %d)\n", fontPath.c_str(), error);
+        return false;
+    }
+
+    error = FT_Set_Pixel_Sizes(face, 0, pixelHeight);
+    if (error) {
+        Com_Printf("SCR: failed to set pixel height %d for '%s' (error %d)\n", pixelHeight, fontPath.c_str(), error);
+        FT_Done_Face(face);
+        return false;
+    }
+
+    entry.renderInfo.face = face;
+    entry.renderInfo.pixelHeight = pixelHeight;
+
+    auto existing = scr.freetype.fonts.find(cacheKey);
+    if (existing != scr.freetype.fonts.end()) {
+        if (existing->second.renderInfo.face)
+            FT_Done_Face(existing->second.renderInfo.face);
+        existing->second = std::move(entry);
+    } else {
+        scr.freetype.fonts.emplace(cacheKey, std::move(entry));
+    }
+
+    scr.freetype.handleLookup[handle] = cacheKey;
+    scr.freetype.activeFontKey = cacheKey;
+    return true;
+}
+
+static bool SCR_LoadDefaultFreeTypeFont(void)
+{
+    constexpr int defaultPixelHeight = 16;
+
+    std::string fontPath;
+    if (scr_fontpath && scr_fontpath->string[0]) {
+        fontPath = scr_fontpath->string;
+        if (!fontPath.empty() && fontPath.back() != '/' && fontPath.back() != '\\')
+            fontPath.push_back('/');
+    }
+    fontPath += "Arial.ttf";
+
+    std::string cacheKey = "Arial-" + std::to_string(defaultPixelHeight);
+
+    if (!SCR_LoadFreeTypeFont(cacheKey, fontPath, defaultPixelHeight, scr.font_pic))
+        return false;
+
+    return true;
+}
+
+static const ref_freetype_font_t *SCR_FTFontForHandle(qhandle_t handle)
+{
+    auto handleIt = scr.freetype.handleLookup.find(handle);
+    if (handleIt == scr.freetype.handleLookup.end())
+        return nullptr;
+
+    auto fontIt = scr.freetype.fonts.find(handleIt->second);
+    if (fontIt == scr.freetype.fonts.end())
+        return nullptr;
+
+    return &fontIt->second.renderInfo;
+}
+#endif
 
 /*
 ===============================================================================
@@ -105,6 +230,12 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 {
     size_t len = strlen(s);
 
+#if USE_FREETYPE
+    const ref_freetype_font_t *ftFont = SCR_FTFontForHandle(font);
+#else
+    const ref_freetype_font_t *ftFont = nullptr;
+#endif
+
     if (len > maxlen) {
         len = maxlen;
     }
@@ -115,7 +246,7 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
         x -= len * CONCHAR_WIDTH * scale;
     }
 
-    return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font);
+    return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font, ftFont);
 }
 
 
@@ -1227,6 +1358,9 @@ static void scr_font_changed(cvar_t *self)
         Cvar_Reset(self);
         scr.font_pic = R_RegisterFont(self->default_string);
     }
+#if USE_FREETYPE
+    SCR_LoadDefaultFreeTypeFont();
+#endif
 }
 
 /*
@@ -1279,6 +1413,7 @@ void SCR_RegisterMedia(void)
     SCR_LoadKFont(&scr.kfont, "fonts/qconfont.kfont");
 
     scr_font_changed(scr_font);
+
 }
 
 static void scr_scale_changed(cvar_t *self)
@@ -1453,6 +1588,9 @@ void SCR_Init(void)
     scr_demobar = Cvar_Get("scr_demobar", "1", 0);
     scr_font = Cvar_Get("scr_font", "conchars", 0);
     scr_font->changed = scr_font_changed;
+#if USE_FREETYPE
+    scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
+#endif
     scr_scale = Cvar_Get("scr_scale", "0", 0);
     scr_scale->changed = scr_scale_changed;
     scr_crosshair = Cvar_Get("crosshair", "3", CVAR_ARCHIVE);
@@ -1525,6 +1663,13 @@ void SCR_Init(void)
 void SCR_Shutdown(void)
 {
     Cmd_Deregister(scr_cmds);
+#if USE_FREETYPE
+    SCR_FreeFreeTypeFonts();
+    if (scr.freetype.library) {
+        FT_Done_FreeType(scr.freetype.library);
+        scr.freetype.library = nullptr;
+    }
+#endif
     scr.initialized = false;
 }
 
