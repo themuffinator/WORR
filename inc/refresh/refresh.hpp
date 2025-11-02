@@ -23,6 +23,22 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.hpp"
 #include "common/error.hpp"
 
+// Some client UI constants are required by inline helpers in this header. They
+// are normally provided by client headers, but a few refresh translation units
+// include this header without pulling those in. Provide compatible fallbacks so
+// the renderer can be built in isolation.
+#ifndef CONCHAR_WIDTH
+#define CONCHAR_WIDTH 8
+#endif
+
+#ifndef CONCHAR_HEIGHT
+#define CONCHAR_HEIGHT 8
+#endif
+
+#ifndef UI_MULTILINE
+#define UI_MULTILINE (1u << 9)
+#endif
+
 #if USE_FREETYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
