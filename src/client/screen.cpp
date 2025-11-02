@@ -197,9 +197,9 @@ static bool SCR_LoadDefaultFreeTypeFont(void)
         if (!fontPath.empty() && fontPath.back() != '/' && fontPath.back() != '\\')
             fontPath.push_back('/');
     }
-    fontPath += "Arial.ttf";
+    fontPath += "RobotoMono-Regular.ttf";
 
-    std::string cacheKey = "Arial-" + std::to_string(defaultPixelHeight);
+    std::string cacheKey = "RobotoMono-Regular-" + std::to_string(defaultPixelHeight);
 
     if (!SCR_LoadFreeTypeFont(cacheKey, fontPath, defaultPixelHeight, scr.font_pic))
         return false;
@@ -1778,7 +1778,7 @@ void SCR_Init(void)
     scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
     scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
-    scr_text_backend = Cvar_Get("scr_text_backend", "bitmap", CVAR_ARCHIVE);
+    scr_text_backend = Cvar_Get("scr_text_backend", "freetype", CVAR_ARCHIVE);
     scr_text_backend->changed = scr_text_backend_changed;
     scr_text_backend->generator = scr_text_backend_g;
     scr_text_backend_changed(scr_text_backend);
