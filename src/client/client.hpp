@@ -67,7 +67,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 //=============================================================================
 
-struct client_state_t {
+struct centity_t {
     entity_state_t     current;
     entity_state_t     prev;           // will always be valid, but might just be a copy of current
 
@@ -95,7 +95,7 @@ struct client_state_t {
     int             stair_time;
     float           stair_height;
 // KEX
-} centity_t;
+};
 
 extern centity_t    cl_entities[MAX_EDICTS];
 
@@ -467,7 +467,7 @@ typedef struct {
         float to{1.0f};
         std::chrono::steady_clock::time_point start{};
     } slow_time;
-};
+} client_state_t;
 
 extern client_state_t   cl;
 
