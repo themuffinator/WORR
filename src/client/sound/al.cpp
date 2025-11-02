@@ -28,6 +28,78 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // OpenAL implementation should support at least this number of sources
 #define MIN_CHANNELS    16
 
+namespace {
+
+class QalContextGuard {
+public:
+    bool Init()
+    {
+        int result = QAL_Init();
+        if (result < 0) {
+            return false;
+        }
+        init_result_ = result;
+        initialized_ = true;
+        return true;
+    }
+
+    void Shutdown()
+    {
+        if (initialized_) {
+            QAL_Shutdown();
+            initialized_ = false;
+        }
+    }
+
+    bool IsInitialized() const
+    {
+        return initialized_;
+    }
+
+    int init_result() const
+    {
+        return init_result_;
+    }
+
+    ~QalContextGuard()
+    {
+        Shutdown();
+    }
+
+private:
+    bool initialized_ = false;
+    int init_result_ = 0;
+};
+
+class OpenALBackend final : public AudioBackend {
+public:
+    bool Init() override;
+    void Shutdown() override;
+    void Update() override { AL_Update(); }
+    void Activate() override { AL_Activate(); }
+    void SoundInfo() override { AL_SoundInfo(); }
+    sfxcache_t *UploadSfx(sfx_t *sfx) override { return AL_UploadSfx(sfx); }
+    void DeleteSfx(sfx_t *sfx) override { AL_DeleteSfx(sfx); }
+    bool RawSamples(int samples, int rate, int width, int channels, const void *data, float volume) override
+    {
+        return AL_RawSamples(samples, rate, width, channels, data, volume);
+    }
+    int NeedRawSamples() const override { return AL_NeedRawSamples(); }
+    int HaveRawSamples() const override { return AL_HaveRawSamples(); }
+    void DropRawSamples() override { AL_StreamStop(); }
+    void PauseRawSamples(bool paused) override { AL_StreamPause(paused); }
+    int GetBeginOffset(float timeofs) override { return AL_GetBeginofs(timeofs); }
+    void PlayChannel(channel_t *ch) override { AL_PlayChannel(ch); }
+    void StopChannel(channel_t *ch) override { AL_StopChannel(ch); }
+    void StopAllSounds() override { AL_StopAllSounds(); }
+    int GetSampleRate() const override { return QAL_GetSampleRate(); }
+    void EndRegistration() override { AL_EndRegistration(); }
+
+private:
+    QalContextGuard qalContext_;
+    bool initialized_ = false;
+};
+
 static cvar_t       *al_reverb;
 static cvar_t       *al_reverb_lerp_time;
 
@@ -602,15 +674,19 @@ static void s_volume_changed(cvar_t *self)
     qalListenerf(AL_GAIN, self->value);
 }
 
-static bool AL_Init(void)
+bool OpenALBackend::Init()
 {
-    int i;
+    if (initialized_) {
+        return true;
+    }
 
     SoundSystem &soundSystem = S_GetSoundSystem();
 
-    i = QAL_Init();
-    if (i < 0)
+    if (!qalContext_.Init()) {
         goto fail0;
+    }
+
+    int i = qalContext_.init_result();
     s_merge_looping_minval = i + 1;
 
     Com_DPrintf("AL_VENDOR: %s\n", qalGetString(AL_VENDOR));
@@ -692,20 +768,30 @@ static bool AL_Init(void)
     SCR_RegisterStat("al_reverb", AL_Reverb_stat);
 
     Com_Printf("OpenAL initialized.\n");
+    initialized_ = true;
     return true;
 
 fail1:
-    QAL_Shutdown();
+    Shutdown();
+    goto fail0;
+
 fail0:
     Com_EPrintf("Failed to initialize OpenAL: %s\n", Com_GetLastError());
     return false;
 }
 
-static void AL_Shutdown(void)
+void OpenALBackend::Shutdown()
 {
-    Com_Printf("Shutting down OpenAL.\n");
-
     SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (!qalContext_.IsInitialized() && !initialized_) {
+        return;
+    }
+
+    if (initialized_) {
+        Com_Printf("Shutting down OpenAL.\n");
+    }
+
     int num_channels = soundSystem.num_channels();
 
     if (num_channels) {
@@ -750,7 +836,8 @@ static void AL_Shutdown(void)
 
     SCR_UnregisterStat("al_reverb");
 
-    QAL_Shutdown();
+    qalContext_.Shutdown();
+    initialized_ = false;
 }
 
 static ALenum AL_GetSampleFormat(int width, int channels)
@@ -1403,29 +1490,9 @@ static void AL_EndRegistration(void)
         AL_SetReverbStepIDs();
 }
 
-static constexpr sndapi_t MakeOpenALSndApi()
-{
-    return sndapi_t{
-        AL_Init,
-        AL_Shutdown,
-        AL_Update,
-        AL_Activate,
-        AL_SoundInfo,
-        AL_UploadSfx,
-        AL_DeleteSfx,
-        nullptr,
-        AL_RawSamples,
-        AL_NeedRawSamples,
-        AL_HaveRawSamples,
-        AL_StreamStop,
-        AL_StreamPause,
-        AL_GetBeginofs,
-        AL_PlayChannel,
-        AL_StopChannel,
-        AL_StopAllSounds,
-        QAL_GetSampleRate,
-        AL_EndRegistration,
-    };
-}
+} // namespace
 
-const sndapi_t snd_openal = MakeOpenALSndApi();
+std::unique_ptr<AudioBackend> CreateOpenALBackend()
+{
+    return std::unique_ptr<AudioBackend>(new OpenALBackend());
+}
