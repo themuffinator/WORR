@@ -459,13 +459,13 @@ typedef struct {
     } shadowdefs[MAX_SHADOW_LIGHTS];
 
     struct {
-        bool active{};
-        bool desired{};
-        bool initialized{};
-        float factor{1.0f};
-        float from{1.0f};
-        float to{1.0f};
-        std::chrono::steady_clock::time_point start{};
+        bool active;
+        bool desired;
+        bool initialized;
+        float factor;
+        float from;
+        float to;
+        std::chrono::steady_clock::time_point start;
     } slow_time;
 } client_state_t;
 

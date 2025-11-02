@@ -658,12 +658,12 @@ void V_RenderView(void)
     }
 
     if (cl_dof->integer) {
-        const float slow_scale = std::max(0.0f, 1.0f - CL_Wheel_TimeScale());
+        const float slow_scale = (std::max)(0.0f, 1.0f - CL_Wheel_TimeScale());
         const float base_blend = Q_clipf(slow_scale, 0.0f, 1.0f);
-        const float blur_range = std::max(cl_dof_blur_range->value * base_blend, 0.0f);
-        const float focus_distance = std::max(cl_dof_focus_distance->value, 0.0f);
-        const float focus_range = std::max(cl_dof_focus_range->value, 0.001f);
-        const float luma_strength = std::max(cl_dof_luma_strength->value, 0.0f);
+        const float blur_range = (std::max)(cl_dof_blur_range->value * base_blend, 0.0f);
+        const float focus_distance = (std::max)(cl_dof_focus_distance->value, 0.0f);
+        const float focus_range = (std::max)(cl_dof_focus_range->value, 0.001f);
+        const float luma_strength = (std::max)(cl_dof_luma_strength->value, 0.0f);
 
         cl.refdef.depth_of_field = base_blend > 0.0f && blur_range > 0.0f;
         cl.refdef.dof_blur_range = blur_range;
