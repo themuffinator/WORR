@@ -233,7 +233,7 @@ typedef struct {
 // the client_state_t structure is wiped completely at every
 // server map change
 //
-typedef struct {
+typedef struct client_state_s {
     int         timeoutcount;
 
     unsigned    lastTransmitTime;
