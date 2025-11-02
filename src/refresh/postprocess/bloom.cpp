@@ -82,12 +82,17 @@ void BloomEffect::shutdown()
 
 void BloomEffect::allocateTexture(GLuint tex, int width, int height) const
 {
-	qglBindTexture(GL_TEXTURE_2D, tex);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        qglBindTexture(GL_TEXTURE_2D, tex);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
+        const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
+        const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
+
+        qglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
 }
 
 bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const
@@ -158,21 +163,25 @@ extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
 
 void BloomEffect::render(const BloomRenderContext& ctx)
 {
-	if (!initialized_ || downsampleWidth_ <= 0 || downsampleHeight_ <= 0) {
-		if (ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField)
-			ctx.runDepthOfField();
+        if (!initialized_ || downsampleWidth_ <= 0 || downsampleHeight_ <= 0) {
+                if (ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField)
+                        ctx.runDepthOfField();
 
-		GL_Setup2D();
+                GL_Setup2D();
 
-		glStateBits_t bits = GLS_DEFAULT;
-		GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
-		if (!ctx.showDebug && ctx.waterwarp)
-			bits |= GLS_WARP_ENABLE;
+                glStateBits_t bits = GLS_DEFAULT;
+                GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
+                if (!ctx.showDebug && ctx.waterwarp)
+                        bits |= GLS_WARP_ENABLE;
+                if (!ctx.showDebug && ctx.updateHdrUniforms)
+                        ctx.updateHdrUniforms();
+                if (!ctx.showDebug && ctx.tonemap)
+                        bits |= GLS_TONEMAP_ENABLE;
 
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
-		return;
-	}
+                qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+                GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
+                return;
+        }
 
 	qglViewport(0, 0, downsampleWidth_, downsampleHeight_);
 	GL_Ortho(0, downsampleWidth_, downsampleHeight_, 0, -1, 1);
@@ -211,20 +220,24 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	if (ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField)
 		ctx.runDepthOfField();
 
-	GL_Setup2D();
+        GL_Setup2D();
 
-	glStateBits_t bits = ctx.showDebug ? GLS_DEFAULT : GLS_BLOOM_OUTPUT;
-	if (ctx.showDebug) {
-		GL_ForceTexture(TMU_TEXTURE, bloomTexture);
-	}
-	else {
-		GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
-		GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
-		if (ctx.waterwarp)
-			bits |= GLS_WARP_ENABLE;
-	}
+        glStateBits_t bits = ctx.showDebug ? GLS_DEFAULT : GLS_BLOOM_OUTPUT;
+        if (ctx.showDebug) {
+                GL_ForceTexture(TMU_TEXTURE, bloomTexture);
+        }
+        else {
+                GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
+                GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
+                if (ctx.waterwarp)
+                        bits |= GLS_WARP_ENABLE;
+                if (ctx.updateHdrUniforms)
+                        ctx.updateHdrUniforms();
+                if (ctx.tonemap)
+                        bits |= GLS_TONEMAP_ENABLE;
+        }
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-	GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
 }
 

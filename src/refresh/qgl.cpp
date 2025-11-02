@@ -107,6 +107,7 @@ static constexpr glfunction_t kGl11CompatFunctions[] = {
 static constexpr glfunction_t kGl11NoEsFunctions[] = {
     QGL_FN(ClearDepth),
     QGL_FN(DepthRange),
+    QGL_FN(GetTexImage),
     QGL_FN(PolygonMode),
     { nullptr }
 };

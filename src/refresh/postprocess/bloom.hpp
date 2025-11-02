@@ -8,12 +8,14 @@ struct BloomRenderContext {
 	GLuint dofTexture;
 	int viewportX;
 	int viewportY;
-	int viewportWidth;
-	int viewportHeight;
-	bool waterwarp;
-	bool depthOfField;
-	bool showDebug;
-	void (*runDepthOfField)();
+        int viewportWidth;
+        int viewportHeight;
+        bool waterwarp;
+        bool depthOfField;
+        bool showDebug;
+        bool tonemap;
+        void (*updateHdrUniforms)();
+        void (*runDepthOfField)();
 };
 
 class BloomEffect {

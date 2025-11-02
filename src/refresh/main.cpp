@@ -25,6 +25,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "postprocess/bloom.hpp"
 #include "font_freetype.hpp"
 #include <array>
+#include <cmath>
+#include <vector>
 
 glRefdef_t glr;
 glStatic_t gl_static;
@@ -67,6 +69,22 @@ cvar_t *r_enablefog;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
 cvar_t *r_bloomThreshold;
+cvar_t *r_bloomIntensity;
+cvar_t *r_hdr;
+cvar_t *r_hdr_mode;
+cvar_t *r_tonemap;
+cvar_t *r_exposure_auto;
+cvar_t *r_exposure_key;
+cvar_t *r_exposure_speed_up;
+cvar_t *r_exposure_speed_down;
+cvar_t *r_exposure_ev_min;
+cvar_t *r_exposure_ev_max;
+cvar_t *r_output_paper_white;
+cvar_t *r_output_peak_white;
+cvar_t *r_dither;
+cvar_t *r_ui_sdr_style;
+cvar_t *r_debug_histogram;
+cvar_t *r_debug_tonemap;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
 
@@ -102,6 +120,31 @@ cvar_t *gl_polyblend;
 cvar_t *gl_showerrors;
 
 int32_t gl_shaders_modified;
+
+enum hdr_mode_t {
+    HDR_MODE_SDR = 0,
+    HDR_MODE_HDR10 = 1,
+    HDR_MODE_SCRGB = 2,
+    HDR_MODE_AUTO = 3,
+};
+
+enum tonemap_mode_t {
+    TONEMAP_ACES = 0,
+    TONEMAP_HABLE = 1,
+    TONEMAP_REINHARD = 2,
+    TONEMAP_LINEAR = 3,
+};
+
+struct hdrStateLocal_t {
+    bool auto_supported = false;
+    float noise_seed = 0.0f;
+    std::vector<float> histogram_scratch;
+};
+
+static hdrStateLocal_t hdr_state_local;
+static int32_t r_hdr_modified = 0;
+static int32_t r_hdr_mode_modified = 0;
+static int32_t r_exposure_auto_modified = 0;
 
 // ==============================================================================
 
@@ -682,6 +725,205 @@ bool GL_ShowErrors(const char *func)
     return true;
 }
 
+static void HDR_ResetState(void)
+{
+    gl_static.hdr.exposure = 1.0f;
+    gl_static.hdr.target_exposure = 1.0f;
+    gl_static.hdr.average_luminance = 0.18f;
+    gl_static.hdr.max_mip_level = 0;
+    gl_static.hdr.histogram.fill(0.0f);
+    gl_static.hdr.histogram_scale = 1.0f;
+    gl_static.hdr.graph_max_input = 16.0f;
+}
+
+static void HDR_InitializeCapabilities(void)
+{
+    const bool float_textures = (gl_config.ver_gl >= QGL_VER(3, 0)) || (gl_config.ver_es >= QGL_VER(3, 0));
+    gl_static.hdr.supported = float_textures;
+    hdr_state_local.auto_supported = qglGetTexImage != nullptr;
+}
+
+static void HDR_UpdateConfig(void)
+{
+    gl_static.hdr.bloom_intensity = max(r_bloomIntensity->value, 0.0f);
+    gl_static.hdr.paper_white = max(r_output_paper_white->value, 10.0f);
+    gl_static.hdr.peak_white = max(gl_static.hdr.paper_white, r_output_peak_white->value);
+    gl_static.hdr.exposure_key = max(r_exposure_key->value, 0.0001f);
+    gl_static.hdr.exposure_speed_up = max(r_exposure_speed_up->value, 0.0f);
+    gl_static.hdr.exposure_speed_down = max(r_exposure_speed_down->value, 0.0f);
+    gl_static.hdr.exposure_ev_min = r_exposure_ev_min->value;
+    gl_static.hdr.exposure_ev_max = r_exposure_ev_max->value;
+    gl_static.hdr.dither_strength = r_dither->integer ? 1.0f / 255.0f : 0.0f;
+    gl_static.hdr.ui_sdr_mix = r_ui_sdr_style->integer ? 1.0f : 0.0f;
+    gl_static.hdr.debug_histogram = r_debug_histogram->integer != 0;
+    gl_static.hdr.debug_tonemap = r_debug_tonemap->integer != 0;
+    gl_static.hdr.tonemap = Q_bound(TONEMAP_ACES, r_tonemap->integer, TONEMAP_LINEAR);
+
+    int hdr_mode = Q_bound(HDR_MODE_SDR, r_hdr_mode->integer, HDR_MODE_AUTO);
+    if (hdr_mode == HDR_MODE_AUTO)
+        hdr_mode = gl_static.hdr.supported ? HDR_MODE_HDR10 : HDR_MODE_SDR;
+    gl_static.hdr.mode = hdr_mode;
+
+    gl_static.hdr.auto_exposure = hdr_state_local.auto_supported && r_exposure_auto->integer;
+    gl_static.hdr.graph_max_input = powf(2.0f, gl_static.hdr.exposure_ev_max);
+}
+
+static void HDR_UpdatePostprocessFormats(void)
+{
+    if (gl_static.hdr.active) {
+        gl_static.postprocess_internal_format = GL_RGBA16F;
+        gl_static.postprocess_format = GL_RGBA;
+        gl_static.postprocess_type = GL_HALF_FLOAT;
+    } else {
+        gl_static.postprocess_internal_format = GL_RGBA;
+        gl_static.postprocess_format = GL_RGBA;
+        gl_static.postprocess_type = GL_UNSIGNED_BYTE;
+    }
+}
+
+static void HDR_ComputeHistogram(int width, int height)
+{
+    if (!gl_static.hdr.debug_histogram)
+        return;
+
+    if (!qglReadPixels)
+        return;
+
+    const int sample_limit = 128;
+    const int sample_w = min(width, sample_limit);
+    const int sample_h = min(height, sample_limit);
+    if (sample_w <= 0 || sample_h <= 0)
+        return;
+
+    hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
+    float *scratch = hdr_state_local.histogram_scratch.data();
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+    qglReadBuffer(GL_COLOR_ATTACHMENT0);
+    qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    constexpr int bins = 64;
+    std::array<float, bins> counts{};
+    counts.fill(0.0f);
+
+    const float ev_min = gl_static.hdr.exposure_ev_min;
+    const float ev_max = max(gl_static.hdr.exposure_ev_max, ev_min + 0.0001f);
+    const float ev_span = ev_max - ev_min;
+
+    const size_t total_pixels = static_cast<size_t>(sample_w) * sample_h;
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const float r = scratch[i * 4 + 0];
+        const float g = scratch[i * 4 + 1];
+        const float b = scratch[i * 4 + 2];
+        const float luminance = max(0.0f, r * 0.2126f + g * 0.7152f + b * 0.0722f);
+        const float ev = std::log2(max(luminance, 1e-5f));
+        const float norm = (ev - ev_min) / ev_span;
+        int bin = static_cast<int>(norm * bins);
+        bin = Q_bound(0, bin, bins - 1);
+        counts[bin] += 1.0f;
+    }
+
+    float peak = 1.0f;
+    for (float value : counts)
+        peak = max(peak, value);
+
+    gl_static.hdr.histogram_scale = (peak > 0.0f) ? (1.0f / peak) : 1.0f;
+    for (int i = 0; i < bins; ++i)
+        gl_static.hdr.histogram[i] = counts[i];
+}
+
+static void HDR_UpdateExposure(int width, int height)
+{
+    if (!gl_static.hdr.active)
+        return;
+
+    if (width <= 0 || height <= 0)
+        return;
+
+    hdr_state_local.noise_seed = glr.fd.time;
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    if (qglGenerateMipmap)
+        qglGenerateMipmap(GL_TEXTURE_2D);
+
+    const int max_dim = max(width, height);
+    gl_static.hdr.max_mip_level = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
+
+    float pixel[4] = { gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, 1.0f };
+    if (hdr_state_local.auto_supported && qglGetTexImage) {
+        qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
+    }
+
+    const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
+    gl_static.hdr.average_luminance = luminance;
+
+    float target_ev;
+    if (gl_static.hdr.auto_exposure)
+        target_ev = std::log2(gl_static.hdr.exposure_key / luminance);
+    else
+        target_ev = gl_static.hdr.exposure_key;
+
+    target_ev = Q_bound(gl_static.hdr.exposure_ev_min, target_ev, gl_static.hdr.exposure_ev_max);
+    const float target_exposure = powf(2.0f, target_ev);
+    gl_static.hdr.target_exposure = target_exposure;
+
+    float exposure = gl_static.hdr.exposure;
+    const float delta = target_exposure - exposure;
+    const float speed = (delta > 0.0f) ? gl_static.hdr.exposure_speed_up : gl_static.hdr.exposure_speed_down;
+
+    if (speed <= 0.0f) {
+        exposure = target_exposure;
+    } else {
+        const float step = speed * glr.fd.frametime;
+        if (fabsf(delta) <= step)
+            exposure = target_exposure;
+        else
+            exposure += (delta > 0.0f) ? step : -step;
+    }
+
+    gl_static.hdr.exposure = exposure;
+
+    HDR_ComputeHistogram(width, height);
+}
+
+void R_HDRUpdateUniforms(void)
+{
+    const float inv_width = glr.fd.width > 0 ? 1.0f / glr.fd.width : 0.0f;
+    const float inv_height = glr.fd.height > 0 ? 1.0f / glr.fd.height : 0.0f;
+
+    gls.u_block.hdr_exposure[0] = gl_static.hdr.exposure;
+    gls.u_block.hdr_exposure[1] = gl_static.hdr.average_luminance;
+    gls.u_block.hdr_exposure[2] = gl_static.hdr.target_exposure;
+    gls.u_block.hdr_exposure[3] = hdr_state_local.noise_seed;
+
+    gls.u_block.hdr_params0[0] = static_cast<float>(gl_static.hdr.tonemap);
+    gls.u_block.hdr_params0[1] = gl_static.hdr.paper_white;
+    gls.u_block.hdr_params0[2] = gl_static.hdr.peak_white;
+    gls.u_block.hdr_params0[3] = gl_static.hdr.bloom_intensity;
+
+    gls.u_block.hdr_params1[0] = static_cast<float>(gl_static.hdr.mode);
+    gls.u_block.hdr_params1[1] = gl_static.hdr.exposure_key;
+    gls.u_block.hdr_params1[2] = gl_static.hdr.exposure_ev_min;
+    gls.u_block.hdr_params1[3] = gl_static.hdr.exposure_ev_max;
+
+    gls.u_block.hdr_params2[0] = inv_width;
+    gls.u_block.hdr_params2[1] = inv_height;
+    gls.u_block.hdr_params2[2] = gl_static.hdr.graph_max_input;
+    gls.u_block.hdr_params2[3] = gl_static.hdr.histogram_scale;
+
+    gls.u_block.hdr_params3[0] = gl_static.hdr.dither_strength;
+    gls.u_block.hdr_params3[1] = gl_static.hdr.debug_histogram ? 1.0f : 0.0f;
+    gls.u_block.hdr_params3[2] = gl_static.hdr.debug_tonemap ? 1.0f : 0.0f;
+    gls.u_block.hdr_params3[3] = gl_static.hdr.ui_sdr_mix;
+
+    for (int i = 0; i < 16; ++i)
+        for (int j = 0; j < 4; ++j)
+            gls.u_block.hdr_histogram[i][j] = gl_static.hdr.histogram[i * 4 + j];
+
+    gls.u_block_dirty = true;
+}
+
 void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 {
     GL_BindArrays(VA_POSTPROCESS);
@@ -790,6 +1032,7 @@ typedef enum {
     PP_WATERWARP = BIT(0),
     PP_BLOOM     = BIT(1),
     PP_DEPTH_OF_FIELD = BIT(2),
+    PP_HDR       = BIT(3),
 } pp_flags_t;
 
 constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
@@ -851,6 +1094,8 @@ static void GL_DrawBloom(pp_flags_t flags)
         .waterwarp = waterwarp,
         .depthOfField = depth_of_field,
         .showDebug = show_bloom,
+        .tonemap = (flags & PP_HDR) != 0,
+        .updateHdrUniforms = R_HDRUpdateUniforms,
         .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
     };
 
@@ -868,6 +1113,9 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     glStateBits_t bits = GLS_DEFAULT;
     if (waterwarp)
         bits |= GLS_WARP_ENABLE;
+    R_HDRUpdateUniforms();
+    if (flags & PP_HDR)
+        bits |= GLS_TONEMAP_ENABLE;
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
 
@@ -888,6 +1136,28 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (!gl_static.use_shaders)
         return PP_NONE;
 
+    HDR_UpdateConfig();
+
+    const bool hdr_prev = gl_static.hdr.active;
+    const bool hdr_requested = gl_static.hdr.supported && gl_static.use_shaders && r_hdr->integer;
+
+    if (r_hdr->modified_count != r_hdr_modified) {
+        HDR_ResetState();
+        r_hdr_modified = r_hdr->modified_count;
+    }
+
+    if (r_hdr_mode->modified_count != r_hdr_mode_modified)
+        r_hdr_mode_modified = r_hdr_mode->modified_count;
+
+    if (r_exposure_auto->modified_count != r_exposure_auto_modified) {
+        HDR_ResetState();
+        r_exposure_auto_modified = r_exposure_auto->modified_count;
+    }
+
+    gl_static.hdr.active = hdr_requested;
+
+    HDR_UpdatePostprocessFormats();
+
     if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
         flags |= PP_WATERWARP;
 
@@ -897,12 +1167,16 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (dof_active)
         flags |= PP_DEPTH_OF_FIELD;
 
+    if (gl_static.hdr.active)
+        flags |= PP_HDR;
+
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
-        gl_dof->modified_count != gl_dof_modified) {
+        gl_dof->modified_count != gl_dof_modified ||
+        hdr_prev != gl_static.hdr.active) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
@@ -1006,6 +1280,8 @@ void R_RenderFrame(const refdef_t *fd)
         glr.framebuffer_bound = false;
     }
 
+    HDR_UpdateExposure(glr.fd.width, glr.fd.height);
+
     tess.dlight_bits = 0;
 
     // go back into 2D mode
@@ -1022,8 +1298,16 @@ void R_RenderFrame(const refdef_t *fd)
     } else if (pp_flags & PP_DEPTH_OF_FIELD) {
         GL_DrawDepthOfField(pp_flags);
     } else if (pp_flags & PP_WATERWARP) {
+        glStateBits_t bits = GLS_WARP_ENABLE;
+        R_HDRUpdateUniforms();
+        if (pp_flags & PP_HDR)
+            bits |= GLS_TONEMAP_ENABLE;
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        GL_PostProcess(GLS_WARP_ENABLE, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    } else if (pp_flags & PP_HDR) {
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        R_HDRUpdateUniforms();
+        GL_PostProcess(GLS_TONEMAP_ENABLE, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     }
 
     if (gl_polyblend->integer)
@@ -1270,7 +1554,23 @@ static void GL_Register(void)
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
-    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.8", 0);
+    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "1.0", 0);
+    r_bloomIntensity = Cvar_Get("r_bloomIntensity", "0.05", CVAR_ARCHIVE);
+    r_hdr = Cvar_Get("r_hdr", "0", CVAR_ARCHIVE);
+    r_hdr_mode = Cvar_Get("r_hdr_mode", "3", CVAR_ARCHIVE);
+    r_tonemap = Cvar_Get("r_tonemap", "0", CVAR_ARCHIVE);
+    r_exposure_auto = Cvar_Get("r_exposure_auto", "1", CVAR_ARCHIVE);
+    r_exposure_key = Cvar_Get("r_exposure_key", "0.18", CVAR_ARCHIVE);
+    r_exposure_speed_up = Cvar_Get("r_exposure_speed_up", "2.5", CVAR_ARCHIVE);
+    r_exposure_speed_down = Cvar_Get("r_exposure_speed_down", "1.2", CVAR_ARCHIVE);
+    r_exposure_ev_min = Cvar_Get("r_exposure_ev_min", "-6", CVAR_ARCHIVE);
+    r_exposure_ev_max = Cvar_Get("r_exposure_ev_max", "6", CVAR_ARCHIVE);
+    r_output_paper_white = Cvar_Get("r_output_paper_white", "200", CVAR_ARCHIVE);
+    r_output_peak_white = Cvar_Get("r_output_peak_white", "1000", CVAR_ARCHIVE);
+    r_dither = Cvar_Get("r_dither", "1", CVAR_ARCHIVE);
+    r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
+    r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
+    r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
@@ -1317,6 +1617,10 @@ static void GL_Register(void)
     gl_modulate_entities_changed(NULL);
     gl_swapinterval_changed(gl_swapinterval);
     gl_clearcolor_changed(gl_clearcolor);
+
+    r_hdr_modified = r_hdr->modified_count;
+    r_hdr_mode_modified = r_hdr_mode->modified_count;
+    r_exposure_auto_modified = r_exposure_auto->modified_count;
 
     Cmd_AddCommand("strings", GL_Strings_f);
 
@@ -1551,6 +1855,10 @@ bool R_Init(bool total)
 
     // register our variables
     GL_Register();
+
+    HDR_InitializeCapabilities();
+    HDR_ResetState();
+    HDR_UpdateConfig();
 
     GL_InitArrays();
 

@@ -59,6 +59,7 @@ QGLAPI void (APIENTRYP qglGenTextures)(GLsizei n, GLuint *textures);
 QGLAPI GLenum (APIENTRYP qglGetError)(void);
 QGLAPI void (APIENTRYP qglGetFloatv)(GLenum pname, GLfloat *data);
 QGLAPI void (APIENTRYP qglGetIntegerv)(GLenum pname, GLint *data);
+QGLAPI void (APIENTRYP qglGetTexImage)(GLenum target, GLint level, GLenum format, GLenum type, void *pixels);
 QGLAPI const GLubyte *(APIENTRYP qglGetString)(GLenum name);
 QGLAPI GLboolean (APIENTRYP qglIsEnabled)(GLenum cap);
 QGLAPI void (APIENTRYP qglLineWidth)(GLfloat width);

@@ -120,6 +120,12 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_dof_screen;
         vec4 u_dof_depth;
         vec4 u_vieworg;
+        vec4 u_hdr_exposure;
+        vec4 u_hdr_params0;
+        vec4 u_hdr_params1;
+        vec4 u_hdr_params2;
+        vec4 u_hdr_params3;
+        vec4 u_hdr_histogram[16];
     )
     GLSF("};\n");
 }
@@ -538,6 +544,154 @@ static void write_box_blur(sizebuf_t *buf)
     )
 }
 
+static void write_tonemap_block(sizebuf_t *buf)
+{
+    GLSF("#define TONEMAP_ACES 0\n");
+    GLSF("#define TONEMAP_HABLE 1\n");
+    GLSF("#define TONEMAP_REINHARD 2\n");
+    GLSF("#define TONEMAP_LINEAR 3\n");
+    GLSF("#define HDR_MODE_SDR 0\n");
+    GLSF("#define HDR_MODE_HDR10 1\n");
+    GLSF("#define HDR_MODE_SCRGB 2\n");
+
+    GLSL(const vec3 hdr_luminance_weights = vec3(0.2126, 0.7152, 0.0722);)
+
+    GLSL(float hdr_luma(vec3 color) { return dot(color, hdr_luminance_weights); })
+
+    GLSL(vec3 hdr_aces(vec3 x) {
+        const float a = 2.51;
+        const float b = 0.03;
+        const float c = 2.43;
+        const float d = 0.59;
+        const float e = 0.14;
+        return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+    })
+
+    GLSL(const float hdr_hable_A = 0.22;)
+    GLSL(const float hdr_hable_B = 0.30;)
+    GLSL(const float hdr_hable_C = 0.10;)
+    GLSL(const float hdr_hable_D = 0.20;)
+    GLSL(const float hdr_hable_E = 0.01;)
+    GLSL(const float hdr_hable_F = 0.30;)
+    GLSL(const float hdr_hable_white = 11.2;)
+    GLSL(const float hdr_hable_white_scale = 1.0 /
+        (((hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_C * hdr_hable_B)) + hdr_hable_D * hdr_hable_E) /
+         ((hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_B)) + hdr_hable_D * hdr_hable_F) -
+         hdr_hable_E / hdr_hable_F));
+
+    GLSL(vec3 hdr_hable(vec3 x) {
+        vec3 numerator = (x * (hdr_hable_A * x + hdr_hable_C * hdr_hable_B)) + hdr_hable_D * hdr_hable_E;
+        vec3 denominator = (x * (hdr_hable_A * x + hdr_hable_B)) + hdr_hable_D * hdr_hable_F;
+        return numerator / denominator - hdr_hable_E / hdr_hable_F;
+    })
+
+    GLSL(vec3 hdr_reinhard(vec3 x) {
+        return x / (x + vec3(1.0));
+    })
+
+    GLSL(vec3 hdr_linear(vec3 x) {
+        return clamp(x, 0.0, 1.0);
+    })
+
+    GLSL(vec3 hdr_linear_to_srgb(vec3 color) {
+        vec3 c = max(color, vec3(0.0));
+        vec3 lo = c * 12.92;
+        vec3 hi = (pow(c, vec3(1.0 / 2.4)) * 1.055) - 0.055;
+        vec3 cutoff = step(c, vec3(0.0031308));
+        return mix(hi, lo, cutoff);
+    })
+
+    GLSL(float hdr_pq_encode(float value) {
+        const float c1 = 0.8359375;
+        const float c2 = 18.8515625;
+        const float c3 = 18.6875;
+        const float m1 = 0.1593017578125;
+        const float m2 = 78.84375;
+        float L = max(value, 0.0);
+        float Lm1 = pow(L, m1);
+        float num = c1 + c2 * Lm1;
+        float den = 1.0 + c3 * Lm1;
+        return pow(num / den, m2);
+    })
+
+    GLSL(float hdr_dither(vec2 coord) {
+        float noise = fract(sin(dot(coord, vec2(12.9898, 78.233)) + u_hdr_exposure.w) * 43758.5453);
+        return noise - 0.5;
+    })
+
+    GLSL(vec3 hdr_apply_tonemap(vec3 color) {
+        vec3 result = max(color, vec3(0.0)) * u_hdr_exposure.x;
+        int tonemap = int(u_hdr_params0.x + 0.5);
+        if (tonemap == TONEMAP_ACES) {
+            result = hdr_aces(result);
+        } else if (tonemap == TONEMAP_HABLE) {
+            result = clamp(hdr_hable(result) * hdr_hable_white_scale, 0.0, 1.0);
+        } else if (tonemap == TONEMAP_REINHARD) {
+            result = hdr_reinhard(result);
+        } else {
+            result = hdr_linear(result);
+        }
+
+        int mode = int(u_hdr_params1.x + 0.5);
+        if (mode == HDR_MODE_HDR10) {
+            vec3 nits = clamp(result * u_hdr_params0.z, 0.0, u_hdr_params0.z);
+            return vec3(hdr_pq_encode(nits.r), hdr_pq_encode(nits.g), hdr_pq_encode(nits.b));
+        } else if (mode == HDR_MODE_SCRGB) {
+            float scale = u_hdr_params0.y / 80.0;
+            return result * scale;
+        }
+
+        return hdr_linear_to_srgb(result);
+    })
+
+    GLSL(vec3 hdr_apply_dither(vec3 color, vec2 fragCoord) {
+        int mode = int(u_hdr_params1.x + 0.5);
+        if (u_hdr_params3.x > 0.0)
+            color += hdr_dither(fragCoord) * u_hdr_params3.x;
+        if (mode == HDR_MODE_SCRGB)
+            return clamp(color, vec3(-0.5), vec3(7.5));
+        return clamp(color, 0.0, 1.0);
+    })
+
+    GLSL(vec3 hdr_apply(vec3 color, vec2 tc, vec2 fragCoord) {
+        vec3 encoded = hdr_apply_tonemap(color);
+        vec2 norm = fragCoord * vec2(u_hdr_params2.x, u_hdr_params2.y);
+
+        if (u_hdr_params3.y > 0.5) {
+            if (norm.x < 0.32 && norm.y < 0.25) {
+                vec2 uv = vec2(norm.x / 0.32, norm.y / 0.25);
+                int bin = int(clamp(floor(uv.x * 64.0), 0.0, 63.0));
+                int group = bin >> 2;
+                int component = bin & 3;
+                float value = clamp(u_hdr_histogram[group][component] * u_hdr_params2.w, 0.0, 1.0);
+                vec3 base = vec3(0.08, 0.08, 0.08);
+                vec3 bar = vec3(0.95, 0.95, 0.95);
+                float fill = step(uv.y, value);
+                return mix(base, bar, fill);
+            }
+        }
+
+        if (u_hdr_params3.z > 0.5) {
+            if (norm.x < 0.32 && norm.y >= 0.30 && norm.y < 0.55) {
+                vec2 uv = vec2(norm.x / 0.32, (norm.y - 0.30) / 0.25);
+                vec3 base = vec3(0.08, 0.08, 0.08);
+                float axis = step(abs(uv.x - 0.0), 0.001) + step(abs(uv.y - 0.0), 0.001);
+                base += vec3(axis) * 0.12;
+                float sampleValue = uv.x * u_hdr_params2.z;
+                vec3 mapped = hdr_apply_tonemap(vec3(sampleValue));
+                float output = clamp(hdr_luma(mapped), 0.0, 1.0);
+                float diff = abs(uv.y - output);
+                float line = smoothstep(0.0, 0.01, 0.02 - diff);
+                vec3 curveColor = vec3(0.9, 0.7, 0.2);
+                return mix(base, curveColor, clamp(line, 0.0, 1.0));
+            }
+        }
+
+        encoded = mix(encoded, clamp(encoded, vec3(0.0), vec3(1.0)), clamp(u_hdr_params3.w, 0.0, 1.0));
+        return hdr_apply_dither(encoded, fragCoord);
+    })
+}
+
 static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
 {
     write_header(buf, bits);
@@ -720,6 +874,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & GLS_UNIFORM_MASK)
         write_block(buf, bits);
+
+    if (bits & GLS_TONEMAP_ENABLE)
+        write_tonemap_block(buf);
 
     if (bits & GLS_DYNAMIC_LIGHTS)
         write_dynamic_light_block(buf);
@@ -906,10 +1063,13 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
 
     if (bits & GLS_BLOOM_OUTPUT)
-        GLSL(diffuse.rgb += texture(u_bloom, tc).rgb;)
+        GLSL(diffuse.rgb += texture(u_bloom, tc).rgb * u_hdr_params0.w;)
 
     if (bits & GLS_BLOOM_GENERATE)
         GLSL(o_bloom = bloom;)
+
+    if (bits & GLS_TONEMAP_ENABLE)
+        GLSL(diffuse.rgb = hdr_apply(diffuse.rgb, tc, gl_FragCoord.xy);)
 
     GLSL(o_color = diffuse;)
     GLSF("}\n");
