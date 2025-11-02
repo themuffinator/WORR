@@ -524,7 +524,7 @@ sfxcache_t *S_LoadSound(sfx_t *s)
     if (s_info.format == FORMAT_PCM)
         ConvertSamples();
 
-    sc = s_api->upload_sfx(s);
+    sc = s_backend ? s_backend->UploadSfx(s) : nullptr;
 
 #if USE_AVCODEC
     if (s_info.format != FORMAT_PCM)

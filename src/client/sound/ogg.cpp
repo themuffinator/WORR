@@ -287,8 +287,8 @@ void OGG_Play(void)
             Com_DPrintf("No such track: %s\n", s);
     }
 
-    if (s_api)
-        s_api->drop_raw_samples();
+    if (s_backend)
+        s_backend->DropRawSamples();
 }
 
 void OGG_Stop(void)
@@ -305,8 +305,8 @@ void OGG_Stop(void)
     ogg_manual_play = false;
     ogg_paused = false;
 
-    if (s_api)
-        s_api->drop_raw_samples();
+    if (s_backend)
+        s_backend->DropRawSamples();
 }
 
 static int read_packet(AVPacket *pkt)
@@ -438,11 +438,13 @@ static void flush_samples(const AVFrame *out)
 {
     Com_DDDPrintf("%d raw samples\n", out->nb_samples);
 
-    if (!s_api->raw_samples(out->nb_samples, out->sample_rate,
-                            av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
-                            out->ch_layout.nb_channels,
-                            out->data[0], ogg_volume->value))
-        s_api->drop_raw_samples();
+    if (!s_backend || !s_backend->RawSamples(out->nb_samples, out->sample_rate,
+                                             av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
+                                             out->ch_layout.nb_channels,
+                                             out->data[0], ogg_volume->value)) {
+        if (s_backend)
+            s_backend->DropRawSamples();
+    }
 }
 
 static int convert_frame(AVFrame *out, AVFrame *in)
@@ -464,7 +466,7 @@ static int convert_audio(void)
         return 0;
 
     // get available free space
-    need = s_api->need_raw_samples();
+    need = s_backend ? s_backend->NeedRawSamples() : 0;
     if (need <= 0)
         return 0;
 
@@ -568,7 +570,7 @@ void OGG_Update(void)
 
     if (!ogg.dec_ctx && !ogg_swr_draining) {
         // resume auto playback if manual playback just stopped
-        if (ogg_manual_play && !s_api->have_raw_samples()) {
+        if (ogg_manual_play && (!s_backend || !s_backend->HaveRawSamples())) {
             ogg_manual_play = false;
             OGG_Play();
         }

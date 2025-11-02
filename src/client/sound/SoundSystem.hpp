@@ -2,9 +2,11 @@
 
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <vector>
 
 #include "sound.hpp"
+#include "AudioBackend.hpp"
 
 class SoundSystem {
 public:
@@ -46,6 +48,10 @@ public:
     bool HasPendingPlays() const;
     void ResetPlaysounds();
 
+    void SetBackend(std::unique_ptr<AudioBackend> backend);
+    AudioBackend *GetBackend();
+    const AudioBackend *GetBackend() const;
+
     vec3_t &listener_origin();
     vec3_t &listener_forward();
     vec3_t &listener_right();
@@ -65,6 +71,7 @@ private:
     std::vector<playsound_t> playsounds_;
     std::deque<playsound_t *> freeplays_;
     std::deque<playsound_t *> pendingplays_;
+    std::unique_ptr<AudioBackend> backend_;
     vec3_t listener_origin_ = { 0.0f, 0.0f, 0.0f };
     vec3_t listener_forward_ = { 0.0f, 0.0f, 0.0f };
     vec3_t listener_right_ = { 0.0f, 0.0f, 0.0f };

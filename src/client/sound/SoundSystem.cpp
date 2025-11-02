@@ -173,6 +173,21 @@ void SoundSystem::ResetPlaysounds()
     }
 }
 
+void SoundSystem::SetBackend(std::unique_ptr<AudioBackend> backend)
+{
+    backend_ = std::move(backend);
+}
+
+AudioBackend *SoundSystem::GetBackend()
+{
+    return backend_.get();
+}
+
+const AudioBackend *SoundSystem::GetBackend() const
+{
+    return backend_.get();
+}
+
 vec3_t &SoundSystem::listener_origin()
 {
     return listener_origin_;

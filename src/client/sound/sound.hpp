@@ -22,6 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "../client.hpp"
 #include "shared/list.hpp"
+#include <memory>
+
+#include "AudioBackend.hpp"
 
 #if USE_SNDDMA
 #include "client/sound/dma.hpp"
@@ -107,36 +110,6 @@ typedef struct {
 ====================================================================
 */
 
-typedef struct {
-    bool (*init)(void);
-    void (*shutdown)(void);
-    void (*update)(void);
-    void (*activate)(void);
-    void (*sound_info)(void);
-    sfxcache_t *(*upload_sfx)(sfx_t *s);
-    void (*delete_sfx)(sfx_t *s);
-    void (*page_in_sfx)(sfx_t *s);
-    bool (*raw_samples)(int samples, int rate, int width, int channels, const void *data, float volume);
-    int (*need_raw_samples)(void);
-    int (*have_raw_samples)(void);
-    void (*drop_raw_samples)(void);
-    void (*pause_raw_samples)(bool paused);
-    int (*get_begin_ofs)(float timeofs);
-    void (*play_channel)(channel_t *ch);
-    void (*stop_channel)(channel_t *ch);
-    void (*stop_all_sounds)(void);
-    int (*get_sample_rate)(void);
-    void (*end_registration)(void);
-} sndapi_t;
-
-#if USE_SNDDMA
-extern const sndapi_t   snd_dma;
-#endif
-
-#if USE_OPENAL
-extern const sndapi_t   snd_openal;
-#endif
-
 //====================================================================
 
 enum class SoundBackend {
@@ -152,7 +125,15 @@ enum class SoundBackend {
 extern SoundBackend     s_started;
 extern bool             s_active;
 extern bool             s_supports_float;
-extern const sndapi_t   *s_api;
+extern AudioBackend     *s_backend;
+
+#if USE_SNDDMA
+std::unique_ptr<AudioBackend> CreateDmaBackend();
+#endif
+
+#if USE_OPENAL
+std::unique_ptr<AudioBackend> CreateOpenALBackend();
+#endif
 
 extern int          s_paintedtime;
 

@@ -23,6 +23,78 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #define PAINTBUFFER_SIZE    2048
 
+static const snddma_driver_t *snddma = nullptr;
+
+namespace {
+
+struct DmaDriverHandle {
+    ~DmaDriverHandle()
+    {
+        Reset();
+    }
+
+    void Set(const snddma_driver_t *driver)
+    {
+        driver_ = driver;
+    }
+
+    void Reset()
+    {
+        if (driver_) {
+            driver_->shutdown();
+            driver_ = nullptr;
+        }
+    }
+
+    const snddma_driver_t *Get() const
+    {
+        return driver_;
+    }
+
+private:
+    const snddma_driver_t *driver_ = nullptr;
+};
+
+class DmaBackend final : public AudioBackend {
+public:
+    bool Init() override;
+    void Shutdown() override;
+    void Update() override { DMA_Update(); }
+    void Activate() override { DMA_Activate(); }
+    void SoundInfo() override { DMA_SoundInfo(); }
+    sfxcache_t *UploadSfx(sfx_t *sfx) override { return DMA_UploadSfx(sfx); }
+    void PageInSfx(sfx_t *sfx) override { DMA_PageInSfx(sfx); }
+    bool RawSamples(int samples, int rate, int width, int channels, const void *data, float volume) override
+    {
+        return DMA_RawSamples(samples, rate, width, channels, data, volume);
+    }
+    int NeedRawSamples() const override { return DMA_NeedRawSamples(); }
+    int HaveRawSamples() const override { return DMA_HaveRawSamples(); }
+    void DropRawSamples() override { DMA_DropRawSamples(); }
+    int GetBeginOffset(float timeofs) override { return DMA_DriftBeginofs(timeofs); }
+    void PlayChannel(channel_t *ch) override { DMA_Spatialize(ch); }
+    void StopAllSounds() override { DMA_ClearBuffer(); }
+    int GetSampleRate() const override { return DMA_GetSampleRate(); }
+
+private:
+    void SetDriver(const snddma_driver_t *driver)
+    {
+        driver_.Set(driver);
+        snddma = driver;
+    }
+
+    void ResetDriver()
+    {
+        driver_.Reset();
+        snddma = nullptr;
+    }
+
+    DmaDriverHandle driver_;
+    bool initialized_ = false;
+};
+
+} // namespace
+
 typedef struct {
     float   left;
     float   right;
@@ -544,8 +616,6 @@ static const snddma_driver_t *const s_drivers[] = {
     NULL
 };
 
-static const snddma_driver_t    *snddma;
-
 static void DMA_SoundInfo(void)
 {
     Com_Printf("%5d channels\n", dma.channels);
@@ -557,10 +627,16 @@ static void DMA_SoundInfo(void)
     Com_Printf("%p dma buffer\n", dma.buffer);
 }
 
-static bool DMA_Init(void)
+bool DmaBackend::Init()
 {
+    if (initialized_) {
+        return true;
+    }
+
+    ResetDriver();
+
     sndinitstat_t ret = SIS_FAILURE;
-    int i;
+    const snddma_driver_t *driver = nullptr;
 
     s_khz = Cvar_Get("s_khz", "44", CVAR_ARCHIVE | CVAR_SOUND);
     s_mixahead = Cvar_Get("s_mixahead", "0.1", CVAR_ARCHIVE);
@@ -568,10 +644,11 @@ static bool DMA_Init(void)
     s_swapstereo = Cvar_Get("s_swapstereo", "0", 0);
     cvar_t *s_driver = Cvar_Get("s_driver", "", CVAR_SOUND);
 
+    int i;
     for (i = 0; s_drivers[i]; i++) {
         if (!strcmp(s_drivers[i]->name, s_driver->string)) {
-            snddma = s_drivers[i];
-            ret = snddma->init();
+            driver = s_drivers[i];
+            ret = driver->init();
             break;
         }
     }
@@ -581,15 +658,21 @@ static bool DMA_Init(void)
         for (i = 0; s_drivers[i]; i++) {
             if (i == tried)
                 continue;
-            snddma = s_drivers[i];
-            if ((ret = snddma->init()) == SIS_SUCCESS)
+            const snddma_driver_t *candidate = s_drivers[i];
+            ret = candidate->init();
+            if (ret == SIS_SUCCESS) {
+                driver = candidate;
                 break;
+            }
         }
         Cvar_Reset(s_driver);
     }
 
-    if (ret != SIS_SUCCESS)
+    if (ret != SIS_SUCCESS || !driver) {
         return false;
+    }
+
+    SetDriver(driver);
 
     s_underwater_gain_hf->changed = s_underwater_gain_hf_changed;
     s_underwater_gain_hf_changed(s_underwater_gain_hf);
@@ -603,17 +686,23 @@ static bool DMA_Init(void)
 
     Com_Printf("sound sampling rate: %i\n", dma.speed);
 
+    initialized_ = true;
     return true;
 }
 
-static void DMA_Shutdown(void)
+void DmaBackend::Shutdown()
 {
-    snddma->shutdown();
-    snddma = NULL;
+    if (!initialized_ && !snddma) {
+        return;
+    }
+
+    ResetDriver();
     S_GetSoundSystem().num_channels() = 0;
 
     s_underwater_gain_hf->changed = NULL;
     s_volume->changed = NULL;
+
+    initialized_ = false;
 }
 
 static void DMA_Activate(void)
@@ -893,24 +982,7 @@ static int DMA_GetSampleRate(void)
     return dma.speed;
 }
 
-const sndapi_t snd_dma = {
-    DMA_Init,
-    DMA_Shutdown,
-    DMA_Update,
-    DMA_Activate,
-    DMA_SoundInfo,
-    DMA_UploadSfx,
-    nullptr,
-    DMA_PageInSfx,
-    DMA_RawSamples,
-    DMA_NeedRawSamples,
-    DMA_HaveRawSamples,
-    DMA_DropRawSamples,
-    nullptr,
-    DMA_DriftBeginofs,
-    DMA_Spatialize,
-    nullptr,
-    DMA_ClearBuffer,
-    DMA_GetSampleRate,
-    nullptr,
-};
+std::unique_ptr<AudioBackend> CreateDmaBackend()
+{
+    return std::unique_ptr<AudioBackend>(new DmaBackend());
+}
