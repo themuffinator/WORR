@@ -582,7 +582,7 @@ static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
             vec2(0.22252150, -0.97492780),
             vec2(0.62348970, -0.78183160),
             vec2(0.90096885, -0.43388376)
-        ));
+        ););
 
         GLSL(float bokeh_sample_weight(float coc, float radius) {
             return clamp((coc - radius + 2.0) / 2.0, 0.0, 1.0);
