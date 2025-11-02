@@ -61,8 +61,8 @@ cvar_t *gl_md5_use;
 cvar_t *gl_md5_distance;
 #endif
 cvar_t *gl_damageblend_frac;
-cvar_t *gl_waterwarp;
-cvar_t *gl_fog;
+cvar_t *r_skipUnderWaterFX;
+cvar_t *r_enablefog;
 cvar_t *gl_bloom;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
@@ -904,7 +904,7 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
 }
 
-static int32_t gl_waterwarp_modified = 0;
+static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t gl_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
 
@@ -917,7 +917,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (!gl_static.use_shaders)
         return PP_NONE;
 
-    if ((glr.fd.rdflags & RDF_UNDERWATER) && gl_waterwarp->integer)
+    if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
         flags |= PP_WATERWARP;
 
     if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_bloom->integer)
@@ -929,13 +929,13 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
-    if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified ||
+    if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         gl_bloom->modified_count != gl_bloom_modified ||
         gl_dof->modified_count != gl_dof_modified) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
-        gl_waterwarp_modified = gl_waterwarp->modified_count;
+        r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
         if (flags & PP_BLOOM)
@@ -981,7 +981,7 @@ void R_RenderFrame(const refdef_t *fd)
     glr.fog_bits = glr.fog_bits_sky = 0;
 
     if (gl_static.use_shaders) {
-        if (gl_fog->integer > 0) {
+        if (r_enablefog->integer > 0) {
             if (glr.fd.fog.density > 0)
                 glr.fog_bits |= GLS_FOG_GLOBAL;
             if (glr.fd.heightfog.density > 0 && glr.fd.heightfog.falloff > 0)
@@ -1295,8 +1295,8 @@ static void GL_Register(void)
     gl_md5_distance = Cvar_Get("gl_md5_distance", "2048", 0);
 #endif
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
-    gl_waterwarp = Cvar_Get("gl_waterwarp", "1", 0);
-    gl_fog = Cvar_Get("gl_fog", "1", 0);
+    r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
+    r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
