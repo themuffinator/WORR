@@ -954,9 +954,18 @@ static void CL_AddPlayerBeams(void)
             ps = CL_KEYPS;
             ops = CL_OLDKEYPS;
 
-            for (j = 0; j < 3; j++)
-                b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
-                    CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
+            const bool skipBob = info_bobskip && info_bobskip->integer;
+
+            for (j = 0; j < 3; j++) {
+                float gunOffset = 0.0f;
+
+                if (!skipBob) {
+                    gunOffset = ops->gunoffset[j] +
+                        CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
+                }
+
+                b->start[j] = cl.refdef.vieworg[j] + gunOffset;
+            }
 
             x = b->offset[0];
             y = b->offset[1];

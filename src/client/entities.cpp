@@ -1254,6 +1254,7 @@ static void CL_AddViewWeapon(void)
     const player_state_t *ps, *ops;
     entity_t    gun;        // view model
     int         i, flags;
+    const bool skipBob = info_bobskip && info_bobskip->integer;
 
     // allow the gun to be completely removed
     if (cl_gun->integer < 1) {
@@ -1289,10 +1290,18 @@ static void CL_AddViewWeapon(void)
 
     // set up gun position
     for (i = 0; i < 3; i++) {
-        gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i] +
-                        CL_KEYLERPFRAC * (ps->gunoffset[i] - ops->gunoffset[i]);
-        gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle(ops->gunangles[i],
-                        ps->gunangles[i], CL_KEYLERPFRAC);
+        float gunOffset = 0.0f;
+        float gunAngleDelta = 0.0f;
+
+        if (!skipBob) {
+            gunOffset = ops->gunoffset[i] +
+                CL_KEYLERPFRAC * (ps->gunoffset[i] - ops->gunoffset[i]);
+            gunAngleDelta = LerpAngle(ops->gunangles[i], ps->gunangles[i],
+                CL_KEYLERPFRAC);
+        }
+
+        gun.origin[i] = cl.refdef.vieworg[i] + gunOffset;
+        gun.angles[i] = cl.refdef.viewangles[i] + gunAngleDelta;
     }
 
     VectorMA(gun.origin, cl_gun_y->value, cl.v_forward, gun.origin);
@@ -1388,7 +1397,7 @@ static void CL_AddViewWeapon(void)
 static void CL_SetupFirstPersonView(void)
 {
     // add kick angles
-    if (cl_kickangles->integer) {
+    if (cl_kickangles->integer && !(info_bobskip && info_bobskip->integer)) {
         vec3_t kickangles;
         LerpAngles(CL_OLDKEYPS->kick_angles, CL_KEYPS->kick_angles, CL_KEYLERPFRAC, kickangles);
         VectorAdd(cl.refdef.viewangles, kickangles, cl.refdef.viewangles);
