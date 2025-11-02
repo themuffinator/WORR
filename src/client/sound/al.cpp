@@ -28,7 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // OpenAL implementation should support at least this number of sources
 #define MIN_CHANNELS    16
 
-static cvar_t       *al_reverb;
+static cvar_t       *s_use_reverb;
 static cvar_t       *al_reverb_lerp_time;
 
 static cvar_t       *al_timescale;
@@ -689,13 +689,13 @@ static bool AL_Init(void)
         qalEffecti(s_reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
     }
 
-    al_reverb = Cvar_Get("al_reverb", "1", 0);
-    al_reverb->changed = al_reverb_changed;
+    s_use_reverb = Cvar_Get("s_use_reverb", "1", 0);
+    s_use_reverb->changed = al_reverb_changed;
     al_reverb_lerp_time = Cvar_Get("al_reverb_lerp_time", "3.0", 0);
 
     al_timescale = Cvar_Get("al_timescale", "1", 0);
 
-    SCR_RegisterStat("al_reverb", AL_Reverb_stat);
+    SCR_RegisterStat("s_use_reverb", AL_Reverb_stat);
 
     Com_Printf("OpenAL initialized.\n");
     return true;
@@ -754,7 +754,7 @@ static void AL_Shutdown(void)
     s_volume->changed = NULL;
     al_merge_looping->changed = NULL;
 
-    SCR_UnregisterStat("al_reverb");
+    SCR_UnregisterStat("s_use_reverb");
 
     QAL_Shutdown();
 }
@@ -936,7 +936,7 @@ static void AL_PlayChannel(channel_t *ch)
     qalSourcef(ch->srcnum, AL_MAX_DISTANCE, 8192);
     qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, ch->dist_mult * (8192 - SOUND_FULLVOLUME));
 
-    if (cl.bsp && s_reverb_slot && al_reverb->integer) {
+    if (cl.bsp && s_reverb_slot && s_use_reverb->integer) {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
     } else {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
@@ -1339,7 +1339,7 @@ static void AL_Update(void)
 
     AL_UpdateUnderWater();
     
-    if (al_reverb->integer) {
+    if (s_use_reverb->integer) {
         AL_UpdateReverb();
     }
 
