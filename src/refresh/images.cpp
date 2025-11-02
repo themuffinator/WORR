@@ -2011,6 +2011,8 @@ static image_t *find_or_load_image(const char *name, size_t len,
         if (!Q_stricmp(ext, "ttf") || !Q_stricmp(ext, "otf")) {
             if (Draw_LoadFreeTypeFont(image, image->name)) {
                 freetype_font = true;
+                flags = enum_bit_or(flags, IF_TRANSPARENT);
+                image_set_flags(image, flags);
             } else {
                 ret = Q_ERR_LIBRARY_ERROR;
                 goto fail;
