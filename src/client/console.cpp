@@ -461,7 +461,7 @@ void Con_Init(void)
     con_alpha = Cvar_Get("con_alpha", "1", 0);
     con_scale = Cvar_Get("con_scale", "0", 0);
     con_scale->changed = con_width_changed;
-    con_font = Cvar_Get("con_font", "conchars", 0);
+    con_font = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
     con_font->changed = con_media_changed;
     con_background = Cvar_Get("con_background", "conback", 0);
     con_background->changed = con_media_changed;
@@ -666,6 +666,9 @@ void Con_RegisterMedia(void)
         if (strcmp(con_font->string, con_font->default_string)) {
             Cvar_Reset(con_font);
             con.charsetImage = R_RegisterFont(con_font->default_string);
+        }
+        if (!con.charsetImage) {
+            con.charsetImage = R_RegisterFont("conchars");
         }
         if (!con.charsetImage) {
             Com_Error(ERR_FATAL, "%s", Com_GetLastError());
