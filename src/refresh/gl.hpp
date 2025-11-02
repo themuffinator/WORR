@@ -87,14 +87,12 @@ constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum
 #define TEXNUM_PP_DEPTH         AUTO_TEX(17)
 
 // framebuffers
-#define FBO_COUNT   7
+#define FBO_COUNT   5
 #define FBO_SCENE   gl_static.framebuffers[0]
-#define FBO_BLUR_0  gl_static.framebuffers[1]
-#define FBO_BLUR_1  gl_static.framebuffers[2]
-#define FBO_BOKEH_COC      gl_static.framebuffers[3]
-#define FBO_BOKEH_RESULT   gl_static.framebuffers[4]
-#define FBO_BOKEH_HALF     gl_static.framebuffers[5]
-#define FBO_BOKEH_GATHER   gl_static.framebuffers[6]
+#define FBO_BOKEH_COC      gl_static.framebuffers[1]
+#define FBO_BOKEH_RESULT   gl_static.framebuffers[2]
+#define FBO_BOKEH_HALF     gl_static.framebuffers[3]
+#define FBO_BOKEH_GATHER   gl_static.framebuffers[4]
 
 typedef struct {
     GLuint query;
@@ -399,8 +397,9 @@ extern cvar_t *gl_md5_distance;
 #endif
 extern cvar_t *gl_damageblend_frac;
 extern cvar_t *r_skipUnderWaterFX;
-extern cvar_t *gl_bloom;
-extern cvar_t *gl_bloom_height;
+extern cvar_t *r_bloom;
+extern cvar_t *r_bloomBlurRadius;
+extern cvar_t *r_bloomThreshold;
 extern cvar_t *gl_dof;
 
 // development variables
@@ -703,16 +702,17 @@ void GL_LoadWorld(const char *name);
 #define GLS_BLOOM_GENERATE      BIT_ULL(29)
 #define GLS_BLOOM_OUTPUT        BIT_ULL(30)
 #define GLS_BLOOM_SHELL         BIT_ULL(31)
+#define GLS_BLOOM_BRIGHTPASS    BIT_ULL(32)
 
-#define GLS_BLUR_GAUSS          BIT_ULL(32)
-#define GLS_BLUR_BOX            BIT_ULL(33)
+#define GLS_BLUR_GAUSS          BIT_ULL(33)
+#define GLS_BLUR_BOX            BIT_ULL(34)
 
-#define GLS_DYNAMIC_LIGHTS      BIT_ULL(34)
-#define GLS_BOKEH_COC           BIT_ULL(35)
-#define GLS_BOKEH_INITIAL       BIT_ULL(36)
-#define GLS_BOKEH_DOWNSAMPLE    BIT_ULL(37)
-#define GLS_BOKEH_GATHER        BIT_ULL(38)
-#define GLS_BOKEH_COMBINE       BIT_ULL(39)
+#define GLS_DYNAMIC_LIGHTS      BIT_ULL(35)
+#define GLS_BOKEH_COC           BIT_ULL(36)
+#define GLS_BOKEH_INITIAL       BIT_ULL(37)
+#define GLS_BOKEH_DOWNSAMPLE    BIT_ULL(38)
+#define GLS_BOKEH_GATHER        BIT_ULL(39)
+#define GLS_BOKEH_COMBINE       BIT_ULL(40)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -721,14 +721,14 @@ void GL_LoadWorld(const char *name);
 #define GLS_FOG_MASK            (GLS_FOG_GLOBAL | GLS_FOG_HEIGHT | GLS_FOG_SKY)
 #define GLS_MESH_ANY            (GLS_MESH_MD2 | GLS_MESH_MD5)
 #define GLS_MESH_MASK           (GLS_MESH_ANY | GLS_MESH_LERP | GLS_MESH_SHELL | GLS_MESH_SHADE)
-#define GLS_BLOOM_MASK          (GLS_BLOOM_GENERATE | GLS_BLOOM_OUTPUT | GLS_BLOOM_SHELL)
+#define GLS_BLOOM_MASK          (GLS_BLOOM_GENERATE | GLS_BLOOM_OUTPUT | GLS_BLOOM_SHELL | GLS_BLOOM_BRIGHTPASS)
 #define GLS_BLUR_MASK           (GLS_BLUR_GAUSS | GLS_BLUR_BOX)
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {

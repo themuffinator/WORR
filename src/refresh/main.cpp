@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.hpp"
+#include "postprocess/bloom.hpp"
 #include "font_freetype.hpp"
 #include <array>
 
@@ -63,7 +64,9 @@ cvar_t *gl_md5_distance;
 cvar_t *gl_damageblend_frac;
 cvar_t *r_skipUnderWaterFX;
 cvar_t *r_enablefog;
-cvar_t *gl_bloom;
+cvar_t *r_bloom;
+cvar_t *r_bloomBlurRadius;
+cvar_t *r_bloomThreshold;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
 
@@ -679,7 +682,7 @@ bool GL_ShowErrors(const char *func)
     return true;
 }
 
-static void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
+void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 {
     GL_BindArrays(VA_POSTPROCESS);
     GL_StateBits(GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_FALSE |
@@ -834,56 +837,24 @@ constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
 static void GL_DrawBloom(pp_flags_t flags)
 {
     const bool waterwarp = (flags & PP_WATERWARP) != 0;
-    bool depth_of_field = (flags & PP_DEPTH_OF_FIELD) != 0;
-    int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
-    int w = glr.fd.width / 4;
-    int h = glr.fd.height / 4;
-
-    qglViewport(0, 0, w, h);
-    GL_Ortho(0, w, h, 0, -1, 1);
-
-    // downscale
-    gls.u_block.fog_color[0] = 1.0f / w;
-    gls.u_block.fog_color[1] = 1.0f / h;
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
-    GL_PostProcess(GLS_BLUR_BOX, 0, 0, w, h);
-
-    // blur X/Y
-    for (int i = 0; i < iterations; i++) {
-        int j = i & 1;
-
-        gls.u_block.fog_color[0] = 1.0f / w;
-        gls.u_block.fog_color[1] = 1.0f / h;
-        gls.u_block.fog_color[j] = 0;
-
-        GL_ForceTexture(TMU_TEXTURE, j ? TEXNUM_PP_BLUR_1 : TEXNUM_PP_BLUR_0);
-        qglBindFramebuffer(GL_FRAMEBUFFER, j ? FBO_BLUR_0 : FBO_BLUR_1);
-        GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
-    }
-
+    const bool depth_of_field = (flags & PP_DEPTH_OF_FIELD) != 0;
     const bool show_bloom = q_unlikely(gl_showbloom->integer);
 
-    if (depth_of_field && !show_bloom)
-        GL_RunDepthOfField();
+    BloomRenderContext context{
+        .sceneTexture = TEXNUM_PP_SCENE,
+        .bloomTexture = TEXNUM_PP_BLOOM,
+        .dofTexture = TEXNUM_PP_DOF_RESULT,
+        .viewportX = glr.fd.x,
+        .viewportY = glr.fd.y,
+        .viewportWidth = glr.fd.width,
+        .viewportHeight = glr.fd.height,
+        .waterwarp = waterwarp,
+        .depthOfField = depth_of_field,
+        .showDebug = show_bloom,
+        .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
+    };
 
-    GL_Setup2D();
-
-    glStateBits_t bits = GLS_BLOOM_OUTPUT;
-    if (show_bloom) {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-        bits = GLS_DEFAULT;
-        depth_of_field = false;
-    } else {
-        GL_ForceTexture(TMU_TEXTURE, depth_of_field ? TEXNUM_PP_DOF_RESULT : TEXNUM_PP_SCENE);
-        GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
-        if (waterwarp)
-            bits |= GLS_WARP_ENABLE;
-    }
-
-    // upscale & add
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    g_bloom_effect.render(context);
 }
 
 static void GL_DrawDepthOfField(pp_flags_t flags)
@@ -905,7 +876,7 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 }
 
 static int32_t r_skipUnderWaterFX_modified = 0;
-static int32_t gl_bloom_modified = 0;
+static int32_t r_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
 
 static pp_flags_t GL_BindFramebuffer(void)
@@ -920,7 +891,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
         flags |= PP_WATERWARP;
 
-    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_bloom->integer)
+    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && r_bloom->integer)
         flags |= PP_BLOOM;
 
     if (dof_active)
@@ -930,13 +901,13 @@ static pp_flags_t GL_BindFramebuffer(void)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
-        gl_bloom->modified_count != gl_bloom_modified ||
+        r_bloom->modified_count != r_bloom_modified ||
         gl_dof->modified_count != gl_dof_modified) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
-        gl_bloom_modified = gl_bloom->modified_count;
+        r_bloom_modified = r_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
         if (flags & PP_BLOOM)
             gl_backend->update_blur();
@@ -1297,7 +1268,9 @@ static void GL_Register(void)
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
-    gl_bloom = Cvar_Get("gl_bloom", "1", 0);
+    r_bloom = Cvar_Get("r_bloom", "1", 0);
+    r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
+    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.8", 0);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;

@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.hpp"
+#include "postprocess/bloom.hpp"
 #include "font_freetype.hpp"
 #include "common/prompt.hpp"
 #include <algorithm>
@@ -1212,12 +1213,12 @@ bool GL_InitFramebuffers(void)
     int dof_w = 0, dof_h = 0;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 
-    if (!r_skipUnderWaterFX->integer || gl_bloom->integer || dof_active) {
+    if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }
 
-    if (gl_bloom->integer) {
+    if (r_bloom->integer) {
         bloom_w = glr.fd.width;
         bloom_h = glr.fd.height;
     }
@@ -1229,8 +1230,6 @@ bool GL_InitFramebuffers(void)
 
     GL_ClearErrors();
 
-    const int bloom_down_w = bloom_w / 4;
-    const int bloom_down_h = bloom_h / 4;
     const int dof_half_w = dof_w > 0 ? (std::max)(dof_w / 2, 1) : 0;
     const int dof_half_h = dof_h > 0 ? (std::max)(dof_h / 2, 1) : 0;
 
@@ -1239,12 +1238,6 @@ bool GL_InitFramebuffers(void)
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
     GL_InitPostProcTexture(bloom_w, bloom_h);
-
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-    GL_InitPostProcTexture(bloom_down_w, bloom_down_h);
-
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_1);
-    GL_InitPostProcTexture(bloom_down_w, bloom_down_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_COC);
     GL_InitPostProcTexture(dof_w, dof_h);
@@ -1269,16 +1262,6 @@ bool GL_InitFramebuffers(void)
 
     CHECK_FB(scene_w, "FBO_SCENE");
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLUR_0 : GL_NONE, 0);
-
-    CHECK_FB(bloom_w, "FBO_BLUR_0");
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_1);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLUR_1 : GL_NONE, 0);
-
-    CHECK_FB(bloom_w, "FBO_BLUR_1");
-
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_COC : GL_NONE, 0);
 
@@ -1300,6 +1283,11 @@ bool GL_InitFramebuffers(void)
     CHECK_FB(dof_w, "FBO_BOKEH_GATHER");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (r_bloom->integer)
+        g_bloom_effect.resize(bloom_w, bloom_h);
+    else
+        g_bloom_effect.resize(0, 0);
 
     return true;
 }
@@ -1413,6 +1401,8 @@ void GL_ShutdownImages(void)
     gl_anisotropy->changed = NULL;
     gl_gamma->changed = NULL;
     gl_partshape->changed = NULL;
+
+    g_bloom_effect.shutdown();
 
     // delete auto textures
     qglDeleteTextures(NUM_AUTO_TEXTURES, gl_static.texnums);
