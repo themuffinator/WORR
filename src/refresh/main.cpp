@@ -1269,8 +1269,8 @@ static void GL_Register(void)
     r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
-    r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
-    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.8", 0);
+    r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "2.0", 0);
+    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.1", 0);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
