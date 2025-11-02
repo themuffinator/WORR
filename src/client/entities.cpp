@@ -1660,10 +1660,11 @@ void CL_CalcViewValues(void)
 
     cl.refdef.vieworg[2] += viewheight;
 
-    VectorCopy(cl.refdef.vieworg, listener_origin);
-    VectorCopy(cl.v_forward, listener_forward);
-    VectorCopy(cl.v_right, listener_right);
-    VectorCopy(cl.v_up, listener_up);
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    VectorCopy(cl.refdef.vieworg, soundSystem.listener_origin());
+    VectorCopy(cl.v_forward, soundSystem.listener_forward());
+    VectorCopy(cl.v_right, soundSystem.listener_right());
+    VectorCopy(cl.v_up, soundSystem.listener_up());
 }
 
 /*
@@ -1732,6 +1733,9 @@ bool CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org, vec3_t offset)
     const mmodel_t  *mod;
     vec3_t          mid, base_origin;
     bool            anchored = false;
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    const vec3_t &listener_origin = soundSystem.listener_origin();
+    const int listener_entnum = soundSystem.listener_entnum();
 
     if (offset)
         VectorClear(offset);

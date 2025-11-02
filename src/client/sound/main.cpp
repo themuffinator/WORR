@@ -730,16 +730,18 @@ S_StartLocalSound
 void S_StartLocalSound(const char *sound)
 {
     if (s_started != SoundBackend::Not) {
+        SoundSystem &soundSystem = S_GetSoundSystem();
         qhandle_t sfx = S_RegisterSound(sound);
-        S_GetSoundSystem().StartSound(NULL, listener_entnum, 0, sfx, 1, ATTN_NONE, 0);
+        soundSystem.StartSound(NULL, soundSystem.listener_entnum(), 0, sfx, 1, ATTN_NONE, 0);
     }
 }
 
 void S_StartLocalSoundOnce(const char *sound)
 {
     if (s_started != SoundBackend::Not) {
+        SoundSystem &soundSystem = S_GetSoundSystem();
         qhandle_t sfx = S_RegisterSound(sound);
-        S_GetSoundSystem().StartSound(NULL, listener_entnum, 256, sfx, 1, ATTN_NONE, 0);
+        soundSystem.StartSound(NULL, soundSystem.listener_entnum(), 256, sfx, 1, ATTN_NONE, 0);
     }
 }
 

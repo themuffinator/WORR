@@ -169,7 +169,9 @@ extern cvar_t       *s_num_channels;
 extern cvar_t       *s_debug_soundorigins;
 
 #define S_IsFullVolume(ch) \
-    ((ch)->entnum == -1 || ((ch)->entnum == listener_entnum && !cl.thirdPersonView) || (ch)->dist_mult == 0)
+    ((ch)->entnum == -1 || \
+     ((ch)->entnum == S_GetSoundSystem().listener_entnum() && !cl.thirdPersonView) || \
+     (ch)->dist_mult == 0)
 
 #define S_IsUnderWater() \
     (cls.state == ca_active && (cl.frame.ps.rdflags | cl.predicted_rdflags) & RDF_UNDERWATER && s_underwater->integer)
