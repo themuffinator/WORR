@@ -87,6 +87,7 @@ common_src = [
 
   'src/common/q2proto-glue.cpp',
   'src/common/q2proto-packing.cpp',
+  'src/common/q3colors.cpp',
 
   'inc/shared/atomic.hpp',
   'inc/shared/base85.hpp',
@@ -118,6 +119,7 @@ common_src = [
   'inc/common/msg.hpp',
   'inc/common/pmove.hpp',
   'inc/common/prompt.hpp',
+  'inc/common/q3colors.hpp',
   'inc/common/protocol.hpp',
   'inc/common/sizebuf.hpp',
   'inc/common/steam.hpp',

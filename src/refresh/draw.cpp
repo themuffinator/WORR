@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "font_freetype.hpp"
+#include "common/q3colors.hpp"
 #include <array>
 
 #if USE_FREETYPE
@@ -264,10 +265,25 @@ static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
     const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
     const int shadow_offset = drop_shadow ? max(scale, 1) : 0;
 
-    color_t shadow_color = ColorA(color.a);
+    color_t currentColor = color;
+    color_t shadow_color = ColorA(currentColor.a);
 
-    while (maxlen-- && *s) {
-        unsigned char ch = static_cast<unsigned char>(*s++);
+    const char *p = s;
+    size_t remaining = maxlen;
+
+    while (remaining && *p) {
+        if (!(flags & UI_IGNORECOLOR)) {
+            size_t consumed = 0;
+            if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
+                p += consumed;
+                remaining -= consumed;
+                shadow_color = ColorA(currentColor.a);
+                continue;
+            }
+        }
+
+        unsigned char ch = static_cast<unsigned char>(*p++);
+        --remaining;
 
         if ((flags & UI_MULTILINE) && ch == '\n') {
             pen_y += line_advance + (1.0f / draw.scale);
@@ -305,7 +321,7 @@ static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
 
             GL_StretchPic_(xpos, ypos, gw, gh,
                            glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-                           color, atlas.texnum, IF_TRANSPARENT);
+                           currentColor, atlas.texnum, IF_TRANSPARENT);
         }
 
         pen_x += adv;
@@ -870,9 +886,22 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
     (void)ftFont;
 
     int sx = x;
+    color_t currentColor = color;
+    const char *p = s;
+    size_t remaining = maxlen;
 
-    while (maxlen-- && *s) {
-        byte c = *s++;
+    while (remaining && *p) {
+        if (!(flags & UI_IGNORECOLOR)) {
+            size_t consumed = 0;
+            if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
+                p += consumed;
+                remaining -= consumed;
+                continue;
+            }
+        }
+
+        byte c = static_cast<byte>(*p++);
+        --remaining;
 
         if ((flags & UI_MULTILINE) && c == '\n') {
             y += CONCHAR_HEIGHT * scale + (1.0 / draw.scale);
@@ -880,7 +909,7 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
             continue;
         }
 
-        draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, color, image);
+        draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, currentColor, image);
         x += CONCHAR_WIDTH * scale;
     }
 
