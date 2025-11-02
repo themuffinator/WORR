@@ -47,11 +47,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/sizebuf.hpp"
 #include "common/zone.hpp"
 
+#include "client/client.hpp"
 #include "refresh/refresh.hpp"
 #include "server/server.hpp"
 #include "system/system.hpp"
-
-#include "client/client.hpp"
 #include "client/input.hpp"
 #include "client/keys.hpp"
 #include "client/sound/sound.hpp"
