@@ -314,6 +314,41 @@ static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
     return static_cast<int>(std::lround(pen_x));
 }
 
+static int Ft_MeasureString(FtFont &font, int scale, int flags,
+                            size_t maxlen, const char *s)
+{
+    if (!s)
+        return 0;
+
+    const float target_height = CONCHAR_HEIGHT * max(scale, 1);
+    const float scale_factor = target_height / static_cast<float>(font.pixel_height);
+    float pen_x = 0.0f;
+    float max_pen_x = 0.0f;
+
+    while (maxlen-- && *s) {
+        unsigned char ch = static_cast<unsigned char>(*s++);
+
+        if ((flags & UI_MULTILINE) && ch == '\n') {
+            max_pen_x = max(max_pen_x, pen_x);
+            pen_x = 0.0f;
+            continue;
+        }
+
+        if (ch < 32)
+            continue;
+
+        FtGlyph *glyph = Ft_LookupGlyph(font, ch);
+        if (!glyph)
+            continue;
+
+        pen_x += glyph->advance * scale_factor;
+    }
+
+    max_pen_x = max(max_pen_x, pen_x);
+
+    return static_cast<int>(std::lround(max_pen_x));
+}
+
 } // namespace
 
 bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
@@ -423,6 +458,122 @@ void Draw_ShutdownFreeTypeFonts(void)
     ft_fonts.clear();
     FT_Done_FreeType(ft_library);
     ft_library = nullptr;
+}
+
+bool R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont)
+{
+    if (!outFont)
+        return false;
+
+    outFont->driverData = nullptr;
+    outFont->ascent = 0;
+    outFont->descent = 0;
+    outFont->lineHeight = 0;
+
+    const image_t *image = IMG_ForHandle(font);
+    if (!image)
+        return false;
+
+    FtFont *ft_font = Ft_FontForImage(image);
+    if (!ft_font)
+        return false;
+
+    outFont->driverData = ft_font;
+    outFont->ascent = ft_font->ascent;
+    outFont->descent = ft_font->descent;
+    outFont->lineHeight = ft_font->line_height;
+
+    if (!outFont->pixelHeight)
+        outFont->pixelHeight = ft_font->pixel_height;
+    if (!outFont->face)
+        outFont->face = ft_font->face;
+
+    return true;
+}
+
+void R_ReleaseFreeTypeFont(ftfont_t *font)
+{
+    if (!font)
+        return;
+
+    font->driverData = nullptr;
+    font->ascent = 0;
+    font->descent = 0;
+    font->lineHeight = 0;
+}
+
+int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
+                         const char *string, color_t color, qhandle_t font,
+                         const ftfont_t *ftFont)
+{
+    const image_t *image = IMG_ForHandle(font);
+
+    FtFont *ft_font = nullptr;
+    if (ftFont)
+        ft_font = static_cast<FtFont *>(ftFont->driverData);
+
+    if (!ft_font)
+        ft_font = Ft_FontForImage(image);
+
+    if (ft_font) {
+        if (gl_fontshadow->integer > 0)
+            flags |= UI_DROPSHADOW;
+        return Ft_DrawString(*ft_font, x, y, scale, flags, maxChars, string, color);
+    }
+
+    return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, nullptr);
+}
+
+int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
+                            const char *string, qhandle_t font,
+                            const ftfont_t *ftFont)
+{
+    const image_t *image = IMG_ForHandle(font);
+
+    FtFont *ft_font = nullptr;
+    if (ftFont)
+        ft_font = static_cast<FtFont *>(ftFont->driverData);
+
+    if (!ft_font)
+        ft_font = Ft_FontForImage(image);
+
+    if (ft_font)
+        return Ft_MeasureString(*ft_font, scale, flags, maxChars, string);
+
+    int width = 0;
+    int maxWidth = 0;
+
+    if (!string)
+        return 0;
+
+    while (maxChars-- && *string) {
+        char ch = *string++;
+
+        if ((flags & UI_MULTILINE) && ch == '\n') {
+            maxWidth = max(maxWidth, width);
+            width = 0;
+            continue;
+        }
+
+        width += CONCHAR_WIDTH * scale;
+    }
+
+    return max(maxWidth, width);
+}
+
+float R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont)
+{
+    FtFont *ft_font = nullptr;
+    if (ftFont)
+        ft_font = static_cast<FtFont *>(ftFont->driverData);
+
+    if (!ft_font)
+        return CONCHAR_HEIGHT * max(scale, 1);
+
+    const float target_height = CONCHAR_HEIGHT * max(scale, 1);
+    const float scale_factor = target_height / static_cast<float>(ft_font->pixel_height);
+    const float line_height = (ft_font->line_height ? ft_font->line_height : ft_font->pixel_height) * scale_factor;
+    return line_height;
 }
 
 #endif // USE_FREETYPE
@@ -852,12 +1003,19 @@ void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t col
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
                         const char *s, color_t color, qhandle_t font,
-                        const ref_freetype_font_t *ftFont)
+                        const ftfont_t *ftFont)
 {
     const image_t *image = IMG_ForHandle(font);
 
 #if USE_FREETYPE
-    if (FtFont *ft_font = Ft_FontForImage(image)) {
+    FtFont *ft_font = nullptr;
+    if (ftFont)
+        ft_font = static_cast<FtFont *>(ftFont->driverData);
+
+    if (!ft_font)
+        ft_font = Ft_FontForImage(image);
+
+    if (ft_font) {
         if (gl_fontshadow->integer > 0)
             flags |= UI_DROPSHADOW;
         return Ft_DrawString(*ft_font, x, y, scale, flags, maxlen, s, color);
@@ -866,8 +1024,6 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 
     if (gl_fontshadow->integer > 0)
         flags |= UI_DROPSHADOW;
-
-    (void)ftFont;
 
     int sx = x;
 

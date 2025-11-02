@@ -87,7 +87,7 @@ static cvar_t   *scr_fontpath;
 
 static void SCR_FreeFreeTypeFonts(void);
 static bool SCR_LoadDefaultFreeTypeFont(void);
-static const ref_freetype_font_t *SCR_FTFontForHandle(qhandle_t handle);
+static const ftfont_t *SCR_FTFontForHandle(qhandle_t handle);
 #endif
 
 // nb: this is dumb but C doesn't allow
@@ -122,6 +122,7 @@ static void SCR_FreeFreeTypeFonts(void)
             FT_Done_Face(entry.second.renderInfo.face);
             entry.second.renderInfo.face = nullptr;
         }
+        R_ReleaseFreeTypeFont(&entry.second.renderInfo);
     }
 
     scr.freetype.fonts.clear();
@@ -168,9 +169,13 @@ static bool SCR_LoadFreeTypeFont(const std::string &cacheKey, const std::string 
     if (existing != scr.freetype.fonts.end()) {
         if (existing->second.renderInfo.face)
             FT_Done_Face(existing->second.renderInfo.face);
+        R_ReleaseFreeTypeFont(&existing->second.renderInfo);
         existing->second = std::move(entry);
+        R_AcquireFreeTypeFont(handle, &existing->second.renderInfo);
     } else {
-        scr.freetype.fonts.emplace(cacheKey, std::move(entry));
+        auto [it, inserted] = scr.freetype.fonts.emplace(cacheKey, std::move(entry));
+        if (inserted)
+            R_AcquireFreeTypeFont(handle, &it->second.renderInfo);
     }
 
     scr.freetype.handleLookup[handle] = cacheKey;
@@ -198,7 +203,7 @@ static bool SCR_LoadDefaultFreeTypeFont(void)
     return true;
 }
 
-static const ref_freetype_font_t *SCR_FTFontForHandle(qhandle_t handle)
+static const ftfont_t *SCR_FTFontForHandle(qhandle_t handle)
 {
     auto handleIt = scr.freetype.handleLookup.find(handle);
     if (handleIt == scr.freetype.handleLookup.end())
@@ -231,9 +236,9 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
     size_t len = strlen(s);
 
 #if USE_FREETYPE
-    const ref_freetype_font_t *ftFont = SCR_FTFontForHandle(font);
+    const ftfont_t *ftFont = SCR_FTFontForHandle(font);
 #else
-    const ref_freetype_font_t *ftFont = nullptr;
+    const ftfont_t *ftFont = nullptr;
 #endif
 
     if (len > maxlen) {
@@ -241,12 +246,16 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
     }
 
     if ((flags & UI_CENTER) == UI_CENTER) {
-        x -= (len * CONCHAR_WIDTH * scale) / 2;
+        int width = ftFont ? R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, len, s, font, ftFont)
+                           : static_cast<int>(len) * CONCHAR_WIDTH * scale;
+        x -= width / 2;
     } else if (flags & UI_RIGHT) {
-        x -= len * CONCHAR_WIDTH * scale;
+        int width = ftFont ? R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, len, s, font, ftFont)
+                           : static_cast<int>(len) * CONCHAR_WIDTH * scale;
+        x -= width;
     }
 
-    return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font, ftFont);
+    return R_DrawFreeTypeString(x, y, scale, flags, maxlen, s, color, font, ftFont);
 }
 
 

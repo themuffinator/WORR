@@ -1195,7 +1195,7 @@ typedef struct {
 #if USE_FREETYPE
 struct scr_freetype_font_entry_t {
     std::vector<uint8_t> buffer;
-    ref_freetype_font_t  renderInfo;
+    ftfont_t             renderInfo;
 };
 
 struct scr_freetype_cache_t {

@@ -270,7 +270,17 @@ static void CG_SCR_SetAltTypeface(bool enabled)
 static float CG_SCR_FontLineHeight(int scale)
 {
     if (!scr.kfont.pic)
+    {
+#if USE_FREETYPE
+        ftfont_t ftFont{};
+        if (R_AcquireFreeTypeFont(scr.font_pic, &ftFont)) {
+            float height = R_FreeTypeFontLineHeight(scale, &ftFont);
+            R_ReleaseFreeTypeFont(&ftFont);
+            return height;
+        }
+#endif
         return CONCHAR_HEIGHT * scale;
+    }
 
     return scr.kfont.line_height;
 }
@@ -294,17 +304,40 @@ static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
     int num_lines = 1;
     int max_width = 0;
 
+#if USE_FREETYPE
+    ftfont_t ftFont{};
+    bool haveFtFont = R_AcquireFreeTypeFont(scr.font_pic, &ftFont);
+#endif
+
     while (*str) {
         const char *p = strchr(str, '\n');
         if (!p) {
-            int line_width = scr.kfont.pic ? CG_MeasureKFontWidth(str, maxlen) : maxlen * CONCHAR_WIDTH * scale;
+            int line_width;
+            if (scr.kfont.pic) {
+                line_width = CG_MeasureKFontWidth(str, maxlen);
+#if USE_FREETYPE
+            } else if (haveFtFont) {
+                line_width = R_MeasureFreeTypeString(scale, 0, maxlen, str, scr.font_pic, &ftFont);
+#endif
+            } else {
+                line_width = maxlen * CONCHAR_WIDTH * scale;
+            }
             if (line_width > max_width)
                 max_width = line_width;
             break;
         }
 
         size_t len = min(p - str, maxlen);
-        int line_width = scr.kfont.pic ? CG_MeasureKFontWidth(str, len) : len * CONCHAR_WIDTH * scale;
+        int line_width;
+        if (scr.kfont.pic) {
+            line_width = CG_MeasureKFontWidth(str, len);
+#if USE_FREETYPE
+        } else if (haveFtFont) {
+            line_width = R_MeasureFreeTypeString(scale, 0, len, str, scr.font_pic, &ftFont);
+#endif
+        } else {
+            line_width = len * CONCHAR_WIDTH * scale;
+        }
         if (line_width > max_width)
             max_width = line_width;
         maxlen -= len;
@@ -312,6 +345,11 @@ static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
         ++num_lines;
         str = p + 1;
     }
+
+#if USE_FREETYPE
+    if (haveFtFont)
+        R_ReleaseFreeTypeFont(&ftFont);
+#endif
 
     return cg_vec2_t{ static_cast<float>(max_width), static_cast<float>(num_lines) * CG_SCR_FontLineHeight(scale) };
 }
