@@ -1212,7 +1212,7 @@ bool GL_InitFramebuffers(void)
     int dof_w = 0, dof_h = 0;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 
-    if (gl_waterwarp->integer || gl_bloom->integer || dof_active) {
+    if (!r_skipUnderWaterFX->integer || gl_bloom->integer || dof_active) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }
