@@ -894,7 +894,15 @@ void SoundSystem::Update()
     if (cls.state != ca_active) {
         listener_entnum_ = -1;
     } else {
-        listener_entnum_ = cl.frame.clientNum + 1;
+        int clientNum = cl.frame.clientNum;
+
+        if (clientNum < 0)
+            clientNum = cl.clientNum;
+
+        if (clientNum >= 0 && clientNum < cl.csr.max_edicts)
+            listener_entnum_ = clientNum + 1;
+        else
+            listener_entnum_ = -1;
     }
 
     OGG_Update();
