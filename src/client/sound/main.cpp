@@ -17,8 +17,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // snd_main.c -- common sound functions
 
-#include <vector>
-
 #include "SoundSystem.hpp"
 
 #include "sound.hpp"
@@ -31,8 +29,6 @@ SoundBackend    s_started;
 bool            s_active;
 bool            s_supports_float;
 const sndapi_t  *s_api;
-
-bool        s_registering;
 
 int         s_paintedtime;  // sample PAIRS
 
@@ -199,19 +195,6 @@ fail:
 }
 
 
-// =======================================================================
-// Shutdown sound engine
-// =======================================================================
-
-static void S_FreeSound(sfx_t *sfx)
-{
-    if (s_started != SoundBackend::Not && s_api->delete_sfx)
-        s_api->delete_sfx(sfx);
-    Z_Free(sfx->cache);
-    Z_Free(sfx->truename);
-    memset(sfx, 0, sizeof(*sfx));
-}
-
 void S_FreeAllSounds(void)
 {
     SoundSystem &soundSystem = S_GetSoundSystem();
@@ -223,7 +206,7 @@ void S_FreeAllSounds(void)
         sfx_t *sfx = &known_sfx[i];
         if (!sfx->name[0])
             continue;
-        S_FreeSound(sfx);
+        soundSystem.FreeSound(sfx);
     }
 
     soundSystem.set_num_sfx(0);
@@ -298,57 +281,6 @@ sfx_t *SoundSystem::SfxForHandle(qhandle_t hSfx)
     return &known_sfx_[hSfx - 1];
 }
 
-static sfx_t *S_AllocSfx(void)
-{
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-    int num_sfx = soundSystem.num_sfx();
-
-    for (int i = 0; i < num_sfx; i++) {
-        sfx_t *sfx = &known_sfx[i];
-        if (!sfx->name[0]) {
-            return sfx;
-        }
-    }
-
-    if (num_sfx == soundSystem.max_sfx())
-        return NULL;
-
-    sfx_t *sfx = &known_sfx[num_sfx];
-    soundSystem.set_num_sfx(num_sfx + 1);
-    return sfx;
-}
-
-/*
-==================
-S_FindName
-
-==================
-*/
-static sfx_t *S_FindName(const char *name, size_t namelen)
-{
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-    int num_sfx = soundSystem.num_sfx();
-
-    // see if already loaded
-    for (int i = 0; i < num_sfx; i++) {
-        sfx_t *sfx = &known_sfx[i];
-        if (!FS_pathcmp(sfx->name, name)) {
-            sfx->registration_sequence = soundSystem.registration_sequence();
-            return sfx;
-        }
-    }
-
-    // allocate new one
-    sfx_t *sfx = S_AllocSfx();
-    if (sfx) {
-        memcpy(sfx->name, name, namelen + 1);
-        sfx->registration_sequence = soundSystem.registration_sequence();
-    }
-    return sfx;
-}
-
 /*
 =====================
 S_BeginRegistration
@@ -357,8 +289,7 @@ S_BeginRegistration
 */
 void S_BeginRegistration(void)
 {
-    S_GetSoundSystem().increment_registration_sequence();
-    s_registering = true;
+    S_GetSoundSystem().BeginRegistration();
 }
 
 /*
@@ -369,126 +300,7 @@ S_RegisterSound
 */
 qhandle_t S_RegisterSound(const char *name)
 {
-    char    buffer[MAX_QPATH];
-    sfx_t   *sfx;
-    size_t  len;
-
-    if (s_started == SoundBackend::Not)
-        return 0;
-
-    Q_assert(name);
-
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-
-    // empty names are legal, silently ignore them
-    if (!*name)
-        return 0;
-
-    if (*name == '*') {
-        len = Q_strlcpy(buffer, name, MAX_QPATH);
-    } else if (*name == '#') {
-        len = FS_NormalizePathBuffer(buffer, name + 1, MAX_QPATH);
-    } else {
-        len = Q_concat(buffer, MAX_QPATH, "sound/", name);
-        if (len < MAX_QPATH)
-            len = FS_NormalizePath(buffer);
-    }
-
-    // this MAY happen after prepending "sound/"
-    if (len >= MAX_QPATH) {
-        Com_DPrintf("%s: oversize name\n", __func__);
-        return 0;
-    }
-
-    // normalized to empty name?
-    if (len == 0) {
-        Com_DPrintf("%s: empty name\n", __func__);
-        return 0;
-    }
-
-    sfx = S_FindName(buffer, len);
-    if (!sfx) {
-        Com_DPrintf("%s: out of slots\n", __func__);
-        return 0;
-    }
-
-    if (!s_registering) {
-        soundSystem.LoadSound(sfx);
-    }
-
-    return static_cast<qhandle_t>((sfx - known_sfx) + 1);
-}
-
-/*
-====================
-S_RegisterSexedSound
-====================
-*/
-static sfx_t *S_RegisterSexedSound(int entnum, const char *base)
-{
-    sfx_t           *sfx;
-    const char      *model;
-    char            buffer[MAX_QPATH];
-
-    // determine what model the client is using
-    if (entnum > 0 && entnum <= MAX_CLIENTS)
-        model = cl.clientinfo[entnum - 1].model_name;
-    else
-        model = cl.baseclientinfo.model_name;
-
-    // if we can't figure it out, they're male
-    if (!*model)
-        model = "male";
-
-    // see if we already know of the model specific sound
-    if (Q_concat(buffer, MAX_QPATH, "players/", model, "/", base + 1) >= MAX_QPATH
-        && Q_concat(buffer, MAX_QPATH, "players/", "male", "/", base + 1) >= MAX_QPATH)
-        return NULL;
-
-    sfx = S_FindName(buffer, FS_NormalizePath(buffer));
-
-    // see if it exists
-    if (sfx && !sfx->truename && !s_registering && !S_GetSoundSystem().LoadSound(sfx)) {
-        // no, revert to the male sound in the pak0.pak
-        if (Q_concat(buffer, MAX_QPATH, "sound/player/male/", base + 1) < MAX_QPATH) {
-            FS_NormalizePath(buffer);
-            sfx->error = Q_ERR_SUCCESS;
-            sfx->truename = S_CopyString(buffer);
-        }
-    }
-
-    return sfx;
-}
-
-static void S_RegisterSexedSounds(void)
-{
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-    int num_sfx = soundSystem.num_sfx();
-
-    std::vector<int> sounds;
-    sounds.reserve(num_sfx);
-
-    // find sexed sounds
-    for (int i = 0; i < num_sfx; i++) {
-        sfx_t *sfx = &known_sfx[i];
-        if (sfx->name[0] != '*')
-            continue;
-        if (sfx->registration_sequence != soundSystem.registration_sequence())
-            continue;
-        sounds.push_back(i);
-    }
-
-    // register sounds for baseclientinfo and other valid clientinfos
-    for (int i = 0; i <= MAX_CLIENTS; i++) {
-        if (i > 0 && !cl.clientinfo[i - 1].model_name[0])
-            continue;
-        for (int index : sounds) {
-            sfx_t *sfx = &known_sfx[index];
-            S_RegisterSexedSound(i, sfx->name);
-        }
-    }
+    return S_GetSoundSystem().RegisterSound(name);
 }
 
 /*
@@ -499,42 +311,7 @@ S_EndRegistration
 */
 void S_EndRegistration(void)
 {
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-    int num_sfx = soundSystem.num_sfx();
-
-    S_RegisterSexedSounds();
-
-    // clear playsound list, so we don't free sfx still present there
-    soundSystem.StopAllSounds();
-
-    // free any sounds not from this registration sequence
-    for (int i = 0; i < num_sfx; i++) {
-        sfx_t *sfx = &known_sfx[i];
-        if (!sfx->name[0])
-            continue;
-        if (sfx->registration_sequence != soundSystem.registration_sequence()) {
-            // don't need this sound
-            S_FreeSound(sfx);
-            continue;
-        }
-        // make sure it is paged in
-    if (s_started != SoundBackend::Not && s_api->page_in_sfx)
-        s_api->page_in_sfx(sfx);
-    }
-
-    // load everything in
-    for (int i = 0; i < num_sfx; i++) {
-        sfx_t *sfx = &known_sfx[i];
-        if (!sfx->name[0])
-            continue;
-        soundSystem.LoadSound(sfx);
-    }
-
-    if (s_started != SoundBackend::Not && s_api->end_registration)
-        s_api->end_registration();
-
-    s_registering = false;
+    S_GetSoundSystem().EndRegistration();
 }
 
 
