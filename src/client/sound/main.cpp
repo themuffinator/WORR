@@ -449,7 +449,7 @@ void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qh
         return;
 
     if (sfx->name[0] == '*') {
-        sfx = S_RegisterSexedSound(entnum, sfx->name);
+        sfx = RegisterSexedSound(entnum, sfx->name);
         if (!sfx)
             return;
     }
