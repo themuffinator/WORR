@@ -149,13 +149,6 @@ enum class SoundBackend {
 #endif
 };
 
-extern SoundBackend     s_started;
-extern bool             s_active;
-extern bool             s_supports_float;
-extern const sndapi_t   *s_api;
-
-extern int          s_paintedtime;
-
 extern wavinfo_t    s_info;
 
 extern cvar_t       *s_volume;

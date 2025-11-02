@@ -112,13 +112,15 @@ RAW SAMPLES
 
 static bool DMA_RawSamples(int samples, int rate, int width, int channels, const void *data, float volume)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     float stepscale = (float)rate / dma.speed;
     int i, j, k, frac, fracstep = stepscale * 256;
     int outcount = samples / stepscale;
     float vol = snd_vol * volume;
 
-    if (s_rawend < s_paintedtime)
-        s_rawend = s_paintedtime;
+    const int painted_time = soundSystem.painted_time();
+    if (s_rawend < painted_time)
+        s_rawend = painted_time;
 
     if (width == 4) {
         const float *src = (const float *)data;
@@ -171,7 +173,7 @@ static bool DMA_RawSamples(int samples, int rate, int width, int channels, const
 
 static int DMA_HaveRawSamples(void)
 {
-    return Q_clip(s_rawend - s_paintedtime, 0, MAX_RAW_SAMPLES);
+    return Q_clip(s_rawend - S_GetSoundSystem().painted_time(), 0, MAX_RAW_SAMPLES);
 }
 
 static int DMA_NeedRawSamples(void)
@@ -182,7 +184,7 @@ static int DMA_NeedRawSamples(void)
 static void DMA_DropRawSamples(void)
 {
     memset(s_rawsamples, 0, sizeof(s_rawsamples));
-    s_rawend = s_paintedtime;
+    s_rawend = S_GetSoundSystem().painted_time();
 }
 
 /*
@@ -195,7 +197,7 @@ PAINTBUFFER TRANSFER
 
 static void TransferStereo16(const samplepair_t *samp, int endtime)
 {
-    int ltime = s_paintedtime;
+    int ltime = S_GetSoundSystem().painted_time();
     int size = dma.samples >> 1;
 
     while (ltime < endtime) {
@@ -216,10 +218,11 @@ static void TransferStereo16(const samplepair_t *samp, int endtime)
 
 static void TransferStereo(const samplepair_t *samp, int endtime)
 {
+    const int painted_time = S_GetSoundSystem().painted_time();
     const float *p = (const float *)samp;
-    int count = (endtime - s_paintedtime) * dma.channels;
+    int count = (endtime - painted_time) * dma.channels;
     int out_mask = dma.samples - 1;
-    int out_idx = s_paintedtime * dma.channels & out_mask;
+    int out_idx = painted_time * dma.channels & out_mask;
     int step = 3 - dma.channels;
     int val;
 
@@ -244,17 +247,18 @@ static void TransferStereo(const samplepair_t *samp, int endtime)
 
 static void TransferPaintBuffer(samplepair_t *samp, int endtime)
 {
+    const int painted_time = S_GetSoundSystem().painted_time();
     int i;
 
     if (s_testsound->integer) {
         // write a fixed sine wave
-        for (i = 0; i < endtime - s_paintedtime; i++) {
-            samp[i].left = samp[i].right = sinf((s_paintedtime + i) * 0.1f) * 20000;
+        for (i = 0; i < endtime - painted_time; i++) {
+            samp[i].left = samp[i].right = sinf((painted_time + i) * 0.1f) * 20000;
         }
     }
 
     if (s_swapstereo->integer) {
-        for (i = 0; i < endtime - s_paintedtime; i++) {
+        for (i = 0; i < endtime - painted_time; i++) {
             SWAP(float, samp[i].left, samp[i].right);
         }
     }
@@ -431,17 +435,18 @@ static void PaintChannels(int endtime)
     bool underwater = S_IsUnderWater();
 
     SoundSystem &soundSystem = S_GetSoundSystem();
+    int &painted_time = soundSystem.painted_time();
 
-    while (s_paintedtime < endtime) {
+    while (painted_time < endtime) {
         // if paintbuffer is smaller than DMA buffer
-        int end = min(endtime, s_paintedtime + PAINTBUFFER_SIZE);
+        int end = min(endtime, painted_time + PAINTBUFFER_SIZE);
 
         // start any playsounds
         while (1) {
             playsound_t *ps = soundSystem.PeekPendingPlay();
             if (!ps)
                 break;    // no more pending sounds
-            if (ps->begin > s_paintedtime) {
+            if (ps->begin > painted_time) {
                 end = min(end, ps->begin);  // stop here
                 break;
             }
@@ -449,13 +454,13 @@ static void PaintChannels(int endtime)
         }
 
         // clear the paint buffer
-        memset(paintbuffer, 0, (end - s_paintedtime) * sizeof(paintbuffer[0]));
+        memset(paintbuffer, 0, (end - painted_time) * sizeof(paintbuffer[0]));
 
         // paint in the channels.
         channel_t *channels = soundSystem.channels_data();
         int num_channels = soundSystem.num_channels();
         for (i = 0, ch = channels; ch && i < num_channels; i++, ch++) {
-            int ltime = s_paintedtime;
+            int ltime = painted_time;
 
             while (ltime < end) {
                 if (!ch->sfx || (!ch->leftvol && !ch->rightvol))
@@ -471,7 +476,7 @@ static void PaintChannels(int endtime)
                 if (count > 0) {
                     int func = (sc->width - 1) * 3 + (sc->channels - 1) * (S_IsFullVolume(ch) + 1);
                     Q_assert(func < q_countof(paintfuncs));
-                    paintfuncs[func](ch, sc, count, &paintbuffer[ltime - s_paintedtime]);
+                    paintfuncs[func](ch, sc, count, &paintbuffer[ltime - painted_time]);
                     ch->pos += count;
                     ltime += count;
                 }
@@ -494,20 +499,20 @@ static void PaintChannels(int endtime)
         }
 
         if (underwater)
-            underwater_filter(paintbuffer, end - s_paintedtime);
+            underwater_filter(paintbuffer, end - painted_time);
 
         // add from the streaming sound source
-        int count = min(end, s_rawend) - s_paintedtime;
+        int count = min(end, s_rawend) - painted_time;
 
         for (i = 0; i < count; i++) {
-            int s = (s_paintedtime + i) & (MAX_RAW_SAMPLES - 1);
+            int s = (painted_time + i) & (MAX_RAW_SAMPLES - 1);
             paintbuffer[i].left  += s_rawsamples[s].left;
             paintbuffer[i].right += s_rawsamples[s].right;
         }
 
         // transfer out according to DMA format
         TransferPaintBuffer(paintbuffer, end);
-        s_paintedtime = end;
+        painted_time = end;
     }
 }
 
@@ -599,7 +604,7 @@ static bool DMA_Init(void)
 
     SoundSystem &soundSystem = S_GetSoundSystem();
     soundSystem.num_channels() = soundSystem.max_channels();
-    s_supports_float = true;
+    soundSystem.set_supports_float(true);
 
     Com_Printf("sound sampling rate: %i\n", dma.speed);
 
@@ -620,7 +625,7 @@ static void DMA_Activate(void)
 {
     if (snddma->activate) {
         S_GetSoundSystem().StopAllSounds();
-        snddma->activate(s_active);
+        snddma->activate(S_GetSoundSystem().is_active());
     }
 }
 
@@ -636,20 +641,21 @@ static int DMA_DriftBeginofs(float timeofs)
 {
     static int  s_beginofs;
     int         start;
+    const int   painted_time = S_GetSoundSystem().painted_time();
 
     // drift s_beginofs
     start = cl.servertime * 0.001f * dma.speed + s_beginofs;
-    if (start < s_paintedtime) {
-        start = s_paintedtime;
+    if (start < painted_time) {
+        start = painted_time;
         s_beginofs = start - (cl.servertime * 0.001f * dma.speed);
-    } else if (start > s_paintedtime + 0.3f * dma.speed) {
-        start = s_paintedtime + 0.1f * dma.speed;
+    } else if (start > painted_time + 0.3f * dma.speed) {
+        start = painted_time + 0.1f * dma.speed;
         s_beginofs = start - (cl.servertime * 0.001f * dma.speed);
     } else {
         s_beginofs -= 10;
     }
 
-    return timeofs ? start + timeofs * dma.speed : s_paintedtime;
+    return timeofs ? start + timeofs * dma.speed : painted_time;
 }
 
 static void DMA_ClearBuffer(void)
@@ -717,15 +723,16 @@ static void AddLoopSounds(void)
     int         num;
     entity_state_t *ent;
     vec3_t      origin;
+    SoundSystem &soundSystem = S_GetSoundSystem();
 
-    if (!S_GetSoundSystem().BuildSoundList(sounds))
+    if (!soundSystem.BuildSoundList(sounds))
         return;
 
     for (i = 0; i < cl.frame.numEntities; i++) {
         if (!sounds[i])
             continue;
 
-        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = soundSystem.SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -746,8 +753,8 @@ static void AddLoopSounds(void)
             VectorSubtract(origin, offset, base);
             CL_DebugTrail(base, origin);
         }
-        S_GetSoundSystem().SpatializeOrigin(origin, vol, att, &left_total,
-                           &right_total, GET_STEREO(ent));
+        soundSystem.SpatializeOrigin(origin, vol, att, &left_total,
+                                     &right_total, GET_STEREO(ent));
         for (j = i + 1; j < cl.frame.numEntities; j++) {
             if (sounds[j] != sounds[i])
                 continue;
@@ -762,10 +769,10 @@ static void AddLoopSounds(void)
                 VectorSubtract(origin, offset, base);
                 CL_DebugTrail(base, origin);
             }
-            S_GetSoundSystem().SpatializeOrigin(origin,
-                               S_GetEntityLoopVolume(ent),
-                               S_GetEntityLoopDistMult(ent),
-                               &left, &right, GET_STEREO(ent));
+            soundSystem.SpatializeOrigin(origin,
+                                         S_GetEntityLoopVolume(ent),
+                                         S_GetEntityLoopDistMult(ent),
+                                         &left, &right, GET_STEREO(ent));
             left_total += left;
             right_total += right;
         }
@@ -774,7 +781,7 @@ static void AddLoopSounds(void)
             continue;       // not audible
 
         // allocate a channel
-        ch = S_GetSoundSystem().PickChannel(0, 0);
+        ch = soundSystem.PickChannel(0, 0);
         if (!ch)
             return;
 
@@ -784,8 +791,9 @@ static void AddLoopSounds(void)
         ch->dist_mult = att;    // for S_IsFullVolume()
         ch->autosound = true;   // remove next frame
         ch->sfx = sfx;
-        ch->pos = s_paintedtime % sc->length;
-        ch->end = s_paintedtime + sc->length - ch->pos;
+        const int painted_time = soundSystem.painted_time();
+        ch->pos = painted_time % sc->length;
+        ch->end = painted_time + sc->length - ch->pos;
     }
 }
 
@@ -794,16 +802,18 @@ static int DMA_GetTime(void)
     static int      buffers;
     static int      oldsamplepos;
     int fullsamples = dma.samples >> (dma.channels - 1);
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    int &painted_time = soundSystem.painted_time();
 
 // it is possible to miscount buffers if it has wrapped twice between
 // calls to S_Update.  Oh well.
     if (dma.samplepos < oldsamplepos) {
         buffers++;      // buffer wrapped
-        if (s_paintedtime > 0x40000000) {
+        if (painted_time > 0x40000000) {
             // time to chop things off to avoid 32 bit limits
             buffers = 0;
-            s_rawend = s_paintedtime = fullsamples;
-            S_GetSoundSystem().StopAllSounds();
+            s_rawend = painted_time = fullsamples;
+            soundSystem.StopAllSounds();
         }
     }
     oldsamplepos = dma.samplepos;
@@ -821,6 +831,7 @@ static void DMA_Update(void)
     SoundSystem &soundSystem = S_GetSoundSystem();
     channel_t *channels = soundSystem.channels_data();
     int num_channels = soundSystem.num_channels();
+    int &painted_time = soundSystem.painted_time();
 
     // update spatialization for dynamic sounds
     for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
@@ -853,7 +864,7 @@ static void DMA_Update(void)
             }
         }
         if (s_show->integer > 1 || total) {
-            Com_Printf("----(%i)---- painted: %i\n", total, s_paintedtime);
+            Com_Printf("----(%i)---- painted: %i\n", total, painted_time);
         }
     }
 #endif
@@ -867,9 +878,9 @@ static void DMA_Update(void)
     soundtime = DMA_GetTime();
 
     // check to make sure that we haven't overshot
-    if (s_paintedtime < soundtime) {
+    if (painted_time < soundtime) {
         Com_DPrintf("%s: overflow\n", __func__);
-        s_paintedtime = soundtime;
+        painted_time = soundtime;
     }
 
     // mix ahead of current position

@@ -26,6 +26,21 @@ public:
     void reset_registration_sequence();
     void increment_registration_sequence();
 
+    SoundBackend backend() const;
+    void set_backend(SoundBackend backend);
+
+    const sndapi_t *api() const;
+    void set_api(const sndapi_t *api);
+
+    bool supports_float() const;
+    void set_supports_float(bool supports);
+
+    bool is_active() const;
+    void set_active(bool active);
+
+    bool is_registering() const;
+    void set_registering(bool registering);
+
     sfx_t *known_sfx_data();
     const sfx_t *known_sfx_data() const;
     int num_sfx() const;
@@ -60,6 +75,10 @@ public:
     void StopAllSounds();
     void Update();
 
+    int painted_time() const;
+    int &painted_time();
+    void set_painted_time(int time);
+
     vec3_t &listener_origin();
     vec3_t &listener_forward();
     vec3_t &listener_right();
@@ -71,6 +90,12 @@ private:
 
     Config config_{};
     unsigned registration_sequence_ = 1;
+    SoundBackend backend_ = SoundBackend::Not;
+    const sndapi_t *api_ = nullptr;
+    bool supports_float_ = false;
+    bool active_ = false;
+    bool registering_ = false;
+    int painted_time_ = 0;
     std::vector<sfx_t> known_sfx_;
     int num_sfx_ = 0;
     std::vector<channel_t> channels_;
