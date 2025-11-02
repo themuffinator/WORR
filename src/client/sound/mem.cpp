@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // snd_mem.c: sound caching
 
+#include "SoundSystem.hpp"
 #include "sound.hpp"
 #include "common/intreadwrite.hpp"
 
@@ -477,7 +478,7 @@ static void ConvertSamples(void)
 S_LoadSound
 ==============
 */
-sfxcache_t *S_LoadSound(sfx_t *s)
+sfxcache_t *SoundSystem::LoadSound(sfx_t *s)
 {
     sizebuf_t   sz;
     byte        *data;

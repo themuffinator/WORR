@@ -39,6 +39,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define UI_RIGHT            BIT(1)
 #define UI_CENTER           (UI_LEFT | UI_RIGHT)
 
+static cgame_import_t cgi;
+static cgame_q2pro_extended_support_ext_t cgix;
+static const cs_remap_t *csr;
+static int max_stats;
+
 namespace
 {
 
@@ -81,11 +86,6 @@ float SCR_FadeAlpha(unsigned startTime, unsigned visTime, unsigned fadeTime);
 bool SCR_ParseColor(const char *s, color_t *color);
 
 // ==========================================================================
-
-static cgame_import_t cgi;
-static cgame_q2pro_extended_support_ext_t cgix;
-static const cs_remap_t *csr;
-static int max_stats;
 
 static cvar_t   *scr_centertime;
 static cvar_t   *scr_draw2d;

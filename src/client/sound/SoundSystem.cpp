@@ -22,13 +22,16 @@ void SoundSystem::Configure(const Config &config)
 void SoundSystem::InitializeStorage()
 {
     known_sfx_.assign(config_.maxSfx, sfx_t{});
-    playsounds_.assign(config_.maxPlaysounds, playsound_t{});
+    playsounds_.clear();
+    playsounds_.reserve(config_.maxPlaysounds);
     freeplays_.clear();
     pendingplays_.clear();
-    for (auto &ps : playsounds_) {
-        std::memset(&ps, 0, sizeof(ps));
-        List_Init(&ps.entry);
-        freeplays_.push_back(&ps);
+    for (std::size_t i = 0; i < config_.maxPlaysounds; ++i) {
+        auto playsound = std::make_unique<playsound_t>();
+        std::memset(playsound.get(), 0, sizeof(*playsound));
+        List_Init(&playsound->entry);
+        freeplays_.push_back(playsound.get());
+        playsounds_.push_back(std::move(playsound));
     }
 
     num_sfx_ = 0;
@@ -166,10 +169,10 @@ void SoundSystem::ResetPlaysounds()
 {
     pendingplays_.clear();
     freeplays_.clear();
-    for (auto &ps : playsounds_) {
-        std::memset(&ps, 0, sizeof(ps));
-        List_Init(&ps.entry);
-        freeplays_.push_back(&ps);
+    for (auto &playsound : playsounds_) {
+        std::memset(playsound.get(), 0, sizeof(*playsound));
+        List_Init(&playsound->entry);
+        freeplays_.push_back(playsound.get());
     }
 }
 

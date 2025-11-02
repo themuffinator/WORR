@@ -517,7 +517,7 @@ static void PaintChannels(int endtime)
                 end = min(end, ps->begin);  // stop here
                 break;
             }
-            S_IssuePlaysound(ps);
+            S_GetSoundSystem().IssuePlaysound(ps);
         }
 
         // clear the paint buffer
@@ -533,7 +533,7 @@ static void PaintChannels(int endtime)
                 if (!ch->sfx || (!ch->leftvol && !ch->rightvol))
                     break;
 
-                sfxcache_t *sc = S_LoadSound(ch->sfx);
+                sfxcache_t *sc = S_GetSoundSystem().LoadSound(ch->sfx);
                 if (!sc)
                     break;
 
@@ -708,7 +708,7 @@ void DmaBackend::Shutdown()
 static void DMA_Activate(void)
 {
     if (snddma->activate) {
-        S_StopAllSounds();
+        S_GetSoundSystem().StopAllSounds();
         snddma->activate(s_active);
     }
 }
@@ -781,7 +781,7 @@ static void DMA_Spatialize(channel_t *ch)
         }
     }
 
-    S_SpatializeOrigin(origin, ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol, dma.channels - 1);
+    S_GetSoundSystem().SpatializeOrigin(origin, ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol, dma.channels - 1);
 }
 
 #define GET_STEREO(ent) (S_GetEntityLoopStereoPan(ent) && dma.channels - 1)
@@ -807,14 +807,14 @@ static void AddLoopSounds(void)
     entity_state_t *ent;
     vec3_t      origin;
 
-    if (!S_BuildSoundList(sounds))
+    if (!S_GetSoundSystem().BuildSoundList(sounds))
         return;
 
     for (i = 0; i < cl.frame.numEntities; i++) {
         if (!sounds[i])
             continue;
 
-        sfx = S_SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -835,7 +835,7 @@ static void AddLoopSounds(void)
             VectorSubtract(origin, offset, base);
             CL_DebugTrail(base, origin);
         }
-        S_SpatializeOrigin(origin, vol, att, &left_total,
+        S_GetSoundSystem().SpatializeOrigin(origin, vol, att, &left_total,
                            &right_total, GET_STEREO(ent));
         for (j = i + 1; j < cl.frame.numEntities; j++) {
             if (sounds[j] != sounds[i])
@@ -851,7 +851,7 @@ static void AddLoopSounds(void)
                 VectorSubtract(origin, offset, base);
                 CL_DebugTrail(base, origin);
             }
-            S_SpatializeOrigin(origin,
+            S_GetSoundSystem().SpatializeOrigin(origin,
                                S_GetEntityLoopVolume(ent),
                                S_GetEntityLoopDistMult(ent),
                                &left, &right, GET_STEREO(ent));
@@ -863,7 +863,7 @@ static void AddLoopSounds(void)
             continue;       // not audible
 
         // allocate a channel
-        ch = S_PickChannel(0, 0);
+        ch = S_GetSoundSystem().PickChannel(0, 0);
         if (!ch)
             return;
 
@@ -892,7 +892,7 @@ static int DMA_GetTime(void)
             // time to chop things off to avoid 32 bit limits
             buffers = 0;
             s_rawend = s_paintedtime = fullsamples;
-            S_StopAllSounds();
+            S_GetSoundSystem().StopAllSounds();
         }
     }
     oldsamplepos = dma.samplepos;

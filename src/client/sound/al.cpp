@@ -651,7 +651,7 @@ static void s_underwater_gain_hf_changed(cvar_t *self)
 
 static void al_reverb_changed(cvar_t *self)
 {
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 }
 
 static void al_merge_looping_changed(cvar_t *self)
@@ -1045,7 +1045,7 @@ static void AL_IssuePlaysounds(void)
             break;  // no more pending sounds
         if (ps->begin > s_paintedtime)
             break;
-        S_IssuePlaysound(ps);
+        S_GetSoundSystem().IssuePlaysound(ps);
     }
 }
 
@@ -1100,14 +1100,14 @@ static void AL_MergeLoopSounds(void)
     entity_state_t *ent;
     vec3_t      origin;
 
-    if (!S_BuildSoundList(sounds))
+    if (!S_GetSoundSystem().BuildSoundList(sounds))
         return;
 
     for (i = 0; i < cl.frame.numEntities; i++) {
         if (!sounds[i])
             continue;
 
-        sfx = S_SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -1128,7 +1128,7 @@ static void AL_MergeLoopSounds(void)
             VectorSubtract(origin, offset, base);
             CL_DebugTrail(base, origin);
         }
-        S_SpatializeOrigin(origin, vol, att,
+        S_GetSoundSystem().SpatializeOrigin(origin, vol, att,
                            &left_total, &right_total,
                            S_GetEntityLoopStereoPan(ent));
         for (j = i + 1; j < cl.frame.numEntities; j++) {
@@ -1145,7 +1145,7 @@ static void AL_MergeLoopSounds(void)
                 VectorSubtract(origin, offset, base);
                 CL_DebugTrail(base, origin);
             }
-            S_SpatializeOrigin(origin,
+            S_GetSoundSystem().SpatializeOrigin(origin,
                                S_GetEntityLoopVolume(ent),
                                S_GetEntityLoopDistMult(ent),
                                &left, &right,
@@ -1175,7 +1175,7 @@ static void AL_MergeLoopSounds(void)
         }
 
         // allocate a channel
-        ch = S_PickChannel(0, 0);
+        ch = S_GetSoundSystem().PickChannel(0, 0);
         if (!ch)
             continue;
 
@@ -1225,13 +1225,13 @@ static void AL_AddLoopSounds(void)
     if (cls.state != ca_active || sv_paused->integer || !s_ambient->integer)
         return;
 
-    S_BuildSoundList(sounds);
+    S_GetSoundSystem().BuildSoundList(sounds);
 
     for (i = 0; i < cl.frame.numEntities; i++) {
         if (!sounds[i])
             continue;
 
-        sfx = S_SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -1249,7 +1249,7 @@ static void AL_AddLoopSounds(void)
         }
 
         // allocate a channel
-        ch = S_PickChannel(0, 0);
+        ch = S_GetSoundSystem().PickChannel(0, 0);
         if (!ch)
             continue;
 
@@ -1383,7 +1383,7 @@ static void AL_UpdateUnderWater(void)
 
 static void AL_Activate(void)
 {
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
     AL_StreamPause(s_stream_paused);
 }
 
@@ -1403,7 +1403,7 @@ static void AL_Update(void)
     // handle time wraparound. FIXME: get rid of this?
     i = cls.realtime & MASK(30);
     if (i < s_paintedtime)
-        S_StopAllSounds();
+        S_GetSoundSystem().StopAllSounds();
     s_paintedtime = i;
 
     // set listener parameters

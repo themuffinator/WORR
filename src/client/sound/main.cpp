@@ -98,8 +98,13 @@ static void S_SoundList_f(void)
     Com_Printf("Total resident: %zu\n", total);
 }
 
+static void S_StopAllSounds_Cmd(void)
+{
+    S_GetSoundSystem().StopAllSounds();
+}
+
 static const cmdreg_t c_sound[] = {
-    { "stopsound", S_StopAllSounds },
+    { "stopsound", S_StopAllSounds_Cmd },
     { "soundlist", S_SoundList_f },
     { "soundinfo", S_SoundInfo_f },
 
@@ -188,7 +193,7 @@ void S_Init(void)
 
     // init playsound list
     // clear DMA buffer
-    S_StopAllSounds();
+    soundSystem.StopAllSounds();
 
     s_auto_focus->changed = s_auto_focus_changed;
     s_auto_focus_changed(s_auto_focus);
@@ -243,7 +248,7 @@ void S_Shutdown(void)
     if (s_started == SoundBackend::Not)
         return;
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
     S_FreeAllSounds();
     OGG_Stop();
 
@@ -301,17 +306,14 @@ void S_Activate(void)
 S_SfxForHandle
 ==================
 */
-sfx_t *S_SfxForHandle(qhandle_t hSfx)
+sfx_t *SoundSystem::SfxForHandle(qhandle_t hSfx)
 {
     if (!hSfx) {
         return NULL;
     }
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    int num_sfx = soundSystem.num_sfx();
-    Q_assert(hSfx > 0 && hSfx <= num_sfx);
-    sfx_t *known_sfx = soundSystem.known_sfx_data();
-    return &known_sfx[hSfx - 1];
+    Q_assert(hSfx > 0 && hSfx <= num_sfx_);
+    return &known_sfx_[hSfx - 1];
 }
 
 static sfx_t *S_AllocSfx(void)
@@ -430,7 +432,7 @@ qhandle_t S_RegisterSound(const char *name)
     }
 
     if (!s_registering) {
-        S_LoadSound(sfx);
+        soundSystem.LoadSound(sfx);
     }
 
     return static_cast<qhandle_t>((sfx - known_sfx) + 1);
@@ -465,7 +467,7 @@ static sfx_t *S_RegisterSexedSound(int entnum, const char *base)
     sfx = S_FindName(buffer, FS_NormalizePath(buffer));
 
     // see if it exists
-    if (sfx && !sfx->truename && !s_registering && !S_LoadSound(sfx)) {
+    if (sfx && !sfx->truename && !s_registering && !S_GetSoundSystem().LoadSound(sfx)) {
         // no, revert to the male sound in the pak0.pak
         if (Q_concat(buffer, MAX_QPATH, "sound/player/male/", base + 1) < MAX_QPATH) {
             FS_NormalizePath(buffer);
@@ -522,7 +524,7 @@ void S_EndRegistration(void)
     S_RegisterSexedSounds();
 
     // clear playsound list, so we don't free sfx still present there
-    S_StopAllSounds();
+    soundSystem.StopAllSounds();
 
     // free any sounds not from this registration sequence
     for (int i = 0; i < num_sfx; i++) {
@@ -544,7 +546,7 @@ void S_EndRegistration(void)
         sfx_t *sfx = &known_sfx[i];
         if (!sfx->name[0])
             continue;
-        S_LoadSound(sfx);
+        soundSystem.LoadSound(sfx);
     }
 
     if (s_started != SoundBackend::Not && s_backend)
@@ -563,25 +565,21 @@ S_PickChannel
 picks a channel based on priorities, empty slots, number of channels
 =================
 */
-channel_t *S_PickChannel(int entnum, int entchannel)
+channel_t *SoundSystem::PickChannel(int entnum, int entchannel)
 {
     int         ch_idx;
     int         first_to_die;
     int         life_left;
     channel_t   *ch;
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    channel_t *channels = soundSystem.channels_data();
-    int num_channels = soundSystem.num_channels();
-
-    if (!channels || num_channels <= 0)
+    if (channels_.empty() || num_channels_ <= 0)
         return NULL;
 
 // Check for replacement sound, or find the best one to replace
     first_to_die = -1;
     life_left = INT_MAX;
-    for (ch_idx = 0; ch_idx < num_channels; ch_idx++) {
-        ch = &channels[ch_idx];
+    for (ch_idx = 0; ch_idx < num_channels_; ch_idx++) {
+        ch = &channels_[ch_idx];
         // channel 0 never overrides unless out of channels
         if (ch->entnum == entnum && ch->entchannel == entchannel && entchannel != 0) {
             if (entchannel > 255 && ch->sfx)
@@ -607,30 +605,12 @@ channel_t *S_PickChannel(int entnum, int entchannel)
     ch = &channels[first_to_die];
     if (s_backend)
         s_backend->StopChannel(ch);
+    if (s_api->stop_channel)
+        s_api->stop_channel(ch);
     memset(ch, 0, sizeof(*ch));
     ch->has_spatial_offset = false;
 
     return ch;
-}
-
-/*
-=================
-S_AllocPlaysound
-=================
-*/
-static playsound_t *S_AllocPlaysound(void)
-{
-    return S_GetSoundSystem().AllocatePlaysound();
-}
-
-/*
-=================
-S_FreePlaysound
-=================
-*/
-static void S_FreePlaysound(playsound_t *ps)
-{
-    S_GetSoundSystem().FreePlaysound(ps);
 }
 
 /*
@@ -642,7 +622,7 @@ This is never called directly by S_Play*, but only
 by the update loop.
 ===============
 */
-void S_IssuePlaysound(playsound_t *ps)
+void SoundSystem::IssuePlaysound(playsound_t *ps)
 {
     channel_t   *ch;
     sfxcache_t  *sc;
@@ -652,16 +632,16 @@ void S_IssuePlaysound(playsound_t *ps)
         Com_Printf("Issue %i\n", ps->begin);
 #endif
     // pick a channel to play on
-    ch = S_PickChannel(ps->entnum, ps->entchannel);
+    ch = PickChannel(ps->entnum, ps->entchannel);
     if (!ch) {
-        S_FreePlaysound(ps);
+        FreePlaysound(ps);
         return;
     }
 
-    sc = S_LoadSound(ps->sfx);
+    sc = LoadSound(ps->sfx);
     if (!sc) {
         Com_Printf("S_IssuePlaysound: couldn't load %s\n", ps->sfx->name);
-        S_FreePlaysound(ps);
+        FreePlaysound(ps);
         return;
     }
 
@@ -683,7 +663,7 @@ void S_IssuePlaysound(playsound_t *ps)
         s_backend->PlayChannel(ch);
 
     // free the playsound
-    S_FreePlaysound(ps);
+    FreePlaysound(ps);
 }
 
 // =======================================================================
@@ -699,7 +679,7 @@ if pos is NULL, the sound will be dynamically sourced from the entity
 Entchannel 0 will never override a playing sound
 ====================
 */
-void S_StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSfx, float vol, float attenuation, float timeofs)
+void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSfx, float vol, float attenuation, float timeofs)
 {
     sfxcache_t  *sc;
     playsound_t *ps;
@@ -709,10 +689,8 @@ void S_StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSf
         return;
     if (!s_active)
         return;
-    if (!(sfx = S_SfxForHandle(hSfx)))
+    if (!(sfx = SfxForHandle(hSfx)))
         return;
-
-    SoundSystem &soundSystem = S_GetSoundSystem();
 
     if (sfx->name[0] == '*') {
         sfx = S_RegisterSexedSound(entnum, sfx->name);
@@ -721,12 +699,12 @@ void S_StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSf
     }
 
     // make sure the sound is loaded
-    sc = S_LoadSound(sfx);
+    sc = LoadSound(sfx);
     if (!sc)
         return;     // couldn't load the sound's data
 
     // make the playsound_t
-    ps = S_AllocPlaysound();
+    ps = AllocatePlaysound();
     if (!ps)
         return;
 
@@ -745,7 +723,7 @@ void S_StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSf
     ps->begin = s_backend ? s_backend->GetBeginOffset(timeofs) : 0;
 
     // sort into the pending sound list
-    soundSystem.QueuePendingPlay(ps);
+    QueuePendingPlay(ps);
 }
 
 void S_ParseStartSound(void)
@@ -760,9 +738,9 @@ void S_ParseStartSound(void)
         CL_CheckEntityPresent(snd.entity, "sound");
 #endif
 
-    S_StartSound(snd.has_position ? snd.pos : NULL,
-                 snd.entity, snd.channel, handle,
-                 snd.volume, snd.attenuation, snd.timeofs);
+    S_GetSoundSystem().StartSound(snd.has_position ? snd.pos : NULL,
+                                  snd.entity, snd.channel, handle,
+                                  snd.volume, snd.attenuation, snd.timeofs);
 }
 
 /*
@@ -774,7 +752,7 @@ void S_StartLocalSound(const char *sound)
 {
     if (s_started != SoundBackend::Not) {
         qhandle_t sfx = S_RegisterSound(sound);
-        S_StartSound(NULL, listener_entnum, 0, sfx, 1, ATTN_NONE, 0);
+        S_GetSoundSystem().StartSound(NULL, listener_entnum, 0, sfx, 1, ATTN_NONE, 0);
     }
 }
 
@@ -782,7 +760,7 @@ void S_StartLocalSoundOnce(const char *sound)
 {
     if (s_started != SoundBackend::Not) {
         qhandle_t sfx = S_RegisterSound(sound);
-        S_StartSound(NULL, listener_entnum, 256, sfx, 1, ATTN_NONE, 0);
+        S_GetSoundSystem().StartSound(NULL, listener_entnum, 256, sfx, 1, ATTN_NONE, 0);
     }
 }
 
@@ -791,18 +769,17 @@ void S_StartLocalSoundOnce(const char *sound)
 S_StopAllSounds
 ==================
 */
-void S_StopAllSounds(void)
+void SoundSystem::StopAllSounds()
 {
     if (s_started == SoundBackend::Not)
         return;
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    soundSystem.ResetPlaysounds();
+    ResetPlaysounds();
 
     if (s_backend)
         s_backend->StopAllSounds();
 
-    soundSystem.clear_channels();
+    clear_channels();
 }
 
 void S_RawSamples(int samples, int rate, int width, int channels, const void *data)
@@ -834,7 +811,7 @@ void S_PauseRawSamples(bool paused)
 // Update sound buffer
 // =======================================================================
 
-int S_BuildSoundList(int *sounds)
+int SoundSystem::BuildSoundList(int *sounds)
 {
     int             i, num, count;
     entity_state_t  *ent;
@@ -847,7 +824,7 @@ int S_BuildSoundList(int *sounds)
         ent = &cl.entityStates[num];
         if (s_ambient->integer == 2 && !ent->modelindex) {
             sounds[i] = 0;
-        } else if (s_ambient->integer == 3 && ent->number != listener_entnum) {
+        } else if (s_ambient->integer == 3 && ent->number != listener_entnum_) {
             sounds[i] = 0;
         } else {
             sounds[i] = ent->sound;
@@ -868,7 +845,7 @@ S_SpatializeOrigin
 Used for spatializing channels and autosounds
 =================
 */
-void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo)
+void SoundSystem::SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo)
 {
     vec_t       dot;
     vec_t       dist;
@@ -876,7 +853,7 @@ void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, 
     vec3_t      source_vec;
 
 // calculate stereo separation and distance attenuation
-    VectorSubtract(origin, listener_origin, source_vec);
+    VectorSubtract(origin, listener_origin_, source_vec);
 
     dist = VectorNormalize(source_vec);
     dist -= SOUND_FULLVOLUME;
@@ -889,7 +866,7 @@ void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, 
         rscale = 1.0f;
         lscale = 1.0f;
     } else {
-        dot = DotProduct(listener_right, source_vec);
+        dot = DotProduct(listener_right_, source_vec);
         rscale = 0.5f * (1.0f + dot);
         lscale = 0.5f * (1.0f - dot);
     }
@@ -913,7 +890,7 @@ S_Update
 Called once each time through the main loop
 ============
 */
-void S_Update(void)
+void SoundSystem::Update()
 {
     if (cvar_modified & CVAR_SOUND) {
         Cbuf_AddText(&cmd_buffer, "snd_restart\n");
@@ -935,9 +912,9 @@ void S_Update(void)
     // set listener entity number
     // other parameters should be already set up by CL_CalcViewValues
     if (cls.state != ca_active) {
-        listener_entnum = -1;
+        listener_entnum_ = -1;
     } else {
-        listener_entnum = cl.frame.clientNum + 1;
+        listener_entnum_ = cl.frame.clientNum + 1;
     }
 
     OGG_Update();

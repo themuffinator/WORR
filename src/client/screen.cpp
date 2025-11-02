@@ -1878,7 +1878,7 @@ void SCR_BeginLoadingPlaque(void)
         return;
     }
 
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
     OGG_Update();
 
     if (cls.disable_screen) {

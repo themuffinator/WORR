@@ -1243,7 +1243,7 @@ static void CL_Seek_f(void)
     memset(cl.dcs, 0, sizeof(cl.dcs));
 
     // stop sounds
-    S_StopAllSounds();
+    S_GetSoundSystem().StopAllSounds();
 
     // save previous server frame number
     prev = cl.frame.number;
