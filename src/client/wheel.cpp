@@ -16,6 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+
 #include "client.hpp"
 #include "common/loc.hpp"
 
@@ -42,6 +46,55 @@ static cvar_t *wc_screen_frac_y;
 static cvar_t *wc_timeout;
 static cvar_t *wc_lock_time;
 static cvar_t *wc_ammo_scale;
+
+namespace {
+using namespace std::chrono_literals;
+
+constexpr auto kSlowTimeBlendDuration = 500ms;
+constexpr float kSlowTimeInactiveScale = 1.0f;
+constexpr float kSlowTimeActiveScale = 0.1f;
+
+void CL_SlowTime_Update()
+{
+    using std::chrono::duration;
+    using std::chrono::steady_clock;
+
+    auto &slow = cl.slow_time;
+    const auto now = steady_clock::now();
+
+    if (!slow.initialized) {
+        slow.initialized = true;
+        slow.factor = kSlowTimeInactiveScale;
+        slow.from = kSlowTimeInactiveScale;
+        slow.to = kSlowTimeInactiveScale;
+        slow.start = now;
+    }
+
+    const bool desired = cl.maxclients == 1 && cl.frame.ps.stats[STAT_SLOW_TIME];
+    if (desired != slow.desired) {
+        slow.desired = desired;
+        slow.from = slow.factor;
+        slow.to = desired ? kSlowTimeActiveScale : kSlowTimeInactiveScale;
+        slow.start = now;
+    }
+
+    const auto elapsed = now - slow.start;
+    const float duration_seconds = duration<float>(kSlowTimeBlendDuration).count();
+    float progress = 1.0f;
+    if (duration_seconds > 0.0f) {
+        const float elapsed_seconds = duration<float>(elapsed).count();
+        progress = std::clamp(elapsed_seconds / duration_seconds, 0.0f, 1.0f);
+    }
+
+    slow.factor = std::lerp(slow.from, slow.to, progress);
+    slow.active = desired;
+
+    if (progress >= 1.0f) {
+        slow.from = slow.to = slow.factor;
+        slow.start = now;
+    }
+}
+} // namespace
 
 static void CL_Carousel_Close(void)
 {
@@ -315,6 +368,12 @@ float CL_Wheel_TimeScale(void)
     return cl.wheel.timescale;
 }
 
+float CL_ActiveTimeScale(void)
+{
+    const float slow_factor = cl.slow_time.initialized ? cl.slow_time.factor : 1.0f;
+    return max(0.0f, cl.wheel.timescale * slow_factor);
+}
+
 void CL_Wheel_ClearInput(void)
 {
     if (cl.wheel.state == WHEEL_CLOSING)
@@ -390,6 +449,8 @@ void CL_Wheel_Input(int x, int y)
 
 void CL_Wheel_Update(void)
 {
+    CL_SlowTime_Update();
+
     static unsigned int lastWheelTime;
     unsigned int t = Sys_Milliseconds();
     float frac = (t - lastWheelTime) * 0.001f;

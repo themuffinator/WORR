@@ -252,12 +252,14 @@ enum player_stat_t
 	STAT_HIT_MARKER,
 	// [Paril-KEX]
 	STAT_SELECTED_ITEM_NAME,
-	// [Paril-KEX]
-	STAT_HEALTH_BARS, // two health bar values; 7 bits for value, 1 bit for active
-	// [Paril-KEX]
-	STAT_ACTIVE_WEAPON,
+        // [Paril-KEX]
+        STAT_HEALTH_BARS, // two health bar values; 7 bits for value, 1 bit for active
+        // [Paril-KEX]
+        STAT_ACTIVE_WEAPON,
+        // [WOR] slow-time indicator
+        STAT_SLOW_TIME,
 
-	// don't use; just for verification
+        // don't use; just for verification
     STAT_LAST
 };
 
