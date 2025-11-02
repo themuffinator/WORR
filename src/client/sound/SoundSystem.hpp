@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <vector>
 
 #include "sound.hpp"
@@ -46,6 +47,19 @@ public:
     bool HasPendingPlays() const;
     void ResetPlaysounds();
 
+    sfx_t *SfxForHandle(qhandle_t hSfx);
+    sfxcache_t *LoadSound(sfx_t *s);
+    channel_t *PickChannel(int entnum, int entchannel);
+    void IssuePlaysound(playsound_t *ps);
+    int BuildSoundList(int *sounds);
+    void SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult,
+                          float *left_vol, float *right_vol, bool stereo);
+
+    void StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSfx,
+                    float vol, float attenuation, float timeofs);
+    void StopAllSounds();
+    void Update();
+
     vec3_t &listener_origin();
     vec3_t &listener_forward();
     vec3_t &listener_right();
@@ -62,7 +76,7 @@ private:
     std::vector<channel_t> channels_;
     int num_channels_ = 0;
     int max_channels_ = 0;
-    std::vector<playsound_t> playsounds_;
+    std::vector<std::unique_ptr<playsound_t>> playsounds_;
     std::deque<playsound_t *> freeplays_;
     std::deque<playsound_t *> pendingplays_;
     vec3_t listener_origin_ = { 0.0f, 0.0f, 0.0f };

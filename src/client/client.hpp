@@ -54,6 +54,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/client.hpp"
 #include "client/input.hpp"
 #include "client/keys.hpp"
+#include "client/sound/SoundSystem.hpp"
 #include "client/sound/sound.hpp"
 #include "client/ui.hpp"
 #include "client/video.hpp"

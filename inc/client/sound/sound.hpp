@@ -23,16 +23,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 void S_Init(void);
 void S_Shutdown(void);
 
-// if origin is NULL, the sound will be dynamically sourced from the entity
-void S_StartSound(const vec3_t origin, int entnum, int entchannel,
-                  qhandle_t sfx, float fvol, float attenuation, float timeofs);
 void S_ParseStartSound(void);
 void S_StartLocalSound(const char *s);
 void S_StartLocalSoundOnce(const char *s);
 
 void S_FreeAllSounds(void);
-void S_StopAllSounds(void);
-void S_Update(void);
 
 void S_Activate(void);
 

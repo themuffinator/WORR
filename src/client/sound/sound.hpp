@@ -181,9 +181,3 @@ extern cvar_t       *s_debug_soundorigins;
 #define S_GetEntityLoopDistMult(ent)    Com_GetEntityLoopDistMult((ent)->loop_attenuation)
 #define S_GetEntityLoopStereoPan(ent)   !(cl.csr.extended && (ent)->renderfx & RF_NO_STEREO)
 
-sfx_t *S_SfxForHandle(qhandle_t hSfx);
-sfxcache_t *S_LoadSound(sfx_t *s);
-channel_t *S_PickChannel(int entnum, int entchannel);
-void S_IssuePlaysound(playsound_t *ps);
-int S_BuildSoundList(int *sounds);
-void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo);
