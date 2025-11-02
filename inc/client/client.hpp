@@ -115,6 +115,7 @@ bool    SCR_StatActive(void);
     SCR_StatKeyValue((key), va("%f %f %f", (value)[0], (value)[1], (value)[2]))
 
 float CL_Wheel_TimeScale(void);
+float CL_ActiveTimeScale(void);
 
 #define UI_LEFT             BIT(0)
 #define UI_RIGHT            BIT(1)

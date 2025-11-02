@@ -705,6 +705,11 @@ void CL_ClearState(void)
     memset(&cl, 0, sizeof(cl));
     memset(&cl_entities, 0, sizeof(cl_entities));
 
+    cl.slow_time.factor = 1.0f;
+    cl.slow_time.from = 1.0f;
+    cl.slow_time.to = 1.0f;
+    cl.slow_time.start = {};
+
     if (cls.state > ca_connected) {
         cls.state = ca_connected;
         CL_CheckForPause();

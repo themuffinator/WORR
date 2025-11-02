@@ -886,7 +886,10 @@ static void AL_Spatialize(channel_t *ch)
     }
 
     if (al_timescale->integer) {
-        qalSourcef(ch->srcnum, AL_PITCH, max(0.75f, CL_Wheel_TimeScale() * Cvar_VariableValue("timescale")));
+        const float engine_scale = Cvar_VariableValue("timescale");
+        const float time_scale = CL_ActiveTimeScale() * engine_scale;
+        const float min_pitch = cl.slow_time.active ? 0.1f : 0.75f;
+        qalSourcef(ch->srcnum, AL_PITCH, max(min_pitch, time_scale));
     } else {
         qalSourcef(ch->srcnum, AL_PITCH, 1.0f);
     }

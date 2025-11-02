@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -456,6 +457,16 @@ typedef struct {
         int                 number;
         cl_shadow_light_t   light;
     } shadowdefs[MAX_SHADOW_LIGHTS];
+
+    struct {
+        bool active{};
+        bool desired{};
+        bool initialized{};
+        float factor{1.0f};
+        float from{1.0f};
+        float to{1.0f};
+        std::chrono::steady_clock::time_point start{};
+    } slow_time;
 } client_state_t;
 
 extern client_state_t   cl;

@@ -1118,7 +1118,7 @@ void Qcommon_Frame(void)
     }
 
 #if USE_CLIENT
-    float ts = CL_Wheel_TimeScale() * timescale->value;
+    float ts = CL_ActiveTimeScale() * timescale->value;
 #else
     float ts = timescale->value;
 #endif

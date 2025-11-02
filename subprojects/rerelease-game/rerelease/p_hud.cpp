@@ -1027,6 +1027,8 @@ void G_SetStats(edict_t *ent)
 
 	ent->client->ps.stats[STAT_SPECTATOR] = 0;
 
+	ent->client->ps.stats[STAT_SLOW_TIME] = (globals.server_flags & SERVER_FLAG_SLOW_TIME) ? 1 : 0;
+
 	// set & run the health bar stuff
 	for (size_t i = 0; i < MAX_HEALTH_BARS; i++)
 	{
