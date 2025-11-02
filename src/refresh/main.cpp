@@ -23,7 +23,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "font_freetype.hpp"
-#include <algorithm>
 #include <array>
 
 glRefdef_t glr;
@@ -769,8 +768,8 @@ static void GL_RunDepthOfField(void)
     if (w <= 0 || h <= 0)
         return;
 
-    const int half_w = std::max(w / 2, 1);
-    const int half_h = std::max(h / 2, 1);
+    const int half_w = max(w / 2, 1);
+    const int half_h = max(h / 2, 1);
 
     GL_Setup2D();
 
@@ -781,6 +780,55 @@ static void GL_RunDepthOfField(void)
     GL_BokehCombinePass(w, h);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+typedef enum {
+    PP_NONE      = 0,
+    PP_WATERWARP = BIT(0),
+    PP_BLOOM     = BIT(1),
+    PP_DEPTH_OF_FIELD = BIT(2),
+} pp_flags_t;
+
+constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator&(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator^(pp_flags_t lhs, pp_flags_t rhs) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
+}
+
+constexpr pp_flags_t operator~(pp_flags_t value) noexcept
+{
+    using U = std::underlying_type_t<pp_flags_t>;
+    return static_cast<pp_flags_t>(~static_cast<U>(value));
+}
+
+constexpr pp_flags_t &operator|=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+constexpr pp_flags_t &operator&=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
+{
+    lhs = lhs ^ rhs;
+    return lhs;
 }
 
 static void GL_DrawBloom(pp_flags_t flags)
@@ -859,55 +907,6 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 static int32_t gl_waterwarp_modified = 0;
 static int32_t gl_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
-
-typedef enum {
-    PP_NONE      = 0,
-    PP_WATERWARP = BIT(0),
-    PP_BLOOM     = BIT(1),
-    PP_DEPTH_OF_FIELD = BIT(2),
-} pp_flags_t;
-
-constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
-{
-    using U = std::underlying_type_t<pp_flags_t>;
-    return static_cast<pp_flags_t>(static_cast<U>(lhs) | static_cast<U>(rhs));
-}
-
-constexpr pp_flags_t operator&(pp_flags_t lhs, pp_flags_t rhs) noexcept
-{
-    using U = std::underlying_type_t<pp_flags_t>;
-    return static_cast<pp_flags_t>(static_cast<U>(lhs) & static_cast<U>(rhs));
-}
-
-constexpr pp_flags_t operator^(pp_flags_t lhs, pp_flags_t rhs) noexcept
-{
-    using U = std::underlying_type_t<pp_flags_t>;
-    return static_cast<pp_flags_t>(static_cast<U>(lhs) ^ static_cast<U>(rhs));
-}
-
-constexpr pp_flags_t operator~(pp_flags_t value) noexcept
-{
-    using U = std::underlying_type_t<pp_flags_t>;
-    return static_cast<pp_flags_t>(~static_cast<U>(value));
-}
-
-constexpr pp_flags_t &operator|=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
-{
-    lhs = lhs | rhs;
-    return lhs;
-}
-
-constexpr pp_flags_t &operator&=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
-{
-    lhs = lhs & rhs;
-    return lhs;
-}
-
-constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
-{
-    lhs = lhs ^ rhs;
-    return lhs;
-}
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
