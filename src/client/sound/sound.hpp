@@ -170,7 +170,7 @@ extern cvar_t       *s_debug_soundorigins;
 
 #define S_IsFullVolume(ch) \
     ((ch)->entnum == -1 || \
-     ((ch)->entnum == S_GetSoundSystem().listener_entnum() && !cl.thirdPersonView) || \
+     (ch)->entnum == S_GetSoundSystem().listener_entnum() || \
      (ch)->dist_mult == 0)
 
 #define S_IsUnderWater() \
