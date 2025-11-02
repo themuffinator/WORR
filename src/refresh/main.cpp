@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "font_freetype.hpp"
+#include <algorithm>
 #include <array>
 
 glRefdef_t glr;
@@ -65,7 +66,6 @@ cvar_t *gl_waterwarp;
 cvar_t *gl_fog;
 cvar_t *gl_bloom;
 cvar_t *gl_dof;
-cvar_t *gl_dof_sigma;
 cvar_t *gl_swapinterval;
 
 // development variables
@@ -698,7 +698,70 @@ static void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
     GL_UnlockArrays();
 }
 
-static void GL_GenerateDepthOfField(void)
+static void GL_BokehViewport(int w, int h)
+{
+    qglViewport(0, 0, w, h);
+    GL_Ortho(0, w, h, 0, -1, 1);
+}
+
+static void GL_BokehSetScreen(int w, int h)
+{
+    const float inv_w = w > 0 ? 1.0f / w : 0.0f;
+    const float inv_h = h > 0 ? 1.0f / h : 0.0f;
+    Vector4Set(gls.u_block.dof_screen, static_cast<float>(w), static_cast<float>(h), inv_w, inv_h);
+    gls.u_block_dirty = true;
+}
+
+static void GL_BokehCoCPass(int w, int h)
+{
+    GL_BokehViewport(w, h);
+    GL_BokehSetScreen(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
+    GL_PostProcess(GLS_BOKEH_COC, 0, 0, w, h);
+}
+
+static void GL_BokehInitialBlurPass(int w, int h)
+{
+    GL_BokehViewport(w, h);
+    GL_BokehSetScreen(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+    GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, w, h);
+}
+
+static void GL_BokehDownsamplePass(int w, int h)
+{
+    GL_BokehViewport(w, h);
+    GL_BokehSetScreen(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
+    GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, w, h);
+}
+
+static void GL_BokehGatherPass(int w, int h)
+{
+    GL_BokehViewport(w, h);
+    GL_BokehSetScreen(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
+    GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, w, h);
+}
+
+static void GL_BokehCombinePass(int w, int h)
+{
+    GL_BokehViewport(w, h);
+    GL_BokehSetScreen(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
+    GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+    GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, w, h);
+}
+
+static void GL_RunDepthOfField(void)
 {
     const int w = glr.fd.width;
     const int h = glr.fd.height;
@@ -706,23 +769,16 @@ static void GL_GenerateDepthOfField(void)
     if (w <= 0 || h <= 0)
         return;
 
+    const int half_w = std::max(w / 2, 1);
+    const int half_h = std::max(h / 2, 1);
+
     GL_Setup2D();
-    qglViewport(0, 0, w, h);
-    GL_Ortho(0, w, h, 0, -1, 1);
 
-    gls.u_block.fog_color[0] = 1.0f / w;
-    gls.u_block.fog_color[1] = 0.0f;
-    gls.u_block_dirty = true;
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_0);
-    GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
-
-    gls.u_block.fog_color[0] = 0.0f;
-    gls.u_block.fog_color[1] = 1.0f / h;
-    gls.u_block_dirty = true;
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_0);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_1);
-    GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+    GL_BokehCoCPass(w, h);
+    GL_BokehInitialBlurPass(w, h);
+    GL_BokehDownsamplePass(half_w, half_h);
+    GL_BokehGatherPass(half_w, half_h);
+    GL_BokehCombinePass(w, h);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -761,7 +817,7 @@ static void GL_DrawBloom(pp_flags_t flags)
     const bool show_bloom = q_unlikely(gl_showbloom->integer);
 
     if (depth_of_field && !show_bloom)
-        GL_GenerateDepthOfField();
+        GL_RunDepthOfField();
 
     GL_Setup2D();
 
@@ -771,14 +827,10 @@ static void GL_DrawBloom(pp_flags_t flags)
         bits = GLS_DEFAULT;
         depth_of_field = false;
     } else {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        GL_ForceTexture(TMU_TEXTURE, depth_of_field ? TEXNUM_PP_DOF_RESULT : TEXNUM_PP_SCENE);
         GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
         if (waterwarp)
             bits |= GLS_WARP_ENABLE;
-        if (depth_of_field) {
-            GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_1);
-            bits |= GLS_DOF_ENABLE;
-        }
     }
 
     // upscale & add
@@ -790,16 +842,15 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 {
     const bool waterwarp = (flags & PP_WATERWARP) != 0;
 
-    GL_GenerateDepthOfField();
+    GL_RunDepthOfField();
 
     GL_Setup2D();
 
-    glStateBits_t bits = GLS_DOF_ENABLE;
+    glStateBits_t bits = GLS_DEFAULT;
     if (waterwarp)
         bits |= GLS_WARP_ENABLE;
 
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_1);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
     GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
@@ -888,7 +939,7 @@ static pp_flags_t GL_BindFramebuffer(void)
         gl_waterwarp_modified = gl_waterwarp->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
-        if (flags & (PP_BLOOM | PP_DEPTH_OF_FIELD))
+        if (flags & PP_BLOOM)
             gl_backend->update_blur();
     }
 
@@ -991,7 +1042,8 @@ void R_RenderFrame(const refdef_t *fd)
     GL_Setup2D();
 
     if (pp_flags & PP_DEPTH_OF_FIELD) {
-        Vector4Set(gls.u_block.dof_params, glr.fd.dof_blend, glr.fd.dof_focus, glr.fd.dof_strength, 0.0f);
+        Vector4Set(gls.u_block.dof_params, glr.fd.dof_blur_range, glr.fd.dof_focus_distance, glr.fd.dof_focus_range, glr.fd.dof_luma_strength);
+        Vector4Set(gls.u_block.dof_depth, glr.view_znear, glr.view_zfar, 0.0f, 0.0f);
         gls.u_block_dirty = true;
     }
 
@@ -1248,7 +1300,6 @@ static void GL_Register(void)
     gl_fog = Cvar_Get("gl_fog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
-    gl_dof_sigma = Cvar_Get("gl_dof_sigma", "12", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 

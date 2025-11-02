@@ -118,6 +118,8 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         float pad_5;
         float pad_4;
         vec4 u_dof_params;
+        vec4 u_dof_screen;
+        vec4 u_dof_depth;
         vec4 u_vieworg;
     )
     GLSF("};\n");
@@ -538,6 +540,152 @@ static void write_box_blur(sizebuf_t *buf)
     )
 }
 
+static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
+{
+    write_header(buf, bits);
+    write_block(buf, bits);
+
+    GLSL(uniform sampler2D u_bokeh_source;);
+    if (bits & (GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_COMBINE))
+        GLSL(uniform sampler2D u_bokeh_coc;);
+    if (bits & GLS_BOKEH_COMBINE)
+        GLSL(uniform sampler2D u_bokeh_gather;);
+
+    GLSL(in vec2 v_tc;);
+
+    if (gl_config.ver_es)
+        GLSL(layout(location = 0));
+    GLSL(out vec4 o_color;);
+
+    if (bits & GLS_BOKEH_INITIAL) {
+        GLSL(const int kernelSampleCount = 22;);
+        GLSL(const vec2 kernel[kernelSampleCount] = vec2[](
+            vec2(0.00000000, 0.00000000),
+            vec2(0.53333336, 0.00000000),
+            vec2(0.33252790, 0.41697681),
+            vec2(-0.11867785, 0.51996160),
+            vec2(-0.48051673, 0.23140470),
+            vec2(-0.48051673, -0.23140468),
+            vec2(-0.11867763, -0.51996166),
+            vec2(0.33252785, -0.41697690),
+            vec2(1.00000000, 0.00000000),
+            vec2(0.90096885, 0.43388376),
+            vec2(0.62348980, 0.78183150),
+            vec2(0.22252098, 0.97492790),
+            vec2(-0.22252095, 0.97492790),
+            vec2(-0.62349000, 0.78183140),
+            vec2(-0.90096885, 0.43388382),
+            vec2(-1.00000000, 0.00000000),
+            vec2(-0.90096885, -0.43388376),
+            vec2(-0.62348960, -0.78183160),
+            vec2(-0.22252055, -0.97492800),
+            vec2(0.22252150, -0.97492780),
+            vec2(0.62348970, -0.78183160),
+            vec2(0.90096885, -0.43388376)
+        ));
+
+        GLSL(float bokeh_sample_weight(float coc, float radius) {
+            return clamp((coc - radius + 2.0) / 2.0, 0.0, 1.0);
+        });
+
+        GLSL(vec3 luma_boost(vec3 color) {
+            float lum = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722)) * u_dof_params.w;
+            vec3 vOut = color * (1.0 + 0.2 * lum * lum * lum);
+            return vOut * vOut;
+        });
+    }
+
+    GLSF("void main() {\n");
+    GLSL(vec2 tc = v_tc;);
+
+    if (bits & GLS_BOKEH_COC) {
+        GLSL(float depth = texture(u_bokeh_source, tc).r;);
+        GLSL(float znear = u_dof_depth.x;);
+        GLSL(float zfar = u_dof_depth.y;);
+        GLSL(float ndc = depth * 2.0 - 1.0;);
+        GLSL(float linear = (2.0 * znear * zfar) / max(zfar + znear - ndc * (zfar - znear), 0.00001););
+        GLSL(float focus_distance = u_dof_params.y;);
+        GLSL(float focus_range = max(u_dof_params.z, 0.0001););
+        GLSL(float coc = clamp((linear - focus_distance) / focus_range, -1.0, 1.0););
+        GLSL(float sign_val = coc < 0.0 ? -1.0 : 1.0;);
+        GLSL(coc = smoothstep(0.1, 1.0, abs(coc)) * sign_val;);
+        GLSL(o_color = vec4(coc * u_dof_params.x, 0.0, 0.0, 1.0););
+        GLSL(return;);
+    }
+
+    if (bits & GLS_BOKEH_INITIAL) {
+        GLSL(vec2 inv_resolution = vec2(u_dof_screen.z, u_dof_screen.w););
+        GLSL(vec3 bgColor = vec3(0.0););
+        GLSL(vec3 fgColor = vec3(0.0););
+        GLSL(float bgWeight = 0.0;);
+        GLSL(float fgWeight = 0.0;);
+        GLSL(float center_coc = texture(u_bokeh_coc, tc).r;);
+
+        GLSL(for (int k = 0; k < kernelSampleCount; ++k) {
+            vec2 sample_dir = kernel[k] * u_dof_params.x;
+            float radius = length(sample_dir);
+            vec2 offset = sample_dir * inv_resolution;
+            vec4 sample_color = texture(u_bokeh_source, tc + offset);
+            float sample_coc = texture(u_bokeh_coc, tc + offset).r;
+            vec3 lum = sample_color.rgb + luma_boost(sample_color.rgb);
+
+            float bgw = bokeh_sample_weight(max(0.0, min(sample_coc, center_coc)), radius);
+            bgColor += lum * bgw;
+            bgWeight += bgw;
+
+            float fgw = bokeh_sample_weight(-sample_coc, radius);
+            fgColor += lum * fgw;
+            fgWeight += fgw;
+        });
+
+        GLSL(if (bgWeight > 0.0) bgColor /= bgWeight;);
+        GLSL(if (fgWeight > 0.0) fgColor /= fgWeight;);
+        GLSL(float total = min(1.0, fgWeight * 3.14159265359 / float(kernelSampleCount)););
+        GLSL(vec3 color = mix(bgColor, fgColor, total););
+        GLSL(o_color = vec4(color, total););
+        GLSL(return;);
+    }
+
+    if (bits & GLS_BOKEH_DOWNSAMPLE) {
+        GLSL(vec2 inv_resolution = vec2(u_dof_screen.z, u_dof_screen.w););
+        GLSL(vec4 offset = inv_resolution.xyxy * vec2(-0.5, 0.5).xxyy;);
+        GLSL(float coc1 = texture(u_bokeh_coc, tc + offset.xy).r;);
+        GLSL(float coc2 = texture(u_bokeh_coc, tc + offset.zy).r;);
+        GLSL(float coc3 = texture(u_bokeh_coc, tc + offset.xw).r;);
+        GLSL(float coc4 = texture(u_bokeh_coc, tc + offset.zw).r;);
+        GLSL(float cocMin = min(min(coc1, coc2), min(coc3, coc4)););
+        GLSL(float cocMax = max(max(coc1, coc2), max(coc3, coc4)););
+        GLSL(float cocAvg = cocMax >= -cocMin ? cocMax : cocMin;);
+        GLSL(vec3 color = texture(u_bokeh_source, tc).rgb;);
+        GLSL(o_color = vec4(color, cocAvg););
+        GLSL(return;);
+    }
+
+    if (bits & GLS_BOKEH_GATHER) {
+        GLSL(vec2 inv_resolution = vec2(u_dof_screen.z, u_dof_screen.w););
+        GLSL(vec4 offset = inv_resolution.xyxy * vec2(-0.5, 0.5).xxyy;);
+        GLSL(vec4 color = texture(u_bokeh_source, tc + offset.xy););
+        GLSL(color += texture(u_bokeh_source, tc + offset.zy););
+        GLSL(color += texture(u_bokeh_source, tc + offset.xw););
+        GLSL(color += texture(u_bokeh_source, tc + offset.zw););
+        GLSL(o_color = color * 0.25;);
+        GLSL(return;);
+    }
+
+    if (bits & GLS_BOKEH_COMBINE) {
+        GLSL(float coc = texture(u_bokeh_coc, tc).a;);
+        GLSL(vec4 dof = texture(u_bokeh_gather, tc););
+        GLSL(vec4 src = texture(u_bokeh_source, tc););
+        GLSL(float s = smoothstep(0.1, 1.0, abs(coc)););
+        GLSL(vec3 color = mix(src.rgb, dof.rgb, s + dof.a - s * dof.a););
+        GLSL(o_color = vec4(color, src.a););
+        GLSL(return;);
+    }
+
+    GLSL(o_color = vec4(0.0););
+    GLSF("}\n");
+}
+
 // XXX: this is very broken. but that's how it is in re-release.
 static void write_height_fog(sizebuf_t *buf, glStateBits_t bits)
 {
@@ -564,6 +712,11 @@ static void write_height_fog(sizebuf_t *buf, glStateBits_t bits)
 
 static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 {
+    if (bits & GLS_BOKEH_MASK) {
+        write_bokeh_fragment(buf, bits);
+        return;
+    }
+
     write_header(buf, bits);
 
     if (bits & GLS_UNIFORM_MASK)
@@ -583,8 +736,6 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(uniform sampler2D u_texture;)
         if (bits & GLS_BLOOM_OUTPUT)
             GLSL(uniform sampler2D u_bloom;)
-        if (bits & GLS_DOF_ENABLE)
-            GLSL(uniform sampler2D u_dof;)
     }
 
     if (bits & GLS_SKY_MASK)
@@ -740,15 +891,6 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & GLS_FOG_SKY)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
-
-    if (bits & GLS_DOF_ENABLE) {
-        GLSL(vec4 dof_sample = texture(u_dof, tc);)
-        GLSL(float dof_base = clamp(u_dof_params.x, 0.0, 1.0);)
-        GLSL(float dof_exp = max(u_dof_params.y, 0.0001);)
-        GLSL(float dof_strength = max(u_dof_params.z, 0.0);)
-        GLSL(float dof_amount = clamp(pow(dof_base, dof_exp) * dof_strength, 0.0, 1.0);)
-        GLSL(diffuse = mix(diffuse, dof_sample, dof_amount);)
-    }
 
     if (bits & GLS_BLOOM_OUTPUT)
         GLSL(diffuse.rgb += texture(u_bloom, tc).rgb;)
@@ -928,15 +1070,19 @@ static GLuint create_and_use_program(glStateBits_t bits)
     }
 #endif
 
-    if (bits & GLS_CLASSIC_SKY) {
+    if (bits & GLS_BOKEH_MASK) {
+        bind_texture_unit(program, "u_bokeh_source", TMU_TEXTURE);
+        if (bits & (GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_COMBINE))
+            bind_texture_unit(program, "u_bokeh_coc", TMU_LIGHTMAP);
+        if (bits & GLS_BOKEH_COMBINE)
+            bind_texture_unit(program, "u_bokeh_gather", TMU_GLOWMAP);
+    } else if (bits & GLS_CLASSIC_SKY) {
         bind_texture_unit(program, "u_texture1", TMU_TEXTURE);
         bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
     } else {
         bind_texture_unit(program, "u_texture", TMU_TEXTURE);
         if (bits & GLS_BLOOM_OUTPUT)
             bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
-        if (bits & GLS_DOF_ENABLE)
-            bind_texture_unit(program, "u_dof", TMU_GLOWMAP);
     }
 
     if (bits & GLS_LIGHTMAP_ENABLE)
@@ -1198,12 +1344,6 @@ static void shader_update_blur(void)
             sigma = bloom_sigma;
     }
 
-    if (gl_dof->integer && glr.fd.depth_of_field) {
-        float dof_sigma = Cvar_ClampValue(gl_dof_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
-        if (sigma < dof_sigma)
-            sigma = dof_sigma;
-    }
-
     if (sigma <= 0.0f)
         sigma = 1.0f;
 
@@ -1234,18 +1374,10 @@ static void gl_bloom_sigma_changed(cvar_t *self)
         shader_update_blur();
 }
 
-static void gl_dof_sigma_changed(cvar_t *self)
-{
-    if (gl_dof->integer && glr.fd.height > 0)
-        shader_update_blur();
-}
-
 static void shader_init(void)
 {
     gl_bloom_sigma = Cvar_Get("gl_bloom_sigma", "8", 0);
     gl_bloom_sigma->changed = gl_bloom_sigma_changed;
-    if (gl_dof_sigma)
-        gl_dof_sigma->changed = gl_dof_sigma_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 

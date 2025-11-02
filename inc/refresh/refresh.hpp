@@ -162,9 +162,10 @@ typedef struct {
     particle_t  *particles;
 
     bool        depth_of_field;
-    float       dof_blend;
-    float       dof_focus;
-    float       dof_strength;
+    float       dof_blur_range;
+    float       dof_focus_distance;
+    float       dof_focus_range;
+    float       dof_luma_strength;
 } refdef_t;
 
 enum {
