@@ -1,9 +1,9 @@
-#include "refresh/postprocess/bloom.hpp"
+#include "bloom.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-#include "refresh/qgl.hpp"
+#include "../qgl.hpp"
 
 BloomEffect g_bloom_effect;
 
@@ -52,150 +52,150 @@ bool R_ColorCorrectionActive(void)
 }
 
 BloomEffect::BloomEffect() noexcept
-    : textures_{},
-      framebuffers_{},
-      sceneWidth_(0),
-      sceneHeight_(0),
-      downsampleWidth_(0),
-      downsampleHeight_(0),
-      initialized_(false)
+	: textures_{},
+	framebuffers_{},
+	sceneWidth_(0),
+	sceneHeight_(0),
+	downsampleWidth_(0),
+	downsampleHeight_(0),
+	initialized_(false)
 {
 }
 
 BloomEffect::~BloomEffect()
 {
-    shutdown();
+	shutdown();
 }
 
 void BloomEffect::destroyTextures()
 {
-    for (GLuint &texture : textures_) {
-        if (texture) {
-            qglDeleteTextures(1, &texture);
-            texture = 0;
-        }
-    }
+	for (GLuint& texture : textures_) {
+		if (texture) {
+			qglDeleteTextures(1, &texture);
+			texture = 0;
+		}
+	}
 }
 
 void BloomEffect::destroyFramebuffers()
 {
-    for (GLuint &fbo : framebuffers_) {
-        if (fbo) {
-            qglDeleteFramebuffers(1, &fbo);
-            fbo = 0;
-        }
-    }
+	for (GLuint& fbo : framebuffers_) {
+		if (fbo) {
+			qglDeleteFramebuffers(1, &fbo);
+			fbo = 0;
+		}
+	}
 }
 
 void BloomEffect::initialize()
 {
-    if (initialized_)
-        return;
+	if (initialized_)
+		return;
 
-    qglGenTextures(TextureCount, textures_);
-    qglGenFramebuffers(FramebufferCount, framebuffers_);
+	qglGenTextures(TextureCount, textures_);
+	qglGenFramebuffers(FramebufferCount, framebuffers_);
 
-    initialized_ = true;
+	initialized_ = true;
 }
 
 void BloomEffect::ensureInitialized()
 {
-    if (!initialized_)
-        initialize();
+	if (!initialized_)
+		initialize();
 }
 
 void BloomEffect::shutdown()
 {
-    if (!initialized_)
-        return;
+	if (!initialized_)
+		return;
 
-    destroyTextures();
-    destroyFramebuffers();
+	destroyTextures();
+	destroyFramebuffers();
 
-    sceneWidth_ = 0;
-    sceneHeight_ = 0;
-    downsampleWidth_ = 0;
-    downsampleHeight_ = 0;
-    initialized_ = false;
+	sceneWidth_ = 0;
+	sceneHeight_ = 0;
+	downsampleWidth_ = 0;
+	downsampleHeight_ = 0;
+	initialized_ = false;
 }
 
 void BloomEffect::allocateTexture(GLuint tex, int width, int height) const
 {
-    qglBindTexture(GL_TEXTURE_2D, tex);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	qglBindTexture(GL_TEXTURE_2D, tex);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 }
 
-bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char *name) const
+bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const
 {
-    qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-    if (width > 0 && height > 0)
-        qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, texture, 0);
-    else
-        qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, 0, 0);
+	if (width > 0 && height > 0)
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, texture, 0);
+	else
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, 0, 0);
 
-    if (width <= 0 || height <= 0) {
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return true;
-    }
+	if (width <= 0 || height <= 0) {
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		return true;
+	}
 
-    GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        if (gl_showerrors->integer)
-            Com_EPrintf("%s framebuffer status %#x\n", name, status);
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
-    }
+	GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		if (gl_showerrors->integer)
+			Com_EPrintf("%s framebuffer status %#x\n", name, status);
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		return false;
+	}
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return true;
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	return true;
 }
 
 void BloomEffect::resize(int sceneWidth, int sceneHeight)
 {
-    if (sceneWidth <= 0 || sceneHeight <= 0) {
-        shutdown();
-        return;
-    }
+	if (sceneWidth <= 0 || sceneHeight <= 0) {
+		shutdown();
+		return;
+	}
 
-    ensureInitialized();
-    if (!initialized_)
-        return;
+	ensureInitialized();
+	if (!initialized_)
+		return;
 
-    int downW = std::max(sceneWidth / 4, 1);
-    int downH = std::max(sceneHeight / 4, 1);
+	int downW = (std::max)(sceneWidth / 4, 1);
+	int downH = (std::max)(sceneHeight / 4, 1);
 
-    if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
-        downsampleWidth_ == downW && downsampleHeight_ == downH)
-        return;
+	if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
+		downsampleWidth_ == downW && downsampleHeight_ == downH)
+		return;
 
-    sceneWidth_ = sceneWidth;
-    sceneHeight_ = sceneHeight;
-    downsampleWidth_ = downW;
-    downsampleHeight_ = downH;
+	sceneWidth_ = sceneWidth;
+	sceneHeight_ = sceneHeight;
+	downsampleWidth_ = downW;
+	downsampleHeight_ = downH;
 
-    allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_);
-    allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_);
-    allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_);
-    allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_);
+	allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_);
+	allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_);
+	allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_);
+	allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_);
 
-    bool ok = true;
-    ok &= attachFramebuffer(framebuffers_[DownsampleFbo], textures_[Downsample], downsampleWidth_, downsampleHeight_, "BLOOM_DOWNSAMPLE");
-    ok &= attachFramebuffer(framebuffers_[BrightPassFbo], textures_[BrightPass], downsampleWidth_, downsampleHeight_, "BLOOM_BRIGHTPASS");
-    ok &= attachFramebuffer(framebuffers_[BlurFbo0], textures_[Blur0], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR0");
-    ok &= attachFramebuffer(framebuffers_[BlurFbo1], textures_[Blur1], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR1");
+	bool ok = true;
+	ok &= attachFramebuffer(framebuffers_[DownsampleFbo], textures_[Downsample], downsampleWidth_, downsampleHeight_, "BLOOM_DOWNSAMPLE");
+	ok &= attachFramebuffer(framebuffers_[BrightPassFbo], textures_[BrightPass], downsampleWidth_, downsampleHeight_, "BLOOM_BRIGHTPASS");
+	ok &= attachFramebuffer(framebuffers_[BlurFbo0], textures_[Blur0], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR0");
+	ok &= attachFramebuffer(framebuffers_[BlurFbo1], textures_[Blur1], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR1");
 
-    if (!ok)
-        shutdown();
+	if (!ok)
+		shutdown();
 }
 
 extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
 
-void BloomEffect::render(const BloomRenderContext &ctx)
+void BloomEffect::render(const BloomRenderContext& ctx)
 {
     const bool bloomRequested = r_bloom && r_bloom->integer;
     const bool dofActive = ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField;
