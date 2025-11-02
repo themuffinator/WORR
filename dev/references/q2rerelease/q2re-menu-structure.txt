@@ -1,0 +1,226 @@
+{
+  "options": {
+    "label_key": "m_options",
+    "children": [
+      {
+        "id": "input",
+        "label_key": "m_input",
+        "sections": [
+          {
+            "id": "mouse",
+            "label_key": "m_mouse",
+            "items": [
+              { "id": "vert_sens", "label_key": "m_sensitivity", "type": "slider", "cvar": null },
+              { "id": "horiz_sens", "label_key": "m_hsensitivity", "type": "slider", "cvar": null },
+              { "id": "invert_look", "label_key": "m_invert_look", "type": "toggle", "cvar": null },
+              { "id": "smoothing", "label_key": "m_smoothing", "type": "toggle", "cvar": null },
+              { "id": "wheel_sens", "label_key": "m_wheel_sensitivity", "type": "slider", "cvar": null },
+              { "id": "wheel_deadzone", "label_key": "m_wheel_deadzone_scale", "type": "slider", "cvar": null }
+            ]
+          },
+          {
+            "id": "controller",
+            "label_key": "m_controller",
+            "items": [
+              { "id": "aim_assist", "label_key": "m_aim_assist", "type": "toggle", "cvar": null },
+              { "id": "aim_x", "label_key": "m_aim_x", "type": "slider", "cvar": null },
+              { "id": "aim_y", "label_key": "m_aim_y", "type": "slider", "cvar": null },
+              { "id": "deadzone", "label_key": "m_deadzone", "type": "slider", "cvar": null },
+              { "id": "lstick", "label_key": "m_lstick", "type": "header" },
+              { "id": "rstick", "label_key": "m_rstick", "type": "header" },
+              { "id": "aim_accel", "label_key": "m_joyaccel", "type": "slider", "cvar": null },
+              { "id": "accel_exp", "label_key": "m_joyexponent", "type": "slider", "cvar": null },
+              { "id": "aim_smoothing", "label_key": "m_joysmoothing", "type": "slider", "cvar": null },
+              { "id": "motion_sensor", "label_key": "m_motion_sensor", "type": "toggle", "cvar": null },
+              { "id": "vibration", "label_key": "m_vibration", "type": "toggle", "cvar": null },
+              { "id": "vibration_intensity", "label_key": "m_vibration_volume", "type": "slider", "cvar": null }
+            ]
+          },
+          {
+            "id": "bindings",
+            "label_key": "m_set_binds",
+            "tabs": [
+              { "label_key": "m_player_controls" },
+              { "label_key": "m_inventory_controls" },
+              { "label_key": "m_weapon_controls" },
+              { "label_key": "m_multiplayer_controls" },
+              { "label_key": "m_other_controls" }
+            ]
+          },
+          { "id": "reset", "label_key": "m_reset_settings", "type": "action" }
+        ]
+      },
+
+      {
+        "id": "gameplay",
+        "label_key": "m_gameplay",
+        "items": [
+          { "id": "always_run_keyboard", "label_key": "m_always_run", "type": "toggle", "cvar": null },
+          { "id": "view_bob", "label_key": "m_view_bob", "type": "toggle", "cvar": null },
+          { "id": "crosshair", "label_key": "m_crosshair", "type": "toggle", "cvar": null },
+          { "id": "crosshair_style", "label_key": "m_crosshair_style", "type": "picker", "cvar": null },
+          {
+            "id": "hud_style",
+            "label_key": "m_hud_style",
+            "type": "picker",
+            "cvar": null,
+            "choices": ["m_minimal", "m_standard", "m_full"]
+          },
+          { "id": "classic_quit", "label_key": "m_ui_showquitmessage", "type": "toggle", "cvar": null },
+          {
+            "id": "change_on_pickup",
+            "label_key": "m_change_on_pickup",
+            "type": "picker",
+            "cvar": null,
+            "choices": ["m_always", "m_always_no_ammo", "m_onlynew", "m_smart", "m_never"]
+          },
+          { "id": "toggle_scoreboard", "label_key": "m_togglescoreboard", "type": "toggle", "cvar": null },
+          { "id": "display_hud", "label_key": "m_hud", "type": "toggle", "cvar": null },
+          { "id": "teammate_indicators", "label_key": "m_teammate_indicators", "type": "toggle", "cvar": null },
+          { "id": "hit_markers", "label_key": "m_hit_markers", "type": "toggle", "cvar": null },
+          {
+            "id": "crosshair_settings",
+            "label_key": "m_crosshair_settings",
+            "type": "group",
+            "items": [
+              { "id": "xh_style", "label_key": "m_style", "type": "picker", "cvar": null },
+              { "id": "xh_scale", "label_key": "m_scale", "type": "slider", "cvar": null }
+            ]
+          },
+          {
+            "id": "weapon_hand",
+            "label_key": "m_hand",
+            "type": "picker",
+            "cvar": null,
+            "choices": ["m_left", "m_right", "m_center"]
+          },
+          {
+            "id": "auto_power_shield",
+            "label_key": "m_auto_power_armor",
+            "type": "picker",
+            "cvar": null,
+            "choices": ["m_manual", "m_50_cells", "m_75_cells", "m_100_cells"]
+          }
+        ]
+      },
+
+      {
+        "id": "sound",
+        "label_key": "m_sound",
+        "items": [
+          { "id": "music_volume", "label_key": "m_music_volume", "type": "slider", "cvar": null },
+          { "id": "sound_volume", "label_key": "m_sound_volume", "type": "slider", "cvar": null },
+          { "id": "voice_volume", "label_key": "m_voice_volume", "type": "slider", "cvar": null },
+          { "id": "reverb", "label_key": "m_reverb", "type": "toggle", "cvar": "s_use_reverb" },
+          { "id": "subtitles", "label_key": "m_subtitles", "type": "toggle", "cvar": "cc_enable" }
+        ]
+      },
+
+      {
+        "id": "display",
+        "label_key": "m_display",
+        "pages": [
+          {
+            "id": "display_main",
+            "label_key": "m_display",
+            "items": [
+              { "id": "open_video_settings", "label_key": "m_open_video_settings", "type": "link", "to": "video_settings" },
+              { "id": "brightness", "label_key": "m_brightness", "type": "slider", "cvar": "r_brightness", "min": 0.0, "max": 10.0, "step": 0.1 },
+              { "id": "fov", "label_key": "m_fov", "type": "slider", "cvar": null },
+              { "id": "max_fps", "label_key": "m_max_fps", "type": "int", "cvar": "cl_engineFPS" },
+              {
+                "id": "split_direction",
+                "label_key": "m_split_direction",
+                "type": "toggle",
+                "cvar": "r_verticalsplitscreen",
+                "on_label_key": "m_vertical",
+                "off_label_key": "m_horizontal"
+              },
+              { "id": "texture_smoothing", "label_key": "m_texturemode", "type": "toggle", "cvar": "r_texture_filtering" },
+              {
+                "id": "resolution_scaling",
+                "label_key": "m_resolutionscale",
+                "type": "group",
+                "items": [
+                  { "id": "res_scale_mode", "label_key": "m_resolutionscale", "type": "picker", "cvar": null, "choices": ["m_fixed", "m_dynamic"] },
+                  { "id": "res_scale_value", "label_key": "m_resolutionscale_fixed", "type": "slider", "cvar": null }
+                ]
+              },
+              { "id": "safe_zone", "label_key": "m_safe_zone", "type": "slider", "cvar": "scr_safezone", "min": 0.0, "max": 100.0, "step": 0.01 },
+              {
+                "id": "enhancements_group",
+                "label_key": "m_enhancements",
+                "type": "group",
+                "items": [
+                  { "id": "crt_simulation", "label_key": "m_crtshader", "type": "toggle", "cvar": "r_crtmode" },
+                  { "id": "antialiasing", "label_key": "m_aa", "type": "toggle", "cvar": "r_antialiasing" },
+                  { "id": "ambient_occlusion", "label_key": "m_ao", "type": "toggle", "cvar": null },
+                  { "id": "motion_blur", "label_key": "m_motion_blur", "type": "toggle", "cvar": "r_motionBlur" },
+                  { "id": "model_interpolation", "label_key": "m_modellerp", "type": "toggle", "cvar": null },
+                  { "id": "depth_of_field", "label_key": "m_dof", "type": "toggle", "cvar": "r_dof" },
+                  { "id": "bloom", "label_key": "m_bloom", "type": "toggle", "cvar": "r_bloom" },
+                  { "id": "muzzle_flashes", "label_key": "m_muzzleflashes", "type": "toggle", "cvar": "cl_muzzleflashes" },
+                  { "id": "enhanced_models", "label_key": "m_md5models", "type": "toggle", "cvar": "r_md5models" },
+                  {
+                    "id": "color_lightmaps",
+                    "label_key": "m_colorlightmaps",
+                    "type": "toggle",
+                    "cvar": "r_monochromelightmaps",
+                    "invert": true
+                  },
+                  { "id": "square_particles", "label_key": "m_squareparticles", "type": "toggle", "cvar": "r_particle_square" },
+                  { "id": "fog", "label_key": "m_fog", "type": "toggle", "cvar": "r_enablefog" },
+                  { "id": "dynamic_shadows", "label_key": "m_shadows", "type": "toggle", "cvar": "r_shadows" },
+                  {
+                    "id": "water_warp",
+                    "label_key": "m_waterwarp",
+                    "type": "toggle",
+                    "cvar": "r_skipUnderWaterFX",
+                    "invert": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "video_settings",
+            "label_key": "m_video_settings",
+            "items": [
+              { "id": "graphics_api", "label_key": "m_graphics_api", "type": "picker", "cvar": null },
+              { "id": "graphics_api_note", "label_key": "m_graphics_api_question", "type": "note" },
+              { "id": "resolution", "label_key": "m_video_resolution", "type": "picker", "cvar": null },
+              { "id": "window_mode", "label_key": "m_window_mode", "type": "picker", "cvar": null, "choices": ["m_windowed", "m_borderless", "m_fullscreen"] },
+              { "id": "vsync", "label_key": "m_vsync", "type": "toggle", "cvar": null },
+              { "id": "monitor", "label_key": "m_monitor", "type": "picker", "cvar": null },
+              { "id": "apply_settings", "label_key": "m_apply_settings", "type": "action" }
+            ]
+          }
+        ]
+      },
+
+      {
+        "id": "accessibility",
+        "label_key": "m_a11y",
+        "items": [
+          { "id": "disable_all", "label_key": "m_toggle_all_off", "type": "action" },
+          { "id": "enable_all", "label_key": "m_toggle_all_on", "type": "action" },
+          { "id": "high_contrast", "label_key": "m_high_contrast", "type": "toggle", "cvar": null },
+          { "id": "alt_typeface", "label_key": "m_alternate_typeface", "type": "toggle", "cvar": null },
+          { "id": "screen_fx_amt", "label_key": "m_screen_flash_percent", "type": "slider", "cvar": null },
+          { "id": "center_msg_time", "label_key": "m_center_message_time", "type": "slider", "cvar": null },
+          { "id": "corner_msg_time", "label_key": "m_corner_message_time", "type": "slider", "cvar": null },
+          { "id": "max_lines", "label_key": "m_max_lines", "type": "slider", "cvar": null },
+          { "id": "read_chat_out_loud", "label_key": "options_mp_enable_tts", "type": "toggle", "cvar": null },
+          { "id": "transcribe_voice_chat", "label_key": "options_mp_enable_stt", "type": "toggle", "cvar": null },
+          { "id": "chat_msg_time", "label_key": "m_chat_message_time", "type": "slider", "cvar": null },
+          { "id": "speak_for_me", "label_key": "options_mp_speak_for_me", "type": "toggle", "cvar": null },
+          { "id": "voice_profile", "label_key": "m_options_voice_profile", "type": "picker", "cvar": null }
+        ]
+      },
+
+      { "id": "language", "label_key": "m_language", "type": "navigation" },
+      { "id": "credits", "label_key": "m_credits", "type": "navigation" },
+      { "id": "legal", "label_key": "m_legalnotices", "type": "navigation" }
+    ]
+  }
+}

@@ -1,0 +1,253 @@
+// Overview Of Monster Properties:
+
+// classname: 	the actual classname of the monster, as used in the game code
+// flags: 		describe properties of this monster to the bots
+
+
+// Valid Monster Flags:
+
+// melee:		this monster has a melee attack
+// ranged:		this monster has a ranged attack
+// aquatic:		this monster lives in the water
+// flyer:		this monster flys around
+// turret:		this monster is ( or acts like ) a turret
+// tank:		this monster is resistant to explosives
+// neutral:		this monster(?) is neutral to us ( unless we mess with them )
+
+
+// === Valid id Monsters =====================
+
+{ // Berserk
+  classname		"monster_berserk"
+  flags			melee
+}
+
+{ // Gladiator
+  classname		"monster_gladiator"
+  flags			ranged | melee
+}
+
+{ // Gunner
+  classname		"monster_gunner"
+  flags			ranged
+}
+
+{ // Enforcer
+  classname		"monster_infantry"
+  flags			ranged | melee
+}
+
+{ // Light Guard
+  classname		"monster_soldier_light"
+  flags			ranged
+}
+
+{ // Shotgun Guard
+  classname		"monster_soldier"
+  flags			ranged
+}
+
+{ // Machinegun Guard
+  classname		"monster_soldier_ss"
+  flags			ranged
+}
+
+{ // Tank
+  classname		"monster_tank"
+  flags			ranged
+}
+
+{ // Tank Commander
+  classname		"monster_tank_commander"
+  flags			ranged
+}
+
+{ // Medic
+  classname		"monster_medic"
+  flags			ranged
+}
+
+{ // Barracuda Shark
+  classname		"monster_flipper"
+  flags			aquatic | melee
+}
+
+{ // Iron Maiden
+  classname		"monster_chick"
+  flags			ranged | melee
+}
+
+{ // Parasite
+  classname		"monster_parasite"
+  flags			ranged
+}
+
+{ // Flyer
+  classname		"monster_flyer"
+  flags			flyer | ranged | melee
+}
+
+{ // Brains
+  classname		"monster_brain"
+  flags			ranged | melee
+}
+
+{ // Technician
+  classname		"monster_floater"
+  flags			flyer | ranged | melee
+}
+
+{ // Icarus
+  classname		"monster_hover"
+  flags			flyer | ranged
+}
+
+{ // Mutant
+  classname		"monster_mutant"
+  flags			melee
+}
+
+{ // Super Tank
+  classname		"monster_supertank"
+  flags			ranged
+}
+
+{ // Hornet
+  classname		"monster_boss2"
+  flags			flyer | ranged
+}
+
+{ // Jorg
+  classname		"monster_jorg"
+  flags			ranged
+}
+
+{ // Makron
+  classname		"monster_makron"
+  flags			ranged
+}
+
+{ // Turret Driver
+  classname		"turret_driver"
+  flags			ranged | turret
+}
+
+// === Valid id NPCs:
+
+{ // Actor
+  classname		"misc_actor"
+  flags			neutral
+}
+
+{ // Insane
+  classname		"misc_insane"
+  flags			neutral
+}
+
+// === Valid Xatrix Monsters:
+
+{ // HyperBlaster Guard
+  classname		"monster_soldier_hypergun"
+  flags			ranged
+}
+
+{ // Laser Guard
+  classname		"monster_soldier_lasergun"
+  flags			ranged
+}
+
+{ // Ripper Guard
+  classname		"monster_soldier_ripper"
+  flags			ranged
+}
+
+{ // Fixbot
+  classname		"monster_fixbot"
+  flags			flyer | ranged
+}
+
+{ // Gekk
+  classname		"monster_gekk"
+  flags			melee | ranged
+}
+
+{ // Beta Class Iron Maiden
+  classname		"monster_chick_heat"
+  flags			melee | ranged
+}
+
+{ // Beta Class Gladiator
+  classname		"monster_gladb"
+  flags			melee | ranged
+}
+
+{ // Beta Class Super Tank
+  classname		"monster_boss5"
+  flags			melee | ranged
+}
+
+// === Valid Rogue Monsters:
+
+{ // Stalker
+  classname		"monster_stalker"
+  flags			ranged | melee
+}
+
+{ // Turret
+  classname		"monster_turret"
+  flags			ranged | turret
+}
+
+{ // Daedalus
+  classname		"monster_daedalus"
+  flags			ranged | flyer
+}
+
+{ // Carrier
+  classname		"monster_carrier"
+  flags			ranged | flyer
+}
+
+{ // Widow
+  classname		"monster_widow"
+  flags			ranged
+}
+
+{ // Widow II
+  classname		"monster_widow2"
+  flags			ranged
+}
+
+{ // Medic Commander
+  classname		"monster_medic_commander"
+  flags			ranged
+}
+
+{ // Invisible Brain
+  classname		"turret_invisible_brain"
+  flags			ranged | turret
+}
+
+// === Valid PSX Monsters:
+
+{ // Guardian
+  classname		"monster_guardian"
+  flags			ranged | melee
+}
+
+{ // Arachnid
+  classname		"monster_arachnid"
+  flags			ranged | melee
+}
+
+{ // Gunner Commander
+  classname		"monster_guncmdr"
+  flags			ranged | melee
+}
+
+// === Valid Quake Monsters:
+
+{ // Shambler
+  classname		"monster_shambler"
+  flags			ranged | tank | melee
+}
