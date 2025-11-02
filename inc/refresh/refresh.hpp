@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #include <type_traits>
+#include <algorithm>
 
 #include "common/cvar.hpp"
 #include "common/error.hpp"
@@ -389,7 +390,7 @@ inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
         char ch = *string++;
 
         if ((flags & UI_MULTILINE) && ch == '\n') {
-            maxWidth = max(maxWidth, width);
+            maxWidth = std::max(maxWidth, width);
             width = 0;
             continue;
         }
@@ -397,12 +398,12 @@ inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
         width += CONCHAR_WIDTH * scale;
     }
 
-    return max(maxWidth, width);
+    return std::max(maxWidth, width);
 }
 
 inline float R_FreeTypeFontLineHeight(int scale, const struct ftfont_t * = nullptr)
 {
-    return CONCHAR_HEIGHT * max(scale, 1);
+    return CONCHAR_HEIGHT * std::max(scale, 1);
 }
 #endif
 
