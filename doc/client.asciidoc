@@ -737,7 +737,7 @@ r_skipUnderWaterFX::
     Skips rendering the underwater screen warping effect. Default value is 0
     (render effect).
 
-gl_fog::
+r_enablefog::
     Enable re-release fog effect. Only effective when using GLSL backend.
     Default value is 1 (enabled).
 

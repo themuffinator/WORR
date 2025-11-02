@@ -62,7 +62,7 @@ cvar_t *gl_md5_distance;
 #endif
 cvar_t *gl_damageblend_frac;
 cvar_t *r_skipUnderWaterFX;
-cvar_t *gl_fog;
+cvar_t *r_enablefog;
 cvar_t *gl_bloom;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
@@ -981,7 +981,7 @@ void R_RenderFrame(const refdef_t *fd)
     glr.fog_bits = glr.fog_bits_sky = 0;
 
     if (gl_static.use_shaders) {
-        if (gl_fog->integer > 0) {
+        if (r_enablefog->integer > 0) {
             if (glr.fd.fog.density > 0)
                 glr.fog_bits |= GLS_FOG_GLOBAL;
             if (glr.fd.heightfog.density > 0 && glr.fd.heightfog.falloff > 0)
@@ -1296,7 +1296,7 @@ static void GL_Register(void)
 #endif
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
-    gl_fog = Cvar_Get("gl_fog", "1", 0);
+    r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
