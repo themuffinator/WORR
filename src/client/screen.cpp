@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_scrn.c -- master for refresh, status bar, console, chat, notify, etc
 
 #include "client.hpp"
+#include "common/q3colors.hpp"
 
 #include <cstring>
 #include <string>
@@ -225,6 +226,40 @@ UTILS
 ===============================================================================
 */
 
+namespace {
+
+struct scr_text_metrics_t {
+    size_t  visibleChars { 0 };
+    color_t finalColor;
+};
+
+static scr_text_metrics_t SCR_TextMetrics(const char *s, size_t maxlen, int flags, color_t color)
+{
+    scr_text_metrics_t metrics { 0, color };
+
+    const char *p = s;
+    size_t remaining = maxlen;
+
+    while (remaining && *p) {
+        if (!(flags & UI_IGNORECOLOR)) {
+            size_t consumed = 0;
+            if (Q3_ParseColorEscape(p, remaining, metrics.finalColor, consumed)) {
+                p += consumed;
+                remaining -= consumed;
+                continue;
+            }
+        }
+
+        ++metrics.visibleChars;
+        ++p;
+        --remaining;
+    }
+
+    return metrics;
+}
+
+} // namespace
+
 /*
 ==============
 SCR_DrawStringStretch
@@ -233,17 +268,13 @@ SCR_DrawStringStretch
 int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
                           const char *s, color_t color, qhandle_t font)
 {
-    size_t len = strlen(s);
-
 #if USE_FREETYPE
     const ftfont_t *ftFont = SCR_FTFontForHandle(font);
 #else
     const ftfont_t *ftFont = nullptr;
 #endif
 
-    if (len > maxlen) {
-        len = maxlen;
-    }
+    const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         int width = ftFont ? R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, len, s, font, ftFont)
@@ -271,18 +302,23 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
     size_t  len;
     int     last_x = x;
     int     last_y = y;
+    color_t currentColor = color;
 
     while (*s && maxlen) {
         p = strchr(s, '\n');
         if (!p) {
-            last_x = SCR_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font);
+            const auto metrics = SCR_TextMetrics(s, maxlen, flags, currentColor);
+            last_x = SCR_DrawStringStretch(x, y, scale, flags, maxlen, s, currentColor, font);
             last_y = y;
+            currentColor = metrics.finalColor;
             break;
         }
 
         len = min(p - s, maxlen);
-        last_x = SCR_DrawStringStretch(x, y, scale, flags, len, s, color, font);
+        const auto metrics = SCR_TextMetrics(s, len, flags, currentColor);
+        last_x = SCR_DrawStringStretch(x, y, scale, flags, len, s, currentColor, font);
         last_y = y;
+        currentColor = metrics.finalColor;
         maxlen -= len;
 
         y += CONCHAR_HEIGHT * scale;
@@ -290,7 +326,7 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
     }
 
     if (flags & UI_DRAWCURSOR && com_localTime & BIT(8))
-        R_DrawStretchChar(last_x, last_y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, 11, color, font);
+        R_DrawStretchChar(last_x, last_y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, 11, currentColor, font);
 }
 
 static int SCR_DrawKStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, const kfont_t *kfont)
