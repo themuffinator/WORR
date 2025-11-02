@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.hpp"
+#include "font_freetype.hpp"
 #include "common/prompt.hpp"
 #include <array>
 
@@ -906,6 +907,8 @@ void IMG_Load(image_t *image, byte *pic)
 
 void IMG_Unload(image_t *image)
 {
+    Draw_FreeFreeTypeFont(image);
+
     if (image->texnum && !(image->flags & IF_SCRAP)) {
         std::array<GLuint, 2> tex = { image->texnum, image->texnum2 };
 

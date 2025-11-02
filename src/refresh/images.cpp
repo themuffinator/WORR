@@ -35,6 +35,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <array>
 #include <type_traits>
 #include "images.hpp"
+#include "font_freetype.hpp"
 
 #if USE_PNG
 #define PNG_SKIP_SETJMP_CHECK
@@ -1961,11 +1962,12 @@ static image_t *find_or_load_image(const char *name, size_t len,
                                    imagetype_t type, imageflags_t flags)
 {
     image_t         *image;
-    byte            *pic;
+    byte            *pic = NULL;
     unsigned        hash;
     size_t          baselen;
     imageformat_t   fmt;
     int             ret;
+    bool            freetype_font = false;
 
     Q_assert(len < MAX_QPATH);
     baselen = COM_FileExtension(name) - name;
@@ -2003,7 +2005,21 @@ static image_t *find_or_load_image(const char *name, size_t len,
     image_set_flags(image, flags);
     image->registration_sequence = r_registration_sequence;
 
-    if (!enum_has(flags, IF_SPECIAL)) {
+#if USE_FREETYPE
+    if (type == IT_FONT) {
+        const char *ext = COM_FileExtension(image->name);
+        if (!Q_stricmp(ext, "ttf") || !Q_stricmp(ext, "otf")) {
+            if (Draw_LoadFreeTypeFont(image, image->name)) {
+                freetype_font = true;
+            } else {
+                ret = Q_ERR_LIBRARY_ERROR;
+                goto fail;
+            }
+        }
+    }
+#endif
+
+    if (!freetype_font && !enum_has(flags, IF_SPECIAL)) {
         // find out original extension
         int fmtIndex;
         for (fmtIndex = 0; fmtIndex < IM_MAX; ++fmtIndex) {
@@ -2038,19 +2054,19 @@ static image_t *find_or_load_image(const char *name, size_t len,
         }
 
         image->aspect = (float)image->upload_width / image->upload_height;
-    } else {
+    } else if (!freetype_font) {
         load_special_image(image, &pic);
     }
 
     List_Append(&r_imageHash[hash], &image->entry);
-    
-    if (!enum_has(flags, IF_SPECIAL)) {
+
+    if (!freetype_font && !enum_has(flags, IF_SPECIAL)) {
         // check for glow maps
         if (r_glowmaps->integer && (type == IT_SKIN || type == IT_WALL))
             check_for_glow_map(image);
     }
 
-    if (type == IT_SKY && enum_has(flags, IF_CLASSIC_SKY)) {
+    if (!freetype_font && type == IT_SKY && enum_has(flags, IF_CLASSIC_SKY)) {
         // upload the top half of the image (solid)
         image->height /= 2;
         image->upload_height /= 2;
@@ -2068,13 +2084,13 @@ static image_t *find_or_load_image(const char *name, size_t len,
 
         IMG_Load(&temporary, pic);
         image->texnum2 = temporary.texnum;
-    } else {
+    } else if (!freetype_font) {
         // upload the image
         IMG_Load(image, pic);
     }
 
-    // don't need pics in memory after GL upload
-    Z_Free(pic);
+    if (!freetype_font)
+        Z_Free(pic);
 
     return image;
 

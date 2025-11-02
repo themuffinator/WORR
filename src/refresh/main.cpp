@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.hpp"
+#include "font_freetype.hpp"
 #include <array>
 
 glRefdef_t glr;
@@ -1458,6 +1459,8 @@ bool R_Init(bool total)
 
     GL_PostInit();
 
+    Draw_InitFreeTypeFonts();
+
     GL_ShowErrors(__func__);
 
     SCR_RegisterStat("refresh", Draw_Stats_s);
@@ -1486,10 +1489,13 @@ void R_Shutdown(bool total)
     GL_FreeWorld();
     GL_DeleteQueries();
     GL_ShutdownImages();
+
     MOD_Shutdown();
 
     if (!total)
         return;
+
+    Draw_ShutdownFreeTypeFonts();
 
     if (gl_static.sync) {
         qglDeleteSync(gl_static.sync);
