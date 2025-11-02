@@ -21,6 +21,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #include <array>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "shared/shared.hpp"
 #include "shared/list.hpp"
@@ -1189,6 +1192,20 @@ typedef struct {
 
 #define MAX_TRACKED_POIS        32
 
+#if USE_FREETYPE
+struct scr_freetype_font_entry_t {
+    std::vector<uint8_t> buffer;
+    ref_freetype_font_t  renderInfo;
+};
+
+struct scr_freetype_cache_t {
+    FT_Library                                          library { nullptr };
+    std::unordered_map<std::string, scr_freetype_font_entry_t> fonts;
+    std::unordered_map<qhandle_t, std::string>                 handleLookup;
+    std::string                                         activeFontKey;
+};
+#endif
+
 typedef struct {
     bool        initialized;        // ready to draw
 
@@ -1237,6 +1254,9 @@ typedef struct {
     int         wheel_size;
     qhandle_t   wheel_button;
     int         wheel_button_size;
+#if USE_FREETYPE
+    scr_freetype_cache_t freetype;
+#endif
 } cl_scr_t;
 
 extern cl_scr_t scr;

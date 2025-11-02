@@ -23,6 +23,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.hpp"
 #include "common/error.hpp"
 
+#if USE_FREETYPE
+#include <ft2build.h>
+#include FT_FREETYPE_H
+struct ref_freetype_font_t {
+    FT_Face face { nullptr };
+    int     pixelHeight { 0 };
+};
+#else
+struct ref_freetype_font_t;
+#endif
+
 #define MAX_DLIGHTS     64
 #define MAX_ENTITIES    2048
 #define MAX_PARTICLES   8192
@@ -307,11 +318,13 @@ int     get_auto_scale(void);
 void    R_DrawChar(int x, int y, int flags, int ch, color_t color, qhandle_t font);
 void    R_DrawStretchChar(int x, int y, int w, int h, int flags, int ch, color_t color, qhandle_t font);
 int     R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
-                            const char *string, color_t color, qhandle_t font);  // returns advanced x coord
+                            const char *string, color_t color, qhandle_t font,
+                            const struct ref_freetype_font_t *ftFont = nullptr);  // returns advanced x coord
 static inline int R_DrawString(int x, int y, int flags, size_t maxChars,
-                               const char *string, color_t color, qhandle_t font)
+                               const char *string, color_t color, qhandle_t font,
+                               const struct ref_freetype_font_t *ftFont = nullptr)
 {
-    return R_DrawStringStretch(x, y, 1, flags, maxChars, string, color, font);
+    return R_DrawStringStretch(x, y, 1, flags, maxChars, string, color, font, ftFont);
 }
 
 

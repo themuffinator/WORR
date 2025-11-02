@@ -850,7 +850,9 @@ void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t col
     draw_char(x, y, w, h, flags, c & 255, color, IMG_ForHandle(font));
 }
 
-int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font)
+int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
+                        const char *s, color_t color, qhandle_t font,
+                        const ref_freetype_font_t *ftFont)
 {
     const image_t *image = IMG_ForHandle(font);
 
@@ -864,6 +866,8 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const
 
     if (gl_fontshadow->integer > 0)
         flags |= UI_DROPSHADOW;
+
+    (void)ftFont;
 
     int sx = x;
 
