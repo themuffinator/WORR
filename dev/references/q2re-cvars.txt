@@ -1,0 +1,327 @@
+// ============================================================================
+// Core / System
+// ============================================================================
+Cvar_Get("host_speeds",        "0",     0);
+Cvar_Get("log_stats",          "0",     0);
+Cvar_Get("developer",          "0",     0);
+Cvar_Get("timescale",          "1",     0);
+Cvar_Get("fixedtime",          "0",     0);
+Cvar_Get("logfile",            "0",     0);
+Cvar_Get("showtrace",          "0",     0);
+Cvar_Get("dedicated",          "0",     CVAR_NOSET);
+Cvar_Get("version",            "3.24",  CVAR_NOSET|CVAR_SERVERINFO);
+Cvar_Get("noudp",              "0",     CVAR_NOSET);
+
+// ============================================================================
+// Server / Game Rules
+// ============================================================================
+Cvar_Get("rcon_password",              "",        0);
+Cvar_Get("skill",                      "1",       0);
+Cvar_Get("deathmatch",                 "0",       CVAR_LATCH);
+Cvar_Get("coop",                       "0",       CVAR_LATCH);
+Cvar_Get("fraglimit",                  "0",       CVAR_SERVERINFO);
+Cvar_Get("timelimit",                  "0",       CVAR_SERVERINFO);
+Cvar_Get("cheats",                     "0",       CVAR_LATCH|CVAR_SERVERINFO);
+Cvar_Get("protocol",                   "2023",    CVAR_NOSET|CVAR_SERVERINFO);
+Cvar_Get("maxclients",                 "1",       CVAR_LATCH|CVAR_SERVERINFO);
+Cvar_Get("numsplit",                   "1",       CVAR_LATCH);
+Cvar_Get("hostname",                   "noname",  CVAR_ARCHIVE|CVAR_SERVERINFO);
+Cvar_Get("timeout",                    "125",     0);
+Cvar_Get("zombietime",                 "2",       0);
+Cvar_Get("showclamp",                  "0",       0);
+Cvar_Get("paused",                     "0",       0);
+Cvar_Get("timedemo",                   "0",       0);
+Cvar_Get("sv_enforcetime",             "1",       0);
+Cvar_Get("allow_download",             "1",       CVAR_ARCHIVE);
+Cvar_Get("allow_download_players",     "0",       CVAR_ARCHIVE);
+Cvar_Get("allow_download_models",      "1",       CVAR_ARCHIVE);
+Cvar_Get("allow_download_sounds",      "1",       CVAR_ARCHIVE);
+Cvar_Get("allow_download_maps",        "1",       CVAR_ARCHIVE);
+Cvar_Get("sv_tick_rate",               "40",      CVAR_LATCH);
+Cvar_Get("sv_allow_odd_tick_rates",    "0",       CVAR_LATCH);
+Cvar_Get("sv_noreload",                "0",       0);
+Cvar_Get("public",                     "0",       0);
+
+// ============================================================================
+// Client Movement / View / Prediction
+// ============================================================================
+Cvar_Get("cl_blend",          "1",    0);
+Cvar_Get("cl_lights",         "1",    0);
+Cvar_Get("cl_particles",      "1",    0);
+Cvar_Get("cl_entities",       "1",    0);
+Cvar_Get("cl_gun",            "1",    0);
+Cvar_Get("cl_footsteps",      "1",    0);
+Cvar_Get("cl_noskins",        "0",    0);
+Cvar_Get("cl_autoskins",      "0",    0);
+Cvar_Get("cl_predict",        "1",    0);
+Cvar_Get("cl_packetfps",      "90",   CVAR_ARCHIVE);
+Cvar_Get("cl_upspeed",        "200",  0);
+Cvar_Get("cl_forwardspeed",   "200",  0);
+Cvar_Get("cl_sidespeed",      "200",  0);
+Cvar_Get("cl_yawspeed",       "140",  0);
+Cvar_Get("cl_pitchspeed",     "150",  0);
+Cvar_Get("cl_anglespeedkey",  "1.5",  0);
+Cvar_Get("freelook",          "0",    CVAR_ARCHIVE);
+Cvar_Get("lookspring",        "0",    CVAR_ARCHIVE);
+Cvar_Get("lookstrafe",        "0",    CVAR_ARCHIVE);
+Cvar_Get("sensitivity",       "3",    CVAR_ARCHIVE);
+Cvar_Get("hsensitivity",      "",     CVAR_ARCHIVE);
+Cvar_Get("m_pitch",           "0.022",CVAR_ARCHIVE);
+Cvar_Get("m_yaw",             "0.022",0);
+Cvar_Get("m_forward",         "1",    0);
+Cvar_Get("m_side",            "1",    0);
+Cvar_Get("cl_shownet",        "0",    0);
+Cvar_Get("cl_shownet_minsize","0",    0);
+Cvar_Get("cl_showmiss",       "0",    0);
+Cvar_Get("cl_skipHud",        "0",    CVAR_ARCHIVE);
+Cvar_Get("cl_skipCrossHair",  "0",    0);
+Cvar_Get("cl_timeout",        "120",  0);
+Cvar_Get("paused",            "0",    0);
+Cvar_Get("timedemo",          "0",    0);
+
+// ============================================================================
+// UI / Screen / Graphs
+// ============================================================================
+Cvar_Get("scr_conspeed",          "3",     0);
+Cvar_Get("scr_showturtle",        "0",     0);
+Cvar_Get("scr_showpause",         "1",     0);
+Cvar_Get("netgraph",              "0",     0);
+Cvar_Get("timegraph",             "0",     0);
+Cvar_Get("debuggraph",            "0",     0);
+Cvar_Get("graphheight",           "32",    0);
+Cvar_Get("graphscale",            "1",     0);
+Cvar_Get("graphshift",            "0",     0);
+Cvar_Get("scr_drawall",           "0",     0);
+Cvar_Get("scr_scale",             "0",     CVAR_ARCHIVE);
+Cvar_Get("scr_teammates",         "1",     CVAR_ARCHIVE);
+Cvar_Get("scr_hitmarkers",        "1",     CVAR_ARCHIVE);
+Cvar_Get("scr_damageindicators",  "1",     CVAR_ARCHIVE);
+Cvar_Get("scr_safezone",          "0.01",  CVAR_ARCHIVE);
+
+// ============================================================================
+// CD / Audio
+// ============================================================================
+Cvar_Get("cd_nocd",        "0",    CVAR_ARCHIVE);
+Cvar_Get("cd_loopcount",   "2",    0);
+Cvar_Get("cd_looptrack",   "11",   0);
+Cvar_Get("s_bgvolume",     "0.5",  0);
+
+// ============================================================================
+// RCON / Networking (client-side)
+Cvar_Get("rcon_password",  "",       0);
+Cvar_Get("rcon_address",   "",       0);
+Cvar_Get("rate",           "25000",  CVAR_ARCHIVE|CVAR_USERINFO);
+Cvar_Get("msg",            "1",      CVAR_ARCHIVE|CVAR_USERINFO);
+
+// ============================================================================
+// Split-Screen User Cvars (%d expansion at runtime)
+for (int i = 0; i < 8; ++i) {
+    Cvar_Get(va("cl_run_%d", i),           "1",    CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("cl_joystickrun_%d", i),   "1",    CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("spectator_%d", i),        "0",    CVAR_USERINFO);
+    Cvar_Get(va("name_%d", i),             va("Player %d", i), CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("skin_%d", i),             "male/grunt",       CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("dogtag_%d", i),           "default",          CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("bobskip_%d", i),          "0",                CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("hand_%d", i),             "0",                CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("autoswitch_%d", i),       "0",                CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("autoshield_%d", i),       "0",                CVAR_ARCHIVE|CVAR_USERINFO);
+    Cvar_Get(va("fov_%d", i),              "90",               CVAR_ARCHIVE|CVAR_USERINFO);
+}
+
+// ============================================================================
+// Client Test / Debug
+// ============================================================================
+Cvar_Get("cl_testblend",     "0", 0);
+Cvar_Get("cl_testparticles", "0", 0);
+Cvar_Get("cl_testentities",  "0", 0);
+Cvar_Get("cl_testlights",    "0", 0);
+Cvar_Get("cl_stats",         "0", 0);
+
+// ============================================================================
+// Render / UI (miscellaneous engine cvars)
+Cvar_Get("r_fov",                        "74.0",    CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale",            "1",       CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_fixedscale_w","1.0",    CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_fixedscale_h","1.0",    CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_targetdrawtime","1.125",CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_gooddrawtime","0.9",    CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_lowerspeed", "0.1",     CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_increasespeed","0.2",   CVAR_ARCHIVE);
+Cvar_Get("r_resolutionscale_numframesbeforeraising","200", CVAR_ARCHIVE);
+Cvar_Get("snd_speakermode",              "0",       CVAR_ARCHIVE);
+
+// cvar registrations reconstructed from HLIL (Q2 Rerelease exe)
+
+// ---- Core client toggles ----
+cl_blend        = Cvar_Get("cl_blend",        "1",   0);               // :contentReference[oaicite:0]{index=0}
+cl_lights       = Cvar_Get("cl_lights",       "1",   0);               // :contentReference[oaicite:1]{index=1}
+cl_particles    = Cvar_Get("cl_particles",    "1",   0);               // :contentReference[oaicite:2]{index=2}
+cl_entities     = Cvar_Get("cl_entities",     "1",   0);               // :contentReference[oaicite:3]{index=3}
+cl_gun          = Cvar_Get("cl_gun",          "1",   0);               // :contentReference[oaicite:4]{index=4}
+cl_footsteps    = Cvar_Get("cl_footsteps",    "1",   0);               // :contentReference[oaicite:5]{index=5}
+cl_noskins      = Cvar_Get("cl_noskins",      "0",   0);               // :contentReference[oaicite:6]{index=6}
+cl_autoskins    = Cvar_Get("cl_autoskins",    "0",   0);               // :contentReference[oaicite:7]{index=7}
+cl_predict      = Cvar_Get("cl_predict",      "1",   0);               // :contentReference[oaicite:8]{index=8}
+
+// ---- Networking & timing ----
+cl_packetfps    = Cvar_Get("cl_packetfps",    "90",  CVAR_ARCHIVE);    // 
+cl_timeout      = Cvar_Get("cl_timeout",      "120", 0);               // :contentReference[oaicite:10]{index=10}
+cl_shownet      = Cvar_Get("cl_shownet",      "0",   0);               // :contentReference[oaicite:11]{index=11}
+cl_shownet_minsize = Cvar_Get("cl_shownet_minsize", "0", 0);           // :contentReference[oaicite:12]{index=12}
+cl_showmiss     = Cvar_Get("cl_showmiss",     "0",   0);               // :contentReference[oaicite:13]{index=13}
+showclamp       = Cvar_Get("showclamp",       "0",   0);               // :contentReference[oaicite:14]{index=14}
+paused          = Cvar_Get("paused",          "0",   0);               // :contentReference[oaicite:15]{index=15}
+timedemo        = Cvar_Get("timedemo",        "0",   0);               // :contentReference[oaicite:16]{index=16}
+
+// ---- Movement speeds ----
+cl_upspeed      = Cvar_Get("cl_upspeed",      "200", 0);               // :contentReference[oaicite:17]{index=17}
+cl_forwardspeed = Cvar_Get("cl_forwardspeed", "200", 0);               // :contentReference[oaicite:18]{index=18}
+cl_sidespeed    = Cvar_Get("cl_sidespeed",    "200", 0);               // :contentReference[oaicite:19]{index=19}
+cl_yawspeed     = Cvar_Get("cl_yawspeed",     "140", 0);               // :contentReference[oaicite:20]{index=20}
+cl_pitchspeed   = Cvar_Get("cl_pitchspeed",   "150", 0);               // :contentReference[oaicite:21]{index=21}
+cl_anglespeedkey= Cvar_Get("cl_anglespeedkey","1.5", 0);               // :contentReference[oaicite:22]{index=22}
+
+/* Mouse/aim basics */
+freelook        = Cvar_Get("freelook",        "0",   CVAR_ARCHIVE);    // :contentReference[oaicite:23]{index=23}
+lookspring      = Cvar_Get("lookspring",      "0",   CVAR_ARCHIVE);    // :contentReference[oaicite:24]{index=24}
+lookstrafe      = Cvar_Get("lookstrafe",      "0",   CVAR_ARCHIVE);    // :contentReference[oaicite:25]{index=25}
+m_pitch         = Cvar_Get("m_pitch",         "0.022",CVAR_ARCHIVE);   // :contentReference[oaicite:26]{index=26}
+m_yaw           = Cvar_Get("m_yaw",           "0.022",0);              // :contentReference[oaicite:27]{index=27}
+m_forward       = Cvar_Get("m_forward",       "1",   0);               // :contentReference[oaicite:28]{index=28}
+m_side          = Cvar_Get("m_side",          "1",   0);               // :contentReference[oaicite:29]{index=29}
+cl_mousesmooth  = Cvar_Get("cl_mousesmooth",  "0",   0);               // (name seen) :contentReference[oaicite:30]{index=30}
+
+// ---- Controller/joystick (treated as archived prefs) ----
+cl_joylookspeed_x            = Cvar_Get("cl_joylookspeed_x", "0.575", CVAR_ARCHIVE); // :contentReference[oaicite:31]{index=31}
+cl_joylookspeed_y            = Cvar_Get("cl_joylookspeed_y", "0.3",   CVAR_ARCHIVE); // default at 0.3 
+cl_joyAccelerationSpeed      = Cvar_Get("cl_joyAccelerationSpeed", "15.0", CVAR_ARCHIVE); // :contentReference[oaicite:33]{index=33}
+cl_joysmoothing              = Cvar_Get("cl_joysmoothing", "0", CVAR_ARCHIVE);       // boolean via UI; default resolves to off → "0". :contentReference[oaicite:34]{index=34}
+
+/* Controller assist “AA/adhesion” tuning (exposed as cvars; non-archived here unless clearly user pref) */
+aa_friction_multipliermin    = Cvar_Get("aa_friction_multipliermin", "0.0", 0);      // 
+aa_friction_multipliermax    = Cvar_Get("aa_friction_multipliermax", "0.25", 0);     // :contentReference[oaicite:36]{index=36}
+aa_adhesion_optimalradius    = Cvar_Get("aa_adhesion_optimalradius", "30",  0);      // 
+aa_friction_optimalradius    = Cvar_Get("aa_friction_optimalradius", "30",  0);      // :contentReference[oaicite:38]{index=38}
+aa_friction_radius           = Cvar_Get("aa_friction_radius",        "25",  0);      // :contentReference[oaicite:39]{index=39}
+aa_distance_expandradiusdistmin = Cvar_Get("aa_distance_expandradiusdistmin","0.3",0);// :contentReference[oaicite:40]{index=40}
+aa_distance_expandradiusdistmax = Cvar_Get("aa_distance_expandradiusdistmax","0.3",0);// (paired constant present) :contentReference[oaicite:41]{index=41}
+aa_adhesion_contributionpercentmax = Cvar_Get("aa_adhesion_contributionpercentmax","0.72",0); // 
+aa_adhesion_radius           = Cvar_Get("aa_adhesion_radius",        "15",  0);      // :contentReference[oaicite:43]{index=43}
+aa_adhesion_yawspeedmax      = Cvar_Get("aa_adhesion_yawspeedmax",   "15",  0);      // value string nearby → 15 :contentReference[oaicite:44]{index=44}
+aa_adhesion_pitchspeedmax    = Cvar_Get("aa_adhesion_pitchspeedmax", "15",  0);      // value string nearby → 15 :contentReference[oaicite:45]{index=45}
+
+// ---- Weapon wheel (archived UI prefs) ----
+ww_timer_speed   = Cvar_Get("ww_timer_speed",  "0.5",  CVAR_ARCHIVE);  // “fade in/out speed” with 0.5 constant. :contentReference[oaicite:46]{index=46}
+ww_size          = Cvar_Get("ww_size",         "0.76", CVAR_ARCHIVE);  // “smaller value = larger display” default 0.76. :contentReference[oaicite:47]{index=47}
+ww_screen_frac_x = Cvar_Get("ww_screen_frac_x","0.50", CVAR_ARCHIVE);  // horizontal fraction (text shows purpose; default not explicit → pick sane mid). :contentReference[oaicite:48]{index=48}
+ww_screen_frac_y = Cvar_Get("ww_screen_frac_y","0.50", CVAR_ARCHIVE);  // vertical fraction (as above). :contentReference[oaicite:49]{index=49}
+
+// ---- Video / rendering ----
+r_fov                 = Cvar_Get("r_fov",                 "74.0", CVAR_ARCHIVE); // “Field of view” 74.0. :contentReference[oaicite:50]{index=50}
+r_resolutionscale     = Cvar_Get("r_resolutionscale",     "0",    CVAR_ARCHIVE); // enable/disable scaler (bool-like). name & text present. :contentReference[oaicite:51]{index=51}
+r_resolutionscale_fixedscale_w = Cvar_Get("r_resolutionscale_fixedscale_w", "0", CVAR_ARCHIVE); // fixed W scale. :contentReference[oaicite:52]{index=52}
+r_resolutionscale_fixedscale_h = Cvar_Get("r_resolutionscale_fixedscale_h", "0", CVAR_ARCHIVE); // fixed H scale. :contentReference[oaicite:53]{index=53}
+r_resolutionscale_targetdrawtime = Cvar_Get("r_resolutionscale_targetdrawtime", "1.125", CVAR_ARCHIVE); // up/downscale thresholds 1.125/0.9. :contentReference[oaicite:54]{index=54}
+r_resolutionscale_upscale_time   = Cvar_Get("r_resolutionscale_upscale_time",   "0.9",   CVAR_ARCHIVE); // paired constant observed. :contentReference[oaicite:55]{index=55}
+
+// ---- Cinematics / misc ----
+cl_nocin        = Cvar_Get("cl_nocin",        "0",   0);               // :contentReference[oaicite:56]{index=56}
+cl_cin_nonblocking = Cvar_Get("cl_cin_nonblocking", "0", 0);           // :contentReference[oaicite:57]{index=57}
+
+
+// ===== Client / Input / Net =====
+Cvar_Get("developer",           "0",            0);                               // HLIL name present. 
+Cvar_Get("rate",                "25000",        CVAR_ARCHIVE|CVAR_USERINFO);      // default literal "25000". 
+Cvar_Get("timedemo",            "0",            CVAR_ARCHIVE);                    // HLIL name present. 
+Cvar_Get("fixedtime",           "0",            0);                               // debug timing. 
+Cvar_Get("rcon_address",        "",             CVAR_ARCHIVE);                    // HLIL name present. 
+Cvar_Get("rcon_password",       "",             CVAR_ARCHIVE);                    // HLIL name present. 
+Cvar_Get("password",            "",             CVAR_ARCHIVE|CVAR_USERINFO);      // connection password. 
+
+Cvar_Get("m_yaw",               "0.022",        CVAR_ARCHIVE);                    // default literal nearby. 
+Cvar_Get("m_forward",           "1",            CVAR_ARCHIVE);                    // name present; default set conservatively.
+Cvar_Get("m_side",              "1",            CVAR_ARCHIVE);                    // name present; default set conservatively. 
+
+Cvar_Get("cl_yawspeed",         "140",          CVAR_ARCHIVE);                    // default literal "140". 
+Cvar_Get("cl_pitchspeed",       "150",          CVAR_ARCHIVE);                    // default literal "150". 
+Cvar_Get("cl_anglespeedkey",    "1.5",          CVAR_ARCHIVE);                    // default literal "1.5". 
+Cvar_Get("cl_packetfps",        "90",           CVAR_ARCHIVE);                    // default literal "90". 
+Cvar_Get("cl_lights",           "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_particles",        "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_predict",          "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_upspeed",          "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_forwardspeed",     "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_sidespeed",        "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_vwep",             "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_autodemos",        "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("cl_helppathtime",     "0",            CVAR_ARCHIVE);                    // name present. 
+
+Cvar_Get("autodemo",            "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("nextserver",          "0",            0);                               // name present. 
+
+Cvar_Get("cl_shownet",          "0",            0);                               // net debug. 
+Cvar_Get("cl_shownet_minsize",  "0",            0);                               // net debug. 
+Cvar_Get("cl_showmiss",         "0",            0);                               // debug. 
+Cvar_Get("cl_timeout",          "0",            CVAR_ARCHIVE);                    // name present. 
+Cvar_Get("showclamp",           "0",            0);                               // debug. 
+
+Cvar_Get("config_version",      "0",            CVAR_ARCHIVE);                    // config guard. 
+
+// ===== Renderer / Debug =====
+Cvar_Get("r_drawEntityBounds",  "0",            0);                               // debug draw. 
+Cvar_Get("r_drawflat",          "0",            0);                               // debug draw. 
+Cvar_Get("r_drawworld",         "0",            0);                               // debug draw. 
+Cvar_Get("r_staticshadows",     "0",            CVAR_ARCHIVE);                    // renderer opt. 
+Cvar_Get("gl_lightmap",         "0",            0);                               // classic GL toggle. 
+Cvar_Get("gl_saturatelighting", "0",            CVAR_ARCHIVE);                    // renderer opt. 
+
+// ===== Underwater / visual FX =====
+Cvar_Get("r_underwater_strips",  "0", 0);          // Sets the number of strips for the underwater effect. :contentReference[oaicite:0]{index=0}
+Cvar_Get("r_underwater_spread",  "0", 0);          // Sets spread of the underwater wave effect. :contentReference[oaicite:1]{index=1}
+Cvar_Get("r_underwater_speed",   "0", 0);          // Speed of underwater effect. :contentReference[oaicite:2]{index=2}
+Cvar_Get("r_skipUnderWaterFX",   "0", 0);          // 1 = Skips Underwater View FX. :contentReference[oaicite:3]{index=3}
+
+// ===== Renderer debug / dev view =====
+Cvar_Get("r_notextures",         "0", 0);          // Disables textures. :contentReference[oaicite:4]{index=4}
+Cvar_Get("r_showoverdraw",       "0", 0);          // Lighting Overdraw view. :contentReference[oaicite:5]{index=5}
+Cvar_Get("r_drawcells",          "0", 0);          // Show PVS grid cells. :contentReference[oaicite:6]{index=6}
+Cvar_Get("r_showtris",           "0", 0);          // Show Triangles. :contentReference[oaicite:7]{index=7}
+Cvar_Get("r_enablefog",          "0", 0);          // Enables fog. :contentReference[oaicite:8]{index=8}
+Cvar_Get("r_shadows",            "0", 0);          // Global shadows toggle. :contentReference[oaicite:9]{index=9}
+
+/* Entity-viewport spotlight debug */
+Cvar_Get("r_entviewport_override_spotlight_pitch", "0", 0);  // Override spotlight pitch. :contentReference[oaicite:10]{index=10}
+Cvar_Get("r_entviewport_override_spotlight_yaw",   "0", 0);  // Override spotlight yaw.   :contentReference[oaicite:11]{index=11}
+Cvar_Get("r_entviewport_override_spotlight_offset_y","0",0); // Override spotlight Y offset. :contentReference[oaicite:12]{index=12}
+Cvar_Get("r_entviewport_override_spotlight_offset_z","0",0); // Override spotlight Z offset. :contentReference[oaicite:13]{index=13}
+
+/* Bloom blur size (explicit “2.0” literal next to “Sets blur size for bloom”) */
+Cvar_Get("r_bloom_blursize",     "2.0", 0);        // Sets blur size for bloom. :contentReference[oaicite:14]{index=14}
+
+/* FPS readout (mentioned in UI text as con_showfps) */
+Cvar_Get("con_showfps",          "0", 0);          // Show FPS counter. :contentReference[oaicite:15]{index=15}
+
+/* General renderer/dev toggles already hinted elsewhere */
+Cvar_Get("r_drawworld",          "0", 0);          // Draw world on/off. :contentReference[oaicite:16]{index=16}
+
+// ===== Screenshot / telemetry =====
+Cvar_Get("cl_saveScreenshotsAsJPEG",     "0", CVAR_ARCHIVE);        // Save screenshots as JPEG. :contentReference[oaicite:17]{index=17}
+Cvar_Get("cl_saveScreenshotUserDirectory","0", CVAR_ARCHIVE);        // Save in user dir vs exe dir. :contentReference[oaicite:18]{index=18}
+Cvar_Get("cl_updateCPUUsageFrequency",   "500", CVAR_ARCHIVE);       // CPU usage poll freq (ms). Default 500. :contentReference[oaicite:19]{index=19}
+
+// ===== Muzzle flashes / small visuals =====
+Cvar_Get("cl_muzzleflashes",     "0", CVAR_ARCHIVE); // Toggle muzzle flashes. :contentReference[oaicite:20]{index=20}
+
+/* Misc render toggles exposed in strings */
+Cvar_Get("r_world_brightness",   "0", 0);          // “Sets the overall scene brightness.” (name reconstructed; adjust to actual if you later see it in the Cvar_Get site). :contentReference[oaicite:21]{index=21}
+Cvar_Get("r_enablefog_hint",     "0", 0);          // “Skips Rendering Fog For Testing”/“Enables fog” strings live here; keep r_enablefog as the real toggle and treat this as a helper if you wire it. :contentReference[oaicite:22]{index=22}
+
+// ===== SDL / Input (controller/joystick plumbing) =====
+Cvar_Get("in_profilejoybuttons",  "0", CVAR_ARCHIVE); // Print joystick button ids when pressed. :contentReference[oaicite:23]{index=23}
+Cvar_Get("in_nojoy",              "0", CVAR_ARCHIVE); // Disables joystick activation. :contentReference[oaicite:24]{index=24}
+Cvar_Get("in_skipplayerone",      "0", CVAR_ARCHIVE); // Prevent P1 from being assigned a controller. :contentReference[oaicite:25]{index=25}
+
+/* Steam social display toggle (exposed in strings; treat as user pref if you wire it) */
+Cvar_Get("steam_display",         "0", CVAR_ARCHIVE); // Steam presence display toggle. :contentReference[oaicite:26]{index=26}
+
