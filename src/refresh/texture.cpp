@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "font_freetype.hpp"
 #include "common/prompt.hpp"
+#include <algorithm>
 #include <array>
 
 static int gl_filter_min;
@@ -1174,6 +1175,15 @@ static void GL_InitPostProcTexture(int w, int h)
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+static void GL_InitDepthTexture(int w, int h)
+{
+    qglTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
 static bool GL_CheckFramebufferStatus(bool check, const char *name)
 {
     GL_ShowErrors(__func__);
@@ -1219,6 +1229,11 @@ bool GL_InitFramebuffers(void)
 
     GL_ClearErrors();
 
+    const int bloom_down_w = bloom_w / 4;
+    const int bloom_down_h = bloom_h / 4;
+    const int dof_half_w = dof_w > 0 ? std::max(dof_w / 2, 1) : 0;
+    const int dof_half_h = dof_h > 0 ? std::max(dof_h / 2, 1) : 0;
+
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_InitPostProcTexture(scene_w, scene_h);
 
@@ -1226,26 +1241,31 @@ bool GL_InitFramebuffers(void)
     GL_InitPostProcTexture(bloom_w, bloom_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-    GL_InitPostProcTexture(bloom_w / 4, bloom_h / 4);
+    GL_InitPostProcTexture(bloom_down_w, bloom_down_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_1);
-    GL_InitPostProcTexture(bloom_w / 4, bloom_h / 4);
+    GL_InitPostProcTexture(bloom_down_w, bloom_down_h);
 
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_0);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_COC);
     GL_InitPostProcTexture(dof_w, dof_h);
 
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_1);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
     GL_InitPostProcTexture(dof_w, dof_h);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
+    GL_InitPostProcTexture(dof_half_w, dof_half_h);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_GATHER);
+    GL_InitPostProcTexture(dof_half_w, dof_half_h);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+    GL_InitDepthTexture(scene_w, scene_h);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_SCENE : GL_NONE, 0);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLOOM : GL_NONE, 0);
 
-    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.renderbuffer);
-    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, scene_w, scene_h);
-    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene_w ? gl_static.renderbuffer : GL_NONE);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_DEPTH : GL_NONE, 0);
 
     CHECK_FB(scene_w, "FBO_SCENE");
 
@@ -1259,15 +1279,25 @@ bool GL_InitFramebuffers(void)
 
     CHECK_FB(bloom_w, "FBO_BLUR_1");
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_0);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_0 : GL_NONE, 0);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_COC : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_DOF_0");
+    CHECK_FB(dof_w, "FBO_BOKEH_COC");
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_DOF_1);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_1 : GL_NONE, 0);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_RESULT : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_DOF_1");
+    CHECK_FB(dof_w, "FBO_BOKEH_RESULT");
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_HALF : GL_NONE, 0);
+
+    CHECK_FB(dof_w, "FBO_BOKEH_HALF");
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_GATHER : GL_NONE, 0);
+
+    CHECK_FB(dof_w, "FBO_BOKEH_GATHER");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -1349,10 +1379,8 @@ void GL_InitImages(void)
     qglGenTextures(NUM_AUTO_TEXTURES, gl_static.texnums);
     qglGenTextures(LM_MAX_LIGHTMAPS, lm.texnums);
 
-    if (gl_static.use_shaders) {
-        qglGenRenderbuffers(1, &gl_static.renderbuffer);
+    if (gl_static.use_shaders)
         qglGenFramebuffers(FBO_COUNT, gl_static.framebuffers);
-    }
 
     Scrap_Init();
 
@@ -1397,9 +1425,6 @@ void GL_ShutdownImages(void)
     if (gl_static.use_shaders) {
         qglDeleteFramebuffers(FBO_COUNT, gl_static.framebuffers);
         memset(gl_static.framebuffers, 0, sizeof(gl_static.framebuffers));
-
-        qglDeleteRenderbuffers(1, &gl_static.renderbuffer);
-        gl_static.renderbuffer = 0;
     }
 
 #if USE_DEBUG
