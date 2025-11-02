@@ -55,6 +55,13 @@ public:
     void SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult,
                           float *left_vol, float *right_vol, bool stereo);
 
+    void BeginRegistration();
+    qhandle_t RegisterSound(const char *name);
+    void EndRegistration();
+    bool is_registering() const;
+    sfx_t *FindOrAllocateSfx(const char *name, size_t namelen);
+    void FreeSound(sfx_t *sfx);
+
     void StartSound(const vec3_t origin, int entnum, int entchannel, qhandle_t hSfx,
                     float vol, float attenuation, float timeofs);
     void StopAllSounds();
@@ -68,6 +75,9 @@ public:
 
 private:
     void InitializeStorage();
+    sfx_t *AllocSfx();
+    sfx_t *RegisterSexedSound(int entnum, const char *base);
+    void RegisterSexedSounds();
 
     Config config_{};
     unsigned registration_sequence_ = 1;
@@ -84,6 +94,7 @@ private:
     vec3_t listener_right_ = { 0.0f, 0.0f, 0.0f };
     vec3_t listener_up_ = { 0.0f, 0.0f, 0.0f };
     int listener_entnum_ = -1;
+    bool registering_ = false;
 };
 
 SoundSystem &S_GetSoundSystem();

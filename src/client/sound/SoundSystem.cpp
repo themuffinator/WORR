@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <vector>
 
 SoundSystem::SoundSystem()
 {
@@ -37,6 +38,24 @@ void SoundSystem::InitializeStorage()
     num_sfx_ = 0;
     registration_sequence_ = 1;
     clear_channels();
+}
+
+sfx_t *SoundSystem::AllocSfx()
+{
+    for (int i = 0; i < num_sfx_; i++) {
+        sfx_t *sfx = &known_sfx_[i];
+        if (!sfx->name[0]) {
+            return sfx;
+        }
+    }
+
+    if (num_sfx_ == max_sfx()) {
+        return nullptr;
+    }
+
+    sfx_t *sfx = &known_sfx_[num_sfx_];
+    set_num_sfx(num_sfx_ + 1);
+    return sfx;
 }
 
 unsigned SoundSystem::registration_sequence() const
@@ -111,6 +130,189 @@ int &SoundSystem::num_channels()
 int &SoundSystem::max_channels()
 {
     return max_channels_;
+}
+
+bool SoundSystem::is_registering() const
+{
+    return registering_;
+}
+
+sfx_t *SoundSystem::FindOrAllocateSfx(const char *name, size_t namelen)
+{
+    for (int i = 0; i < num_sfx_; i++) {
+        sfx_t *sfx = &known_sfx_[i];
+        if (!FS_pathcmp(sfx->name, name)) {
+            sfx->registration_sequence = registration_sequence_;
+            return sfx;
+        }
+    }
+
+    sfx_t *sfx = AllocSfx();
+    if (sfx) {
+        std::memcpy(sfx->name, name, namelen + 1);
+        sfx->registration_sequence = registration_sequence_;
+    }
+    return sfx;
+}
+
+void SoundSystem::FreeSound(sfx_t *sfx)
+{
+    if (s_started != SoundBackend::Not && s_api->delete_sfx) {
+        s_api->delete_sfx(sfx);
+    }
+    Z_Free(sfx->cache);
+    Z_Free(sfx->truename);
+    std::memset(sfx, 0, sizeof(*sfx));
+}
+
+void SoundSystem::BeginRegistration()
+{
+    increment_registration_sequence();
+    registering_ = true;
+}
+
+qhandle_t SoundSystem::RegisterSound(const char *name)
+{
+    char buffer[MAX_QPATH];
+    size_t len;
+
+    if (s_started == SoundBackend::Not) {
+        return 0;
+    }
+
+    Q_assert(name);
+
+    if (!*name) {
+        return 0;
+    }
+
+    if (*name == '*') {
+        len = Q_strlcpy(buffer, name, MAX_QPATH);
+    } else if (*name == '#') {
+        len = FS_NormalizePathBuffer(buffer, name + 1, MAX_QPATH);
+    } else {
+        len = Q_concat(buffer, MAX_QPATH, "sound/", name);
+        if (len < MAX_QPATH) {
+            len = FS_NormalizePath(buffer);
+        }
+    }
+
+    if (len >= MAX_QPATH) {
+        Com_DPrintf("%s: oversize name\n", __func__);
+        return 0;
+    }
+
+    if (len == 0) {
+        Com_DPrintf("%s: empty name\n", __func__);
+        return 0;
+    }
+
+    sfx_t *sfx = FindOrAllocateSfx(buffer, len);
+    if (!sfx) {
+        Com_DPrintf("%s: out of slots\n", __func__);
+        return 0;
+    }
+
+    if (!registering_) {
+        LoadSound(sfx);
+    }
+
+    return static_cast<qhandle_t>((sfx - known_sfx_.data()) + 1);
+}
+
+sfx_t *SoundSystem::RegisterSexedSound(int entnum, const char *base)
+{
+    const char *model;
+    char buffer[MAX_QPATH];
+
+    if (entnum > 0 && entnum <= MAX_CLIENTS) {
+        model = cl.clientinfo[entnum - 1].model_name;
+    } else {
+        model = cl.baseclientinfo.model_name;
+    }
+
+    if (!*model) {
+        model = "male";
+    }
+
+    if (Q_concat(buffer, MAX_QPATH, "players/", model, "/", base + 1) >= MAX_QPATH &&
+        Q_concat(buffer, MAX_QPATH, "players/", "male", "/", base + 1) >= MAX_QPATH) {
+        return nullptr;
+    }
+
+    sfx_t *sfx = FindOrAllocateSfx(buffer, FS_NormalizePath(buffer));
+
+    if (sfx && !sfx->truename && !is_registering() && !LoadSound(sfx)) {
+        if (Q_concat(buffer, MAX_QPATH, "sound/player/male/", base + 1) < MAX_QPATH) {
+            FS_NormalizePath(buffer);
+            sfx->error = Q_ERR_SUCCESS;
+            sfx->truename = S_CopyString(buffer);
+        }
+    }
+
+    return sfx;
+}
+
+void SoundSystem::RegisterSexedSounds()
+{
+    std::vector<int> sounds;
+    sounds.reserve(num_sfx_);
+
+    for (int i = 0; i < num_sfx_; i++) {
+        sfx_t *sfx = &known_sfx_[i];
+        if (sfx->name[0] != '*') {
+            continue;
+        }
+        if (sfx->registration_sequence != registration_sequence_) {
+            continue;
+        }
+        sounds.push_back(i);
+    }
+
+    for (int i = 0; i <= MAX_CLIENTS; i++) {
+        if (i > 0 && !cl.clientinfo[i - 1].model_name[0]) {
+            continue;
+        }
+        for (int index : sounds) {
+            sfx_t *sfx = &known_sfx_[index];
+            RegisterSexedSound(i, sfx->name);
+        }
+    }
+}
+
+void SoundSystem::EndRegistration()
+{
+    RegisterSexedSounds();
+
+    StopAllSounds();
+
+    for (int i = 0; i < num_sfx_; i++) {
+        sfx_t *sfx = &known_sfx_[i];
+        if (!sfx->name[0]) {
+            continue;
+        }
+        if (sfx->registration_sequence != registration_sequence_) {
+            FreeSound(sfx);
+            continue;
+        }
+        if (s_started != SoundBackend::Not && s_api->page_in_sfx) {
+            s_api->page_in_sfx(sfx);
+        }
+    }
+
+    for (int i = 0; i < num_sfx_; i++) {
+        sfx_t *sfx = &known_sfx_[i];
+        if (!sfx->name[0]) {
+            continue;
+        }
+        LoadSound(sfx);
+    }
+
+    if (s_started != SoundBackend::Not && s_api->end_registration) {
+        s_api->end_registration();
+    }
+
+    registering_ = false;
 }
 
 playsound_t *SoundSystem::AllocatePlaysound()
