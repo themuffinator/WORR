@@ -67,7 +67,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 //=============================================================================
 
-struct centity_t {
+typedef struct centity_s {
     entity_state_t     current;
     entity_state_t     prev;           // will always be valid, but might just be a copy of current
 
@@ -95,7 +95,7 @@ struct centity_t {
     int             stair_time;
     float           stair_height;
 // KEX
-};
+} centity_t;
 
 extern centity_t    cl_entities[MAX_EDICTS];
 
