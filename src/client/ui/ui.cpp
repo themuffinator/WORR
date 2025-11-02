@@ -305,13 +305,8 @@ bool UI_CursorInRect(const vrect_t *rect)
 // nb: all UI strings are drawn at full alpha
 void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 {
-    if ((flags & UI_CENTER) == UI_CENTER) {
-        x -= strlen(string) * CONCHAR_WIDTH / 2;
-    } else if (flags & UI_RIGHT) {
-        x -= strlen(string) * CONCHAR_WIDTH;
-    }
-
-    R_DrawString(x, y, flags, MAX_STRING_CHARS, string, ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
+    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string,
+                          ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
 }
 
 // nb: all UI chars are drawn at full alpha
@@ -322,8 +317,8 @@ void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
 {
-    rc->height = CONCHAR_HEIGHT;
-    rc->width = CONCHAR_WIDTH * strlen(string);
+    rc->height = SCR_FontLineHeight(1, uis.fontHandle);
+    rc->width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         rc->x -= rc->width / 2;

@@ -2288,12 +2288,15 @@ static void Menu_DrawStatus(menuFrameWork_t *menu)
 
     lens[count++] = x;
 
-    R_DrawFill8(0, menu->y2 - count * CONCHAR_HEIGHT, uis.width, count * CONCHAR_HEIGHT, 4);
+    const int lineHeight = SCR_FontLineHeight(1, uis.fontHandle);
+
+    R_DrawFill8(0, menu->y2 - count * lineHeight, uis.width, count * lineHeight, 4);
 
     for (l = 0; l < count; l++) {
-        x = (uis.width - lens[l] * CONCHAR_WIDTH) / 2;
-        y = menu->y2 - (count - l) * CONCHAR_HEIGHT;
-        R_DrawString(x, y, 0, lens[l], ptrs[l], COLOR_WHITE, uis.fontHandle);
+        const int lineWidth = SCR_MeasureString(1, 0, lens[l], ptrs[l], uis.fontHandle);
+        x = (uis.width - lineWidth) / 2;
+        y = menu->y2 - (count - l) * lineHeight;
+        SCR_DrawStringStretch(x, y, 1, 0, lens[l], ptrs[l], COLOR_WHITE, uis.fontHandle);
     }
 }
 

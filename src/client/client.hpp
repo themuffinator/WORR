@@ -1203,6 +1203,7 @@ struct scr_freetype_cache_t {
     std::unordered_map<std::string, scr_freetype_font_entry_t> fonts;
     std::unordered_map<qhandle_t, std::string>                 handleLookup;
     std::string                                         activeFontKey;
+    qhandle_t                                           activeFontHandle { 0 };
 };
 #endif
 
@@ -1280,8 +1281,12 @@ int     SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 void    SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawKStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, const kfont_t *kfont);
 
+qhandle_t SCR_DefaultFontHandle(void);
+int     SCR_FontLineHeight(int scale, qhandle_t font);
+int     SCR_MeasureString(int scale, int flags, size_t maxlen, const char *s, qhandle_t font);
+
 #define SCR_DrawString(x, y, flags, color, string) \
-    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string, color, scr.font_pic)
+    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string, color, SCR_DefaultFontHandle())
 
 void    SCR_ClearChatHUD_f(void);
 void    SCR_AddToChatHUD(const char *text);
