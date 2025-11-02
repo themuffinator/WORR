@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "client.hpp"
+#include "SoundSystem.hpp"
 #include "client/sound/dma.hpp"
 #include <mmsystem.h>
 
@@ -290,7 +291,7 @@ static void WAVE_Submit(void)
     //
     while (((snd_sent - snd_completed) >> sample16) < 8) {
         h = lpWaveHdr + (snd_sent & WAV_MASK);
-        if (s_paintedtime / 256 <= snd_sent)
+        if (S_GetSoundSystem().painted_time() / 256 <= snd_sent)
             break;
         snd_sent++;
         /*

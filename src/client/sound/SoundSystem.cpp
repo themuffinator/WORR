@@ -54,6 +54,71 @@ void SoundSystem::increment_registration_sequence()
     ++registration_sequence_;
 }
 
+SoundBackend SoundSystem::backend() const
+{
+    return backend_;
+}
+
+void SoundSystem::set_backend(SoundBackend backend)
+{
+    backend_ = backend;
+}
+
+const sndapi_t *SoundSystem::api() const
+{
+    return api_;
+}
+
+void SoundSystem::set_api(const sndapi_t *api)
+{
+    api_ = api;
+}
+
+bool SoundSystem::supports_float() const
+{
+    return supports_float_;
+}
+
+void SoundSystem::set_supports_float(bool supports)
+{
+    supports_float_ = supports;
+}
+
+bool SoundSystem::is_active() const
+{
+    return active_;
+}
+
+void SoundSystem::set_active(bool active)
+{
+    active_ = active;
+}
+
+bool SoundSystem::is_registering() const
+{
+    return registering_;
+}
+
+void SoundSystem::set_registering(bool registering)
+{
+    registering_ = registering;
+}
+
+int SoundSystem::painted_time() const
+{
+    return painted_time_;
+}
+
+int &SoundSystem::painted_time()
+{
+    return painted_time_;
+}
+
+void SoundSystem::set_painted_time(int time)
+{
+    painted_time_ = time;
+}
+
 sfx_t *SoundSystem::known_sfx_data()
 {
     return known_sfx_.data();

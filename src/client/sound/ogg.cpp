@@ -16,6 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "SoundSystem.hpp"
 #include "sound.hpp"
 #include "common/hash_map.hpp"
 #include "../ffmpeg_utils.hpp"
@@ -242,8 +243,9 @@ void OGG_Play(void)
 {
     const char *s, *path;
     bool force = cls.state < ca_connected;
+    SoundSystem &soundSystem = S_GetSoundSystem();
 
-    if (s_started == SoundBackend::Not || cls.state == ca_cinematic || ogg_manual_play)
+    if (soundSystem.backend() == SoundBackend::Not || cls.state == ca_cinematic || ogg_manual_play)
         return;
 
     if (cls.state >= ca_connected)
@@ -287,8 +289,8 @@ void OGG_Play(void)
             Com_DPrintf("No such track: %s\n", s);
     }
 
-    if (s_api)
-        s_api->drop_raw_samples();
+    if (const sndapi_t *api = S_GetSoundSystem().api())
+        api->drop_raw_samples();
 }
 
 void OGG_Stop(void)
@@ -305,8 +307,8 @@ void OGG_Stop(void)
     ogg_manual_play = false;
     ogg_paused = false;
 
-    if (s_api)
-        s_api->drop_raw_samples();
+    if (const sndapi_t *api = S_GetSoundSystem().api())
+        api->drop_raw_samples();
 }
 
 static int read_packet(AVPacket *pkt)
@@ -404,7 +406,7 @@ static int reconfigure_swr(void)
     ret = Q_AVChannelLayoutDefault(&out->ch_layout, 2);
     if (ret < 0)
         return ret;
-    out->format = s_supports_float ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_S16;
+    out->format = S_GetSoundSystem().supports_float() ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_S16;
     out->sample_rate = sample_rate;
     out->nb_samples = MAX_RAW_SAMPLES;
 
@@ -438,11 +440,13 @@ static void flush_samples(const AVFrame *out)
 {
     Com_DDDPrintf("%d raw samples\n", out->nb_samples);
 
-    if (!s_api->raw_samples(out->nb_samples, out->sample_rate,
-                            av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
-                            out->ch_layout.nb_channels,
-                            out->data[0], ogg_volume->value))
-        s_api->drop_raw_samples();
+    if (const sndapi_t *api = S_GetSoundSystem().api()) {
+        if (!api->raw_samples(out->nb_samples, out->sample_rate,
+                              av_get_bytes_per_sample(static_cast<AVSampleFormat>(out->format)),
+                              out->ch_layout.nb_channels,
+                              out->data[0], ogg_volume->value))
+            api->drop_raw_samples();
+    }
 }
 
 static int convert_frame(AVFrame *out, AVFrame *in)
@@ -464,7 +468,11 @@ static int convert_audio(void)
         return 0;
 
     // get available free space
-    need = s_api->need_raw_samples();
+    const sndapi_t *api = S_GetSoundSystem().api();
+    if (!api)
+        return 0;
+
+    need = api->need_raw_samples();
     if (need <= 0)
         return 0;
 
@@ -563,12 +571,15 @@ drain:
 
 void OGG_Update(void)
 {
-    if (s_started == SoundBackend::Not || !s_active)
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    const sndapi_t *api = soundSystem.api();
+
+    if (soundSystem.backend() == SoundBackend::Not || !soundSystem.is_active())
         return;
 
     if (!ogg.dec_ctx && !ogg_swr_draining) {
         // resume auto playback if manual playback just stopped
-        if (ogg_manual_play && !s_api->have_raw_samples()) {
+        if (ogg_manual_play && api && !api->have_raw_samples()) {
             ogg_manual_play = false;
             OGG_Play();
         }
@@ -673,7 +684,7 @@ static void OGG_Play_f(void)
         return;
     }
 
-    if (s_started == SoundBackend::Not) {
+    if (S_GetSoundSystem().backend() == SoundBackend::Not) {
         Com_Printf("Sound system not started.\n");
         return;
     }
@@ -726,7 +737,7 @@ static void OGG_Cmd_c(genctx_t *ctx, int argnum)
 
 static void OGG_Next_f(void)
 {
-    if (s_started == SoundBackend::Not) {
+    if (S_GetSoundSystem().backend() == SoundBackend::Not) {
         Com_Printf("Sound system not started.\n");
         return;
     }

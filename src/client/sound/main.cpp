@@ -27,15 +27,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // Internal sound data & structures
 // =======================================================================
 
-SoundBackend    s_started;
-bool            s_active;
-bool            s_supports_float;
-const sndapi_t  *s_api;
-
-bool        s_registering;
-
-int         s_paintedtime;  // sample PAIRS
-
 cvar_t      *s_volume;
 cvar_t      *s_ambient;
 #if USE_DEBUG
@@ -55,12 +46,16 @@ static cvar_t   *s_auto_focus;
 
 static void S_SoundInfo_f(void)
 {
-    if (s_started == SoundBackend::Not) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() == SoundBackend::Not) {
         Com_Printf("Sound system not started.\n");
         return;
     }
 
-    s_api->sound_info();
+    if (const sndapi_t *api = soundSystem.api()) {
+        api->sound_info();
+    }
 }
 
 static void S_SoundList_f(void)
@@ -127,15 +122,22 @@ S_Init
 */
 void S_Init(void)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
     s_enable = Cvar_Get("s_enable", "2", CVAR_SOUND);
     if (s_enable->integer <= static_cast<int>(SoundBackend::Not)) {
         Com_Printf("Sound initialization disabled.\n");
+        soundSystem.set_backend(SoundBackend::Not);
+        soundSystem.set_api(nullptr);
+        soundSystem.set_supports_float(false);
+        soundSystem.set_active(false);
+        soundSystem.set_registering(false);
+        soundSystem.set_painted_time(0);
         return;
     }
 
     Com_Printf("------- S_Init -------\n");
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
     soundSystem.Configure({ SoundSystem::kDefaultMaxSfx, SoundSystem::kDefaultMaxPlaysounds });
 
     s_volume = Cvar_Get("s_volume", "0.7", CVAR_ARCHIVE);
@@ -154,26 +156,35 @@ void S_Init(void)
     soundSystem.num_channels() = 0;
 
     // start one of available sound engines
-    s_started = SoundBackend::Not;
+    soundSystem.set_backend(SoundBackend::Not);
+    soundSystem.set_api(nullptr);
+    soundSystem.set_supports_float(false);
+    soundSystem.set_active(false);
+
+    SoundBackend started = SoundBackend::Not;
+    const sndapi_t *api = nullptr;
 
 #if USE_OPENAL
-    if (s_started == SoundBackend::Not && s_enable->integer >= static_cast<int>(SoundBackend::OpenAL) && snd_openal.init()) {
-        s_started = SoundBackend::OpenAL;
-        s_api = &snd_openal;
+    if (started == SoundBackend::Not && s_enable->integer >= static_cast<int>(SoundBackend::OpenAL) && snd_openal.init()) {
+        started = SoundBackend::OpenAL;
+        api = &snd_openal;
     }
 #endif
 
 #if USE_SNDDMA
-    if (s_started == SoundBackend::Not && s_enable->integer >= static_cast<int>(SoundBackend::DMA) && snd_dma.init()) {
-        s_started = SoundBackend::DMA;
-        s_api = &snd_dma;
+    if (started == SoundBackend::Not && s_enable->integer >= static_cast<int>(SoundBackend::DMA) && snd_dma.init()) {
+        started = SoundBackend::DMA;
+        api = &snd_dma;
     }
 #endif
 
-    if (s_started == SoundBackend::Not) {
+    if (started == SoundBackend::Not) {
         Com_EPrintf("Sound failed to initialize.\n");
         goto fail;
     }
+
+    soundSystem.set_backend(started);
+    soundSystem.set_api(api);
 
     Cmd_Register(c_sound);
 
@@ -186,15 +197,16 @@ void S_Init(void)
 
     soundSystem.set_num_sfx(0);
 
-    s_paintedtime = 0;
+    soundSystem.set_painted_time(0);
 
     soundSystem.reset_registration_sequence();
+    soundSystem.set_registering(false);
 
     // start the cd track
     OGG_Play();
 
 fail:
-    Cvar_SetInteger(s_enable, static_cast<int>(s_started), FROM_CODE);
+    Cvar_SetInteger(s_enable, static_cast<int>(started), FROM_CODE);
     Com_Printf("----------------------\n");
 }
 
@@ -205,8 +217,11 @@ fail:
 
 static void S_FreeSound(sfx_t *sfx)
 {
-    if (s_started != SoundBackend::Not && s_api->delete_sfx)
-        s_api->delete_sfx(sfx);
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    const sndapi_t *api = soundSystem.api();
+
+    if (soundSystem.backend() != SoundBackend::Not && api && api->delete_sfx)
+        api->delete_sfx(sfx);
     Z_Free(sfx->cache);
     Z_Free(sfx->truename);
     memset(sfx, 0, sizeof(*sfx));
@@ -231,25 +246,29 @@ void S_FreeAllSounds(void)
 
 void S_Shutdown(void)
 {
-    if (s_started == SoundBackend::Not)
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() == SoundBackend::Not)
         return;
 
-    S_GetSoundSystem().StopAllSounds();
+    soundSystem.StopAllSounds();
     S_FreeAllSounds();
     OGG_Stop();
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
     soundSystem.clear_channels();
     soundSystem.num_channels() = 0;
     soundSystem.max_channels() = 0;
     soundSystem.ResetPlaysounds();
 
-    s_api->shutdown();
-    s_api = NULL;
+    if (const sndapi_t *api = soundSystem.api()) {
+        api->shutdown();
+    }
 
-    s_started = SoundBackend::Not;
-    s_active = false;
-    s_supports_float = false;
+    soundSystem.set_api(nullptr);
+    soundSystem.set_backend(SoundBackend::Not);
+    soundSystem.set_active(false);
+    soundSystem.set_supports_float(false);
+    soundSystem.set_registering(false);
 
     s_auto_focus->changed = NULL;
 
@@ -263,20 +282,24 @@ void S_Activate(void)
     bool active;
     active_t level;
 
-    if (s_started == SoundBackend::Not)
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() == SoundBackend::Not)
         return;
 
     level = static_cast<active_t>(Cvar_ClampInteger(s_auto_focus, ACT_MINIMIZED, ACT_ACTIVATED));
 
     active = cls.active >= level;
 
-    if (active == s_active)
+    if (active == soundSystem.is_active())
         return;
 
     Com_DDDPrintf("%s: %d\n", __func__, active);
-    s_active = active;
+    soundSystem.set_active(active);
 
-    s_api->activate();
+    if (const sndapi_t *api = soundSystem.api()) {
+        api->activate();
+    }
 }
 
 // =======================================================================
@@ -357,8 +380,9 @@ S_BeginRegistration
 */
 void S_BeginRegistration(void)
 {
-    S_GetSoundSystem().increment_registration_sequence();
-    s_registering = true;
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    soundSystem.increment_registration_sequence();
+    soundSystem.set_registering(true);
 }
 
 /*
@@ -369,16 +393,16 @@ S_RegisterSound
 */
 qhandle_t S_RegisterSound(const char *name)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     char    buffer[MAX_QPATH];
     sfx_t   *sfx;
     size_t  len;
 
-    if (s_started == SoundBackend::Not)
+    if (soundSystem.backend() == SoundBackend::Not)
         return 0;
 
     Q_assert(name);
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
     sfx_t *known_sfx = soundSystem.known_sfx_data();
 
     // empty names are legal, silently ignore them
@@ -413,7 +437,7 @@ qhandle_t S_RegisterSound(const char *name)
         return 0;
     }
 
-    if (!s_registering) {
+    if (!soundSystem.is_registering()) {
         soundSystem.LoadSound(sfx);
     }
 
@@ -427,6 +451,7 @@ S_RegisterSexedSound
 */
 static sfx_t *S_RegisterSexedSound(int entnum, const char *base)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     sfx_t           *sfx;
     const char      *model;
     char            buffer[MAX_QPATH];
@@ -449,7 +474,7 @@ static sfx_t *S_RegisterSexedSound(int entnum, const char *base)
     sfx = S_FindName(buffer, FS_NormalizePath(buffer));
 
     // see if it exists
-    if (sfx && !sfx->truename && !s_registering && !S_GetSoundSystem().LoadSound(sfx)) {
+    if (sfx && !sfx->truename && !soundSystem.is_registering() && !soundSystem.LoadSound(sfx)) {
         // no, revert to the male sound in the pak0.pak
         if (Q_concat(buffer, MAX_QPATH, "sound/player/male/", base + 1) < MAX_QPATH) {
             FS_NormalizePath(buffer);
@@ -502,6 +527,7 @@ void S_EndRegistration(void)
     SoundSystem &soundSystem = S_GetSoundSystem();
     sfx_t *known_sfx = soundSystem.known_sfx_data();
     int num_sfx = soundSystem.num_sfx();
+    const sndapi_t *api = soundSystem.api();
 
     S_RegisterSexedSounds();
 
@@ -519,8 +545,8 @@ void S_EndRegistration(void)
             continue;
         }
         // make sure it is paged in
-    if (s_started != SoundBackend::Not && s_api->page_in_sfx)
-        s_api->page_in_sfx(sfx);
+        if (soundSystem.backend() != SoundBackend::Not && api && api->page_in_sfx)
+            api->page_in_sfx(sfx);
     }
 
     // load everything in
@@ -531,10 +557,10 @@ void S_EndRegistration(void)
         soundSystem.LoadSound(sfx);
     }
 
-    if (s_started != SoundBackend::Not && s_api->end_registration)
-        s_api->end_registration();
+    if (soundSystem.backend() != SoundBackend::Not && api && api->end_registration)
+        api->end_registration();
 
-    s_registering = false;
+    soundSystem.set_registering(false);
 }
 
 
@@ -575,8 +601,8 @@ channel_t *SoundSystem::PickChannel(int entnum, int entchannel)
         if (ch->entnum == listener_entnum_ && entnum != listener_entnum_ && ch->sfx)
             continue;
 
-        if (ch->end - s_paintedtime < life_left) {
-            life_left = ch->end - s_paintedtime;
+        if (ch->end - painted_time_ < life_left) {
+            life_left = ch->end - painted_time_;
             first_to_die = ch_idx;
         }
     }
@@ -585,8 +611,8 @@ channel_t *SoundSystem::PickChannel(int entnum, int entchannel)
         return NULL;
 
     ch = &channels_[first_to_die];
-    if (s_api->stop_channel)
-        s_api->stop_channel(ch);
+    if (api_ && api_->stop_channel)
+        api_->stop_channel(ch);
     memset(ch, 0, sizeof(*ch));
     ch->has_spatial_offset = false;
 
@@ -637,9 +663,10 @@ void SoundSystem::IssuePlaysound(playsound_t *ps)
     VectorCopy(ps->origin, ch->origin);
     ch->fixed_origin = ps->fixed_origin;
     ch->pos = 0;
-    ch->end = s_paintedtime + sc->length;
+    ch->end = painted_time_ + sc->length;
 
-    s_api->play_channel(ch);
+    if (api_ && api_->play_channel)
+        api_->play_channel(ch);
 
     // free the playsound
     FreePlaysound(ps);
@@ -664,9 +691,11 @@ void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qh
     playsound_t *ps;
     sfx_t       *sfx;
 
-    if (s_started == SoundBackend::Not)
+    if (backend_ == SoundBackend::Not)
         return;
-    if (!s_active)
+    if (!active_)
+        return;
+    if (!api_)
         return;
     if (!(sfx = SfxForHandle(hSfx)))
         return;
@@ -681,6 +710,9 @@ void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qh
     sc = LoadSound(sfx);
     if (!sc)
         return;     // couldn't load the sound's data
+
+    if (!api_->get_begin_ofs)
+        return;
 
     // make the playsound_t
     ps = AllocatePlaysound();
@@ -699,7 +731,7 @@ void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qh
     ps->attenuation = attenuation;
     ps->volume = vol;
     ps->sfx = sfx;
-    ps->begin = s_api->get_begin_ofs(timeofs);
+    ps->begin = api_->get_begin_ofs(timeofs);
 
     // sort into the pending sound list
     QueuePendingPlay(ps);
@@ -729,17 +761,21 @@ S_StartLocalSound
 */
 void S_StartLocalSound(const char *sound)
 {
-    if (s_started != SoundBackend::Not) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() != SoundBackend::Not) {
         qhandle_t sfx = S_RegisterSound(sound);
-        S_GetSoundSystem().StartSound(NULL, listener_entnum, 0, sfx, 1, ATTN_NONE, 0);
+        soundSystem.StartSound(NULL, listener_entnum, 0, sfx, 1, ATTN_NONE, 0);
     }
 }
 
 void S_StartLocalSoundOnce(const char *sound)
 {
-    if (s_started != SoundBackend::Not) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() != SoundBackend::Not) {
         qhandle_t sfx = S_RegisterSound(sound);
-        S_GetSoundSystem().StartSound(NULL, listener_entnum, 256, sfx, 1, ATTN_NONE, 0);
+        soundSystem.StartSound(NULL, listener_entnum, 256, sfx, 1, ATTN_NONE, 0);
     }
 }
 
@@ -750,39 +786,51 @@ S_StopAllSounds
 */
 void SoundSystem::StopAllSounds()
 {
-    if (s_started == SoundBackend::Not)
+    if (backend_ == SoundBackend::Not)
         return;
 
     ResetPlaysounds();
 
-    if (s_api && s_api->stop_all_sounds)
-        s_api->stop_all_sounds();
+    if (api_ && api_->stop_all_sounds)
+        api_->stop_all_sounds();
 
     clear_channels();
 }
 
 void S_RawSamples(int samples, int rate, int width, int channels, const void *data)
 {
-    if (s_started != SoundBackend::Not && s_active)
-        s_api->raw_samples(samples, rate, width, channels, data, 1.0f);
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (soundSystem.backend() != SoundBackend::Not && soundSystem.is_active()) {
+        if (const sndapi_t *api = soundSystem.api())
+            api->raw_samples(samples, rate, width, channels, data, 1.0f);
+    }
 }
 
 int S_GetSampleRate(void)
 {
-    if (s_api && s_api->get_sample_rate)
-        return s_api->get_sample_rate();
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (const sndapi_t *api = soundSystem.api()) {
+        if (api->get_sample_rate)
+            return api->get_sample_rate();
+    }
     return 0;
 }
 
 bool S_SupportsFloat(void)
 {
-    return s_supports_float;
+    return S_GetSoundSystem().supports_float();
 }
 
 void S_PauseRawSamples(bool paused)
 {
-    if (s_api && s_api->pause_raw_samples)
-        s_api->pause_raw_samples(paused);
+    SoundSystem &soundSystem = S_GetSoundSystem();
+
+    if (const sndapi_t *api = soundSystem.api()) {
+        if (api->pause_raw_samples)
+            api->pause_raw_samples(paused);
+    }
 }
 
 // =======================================================================
@@ -794,7 +842,7 @@ int SoundSystem::BuildSoundList(int *sounds)
     int             i, num, count;
     entity_state_t  *ent;
 
-    if (cls.state != ca_active || !s_active || sv_paused->integer || !s_ambient->integer)
+    if (cls.state != ca_active || !active_ || sv_paused->integer || !s_ambient->integer)
         return 0;
 
     for (i = count = 0; i < cl.frame.numEntities; i++) {
@@ -876,7 +924,7 @@ void SoundSystem::Update()
         return;
     }
 
-    if (s_started == SoundBackend::Not)
+    if (backend_ == SoundBackend::Not || !api_)
         return;
 
     // if the loading plaque is up, clear everything
@@ -897,5 +945,6 @@ void SoundSystem::Update()
 
     OGG_Update();
 
-    s_api->update();
+    if (api_->update)
+        api_->update();
 }

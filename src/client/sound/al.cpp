@@ -654,7 +654,7 @@ static bool AL_Init(void)
 
     s_loop_points = qalIsExtensionPresent("AL_SOFT_loop_points");
     s_source_spatialize = qalIsExtensionPresent("AL_SOFT_source_spatialize");
-    s_supports_float = qalIsExtensionPresent("AL_EXT_float32");
+    soundSystem.set_supports_float(qalIsExtensionPresent("AL_EXT_float32"));
 
     // init distance model
     qalDistanceModel(AL_LINEAR_DISTANCE_CLAMPED);
@@ -765,7 +765,7 @@ static ALenum AL_GetSampleFormat(int width, int channels)
     case 2:
         return AL_FORMAT_MONO16 + (channels - 1) * 2;
     case 4:
-        if (!s_supports_float)
+        if (!S_GetSoundSystem().supports_float())
             return 0;
         return AL_FORMAT_MONO_FLOAT32 + (channels - 1);
     default:
@@ -832,7 +832,7 @@ static void AL_DeleteSfx(sfx_t *s)
 
 static int AL_GetBeginofs(float timeofs)
 {
-    return s_paintedtime + timeofs * 1000;
+    return S_GetSoundSystem().painted_time() + timeofs * 1000;
 }
 
 static void AL_Spatialize(channel_t *ch)
@@ -957,7 +957,7 @@ static void AL_IssuePlaysounds(void)
         playsound_t *ps = soundSystem.PeekPendingPlay();
         if (!ps)
             break;  // no more pending sounds
-        if (ps->begin > s_paintedtime)
+        if (ps->begin > soundSystem.painted_time())
             break;
         S_GetSoundSystem().IssuePlaysound(ps);
     }
@@ -1012,6 +1012,7 @@ static void AL_MergeLoopSounds(void)
     sfxcache_t  *sc;
     int         num;
     entity_state_t *ent;
+    SoundSystem &soundSystem = S_GetSoundSystem();
     vec3_t      origin;
 
     if (!S_GetSoundSystem().BuildSoundList(sounds))
@@ -1021,7 +1022,7 @@ static void AL_MergeLoopSounds(void)
         if (!sounds[i])
             continue;
 
-        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = soundSystem.SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -1042,9 +1043,9 @@ static void AL_MergeLoopSounds(void)
             VectorSubtract(origin, offset, base);
             CL_DebugTrail(base, origin);
         }
-        S_GetSoundSystem().SpatializeOrigin(origin, vol, att,
-                           &left_total, &right_total,
-                           S_GetEntityLoopStereoPan(ent));
+        soundSystem.SpatializeOrigin(origin, vol, att,
+                                     &left_total, &right_total,
+                                     S_GetEntityLoopStereoPan(ent));
         for (j = i + 1; j < cl.frame.numEntities; j++) {
             if (sounds[j] != sounds[i])
                 continue;
@@ -1059,11 +1060,11 @@ static void AL_MergeLoopSounds(void)
                 VectorSubtract(origin, offset, base);
                 CL_DebugTrail(base, origin);
             }
-            S_GetSoundSystem().SpatializeOrigin(origin,
-                               S_GetEntityLoopVolume(ent),
-                               S_GetEntityLoopDistMult(ent),
-                               &left, &right,
-                               S_GetEntityLoopStereoPan(ent));
+            soundSystem.SpatializeOrigin(origin,
+                                         S_GetEntityLoopVolume(ent),
+                                         S_GetEntityLoopDistMult(ent),
+                                         &left, &right,
+                                         S_GetEntityLoopStereoPan(ent));
             left_total += left;
             right_total += right;
         }
@@ -1084,16 +1085,16 @@ static void AL_MergeLoopSounds(void)
             qalSourcef(ch->srcnum, AL_GAIN, gain);
             qalSource3f(ch->srcnum, AL_POSITION, pan, 0.0f, pan2);
             ch->autoframe = s_framecount;
-            ch->end = s_paintedtime + sc->length;
+            ch->end = soundSystem.painted_time() + sc->length;
             continue;
         }
 
         // allocate a channel
-        ch = S_GetSoundSystem().PickChannel(0, 0);
+        ch = soundSystem.PickChannel(0, 0);
         if (!ch)
             continue;
 
-        channel_t *channels = S_GetSoundSystem().channels_data();
+        channel_t *channels = soundSystem.channels_data();
         if (channels) {
             ch->srcnum = s_srcnums[ch - channels];
         } else {
@@ -1116,7 +1117,7 @@ static void AL_MergeLoopSounds(void)
         ch->entnum = ent->number;
         ch->master_vol = vol;
         ch->dist_mult = att;
-        ch->end = s_paintedtime + sc->length;
+        ch->end = soundSystem.painted_time() + sc->length;
 
         // play it
         qalSourcePlay(ch->srcnum);
@@ -1139,13 +1140,13 @@ static void AL_AddLoopSounds(void)
     if (cls.state != ca_active || sv_paused->integer || !s_ambient->integer)
         return;
 
-    S_GetSoundSystem().BuildSoundList(sounds);
+    soundSystem.BuildSoundList(sounds);
 
     for (i = 0; i < cl.frame.numEntities; i++) {
         if (!sounds[i])
             continue;
 
-        sfx = S_GetSoundSystem().SfxForHandle(cl.sound_precache[sounds[i]]);
+        sfx = soundSystem.SfxForHandle(cl.sound_precache[sounds[i]]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -1158,12 +1159,12 @@ static void AL_AddLoopSounds(void)
         ch = AL_FindLoopingSound(ent->number, sfx);
         if (ch) {
             ch->autoframe = s_framecount;
-            ch->end = s_paintedtime + sc->length;
+            ch->end = soundSystem.painted_time() + sc->length;
             continue;
         }
 
         // allocate a channel
-        ch = S_GetSoundSystem().PickChannel(0, 0);
+        ch = soundSystem.PickChannel(0, 0);
         if (!ch)
             continue;
 
@@ -1173,7 +1174,7 @@ static void AL_AddLoopSounds(void)
         ch->entnum = ent->number;
         ch->master_vol = S_GetEntityLoopVolume(ent);
         ch->dist_mult = S_GetEntityLoopDistMult(ent);
-        ch->end = s_paintedtime + sc->length;
+        ch->end = soundSystem.painted_time() + sc->length;
 
         AL_PlayChannel(ch);
     }
@@ -1212,7 +1213,7 @@ static void AL_StreamPause(bool paused)
     s_stream_paused = paused;
 
     // force pause if not active
-    if (!s_active)
+    if (!S_GetSoundSystem().is_active())
         paused = true;
 
     ALint state = 0;
@@ -1311,14 +1312,15 @@ static void AL_Update(void)
     channel_t *channels = soundSystem.channels_data();
     int num_channels = soundSystem.num_channels();
 
-    if (!s_active)
+    if (!soundSystem.is_active())
         return;
 
     // handle time wraparound. FIXME: get rid of this?
     i = cls.realtime & MASK(30);
-    if (i < s_paintedtime)
-        S_GetSoundSystem().StopAllSounds();
-    s_paintedtime = i;
+    int &painted_time = soundSystem.painted_time();
+    if (i < painted_time)
+        soundSystem.StopAllSounds();
+    painted_time = i;
 
     // set listener parameters
     qalListener3f(AL_POSITION, AL_UnpackVector(listener_origin));
