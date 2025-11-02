@@ -25,7 +25,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define GLSF(x)     SZ_Write(buf, CONST_STR_LEN(x))
 #define GLSP(...)   shader_printf(buf, __VA_ARGS__)
 
-static cvar_t *gl_bloom_sigma;
 cvar_t *gl_per_pixel_lighting;
 
 q_printf(2, 3)
@@ -456,7 +455,6 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits)
     GLSF("}\n");
 }
 
-#define MAX_SIGMA   25
 #define MAX_RADIUS  50
 
 // https://lisyarus.github.io/blog/posts/blur-coefficients-generator.html
@@ -737,6 +735,8 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(uniform sampler2D u_texture;)
         if (bits & GLS_BLOOM_OUTPUT)
             GLSL(uniform sampler2D u_bloom;)
+        if (bits & GLS_BLOOM_BRIGHTPASS)
+            GLSL(uniform sampler2D u_scene;)
     }
 
     if (bits & GLS_SKY_MASK)
@@ -778,6 +778,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     else if (bits & GLS_BLUR_BOX)
         write_box_blur(buf);
 
+    if (bits & GLS_BLOOM_BRIGHTPASS)
+        GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
+
     GLSF("void main() {\n");
     if (bits & GLS_CLASSIC_SKY) {
         GLSL(
@@ -801,6 +804,15 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
+
+        if (bits & GLS_BLOOM_BRIGHTPASS) {
+            GLSL(vec4 scene = texture(u_scene, tc);)
+            GLSL(float luminance = dot(scene.rgb, bloom_luminance);)
+            GLSL(float threshold = u_fog_color.z;)
+            GLSL(luminance = max(0.0, luminance - threshold);)
+            GLSL(diffuse.rgb *= sign(luminance);)
+            GLSL(diffuse.a = 1.0;)
+        }
     }
 
     if (bits & GLS_ALPHATEST_ENABLE)
@@ -1084,6 +1096,8 @@ static GLuint create_and_use_program(glStateBits_t bits)
         bind_texture_unit(program, "u_texture", TMU_TEXTURE);
         if (bits & GLS_BLOOM_OUTPUT)
             bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
+        if (bits & GLS_BLOOM_BRIGHTPASS)
+            bind_texture_unit(program, "u_scene", TMU_LIGHTMAP);
     }
 
     if (bits & GLS_LIGHTMAP_ENABLE)
@@ -1337,21 +1351,25 @@ static void shader_clear_state(void)
 
 static void shader_update_blur(void)
 {
-    float sigma = 0.0f;
+    float sigma = 1.0f;
 
-    if (gl_bloom->integer) {
-        float bloom_sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
-        if (sigma < bloom_sigma)
-            sigma = bloom_sigma;
+    if (r_bloom->integer && glr.fd.height > 0) {
+        float base_radius = Cvar_ClampValue(r_bloomBlurRadius, 1, MAX_RADIUS);
+        float scaled_radius = base_radius * glr.fd.height / 1080.0f;
+        if (scaled_radius > 0.0f) {
+            sigma = scaled_radius * 0.5f;
+            if (sigma < 1.0f)
+                sigma = 1.0f;
+        }
     }
-
-    if (sigma <= 0.0f)
-        sigma = 1.0f;
 
     if (gl_static.bloom_sigma == sigma)
         return;
 
     gl_static.bloom_sigma = sigma;
+
+    if (!gl_static.programs)
+        return;
 
     bool changed = false;
     uint32_t map_size = HashMap_Size(gl_static.programs);
@@ -1369,18 +1387,20 @@ static void shader_update_blur(void)
         shader_use_program(gls.state_bits & GLS_SHADER_MASK);
 }
 
-static void gl_bloom_sigma_changed(cvar_t *self)
+static void r_bloom_blur_radius_changed(cvar_t *self)
 {
-    if (gl_bloom->integer && glr.fd.height > 0)
-        shader_update_blur();
+    (void)self;
+    shader_update_blur();
 }
 
 static void shader_init(void)
 {
-    gl_bloom_sigma = Cvar_Get("gl_bloom_sigma", "8", 0);
-    gl_bloom_sigma->changed = gl_bloom_sigma_changed;
+    if (r_bloomBlurRadius)
+        r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
+
+    shader_update_blur();
 
     qglGenBuffers(1, &gl_static.uniform_buffer);
     GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
@@ -1415,7 +1435,8 @@ static void shader_shutdown(void)
     shader_disable_state();
     qglUseProgram(0);
 
-    gl_bloom_sigma->changed = NULL;
+    if (r_bloomBlurRadius)
+        r_bloomBlurRadius->changed = NULL;
 
     if (gl_static.programs) {
         uint32_t map_size = HashMap_Size(gl_static.programs);
