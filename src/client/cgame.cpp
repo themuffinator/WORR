@@ -370,7 +370,7 @@ static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, cons
 
     // TODO: 'str' may contain UTF-8, handle that.
     if (!scr.kfont.pic) {
-        SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, scr.font_pic);
+        SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, SCR_DefaultFontHandle());
     } else {
         SCR_DrawKStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, &scr.kfont);
     }

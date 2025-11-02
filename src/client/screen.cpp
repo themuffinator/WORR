@@ -85,6 +85,7 @@ static float    fps_counter = 0;
 
 #if USE_FREETYPE
 static cvar_t   *scr_fontpath;
+static cvar_t   *scr_text_backend;
 
 static void SCR_FreeFreeTypeFonts(void);
 static bool SCR_LoadDefaultFreeTypeFont(void);
@@ -129,6 +130,7 @@ static void SCR_FreeFreeTypeFonts(void)
     scr.freetype.fonts.clear();
     scr.freetype.handleLookup.clear();
     scr.freetype.activeFontKey.clear();
+    scr.freetype.activeFontHandle = 0;
 }
 
 static bool SCR_LoadFreeTypeFont(const std::string &cacheKey, const std::string &fontPath,
@@ -181,6 +183,7 @@ static bool SCR_LoadFreeTypeFont(const std::string &cacheKey, const std::string 
 
     scr.freetype.handleLookup[handle] = cacheKey;
     scr.freetype.activeFontKey = cacheKey;
+    scr.freetype.activeFontHandle = handle;
     return true;
 }
 
@@ -215,6 +218,79 @@ static const ftfont_t *SCR_FTFontForHandle(qhandle_t handle)
         return nullptr;
 
     return &fontIt->second.renderInfo;
+}
+
+enum class scr_text_backend_mode {
+    BITMAP,
+    FREETYPE,
+};
+
+static scr_text_backend_mode scr_activeTextBackend = scr_text_backend_mode::BITMAP;
+
+static scr_text_backend_mode SCR_ParseTextBackend(const char *value)
+{
+    if (!value || !*value)
+        return scr_text_backend_mode::BITMAP;
+
+    if (!Q_stricmp(value, "bitmap"))
+        return scr_text_backend_mode::BITMAP;
+
+    if (!Q_stricmp(value, "freetype") || !Q_stricmp(value, "ft"))
+        return scr_text_backend_mode::FREETYPE;
+
+    if (Q_isdigit(*value) || (*value == '-' && Q_isdigit(value[1])))
+        return Q_atoi(value) > 0 ? scr_text_backend_mode::FREETYPE
+                                 : scr_text_backend_mode::BITMAP;
+
+    return scr_text_backend_mode::BITMAP;
+}
+
+static bool SCR_ShouldUseFreeType(qhandle_t font)
+{
+    if (scr_activeTextBackend != scr_text_backend_mode::FREETYPE)
+        return false;
+
+    if (!font)
+        return false;
+
+    if (scr.freetype.activeFontHandle && font == scr.freetype.activeFontHandle)
+        return true;
+
+    return SCR_FTFontForHandle(font) != nullptr;
+}
+
+static void scr_text_backend_changed(cvar_t *self)
+{
+    const auto requested = SCR_ParseTextBackend(self->string);
+    auto newBackend = requested;
+
+    if (requested == scr_text_backend_mode::FREETYPE) {
+        if (!scr.font_pic) {
+            newBackend = scr_text_backend_mode::BITMAP;
+        } else {
+            if (!scr.freetype.activeFontHandle) {
+                if (!SCR_LoadDefaultFreeTypeFont())
+                    newBackend = scr_text_backend_mode::BITMAP;
+            }
+
+            if (!scr.freetype.activeFontHandle)
+                newBackend = scr_text_backend_mode::BITMAP;
+        }
+    }
+
+    scr_activeTextBackend = newBackend;
+
+    if (requested == scr_text_backend_mode::FREETYPE && newBackend != requested) {
+        Com_WPrintf("FreeType text backend unavailable, falling back to bitmap fonts.\n");
+        if (Q_stricmp(self->string, "bitmap"))
+            Cvar_Set(self->name, "bitmap");
+    }
+}
+
+static void scr_text_backend_g(genctx_t *ctx)
+{
+    Prompt_AddMatch(ctx, "bitmap");
+    Prompt_AddMatch(ctx, "freetype");
 }
 #endif
 
@@ -260,6 +336,42 @@ static scr_text_metrics_t SCR_TextMetrics(const char *s, size_t maxlen, int flag
 
 } // namespace
 
+qhandle_t SCR_DefaultFontHandle(void)
+{
+#if USE_FREETYPE
+    if (scr_activeTextBackend == scr_text_backend_mode::FREETYPE && scr.freetype.activeFontHandle)
+        return scr.freetype.activeFontHandle;
+#endif
+    return scr.font_pic;
+}
+
+int SCR_FontLineHeight(int scale, qhandle_t font)
+{
+    const int clampedScale = max(scale, 1);
+#if USE_FREETYPE
+    if (SCR_ShouldUseFreeType(font)) {
+        if (const ftfont_t *ftFont = SCR_FTFontForHandle(font))
+            return Q_rint(R_FreeTypeFontLineHeight(clampedScale, ftFont));
+    }
+#endif
+    return CONCHAR_HEIGHT * clampedScale;
+}
+
+int SCR_MeasureString(int scale, int flags, size_t maxlen, const char *s, qhandle_t font)
+{
+    const auto metrics = SCR_TextMetrics(s, maxlen, flags, COLOR_WHITE);
+    const size_t visibleChars = metrics.visibleChars;
+
+#if USE_FREETYPE
+    if (SCR_ShouldUseFreeType(font)) {
+        if (const ftfont_t *ftFont = SCR_FTFontForHandle(font))
+            return R_MeasureFreeTypeString(scale, flags, visibleChars, s, font, ftFont);
+    }
+#endif
+
+    return static_cast<int>(visibleChars) * CONCHAR_WIDTH * max(scale, 1);
+}
+
 /*
 ==============
 SCR_DrawStringStretch
@@ -268,25 +380,43 @@ SCR_DrawStringStretch
 int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
                           const char *s, color_t color, qhandle_t font)
 {
+    const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
+    const size_t visibleChars = metrics.visibleChars;
+
 #if USE_FREETYPE
-    const ftfont_t *ftFont = SCR_FTFontForHandle(font);
+    const bool useFreeType = SCR_ShouldUseFreeType(font);
+    const ftfont_t *ftFont = useFreeType ? SCR_FTFontForHandle(font) : nullptr;
 #else
+    const bool useFreeType = false;
     const ftfont_t *ftFont = nullptr;
 #endif
 
-    const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
-
     if ((flags & UI_CENTER) == UI_CENTER) {
-        int width = ftFont ? R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, len, s, font, ftFont)
-                           : static_cast<int>(len) * CONCHAR_WIDTH * scale;
+        int width = 0;
+#if USE_FREETYPE
+        if (useFreeType && ftFont)
+            width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, visibleChars, s, font, ftFont);
+        else
+#endif
+            width = static_cast<int>(visibleChars) * CONCHAR_WIDTH * scale;
         x -= width / 2;
     } else if (flags & UI_RIGHT) {
-        int width = ftFont ? R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, len, s, font, ftFont)
-                           : static_cast<int>(len) * CONCHAR_WIDTH * scale;
+        int width = 0;
+#if USE_FREETYPE
+        if (useFreeType && ftFont)
+            width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, visibleChars, s, font, ftFont);
+        else
+#endif
+            width = static_cast<int>(visibleChars) * CONCHAR_WIDTH * scale;
         x -= width;
     }
 
-    return R_DrawFreeTypeString(x, y, scale, flags, maxlen, s, color, font, ftFont);
+#if USE_FREETYPE
+    if (useFreeType && ftFont)
+        return R_DrawFreeTypeString(x, y, scale, flags, maxlen, s, color, font, ftFont);
+#endif
+
+    return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font, nullptr);
 }
 
 
@@ -303,6 +433,8 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
     int     last_x = x;
     int     last_y = y;
     color_t currentColor = color;
+
+    const int lineHeight = SCR_FontLineHeight(scale, font);
 
     while (*s && maxlen) {
         p = strchr(s, '\n');
@@ -321,7 +453,7 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
         currentColor = metrics.finalColor;
         maxlen -= len;
 
-        y += CONCHAR_HEIGHT * scale;
+        y += lineHeight;
         s = p + 1;
     }
 
@@ -565,8 +697,11 @@ static void draw_progress_bar(float progress, bool paused, int framenum)
     int x, w, h;
     size_t len;
 
+    const qhandle_t font = SCR_DefaultFontHandle();
+    const int lineHeight = SCR_FontLineHeight(1, font);
+
     w = Q_rint(scr.hud_width * progress);
-    h = Q_rint(CONCHAR_HEIGHT / scr.hud_scale);
+    h = Q_rint(static_cast<float>(lineHeight) / scr.hud_scale);
 
     scr.hud_height -= h;
 
@@ -579,15 +714,16 @@ static void draw_progress_bar(float progress, bool paused, int framenum)
     h = Q_rint(scr.hud_height * scr.hud_scale);
 
     len = Q_scnprintf(buffer, sizeof(buffer), "%.f%%", progress * 100);
-    x = (w - len * CONCHAR_WIDTH) / 2;
-    R_DrawString(x, h, 0, MAX_STRING_CHARS, buffer, COLOR_WHITE, scr.font_pic);
+    const int percentWidth = SCR_MeasureString(1, 0, len, buffer, font);
+    x = (w - percentWidth) / 2;
+    SCR_DrawStringStretch(x, h, 1, 0, len, buffer, COLOR_WHITE, font);
 
     if (scr_demobar->integer > 1) {
         int sec = framenum / BASE_FRAMERATE;
         int min = sec / 60; sec %= 60;
 
         Q_scnprintf(buffer, sizeof(buffer), "%d:%02d.%d", min, sec, framenum % BASE_FRAMERATE);
-        R_DrawString(0, h, 0, MAX_STRING_CHARS, buffer, COLOR_WHITE, scr.font_pic);
+        SCR_DrawStringStretch(0, h, 1, 0, MAX_STRING_CHARS, buffer, COLOR_WHITE, font);
     }
 
     if (paused) {
@@ -1129,16 +1265,18 @@ static void SCR_DrawDebugStats(void)
     if (j > cl.max_stats)
         j = cl.max_stats;
 
+    const qhandle_t font = SCR_DefaultFontHandle();
+    const int lineHeight = SCR_FontLineHeight(1, font);
     x = CONCHAR_WIDTH;
-    y = (scr.hud_height - j * CONCHAR_HEIGHT) / 2;
+    y = (scr.hud_height - j * lineHeight) / 2;
     for (i = 0; i < j; i++) {
         Q_snprintf(buffer, sizeof(buffer), "%2d: %d", i, cl.frame.ps.stats[i]);
         color_t color = COLOR_WHITE;
         if (cl.oldframe.ps.stats[i] != cl.frame.ps.stats[i]) {
             color = COLOR_RED;
         }
-        R_DrawString(x, y, 0, MAX_STRING_CHARS, buffer, color, scr.font_pic);
-        y += CONCHAR_HEIGHT;
+        SCR_DrawStringStretch(x, y, 1, 0, MAX_STRING_CHARS, buffer, color, font);
+        y += lineHeight;
     }
 }
 
@@ -1158,20 +1296,22 @@ static void SCR_DrawDebugPmove(void)
     if (!scr_showpmove->integer)
         return;
 
+    const qhandle_t font = SCR_DefaultFontHandle();
+    const int lineHeight = SCR_FontLineHeight(1, font);
     x = CONCHAR_WIDTH;
-    y = (scr.hud_height - 2 * CONCHAR_HEIGHT) / 2;
+    y = (scr.hud_height - 2 * lineHeight) / 2;
 
     i = cl.frame.ps.pmove.pm_type;
     if (i > PM_FREEZE)
         i = PM_FREEZE;
 
-    R_DrawString(x, y, 0, MAX_STRING_CHARS, types[i], COLOR_WHITE, scr.font_pic);
-    y += CONCHAR_HEIGHT;
+    SCR_DrawStringStretch(x, y, 1, 0, MAX_STRING_CHARS, types[i], COLOR_WHITE, font);
+    y += lineHeight;
 
     j = cl.frame.ps.pmove.pm_flags;
     for (i = 0; i < 8; i++) {
         if (j & (1 << i)) {
-            x = R_DrawString(x, y, 0, MAX_STRING_CHARS, flags[i], COLOR_WHITE, scr.font_pic);
+            x = SCR_DrawStringStretch(x, y, 1, 0, MAX_STRING_CHARS, flags[i], COLOR_WHITE, font);
             x += CONCHAR_WIDTH;
         }
     }
@@ -1404,7 +1544,10 @@ static void scr_font_changed(cvar_t *self)
         scr.font_pic = R_RegisterFont(self->default_string);
     }
 #if USE_FREETYPE
-    SCR_LoadDefaultFreeTypeFont();
+    if (scr.font_pic)
+        SCR_LoadDefaultFreeTypeFont();
+    if (scr_text_backend)
+        scr_text_backend_changed(scr_text_backend);
 #endif
 }
 
@@ -1635,6 +1778,10 @@ void SCR_Init(void)
     scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
     scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
+    scr_text_backend = Cvar_Get("scr_text_backend", "bitmap", CVAR_ARCHIVE);
+    scr_text_backend->changed = scr_text_backend_changed;
+    scr_text_backend->generator = scr_text_backend_g;
+    scr_text_backend_changed(scr_text_backend);
 #endif
     scr_scale = Cvar_Get("scr_scale", "0", 0);
     scr_scale->changed = scr_scale_changed;
