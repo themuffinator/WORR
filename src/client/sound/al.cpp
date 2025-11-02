@@ -16,6 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "SoundSystem.hpp"
 #include "sound.hpp"
 #include "qal.hpp"
 #include "common/json.hpp"
@@ -555,17 +556,20 @@ static void AL_StopChannel(channel_t *ch);
 
 static void AL_SoundInfo(void)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     Com_Printf("AL_VENDOR: %s\n", qalGetString(AL_VENDOR));
     Com_Printf("AL_RENDERER: %s\n", qalGetString(AL_RENDERER));
     Com_Printf("AL_VERSION: %s\n", qalGetString(AL_VERSION));
     Com_Printf("AL_EXTENSIONS: %s\n", qalGetString(AL_EXTENSIONS));
-    Com_Printf("Number of sources: %d\n", s_numchannels);
+    Com_Printf("Number of sources: %d\n", soundSystem.num_channels());
 }
 
 static void s_underwater_gain_hf_changed(cvar_t *self)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     if (s_underwater_flag) {
-        for (int i = 0; i < s_numchannels; i++)
+        int num_channels = soundSystem.num_channels();
+        for (int i = 0; i < num_channels; i++)
             qalSourcei(s_srcnums[i], AL_DIRECT_FILTER, 0);
         s_underwater_flag = false;
     }
@@ -583,7 +587,11 @@ static void al_merge_looping_changed(cvar_t *self)
     int         i;
     channel_t   *ch;
 
-    for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+    int num_channels = soundSystem.num_channels();
+
+    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
         if (ch->autosound)
             AL_StopChannel(ch);
     }
@@ -597,6 +605,8 @@ static void s_volume_changed(cvar_t *self)
 static bool AL_Init(void)
 {
     int i;
+
+    SoundSystem &soundSystem = S_GetSoundSystem();
 
     i = QAL_Init();
     if (i < 0)
@@ -612,9 +622,10 @@ static bool AL_Init(void)
     qalGetError();
     qalGenSources(1, &s_stream);
 
-    s_srcnums = Z_TagMalloc(sizeof(*s_srcnums) * s_maxchannels, TAG_SOUND);
+    int max_channels = soundSystem.max_channels();
+    s_srcnums = Z_TagMalloc(sizeof(*s_srcnums) * max_channels, TAG_SOUND);
 
-    for (i = 0; i < s_maxchannels; i++) {
+    for (i = 0; i < max_channels; i++) {
         qalGenSources(1, &s_srcnums[i]);
         if (qalGetError() != AL_NO_ERROR) {
             break;
@@ -622,7 +633,7 @@ static bool AL_Init(void)
         s_numalsources++;
     }
 
-    if (s_numalsources != s_maxchannels)
+    if (s_numalsources != max_channels)
         s_srcnums = Z_Realloc(s_srcnums, sizeof(*s_srcnums) * s_numalsources);
 
     Com_DPrintf("Got %d AL sources\n", i);
@@ -632,7 +643,7 @@ static bool AL_Init(void)
         goto fail1;
     }
 
-    s_numchannels = i;
+    soundSystem.num_channels() = i;
 
     s_volume->changed = s_volume_changed;
     s_volume_changed(s_volume);
@@ -694,13 +705,17 @@ static void AL_Shutdown(void)
 {
     Com_Printf("Shutting down OpenAL.\n");
 
-    if (s_numchannels) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    int num_channels = soundSystem.num_channels();
+
+    if (num_channels) {
         // delete source names
-        qalDeleteSources(s_numchannels, s_srcnums);
+        qalDeleteSources(num_channels, s_srcnums);
         Z_Free(s_srcnums);
         s_srcnums = NULL;
         s_numalsources = 0;
-        s_numchannels = 0;
+        soundSystem.num_channels() = 0;
+        soundSystem.clear_channels();
     }
 
     if (s_stream) {
@@ -891,12 +906,19 @@ static void AL_PlayChannel(channel_t *ch)
 {
     sfxcache_t *sc = ch->sfx->cache;
 
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+
 #if USE_DEBUG
     if (s_show->integer > 1)
         Com_Printf("%s: %s\n", __func__, ch->sfx->name);
 #endif
 
-    ch->srcnum = s_srcnums[ch - s_channels];
+    if (channels) {
+        ch->srcnum = s_srcnums[ch - channels];
+    } else {
+        ch->srcnum = 0;
+    }
     qalGetError();
     qalSourcei(ch->srcnum, AL_BUFFER, sc->bufnum);
     qalSourcei(ch->srcnum, AL_LOOPING, ch->autosound || sc->loopstart >= 0);
@@ -928,10 +950,11 @@ static void AL_PlayChannel(channel_t *ch)
 
 static void AL_IssuePlaysounds(void)
 {
+    SoundSystem &soundSystem = S_GetSoundSystem();
     // start any playsounds
     while (1) {
-        playsound_t *ps = PS_FIRST(&s_pendingplays);
-        if (PS_TERM(ps, &s_pendingplays))
+        playsound_t *ps = soundSystem.PeekPendingPlay();
+        if (!ps)
             break;  // no more pending sounds
         if (ps->begin > s_paintedtime)
             break;
@@ -944,7 +967,11 @@ static void AL_StopAllSounds(void)
     int         i;
     channel_t   *ch;
 
-    for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+    int num_channels = soundSystem.num_channels();
+
+    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
         if (!ch->sfx)
             continue;
         AL_StopChannel(ch);
@@ -956,7 +983,11 @@ static channel_t *AL_FindLoopingSound(int entnum, const sfx_t *sfx)
     int         i;
     channel_t   *ch;
 
-    for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+    int num_channels = soundSystem.num_channels();
+
+    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
         if (!ch->autosound)
             continue;
         if (entnum && ch->entnum != entnum)
@@ -1061,7 +1092,12 @@ static void AL_MergeLoopSounds(void)
         if (!ch)
             continue;
 
-        ch->srcnum = s_srcnums[ch - s_channels];
+        channel_t *channels = S_GetSoundSystem().channels_data();
+        if (channels) {
+            ch->srcnum = s_srcnums[ch - channels];
+        } else {
+            ch->srcnum = 0;
+        }
         qalGetError();
         qalSourcei(ch->srcnum, AL_BUFFER, sc->bufnum);
         qalSourcei(ch->srcnum, AL_LOOPING, AL_TRUE);
@@ -1251,7 +1287,8 @@ static void AL_UpdateUnderWater(void)
     if (underwater)
         filter = s_underwater_filter;
 
-    for (int i = 0; i < s_numchannels; i++)
+    int num_channels = S_GetSoundSystem().num_channels();
+    for (int i = 0; i < num_channels; i++)
         qalSourcei(s_srcnums[i], AL_DIRECT_FILTER, filter);
 
     s_underwater_flag = underwater;
@@ -1268,6 +1305,10 @@ static void AL_Update(void)
     int         i;
     channel_t   *ch;
     ALfloat     orientation[6];
+
+    SoundSystem &soundSystem = S_GetSoundSystem();
+    channel_t *channels = soundSystem.channels_data();
+    int num_channels = soundSystem.num_channels();
 
     if (!s_active)
         return;
@@ -1291,7 +1332,7 @@ static void AL_Update(void)
     }
 
     // update spatialization for dynamic sounds
-    for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
+    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
         if (!ch->sfx)
             continue;
 

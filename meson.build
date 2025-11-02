@@ -163,6 +163,8 @@ client_src = [
   'src/client/predict.cpp',
   'src/client/refresh.cpp',
   'src/client/screen.cpp',
+  'src/client/sound/SoundSystem.cpp',
+  'src/client/sound/SoundSystem.hpp',
   'src/client/sound/main.cpp',
   'src/client/sound/mem.cpp',
   'src/client/sound/qal.hpp',
