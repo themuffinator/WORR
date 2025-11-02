@@ -132,6 +132,7 @@ typedef struct {
     GLsync          sync;
     float           entity_modulate;
     float           bloom_sigma;
+    float           bloom_falloff;
     uint32_t        inverse_intensity_33;
     uint32_t        inverse_intensity_66;
     uint32_t        inverse_intensity_100;
@@ -399,7 +400,14 @@ extern cvar_t *gl_damageblend_frac;
 extern cvar_t *r_skipUnderWaterFX;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
-extern cvar_t *r_bloomThreshold;
+extern cvar_t *r_bloomBlurScale;
+extern cvar_t *r_bloomBlurFalloff;
+extern cvar_t *r_bloomBrightThreshold;
+extern cvar_t *r_bloomIntensity;
+extern cvar_t *r_bloomPasses;
+extern cvar_t *r_bloomSaturation;
+extern cvar_t *r_bloomSceneSaturation;
+extern cvar_t *r_colorCorrection;
 extern cvar_t *gl_dof;
 
 // development variables
@@ -713,6 +721,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_BOKEH_DOWNSAMPLE    BIT_ULL(38)
 #define GLS_BOKEH_GATHER        BIT_ULL(39)
 #define GLS_BOKEH_COMBINE       BIT_ULL(40)
+#define GLS_COLOR_CORRECTION    BIT_ULL(41)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -726,9 +735,10 @@ void GL_LoadWorld(const char *name);
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
-                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
+                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | GLS_COLOR_CORRECTION)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK)
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT | \
+                                 GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | GLS_COLOR_CORRECTION)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -829,6 +839,8 @@ typedef struct {
     vec4_t      dof_params;
     vec4_t      dof_screen;
     vec4_t      dof_depth;
+    vec4_t      bloom_params;
+    vec4_t      bloom_color;
     vec4_t      vieworg;
 } glUniformBlock_t;
 

@@ -119,6 +119,8 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_dof_params;
         vec4 u_dof_screen;
         vec4 u_dof_depth;
+        vec4 u_bloom_params;
+        vec4 u_bloom_color;
         vec4 u_vieworg;
     )
     GLSF("};\n");
@@ -461,6 +463,7 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits)
 static void write_gaussian_blur(sizebuf_t *buf)
 {
     float sigma = gl_static.bloom_sigma;
+    float falloff = max(gl_static.bloom_falloff, 0.0001f);
     int radius = min(sigma * 2 + 0.5f, MAX_RADIUS);
     int samples = radius + 1;
     int raw_samples = (radius * 2) + 1;
@@ -475,7 +478,7 @@ static void write_gaussian_blur(sizebuf_t *buf)
 
     float sum = 0;
     for (int i = -radius, j = 0; i <= radius; i++, j++) {
-        float w = expf(-(i * i) / (sigma * sigma));
+        float w = expf(-(i * i) * falloff / (sigma * sigma));
         weights[j] = w;
         sum += w;
     }
@@ -778,8 +781,29 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     else if (bits & GLS_BLUR_BOX)
         write_box_blur(buf);
 
-    if (bits & GLS_BLOOM_BRIGHTPASS)
+    if (bits & (GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT | GLS_COLOR_CORRECTION))
         GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
+
+    if (bits & GLS_COLOR_CORRECTION) {
+        GLSL(
+            vec3 aces_tonemap(vec3 x) {
+                const mat3 ACESInputMat = mat3(
+                    0.59719, 0.35458, 0.04823,
+                    0.07600, 0.90834, 0.01566,
+                    0.02840, 0.13383, 0.83777);
+                const mat3 ACESOutputMat = mat3(
+                    1.60475, -0.53108, -0.07367,
+                    -0.10208, 1.10813, -0.00605,
+                    -0.00327, -0.07276, 1.07602);
+                x = ACESInputMat * x;
+                vec3 a = x * (x + vec3(0.0245786)) - vec3(0.000090537);
+                vec3 b = x * (x * 0.983729 + vec3(0.4329510)) + vec3(0.238081);
+                x = a / b;
+                x = ACESOutputMat * x;
+                return clamp(x, 0.0, 1.0);
+            }
+        )
+    }
 
     GLSF("void main() {\n");
     if (bits & GLS_CLASSIC_SKY) {
@@ -801,14 +825,14 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
             GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
 
         if (bits & GLS_BLUR_MASK)
-            GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
+            GLSL(vec4 diffuse = blur(u_texture, tc, u_bloom_params.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
 
         if (bits & GLS_BLOOM_BRIGHTPASS) {
             GLSL(vec4 scene = texture(u_scene, tc);)
             GLSL(float luminance = dot(scene.rgb, bloom_luminance);)
-            GLSL(float threshold = u_fog_color.z;)
+            GLSL(float threshold = u_bloom_params.z;)
             GLSL(luminance = max(0.0, luminance - threshold);)
             GLSL(diffuse.rgb *= sign(luminance);)
             GLSL(diffuse.a = 1.0;)
@@ -905,8 +929,24 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_FOG_SKY)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
 
-    if (bits & GLS_BLOOM_OUTPUT)
-        GLSL(diffuse.rgb += texture(u_bloom, tc).rgb;)
+    if (bits & GLS_BLOOM_OUTPUT) {
+        GLSL(vec3 bloom = texture(u_bloom, tc).rgb;)
+        GLSL(float bloomSat = clamp(u_bloom_color.x, 0.0, 8.0);)
+        GLSL(vec3 bloomLuma = vec3(dot(bloom, bloom_luminance));)
+        GLSL(bloom = mix(bloomLuma, bloom, bloomSat);)
+        GLSL(diffuse.rgb += bloom * u_bloom_params.w;)
+    }
+
+    if (bits & GLS_COLOR_CORRECTION) {
+        GLSL(float sceneSat = clamp(u_bloom_color.y, 0.0, 8.0);)
+        GLSL(vec3 sceneLuma = vec3(dot(diffuse.rgb, bloom_luminance));)
+        GLSL(diffuse.rgb = mix(sceneLuma, diffuse.rgb, sceneSat);)
+        GLSL(float ccStrength = clamp(u_bloom_color.z, 0.0, 1.0);)
+        GLSL(if (ccStrength > 0.0) {)
+        GLSL(    vec3 graded = aces_tonemap(diffuse.rgb);)
+        GLSL(    diffuse.rgb = mix(diffuse.rgb, graded, ccStrength);)
+        GLSL(})
+    }
 
     if (bits & GLS_BLOOM_GENERATE)
         GLSL(o_bloom = bloom;)
@@ -1279,6 +1319,9 @@ static void shader_setup_2d(void)
     gls.u_block.w_amp[1] = 0.0025f;
     gls.u_block.w_phase[0] = M_PIf * 10;
     gls.u_block.w_phase[1] = M_PIf * 10;
+
+    Vector4Set(gls.u_block.bloom_params, 0.0f, 0.0f, 0.0f, 1.0f);
+    Vector4Set(gls.u_block.bloom_color, 1.0f, 1.0f, 0.0f, 0.0f);
 }
 
 static void shader_setup_fog(void)
@@ -1352,21 +1395,27 @@ static void shader_clear_state(void)
 static void shader_update_blur(void)
 {
     float sigma = 1.0f;
+    float falloff = 1.0f;
 
     if (r_bloom->integer && glr.fd.height > 0) {
         float base_radius = Cvar_ClampValue(r_bloomBlurRadius, 1, MAX_RADIUS);
-        float scaled_radius = base_radius * glr.fd.height / 1080.0f;
+        float scale = r_bloomBlurScale ? r_bloomBlurScale->value : 1.0f;
+        scale = max(scale, 0.01f);
+        float scaled_radius = base_radius * scale * glr.fd.height / 1080.0f;
         if (scaled_radius > 0.0f) {
             sigma = scaled_radius * 0.5f;
             if (sigma < 1.0f)
                 sigma = 1.0f;
         }
+        falloff = r_bloomBlurFalloff ? r_bloomBlurFalloff->value : 1.0f;
+        falloff = max(falloff, 0.0001f);
     }
 
-    if (gl_static.bloom_sigma == sigma)
+    if (gl_static.bloom_sigma == sigma && gl_static.bloom_falloff == falloff)
         return;
 
     gl_static.bloom_sigma = sigma;
+    gl_static.bloom_falloff = falloff;
 
     if (!gl_static.programs)
         return;
@@ -1387,7 +1436,7 @@ static void shader_update_blur(void)
         shader_use_program(gls.state_bits & GLS_SHADER_MASK);
 }
 
-static void r_bloom_blur_radius_changed(cvar_t *self)
+static void r_bloom_blur_params_changed(cvar_t *self)
 {
     (void)self;
     shader_update_blur();
@@ -1396,7 +1445,11 @@ static void r_bloom_blur_radius_changed(cvar_t *self)
 static void shader_init(void)
 {
     if (r_bloomBlurRadius)
-        r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
+        r_bloomBlurRadius->changed = r_bloom_blur_params_changed;
+    if (r_bloomBlurScale)
+        r_bloomBlurScale->changed = r_bloom_blur_params_changed;
+    if (r_bloomBlurFalloff)
+        r_bloomBlurFalloff->changed = r_bloom_blur_params_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
@@ -1437,6 +1490,10 @@ static void shader_shutdown(void)
 
     if (r_bloomBlurRadius)
         r_bloomBlurRadius->changed = NULL;
+    if (r_bloomBlurScale)
+        r_bloomBlurScale->changed = NULL;
+    if (r_bloomBlurFalloff)
+        r_bloomBlurFalloff->changed = NULL;
 
     if (gl_static.programs) {
         uint32_t map_size = HashMap_Size(gl_static.programs);

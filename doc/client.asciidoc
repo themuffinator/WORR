@@ -750,10 +750,41 @@ r_bloomBlurRadius::
     defined in pixels at 1080p and scale with the framebuffer size. Default
     value is 12.
 
-r_bloomThreshold::
+r_bloomBlurScale::
+    Multiplier applied to the configured blur radius after it is scaled to the
+    current framebuffer size. Values greater than 1.0 widen the blur while
+    values below 1.0 tighten it. Default value is 1.0.
+
+r_bloomBlurFalloff::
+    Controls how quickly the gaussian blur weights fall off from the center of
+    the kernel. Lower values spread bloom over a larger area; higher values
+    keep highlights tighter. Default value is 0.75.
+
+r_bloomBrightThreshold::
     Minimum luminance for a fragment to contribute to bloom. Fragments below
     this threshold are ignored during the bright-pass filter. Default value is
-    0.8.
+    0.8. (The legacy ``r_bloomThreshold`` alias is kept for compatibility.)
+
+r_bloomIntensity::
+    Scales the intensity of the bloom contribution before it is blended back
+    into the scene. Default value is 1.0.
+
+r_bloomPasses::
+    Number of blur iterations applied to the bloom buffer. Higher values
+    produce a softer glow at the cost of performance. Default value is 2.
+
+r_bloomSaturation::
+    Adjusts saturation of the bloom highlights prior to compositing. Default
+    value is 1.0.
+
+r_bloomSceneSaturation::
+    Adjusts saturation of the final scene after bloom and post-processing are
+    applied. Default value is 1.0.
+
+r_colorCorrection::
+    Strength of the ACES-inspired color correction applied during the final
+    post-processing pass. Set to 0 to disable the correction. Default value is
+    0.
 
 gl_flarespeed::
     Specifies flare fading effect speed. Default value is 8. Set this to 0

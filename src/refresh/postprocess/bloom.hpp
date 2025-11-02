@@ -63,3 +63,6 @@ private:
 
 extern BloomEffect g_bloom_effect;
 
+void R_SetPostProcessUniforms(float dirX, float dirY);
+bool R_ColorCorrectionActive(void);
+

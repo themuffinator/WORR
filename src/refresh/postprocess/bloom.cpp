@@ -1,6 +1,7 @@
 #include "bloom.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "../qgl.hpp"
 
@@ -8,8 +9,46 @@ BloomEffect g_bloom_effect;
 
 namespace {
 
-	constexpr GLenum kColorAttachment = GL_COLOR_ATTACHMENT0;
+constexpr GLenum kColorAttachment = GL_COLOR_ATTACHMENT0;
+constexpr int kMaxBloomPasses = 8;
+constexpr float kSceneSaturationEpsilon = 1e-4f;
 
+inline void SetBlurDirection(float x, float y)
+{
+    gls.u_block.bloom_params[0] = x;
+    gls.u_block.bloom_params[1] = y;
+    gls.u_block_dirty = true;
+}
+
+inline int GetBloomPassCount()
+{
+    if (!r_bloomPasses)
+        return 1;
+
+    return std::clamp(r_bloomPasses->integer, 1, kMaxBloomPasses);
+}
+
+}
+
+void R_SetPostProcessUniforms(float dirX, float dirY)
+{
+    const float threshold = std::max(r_bloomBrightThreshold ? r_bloomBrightThreshold->value : 0.0f, 0.0f);
+    const float intensity = std::max(r_bloomIntensity ? r_bloomIntensity->value : 0.0f, 0.0f);
+    const float bloomSaturation = std::max(r_bloomSaturation ? r_bloomSaturation->value : 0.0f, 0.0f);
+    const float sceneSaturation = std::max(r_bloomSceneSaturation ? r_bloomSceneSaturation->value : 0.0f, 0.0f);
+    const float colorStrength = std::max(r_colorCorrection ? r_colorCorrection->value : 0.0f, 0.0f);
+
+    Vector4Set(gls.u_block.bloom_params, dirX, dirY, threshold, intensity);
+    Vector4Set(gls.u_block.bloom_color, bloomSaturation, sceneSaturation, colorStrength, 0.0f);
+    gls.u_block_dirty = true;
+}
+
+bool R_ColorCorrectionActive(void)
+{
+    const float sceneSaturation = r_bloomSceneSaturation ? r_bloomSceneSaturation->value : 1.0f;
+    const float colorStrength = r_colorCorrection ? r_colorCorrection->value : 0.0f;
+
+    return std::fabs(sceneSaturation - 1.0f) > kSceneSaturationEpsilon || colorStrength > 0.0f;
 }
 
 BloomEffect::BloomEffect() noexcept
@@ -158,73 +197,87 @@ extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
 
 void BloomEffect::render(const BloomRenderContext& ctx)
 {
-	if (!initialized_ || downsampleWidth_ <= 0 || downsampleHeight_ <= 0) {
-		if (ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField)
-			ctx.runDepthOfField();
+    const bool bloomRequested = r_bloom && r_bloom->integer;
+    const bool dofActive = ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField;
+    const bool applyColorCorrection = !ctx.showDebug && R_ColorCorrectionActive();
 
-		GL_Setup2D();
+    if (!bloomRequested || !initialized_ || downsampleWidth_ <= 0 || downsampleHeight_ <= 0) {
+        if (dofActive)
+            ctx.runDepthOfField();
 
-		glStateBits_t bits = GLS_DEFAULT;
-		GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
-		if (!ctx.showDebug && ctx.waterwarp)
-			bits |= GLS_WARP_ENABLE;
+        GL_Setup2D();
 
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
-		return;
-	}
+        glStateBits_t bits = GLS_DEFAULT;
+        if (!ctx.showDebug) {
+            if (ctx.waterwarp)
+                bits |= GLS_WARP_ENABLE;
+            if (applyColorCorrection)
+                bits |= GLS_COLOR_CORRECTION;
+            R_SetPostProcessUniforms(0.0f, 0.0f);
+            GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
+        } else {
+            GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
+        }
 
-	qglViewport(0, 0, downsampleWidth_, downsampleHeight_);
-	GL_Ortho(0, downsampleWidth_, downsampleHeight_, 0, -1, 1);
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
+        return;
+    }
 
-	const float invW = 1.0f / downsampleWidth_;
-	const float invH = 1.0f / downsampleHeight_;
+    qglViewport(0, 0, downsampleWidth_, downsampleHeight_);
+    GL_Ortho(0, downsampleWidth_, downsampleHeight_, 0, -1, 1);
 
-	gls.u_block.fog_color[0] = invW;
-	gls.u_block.fog_color[1] = invH;
-	gls.u_block.fog_color[2] = 0.0f;
-	GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
-	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
-	GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
+    const float invW = 1.0f / downsampleWidth_;
+    const float invH = 1.0f / downsampleHeight_;
 
-	gls.u_block.fog_color[0] = invW;
-	gls.u_block.fog_color[1] = invH;
-	gls.u_block.fog_color[2] = r_bloomThreshold->value;
-	GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
-	GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
-	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
-	GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
+    R_SetPostProcessUniforms(invW, invH);
 
-	GLuint currentTexture = textures_[BrightPass];
-	for (int axis = 0; axis < 2; ++axis) {
-		const bool horizontal = axis == 0;
-		gls.u_block.fog_color[0] = horizontal ? invW : 0.0f;
-		gls.u_block.fog_color[1] = horizontal ? 0.0f : invH;
-		GL_ForceTexture(TMU_TEXTURE, currentTexture);
-		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-		GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, downsampleWidth_, downsampleHeight_);
-		currentTexture = textures_[Blur0 + axis];
-	}
+    GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
+    qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
+    SetBlurDirection(invW, invH);
+    GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
 
-	const GLuint bloomTexture = currentTexture;
+    GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
+    GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
+    qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
+    SetBlurDirection(invW, invH);
+    GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
 
-	if (ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField)
-		ctx.runDepthOfField();
+    GLuint currentTexture = textures_[BrightPass];
+    const int passes = GetBloomPassCount();
+    for (int pass = 0; pass < passes; ++pass) {
+        for (int axis = 0; axis < 2; ++axis) {
+            const bool horizontal = axis == 0;
+            SetBlurDirection(horizontal ? invW : 0.0f, horizontal ? 0.0f : invH);
+            GL_ForceTexture(TMU_TEXTURE, currentTexture);
+            qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
+            GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, downsampleWidth_, downsampleHeight_);
+            currentTexture = textures_[Blur0 + axis];
+        }
+    }
 
-	GL_Setup2D();
+    const GLuint bloomTexture = currentTexture;
 
-	glStateBits_t bits = ctx.showDebug ? GLS_DEFAULT : GLS_BLOOM_OUTPUT;
-	if (ctx.showDebug) {
-		GL_ForceTexture(TMU_TEXTURE, bloomTexture);
-	}
-	else {
-		GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
-		GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
-		if (ctx.waterwarp)
-			bits |= GLS_WARP_ENABLE;
-	}
+    if (dofActive)
+        ctx.runDepthOfField();
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-	GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
+    GL_Setup2D();
+
+    glStateBits_t bits = GLS_DEFAULT;
+    if (ctx.showDebug) {
+        GL_ForceTexture(TMU_TEXTURE, bloomTexture);
+    } else {
+        R_SetPostProcessUniforms(0.0f, 0.0f);
+        GL_ForceTexture(TMU_TEXTURE, ctx.depthOfField ? ctx.dofTexture : ctx.sceneTexture);
+        GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
+        bits |= GLS_BLOOM_OUTPUT;
+        if (ctx.waterwarp)
+            bits |= GLS_WARP_ENABLE;
+        if (applyColorCorrection)
+            bits |= GLS_COLOR_CORRECTION;
+    }
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
 }
 
