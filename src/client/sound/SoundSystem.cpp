@@ -92,7 +92,7 @@ const channel_t *SoundSystem::channels_data() const
 void SoundSystem::set_channel_capacity(int capacity)
 {
     max_channels_ = capacity;
-    channels_.assign(static_cast<std::size_t>(std::max(capacity, 0)), channel_t{});
+    channels_.assign(static_cast<std::size_t>((std::max)(capacity, 0)), channel_t{});
     clear_channels();
 }
 

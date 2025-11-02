@@ -147,7 +147,7 @@ void S_Init(void)
     s_underwater = Cvar_Get("s_underwater", "1", 0);
     s_underwater_gain_hf = Cvar_Get("s_underwater_gain_hf", "0.25", 0);
     s_num_channels = Cvar_Get("s_num_channels", "64", CVAR_SOUND);
-    s_debug_soundorigins = Cvar_Get("s_debugSoundOrigins", "0", CVAR_DEVELOPER);
+    s_debug_soundorigins = Cvar_Get("s_debugSoundOrigins", "0", 0);
 
     int max_channels = Cvar_ClampInteger(s_num_channels, 16, 256);
     soundSystem.set_channel_capacity(max_channels);
@@ -373,7 +373,7 @@ qhandle_t S_RegisterSound(const char *name)
     sfx_t   *sfx;
     size_t  len;
 
-    if (!s_started)
+    if (s_started == SoundBackend::Not)
         return 0;
 
     Q_assert(name);
@@ -572,7 +572,7 @@ channel_t *SoundSystem::PickChannel(int entnum, int entchannel)
         }
 
         // don't let monster sounds override player sounds
-        if (ch->entnum == listener_entnum && entnum != listener_entnum && ch->sfx)
+        if (ch->entnum == listener_entnum_ && entnum != listener_entnum_ && ch->sfx)
             continue;
 
         if (ch->end - s_paintedtime < life_left) {
@@ -664,7 +664,7 @@ void SoundSystem::StartSound(const vec3_t origin, int entnum, int entchannel, qh
     playsound_t *ps;
     sfx_t       *sfx;
 
-    if (!s_started)
+    if (s_started == SoundBackend::Not)
         return;
     if (!s_active)
         return;
@@ -876,7 +876,7 @@ void SoundSystem::Update()
         return;
     }
 
-    if (!s_started)
+    if (s_started == SoundBackend::Not)
         return;
 
     // if the loading plaque is up, clear everything
