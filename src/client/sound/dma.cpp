@@ -661,7 +661,9 @@ DMA_Spatialize
 */
 static void DMA_Spatialize(channel_t *ch)
 {
-    vec3_t      origin;
+    vec3_t      origin, offset;
+
+    ch->has_spatial_offset = false;
 
     // anything coming from the view entity will always be full volume
     if (S_IsFullVolume(ch)) {
@@ -673,7 +675,15 @@ static void DMA_Spatialize(channel_t *ch)
     if (ch->fixed_origin) {
         VectorCopy(ch->origin, origin);
     } else {
-        CL_GetEntitySoundOrigin(ch->entnum, origin);
+        if (CL_GetEntitySoundOrigin(ch->entnum, origin, offset)) {
+            ch->has_spatial_offset = true;
+            VectorCopy(offset, ch->spatial_offset);
+            if (s_debug_soundorigins->integer) {
+                vec3_t base;
+                VectorSubtract(origin, offset, base);
+                CL_DebugTrail(base, origin);
+            }
+        }
     }
 
     S_SpatializeOrigin(origin, ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol, dma.channels - 1);
@@ -723,7 +733,13 @@ static void AddLoopSounds(void)
         att = S_GetEntityLoopDistMult(ent);
 
         // find the total contribution of all sounds of this type
-        CL_GetEntitySoundOrigin(ent->number, origin);
+        vec3_t offset;
+        bool anchored = CL_GetEntitySoundOrigin(ent->number, origin, offset);
+        if (anchored && s_debug_soundorigins->integer) {
+            vec3_t base;
+            VectorSubtract(origin, offset, base);
+            CL_DebugTrail(base, origin);
+        }
         S_SpatializeOrigin(origin, vol, att, &left_total,
                            &right_total, GET_STEREO(ent));
         for (j = i + 1; j < cl.frame.numEntities; j++) {
@@ -734,7 +750,12 @@ static void AddLoopSounds(void)
             num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
             ent = &cl.entityStates[num];
 
-            CL_GetEntitySoundOrigin(ent->number, origin);
+            anchored = CL_GetEntitySoundOrigin(ent->number, origin, offset);
+            if (anchored && s_debug_soundorigins->integer) {
+                vec3_t base;
+                VectorSubtract(origin, offset, base);
+                CL_DebugTrail(base, origin);
+            }
             S_SpatializeOrigin(origin,
                                S_GetEntityLoopVolume(ent),
                                S_GetEntityLoopDistMult(ent),

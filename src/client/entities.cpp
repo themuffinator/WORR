@@ -1690,27 +1690,75 @@ void CL_AddEntities(void)
 ===============
 CL_GetEntitySoundOrigin
 
-Called to get the sound spatialization origin
+Called to get the sound spatialization origin. Returns true when a
+player-specific anchor offset was applied to the interpolated origin.
 ===============
 */
-void CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org)
+static bool CL_PlayerSoundOffset(const centity_t *ent, vec3_t offset)
+{
+    if (ent->current.modelindex != MODELINDEX_PLAYER)
+        return false;
+
+    if (ent->radius <= 0)
+        return false;
+
+    // Player entities reuse the pmove solid for their collision, so mins/maxs
+    // describe the animated model regardless of the current frame.  Biasing
+    // towards the top of that box keeps weapon and voice playback anchored
+    // near the listener's head instead of the waist.
+    if (VectorCompare(ent->mins, vec3_origin) && VectorCompare(ent->maxs, vec3_origin))
+        return false;
+
+    VectorAvg(ent->mins, ent->maxs, offset);
+
+    const float height = ent->maxs[2] - ent->mins[2];
+    if (height > 0.0f) {
+        const float head = ent->maxs[2] - 0.1f * height;
+        offset[2] = max(offset[2], head);
+    }
+
+    float scale = ent->current.scale;
+    if (scale == 0.0f)
+        scale = 1.0f;
+    if (scale != 1.0f)
+        VectorScale(offset, scale, offset);
+
+    return true;
+}
+
+bool CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org, vec3_t offset)
 {
     const centity_t *ent;
     const mmodel_t  *mod;
-    vec3_t          mid;
+    vec3_t          mid, base_origin;
+    bool            anchored = false;
+
+    if (offset)
+        VectorClear(offset);
 
     if (entnum >= cl.csr.max_edicts)
         Com_Error(ERR_DROP, "%s: bad entity", __func__);
 
-    if (!entnum || entnum == listener_entnum) {
-        // should this ever happen?
+    if (!entnum) {
         VectorCopy(listener_origin, org);
-        return;
+        return false;
+    }
+
+    if (entnum == listener_entnum && !cl.thirdPersonView) {
+        VectorCopy(listener_origin, org);
+        return false;
     }
 
     // interpolate origin
     ent = &cl_entities[entnum];
-    LerpVector(ent->prev.origin, ent->current.origin, cl.lerpfrac, org);
+    LerpVector(ent->prev.origin, ent->current.origin, cl.lerpfrac, base_origin);
+    VectorCopy(base_origin, org);
+
+    vec3_t local_offset;
+    if (CL_PlayerSoundOffset(ent, local_offset)) {
+        VectorAdd(org, local_offset, org);
+        anchored = true;
+    }
 
     // use re-releases algorithm for bmodels & beams
     if (cl.csr.extended) {
@@ -1752,4 +1800,9 @@ void CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org)
             }
         }
     }
+
+    if (offset)
+        VectorSubtract(org, base_origin, offset);
+
+    return anchored;
 }
