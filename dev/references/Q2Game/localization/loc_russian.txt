@@ -1,0 +1,2619 @@
+// generic menu
+m_on = "Вкл."
+m_off = "Выкл."
+m_back = "Назад"
+m_select = "Выбрать"
+m_ok = "ОК"
+m_y_or = "Y или"
+m_n_or = "N или"
+m_yes = "Да"
+m_no = "Нет"
+m_auto = "Авто"
+
+// iis menu
+m_start = "Начать"
+
+// top level menu
+m_game = "Игра"
+m_single_player = "Один игрок"
+m_multiplayer = "Несколько игроков"
+m_options = "Настройки"
+m_general = "Главное"
+m_id_vault = "Архив id"
+m_quit = "Выйти"
+m_new_game = "Новая игра"
+m_load_game = "Загрузить игру"
+m_save_game = "Сохранить игру"
+m_delete_game = "Удалить игру"
+m_end_game = "Завершить игру"
+m_sign_out = "Выйти"
+m_tutorial = "Обучение"
+
+// save menu
+m_new_save = "Новое сохранение"
+m_restart_level = "Начать уровень сначала"
+m_no_saves = "Нет сохранённых данных"
+m_quickslot = "БЫСТРОЕ: "
+m_autoslot = "АВТО: "
+m_quicksave = "Быстрое сохранение"
+m_quickload = "Быстрая загрузка"
+m_delete = "Удалить"
+m_delete_question = "Вы уверены, что хотите удалить:" // save name
+
+// level select menu
+m_level_select = "Выбрать уровень"
+
+// difficulty
+m_episode = "Эпизод"
+m_difficulty = "Сложность"
+m_easy = "Легко"
+m_medium = "Нормально"
+m_hard = "Тяжело"
+m_nightmare = "Кошмар"
+
+// multiplayer services
+m_network_local = "На одном экране"
+m_network_lan = "Локальная сеть"
+m_network_adhoc = "Локальная беспроводная связь"
+m_network_playfab = "Интернет"
+
+// online services
+m_logging_in = "Выполняется вход..."
+m_logging_in_multi <switch> = "Ожидание сетевых служб: игрок {0} из {1}..."
+m_logging_in_multi = "Выполняется вход: игрок {0} из {1}..."
+m_connecting = "Подключение к службам..."
+m_obtaining_lists = "Получение списков..."
+m_setting_up_lobby = "Настройка лобби"
+m_connecting_to_lobby = "Подключение к лобби"
+m_searching_for_lobby = "Поиск лобби"
+error_no_internet = "Нет соединения с интернетом."
+error_no_multiplayer = "Сетевая игра недоступна."
+m_crossplay_enabled = "Игра на разных платформах включена"
+m_crossplay_disabled = "Игра на разных платформах выключена"
+m_waiting_for_region = "Ожидание списка регионов."
+m_setting_arbitrator = "Матч найден, назначение лидера."
+m_getting_arbitrator = "Матч найден, поиск лидера."
+m_waiting_arbitrator = "Матч найден, ожидание лидера."
+m_waitingforplayers = "Ожидание игроков..."
+m_searching_estimate = "Игроков: {0} ({1} сек.)"
+
+// tos
+m_accept_tos_prompt = "Ознакомьтесь с этими соглашениями и примите их условия перед началом игры."
+m_viewtos = "Открыть пользовательское соглашение"
+m_accept = "Принять все"
+m_reject = "Отклонить все"
+
+// mp player config
+m_whosplaying = "Параметры игроков"
+m_controllersconnected = "Геймпады подключены"
+m_controllersconnected <ps4 ps5> = "Контроллеры подключены"
+m_controllersconnected <switch> = "Контроллеры подключены"
+m_controllersconnected <xboxone xboxseries winstore> = "Геймпады подключены"
+m_remove = "Исключить игрока"
+
+// multiplayer menu
+m_join_match = "Присоединиться к матчу"
+m_join_adhoc_match = "Присоединиться к матчу напрямую"
+m_create_match = "Создать матч"
+m_online = "По сети"
+m_matchmaking = "Подбор игроков"
+m_start_match = "Начать матч"
+m_match_browser = "Выбор матча"
+m_public_lobbies = "Открытые лобби"
+m_gamepad_restricted = "Только геймпад"
+m_gamepad_restricted <switch> = "Только контроллер"
+m_gamepad_restricted <ps4 ps5 switch> = "Только контроллер"
+m_gamepad_restricted <xboxone xboxseries winstore> = "Только геймпад"
+m_crossplay = "На разных платформах"
+m_non_crossplay = "На одной платформе"
+m_room_code = "Код комнаты"
+m_invite_list = "Список приглашений"
+m_max_players = "Максимум игроков"
+m_privacy = "Приватность"
+m_public = "Открытое"
+m_private = "Закрытое"
+m_lobby_target = "Тип лобби"
+m_local_play = "Локальная игра"
+m_players = "Игроки"
+m_mode = "Режим игры"
+m_coop = "Совместная игра"
+m_deathmatch = "Смертельный бой"
+m_tdm = "Командный бой"
+m_ctf = "Захват флага"
+m_teamplay = "Командный бой"
+m_horde = "Орда"
+m_lobby = "Лобби"
+m_map = "Карта"
+m_map_list = "Список карт"
+m_use_map_list = "Использовать список карт"
+m_shuffle = "Перемешать карты"
+m_select_maps = "Выбрать карты..."
+m_minplayers = "Минимум игроков"
+m_bot_skill = "Уровень ботов"
+m_num_bots = "Количество ботов"
+m_bot_chat = "Включить разговоры ботов"
+m_mode_settings = "Параметры режима"
+m_friendly_fire = "Огонь по своим"
+m_fraglimit = "Лимит убийств"
+m_timelimit = "Лимит времени"
+m_capturelimit = "Лимит захватов"
+m_automatic_teams = "Автовыбор команд"
+m_play = "Играть"
+m_player_config_option = "Конфигурация игрока..."
+m_coop_limit_reached = "Не более 4 игроков\nв совместной игре"
+m_weaponRespawnTime = "Время повторного появления оружия"
+m_sortby = "Сортировка"
+
+// Map selector
+m_select_maps_header = "Выберите карты"
+m_use_filters = "Использовать фильтры"
+m_select_all = "Выбрать все"
+m_select_none = "Отменить выбор"
+m_maps = "Карты"
+
+// player configuration 
+m_player_config = "Конфигурация игрока"
+m_model = "Модель"
+m_skin = "Образ"
+m_dogtag = "Тег"
+m_male = "Мужч."
+m_female = "Женщ."
+m_cyborg = "Киборг"
+
+// match config
+m_bot_settings = "Параметры ботов"
+m_coop_squad = "Возрождение рядом с отрядом"
+m_coop_lives = "Включить максимум жизней"
+m_coop_instanced_items = "Неисчезающие предметы"
+m_coop_num_lives = "Максимум жизней"
+m_coop_health_scale = "Доп. здоровье врагов %"
+m_instant_weapon_switch = "Мгновенное переключение оружия"
+m_weapons_stay = "Постоянное оружие"
+m_allow_grapple = "Разрешить крюк"
+m_allow_techs = "Разрешить гаджеты"
+m_mutator = "Модификатор игры"
+m_randomweapons = "Случайное оружие"
+m_instagib = "Мгновенная смерть"
+m_infinite_ammo = "Бесконечные боеприпасы"
+m_instant_items = "Мгновенные предметы"
+m_falling_damage = "Урон от падения"
+m_mp_health = "Создать здоровье"
+m_mp_items = "Создать усиливающие предметы"
+m_mp_armor = "Создать броню"
+m_mp_mines = "Создать мины"
+m_mp_nukes = "Создать бомбы с антиматерией"
+m_mp_quad_drop = "Ронять четверной урон при смерти"
+m_mp_quadfire_drop = "Ронять огневой удвоитель при смерти"
+m_player_collision = "Столкновения игроков"
+
+m_refresh = "Обновить"
+m_refreshing = "Обновление..."
+m_searching_match = "Поиск матча..."
+m_waiting_for_server = "Ожидание сервера..."
+m_match_found_setting = "Найден матч, настройка хоста"
+m_match_found_getting = "Найден матч, соединение с хостом"
+m_match_found_waiting = "Найден матч, ожидание хоста"
+
+// match browser
+m_browserfilters = "Фильтр матчей"
+m_lobbytype = "Тип лобби"
+m_showfull = "Подробно"
+m_filter_settings = "Параметры фильтра"
+m_no_matches = "Нет подходящих матчей"
+
+// lobby
+m_next_match = "Следующий матч"
+m_current_match = "Текущий матч"
+m_match_configuration = "Настройка матча"
+m_match_settings = "Изменить параметры..."
+m_match_settings_title = "Параметры матча"
+m_invites = "Приглашения"
+m_invite = "Пригласить друзей..."
+m_invite_title = "Пригласить друзей"
+m_invite_sent = "Приглашение отправлено: {0}"
+m_no_friends = "Нет друзей в сети."
+m_changeteam = "Сменить команду..."
+m_show_roomcode = "Код комнаты: ****"
+m_hide_roomcode = "Код комнаты: {0}"
+m_playercount = "Игроки: {0}"
+m_join = "Присоединиться"
+m_switchteam = "Сменить команду..."
+m_crossplat_friends = "Друзья с разных платформ..."
+m_no_invites = "Нет доступных приглашений"
+
+// join room code menu
+m_connectroom = "Подключиться с помощью кода комнаты"
+m_roomcodehelp = "Введите четырёхзначный код комнаты, чтобы подключиться к этому матчу."
+m_connect = "Подключиться"
+
+// vault
+m_concept = "Наброски"
+m_development = "Разработка"
+m_promo = "Промо"
+m_weapons = "Оружие"
+m_enemies = "Противники"
+m_items = "Подбираемые предметы"
+m_pan = "Подвинуть"
+m_zoom = "Масштаб"
+m_hidecontrols = "Скрыть подсказки"
+m_rotate = "Повернуть"
+m_playanim = "Воспроизвести анимацию"
+m_pauseanim = "Остановить анимацию"
+m_show_orig = "Показать оригинальную модель"
+m_show_enhanced = "Показать улучшенную модель"
+
+// bot skills
+m_bot_skill_training = "Тренировка"
+m_bot_skill_easy = "Легко"
+m_bot_skill_normal = "Обычный"
+m_bot_skill_hard = "Тяжело"
+m_bot_skill_uv = "Ультражестокость"
+m_bot_skill_nightmare = "Кошмар"
+
+// bot connected chats - these MUST be numbered ( 0 - N )
+// {$} is the name of a random human player.
+m_bot_chat_connected_0 = "привет"
+m_bot_chat_connected_1 = "салют"
+m_bot_chat_connected_2 = "ку"
+m_bot_chat_connected_3 = "йо"
+m_bot_chat_connected_4 = "чё как"
+m_bot_chat_connected_5 = "как оно"
+m_bot_chat_connected_6 = "ахой"
+m_bot_chat_connected_7 = "здоров"
+m_bot_chat_connected_8 = "прив"
+m_bot_chat_connected_9 = "дарова!"
+m_bot_chat_connected_10 = "привет!"
+m_bot_chat_connected_11 = "всем привет!"
+m_bot_chat_connected_12 = "приве-е-ет!"
+m_bot_chat_connected_13 = "привееет!!!"
+m_bot_chat_connected_14 = "снова ты, {$}"
+m_bot_chat_connected_15 = "о, {$}, ты тоже тут"
+m_bot_chat_connected_16 = "ох, тут {$}. тебя кто сюда пустил?"
+m_bot_chat_connected_17 = "{$}, мы на другом сервере не встречались?"
+
+// bot disconnected chats - these MUST be numbered ( 0 - N )
+// {$} is the name of a random human player.
+m_bot_chat_disconnect_0 = "пока, неудачники!"
+m_bot_chat_disconnect_1 = "запущу свой сервер - с блек-джеком и..."
+m_bot_chat_disconnect_2 = "покеда!"
+m_bot_chat_disconnect_3 = "так, я всё."
+m_bot_chat_disconnect_4 = "счастливо!"
+m_bot_chat_disconnect_5 = "пока!"
+m_bot_chat_disconnect_6 = "чао"
+m_bot_chat_disconnect_7 = "убегаю"
+m_bot_chat_disconnect_8 = "всем хорошей игры"
+m_bot_chat_disconnect_9 = "я сваливаю"
+m_bot_chat_disconnect_10 = "жгите дальше, ребята"
+m_bot_chat_disconnect_11 = "покеда!"
+m_bot_chat_disconnect_12 = "бывайте!"
+m_bot_chat_disconnect_13 = "поищу сервер, куда {$} не доберётся"
+m_bot_chat_disconnect_14 = "до скорого, {$}!"
+
+// bot match start chats - these MUST be numbered ( 0 - N )
+// {$} is the name of a random human player.
+m_bot_chat_match_start_0 = "погнали"
+m_bot_chat_match_start_1 = "опять эта карта"
+m_bot_chat_match_start_2 = "о, любимая карта!"
+m_bot_chat_match_start_3 = "удачи"
+m_bot_chat_match_start_4 = "только полегче"
+m_bot_chat_match_start_5 = "я выиграю"
+m_bot_chat_match_start_6 = "будет весело"
+m_bot_chat_match_start_7 = "ща покажу, как надо"
+m_bot_chat_match_start_8 = "где ракетомёт?"
+m_bot_chat_match_start_9 = "люблю эту карту"
+m_bot_chat_match_start_10 = "стартуем!"
+m_bot_chat_match_start_11 = "итак, шоу начинается!"
+m_bot_chat_match_start_12 = "вот так вот, {$}!"
+m_bot_chat_match_start_13 = "смотри на меня, делай как я, {$}!"
+m_bot_chat_match_start_14 = "смотри и учись, {$}"
+
+// bot match end chats - these MUST be numbered ( 0 - N )
+// {$} is the name of a random human player.
+m_bot_chat_match_end_0 = "гг"
+m_bot_chat_match_end_1 = "ГГВП"
+m_bot_chat_match_end_2 = "да ну"
+m_bot_chat_match_end_3 = "чё за фигня"
+m_bot_chat_match_end_4 = "лол"
+m_bot_chat_match_end_5 = "неплохо"
+m_bot_chat_match_end_6 = "огонь"
+m_bot_chat_match_end_7 = "хехе"
+m_bot_chat_match_end_8 = "ха"
+m_bot_chat_match_end_9 = "было круто!"
+m_bot_chat_match_end_10 = "по-моему, неплохо"
+m_bot_chat_match_end_11 = "неплохо"
+m_bot_chat_match_end_12 = "штош!"
+m_bot_chat_match_end_13 = "неплохо в этот раз :D"
+m_bot_chat_match_end_14 = "хорошая была попытка :Р"
+m_bot_chat_match_end_15 = "отлично сыграли!"
+m_bot_chat_match_end_16 = "не переживай, {$}"
+m_bot_chat_match_end_17 = "{$}, теперь я буду воспринимать тебя всерьёз… нескоро"
+m_bot_chat_match_end_18 = "бедняга {$}"
+
+// bot melee murder chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_melee_murder_0 = "эк тебя располовинило, {$}!"
+m_bot_chat_melee_murder_1 = "соблюдай дистанцию!"
+m_bot_chat_melee_murder_2 = ":-D"
+m_bot_chat_melee_murder_3 = "теперь ты водишь!"
+m_bot_chat_melee_murder_4 = "смерть подкралась незаметно!"
+m_bot_chat_melee_murder_5 = "голова не трещит?"
+m_bot_chat_melee_murder_6 = "уй-й!"
+m_bot_chat_melee_murder_7 = "больно небось"
+m_bot_chat_melee_murder_8 = "ой!"
+m_bot_chat_melee_murder_9 = "иду напролом!"
+m_bot_chat_melee_murder_10 = "какое месиво!"
+m_bot_chat_melee_murder_11 = "{$}, голова не болит?"
+
+// bot killed in action by enemy human chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_kia_human_0 = "ха-ха"
+m_bot_chat_kia_human_1 = "хороший выстрел, {$}!"
+m_bot_chat_kia_human_2 = "неплохо"
+m_bot_chat_kia_human_3 = "{$}, теперь мой ход"
+m_bot_chat_kia_human_4 = "что?!"
+m_bot_chat_kia_human_5 = "но как?"
+m_bot_chat_kia_human_6 = "лаг"
+m_bot_chat_kia_human_7 = "{$}, тебе повезло!"
+m_bot_chat_kia_human_8 = "ой!"
+m_bot_chat_kia_human_9 = "{$}, неплохо!"
+m_bot_chat_kia_human_10 = "{$}, ты что, бот?"
+m_bot_chat_kia_human_11 = "отстой!"
+m_bot_chat_kia_human_12 = "а, блин!"
+m_bot_chat_kia_human_13 = "{$}, тебе повезло!"
+m_bot_chat_kia_human_14 = "{$}, так и быть, держи подачку"
+m_bot_chat_kia_human_15 = "моя месть будет страшна, {$}!"
+
+// bot killed in action by monster chats - these MUST be numbered ( 0 - N )
+m_bot_chat_kia_monster_0 = "да что ж такое!"
+m_bot_chat_kia_monster_1 = "убил монстр = ЛАЖА!"
+m_bot_chat_kia_monster_2 = "вот невезуха"
+m_bot_chat_kia_monster_3 = "да блин"
+m_bot_chat_kia_monster_4 = "ха-ха-ха..."
+m_bot_chat_kia_monster_5 = "чёрт, засада :("
+m_bot_chat_kia_monster_6 = "дальше без меня!"
+m_bot_chat_kia_monster_7 = "что-то в глаз попало"
+m_bot_chat_kia_monster_8 = "ЖИВИ!!!"
+m_bot_chat_kia_monster_9 = "осторожно, меня грохнули."
+m_bot_chat_kia_monster_10 = "меня убили! кто ещё жив, держитесь"
+m_bot_chat_kia_monster_11 = "тупой монстр!"
+
+// bot killed in action by friendly chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_kia_friendly_0 = "{$}, смотри, куда стреляешь!"
+m_bot_chat_kia_friendly_1 = "{$}, какого хрена?!"
+m_bot_chat_kia_friendly_2 = "{$}, ты на стороне врага, что ли?!"
+m_bot_chat_kia_friendly_3 = "{$}, я тебя не поздравлю на Новый год!"
+m_bot_chat_kia_friendly_4 = "метко стреляешь, чудило"
+m_bot_chat_kia_friendly_5 = "{$}, не пали по своим!"
+m_bot_chat_kia_friendly_6 = "конечно, стреляй куда хочешь, {$}"
+m_bot_chat_kia_friendly_7 = "{$}, стрелять в своих - залог победы!"
+m_bot_chat_kia_friendly_8 = "{$}, давай выключим огонь по своим?"
+m_bot_chat_kia_friendly_9 = "мне как раз хотелось отдохнуть"
+m_bot_chat_kia_friendly_10 = "{$}, тебе бы к окулисту сходить..."
+m_bot_chat_kia_friendly_11 = "{$}, ты помнишь, в какой команде играешь?!"
+
+// bot fragged enemy chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_fragged_enemy_0 = "дело не во мне..."
+m_bot_chat_fragged_enemy_1 = "ха"
+m_bot_chat_fragged_enemy_2 = "а ну, с дороги"
+m_bot_chat_fragged_enemy_3 = ">:-)"
+m_bot_chat_fragged_enemy_4 = "вот тебе, {$}!"
+m_bot_chat_fragged_enemy_5 = "позовите кого-нибудь прибраться"
+m_bot_chat_fragged_enemy_6 = "твоё здоровье!"
+m_bot_chat_fragged_enemy_7 = "ещё минус 1"
+m_bot_chat_fragged_enemy_8 = "уворачиваться надо, {$}"
+m_bot_chat_fragged_enemy_9 = "я случайно!"
+m_bot_chat_fragged_enemy_10 = "не повезло, {$}!"
+m_bot_chat_fragged_enemy_11 = "плюс одно очко - спасибо!"
+m_bot_chat_fragged_enemy_12 = "ой, прости >:D"
+m_bot_chat_fragged_enemy_13 = "красиво вышло, правда?! :D"
+m_bot_chat_fragged_enemy_14 = "кому ещё навалять?"
+m_bot_chat_fragged_enemy_15 = "жри!!!"
+m_bot_chat_fragged_enemy_16 = "как тебя жаль, {$} :Р"
+m_bot_chat_fragged_enemy_17 = "попробуй приседать, {$}!"
+m_bot_chat_fragged_enemy_18 = "уворачиваться надо, {$}!"
+m_bot_chat_fragged_enemy_19 = "хорошо стараешься, {$} :-Р"
+m_bot_chat_fragged_enemy_20 = "{$}, двигайся активнее :-Р"
+
+// bot fragged friendly chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_fragged_friendly_0 = "ой, блин! прости!"
+m_bot_chat_fragged_friendly_1 = "ошибочка вышла!"
+
+// bot fragged self chats - these MUST be numbered ( 0 - N )
+m_bot_chat_fragged_self_0 = "да что за?!"
+m_bot_chat_fragged_self_1 = "лаг жуткий"
+m_bot_chat_fragged_self_2 = "да что ты будешь делать!"
+m_bot_chat_fragged_self_3 = "надо больше тренироваться"
+m_bot_chat_fragged_self_4 = "лол"
+m_bot_chat_fragged_self_5 = "чё за фигня"
+m_bot_chat_fragged_self_6 = "да откуда тут эта стена?!"
+m_bot_chat_fragged_self_7 = ">:-D"
+m_bot_chat_fragged_self_8 = "ошибочка вышла"
+m_bot_chat_fragged_self_9 = "вот чёрт!"
+m_bot_chat_fragged_self_10 = "просто я себе не очень нравлюсь"
+m_bot_chat_fragged_self_11 = "надо, наверное, отдохнуть минутку"
+m_bot_chat_fragged_self_12 = "у меня геймпад сломался"
+m_bot_chat_fragged_self_13 = "мышка что-то барахлит"
+m_bot_chat_fragged_self_14 = "да чтоб тебя!"
+
+// bot telefragged enemy chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_telefragged_enemy_0 = "ого! что тут стряслось?"
+m_bot_chat_telefragged_enemy_1 = "ха! а я думаю, где ты? :D"
+m_bot_chat_telefragged_enemy_2 = "кто тут грязищу развёл?! >:D"
+m_bot_chat_telefragged_enemy_3 = "эта карта слишком мала для нас двоих :P"
+m_bot_chat_telefragged_enemy_4 = "вот это месиво!"
+m_bot_chat_telefragged_enemy_5 = "ха-ха-ха-ха-ха!!!"
+m_bot_chat_telefragged_enemy_6 = "ха!"
+m_bot_chat_telefragged_enemy_7 = "{$}, спс за халявный фраг!"
+
+// bot telefragged friendly chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_telefragged_friendly_0 = "опаньки!"
+m_bot_chat_telefragged_friendly_1 = "{$}, поосторожнее с телепортами"
+m_bot_chat_telefragged_friendly_2 = "чёрт! прости, {$}!"
+
+// bot telefragged self chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_telefragged_self_0 = "{$}, не лезь в моё личное пространство!"
+m_bot_chat_telefragged_self_1 = "{$}, смотри, куда прёшь!"
+m_bot_chat_telefragged_self_2 = "вот тебя тут и не хватало! >:("
+m_bot_chat_telefragged_self_3 = "{$}, это было нарушение личных границ"
+m_bot_chat_telefragged_self_4 = "а ничего, что я здесь стою? :-/"
+m_bot_chat_telefragged_self_5 = "что-то я теряю хватку..."
+m_bot_chat_telefragged_self_6 = "кто сюда телепорт воткнул?!"
+
+// bot escorting someone chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_escort_following_0 = "{$}, я тебя прикрою!"
+m_bot_chat_escort_following_1 = "ты впереди, я за тобой!"
+m_bot_chat_escort_following_2 = "{$}, я за тобой"
+m_bot_chat_escort_following_3 = "веди меня, {$}"
+
+// bot is annoyed at escort goal chats - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_escort_annoyed_0 = "{$}, не тупи!"
+m_bot_chat_escort_annoyed_1 = "{$}, хорош валять дурака"
+m_bot_chat_escort_annoyed_2 = "ха-ха-ха, как смешно"
+m_bot_chat_escort_annoyed_3 = "{$}, можно посерьёзнее?!"
+m_bot_chat_escort_annoyed_4 = "очень смешно, с ума сойти!"
+
+// bots escort goal just died - these MUST be numbered ( 0 - N )
+// {$} is the name of the other player involved.
+m_bot_chat_escort_goal_died_0 = "попробуй колесом ходить, вдруг поможет!"
+m_bot_chat_escort_goal_died_1 = "вот надо же было так"
+m_bot_chat_escort_goal_died_2 = "{$}, я отомщу за тебя!!!"
+m_bot_chat_escort_goal_died_3 = "{$}, надо же было так убиться"
+m_bot_chat_escort_goal_died_4 = "{$}, не вставай, я буду воевать без тебя :P"
+m_bot_chat_escort_goal_died_5 = "класс, придётся делать всё в одиночку"
+m_bot_chat_escort_goal_died_6 = "отдохни чутка, ща покажу тебе класс :D"
+m_bot_chat_escort_goal_died_7 = "прикольные у тебя трюки :P"
+
+// bot guarding team flag chats - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_on_defense_0 = "буду охранять базу!"
+m_bot_chat_ctf_on_defense_1 = "останусь дома"
+m_bot_chat_ctf_on_defense_2 = "играю в обороне!"
+m_bot_chat_ctf_on_defense_3 = "я на базе"
+m_bot_chat_ctf_on_defense_4 = "посторожу наш флаг"
+
+// bot going for enemy flag chats - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_on_offense_0 = "я захвачу флаг противника!"
+m_bot_chat_ctf_on_offense_1 = "играю в нападении!"
+m_bot_chat_ctf_on_offense_2 = "заберу их флаг!"
+m_bot_chat_ctf_on_offense_3 = "иду за флагом"
+m_bot_chat_ctf_on_offense_4 = "иду отнимать их флаг"
+
+// bot returning dropped team flag chats - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_returning_dropped_flag_0 = "заберу наш флаг!"
+m_bot_chat_ctf_returning_dropped_flag_1 = "флаг упал, забираю!"
+m_bot_chat_ctf_returning_dropped_flag_2 = "иду за нашим флагом"
+m_bot_chat_ctf_returning_dropped_flag_3 = "я возьму наш флаг"
+m_bot_chat_ctf_returning_dropped_flag_4 = "я у нашего флага - забираю!"
+m_bot_chat_ctf_returning_dropped_flag_5 = "вижу наш флаг - беру!"
+
+// bot hunting enemy flag carrier chats - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_attacking_enemy_carrier_0 = "я убью противника с флагом!"
+m_bot_chat_ctf_attacking_enemy_carrier_1 = "наш флаг убегает, я за ним!"
+m_bot_chat_ctf_attacking_enemy_carrier_2 = "попробую убить их бойца с флагом"
+m_bot_chat_ctf_attacking_enemy_carrier_3 = "попытаюсь вернуть наш флаг!"
+m_bot_chat_ctf_attacking_enemy_carrier_4 = "отслеживаю их бойца с флагом"
+m_bot_chat_ctf_attacking_enemy_carrier_5 = "охочусь на их бойца с флагом"
+
+// bot bringing enemy flag home chats - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_delivering_flag_0 = "их флаг у меня! прикрывайте!"
+m_bot_chat_ctf_delivering_flag_1 = "возвращаюсь домой с флагом"
+m_bot_chat_ctf_delivering_flag_2 = "флаг у меня! нужна помощь!"
+m_bot_chat_ctf_delivering_flag_3 = "флаг у меня! помощь не помешает!"
+m_bot_chat_ctf_delivering_flag_4 = "всем за мной - у меня их флаг!"
+m_bot_chat_ctf_delivering_flag_5 = "флаг у меня - нужна помощь!"
+m_bot_chat_ctf_delivering_flag_6 = "нужна помощь - флаг у меня!"
+
+// bot hanging out at enemy base, waitin for carrier to arrive - these MUST be numbered ( 0 - N )
+m_bot_chat_ctf_camping_enemy_base_0 = "устрою засаду на их базе"
+m_bot_chat_ctf_camping_enemy_base_1 = "засяду на их базе и буду ждать"
+m_bot_chat_ctf_camping_enemy_base_2 = "хочу устроить засаду на их базе"
+m_bot_chat_ctf_camping_enemy_base_3 = "иду на их базу, чтобы устроить засаду"
+m_bot_chat_ctf_camping_enemy_base_4 = "пойду на их базу и буду ждать в засаде"
+m_bot_chat_ctf_camping_enemy_base_5 = "буду на их базе в засаде"
+m_bot_chat_ctf_camping_enemy_base_6 = "буду поджидать врагов на их базе"
+
+// addons menu
+m_loading = "Загрузка..."
+m_download = "Загрузить"
+m_delete = "Удалить"
+m_activate = "Включить"
+m_deactivate = "Выключить"
+m_addons_empty = "Вы не загрузили ни одного дополнения. Подключитесь к сети и загрузите дополнения."
+m_go_online = "Подключиться к сети"
+m_addons_error = "Не удалось загрузить список дополнений."
+m_addons_download_error = "Не удалось загрузить дополнение."
+
+// options root menu
+m_input = "Управление"
+m_gameplay = "Игра"
+m_sound = "Звук"
+m_display = "Графика"
+m_a11y = "Спец. возможности"
+m_language = "Язык"
+m_credits = "Авторы"
+m_legalnotices = "Правовые положения"
+
+// gameplay general
+m_attract_loop = "Запустить деморежим"
+
+// gameplay menu
+m_always_run = "Всегда бежать (клавиатура)"
+m_view_bob = "Покачивание камеры"
+m_crosshair = "Прицел"
+m_crosshair_style = "Стиль прицела"
+m_hud_style = "Стиль индикаторов"
+m_minimal = "Минимальный"
+m_standard = "Стандартный"
+m_full = "Полный"
+m_ui_showquitmessage = "Классическое диалоговое окно при выходе"
+m_change_on_pickup = "Смена оружия при подборе"
+m_always = "Всегда"
+m_always_no_ammo = "Всегда, кроме боеприпасов"
+m_onlynew = "Только новое"
+m_smart = "Умный режим"
+m_never = "Никогда"
+m_togglescoreboard = "Показать/скрыть счёт"
+m_hud = "Показывать индикаторы"
+m_teammate_indicators = "Указатели союзников"
+m_hit_markers = "Отметки попаданий"
+m_crosshair_settings = "Параметры прицела"
+m_style = "Стиль"
+m_scale = "Масштаб"
+m_hand = "Рука с оружием"
+m_left = "Слева"
+m_right = "Справа"
+m_center = "Центр"
+m_auto_power_armor = "Автоматический силовой щит"
+m_manual = "Вручную"
+m_50_cells = "> 50 батарей"
+m_75_cells = "> 75 батарей"
+m_100_cells = "> 100 батарей"
+
+// controls menu
+m_current_player = "Текущий игрок: {}"
+m_skip_player_one = "Первый геймпад"
+m_skip_player_one <ps4 ps5> = "Первый контроллер"
+m_skip_player_one <switch> = "Первый контроллер"
+m_skip_player_one <xboxone xboxseries winstore> = "Первый геймпад"
+m_player_one = "Игрок 1"
+m_player_two = "Игрок 2"
+m_set_binds = "Настройка управления..."
+m_reset_settings = "Сбросить все параметры"
+m_reset_confirm = "Все настройки и привязки клавиш будут сброшены до первоначальных."
+m_mouse = "Мышь"
+m_sensitivity = "Чувств. по вертикали"
+m_hsensitivity = "Чувств. по горизонтали"
+m_invert_look = "Инвертировать обзор"
+m_smoothing = "Сглаживание"
+m_wheel_sensitivity = "Чувств. колеса оружия"
+m_wheel_deadzone_scale = "Мёртвая зона колеса оружия"
+m_controller = "Геймпад"
+m_controller <ps4 ps5> = "Контроллер"
+m_controller <switch> = "Контроллер"
+m_controller <xboxone xboxseries winstore> = "Геймпад"
+m_aim_assist = "Помощь в прицеливании"
+m_aim_x = "Прицел (гориз.)"
+m_aim_y = "Прицел (верт.)"
+m_deadzone = "Мёртвая зона"
+m_lstick = "Левый мини-джойстик"
+m_lstick <ps4 ps5> = "Левый джойстик"
+m_lstick <switch> = "Левый мини-джойстик"
+m_lstick <xboxone xboxseries winstore> = "Левый мини-джойстик"
+m_rstick = "Правый мини-джойстик"
+m_rstick <ps4 ps5> = "Правый джойстик"
+m_rstick <switch> = "Правый мини-джойстик"
+m_rstick <xboxone xboxseries winstore> = "Правый мини-джойстик"
+m_joyaccel = "Ускорение прицеливания"
+m_joyexponent = "Экспонента ускорения"
+m_joysmoothing = "Сглаживание при прицеливании"
+m_motion_sensor = "Датчик движения"
+m_motion_sensor <switch> = "Управление движением"
+m_motion_sensor <ps4> = "Функция датчика перемещения" 
+m_motion_sensor <ps5> = "Функция датчика перемещения"
+m_enabled = "Включено"
+m_vibration <switch> = "Функция вибрации"
+m_vibration = "Вибрация"
+m_vibration_volume = "Сила вибрации"
+
+// sound menu
+m_music_volume = "Громкость музыки"
+m_sound_volume = "Громкость звука"
+m_voice_volume = "Громкость речи"
+m_reverb = "Включить отражение звука"
+m_subtitles = "Включить субтитры"
+
+// display menu
+m_open_video_settings = "Открыть параметры графики..."
+m_video_settings = "Параметры графики"
+m_aa = "Сглаживание"
+m_ao = "Рассеянное затенение"
+m_motion_blur = "Размытие в движении"
+m_modellerp = "Интерполяция моделей"
+m_fov = "Поле зрения"
+m_max_fps = "Макс. частота кадров"
+m_dof = "Глубина поля зрения"
+m_bloom = "Эффекты свечения"
+m_muzzleflashes = "Дульные вспышки"
+m_brightness = "Яркость"
+m_resolution = "Разрешение"
+m_unlimited = "Без ограничений"
+m_high = "Выс."
+m_low = "Низк."
+m_enhancements = "Улучшения"
+m_split_direction = "Разделение экрана"
+m_horizontal = "По горизонтали"
+m_vertical = "По вертикали"
+m_texturemode = "Сглаживание текстур"
+m_md5models = "Улучшенные модели"
+m_colorlightmaps = "Цветные карты освещения"
+m_squareparticles = "Квадратные частицы"
+m_fog = "Туман"
+m_shadows = "Динамические тени"
+m_crtshader = "Симуляция CRT"
+m_resolutionscale = "Масштабирование разрешения"
+m_resolutionscale_fixed = "Масштаб"
+m_fixed = "Фикс."
+m_dynamic = "Динамич."
+m_safe_zone = "Безопасная зона"
+
+// a11y menu
+m_intro_text = "В Quake II есть специальные возможности, которые улучшают читаемость меню и помогают с голосовым и текстовым чатами в сетевой игре. По умолчанию эти возможности включены.\n\nПроверьте ваши настройки. Вы также можете выключить все описанные выше параметры прямо сейчас."
+m_a11y_disable_all = "Выключить все параметры"
+m_a11y_customize = "Настроить специальные возможности..."
+m_toggle_all_off = "Выключить все параметры"
+m_toggle_all_on = "Включить все параметры"
+m_high_contrast = "Высокая контрастность"
+m_alternate_typeface = "Альтернативный шрифт"
+m_screen_flash_percent = "Количество экранных эффектов"
+m_center_message_time = "Время сообщения по центру"
+m_corner_message_time = "Время сообщения в углу"
+m_max_lines = "Максимум строк"
+options_mp_enable_tts = "Зачитывать текстовый чат"
+options_mp_enable_stt = "Переводить голосовой чат в текст"
+m_chat_message_time = "Время сообщения в чате"
+options_mp_speak_for_me = "Говорить за меня в голосовом чате"
+m_options_no_voice_profiles = "Подключитесь к сетевому матчу, чтобы изменить параметры голоса."
+m_options_voice_profile = "Голосовой профиль"
+
+// video menu
+m_video_resolution = "Разрешение"
+m_window_mode = "Оконный режим"
+m_windowed = "В окне"
+m_vsync = "Вертикальная синхронизация"
+m_borderless = "В развёрнутом окне"
+m_fullscreen = "Полный экран"
+m_monitor = "Дисплей"
+m_game_thread = "Многопоточный рендеринг"
+m_apply_settings = "Применить параметры"
+m_graphics_api          = "Графический API"
+m_graphics_api_question = "Изменения, связанные с графическим API, вступят в силу после перезапуска игры."
+
+// binds menu
+m_player_controls = "Игрок"
+m_inventory_controls = "Вещи"
+m_weapon_controls = "Оружие"
+m_multiplayer_controls = "Несколько игроков"
+m_other_controls = "Прочее"
+
+m_unbind = "Отвязать"
+m_attack = "Атаковать"
+m_next_weapon = "Следующее оружие"
+m_prev_weapon = "Предыдущее оружие"
+m_weapon_wheel = "Колесо оружия"
+m_inv_wheel = "Круговое меню вещей"
+m_jump_swim = "Прыгнуть/плыть вверх"
+m_crouch = "Присесть/плыть вниз"
+m_forward = "Вперёд"
+m_backpedal = "Назад"
+m_step_left = "Движение влево"
+m_step_right = "Движение вправо"
+m_turn_left = "Поворот налево"
+m_turn_right = "Поворот направо"
+m_run_walk = "Бежать/идти"
+m_sidestep = "Движение вбок"
+m_look_up = "Смотреть вверх"
+m_look_down = "Смотреть вниз"
+m_center_view = "Центрир. взгляд"
+m_ptt = "Микрофон (рация)"
+m_chat = "Чат"
+m_moreinfo = "Подробнее"
+m_blaster = "Бластер"
+m_blaster_chain = "Многократные нажатия будут переключать:\n бластер\n крюк\n бензопилу"
+m_shotgun = "Дробовик"
+m_super_shotgun = "Супердробовик"
+m_machinegun = "Пулемёт"
+m_machinegun_chain = "Многократные нажатия будут переключать:\n пулемёт\n РП-автомат"
+m_chaingun = "Автопушка"
+m_grenade_launcher = "Гранатомёт"
+m_grenade_launcher_chain = "Многократные нажатия будут переключать:\n гранатомёт\n миномёт"
+m_rocket_launcher = "Ракетница"
+m_hyperblaster = "Гипербластер"
+m_hyperblaster_chain = "Многократные нажатия будут переключать:\n гипербластер\n ионный резак\n плазменный луч"
+m_railgun = "Рельсотрон"
+m_railgun_chain = "Многократные нажатия будут переключать:\n рельсотрон\n «Фалангу»"
+m_bfg10k = "BFG10K"
+m_bfg10k_chain = "Многократные нажатия будут переключать:\n BFG10K\n дезинтегратор"
+m_grenades = "Гранаты"
+m_grenades_chain = "Многократные нажатия будут переключать:\n гранаты\n ловушку\n «Теслу»"
+m_grapple = "Крюк"
+m_chainfist = "Бензопила"
+m_etf_rifle = "РП-автомат"
+m_trap = "Ловушка"
+m_tesla = "«Тесла»"
+m_prox_launcher = "Миномёт"
+m_ionripper = "Ионный резак"
+m_plasma_beam = "Плазменный луч"
+m_phalanx = "«Фаланга»"
+m_disruptor = "Разрушитель"
+m_disintegrator = "Дезинтегратор"
+m_inven = "Вещи"
+m_invuse = "Использовать предмет"
+m_invprev = "Предыдущий предмет"
+m_invnext = "Следующий предмет"
+m_invdrop = "Выбросить предмет"
+m_help_computer = "Компьютер"
+m_flipoff_bind = "Средний палец"
+m_salute_bind = "Приветствие"
+m_taunt_bind = "Насмешка"
+m_wave_bind = "Помахать"
+m_point_bind = "Показать / место"
+
+// HUD
+m_room_code_display = "Код комнаты: {}"
+g_n64_crouching = "В Quake II 64 нельзя приседать."
+
+// scoreboard
+// SP: single-player bottom status bar
+// MT: multi-player top scorebox
+// MH: multi-player score table header
+m_monsters = "Монстры"     // SP, MT
+m_secrets = "Секреты"       // SP, MT
+m_kills = "Убито"           // MH
+m_frags = "Убийства"           // MH
+m_time = "Время"             // SP, MT
+m_name = "Имя"             // MH
+m_ping = "Задержка"             // MH
+m_time_left = "Оставшееся время"   // MT
+m_frags_left = "Убийств осталось" // MT
+m_captures_left = "Осталось захватов" // MT
+
+// Q2 scoreboard
+g_score_frags = "Лимит убийств: {}"
+g_score_captures = "Лимит захватов: {}"
+g_score_time = "Оставшееся время: {}"
+
+// scoreboard menu actions
+m_mute = "Выключить голос"
+m_unmute = "Включить голос"
+m_mute_self = "Выключить свой микрофон"
+m_unmute_self = "Включить свой микрофон"
+m_deafen_self = "Выключить звук у себя"
+m_undeafen_self = "Включить звук у себя"
+m_block = "Заблокировать"
+m_unblock = "Разблокировать"
+m_kick = "Исключить"
+m_view_profile = "Просмотреть профиль"
+m_addfriend = "Добавить в друзья"
+m_removefriend = "Удалить из друзей"
+m_report = "Жалоба"
+
+// scoreboard action items
+m_interact = "Взаимодействие"
+m_continue = "Продолжить"
+m_continue_in = "Продолжение через {}..." // non-zero number
+m_respawn = "Возрождение"
+m_review = "Награды"
+
+// error screen
+m_error_occurred = "Произошла ошибка:"
+m_error_wrong_room_code = "Не существует комнаты с кодом {}"
+m_error_crossplay_disabled = "Для доступа к этой комнате требуется разрешить игру на разных платформах."
+m_error_lobby_disconnected = "Соединение с лобби потеряно"
+m_error_lobby_host_disconnected = "Хост расформировал лобби."
+m_error_lobby_already_connected = "В этом лобби уже есть ваша учётная запись"
+m_error_lobby_already_connected <switch> = "Вы уже находитесь в этом лобби"
+m_error_server_disconnected = "Вы отключены от сервера"
+m_error_matchmaking_tickets = "Вы сделали слишком много запросов на подбор игроков. Подождите и повторите попытку позже."
+m_signedout = "Совершён выход из активного профиля,\nвозврат в главное меню игры."
+m_error_lobby_throttle = "Ограничение. Подождите и повторите попытку."
+m_error_lobby_full = "Лобби заполнено."
+m_error_lobby_gone = "Лобби больше не существует."
+m_error_lobby_clock_fault = "Лобби больше не существует.\nЕсли эта ошибка часто встречается, проверьте, что в вашей системе верно установлены время и часовой пояс."
+m_error_lobby_clock_fault <ps4 ps5> = "Лобби больше не существует.\nЕсли эта ошибка часто встречается, проверьте, что на вашей консоли верно установлены время и часовой пояс."
+m_error_lobby_clock_fault <switch> = "Лобби больше не существует.\nЕсли эта ошибка часто встречается, проверьте, что на вашей консоли верно установлены время и часовой пояс."
+m_error_lobby_clock_fault <xboxone xboxseries> = "Лобби больше не существует.\nЕсли эта ошибка часто встречается, проверьте, что на вашей консоли верно установлены время и часовой пояс."
+m_error_lobby_disallowed = "Лобби не принимает новых пользователей."
+m_error_lobby_disallowed <switch> = "Лобби не принимает новых пользователей."
+m_error_network_disconnected = "Вы отключились от лобби из-за разрыва сетевого соединения."
+m_error_addon_not_found = "Требуется дополнение {}"
+m_error_lobby_createfail = "Не удалось создать лобби."
+m_error_lobby_joinfail = "Не удалось присоединиться к лобби."
+m_error_lobby_kicked = "Вас исключили из лобби."
+m_error_account_banned = "Вашей учётной записи запрещён доступ к сетевой многопользовательской игре."
+m_error_account_banned <switch> = "Вам запрещён доступ к сетевой многопользовательской игре."
+m_error_no_internet = "Не удалось подключиться к сетевым службам."
+m_error_no_network = "Не удалось подключиться к сети."
+m_error_failed_signin = "На одной или нескольких учётных записях не выполнен вход в многопользовательскую игру."
+m_error_failed_signin <switch> = "Сетевая игра в настоящий момент недоступна."
+m_error_accept_tos = "Произошла ошибка сети во время приёма пользовательского соглашения."
+
+// we have an error, but we can't show it yet
+m_error_wait = "Подождите..."
+
+// save messages
+m_game_loaded = "Игра загружена"
+m_game_saved = "Игра сохранена"
+
+// Platform message boxes
+m_error = "Ошибка"
+m_gamepad_disconnected_message = "Подключите геймпад, чтобы продолжить."
+m_gamepad_disconnected_message <ps4 ps5> = "Подключите контроллер, чтобы продолжить."
+m_gamepad_disconnected_message <switch> = "Подключите контроллер, чтобы продолжить."
+m_gamepad_disconnected_message <xboxone xboxseries winstore> = "Подключите геймпад, чтобы продолжить."
+m_confirm_mp_activity = "Это действие завершит текущую сессию. Продолжить?"
+m_no_game_license = "Для запуска этой игры требуется игровая лицензия."
+
+// Achievements
+bnet_achievements        = "ДОСТИЖЕНИЯ"
+m_achievements           = "Достижения"
+m_achievements <ps4 ps5> = "Призы"
+ach_achieved             = "ЗАВЕРШЕНО"
+
+ach_name_eou1 = "Установить связь"
+ach_desc_eou1 = "Quake II: установить связь с командным кораблём."
+ach_name_eou2 = "Уничтожить грузовой поезд строггов"
+ach_desc_eou2 = "Quake II: уничтожить грузовой поезд строггов и восстановить питание главных узлов склада."
+ach_name_eou3 = "Уничтожить охранную сеть"
+ach_desc_eou3 = "Quake II: войти в охранную пирамиду и уничтожить охранную сеть промзоны."
+ach_name_eou4 = "Пройти через шахты"
+ach_desc_eou4 = "Quake II: пройти через шахты к служебному входу завода."
+ach_name_eou5 = "Остановить работу перерабатывающего завода"
+ach_desc_eou5 = "Quake II: остановить всё оборудование на перерабатывающем заводе строггов."
+ach_name_eou6 = "Уничтожить главный реактор строггов"
+ach_desc_eou6 = "Quake II: добраться до главного реактора строггов и уничтожить его."
+ach_name_eou7 = "Уничтожить большую пушку"
+ach_desc_eou7 = "Quake II: найти и уничтожить большую пушку, систему планетарной обороны строггов."
+ach_name_eou8 = "Уничтожить генератор чёрной дыры"
+ach_desc_eou8 = "Quake II: закрыть главный люк ангара и уничтожить генератор чёрной дыры."
+ach_name_end = "Убить Макрона"
+ach_desc_end = "Quake II: отключить систему связи лидера строггов."
+ach_name_mg2 = "Сборщик дисков"
+ach_desc_mg2 = "Call of the Machine: собрать все шесть дисков с данными и победить создателя строггов."
+ach_name_xatrix = "Уничтожить лунную базу"
+ach_desc_xatrix = "The Reckoning: пробраться на лунную базу строггов и уничтожить их флот."
+ach_name_rogue = "Антигравитация"
+ach_desc_rogue = "Ground Zero: найти и уничтожить главное орудие строггов, гравитационный колодец."
+ach_name_n64 = "Отключить ядро"
+ach_desc_n64 = "Quake II 64: переместиться в альтернативную линию времени и уничтожить Стражей."
+ach_name_platinum = "Четырёхкратная мощь"
+ach_desc_platinum = "Сокрушить всех строггов на пути к абсолютной победе."
+
+// Playfab
+options_mp_enable_crossplay = "Разрешить игру на разных платформах"
+options_mp_enable_voip      = "Включить голосовой чат"
+options_mp_enable_voip <ps4 ps5> = "Включить голосовой чат"
+options_mp_enable_voip <switch> = "Включить голосовой чат"
+options_mp_enable_voip <xboxone xboxseries winstore> = "Включить голосовой чат"
+options_mp_enable_local_mic = "Включить микрофон"
+options_mp_enable_ptt       = "Включить режим рации"
+options_mp_enable_direct    = "Разрешить прямое соединение"
+options_mp_stats_for_nerds  = "Показывать данные сети"
+options_mp_show_cs_code     = "Показать код поддержки клиентов"
+
+//Chat
+chat_all = "Все"
+chat_team = "Команда"
+chat_voice = "Голос"
+chat_cycle_channel = "Смена канала"
+
+// Colours
+m_alpha = "Альфа"
+m_red = "Красный"
+m_green = "Зелёный"
+m_blue = "Синий"
+
+// game dll strings
+
+item_body_armor = "Нательная броня"
+item_body_armor_def = "нательная броня"
+item_combat_armor = "Боевая броня"
+item_combat_armor_def = "боевая броня"
+item_jacket_armor = "Бронежилет"
+item_jacket_armor_def = "бронежилет"
+item_armor_shard = "Осколок брони"
+item_armor_shard_def = "осколок брони"
+item_power_screen = "Силовой экран"
+item_power_screen_def = "силовой экран"
+item_power_shield = "Силовой щит"
+item_power_shield_def = "силовой щит"
+item_grapple = "Крюк"
+item_grapple_def = "крюк"
+item_blaster = "Бластер"
+item_blaster_def = "бластер"
+item_chainfist = "Бензопила"
+item_chainfist_def = "бензопила"
+item_shotgun = "Дробовик"
+item_shotgun_def = "дробовик"
+item_super_shotgun = "Супердробовик"
+item_super_shotgun_def = "супердробовик"
+item_machinegun = "Пулемёт"
+item_machinegun_def = "пулемёт"
+item_etf_rifle = "РП-автомат"
+item_etf_rifle_def = "РП-автомат"
+item_chaingun = "Автопушка"
+item_chaingun_def = "автопушка"
+item_grenades = "Гранаты"
+item_grenades_def = "гранаты"
+item_trap = "Ловушка"
+item_trap_def = "ловушка"
+item_tesla = "«Тесла»"
+item_tesla_def = "«Тесла»"
+item_grenade_launcher = "Гранатомёт"
+item_grenade_launcher_def = "гранатомёт"
+item_prox_launcher = "Миномёт"
+item_prox_launcher_def = "миномёт"
+item_rocket_launcher = "Ракетница"
+item_rocket_launcher_def = "ракетница"
+item_hyperblaster = "Гипербластер"
+item_hyperblaster_def = "гипербластер"
+item_ionripper = "Ионный резак"
+item_ionripper_def = "ионный резак"
+item_plasma_beam = "Плазменный луч"
+item_plasma_beam_def = "плазменный луч"
+item_railgun = "Рельсотрон"
+item_railgun_def = "рельсотрон"
+item_phalanx = "«Фаланга»"
+item_phalanx_def = "«Фаланга»"
+item_bfg10k = "BFG10K"
+item_bfg10k_def = "BFG10K"
+item_disruptor = "Разрушитель"
+item_disruptor_def = "разрушитель"
+item_disintegrator = "Дезинтегратор"
+item_disintegrator_def = "дезинтегратор"
+item_shells = "Дробовые патроны"
+item_shells_def = "дробовые патроны"
+item_bullets = "Пули"
+item_bullets_def = "пули"
+item_cells = "Батареи"
+item_cells_def = "батареи"
+item_rockets = "Ракеты"
+item_rockets_def = "ракеты"
+item_slugs = "Снаряды"
+item_slugs_def = "снаряды"
+item_mag_slug = "Магниевый снаряд"
+item_mag_slug_def = "магниевый снаряд"
+item_flechettes = "Разрывные пули"
+item_flechettes_def = "разрывные пули"
+item_prox = "Неконтактная мина"
+item_prox_def = "неконтактная мина"
+item_am_bomb = "АМ-бомба"
+item_am_bomb_def = "АМ-бомба"
+item_rounds = "Патроны"
+item_rounds_def = "патроны"
+item_quad_damage = "Четверной урон"
+item_quad_damage_def = "четверной урон"
+item_dualfire_damage = "Огневой удвоитель"
+item_dualfire_damage_def = "огневой удвоитель"
+item_invulnerability = "Неуязвимость"
+item_invulnerability_def = "неуязвимость"
+item_invisibility = "Невидимость"
+item_invisibility_def = "невидимость"
+item_silencer = "Глушитель"
+item_silencer_def = "глушитель"
+item_rebreather = "Дыхательный аппарат"
+item_rebreather_def = "дыхательный аппарат"
+item_environment_suit = "Защитный костюм"
+item_environment_suit_def = "защитный костюм"
+item_ancient_head = "Древняя голова"
+item_ancient_head_def = "древняя голова"
+item_legacy_head = "Классическая голова"
+item_legacy_head_def = "классическая голова"
+item_adrenaline = "Адреналин"
+item_adrenaline_def = "адреналин"
+item_bandolier = "Патронташ"
+item_bandolier_def = "патронташ"
+item_ammo_pack = "Комплект боеприпасов"
+item_ammo_pack_def = "комплект боеприпасов"
+item_ir_goggles = "Инфракрасные очки"
+item_ir_goggles_def = "инфракрасные очки"
+item_double_damage = "Двойной урон"
+item_double_damage_def = "двойной урон"
+item_vengeance_sphere = "Сфера возмездия"
+item_vengeance_sphere_def = "сфера возмездия"
+item_hunter_sphere = "Сфера-охотник"
+item_hunter_sphere_def = "сфера-охотник"
+item_defender_sphere = "Сфера защиты"
+item_defender_sphere_def = "сфера защиты"
+item_doppleganger = "Двойник"
+item_doppleganger_def = "двойник"
+item_tag_token = "Жетон метки"
+item_tag_token_def = "жетон метки"
+item_data_cd = "Диск с данными"
+item_data_cd_def = "диск с данными"
+item_power_core = "Энергоядро"
+item_power_core_def = "энергоядро"
+item_power_cube = "Энергокуб"
+item_power_cube_def = "энергокуб"
+item_explosive_charges = "Взрывные заряды"
+item_explosive_charges_def = "взрывные заряды"
+item_yellow_key = "Жёлтый ключ"
+item_yellow_key_def = "жёлтый ключ"
+item_pyramid_key = "Ключ-пирамида"
+item_pyramid_key_def = "ключ-пирамида"
+item_data_spinner = "Инъектор данных"
+item_data_spinner_def = "инъектор данных"
+item_security_pass = "Пропуск"
+item_security_pass_def = "пропуск"
+item_blue_key = "Синий ключ"
+item_blue_key_def = "синий ключ"
+item_red_key = "Красный ключ"
+item_red_key_def = "красный ключ"
+item_green_key = "Зелёный ключ"
+item_green_key_def = "зелёный ключ"
+item_commanders_head = "Голова командира"
+item_commanders_head_def = "голова командира"
+item_airstrike_marker = "Маяк для авиаудара"
+item_airstrike_marker_def = "маяк для авиаудара"
+item_antimatter_pod = "Капсула с антиматерией"
+item_antimatter_pod_def = "капсула с антиматерией"
+item_antimatter_bomb = "Бомба с антиматерией"
+item_antimatter_bomb_def = "бомба с антиматерией"
+item_stimpack = "Стимулятор"
+item_stimpack_def = "стимулятор"
+item_small_medkit = "Мини-аптечка"
+item_small_medkit_def = "мини-аптечка"
+item_large_medkit = "Аптечка"
+item_large_medkit_def = "аптечка"
+item_mega_health = "Мегаздоровье"
+item_mega_health_def = "мегаздоровье"
+item_red_flag = "Красный флаг"
+item_red_flag_def = "красный флаг"
+item_blue_flag = "Синий флаг"
+item_blue_flag_def = "синий флаг"
+item_disruptor_shield = "Штурмовой щит"
+item_disruptor_shield_def = "штурмовой щит"
+item_power_amplifier = "Усилитель мощности"
+item_power_amplifier_def = "усилитель мощности"
+item_time_accel = "Ускоритель времени"
+item_time_accel_def = "ускоритель времени"
+item_autodoc = "Автоврач"
+item_autodoc_def = "автоврач"
+item_compass = "Компас"
+item_compass_def = "компас"
+item_flashlight = "Фонарик"
+item_fllashlight_def = "фонарик"
+
+g_no_players_chase = "Нет других игроков, за которыми можно наблюдать."
+g_need_cheats = "Запустите сервер с ключом «+set cheats 1», чтобы активировать эту команду.\n"
+g_unknown_item = "Неизвестный предмет\n"
+g_unknown_item_name = "Неизвестный предмет: {}\n"
+g_item_not_usable = "Предмет нельзя использовать.\n"
+g_out_of_item = "Нет предмета: {}\n"
+g_item_not_droppable = "Предмет нельзя выбросить.\n"
+g_no_item_to_use = "Нет предмета, который можно использовать.\n"
+g_no_item_to_drop = "Нет предмета, который можно выбросить.\n"
+g_players = "{}\nигроки: {}.\n"
+g_flipoff = "Средний палец\n"
+g_salute = "Приветствие\n"
+g_taunt = "Насмешка"
+g_wave = "Помахать\n"
+g_point = "Показать\n"
+g_point_ping = "Показать / место\n"
+g_flipoff_other = "{} показывает средний палец игроку {}.\n"
+g_salute_other = "{} приветствует игрока {}.\n"
+g_taunt_other = "{} насмехается над игроком {}.\n"
+g_wave_other = "{} машет игроку {}.\n"
+g_point_other = "{} показывает на игрока {}.\n"
+g_flipoff_none = "{} показывает средний палец.\n"
+g_salute_none = "{} приветствует всех.\n"
+g_taunt_none = "{} открыто насмехается.\n"
+g_wave_none = "{} машет.\n"
+g_point_none = "{} куда-то показывает.\n"
+g_point_other_ping = "{} указывает место.\n"
+g_flood_cant_talk = "Вы не сможете говорить ещё {} с.\n"
+g_cant_drop_weapon = "Нельзя выбросить это оружие\n"
+g_no_cells_power_armor = "Отсутствуют батареи для силовой брони.\n"
+g_timelimit_hit = "Время истекло.\n"
+g_fraglimit_hit = "Достигнут максимум убийств.\n"
+g_map_ended_by_server = "Сервер завершил игру на карте.\n"
+g_capturelimit_hit = "Достигнут максимум захватов.\n"
+g_no_save_dead = "\nНельзя сохранить игру, когда вы мертвы!\n"
+g_saving_game = "Сохранение...\n"
+g_saved_game = "Игра сохранена!\n"
+g_saved_game_failed = "Не удалось сохранить игру.\n"
+g_primary_mission_objective = "Основная задача:\n{}"
+g_secondary_mission_objective = "Текущая задача:\n{}"
+g_mission_num = "Задание {}:\n{}"
+g_exited_level = "{} покидает уровень.\n"
+g_you_need = "Требуется: {}"
+g_more_to_go = "Ещё {}..."
+g_sequence_completed = "Условия выполнены!"
+g_coop_lose = "Все мертвы. Вы проиграли.\nПерезапуск уровня..."
+g_coop_respawn_in_combat = "Нельзя возродиться - в бою"
+g_coop_respawn_bad_area = "Нельзя возродиться - неподходящее место"
+g_coop_respawn_blocked = "Нельзя возродиться - что-то мешает"
+g_coop_respawn_waiting = "Ожидание возрождения..."
+g_coop_respawn_no_lives = "Жизни закончились. Чтобы возродить команду, нужно покинуть уровень"
+g_coop_in_combat = "Ожидание выхода союзников из боя..."
+g_coop_wait_for_players = "Все игроки должны присутствовать, чтобы продолжить игру..."
+g_coop_players_waiting_for_you = "Игроки ждут вас..."
+g_joined_game = "{} присоединяется к игре\n"
+g_observing = "{} садится на скамейку запасных.\n"
+g_entered_game = "{} присоединяется к игре\n"
+g_disconnected = "{} отключается\n"
+g_no_ammo = "Отсутствуют {} для оружия: {}.\n"
+g_not_enough_ammo = "Требуются ещё {} для оружия: {}.\n"
+g_assigned_team = "Вы в {} команде.\n"
+g_bonus_enemy_carrier = "БОНУС: {} оч. за убийство вражеского носителя флага.\n"
+g_bonus_flag_defense = "{} защищает носителя {} флага от агрессивного противника\n"
+g_bonus_defend_base = "{} защищает {} базу.\n"
+g_bonus_defend_flag = "{} защищает {} флаг.\n"
+g_bonus_defend_carrier = "{} защищает носителя {} флага.\n"
+g_flag_captured = "{} захватывает {} флаг!\n"
+g_bonus_assist_return = "{} оказывает помощь в возвращении флага!\n"
+g_bonus_assist_frag_carrier = "{} оказывает помощь в убийстве носителя флага!\n"
+g_returned_flag = "{} возвращает {} флаг!\n"
+g_got_flag = "{} несёт {} флаг!\n"
+g_flag_returned = "{} флаг возвращён!\n"
+g_lost_flag = "{} теряет {} флаг!\n"
+g_lusers_drop_flags = "Только неудачники роняют флаги.\n"
+g_winners_drop_flags = "Победители не роняют флаги.\n"
+g_you_are_on_team = "Цвет вашей команды: {}."
+g_cant_change_teams = "Нельзя менять команду во время матча.\n"
+g_unknown_team = "Неизвестная команда: {}.\n"
+g_already_on_team = "У вас уже выбрана {} команда.\n"
+g_joined_team = "{} присоединяется к {} команде.\n"
+g_changed_team = "{} переходит в {} команду.\n"
+g_already_have_tech = "У вас уже есть гаджет.\n"
+g_ctf_red_wins_caps = "КРАСНАЯ команда победила СИНЮЮ с перевесом по ЗАХВАТАМ на {}!\n"
+g_ctf_blue_wins_caps = "СИНЯЯ команда победила КРАСНУЮ с перевесом по ЗАХВАТАМ на {}!\n"
+g_ctf_red_wins_points = "КРАСНАЯ команда победила СИНЮЮ с перевесом по ОЧКАМ на {}!\n"
+g_ctf_blue_wins_points = "СИНЯЯ команда победила КРАСНУЮ с перевесом по ОЧКАМ на {}!\n"
+g_ctf_tie_game = "НИЧЬЯ!\n"
+g_only_one_sphere_customer = "Один игрок - одна сфера!"
+g_only_one_sphere_time = "Не больше одной сферы за раз!\n"
+no_valid_poi = "Нет данных компаса для этой задачи.\n"
+g_player_connected = "{} подключается.\n"
+g_ctf_and_more = "...и ещё {}\n"
+
+g_no_load_in_dm = "Нельзя загрузить игру, находясь в матче смертельного боя.\n"
+g_no_load_in_lobby = "Чтобы загрузить игру, отсоединитесь от матча.\n"
+
+g_pc_primary_objective = "Основная задача"
+g_pc_secondary_objective = "Текущая задача"
+g_pc_skill = "Уровень навыка"
+g_pc_kills = "Убито"
+g_pc_goals = "Цели"
+g_pc_secrets = "Секреты"
+g_pc_spectators = "Зрители"
+g_pc_playercount = "  (игроки: {})"
+g_pc_3wctf = "Захват флага ThreeWave"
+g_pc_teamplay = "Командный бой"
+g_pc_join_red_team = "Присоединиться к красным"
+g_pc_join_blue_team = "Присоединиться к синим"
+g_pc_chase_camera = "Режим наблюдателя"
+g_pc_leave_chase_camera = "Покинуть режим наблюдателя"
+g_pc_no_chase = "Не за кем наблюдать"
+g_pc_return = "Вернуться в главное меню"
+
+g_lives = "Жизни"
+g_frags = "Убийства"
+
+g_drop = "Выбросить"
+g_drop_weapon = "Выбросить оружие"
+g_drop_ammo = "Выбросить боеприпасы"
+
+// map messages and goals localization
+map_2_minutes_to_detonation = "2 минуты до взрыва..." // 1 hits
+map_30_seconds_to_detonation = "30 секунд до взрыва..." // 1 hits
+map_60_seconds_to_detonation = "60 секунд до взрыва..." // 1 hits
+map_90_seconds_to_detonation = "90 секунд до взрыва..." // 1 hits
+map_a_secret_door_has_opened = "Открылась секретная дверь!" // 1 hits
+map_a_secret_door_has_opened_elsewhere = "Где-то открылась секретная дверь." // 1 hits
+map_a_secret_is_revealed = "Обнаружен секрет!" // 1 hits
+map_access_bridge_lowered = "Мост опущен.\nНайди служебный лифт\nфабрики." // 1 hits
+map_access_central_computer = "Используй клавиатуру\nглавного компьютера\nи верни инъектор данных." // 1 hits
+map_access_denied_1 = "НЕТ ДОСТУПА\nЭти ворота открываются\nне здесь." // 1 hits
+map_access_denied_2 = "Нет доступа!" // 3 hits
+map_access_denied_3 = "Нет доступа." // 24 hits
+map_access_denied_4 = "Нет доступа.\nВозможен доступ сверху." // 1 hits
+map_access_denied_5 = "Нет доступа.\nТоксичная среда." // 1 hits
+map_access_denied_6 = "Нет доступа:\nработает система\nохлаждения." // 1 hits
+map_access_denied_7 = "Нет доступа:\nработают системы\nохлаждения." // 1 hits
+map_access_denied_8 = "Нет доступа:\nработает энергоядро." // 1 hits
+map_access_denied_9 = "нет доступа:\nзадачи не выполнены." // 1 hits
+map_access_denied_by_sector_2_security = "Доступ запрещён службой безопасности 2-го сектора." // 1 hits
+map_access_door_locked = "Дверь заперта" // 1 hits
+map_access_granted_to = "Получен доступ к\nнасосной станции 1." // 1 hits
+map_access_granted_to_1 = "Получен доступ к\nнаучной лаборатории." // 1 hits
+map_access_keyboard = "Используй клавиатуру\nи верни инъектор данных." // 1 hits
+map_access_logistics_complex = "Войди в центр логистики.\nНайди тюремный блок." // 1 hits
+map_access_now_possible_to_launch_system = "Получен допуск к запуску системы" // 1 hits
+map_access_to_big_gun_denied = "В доступе к большой пушке отказано." // 1 hits
+map_access_to_toxic_waste_dump = "Нет доступа к свалке\nтоксичных отходов." // 1 hits
+map_acquire_blue_key_card = "Найди синюю ключ-карту\nот центра логистики." // 1 hits
+map_acquire_key_card_and_ = "Найди ключ-карту\nи уничтожь всех врагов." // 1 hits
+map_acquire_the_antimatter = "Добудь капсулу\nдля антиматерии." // 1 hits
+map_acquire_the_antimatter_1 = "Добудь капсулу\nдля антиматерии." // 1 hits
+map_activate_antimatter = "Включи генератор\nядер из антиматерии." // 1 hits
+map_activate_cooling_pump_to = "Включи охлаждающий насос,\nчтобы откачать \nтеплоноситель от реактора." // 1 hits
+map_activate_incinerator_and = "Включи сжигатель\nи разбей защитное стекло." // 1 hits
+map_activate_mine_machinery_to = "Запусти горную технику,\nчтобы попасть\nв зону бурения." // 1 hits
+map_airstrike_incoming_in_1 = "Авиаудар через: 1" // 2 hits
+map_airstrike_incoming_in_10 = "Авиаудар через: 10" // 2 hits
+map_airstrike_incoming_in_2 = "Авиаудар через: 2" // 2 hits
+map_airstrike_incoming_in_3 = "Авиаудар через: 3" // 2 hits
+map_airstrike_incoming_in_4 = "Авиаудар через: 4" // 2 hits
+map_airstrike_incoming_in_5 = "Авиаудар через: 5" // 2 hits
+map_airstrike_incoming_in_6 = "Авиаудар через: 6" // 2 hits
+map_airstrike_incoming_in_7 = "Авиаудар через: 7" // 2 hits
+map_airstrike_incoming_in_8 = "Авиаудар через: 8" // 2 hits
+map_airstrike_incoming_in_9 = "Авиаудар через: 9" // 2 hits
+map_all_power_cubes_collected = "Все энергокубы собраны.\nВернись на склад\nбоеприпасов." // 1 hits
+map_all_systems_have_been_shut_down = "Все системы отключены" // 1 hits
+map_anti_aircraft_gun_reprogrammed = "Программа зенитного орудия изменена!" // 2 hits
+map_antimatter_container_machine_activated = "Механизм упаковки антиматерии запущен." // 2 hits
+map_antimatter_core_created = "Ядро из антиматерии создано.\nНужна защитная капсула." // 1 hits
+map_antimatter_core_creation_initiated = "Начато создание ядра из антиматерии." // 1 hits
+map_array_controls_locked = "Управление заблокировано." // 1 hits
+map_autopilot_engaged = "Автопилот включён." // 1 hits
+map_backup_power_rerouted = "Резервное питание перенаправлено." // 1 hits
+map_barrett_alexander__biz = "Баррет Александр - развитие бизнеса" // 1 hits
+map_barrier_neutralized = "Барьер отключён. " // 1 hits
+map_bio_processing_control = "Модуль биопереработки\nвыключен." // 1 hits
+map_biocompression = "Биокомпрессионная камера\nотключена." // 1 hits
+map_bridge_access_denied = "Нет доступа к мосту." // 1 hits
+map_bridge_activated = "Мост активирован." // 3 hits
+map_bridge_enabled = "Мост активен." // 2 hits
+map_bridge_extended = "Мост выдвинут." // 1 hits
+map_bridge_power_activated = "Питание моста включено." // 1 hits
+map_bring_uplink_online_using = "Установи связь с помощью\nтерминала связи." // 1 hits
+map_building_integrity_compromised = "Целостность здания нарушена." // 1 hits
+map_canyon_entrance_to = "Открыт вход\nв центр логистики\nчерез каньон." // 1 hits
+map_cargo_doors_locked = "Грузовые двери заперты." // 2 hits
+map_cargo_doors_sealed = "Грузовые двери закрыты." // 1 hits
+map_cargo_lift_activated = "Грузовой лифт активирован." // 4 hits
+map_cart_track_active = "Система вагонеток запущена." // 1 hits
+map_cell_protective_field = "Защитное поле камеры\nвыключено." // 1 hits
+map_chamber_1_deactivated = "Камера 1 отключена" // 1 hits
+map_chamber_2_deactivated = "Камера 2 отключена" // 1 hits
+map_close_main_hangar_bay_door = "Закрой главный\nлюк ангара.\nУничтожь генератор\nчёрной дыры." // 1 hits
+map_collect_disk_and = "Возьми диск\nи вернись\nв тактический штаб." // 1 hits
+map_collect_the_4_power = "Собери 4 энергокуба,\nчтобы восстановить\nпитание на складе." // 1 hits
+map_communication_uplink_established = "Связь установлена." // 1 hits
+map_compression_chamber_activated = "Компрессионная камера включена." // 1 hits
+map_conduit_lockdown_in_10_seconds = "Канал закроется через 10 секунд." // 1 hits
+map_conduit_locked = "Канал закрыт." // 2 hits
+map_console_inactive,_insufficient_power = "Терминал отключён, нехватка энергии." // 1 hits
+map_containment_bulkheads_activated = "Защитные переборки активированы." // 1 hits
+map_containment_fields_deactivated = "Защитные поля выключены." // 1 hits
+map_continue_to_the = "Следуй к заводу\nбоеприпасов." // 1 hits
+map_control_area = "Нет доступа\nк центру управления." // 2 hits
+map_control_room = "Получен доступ\nк диспетчерской." // 1 hits
+map_control_room_access_denied = "Нет доступа к диспетчерской." // 2 hits
+map_conveyor_activated = "Конвейер запущен." // 1 hits
+map_coolant_pumps_activated = "Насосы системы охлаждения включены.\nБур работает." // 1 hits
+map_coolant_system_not_active__access_denied = "Система охлаждения выключена - нет доступа" // 1 hits
+map_coolant_systems_drained = "В системе нет\nтеплоносителя.\nВернись к реактору." // 1 hits
+map_coolant_tank_flooded,_console_inactive = "Бак с теплоносителем заполнен. Терминал отключён." // 1 hits
+map_coolant_tank_opened = "Бак с теплоносителем открыт." // 1 hits
+map_coolant_tank_sealed = "Бак с теплоносителем закрыт." // 2 hits
+map_cooling_system_disabled = "Система охлаждения выключена." // 1 hits
+map_core_access = "Двери доступа к ядру\nвключены." // 1 hits
+map_core_access_hatch = "Люк прохода к ядру:\nвторой замок открыт." // 1 hits
+map_core_cpu_is_no_longer_functional = "Главный процессор вышел из строя" // 1 hits
+map_core_creation_complete = "Ядро создано." // 1 hits
+map_core_disabled_force_fields_offline = "Ядро отключено. Силовые поля выключены." // 1 hits
+map_core_insertion_complete = "Ядро установлено." // 1 hits
+map_core_insertion_module_activated = "Модуль установки ядра активирован." // 1 hits
+map_crane_activated = "Кран активирован." // 3 hits
+map_crane_is_now_online = "Кран работает." // 1 hits
+map_crane_off_line = "Кран выключен." // 1 hits
+map_crate_mover_activated = "Перевозчик ящиков запущен." // 1 hits
+map_crouch_here = "%bind:+movedown:$m_crouch%Здесь нужно присесть." // 1 hits
+map_crusher_activated = "Дробилка включена." // 2 hits
+map_data_cd_accepted = "Диск с данными принят.\nАктивируй\nкоммуникационный лазер." // 1 hits
+map_data_disc_uploaded = "Данные с диска отправлены.\nКонечная точка телепорта изменена." // 1 hits
+map_data_disk_accepted = "Диск с данными принят." // 1 hits
+map_data_disk_acquired = "Диск с данными получен." // 1 hits
+map_data_disk_acquired_1 = "Диск с данными получен.\nВернись в центр \nлогистики." // 1 hits
+map_data_spinner = "Программа инъектора\nданных изменена." // 1 hits
+map_data_spinner_inserted_for_reprogramming = "Инъектор данных установлен для изменения программы." // 1 hits
+map_deactivate_green_security = "Выключи зелёные\nохранные лазеры." // 1 hits
+map_dentention_block_located = "Тюремный блок найден." // 1 hits
+map_dopefish_lives_again = "Долболобик жив! Снова!" // 1 hits
+map_destroy_all_16_wall = "Уничтожь все 16 стенных\nузлов в этой области." // 1 hits
+map_destroy_all_resistance = "Уничтожь всех врагов!" // 3 hits
+map_destroy_all_resistance_1 = "Уничтожь всех врагов." // 1 hits
+map_destroy_any = "Уничтожь всех\nоставшихся врагов." // 1 hits
+map_destroy_big_gun = "Уничтожь большую пушку." // 1 hits
+map_destroy_containment_glass = "Разбей защитное стекло,\nчтобы запустить \nсистему вентиляции." // 1 hits
+map_destroy_resistance = "Уничтожь врагов." // 1 hits
+map_destroy_strogg = "Уничтожь грузовой\nпоезд строггов." // 1 hits
+map_destroy_the = "Уничтожь\nгравитационный колодец." // 2 hits
+map_destroy_the_blackhole = "Уничтожь генератор\nчёрной дыры." // 1 hits
+map_destroy_the_computer_panel = "Уничтожь панель\nкомпьютера." // 1 hits
+map_destroy_the_computers = "Уничтожь компьютеры." // 1 hits
+map_destroy_the_security = "Уничтожь охранную\nсеть промзоны." // 1 hits
+map_disable_laser_grid_and = "Выключи лазерную сетку\nи добудь голову\nкомандира." // 1 hits
+map_disable_power_to_ = "Обесточь охранную\nсистему челнока." // 1 hits
+map_disable_security_lasers_ = "Отключи охранные лазеры,\nчтобы взять энергокуб." // 1 hits
+map_disarm_yellow_forcefields = "Отключи жёлтые силовые\nполя" // 1 hits
+map_dna_not_on_file = "ДНК нет в архиве..." // 1 hits
+map_docking_station = "Нет доступа\nк стыковочной станции." // 1 hits
+map_door_access_granted = "Доступ к двери разрешён." // 1 hits
+map_door_opens_nearby = "Рядом открылась дверь." // 2 hits
+map_door_unlocked = "Дверь открыта." // 3 hits
+map_doors_are_sealed = "Двери закрыты." // 1 hits
+map_doors_locked = "Двери заперты." // 1 hits
+map_doors_sealed = "Двери закрыты." // 8 hits
+map_drilling_area_access_denied = "Доступ в зону бурения запрещён." // 1 hits
+map_electric_current_nullified = "Электричество выключено.\nНаправляйся на главный \nсклад." // 1 hits
+map_electrical_systems_unstable = "Перебои в работе электросети." // 1 hits
+map_elevator_shaft_sealed = "Шахта лифта закрыта." // 2 hits
+map_bridge_crew_deactivated = "Экипаж на мостике нейтрализован..."
+map_eliminate_all_resistance = "Уничтожь всех врагов." // 1 hits
+map_eliminate_tank_commander = "Уничтожь танка-командира\nи возьми его голову." // 1 hits
+map_emergency_exit = "Аварийный выход\nоткрыт." // 1 hits
+map_emergency_exit_1 = "Аварийный выход\nзакрыт." // 2 hits
+map_emergency_power_core_locks_released = "Аварийные замки энергоядра отключены." // 1 hits
+map_emulsifying_flesh_press = "Эмульсификатор плоти\nдеактивирован." // 1 hits
+map_enemy_processing_unit = "Модуль переработки\nдеактивирован." // 1 hits
+map_energy_core_offline = "Энергоядро отключено." // 1 hits
+map_engage_and_destroy = "Атакуй и уничтожь\nЧёрную вдову." // 1 hits
+map_equipment_failure = "Поломка оборудования!" // 1 hits
+map_escape_pod_sealed = "Спасательная капсула закрыта." // 6 hits
+map_escape_the_rising_lava = "Убеги от поднимающейся \nлавы." // 1 hits
+map_establish_communication = "Установи связь\nс командным кораблём." // 1 hits
+map_evacuate_area__radiation = "Покинуть район!\nОпасный уровень радиации!" // 1 hits
+map_evacuate_immediately = "Срочно эвакуируйся." // 1 hits
+map_extreme_caution_is_advised = "Будь очень осторожен." // 1 hits
+map_fighter_lift_lowered = "Лифт для пилотов опущен." // 1 hits
+map_fighter_lift_raised = "Лифт для пилотов поднят." // 1 hits
+map_filtration_sector_access_denied = "Нет доступа к зоне фильтрации!" // 1 hits
+map_filtration_sector_opened = "Зона фильтрации открыта." // 1 hits
+map_filtration_vents_activated = "Фильтрационная вытяжка включена." // 2 hits
+map_find_a_way_into_the_main = "Найди способ пробраться\nв главный ангар." // 1 hits
+map_find_and_activate_reactor = "Найди и включи реактор\nдля запуска системы \nфильтрации." // 1 hits
+map_find_and_disable_the = "Найди и отключи\nэнергоядро." // 1 hits
+map_find_cargo_lift_to = "Найди грузовой лифт,\nведущий к ремонтным \nангарам." // 1 hits
+map_find_comm_center_to_ = "Найди центр связи\nи получи приказы." // 1 hits
+map_find_communications_laser = "Найди диск с данными\nлазера связи в верхнем \nдворце." // 1 hits
+map_find_control_center_for = "Найди центр управления\nстенными узлами \nстабилизатора." // 1 hits
+map_find_entrance_location_ = "Найди вход\nи уничтожь всех врагов." // 1 hits
+map_find_entrance_to = "Найди вход\nна склад боеприпасов." // 1 hits
+map_find_entrance_to_1 = "Найди вход\nв гравитационный колодец." // 1 hits
+map_find_entrance_to_2 = "Найди вход\nна электростанцию." // 1 hits
+map_find_entrance_to_3 = "Найди вход\nна завод по переработке." // 1 hits
+map_find_entrance_to_4 = "Найди вход\nв пункт снабжения." // 1 hits
+map_find_exit_to_ = "Найди выход\nк таэлитовой шахте." // 1 hits
+map_find_functioning = "Найди исправный\nинъектор данных на\nтерритории внешнего \nдвора." // 1 hits
+map_find_reactor = "Найди реактор.\nОткрой его ядро." // 1 hits
+map_find_secondary_route = "Найди другой путь\nк ремонтным ангарам." // 1 hits
+map_find_security_console_and = "Найди терминал охраны\nи отключи красные лазеры." // 1 hits
+map_find_security_pass = "Найди пропуск\nот склада боеприпасов." // 1 hits
+map_find_the_security_pass = "Найди пропуск,\nкоторый находится\nв комнатах пыток." // 1 hits
+map_find_the_yellow_laser = "Найди компьютер, который\nуправляет жёлтым лазером." // 1 hits
+map_find_your_way_to_the = "Доберись\nдо таэлитовой шахты." // 1 hits
+map_first_half_of_unit = "Задача в секторе\nнаполовину выполнена." // 1 hits
+map_force_field_controlled_by_the_ = "Силовым полем управляют\nпусковые компьютеры." // 1 hits
+map_forcefield_deactivated = "Силовое поле выключено." // 4 hits
+map_forcefield_now_disabled = "Силовое поле выключено" // 1 hits
+map_forcefields_deactivated = "Силовые поля выключены." // 1 hits
+map_fork_lift_activated,_windup_in_progress = "Погрузчик включён, выполняется запуск." // 1 hits
+map_gain_access_to = "Доберись\nдо научного ангара." // 1 hits
+map_gain_access_to_ = "Доберись\nдо центра логистики." // 1 hits
+map_gain_access_to_maintenance = "Доберись\nдо ремонтных ангаров." // 1 hits
+map_gain_access_to_the = "Доберись\nдо очистной станции. " // 1 hits
+map_gain_access_to_waterfront_ = "Доберись\nдо портового склада." // 1 hits
+map_gain_access_via = "Проберись внутрь\nпо разбитой трубе\nв каньоне." // 1 hits
+map_gain_entrance_to = "Доберись\nдо тектонического \nстабилизатора." // 1 hits
+map_gain_entrance_to_waste = "Доберись\nдо диспетчерской \nочистной станции." // 1 hits
+map_geostabilizers = "Геостабилизаторы\nдеактивированы." // 1 hits
+map_geothermal_power_online = "Геотермальная энергосистема включена." // 1 hits
+map_geothermal_station = "Нет доступа\nк геотермальной станции." // 1 hits
+map_go_to_the_cooling_facility = "Иди в центр охлаждения.\nОткачай теплоноситель\nот реактора." // 1 hits
+map_go_to_toxic_waste_dump = "Следуй к свалке \nтоксичных отходов.\nЗапусти насосные станции." // 1 hits
+map_gondola_activated = "Энергокабина активирована." // 1 hits
+map_gondola_prep_sequence_complete = "Подготовка к запуску энергокабины завершена." // 1 hits
+map_gondola_systems_activated = "Системы энергокабины включены." // 1 hits
+map_grab_the_passcard_and = "Возьми пропуск\nи вернись\nв центр охраны." // 1 hits
+map_gravity_generator_deactivated = "Генератор гравитации деактивирован." // 1 hits
+map_gravity_generator_disabled = "Генератор гравитации выключен." // 1 hits
+map_gravity_well_access_denied = "Нет доступа к гравитационному колодцу!" // 2 hits
+map_hangar_access_denied = "Нет доступа к ангару." // 1 hits
+map_hangar_bay_open,_ground_access_denied = "Ангар открыт. В наземном доступе отказано." // 1 hits
+map_hangar_lift_activated = "Лифт ангара активирован." // 1 hits
+map_hangar_lift_door_opened = "Дверь лифта ангара открылась." // 1 hits
+map_humanoid_life_form_detected = "Обнаружена гуманоидная форма жизни." // 1 hits
+map_humanoid_life_form_detected_1 = "Обнаружена гуманоидная форма жизни..." // 1 hits
+map_humanoid_lifeform_detected = "Обнаружена гуманоидная форма жизни!" // 1 hits
+map_incenerator_activated = "Сжигатель включён." // 1 hits
+map_incinerator_access_granted = "Получен доступ к сжигателю." // 1 hits
+map_incoming_marine_doa = "Десантник погиб.\nВыполни его приказ." // 1 hits
+map_infiltrate_and_destroy = "Уничтожь главный\nреактор строггов." // 1 hits
+map_insert_data_spinner = "Вставь инъектор данных\nв следующий терминал." // 1 hits
+map_interrupt_strogg = "Подави связь\nистребителей строггов." // 2 hits
+map_ionization_catalyst = "Камера катализатора ионизации\nотключена." // 1 hits
+map_kill_the_tank_commander_to = "Убей танка-командира\nи забери пропуск." // 1 hits
+map_laser_activated = "Лазер активирован." // 1 hits
+map_laser_activated_1 = "Лазер активирован.\nВключи терминал связи." // 1 hits
+map_laser_control_locked = "Управление лазером недоступно." // 1 hits
+map_laser_drill_activated = "Лазерный бур активирован." // 1 hits
+map_laser_drill_inactive = "Лазерный бур выключен." // 1 hits
+map_laser_guard_locked_down = "Лазерная защита заблокирована." // 1 hits
+map_laser_inactive = "Лазер выключен.\nЗеркала заблокированы." // 1 hits
+map_laser_power_interrupted = "Энергоснабжение лазера прервано." // 2 hits
+map_launch_systems_destroyed = "Пусковые системы \nуничтожены.\nСиловое поле выключено.\nНаправляйся к выходу." // 1 hits
+map_level_1_defences_deactivated = "Защита 1-го уровня выключена." // 1 hits
+map_lift_access_denied = "Доступ к лифту запрещён." // 1 hits
+map_lift_accessible = "Лифт доступен." // 1 hits
+map_lift_activated = "Лифт активирован." // 2 hits
+map_lift_activated_1 = "Лифт активирован." // 88 hits
+map_lift_enabled = "Лифт включён." // 1 hits
+map_lift_inactive = "Лифт не работает." // 4 hits
+map_locate_a_powerful_weapon = "Найди мощное оружие." // 1 hits
+map_locate_an_open = "Найди открытую\nспасательную капсулу." // 1 hits
+map_locate_and_activate = "Найди и включи\nсжигатель." // 1 hits
+map_locate_and_destroy = "Найди и устрани\nлидера строггов." // 1 hits
+map_locate_and_destroy_1 = "Найди и уничтожь\nглавный компьютер сети." // 1 hits
+map_locate_and_enable_satellite = "Найди спутниковую систему\nи установи канал \nсвязи с флагманом." // 1 hits
+map_locate_and_place_the = "Найди и установи\nмаяк для авиаудара." // 1 hits
+map_locate_and_use_exit = "Найди выход\nи покинь дворец." // 1 hits
+map_locate_base_installation = "Найди лифт на базе." // 1 hits
+map_locate_blue_keycard = "Найди синюю ключ-карту." // 1 hits
+map_locate_canyon_entrance_ = "Найди вход в центр \nлогистики в каньоне." // 1 hits
+map_locate_communication_center = "Найди центр связи." // 1 hits
+map_locate_hangar_control = "Найди диспетчерскую \nангара.\nЗакрой главный люк \nангара." // 1 hits
+map_locate_pyramid_key = "Найди ключ-пирамиду\nи вернись\nв центр охраны." // 1 hits
+map_locate_red_key_card_in_the = "Найди красную ключ-карту\nв центре охраны." // 1 hits
+map_locate_repair_facility = "Найди ремонтный центр.\nУкради голову командира." // 1 hits
+map_locate_security_computer = "Найди компьютер охраны\nи отключи замки на \nдверях." // 1 hits
+map_locate_unit_exit = "Найди выход из сектора\nи уничтожь всех врагов." // 1 hits
+map_lock_down_laser_guard = "Заблокируй лазер." // 1 hits
+map_look_up = "Посмотри вверх!" // 1 hits
+map_lower_access_bridge = "Опусти мост.\nНайди служебный лифт\nфабрики." // 1 hits
+map_magnetic_lift_activated = "Магнитный лифт активирован." // 1 hits
+map_main_factory_door_impassable = "Главная дверь фабрики заблокирована." // 1 hits
+map_maintenance_access_hatch = "Люк служебного прохода:\nпервый замок открыт." // 1 hits
+map_maintenance_bridge = "Служебный мост\nактивирован." // 1 hits
+map_maintenance_doors_sealed = "Служебные двери закрыты." // 2 hits
+map_maintenance_hangar_access_denied = "Нет доступа к ремонтному ангару!" // 3 hits
+map_maintenance_hangar_doors_sealed = "Двери ремонтного ангара закрыты." // 1 hits
+map_maintenance_passage = "Служебный проход\nоткрыт." // 1 hits
+map_maintenance_passage_closed = "Служебный проход закрыт." // 1 hits
+map_maintenance_systems_activated = "Служебные системы включены." // 1 hits
+map_maintenance_train_activated = "Служебный поезд готов к работе." // 1 hits
+map_make_your_way_to_the = "Доберись\nдо входа в шахту." // 1 hits
+map_mine_doors_are_locked = "Двери шахты закрыты." // 1 hits
+map_mine_doors_opened = "Двери шахты открыты." // 1 hits
+map_mine_machinery_inoperative = "Горная техника не работает." // 1 hits
+map_mission_accomplished = "Задание выполнено.\nВернись к портовому \nскладу." // 1 hits
+map_move_to_main_hangar_bay = "Следуй в главный\nангар комплекса." // 1 hits
+map_navigate_mines = "Пройди через шахты.\nНайди вход\nна фабрику." // 1 hits
+map_neutralize_strogg_leaders = "Отключи систему связи\nлидера строггов." // 1 hits
+map_new_heading_accepted = "Новое направление установлено." // 1 hits
+map_new_orders_will = "Ожидай\nновых приказов." // 1 hits
+map_new_passage_to_lower = "Создан новый проход\nк нижней шахте." // 1 hits
+map_new_program_accepted = "Новая программа принята." // 1 hits
+map_objective_complete = "Задача выполнена." // 1 hits
+map_objective_complete_1 = "Задача выполнена.\nВернись в ангар." // 1 hits
+map_obtain_antimatter = "Возьми капсулу \nдля антиматерии\nна складе боеприпасов." // 1 hits
+map_obtain_antimatter_core = "Добудь ядро \nиз антиматерии." // 1 hits
+map_obtain_data_disk = "Возьми диск с данными\nи уничтожь всех врагов." // 1 hits
+map_obtain_the_data_cd = "Возьми диск с данными\nв верхнем дворце." // 1 hits
+map_open_control_pyarmid = "Открой пирамиду\nуправления и найди\nпропуск." // 1 hits
+map_open_primary_entrance = "Открой главный вход." // 1 hits
+map_ore_cleansing_in_progress = "Выполняется очистка руды." // 1 hits
+map_ore_mover_activated = "Перевозчик руды запущен." // 1 hits
+map_ore_stabilization_in_progress = "Выполняется стабилизация руды." // 1 hits
+map_organic_material = "Разжижитель органики\nотключён." // 1 hits
+map_overflow_doors_sealed = "Заслонки водосброса закрыты." // 2 hits
+map_penetrate_the_outer = "Прорви внешнюю\nоборону тюрьмы.  " // 1 hits
+map_phase_array_active = "Фазовая антенна работает." // 3 hits
+map_phase_arrays_offline = "Фазовые антенны выключены." // 2 hits
+map_phase_arrays_online = "Фазовые антенны включены." // 3 hits
+map_pick_up_marker_and = "Возьми маяк\nи помести его у зенитки." // 1 hits
+map_place_airstrike_marker = "Установи маяк\nв контейнер\nрядом с топливным баком." // 1 hits
+map_place_data_disk_into = "Вставь диск с данными\nв передающий терминал." // 1 hits
+map_plant_access_granted = "Получен доступ к заводу." // 1 hits
+map_plant_door_is_locked = "Дверь завода заперта." // 1 hits
+map_plasma_emissions_detected = "Обнаружены выбросы плазмы." // 1 hits
+map_player_was_electrocuted = "Игрок получил удар током." // 1 hits
+map_power_center_opened = "Энергоузел открыт." // 1 hits
+map_power_conduit_accessible = "Система питания доступна." // 2 hits
+map_power_core_locks_in_place = "Замки энергоядра на месте" // 1 hits
+map_power_core_venting = "Выполняется продув\nэнергоядра." // 1 hits
+map_power_cubes_needed = "Для подачи энергии\nнужны энергокубы." // 1 hits
+map_power_disrupted,security_network_offline = "Электроснабжение нарушено, охранная сеть отключена." // 1 hits
+map_power_terminal_sealed = "Энерготерминал заперт." // 1 hits
+map_press_and_hold_jump = "%bind:+moveup:$map_jump_ladder%%bind:+movedown:$map_crouch_ladder%Зажми кнопку прыжка,\nчтобы подняться по лестнице." // 1 hits
+map_jump_ladder = "Зажми кнопку прыжка, чтобы залезть по лестнице."
+map_crouch_ladder = "Зажми кнопку приседания, чтобы спуститься по лестнице."
+map_press_button_to = "Лифт включается\nнажатием кнопки." // 1 hits
+map_press_move_up_to_climb_ladder = "%bind:+moveup:$map_jump_ladder%%bind:+movedown:$map_crouch_ladder%Зажми кнопку прыжка,\nчтобы подняться по лестнице." // 1 hits
+map_primary_entrance_door_open = "Дверь главного входа открыта!" // 1 hits
+map_primary_unit = "Основная задача\nв этом секторе выполнена." // 1 hits
+map_primary_unit_objective = "Основная задача\nв этом секторе выполнена." // 3 hits
+map_primary_unit_objective_1 = "Основная задача\nв этом секторе выполнена." // 1 hits
+map_primary_unit_objectives = "Основные задачи\nв этом секторе выполнены." // 1 hits
+map_proceed_directly_to = "Направляйся\nна склад." // 1 hits
+map_proceed_to = "Направляйся\nв изолятор." // 1 hits
+map_proceed_to_ = "Направляйся\nна портовый склад." // 1 hits
+map_proceed_to_1 = "Направляйся\nк станции переработки." // 1 hits
+map_proceed_to_big_gun = "Направляйся к большой \nпушке." // 1 hits
+map_proceed_to_entrance_ = "Направляйся к входу\nв центр управления." // 2 hits
+map_proceed_to_next = "Направляйся к следующему\nбоевому сектору." // 1 hits
+map_proceed_to_pumping_stations = "Иди к насосным станциям.\nЗапусти первую\nи вторую станции." // 1 hits
+map_proceed_to_reactor_core = "Направляйся к ядру \nреактора.\nУничтожь всех врагов." // 1 hits
+map_proceed_to_security_pyramid = "Направляйся\nк охранной пирамиде." // 2 hits
+map_proceed_to_surface = "Направляйся на \nповерхность." // 1 hits
+map_proceed_to_the_factory = "Направляйся к фабрике." // 1 hits
+map_proceed_towards_the = "Направляйся к заводу\nбоеприпасов." // 1 hits
+map_proceed_with_caution = "Действуй осторожно." // 1 hits
+map_pull_the_power_cube = "Достань энергокуб,\nчтобы отключить\nжёлтые силовые поля." // 1 hits
+map_pump_controls_inactive = "Управление насосом выключено." // 3 hits
+map_pump_deactivated = "Насос выключен." // 1 hits
+map_pump_inactive = "Насос не работает." // 1 hits
+map_pump_room_door_is_locked = "Дверь насосной станции заперта." // 1 hits
+map_pumping_station_one = "Насосная станция 1\nзапущена." // 1 hits
+map_pumping_station_two = "Насосная станция 2\nзапущена." // 2 hits
+map_pumping_systems_inactive = "Насосные системы выключены." // 3 hits
+map_pursue_makron_to = "Следуй за Макроном\nво внутренний зал." // 1 hits
+map_pyramid_key_acquired = "Ключ-пирамида найден.\nВернись в центр охраны." // 1 hits
+map_quarantine_fields = "Изолирующие поля\nвыключены." // 1 hits
+map_radiation_levels_rising, = "Повышенный уровень радиации.\nИзоляция опасной зоны." // 1 hits
+map_reactor_activated = "Реактор запущен." // 1 hits
+map_reactor_core_locks_released = "Ядро реактора открыто." // 1 hits
+map_realign_satellite_array = "Перенастрой спутниковую\nантенну, чтобы связаться\nс флагманом." // 1 hits
+map_recover_the_secret_weapon = "Найди секретное оружие." // 1 hits
+map_red_force_fields_deactivated = "Красные силовые поля выключены." // 1 hits
+map_red_forcefields_deactivated = "Красные силовые поля выключены." // 1 hits
+map_red_key_card_now_accessible = "Красная ключ-карта доступна." // 1 hits
+map_rendevous_at_entrance_ = "Встреться с десантником\nу входа." // 1 hits
+map_reprogram_and_destroy = "Перепрограммируй\nи уничтожь зенитку." // 1 hits
+map_reprogram_data_spinner = "Перепрограммируй \nинъектор данных\nв главном компьютере." // 1 hits
+map_repulsor_deactivated = "Отталкиватель выключен.\nДоступ открыт." // 1 hits
+map_repulsor_field_active = "Отталкивающее поле включено." // 1 hits
+map_restore_power_to_key = "Восстанови питание\nглавных узлов склада." // 1 hits
+map_resume_previous_mission = "Продолжай выполнять\nпредыдущее задание." // 2 hits
+map_retrieve_an = "Забери маяк\nдля авиаудара." // 1 hits
+map_retrieve_the_airstrike = "Забери маяк\nдля авиаудара." // 1 hits
+map_retrieve_the_data_cd_from = "Возьми диск с данными\nв тюремном блоке \"А\"\nи проберись в блок \"Б\"." // 1 hits
+map_retrieve_the_security_pass = "Добудь пропуск." // 1 hits
+map_return_and_collect = "Вернись и забери\nдиск с данными." // 1 hits
+map_return_to = "Вернись\nв зону разгрузки." // 1 hits
+map_return_to_antimatter = "Вернись к генератору\nядер из антиматерии\nза ядром." // 1 hits
+map_return_to_elevator_shaft = "Вернись в шахту лифта.\nНаправляйся в зону \nбурения." // 1 hits
+map_return_to_hangar = "Вернись в ангар.\nИспользуй голову \nкомандира, чтобы пройти \nдальше." // 1 hits
+map_return_to_lower_mines = "Вернись в нижнюю шахту." // 1 hits
+map_return_to_munitions_plant = "Вернись на завод \nбоеприпасов." // 1 hits
+map_return_to_sewer_via_pipe = "Вернись в канализацию \nпо трубе." // 1 hits
+map_return_to_the = "Вернись в изолятор.\nОтключи жёлтые лазеры." // 1 hits
+map_return_to_the_1 = "Вернись\nв центр охраны." // 1 hits
+map_return_to_waterfront = "Вернись\nна портовый склад." // 1 hits
+map_scan_initiated = "Начато сканирование." // 1 hits
+map_scanner_inactive = "Сканер не работает." // 1 hits
+map_secondary_ammo_depot_entrance_opened = "Открыт второй вход на склад боеприпасов." // 1 hits
+map_secondary_power = "Резервная энергосистема\nотключена." // 1 hits
+map_secret_area_ = "Секретная область!\nРаспрыгались тут на ракетах!" // 1 hits
+map_sector_1_security_deactivated = "Защита 1-го сектора отключена." // 1 hits
+map_sector_2_security = "Защита 2-го сектора\nотключена." // 1 hits
+map_sector_2_security_disabled = "Защита 2-го сектора отключена." // 1 hits
+map_secure_experimental_fighter = "Захвати прототип\nистребителя." // 1 hits
+map_security_access_granted = "Доступ разрешён." // 1 hits
+map_security_and_access_doors_unlocked = "Защитные и входные двери открыты!" // 1 hits
+map_security_breach = "Нарушение безопасности." // 1 hits
+map_security_counter_measures_activated = "Задействована защитная система." // 1 hits
+map_security_counter_measures_deactvated = "Защитная система выключена." // 1 hits
+map_security_door_locked = "Защитная дверь заперта." // 1 hits
+map_security_doors = "Защитные двери\nвыключены." // 1 hits
+map_security_doors_locked = "Защитные двери заперты." // 2 hits
+map_security_doors_offline = "Защитные двери выключены.\nНаправляйся к челноку." // 1 hits
+map_security_doors_opened = "Защитные двери открыты." // 1 hits
+map_security_doors_sealed = "Защитные двери закрыты." // 2 hits
+map_security_doors_unlocked = "Защитные двери открыты." // 1 hits
+map_security_fields_offline = "Защитные поля выключены." // 1 hits
+map_security_forcefields_activated = "Силовые поля включены." // 1 hits
+map_security_grid_destroyed = "Сеть безопасности уничтожена." // 1 hits
+map_security_lasers_deactivated = "Охранные лазеры выключены." // 2 hits
+map_security_lasers_disabled = "Охранные лазеры выключены." // 1 hits
+map_security_lasers_on_power_cube_secure = "Охранные лазеры включены. Энергокуб защищён." // 1 hits
+map_security_lockdown_in_effect = "Защитная блокировка включена." // 1 hits
+map_security_locks_disabled = "Защитные замки выключены.\nНайди капсулу для \nантиматерии." // 1 hits
+map_security_measures = "Защитная система\nвыключена." // 1 hits
+map_security_measures_are_offline = "Защитная система выключена." // 1 hits
+map_security_pass_accessible = "Получен доступ к пропуску." // 1 hits
+map_security_pass_approved_ = "Пропуск принят. Получен доступ\nк центру управления силовыми полями." // 1 hits
+map_security_pass_grants = "Пропуск позволяет\nпопасть в центр управления\nсиловыми полями." // 1 hits
+map_security_pass_required = "Для отключения жёлтых\nсиловых полей нужен пропуск." // 2 hits
+map_service_elevator_to = "Служебный лифт\nфабрики доступен." // 1 hits
+map_shoot_barrels_to = "Стреляй в бочки,\nчтобы взорвать их." // 1 hits
+map_shoot_button_to = "Выстрели в кнопку, чтобы\nоткрыть секретную \nобласть." // 1 hits
+map_shut_down_alien = "Останови работу\nперерабатывающего завода." // 1 hits
+map_shut_down_all_machines = "Останови работу\nвсего оборудования." // 1 hits
+map_shut_down_communication = "Выключи лазер связи\nв верхнем дворце." // 1 hits
+map_shut_down_the = "Выключи\nтектонический \nстабилизатор." // 1 hits
+map_shut_off_the_coolant = "Отключи ядро процессора\nот системы охлаждения." // 1 hits
+map_shuttle_inactive = "Челнок не реагирует." // 2 hits
+map_shuttle_inactive,_destination_reached = "Челнок не реагирует. Пункт назначения достигнут." // 1 hits
+map_shuttle_power_online = "Подано питание на челнок." // 1 hits
+map_something_feels_off = "Что-то не так. Кажется, будто\nвсё здесь из другой эпохи…" // 1 hits
+map_thanks = "Спасибо за игру.\nQuake II всегда будет лучшей!"
+map_something_just_fell_in_a_container = "Что-то упало в контейнер." // 1 hits
+map_stabilizer_breach_immenent = "Угроза прорыва\nстабилизатора.\n45 секунд до разрушения." // 1 hits
+map_stabilizer_malfunction = "Сбой стабилизатора.\nПокинуть район!" // 1 hits
+map_stabilizer_pump_1_shutdown = "1-й насос стабилизатора отключён." // 1 hits
+map_stabilizer_pump_2_shutdown = "2-й насос стабилизатора отключён." // 1 hits
+map_stabilizer_pump_3_shutdown = "3-й насос стабилизатора отключён." // 1 hits
+map_storage_area_sealed = "Хранилище закрыто." // 2 hits
+map_storage_section_b = "Нет доступа\nк секции склада \"Б\"." // 2 hits
+map_strogg_bioassimilation = "Резервуар биоассимиляции\nстроггов выключен." // 1 hits
+map_strogg_biomaintenence_chamber_activated = "Камера биовосстановления строггов включена." // 1 hits
+map_strogg_fighter = "Связь истребителей\nстроггов подавлена." // 1 hits
+map_strogg_uniform_obtained = "Получена форма строггов.\nДействует маскировка.\nНе стреляй!" // 1 hits
+map_surface_access = "Доступ к поверхности\nзапрещён." // 1 hits
+map_take_out_the = "Уничтожь\nспутниковую тарелку." // 1 hits
+map_take_out_the_blackhole = "Уничтожь компьютеры\nгенератора черной дыры." // 1 hits
+map_take_the_airstrike_marker = "Забери у гладиатора\nмаяк для авиаудара." // 1 hits
+map_tank_commanders_head_needed_at_scanner = "Принеси к сканеру\nголову танка-командира." // 1 hits
+map_target_destroyed = "Цель уничтожена.\nНаправляйся к выходу." // 1 hits
+map_tectonic_stabilizer_access_opening = "Открывается проход к тектоническому стабилизатору." // 1 hits
+map_teleporter_access_denied = "Нет доступа к телепорту." // 1 hits
+map_teleporter_unlocked = "Получен доступ к телепорту." // 1 hits
+map_terminal_locked = "Терминал недоступен.\nЗапусти процедуру \nустановления связи." // 1 hits
+map_terminal_locked,_data_disk_required = "Терминал недоступен, нужен диск с данными." // 1 hits
+map_terminal_offline = "Терминал отключён." // 1 hits
+map_the_core_cpu_has_locked_this_door = "Главный процессор блокирует открытие двери" // 1 hits
+map_the_gate_is_blocked_by_debris = "Проход заблокирован." // 1 hits
+map_this_door_cannot_be_opened_from_here = "Эту дверь нельзя открыть отсюда." // 1 hits
+map_this_door_is_locked = "Эта дверь заперта." // 2 hits
+map_this_door_is_locked_1 = "Эта дверь заперта." // 4 hits
+map_this_door_is_locked_from_the_inside = "Эта дверь заперта изнутри." // 4 hits
+map_this_door_is_opened_elsewhere = "Эта дверь открывается не отсюда." // 2 hits
+map_this_door_is_opened_elsewhere_1 = "Эта дверь открывается не отсюда." // 47 hits
+map_this_door_locked = "Эта дверь заперта." // 1 hits
+map_this_force_field_is = "Это силовое поле\nотключается не отсюда." // 2 hits
+map_this_force_field_is_activated = "Это силовое поле\nактивируется лазером связи." // 2 hits
+map_this_is_the_end_of_the_unit = "Это конец сектора." // 1 hits
+map_this_item_must_be_activated_to_use_it = "%bind:+wheel2:$map_item_wheel%Чтобы использовать этот предмет, его нужно активировать." // 6 hits
+map_item_wheel = "Открыть круговое меню снаряжения"
+map_toxic_conditions_found_in = "Токсичная среда\nв нижних шахтах.\nЗапусти систему \nвентиляции." // 1 hits
+map_track_disabled = "Путь отключён." // 1 hits
+map_tracks_disabled = "Пути отключены." // 1 hits
+map_transfer_pump_online = "Насос перекачки включён." // 1 hits
+map_transport_accesssible = "Транспорт доступен.\nНаправляйся в центр \nлогистики." // 1 hits
+map_turbine_shut_down = "Турбина остановлена." // 1 hits
+map_turn_off_all_3_auxiliary = "Отключи все 3 резервных\nнасоса охлаждения." // 1 hits
+map_unauthorized_entry = "Обнаружен\nпосторонний." // 1 hits
+map_unstable_conditions_ahead = "Впереди нестабильная \nзона.\nДействуй осторожно." // 1 hits
+map_uplink_to_capital_ship = "Свяжись с флагманом,\nчтобы перезаписать\nдиск." // 1 hits
+map_use_air_vent_to = "Проберись через\nвентиляцию к мостику." // 1 hits
+map_use_antimatter_bomb = "Уничтожь гравитационный\nколодец бомбой с \nантиматерией." // 1 hits
+map_use_antimatter_bomb_1 = "Уничтожь гравитационный\nколодец бомбой с \nантиматерией." // 1 hits
+map_use_blue_keycard_to = "Используй синюю\nключ-карту для входа\nв изолятор." // 1 hits
+map_use_blue_keycard_to_enter = "Войди в бункер\nс синей ключ-картой." // 1 hits
+map_use_cargo_elevator = "Доберись до склада\nна грузовом лифте." // 1 hits
+map_use_cargo_lift_to_reenter = "Вернись в ремонтные \nангары\nна грузовом лифте." // 1 hits
+map_use_containment = "Помести ядро\nиз антиматерии\nв защитную капсулу." // 1 hits
+map_use_exit_tunnel_below = "Войди в стабилизатор\nчерез туннель внизу." // 1 hits
+map_use_fighter_lift_to = "Поднимись выше\nна лифте\nдля пилотов." // 1 hits
+map_use_flooded_entrance = "Покинь зону через\nзатопленный вход." // 1 hits
+map_use_flow_control_valves = "Затопи вход с помощью\nклапанов управления \nпотоком. " // 1 hits
+map_use_gondola_to_enter = "Доберись до \nгравитационного колодца\nв энергокабине." // 1 hits
+map_use_key_card_to = "Открой грузовые двери\nключ-картой." // 1 hits
+map_use_med_scanner_to_encode_system_access = "Закодируй доступ \nк системе\nмедицинским сканером" // 1 hits
+map_use_overflow_tunnel = "Доберись до ангаров\nпо туннелю водосброса." // 1 hits
+map_use_power_cube_to_ = "Включи кран \nс помощью энергокуба." // 1 hits
+map_use_secondary_exit = "Вернись на склад\nбоеприпасов через\nзапасной выход." // 1 hits
+map_use_security_pass = "Используй пропуск,\nчтобы взять\nзащитную капсулу." // 1 hits
+map_use_sewer_tunnels_to_gain = "Доберись до центра связи\nчерез туннели \nканализации." // 1 hits
+map_use_the_security_pass = "Используй пропуск,\nчтобы добраться до\nтектонического \nстабилизатора." // 1 hits
+map_use_transport_shuttle_to_ = "Доберись до тактического\nцентра на челноке." // 1 hits
+map_use_underground_train = "Используй подземный \nпоезд." // 1 hits
+map_use_ventilation_fan_shaft = "Проникни в ангар\nчерез шахту вентиляции." // 1 hits
+map_valve_opened = "Клапан открыт." // 1 hits
+map_vent_pipe_access_denied = "Нет доступа к вентиляционной трубе." // 1 hits
+map_vent_pipe_access_granted = "Получен доступ к вентиляционной трубе." // 1 hits
+map_ventilation_fan_inactive = "Вентилятор не работает." // 1 hits
+map_ventilation_systems_active = "Система вентиляции запущена.\nНижние уровни доступны." // 1 hits
+map_wall_node_forcefields_off = "Силовые поля стенных узлов выключены." // 1 hits
+map_warehouse_access_denied = "Нет доступа к складу." // 1 hits
+map_warning = "ВНИМАНИЕ!\nВыполняется запуск." // 1 hits
+map_warning_communication_laser_shut_down = "Внимание. Лазер связи выключен." // 1 hits
+map_waste_conveyor_activated = "Конвейер с отходами запущен." // 1 hits
+map_waste_drain_opened = "Люк сброса отходов открыт." // 1 hits
+map_waste_storage_and_processing_opened = "Станция хранения и переработки отходов открыта." // 1 hits
+map_welcome_to_the_id_gallery = "Добро пожаловать в галерею id!" // 1 hits
+map_yellow_force_fields_deactivated = "Жёлтые силовые поля выключены." // 1 hits
+map_yellow_force_fields_deactivated_1 = "Жёлтые силовые поля выключены." // 1 hits
+map_yellow_forcefields_deactivated = "Жёлтые силовые поля выключены." // 1 hits
+map_yellow_lasers_disabled = "Жёлтые лазеры выключены." // 1 hits
+map_yellow_lasers_still_activated = "Жёлтые лазеры ещё работают.\nДальше пройти нельзя." // 2 hits
+map_you_activated_the_ore_mover = "Перевозчик руды запущен." // 1 hits
+map_you_found_a_secret = "Найден секрет!" // 14 hits
+map_you_found_a_secret_1 = "Найден секрет!" // 70 hits
+map_you_found_a_secret_item = "Секретный предмет!" // 1 hits
+map_you_found_a_secret_item_1 = "Секретный предмет!" // 2 hits
+map_you_found_a_secret_level = "Секретный уровень!" // 1 hits
+map_you_found_a_secret_level_1 = "Секретный уровень!" // 1 hits
+map_you_have_found_a_secret = "Найден секрет!" // 47 hits
+map_you_have_found_a_secret_gun_trap = "Найден секрет!\nСтреляющая ловушка отключена." // 1 hits
+map_you_have_found_a_secret_area = "Секретная область!" // 2 hits
+map_you_have_found_a_secret_area_1 = "Секретная область!" // 39 hits
+map_you_have_found_a_secret_level = "Секретный уровень!" // 3 hits
+map_you_have_found_a_secret_passage = "Секретный проход!" // 1 hits
+map_you_have_triggered = "Активирован\nсекрет!" // 1 hits
+map_you_opened_a_secret = "Открыт секрет!" // 1 hits
+map_you_opened_a_secret_area = "Открыта секретная область!" // 1 hits
+map_you_released_the_mutant = "Мутант на свободе!" // 1 hits
+map_youve_changed_the_passages = "Положение проходов изменилось." // 2 hits
+map_youve_found_a_secret = "Найден секрет!" // 1 hits
+map_youve_found_a_secret_1 = "Найден секрет!" // 1 hits
+map_youve_opened_a_secret = "Открыт секрет!" // 1 hits
+map_youve_triggered_the_slime = "Активирована слизь!" // 2 hits
+map_youve_triggered_the_trap = "Активирована ловушка." // 1 hits
+boss2_jonatan = "Jonatan Pöljö\nEnhanced Models & Additional Art" // should be carried over in all other languages but name and title left unlocalized (needed to render ö correctly)
+
+// additional map messages, xatrix mostly
+map_a_door_has_opened = "Дверь открылась." // 5 hits
+map_a_secret_area_has_been_revealed = "Обнаружена секретная область." // 1 hits
+map_a_secret_room = "Секретное помещение." // 1 hits
+map_access_valve_a_opened = "Клапан доступа \"А\" открыт." // 1 hits
+map_access_valve_b_opened = "Клапан доступа \"Б\" открыт." // 1 hits
+map_adjusting_mirror = "Выравнивание зеркала." // 1 hits
+map_airstrike_incoming_in__1 = "Авиаудар через:  1" // 1 hits
+map_airstrike_incoming_in__2 = "Авиаудар через:  2" // 1 hits
+map_airstrike_incoming_in__3 = "Авиаудар через:  3" // 1 hits
+map_airstrike_incoming_in__4 = "Авиаудар через:  4" // 1 hits
+map_airstrike_incoming_in__5 = "Авиаудар через:  5" // 1 hits
+map_airstrike_incoming_in__6 = "Авиаудар через:  6" // 1 hits
+map_airstrike_incoming_in__7 = "Авиаудар через:  7" // 1 hits
+map_airstrike_incoming_in__8 = "Авиаудар через:  8" // 1 hits
+map_airstrike_incoming_in__9 = "Авиаудар через:  9" // 1 hits
+map_auto_destruct_in_20_seconds = "Самоуничтожение через 20 секунд." // 1 hits
+map_auto_destruct_in_30_seconds = "Самоуничтожение через 30 секунд." // 1 hits
+map_blue_forcefield_deactivated = "Синее силовое поле выключено." // 1 hits
+map_continue_through_sewers = "Двигайся далее\nчерез канализацию.\nУничтожь всех врагов." // 1 hits
+map_conveyor_belt_maintenance = "Открыт служебный\nлюк конвейера." // 1 hits
+map_core_reactor_is_offline = "Главный реактор \nостановлен.\nВернись в грузовой отсек\nи покинь лунную базу." // 1 hits
+map_counter_strike_fleet_is = "Контрударный флот -\nна луне Строггоса.\nНаправляйся в \nзаводской комплекс." // 1 hits
+map_data_cd_not_retrieved = "Нет диска с данными.\nВернись во внешний\nкомплекс." // 1 hits
+map_deactivate_forcefield_from = "Выключи силовое поле\nв диспетчерской ангара." // 1 hits
+map_deactivate_strogg = "Останови работу\nзавода строггов." // 1 hits
+map_destroy_strogg_fuel = "Уничтожь топливный\nзавод строггов." // 1 hits
+map_disable_induction_coils = "Отключи обмотки\nи заблокируй\nтермореактор лунной базы." // 1 hits
+map_downloading_location_of_strogg = "Загрузка координат\nконтрударного флота \nстроггов." // 1 hits
+map_draining = "Откачка..." // 1 hits
+map_eliminate_enemy_resistance = "Уничтожь всех врагов." // 1 hits
+map_enter_intelligence_hq = "Проникни в штаб разведки.\nУзнай, где находится\nконтрударный флот\nстроггов." // 1 hits
+map_filtering = "Фильтрация..." // 1 hits
+map_find_outer_airlock = "Найди внешний шлюз.\nПриготовься к посадке." // 1 hits
+map_flood_hatch_switched = "Шлюзовой затвор переключён." // 1 hits
+map_floodgate_locked = "Шлюз закрыт" // 1 hits
+map_gain_access_to_1 = "Доберись\nдо штаба разведки\nчерез хранилище воды." // 1 hits
+map_gain_access_to_2 = "Доберись\nдо укрепления\nстроггов." // 1 hits
+map_gain_access_to_outer = "Доберись до внешнего\nкомплекса через\nканализацию." // 1 hits
+map_gain_access_to_upper_hangar = "Поднимись в верхний ангар\nна главном грузовом\nлифте." // 1 hits
+map_gain_entrance = "Доберись\nдо очистительного завода." // 1 hits
+map_incoming_airstrike = "Авиация на подходе" // 1 hits
+map_induction_coils_disabled = "Обмотки отключены.\nОстанови главный реактор." // 1 hits
+map_infiltrate_command_center = "Войди в командный центр\nи уничтожь\nлунную базу." // 1 hits
+map_infiltrate_main = "Войди в основной\nцентр охраны." // 1 hits
+map_initiating_auto = "Запуск автоматической\nсистемы уничтожения" // 1 hits
+map_invalid_access_code = "Неверный код доступа..." // 1 hits
+map_join_with_remaining = "Помоги остальным\nбойцам штурмовой бригады.\nНайди диск с данными." // 1 hits
+map_kill_enemy_resistance = "Уничтожь всех врагов." // 1 hits
+map_laser_not_in_up_position = "Лазер не в верхнем положении." // 1 hits
+map_laser_security_grid_deactivated = "Лазерная защитная сеть выключена." // 1 hits
+map_lasers_deactivated = "Лазеры выключены." // 1 hits
+map_lift_is_activated_elsewhere = "Лифт включается в другом месте." // 1 hits
+map_live_food_processing = "Обработка живого корма\nостановлена." // 1 hits
+map_locate_a_newly = "Найди корабль\nи покинь лунную базу,\nпрежде чем она взорвётся." // 1 hits
+map_locate_alternate_entrance = "Найди другой вход\nна очистительный завод." // 1 hits
+map_locate_control_room = "Найди диспетчерскую.\nВозьми красный ключ." // 1 hits
+map_locate_gekk_lair = "Найди логово гекков.\nЗабери маяк для \nавиаудара." // 1 hits
+map_locate_green_keycard = "Найди зелёную ключ-карту." // 1 hits
+map_locate_stolen = "Найди украденный\nмаяк для авиаудара." // 1 hits
+map_locate_strogg_freighter = "Найди грузовой \nтранспорт строггов." // 1 hits
+map_locate_strogg_spaceport = "Найди космопорт строггов.\nПроберись на \nгрузовой транспорт,\nследующий к луне." // 1 hits
+map_locate_the_main = "Найди процессорное\nядро главного\nсервера центра разведки." // 1 hits
+map_locate_transportation_out = "Покинь промзону\nна транспорте.\nУничтожь всех врагов." // 1 hits
+map_locked_by_security = "Заперто охраной." // 1 hits
+map_maintenance_hatch = "Служебный люк\nпереведён в ручной режим." // 1 hits
+map_maintenance_hatch_locked = "Служебный люк заперт." // 1 hits
+map_maintenance_hatch_opened = "Служебный люк открыт." // 1 hits
+map_moving_the_laser = "Перемещение лазера." // 1 hits
+map_no_prize_for_you_rocketman = "Зря прыгал, ракетчик" // 1 hits
+map_overflow_doors_opened = "Заслонки водосброса открыты." // 1 hits
+map_overflow_valve_maintenance = "Служебный люк клапана\nводосброса открыт." // 1 hits
+map_overflow_valve_opened = "Клапан водосброса открыт." // 1 hits
+map_overflow_valve_sealed = "Клапан водосброса закрыт." // 2 hits
+map_power_cube_chamber_open = "Доступ к энергокубу открыт." // 1 hits
+map_power_cubes_retrieved = "Энергокубы получены.\nВернись во внутренний \nкомплекс." // 1 hits
+map_primary_flood_gates_opened = "Основные шлюзы открыты." // 1 hits
+map_primary_mission_completed = "Основное задание выполнено." // 1 hits
+map_proceed_to_intelligence_hq = "Направляйся к штабу \nразведки." // 1 hits
+map_proceed_to_intelligence_hq_1 = "Направляйся к штабу \nразведки.\nУничтожь всех врагов." // 1 hits
+map_proceed_to_main = "Направляйся к главному\nгрузовому лифту." // 1 hits
+map_proceed_to_outer_base = "Направляйся к\nвнешней части базы." // 1 hits
+map_proceed_to_refinery = "Направляйся \nк очистительному заводу." // 1 hits
+map_provide_ground_support = "Обеспечь поддержку\nточного авиаудара." // 1 hits
+map_pumping_station_activated = "Насосная станция \nзапущена.\nНаправляйся на склад." // 1 hits
+map_pursue_airstrike_marker_to = "Следуй за маяком\nна станцию очистки воды." // 1 hits
+map_raising_security_bridge = "Мост поднимается." // 1 hits
+map_resume_search_for = "Продолжай поиск\nгрузового транспорта\nстроггов." // 1 hits
+map_retrieve_power_cubes = "Забери энергокубы\nиз главного реактора." // 1 hits
+map_return_to_industrial = "Вернись на \nпромышленную базу.\nНайди украденный\nмаяк для авиаудара." // 1 hits
+map_secondary_flood_gate_opened = "Открыт дополнительный шлюз." // 1 hits
+map_secure_freighter = "Захвати грузовой \nтранспорт\nи соверши посадку." // 1 hits
+map_security_door_is_locked = "Защитная дверь заперта." // 1 hits
+map_security_door_is_unlocked = "Защитная дверь открыта." // 1 hits
+map_security_door_unlocked = "Защитная дверь открыта." // 1 hits
+map_security_fence_active = "Защитная ограда включена.\nНайди другой путь\nв комплекс." // 1 hits
+map_security_force_feilds_deactivated = "Защитные силовые поля выключены." // 1 hits
+map_security_forcefield_active = "Защитное силовое \nполе включено.\nНайди другой путь\nчерез грузовую зону." // 1 hits
+map_security_has_sealed = "Главный вход заперт.\nНайди другой путь." // 1 hits
+map_security_ladder_extended = "Лестница выдвинута." // 1 hits
+map_security_lift_activated = "Лифт активирован." // 1 hits
+map_security_override = "Система защиты в ручном режиме.\nВыходной шлюз открыт." // 1 hits
+map_sentry_bridge_extended = "Мост выдвинут.\nЛазеры отключены." // 1 hits
+map_silencer_tip = "Атакуя врагов незаметно, ты наносишь двойной урон." // 1 hits
+map_storage_tank_door_is_now_open = "Дверь резервуара открыта." // 1 hits
+map_storage_tank_door_is_sealed = "Дверь резервуара закрыта." // 1 hits
+map_storage_tank_door_is_sealed_1 = "Дверь резервуара закрыта.\nПонизь уровень воды." // 1 hits
+map_storage_tank_water = "Уровень воды\nв резервуаре снижен." // 1 hits
+map_stow_away_in_unused = "Спрячься в пустом\nгрузовом контейнере." // 1 hits
+map_system_is_not_operating = "Система не работает." // 1 hits
+map_system_is_not_powered = "Система обесточена.\nНужны энергокубы\nиз главного реактора." // 1 hits
+map_take_data_cd_and_locate = "Возьми диск с данными\nи найди центр разведки." // 1 hits
+map_terminate_self_destruct = "Останови механизм\nсамоуничтожения. Верни\nэнергокубы в реактор." // 1 hits
+map_the_laser_must_be_operating_first = "Сначала нужно включить лазер." // 1 hits
+map_this_button_is_not_functioning = "Эта кнопка не работает." // 1 hits
+map_this_door_is_not_functioning = "Эта дверь не работает." // 2 hits
+map_this_door_is_opened_nearby = "Эта дверь открывается неподалёку." // 1 hits
+map_this_door_is_sealed_for_transport = "Эта дверь закрыта для транспорта." // 2 hits
+map_this_door_opens_nearby = "Эта дверь открывается неподалёку..." // 1 hits
+map_this_door_opens_nearby_1 = "Эта дверь открывается неподалёку." // 3 hits
+map_unlocked = "Открыто" // 1 hits
+map_use_data_cd_to_discover = "Узнай координаты\nконтрударного флота \nстроггов с помощью \nдиска с данными." // 1 hits
+map_use_green_keycard = "Включи систему\nоткачки с помощью\nзелёной ключ-карты." // 1 hits
+map_use_power_cubes = "Запусти насосную\nстанцию с помощью\nэнергокубов." // 1 hits
+map_ventilation_access_denied = "Нет доступа к системе вентиляции." // 1 hits
+map_ventilation_access_granted = "Доступ к системе вентиляции разрешён." // 1 hits
+map_you_discovered_a_secret = "Найден секрет." // 1 hits
+map_you_found_a_secret_area_1 = "Секретная область." // 19 hits
+map_you_found_another_secret = "Ещё один секрет." // 1 hits
+map_you_have_opened_a_secret_area = "Открыта секретная область." // 1 hits
+map_you_located_a_secret = "Найден секрет." // 1 hits
+map_youve_discovered_a_secret = "Найден секрет." // 4 hits
+map_youve_discovered_a_secret_area = "Найдена секретная область." // 1 hits
+map_youve_found_a_secret_area = "Секретная область!" // 1 hits
+map_youve_found_a_secret_area_1 = "Секретная область." // 5 hits
+
+map_mission_completed_that_was_pret_0 = "Задание выполнено.\nНеплохо.\nНо сможешь повторить\nс одним бластером?"
+map_shoot_barrels_to_make_them_explo_0 = "Стреляй в бочки,\nчтобы взорвать их."
+map_shoot_button_to_open_a_secret_ar_0 = "Выстрели в кнопку, чтобы\nоткрыть секретную область."
+map_mission_completed_proceed_to_ce_0 = "Задание выполнено.\nНаправляйся в центральный комплекс."
+map_press_and_hold_jump_to_climb_lad_0 = "%bind:+moveup:$map_jump_ladder%%bind:+movedown:$map_crouch_ladder%Зажми кнопку прыжка,\nчтобы подняться по лестнице." // 1 hits
+map_press_button_to_activate_lift_0 = "Лифт включается\nнажатием кнопки."
+map_repulsor_deactivated_access_gra_0 = "Отталкиватель выключен.\nДоступ открыт."
+map_data_disc_uploaded_teleporter_d_0 = "Данные с диска отправлены.\nКонечная точка телепорта изменена."
+map_warning_liftoff_in_progress_0 = "ВНИМАНИЕ!\nВыполняется запуск."
+map_docking_station_access_denied_0 = "Нет доступа\nк стыковочной станции."
+map_access_denied_mission_objective_0 = "НЕТ ДОСТУПА:\nзадачи не выполнены."
+map_mission_completed_proceed_to_ca_0 = "Задание выполнено.\nНаправляйся в грузовой отсек."
+map_unauthorized_entry_detected_0 = "Обнаружен\nпосторонний."
+map_security_measures_disabled_0 = "Защитная система\nвыключена."
+map_security_doors_deactivated_0 = "Защитные двери\nвыключены."
+map_control_room_access_granted_0 = "Получен доступ\nк диспетчерской."
+map_emergency_exit_unlocked_0 = "Аварийный выход\nоткрыт."
+map_emergency_exit_sealed_0 = "Аварийный выход\nзакрыт."
+map_geostabilizers_deactivated_0 = "Геостабилизаторы\nдеактивированы."
+map_quarantine_fields_offline_0 = "Изолирующие поля\nвыключены."
+map_control_area_access_denied_0 = "Нет доступа\nк центру управления."
+map_laser_inactive_mirrors_locked_0 = "Лазер выключен.\nЗеркала заблокированы."
+map_surface_access_denied_0 = "Доступ к поверхности\nзапрещён."
+map_security_breach_detected_0 = "Нарушение безопасности."
+map_you_have_triggered_a_secret_0 = "Активирован секрет."
+map_secondary_power_systems_offline_0 = "Резервная энергосистема\nотключена."
+map_geothermal_station_access_denied_0 = "Нет доступа\nк геотермальной станции."
+map_storage_section_b_access_denied_0 = "Нет доступа\nк секции склада \"Б\"."
+map_coolant_pumps_activated_drill_o_0 = "Насосы системы охлаждения включены.\nБур работает."
+map_access_denied_cooling_system_on_0 = "НЕТ ДОСТУПА:\nработает система охлаждения."
+map_access_denied_cooling_systems_a_0 = "НЕТ ДОСТУПА:\nработают системы охлаждения."
+map_cell_protective_field_offline_0 = "Защитное поле камеры\nвыключено."
+map_access_denied_energy_core_onlin_0 = "НЕТ ДОСТУПА:\nработает энергоядро."
+map_maintenance_access_hatch_lock_1_0 = "Люк служебного прохода:\nпервый замок открыт."
+map_core_access_hatch_lock_2_opened_0 = "Люк прохода к ядру:\nвторой замок открыт."
+map_maintenance_passage_opened_0 = "Служебный проход\nоткрыт."
+map_core_access_doors_activated_0 = "Двери доступа к ядру\nвключены."
+map_locate_entrance_to = "Найди выход\nв пустошь."
+map_locate_entrance_to_ = "Найди вход\nв центр логистики."
+map_rboss_escape = "Бомба с антиматерией готова.\nДоберись до научного ангара\nв транспортной капсуле."
+map_rboss_mission_incomplete = "Уничтожь гравитационный колодец,\nпрежде чем вернуться к капсуле."
+
+map_1moretogo = "Ещё 1...\n"
+
+// N64 map goals
+map_dm4_goal_0 = "Среднее время\n----\n1:40"
+map_outpost_goal_0 = "Задание 1:\n\nНайди вход\nв центральный комплекс."
+map_complex_goal_0 = "Задание 2:\n\nНайди взрывные заряды."
+map_complex_goal_1 = "Задание 3:\n\nУничтожь охранный\nтерминал зарядами."
+map_complex_goal_2 = "Задание 4:\n\nНайди и используй\nтелепорт."
+map_intel_goal_0 = "Задание 5:\n\nНайди диск с данными."
+map_intel_goal_1 = "Задание 6:\n\nНаправляйся в центр \nсвязи."
+map_comm_goal_0 = "Задание 7:\n\nОтправь данные с диска\nв штаб."
+map_comm_goal_1 = "Задание 8:\n\nТелепортируйся на\nорбитальную станцию."
+map_orbit_goal_0 = "Задание 9:\n\nОтключи генератор \nгравитации."
+map_orbit_goal_1 = "Задание 10:\n\nНайди и возьми\nвзрывные заряды."
+map_orbit_goal_2 = "Задание 11:\n\nНаправляйся к стыковочной\nстанции."
+map_station_goal_0 = "Задание 12:\n\nУничтожь генераторы\nвзрывными зарядами."
+map_station_goal_1 = "Задание 13:\n\nПокинь сектор\nна корабле строггов."
+map_ship_goal_0 = "Задание 14:\n\nЗамени программу\nнавигационных ЭВМ.\nЦель - луна строггов."
+map_cargo_goal_0 = "Задание 15:\n\nНайди зону капсул.\nИди до луны строггов."
+map_mines_goal_0 = "Задание 16:\n\nНарушь работу шахты.\nНайди аварийный\nвыход."
+map_storage_goal_0 = "Задание 17:\n\nНайди телепорт,\nведущий на планету."
+map_storage_goal_1 = "Задание 18:\n\nПеренаправь лазерный\nбур, чтобы попасть\nна нижний склад."
+map_organic_goal_0 = "Задание 19:\n\nВойди в кабину охраны.\nОткрой охранные двери."
+map_organic_goal_1 = "Задание 20:\nНайди грузовой лифт,\nведущий к центру \nпереработки."
+map_process_goal_0 = "Задание 19:\n\nДоберись\nдо геотермальной станции."
+map_geostat_goal_0 = "Задание 20:\n\nВключи геотермальную\nэнергосистему."
+map_geostat_goal_1 = "Задание 21:\n\nОтключи охлаждение,\nчтобы вызвать перегрузку."
+map_geostat_goal_2 = "Задание 22:\n\nВойди в изолятор\nпо трубе охлаждения."
+map_jail_goal_0 = "Задание 23:\n\nНайди вход\nв лабораторию строггов."
+map_lab_goal_0 = "Задание 24:\n\nОтключи энергоядро."
+map_lab_goal_1 = "Задание 25:\nНайди грузовой поезд,\nследующий на базу \nстроггов."
+map_bio_goal_0 = "Задание 25:\n\nОтключи первый\nзапирающий механизм."
+map_bio_goal_1 = "Задание 26:\n\nОтключи второй\nзапирающий механизм."
+map_bio_goal_2 = "Задание 27:\n\nПроникни в каналы доступа\nчерез служебный проход."
+map_conduits_goal_0 = "Задание 28:\n\nНайди последний замок,\nчтобы попасть к ядру."
+map_conduits_goal_1 = "Задание 29:\n\nВход открыт.\nНаправляйся к ядру."
+map_core_goal_0 = "Задание 30:\n\nСпустись к реактору.\nНайди вход\nв главный штаб строггов."
+map_command_goal_0 = "Задание 31:\n\nУничтожь стражей.\nОтключи ядро."
+
+g_fact3_objective = "У вас есть 30 секунд...\nхватайте всё, что можете!"
+
+// mg maps
+map_access = "Проберись\nв помещение охраны." // 1 hits
+map_access_denied = "Нет доступа." // 8 hits
+map_access_denied__no_entry = "Нет доступа: вход воспрещён." // 1 hits
+map_access_granted = "Доступ разрешён." // 3 hits
+map_access_the_comms_array = "Доберись до узла связи." // 1 hits
+map_access_to = "Получи допуск\nк помещению охраны." // 1 hits
+map_access_uplink_tower = "Используй башню связи,\nчтобы отправить\nданные строггов." // 1 hits
+map_accessing_red_keycard = "Получение красной ключ-карты..." // 1 hits
+map_acess_bridge_active = "Мост активирован." // 1 hits
+map_acquire_data_disc = "Забери диск с данными\nв диспетчерской\nкрыла охраны." // 1 hits
+map_activated_crane_conveyer = "Конвейер крана запущен." // 1 hits
+map_activated_decomposition_sluice = "Шлюз отвода отходов открыт." // 2 hits
+map_aim_orbital_gun = "Наведи орбитальную пушку." // 1 hits
+map_aisa_mainframe = "Работа суперкомпьютера AI-SA\nостановлена.\nВсе лазеры выключены." // 1 hits
+map_an_ancient_evil_is_awakened_find_a_way_out = "Древнее зло пробудилось.\nНайди выход!" // 1 hits
+map_an_ancient_evil_whispers_to_you = "Древнее зло что-то шепчет тебе..." // 2 hits
+map_ancient_carrier = "Древний авианосец" // 1 hits
+map_anti_aircraft_redirect_coordinates = "Координаты ПВО изменены." // 1 hits
+map_arachnid = "Арахнид" // 1 hits
+map_bloodstarved_mutant = "Кровожадный мутант" // 1 hits
+map_blue_firewall_powering_down = "Синее защитное поле выключается..." // 1 hits
+map_blue_lasers_disabled = "Синие лазеры выключены." // 1 hits
+map_breach_the_data_vault = "Проникни в хранилище данных." // 1 hits
+map_cell_weapons_are_more_effective = "Оружие, использующее батареи,\nлучше пробивает силовую броню." // 1 hits
+map_children_of_makron = "Исчадия Макрона" // 2 hits
+map_close_gate_2 = "Закрой ворота 2." // 1 hits
+map_commander = "Командир" // 1 hits
+map_communication_lost = "Связь прервана.\nПостарайся выжить!" // 1 hits
+map_complete_the_trial = "Заверши испытание." // 4 hits
+map_complete_the_tutorial = "Заверши обучение." // 1 hits
+map_congratulations = "Поздравляем!\n\nПосле смерти владык механизмов строгги\nутратили связь со своим создателем.\nТвоё задание выполнено. Тебе удалось\nотомстить врагу, и теперь ты дрейфуешь\nв бескрайней пустоте космоса." // 1 hits
+map_contact_lost = "Контакт потерян.\nЗадание провалено." // 1 hits
+map_control_room_1 = "Диспетчерская закрыта.\nНайди красную ключ-карту." // 1 hits
+map_controlled_by_carrier = "Эту дверь контролирует авианосец." // 4 hits
+map_crouch_to_fit_under_obstacles = "%bind:+movedown:$m_crouch%Приседай, чтобы \nпроходить под\nпрепятствиями." // 1 hits
+map_data_disck_uploaded = "Диск с данными передан на отправку." // 2 hits
+map_data_transmitting = "Передача данных..." // 1 hits
+map_defeat_the = "Победи администратора\nсистемы." // 1 hits
+map_defeat_the_gate_warden = "Победи стража ворот." // 1 hits
+map_defeat_the_strogg_creator = "Победи создателя\nстроггов,\nвладыку механизмов" // 1 hits
+map_defeat_the_underminer = "Победи Разрушителя." // 1 hits
+map_destroy_the_jammers = "Уничтожь генераторы\nпомех." // 1 hits
+map_determine_fate_of_badger_squad = "Узнай судьбу\nотряда \"Барсук\"." // 1 hits
+map_dimensional_shamblers = "Владыки механизмов" // 2 hits
+map_disable = "Останови работу\nсуперкомпьютера." // 1 hits
+map_disable_1 = "Останови работу\nсуперкомпьютера." // 1 hits
+map_disable_the = "Выключи красную\nлазерную сеть." // 1 hits
+map_disable_the_forcefields = "Отключи силовые поля." // 1 hits
+map_door_is_open = "Дверь открыта." // 1 hits
+map_door_open = "Дверь открылась." // 1 hits
+map_downloading_aisa_disc_location = "Загрузка координат диска AI-SA..." // 1 hits
+map_drills_have_been_shut_down = "Буры отключены.\nПокинь корабль\nи вернись на Землю." // 1 hits
+map_either_destroy_the_shield,_or = "Уничтожь щит\nили наноси урон сзади." // 1 hits
+map_energy_shields_disabled = "Энергощиты отключены!" // 1 hits
+map_enter = "Войди в суперкомпьютер." // 2 hits
+map_enter_security_annexe = "Войди в крыло охраны." // 1 hits
+map_enter_the = "Войди\nв бункер связи." // 1 hits
+map_enter_the_slipgate = "Войди в червоточину." // 1 hits
+map_entrance_is_flooded = "Вход затоплен.\nЗапусти насосную станцию." // 1 hits
+map_error_only_one_gate_can_open_at_the_same_time = "ОШИБКА: нельзя открыть два прохода одновременно." // 1 hits
+map_escape_from_megacorpse_iv = "Покинь \"Мегатруп IV\"." // 1 hits
+map_escape_through_coolant_system = "Выберись через\nсистему охлаждения." // 1 hits
+map_explore_the_ancient_temple_and_escape = "Осмотри древний храм\nи покинь территорию." // 1 hits
+map_explore_the_pumping = "Осмотри насосную станцию\nи найди классическую \nголову." // 1 hits
+map_explore_the_upper_sections = "Осмотри верхние уровни." // 1 hits
+map_find_a_way_onbaord_the = "Проберись на борт корабля\nстроггов и отключи\nих буровые установки." // 1 hits
+map_find_an_entrance = "Проберись к входу\nчерез канализацию." // 1 hits
+map_find_and_destroy_reactor_core_ = "Найди и уничтожь ядро\nреактора, чтобы \nотключить щит." // 1 hits
+map_find_and_upload = "Найди и отправь\nданные строггов." // 1 hits
+map_find_missing_marines_and = "Найди пропавших солдат\nи забери диск\nс данными строггов." // 1 hits
+map_find_the_blue_key = "Найди синий ключ." // 2 hits
+map_find_the_power_cube_ = "Найди энергокуб\nдля башни связи." // 1 hits
+map_find_the_red_key = "Найди красный ключ." // 1 hits
+map_follow_the_pipes = "Следуй вдоль труб." // 1 hits
+map_gain_acess_to_deeper_sections = "Доберись\nдо нижних уровней." // 1 hits
+map_gain_entry_to_lower_chambers = "Доберись\nдо нижнего уровня." // 1 hits
+map_garbage_carrier = "Мусоровоз" // 1 hits
+map_gate_2_error_manual_relese_required = "Сбой ворот 2: требуется ручная разблокировка." // 1 hits
+map_gate_broken = "Ворота сломаны!" // 2 hits
+map_gate_warden = "Страж ворот" // 1 hits
+map_get_access_to_the_ = "Получи доступ\nк залу пусковых систем." // 1 hits
+map_get_to_the_core = "Доберись до ядра." // 1 hits
+map_grab_yellow_keycard = "Возьми жёлтую ключ-карту." // 1 hits
+map_green_lasers_disabled = "Зелёные лазеры выключены." // 1 hits
+map_harvesters_alerted = "Сборщики получили сигнал тревоги!" // 1 hits
+map_infiltrate = "Проберись в лабораторию\nплоти строггов и найди\nдиск AI-SA." // 1 hits
+map_infiltrate_and_find = "Проберись на территорию\nи узнай, где находится \nсвалка." // 1 hits
+map_infiltrate_excavation_site = "Проберись на место \nраскопок и собери \nданные сейсмографа." // 1 hits
+map_infiltrate_megacorpse_iv = "Проберись на \n\"Мегатруп IV\"." // 1 hits
+map_insert_data_disc_into = "Вставь диск с данными\nв терминал связи с \nНексусом." // 1 hits
+map_inventory_items = "%bind:+wheel2:$map_item_wheel%Предметы нужно\nактивировать" // 1 hits
+map_its_stuck = "Заклинило." // 2 hits
+map_junkyard_location_ = "Координаты свалки получены." // 1 hits
+map_kill_the_strogg_jammers = "Уничтожь генераторы \nпомех строггов." // 1 hits
+map_laser_deactivated = "Лазер выключен." // 1 hits
+map_laser_gate_disabled = "Лазерные ворота выключены." // 4 hits
+map_laser_gates_deactivated = "Лазерные ворота выключены." // 3 hits
+map_laser_grid_disabled = "Лазерная сеть выключена." // 1 hits
+map_locate = "Найди диск AI-SA." // 1 hits
+map_locate_an_uplink_tower = "Найди башню связи." // 1 hits
+map_locate_and_kill_the = "Найди и уничтожь\nсоздателя строггов." // 1 hits
+map_locate_entrance_to_1 = "Найди вход\nв крыло охраны." // 1 hits
+map_locate_the_aisa_disc = "Найди диск AI-SA." // 3 hits
+map_locate_the_data_disc = "Найди диск с данными\nв крыле охраны." // 1 hits
+map_locked = "Заперто." // 1 hits
+map_locked_1 = "Заперто." // 2 hits
+map_long_live_the_dopefish = "Да здравствует Долболобик!" // 1 hits
+map_lost_contact_with_unit_mg3 = "Потерян контакт \nсо звеном MG-3.\nОсмотри сектор и выясни,\nчто произошло." // 1 hits
+map_main_frame_access_denied = "Нет доступа к суперкомпьютеру." // 2 hits
+map_makron = "Макрон" // 1 hits
+map_medic_commanders = "Командиры-медики телепортируют к себе новых врагов.\nУничтожай медиков в первую очередь." // 1 hits
+map_medics_revive = "Медики оживляют убитых врагов.\nУничтожай медиков в первую очередь." // 1 hits
+map_mining_laser_active = "Буровой лазер включён.\nОстерегайся луча!" // 2 hits
+map_mining_laser_lift_activated = "Лифт бурового лазера активирован." // 1 hits
+map_mission_completed = "Задание выполнено." // 1 hits
+map_modir = "Модир" // 1 hits
+map_more_bodies = "Снова тела. Цель уже близка.\nДиск где-то рядом." // 1 hits
+map_most_weapon_damage_doesnt = "Многие виды оружия\nедва пробивают силовую броню." // 1 hits
+map_must_be_a_control_switch_nearby = "Переключатель наверняка рядом..." // 1 hits
+map_must_open_nearby = "Открывается неподалёку..." // 6 hits
+map_opens_elsewhere = "Открывается не отсюда." // 4 hits
+map_opens_elsewhere_1 = "Открывается не отсюда." // 2 hits
+map_opens_from_the_other_side = "Открывается с той стороны." // 2 hits
+map_opens_from_the_other_side_1 = "Открывается с той стороны." // 6 hits
+map_opens_from_the_other_side_2 = "Открывается с той стороны." // 2 hits
+map_orbital_gun_firing = "Орбитальная пушка открывает огонь." // 1 hits
+map_override_lockdown = "Начата отмена блокировки." // 1 hits
+map_picked_up = "Найдена красная ключ-карта.\nУ тебя есть доступ к суперкомпьютеру." // 1 hits
+map_picked_up_1 = "Найдена синяя ключ-карта." // 1 hits
+map_please_do_not_shoot = "Не стреляй\nв дизайнеров уровней\nи их котиков. Спасибо!" // 1 hits
+map_power_cube_release_activated_ = "Инициирован сброс энергокуба!" // 1 hits
+map_reach_the_bridge_and = "Доберись до мостика\nи отправь данные\nс главного компьютера." // 1 hits
+map_realign_satellite_dish = "Настрой спутниковую \nантенну." // 1 hits
+map_realign_satellite_dish_1 = "Настрой спутниковую \nантенну перед \nотправкой данных." // 1 hits
+map_recover_the_data_disc = "Добудь диск с данными\nи найди способ\nпередать его содержимое." // 1 hits
+map_red_lasers_deactivated = "Красные лазеры выключены." // 1 hits
+map_red_lasers_disabled = "Красные лазеры выключены." // 1 hits
+map_rendezvous = "Встреться\nсо своим отрядом" // 2 hits
+map_research_control_room_access_denied = "Нет доступа к диспетчерской лаборатории." // 1 hits
+map_restoring_aisa_backuptransferring_to_spare_host = "Восстановление AI-SA из резервной копии...\nПеренос на доступный носитель..." // 1 hits
+map_resume_previous_mission_1 = "Продолжай выполнять\nпредыдущее задание." // 2 hits
+map_resume_previous_objective = "Продолжай выполнять предыдущую задачу." // 1 hits
+map_retrieve_strogg_data_disc = "Забери диск с данными \nстроггов." // 1 hits
+map_return_to_comms_bunker = "Вернись в бункер связи." // 1 hits
+map_satelite_dish_misaligned = "Антенна смещена.\nИди во внешний комплекс\nи настрой антенну перед\nотправкой данных." // 1 hits
+map_search_the_junkyard_for = "Осмотри свалку и найди\nдиск с данными строггов." // 1 hits
+map_search_through_the = "Осмотри заброшенный\nкомплекс строггов." // 1 hits
+map_security_gate_disabled = "Защитные ворота выключены." // 1 hits
+map_seismic_data_recovered = "Данные сейсмографа \nнайдены.\nПопытайся отправить их." // 1 hits
+map_servitor_of_creation = "Слуга созидания" // 1 hits
+map_servitors_of_creation = "Слуги созидания" // 1 hits
+map_sewer_access_open = "Проход в канализацию открыт." // 1 hits
+map_shoot_to_activate = "Выстрели, чтобы активировать." // 1 hits
+map_shoot_weak_objects = "Стреляй \nв хрупкие объекты,\nчтобы разбить их." // 1 hits
+map_shut_during_drilling = "Закрыто во время бурения." // 2 hits
+map_sick_hops = "Мощно прыгаешь!" // 1 hits
+map_signal_jammed = "Помехи. Сигнал заглушён." // 1 hits
+map_signal_unjammed = "Помех нет. Сигнал проходит." // 1 hits
+map_stand_by_for = "Жди дальнейших\nуказаний." // 1 hits
+map_strogg_carrier = "Авианосец строггов" // 1 hits
+map_strogg_jammers_detected = "В ядре Луны обнаружены\nгенераторы помех строггов." // 1 hits
+map_strogg_megatank = "Мегатанк строггов" // 1 hits
+map_strogg_supertank = "Супертанк строггов" // 1 hits
+map_supply_station_unlocked = "Пункт снабжения открыт!" // 1 hits
+map_system_error = "Системная ошибка!" // 1 hits
+map_take_back_the_moon = "Отбей Луну у противника!" // 1 hits
+map_thank_you_for_playing = "Спасибо за игру!" // 1 hits
+map_thank_you_sandy = "Спасибо, Сэнди" // 1 hits
+map_the_data_disc_is_located_in_the_mainframe = "Диск с данными находится в суперкомпьютере..." // 1 hits
+map_the_drills_have_retracted = "Буры убраны. Теперь можно\nпопасть в новые области\nи продолжить поиски." // 1 hits
+map_the_manual_gate_release_was_successful = "Ворота были открыты вручную." // 1 hits
+map_the_old_ones_demand_a_sacrifice_or_two = "Древние требуют жертв..." // 1 hits
+map_the_system_administrator = "Администратор системы" // 1 hits
+map_the_underminer = "Разрушитель" // 1 hits
+map_there_are_many_more_secrets_to_uncover = "В игре осталось ещё много секретов!\n\nУдачи в новых приключениях!" // 1 hits
+map_they_are_all_lost = "Никого из них не вернуть.\nНи живых, ни мёртвых.\nНайди диск, солдат!" // 1 hits
+map_this_door_opens_elsewhere = "Эта дверь открывается не отсюда." // 3 hits
+map_touch_to_activate = "Коснись, чтобы активировать" // 1 hits
+map_transmit_targeting = "Отправь координаты\nцели в штаб" // 1 hits
+map_transmit_the_data = "Отправь данные." // 1 hits
+map_transmit_the_data_cd = "Отправь данные с диска" // 1 hits
+map_transmitting_system_admin = "Отправка... Системный администратор..." // 1 hits
+map_travel_to_the = "Отправляйся\nк храму\nсоздателя строггов." // 1 hits
+map_trial_4 = "Испытание #4" // 1 hits
+map_trial_complete = "Испытание пройдено!" // 4 hits
+map_unlock_the_comms = "Открой вход\nв бункер связи." // 1 hits
+map_unlock_the_exit = "Открой выход." // 1 hits
+map_unlocked_entrance_to_lower_chambers = "Открыт вход в нижний зал." // 1 hits
+map_uplink_tower_door_open = "Дверь башни связи открыта!" // 1 hits
+map_upload = "Отправь содержимое\nдиска AI-SA." // 2 hits
+map_upload_data_disc = "Отправь данные с диска,\nиспользуя терминал\nв бункере связи." // 1 hits
+map_upload_targeting_data = "Отправить координаты цели." // 1 hits
+map_upload_the_strogg_data = "Отправить данные строггов." // 2 hits
+map_uploading_data = "Отправка данных..." // 1 hits
+map_uploading_data_cd = "Отправка данных с диска..." // 1 hits
+map_use_both_buttons = "Чтобы открыть, используй обе кнопки." // 2 hits
+map_use_computer_to_print_key_pass = "Используй компьютер, чтобы напечатать ключ доступа." // 1 hits
+map_use_gate_1_to_ = "Покинь очистительный \nзавод\nчерез ворота 1." // 1 hits
+map_use_power_cube_to_access_uplink_tower = "Используй энергокуб,\nчтобы войти в \nбашню связи." // 1 hits
+map_use_the_compass_in_your_inventory = "%bind:+wheel2:$map_item_wheel%Используй компас,\nчтобы понять, куда идти." // 2 hits
+map_use_the_computer = "Используй компьютерные\nтерминалы, чтобы \nпросмотреть\nинформацию о задаче." // 1 hits
+map_use_the_red_keycard = "Используй красную \nключ-карту,\nчтобы открыть\nвход в диспетчерскую." // 1 hits
+map_use_to_spawn = "Нажми кнопку, чтобы создать медика." // 1 hits
+map_use_to_spawn_1 = "Нажми кнопку, чтобы создать\nкомандира-медика" // 1 hits
+map_use_to_spawn_enemy_with = "Используй, чтобы создать врага\nс силовым экраном" // 1 hits
+map_use_to_spawn_enemy_with_1 = "Используй, чтобы создать врага\nс силовым щитом" // 1 hits
+map_use_yellow_keycard_to = "Используй \nжёлтую ключ-карту,\nчтобы вернуться \nво внешний комплекс." // 1 hits
+map_wont_budge = "Не получится..." // 5 hits
+map_yellow_firewall_powering_down = "Жёлтое защитное поле выключается..." // 1 hits
+map_you_found_a_secret_area = "Секретная область." // 7 hits
+map_you_got_the_blue_key = "Найден синий ключ." // 3 hits
+map_you_got_the_data_cd = "Найден диск с данными." // 1 hits
+map_you_got_the_red_key = "Найден красный ключ." // 1 hits
+map_you_have_entered_the = "Тебе удалось попасть\nв чрево чудовища.\nТеперь отключи буры!" // 1 hits
+map_you_have_found_a_secret_1 = "Найден секрет!" // 22 hits
+map_you_have_the_disc = "Диск у тебя.\nНайди способ передать \nэти данные." // 1 hits
+map_you_have_the_disc_1 = "Диск у тебя.\nНайди способ передать\nэти данные." // 1 hits
+map_you_picked_up_key_pass = "Получен ключ доступа!" // 1 hits
+map_you_used_the_blue_key = "Использован синий ключ." // 1 hits
+map_your_helmetcam = "Твоя нашлемная камера\nзасекла тела десантников.\nПопробуй найти выживших." // 1 hits
+map_janitors_closet = "Нет доступа к кладовке уборщика."
+map_the_janitor = "Уборщик"
+map_hub_intro = "Вход в захваченные врата строггов..."
+map_hub_obj_primary = "Отправляй десантников\nиз соседних комнат,\nчтобы собрать данные."
+map_hub_obj_secondary = "Собери все данные,\nчтобы открыть портал\nк создателю строггов."
+map_hub_obj_primary_2 = "Отправляйся в измерение \nмеханизмов и убей создателя \nстроггов."
+map_hub_mgu1 = "Операция \"Бег мертвеца\"\n\nНажми кнопку,\nчтобы отправить десантника."
+map_hub_mgu2 = "Операция \"Лазерные глаза\"\n\nНажми кнопку,\nчтобы отправить десантника."
+map_hub_mgu3 = "Операция \"Разрушенная Земля\"\n\nНажми кнопку,\nчтобы отправить десантника."
+map_hub_mgu4 = "Операция \"Пустоши\"\n\nНажми кнопку,\nчтобы отправить десантника."
+map_hub_mgu5 = "Операция \"Защитное поле\"\n\nНажми кнопку,\nчтобы отправить десантника."
+map_hub_mgu6 = "Операция \"Тёмные глубины\"\n\nНажми кнопку,\nчтобы отправить десантника."
+
+// end of unit table
+m_eou_level = "Уровень"
+m_eou_kills = "Убито"
+m_eou_secrets = "Секреты"
+m_eou_time = "Время"
+m_eou_press_button = "Нажмите любую кнопку, чтобы продолжить."
+
+// means of death
+// {0} is always the player who died.
+// for non-self/generic deaths, {1} is the killer.
+
+// generic deaths
+g_mod_generic_died = "{0} умирает.\n"
+g_mod_generic_suicide = "{0} сводит счёты с жизнью.\n"
+g_mod_generic_falling = "{0} падает со свистом.\n"
+g_mod_generic_crush = "{0} превращается в лепёшку.\n"
+g_mod_generic_water = "{0} тонет как кирпич.\n"
+g_mod_generic_slime = "{0} тает на глазах.\n"
+g_mod_generic_lava = "{0} совершает кувырок в лаву.\n"
+g_mod_generic_explosive = "{0} взрывается.\n"
+g_mod_generic_exit = "{0} находит выход.\n"
+g_mod_generic_laser = "{0} видит яркий свет.\n"
+g_mod_generic_blaster = "{0} гибнет от выстрела.\n"
+g_mod_generic_hurt = "{0} оказывается не в том месте не в то время.\n"
+g_mod_generic_gekk = "{0}... наверное, было больно!\n"
+
+// self deaths
+g_mod_self_held_grenade = "{0} неудачно пытается вставить чеку на место.\n"
+g_mod_self_grenade_splash = "{0} подрывается на своей гранате.\n"
+g_mod_self_rocket_splash = "{0} подрывает себя.\n"
+g_mod_self_bfg_blast = "{0} использует слишком большую пушку.\n"
+g_mod_self_trap = "{0} попадается в свою же ловушку.\n"
+g_mod_self_dopple_explode = "{0} ведётся на уловки собственного двойника.\n"
+g_mod_self_default = "{0} убивает себя.\n"
+
+// killer deaths
+g_mod_kill_blaster = "{0} гибнет от выстрела игрока {1}.\n"
+g_mod_kill_shotgun = "{0} ловит заряд дроби игрока {1}.\n"
+g_mod_kill_sshotgun = "{0} сдувается от супердробовика игрока {1}.\n"
+g_mod_kill_machinegun = "{0} тяжелеет от свинца из пулемёта игрока {1}.\n"
+g_mod_kill_chaingun = "{0} разрезается пополам автопушкой игрока {1}.\n"
+g_mod_kill_grenade = "{0} подрывается на гранате игрока {1}.\n"
+g_mod_kill_grenade_splash = "{0} разлетается в клочья от шрапнели игрока {1}.\n"
+g_mod_kill_rocket = "{0} ловит ракету игрока {1}.\n"
+g_mod_kill_rocket_splash = "{0} не успевает увернуться от ракеты игрока {1}.\n"
+g_mod_kill_hyperblaster = "{0} плавится от залпов из гипербластера игрока {1}.\n"
+g_mod_kill_railgun = "{0} гибнет от рельсотрона игрока {1}.\n"
+g_mod_kill_bfg_laser = "{0} видит красивые огоньки BFG игрока {1}.\n"
+g_mod_kill_bfg_blast = "{0} сгорает от залпа из BFG игрока {1}.\n"
+g_mod_kill_bfg_effect = "{0} не может скрыться от BFG игрока {1}.\n"
+g_mod_kill_handgrenade = "{0} ловко ловит гранату игрока {1}.\n"
+g_mod_kill_handgrenade_splash = "{0} не замечает гранату игрока {1}.\n"
+g_mod_kill_held_grenade = "{0} чувствует всю боль игрока {1}.\n"
+g_mod_kill_telefrag = "{0} неудачно вторгается в личное пространство игрока {1}.\n"
+g_mod_kill_ripper = "{0} превращается в фарш резаком игрока {1}.\n"
+g_mod_kill_phalanx = "{0} обращается в пар стараниями игрока {1}.\n"
+g_mod_kill_trap = "{0} попадается в ловушку игрока {1}.\n"
+g_mod_kill_chainfist = "{0} делится надвое без остатка пилой игрока {1}.\n"
+g_mod_kill_disintegrator = "{0} разлетается на атомы от дезинтегратора игрока {1}.\n"
+g_mod_kill_etf_rifle = "{0} получает набор новых отверстий от игрока {1}.\n"
+g_mod_kill_heatbeam = "{0} сгорает от плазменного луча игрока {1}.\n"
+g_mod_kill_tesla = "{0} получает заряд от тесла-мины игрока {1}.\n"
+g_mod_kill_prox = "{0} неудачно контактирует с неконтактной миной игрока {1}.\n"
+g_mod_kill_nuke = "{0} гибнет от бомбы с антиматерией игрока {1}.\n"
+g_mod_kill_vengeance_sphere = "{0} гибнет от сферы возмездия игрока {1}.\n"
+g_mod_kill_hunter_sphere = "{0} становится жертвой сферы-охотника игрока {1}.\n"
+g_mod_kill_defender_sphere = "{0} гибнет от сферы защиты игрока {1}.\n"
+g_mod_kill_tracker = "{0} превращается в пыль разрушителем игрока {1}.\n"
+g_mod_kill_dopple_explode = "{0} ведётся на уловки двойника игрока {1}.\n"
+g_mod_kill_dopple_vengeance = "{0} становится жертвой двойника игрока {1}.\n"
+g_mod_kill_dopple_hunter = "{0} встречается с двойником игрока {1}.\n"
+g_mod_kill_grapple = "{0} попадается на крюк игрока {1}.\n"
+g_mod_kill_generic = "{0} гибнет от рук игрока {1}.\n"
+
+// id vault
+
+vault_faces = "Голова в интерфейсе"
+vault_faces_desc = "Аналогично голове рейнджера из первой части Quake в Q2Test, публичной бета-версии Quake II, в нижней левой части зоны индикаторов тоже отображалась голова, которая реагировала на урон, полученный персонажем. Она также указывала, с какой стороны атаковали игрока."
+
+vault_early_hud = "Прототип индикаторов"
+vault_early_hud_desc = "Этот ранний вариант набора индикаторов очень похож на тот, который мы использовали в Q2Test во время публичного бета-тестирования Quake II. В конечном итоге мы выбрали упрощённый вариант без лица героя, реагирующего на урон, и без фона под счётчиками здоровья, брони и боеприпасов."
+
+vault_logo = "Логотип Quake II"
+vault_logo_desc = "Игра Quake II не задумывалась как сиквел предыдущей части. Если не считать игрового движка, Quake и Quake II связаны только названием и логотипом. Так вышло, потому что в ходе разработки нужно было заранее подготовить дизайн коробки для розничных продаж, а ещё id хотела интегрировать логотип игры во вступительный ролик. После нескольких неудачных попыток придумать крутое название, которое можно зарегистрировать как товарный знак, в id поняли, что затягивать больше нельзя. Разработчики назвали игру Quake II, пририсовали второй гвоздь к логотипу Quake и сочли проблему решённой. Следующей игрой в серии стала Quake III: Arena, но её задумывали как развитие бесплатного сетевого сервиса QuakeWorld для многопользовательских игр, а не продолжение первой или второй части."
+
+vault_biggun = "Большая пушка"
+vault_biggun_desc = "Строгги создали чёрную дыру, чтобы достичь Земли. Этому вторжению посвящена игра Enemy Territory: Quake Wars, вышедшая в 2007 году. Quake II повествует о последовавшей за этим операции «Владыка». Земляне прошли сквозь чёрную дыру и нанесли сокрушительный авиаудар, чтобы разрушить её генератор. Но на их пути стояла мощная оборонительная система, которую прозвали «большой пушкой». Авторы игры взяли эту идею из фильма «Пушки острова Наварон», вышедшего в 1961 году. В этой ленте группе британских коммандос приказано уничтожить немецкую береговую батарею с крупнокалиберными орудиями на острове Наварон. В Quake II участники операции «Владыка» атакуют сразу несколько целей: генератор чёрной дыры, гравитационный колодец, оборонительный флот строггов и большую пушку."
+
+vault_hangar = "Ангар"
+vault_hangar_desc = "Финальный вариант ангара сильно отличается от ранней концепции, но дизайн оборонительных кораблей строггов был навеян именно этой иллюстрацией. Прототип корабля строггов, созданного по мотивам этого рисунка, можно посмотреть в разделе «Разработка» архива id."
+
+vault_imperial_city = "Столица империи"
+vault_imperial_city_desc = "Мощь цивилизации строггов сконцентрирована в её столице, Цербероне. Этот хорошо укреплённый комплекс встроен в подножье занимающего колоссальную площадь Большого кратера. Церберон расположен между северными равнинами и южным морем Строггоса и является главным центром обороны, связи и политического управления строггов. На южной оконечности Большого кратера находится Малый кратер, где построена крупная военная база для защиты Церберона."
+
+vault_stroggos_base = "База строггов"
+vault_stroggos_base_desc = "Десантная капсула Биттермана падает на базу строггов, и именно здесь начинается путешествие игрока. Первые уровни состоят из типичных военных построек строггов, слегка пострадавших в результате контрнаступления землян. В этой версии игры первый уровень был расширен на основе материалов, найденных в архиве разработки Quake II. Была восстановлена открытая область между двумя частями базы, соединяющаяся с водным участком, который присутствует в первоначальной версии уровня."
+
+vault_weapon_sketches_1 = "Наброски оружия 1"
+vault_weapon_sketches_2 = "Наброски оружия 2"
+vault_weapon_sketches_3 = "Наброски оружия 3"
+vault_weapon_sketches_4 = "Наброски оружия 4"
+vault_weapon_sketches_5 = "Наброски оружия 5"
+vault_weapon_sketches_6 = "Наброски оружия 6"
+vault_weapon_sketches_desc = "От этой эпохи id до нас дошли лишь немногие документы. Листки с этими рисунками нашлись среди старых пробников обложек для коробочной версии игры. Из всех ранних проектов id у Quake II в ходе разработки оказалось больше всего набросков, поскольку игровые видеоролики и сама игра делались с существенным разрывом во времени. Среди этих набросков оружия есть и совсем простенькие эскизы, и полноценные иллюстрации в цвете. Многие из этих эскизов были реализованы в финальной версии почти без изменений, в то время как другие были полностью перерисованы. Среди них есть оригинальный вариант дезинтегратора, который впоследствии стал плазменным лучом в одном из дополнений."
+
+vault_doc1 = "Дизайн-документ 1"
+vault_doc2 = "Дизайн-документ 2"
+vault_doc_desc = "Пара страниц из несохранившегося дизайн-документа игры с описаниями игровых зон и необходимых графических элементов. Работая над первой частью Quake, художники и дизайнеры создавали свои эпизоды отдельно друг от друга и свели их воедино лишь в самом конце. Quake II, напротив, сразу задумывалась как связная последовательность уровней. Эти страницы, которые, судя по многочисленным следам от кофейных кружек, долго лежали на чьём-то столе, описывают секторы города и дворца, до которых игрок добирается ближе к концу игры."
+
+vault_items = "Наброски предметов"
+vault_items_desc = "Копия блокнота с набросками. Здесь изображён эскиз диска с данными, близкий к финальному варианту. В нижней части можно различить фрагмент эскиза батарейки. В середине изображён неизвестный предмет, который, вероятно, должен был использоваться как ключ для перехода на новый уровень."
+
+vault_consolead = "Печатная реклама"
+vault_consolead_desc = "Копия страницы из журнала с рекламой консольных версий Quake II. Дата неизвестна. В 1990-х годах id часто использовала рекламу с имитацией стиля ретро."
+
+vault_strogg = "Набросок строгга"
+vault_strogg_desc = "Набросок строгга, который по первоначальной задумке мог быть Макроном в системе «Йорг». В финальном варианте используется та же идея: маленький враг внутри большого экзоскелета, но здесь экзоскелет выглядит гораздо внушительнее, чем управляющее им существо."
+
+vault_ocean = "Океан"
+vault_ocean_desc = "Атмосфера Строггоса по составу близка к земной. Здесь тоже есть водоёмы и облака, состоящие из водяного пара, а значит, круговорот воды сохранился, несмотря на промышленную деятельность строггов. Эта часть планеты плохо отражена в игре, хотя в целом вода присутствует на многих уровнях."
+
+vault_monorail = "Монорельс строггов"
+vault_monorail_desc = "Строгги - высокоразвитая индустриальная цивилизация, и наличие такой монорельсовой системы подтверждает этот факт. Она соединяет ключевые объекты на Строггосе, доставляя машины, ресурсы и самих строггов. Монорельсовые поезда используются для перемещения игрока между секторами на поверхности и под землёй."
+
+vault_texpaint = "Texpaint"
+vault_texpaint_desc = "Texpaint - внутренний инструмент, позволяющий рисовать текстуры кожи прямо на 3D-моделях. Сегодня у художников есть целый арсенал средств для сложного UV-преобразования текстур, а в те годы инструменты были примитивными. Утилиты вроде Texpaint помогли художникам id создать более сложные модели персонажей по сравнению с первой частью игры."
+
+vault_area_map = "Карта секторов Строггоса"
+vault_area_map_desc = "Карта поверхности планеты Строггос с отметками, по которой камера перемещается в видеороликах. Качество большинства 3D-моделей и текстур невысокое, поскольку они создавались исключительно для использования в видеороликах с разрешением 320х240 точек. Маршрут примерно соответствует пути, по которому игрок движется в основной кампании."
+
+vault_alphabet = "Алфавит строггов"
+vault_alphabet_desc = "Стилизованный алфавит строггов, который используется в различных текстурах игрового окружения. Символы брали из этой картинки-примера и наносили прямо на текстуры. Здесь также есть особые парные лигатуры, не все из которых вошли в финальную версию."
+
+vault_e3_lab = "Игра во время E3 97 г."
+vault_e3_lab_desc = "В июне 1997 года создатели игры продолжали начатый ранее процесс переноса Quake II с кода QuakeC на машинный код. Версия, представленная на Е3, очень близка к знакомой всем Quake II, но параллельно с ней также существовала версия Quake II, более похожая на первую часть. Этот интерфейс с графическими элементами из первой Quake можно увидеть на официальных снимках экрана, так как эти элементы заменили в последнюю очередь. Поскольку проект показывали в разгар масштабной переработки кода, ИИ был примитивным, а игроки часто застревали в стенах и других поверхностях."
+
+vault_e3_campaign = "Демоверсия для E3 97 г."
+vault_e3_campaign_desc = "Эти карты входили в демоверсию, созданную для игровой выставки. Они представляют собой оригинальные карты Quake, которые были адаптированы для работы с финальной версией игрового движка. Игровой процесс на этих картах отличается от оригинального, но они дают хорошее представление о состоянии игры в тот момент."
+
+vault_ects_video = "Видеоролик для ECTS 97 г."
+vault_ects_video_desc = "В сентябре 1997 года Quake II показали в Лондоне на Европейской компьютерной выставке (ECTS). В этом видеоролике показан демонстрационный режим из выставочной сборки игры."
+
+vault_ects_campaign = "Демоверсия для ECTS 97 г."
+vault_ects_campaign_desc = "Набор карт из упомянутой выше сборки, на которых можно было сыграть. Эти уровни отражают примерно три месяца разработки, поскольку финальная версия игры была готова в ноябре. Несмотря на то что до выхода оставалось мало времени, уровни серьёзно переработали."
+
+vault_early_tech = "Прототип техника"
+vault_early_tech_desc = "Ранний вариант модели техника, на которую попытались, насколько это было возможно в тот момент разработки, наложить текстуру. Этот прототип использовал различные щупы и захваты, которые двигались беспорядочным образом."
+
+vault_early_flyer = "Прототип летуна"
+vault_early_flyer_desc = "Почти готовый вариант летуна, работа над которым завершилась через 10 дней после появления этого прототипа. Он отличается более простой текстурой и больше похож на механическое устройство. В финальном варианте летун приобрёл черты киборга, в том числе «лицо»."
+
+vault_early_tank = "Прототип танка"
+vault_early_tank_desc = "Танк стал одним из первых врагов, созданных для Quake II. Этот прототип использует временные варианты текстур и анимации, но в целом очень близок к финальной версии танка."
+
+vault_early_mutant = "Прототип мутанта"
+vault_early_mutant_desc = "Судя по анимации этого прототипа, изначально мутант был двуногим. Авторы создали несколько альтернативных вариантов дизайна, в том числе красный, который представлен здесь. Эта версия мутанта датирована концом сентября 1997 года. До окончания разработки игры оставалось меньше двух месяцев."
+
+vault_gnorta = "Гнорта"
+vault_gnorta_desc = "Гнорту вырезали из игры ещё до создания текстур и анимации. До нас дошла лишь эта модель. Судя по всему, это был ползающий по земле противник с неким подобием черепашьего панциря."
+
+vault_shocker = "Шокер"
+vault_shocker_desc = "Шокер - ещё один противник, так и оставшийся прототипом. Судя по модели, он сочетает в себе черты пехотинца, пулемётчика и берсерка, но мы не знаем, какую роль ему отводили авторы, поскольку от шокера отказались на раннем этапе разработки."
+
+vault_early_blaster = "Прототип бластера"
+vault_early_blaster_desc = "У раннего варианта модели бластера для вида от первого лица совершенно неузнаваемый силуэт: с заострёнными гранями и характерной для тех времён угловатостью. Отсутствие грушевидной формы приводит к тому, что игроку оружие кажется довольно маленьким."
+
+vault_early_ship = "Прототип корабля строггов"
+vault_early_ship_desc = "Ранний вариант истребителя строггов. На него ещё не наложена текстура. Эта модель во многом близка к финальной версии и напоминает корабль, изображённый на наброске ангара."
+
+vault_early_male = "Прототип мужской модели"
+vault_early_male_desc = "Этот ранний прототип мужской модели игрока внешне очень близок к финальному варианту. Впрочем, далеко не вся анимация этой модели вошла в игру, в частности плавание по горизонтали, сложные варианты смерти с потерей конечностей и анимация толкания объектов. Впоследствии анимация плавания была реализована в Quake III Arena. Скорее всего, авторам не хватило времени, чтобы найти применение этим вариантам анимации в Quake II."
+
+vault_early_female = "Прототип женской модели"
+vault_early_female_desc = "Сетчатый прототип женской модели для игрока с другим стилем причёски и ранним вариантом силуэта."
+
+vault_early_inf = "Прототип пехотинца 1"
+vault_early_inf2 = "Прототип пехотинца 2"
+vault_early_inf_desc = "Два варианта облика, созданных для финальной модели пехотинца: один чуть бледнее обычного, а другой использует камуфляж. В итоге разработчики отказались от обоих в пользу одного стандартного облика."
+
+vault_early_cg = "Прототип автопушки"
+vault_early_cg_desc = "Автопушка претерпела множество изменений, прежде чем утвердили её финальный облик. В частности, были варианты с отображением рук игрока. У одной из версий оружия был уменьшенный ствол, но видна основная часть. В итоге авторы приняли решение оставить только ствол, но выполнить его в более высоком разрешении. Конечный дизайн автопушки увидел свет в июне 1997 года. Это один из ранних примеров нового оружия для Quake II."
+
+vault_early_sg1 = "Прототип дробовика 1"
+vault_early_sg2 = "Прототип дробовика 2"
+vault_early_sg3 = "Прототип дробовика 3"
+vault_early_sg_desc = "Три временных варианта облика дробовика, датированные июнем 1997 года. Авторы тестировали несколько разных текстур и в итоге выбрали более холодные оттенки, отказавшись от текстуры со ржавчиной. Позже текстуру доработали, нарисовав блики, чтобы боковая часть оружия выглядела интереснее."
+
+vault_unused_fighter = "Концепция истребителя"
+vault_unused_transport = "Концепция транспорта"
+vault_unused_ships_desc = "Два вида кораблей строггов, которые не вошли в игру. Мы не знаем, в каких целях их планировали использовать авторы. Судя по датам, их, возможно, создали для одного из дополнений к игре."
+
+vault_early_invuln1 = "Прототип «Неуязвимости» 1"
+vault_early_invuln2 = "Прототип «Неуязвимости» 2"
+vault_early_invuln3 = "Прототип «Неуязвимости» 3"
+vault_early_invuln_desc = "Три варианта усиливающего предмета «Неуязвимость». Обычно на этом этапе модель объекта уже утверждена, но текстуры ещё не готовы. Финальный вариант был создан лишь в октябре 1997 года, за месяц до окончания разработки игры."
+
+vault_early_scope = "Оптический прицел"
+vault_early_sights = "Прицел 1"
+vault_early_cam = "Дистанционная камера"
+vault_early_nukebooster = "Ядерный ускоритель"
+vault_unused_items_desc = "Инвентарь игрока и улучшения изначально должны были играть более важную роль. Оптический прицел позволял увеличивать масштаб при стрельбе из оружия, но каждый раз на это тратилась 1 батарея. Другой прицел наводил оружие на врага автоматически, но только в течение определённого количества выстрелов (по похожему принципу действует глушитель). Дистанционная камера работала вполне очевидным образом: она показывала определённую область карты. Когда её повреждали, она пищала. Среди других идей разработчиков были счётчик Гейгера, выявлявший врагов на некотором расстоянии, ускоритель, личный телепорт и пояс пониженной гравитации. Некоторые из этих задумок реализовали в Quake III Arena."
+
+vault_early_stim = "Прототип стимулятора"
+vault_early_stim_desc = "Стимулятор впоследствии изменили, сделав его более похожим на усиливающий предмет «Адреналин». Этот вариант довольно долго считался итоговым, его текстура была почти готова, но в конце концов от него отказались."
+
+vault_early_flares = "Сигнальные ракеты"
+vault_early_flares_desc = "Эти ракеты должны были использоваться в сигнальном пистолете, модель которого впоследствии переделали в крюк. Сигнальный пистолет был одним из самых первых видов оружия в ранних версиях Quake II. Выпущенные из него ракеты просто освещали окрестности в течение короткого времени."
+
+vault_early_nuke = "Ядерный заряд"
+vault_early_nuke_desc = "Ядерный заряд был ранним вариантом ручной гранаты. После броска начинался короткий обратный отсчёт, и заряд детонировал, уничтожая ядерным взрывом всех, кто находился рядом. Заряд присутствовал в ранних сборках Quake II, когда игра использовала движок Quake 1, но из финальной версии был удалён."
+
+vault_early_smallbullets = "Пули, малый комплект"
+vault_early_largebullets = "Пули, большой комплект"
+vault_early_smallshells = "Дробь, малый комплект"
+vault_early_largeshells = "Дробь, большой комплект"
+vault_early_smallcells = "Батареи, малый комплект"
+vault_early_largecells = "Батареи, большой комплект"
+vault_early_smallslugs = "Снаряды, малый комплект"
+vault_early_largeslugs = "Снаряды, больш. комплект"
+vault_early_smallrockets = "Ракеты, малый комплект"
+vault_early_ammo_desc = "В DOOM и первой части Quake боеприпасы были представлены в двух вариантах: большом и малом. Создатели Quake II поначалу хотели добавить в игру третий вариант (средний), но к концу разработки даже большой и малый комплекты были удалены в пользу одного варианта для каждого вида боеприпасов. Соответствующие материалы уже были в относительно готовом виде, когда от них отказались. Вероятно, разработчики решили сократить разнообразие подбираемых предметов, потому что в Quake II больше видов боеприпасов, чем в первой Quake."
+
+vault_arachnid_console = "Арахнид (консоль)"
+vault_arachnid_console_desc = "В консольной версии Quake II среди противников, которые не являются боссами, арахнид - один из самых опасных. Он поочерёдно стреляет из рельсотронов, начиная с правого, и может сразу убить незащищённого игрока, если оба выстрела поразят цель. Оказавшись вблизи, арахнид размахивает конечностями, используя рельсотроны в качестве оружия ближнего боя.\nОценка защиты и оружия: высокая опасность\nПримечание: займись арахнидом в первую очередь. Его рельсотроны стреляют точно и часто, так что лучше устранить эту угрозу сразу."
+
+vault_barracuda_shark = "Акула-барракуда"
+vault_barracuda_shark_desc = "Единственный вид существ, обитающий в водоёмах Строггоса. Острые, как кинжалы, зубы и покрытый шипами хвост могут быстро выпотрошить тебя.\nОценка защиты и оружия: средняя опасность\nПримечание: рыбы нападают стаями, а убить их непросто. Сражаясь, помни, что тебе, в отличие от них, время от времени нужно дышать."
+
+vault_berserker = "Берсерк"
+vault_berserker_desc = "У него заострённая металлическая булава вместо одной руки и молот вместо другой, и он очень быстро двигается.\nОценка защиты и оружия: средняя опасность\nПримечание: этот лысый громила - довольно опасный уродец. Его легко сбить с ног, но он всегда встаёт и продолжает преследовать свою цель."
+
+vault_black_widow_standing = "Чёрная вдова"
+vault_black_widow_standing_desc = "Судя по всему, Чёрная вдова занимает высокий пост в иерархии строггов, а значит, на её счету немало побед в сражениях. Её внушительный арсенал показывает, что она имеет серьёзный боевой опыт. Вдова использует сразу несколько видов оружия и может в любой момент вызывать подкрепление.\nОценка защиты и оружия: колоссальная опасность\nПримечание: именно она стоит на твоём пути к гравитационному колодцу. Чтобы выполнить задание, тебе придётся сделать то, что ещё не удавалось ни одному живому существу."
+
+vault_black_widow_spider = "Чёрная вдова (паук)"
+vault_black_widow_spider_desc = "Чёрная вдова использует для перемещения похожий на паука танк, у которого ещё больше оружия, чем в её «пешем» арсенале.\nОценка защиты и оружия: колоссальная опасность\nПримечание: возможности этой штуковины известны нам лишь по донесениям. Никто из видевших её своими глазами не выжил."
+
+vault_brains = "Мозги"
+vault_brains_desc = "Злобное кибернетическое чудовище, которое атакует жертву вылезающими из груди щупальцами и высасывает жизненные силы.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: держись подальше от опасных щупалец."
+
+vault_carrier = "Авианосец"
+vault_carrier_desc = "Всеми силами избегай этого огромного, агрессивного, смертоносного строгга. Этот летающий арсенал оснащён сдвоенными автопушками, рельсотроном и гранатомётом и не оставит десантнику ни шанса. Хуже того, он умеет телепортировать к себе летунов, чтобы делать из кусков твоей плоти фарш.\nОценка защиты и оружия: высокая опасность\nПримечание: его не зря называют авианосцем. Сначала уничтожь его, а потом займись назойливыми летунами."
+
+vault_daedalus = "«Дедал»"
+vault_daedalus_desc = "Усиленный вариант «Икара» с более мощными бластерами на плечах. Он также использует силовой экран, чтобы уменьшить наносимый ему урон.\nОценка защиты и оружия: средняя опасность\nПримечание: по сути, это летающая платформа со сдвоенными бластерами. «Дедалы» ведут себя умнее, чем предшественники. Будь начеку - эти птички могут здорово тебе нагадить!"
+
+vault_fixbot = "Ремонтный бот"
+vault_fixbot_desc = "Эти трудолюбивые роботы, без устали ремонтирующие двери, светильники и прочее оборудование, вряд ли обратят на тебя внимание.\nОценка защиты и оружия: низкая опасность\nПримечание: будь начеку. Эти роботы выглядят безвредными, но могут реанимировать мёртвых строггов."
+
+vault_flyer = "Летун"
+vault_flyer_desc = "Маленький монстр, который состоит из мозга и управляемого им летающего кибернетического тела на двух крыльях.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: летуны перемещаются весьма быстро и собираются в стаи. На каждом крыле установлен лазерный бластер."
+
+vault_gekk = "Гекк"
+vault_gekk_desc = "Стремительное земноводное существо, которое живёт и охотится на протоболотах Строггоса.\nОценка защиты и оружия: средняя опасность\nПримечание: эти существа обычно охотятся стаями и выпрыгивают на жертву из тени, пытаясь ударить когтями или укусить."
+
+vault_gladiator = "Гладиатор"
+vault_gladiator_desc = "Гладиатор, оснащённый двумя крупными механическими ногами и наплечным рельсотроном, - главный говнюк из всех модифицированных гуманоидов.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: если ты на мушке у гладиатора, у тебя есть меньше секунды, чтобы отойти в сторону, иначе тебе конец. Также остерегайся смертельно опасного захвата левой клешнёй."
+
+vault_gladiator_phalanx = "Гладиатор c «Фалангой»"
+vault_gladiator_phalanx_desc = "Модифицированное наплечное орудие этого мутанта использует заряды пучковой пушки «Фаланга». Он также защищён энергобронёй.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: понадобится проявить упорство, чтобы одолеть эту ходячую батарейку. Перед тем как ты сможешь его уничтожить, придётся истощить весь запас энергии у его брони."
+
+vault_guardian_console = "Страж (консоль)"
+vault_guardian_console_desc = "Похоже, что его создали из торса танка-командира, соединённого с парой огромных механических ног. На плечах закреплены два крупных оружейных блока. Обычно страж непрерывно выпускает в сторону игрока четырёхзарядные очереди из гипербластера, расположенного в правом блоке. Если держаться вдалеке, страж будет использовать лазер на левом плече. Если подойти к нему вплотную, страж попытается пнуть или раздавить бойца ногой, что может быть смертельно.\nОценка защиты и оружия: высокая опасность\nПримечание: так как атаки стража в ближнем бою наносят колоссальный урон, к нему лучше не приближаться."
+
+vault_gunner = "Пулемётчик"
+vault_gunner_desc = "Элитный боец строггов, оснащённый мощным пулемётом и автоматическим гранатомётом.\nОценка защиты и оружия: средняя опасность\nПримечание: он рвёт мутантов на части в свободное время, а на работе разделывает космодесантников. Правда, есть у него и уязвимость: на подготовку своего пулемёта к стрельбе он тратит некоторое время. Пауза будет недолгой, успей ей воспользоваться."
+
+vault_gunner_commander = "Пулемётчик-командир"
+vault_gunner_commander_desc = "Если пулемётчика можно считать элитным бойцом, то пулемётчик-командир - избранный из элиты. Он ещё опаснее обычного пулемётчика и вооружён модифицированным РП-автоматом. Командир также оснащён стандартной силовой бронёй и владеет различными приёмами ближнего боя.\nОценка защиты и оружия: средняя опасность\nПримечание: несмотря на элитный статус, пулемётчик-командир такой же смертный, как и остальные враги. Пробей его щит энергетическим оружием, а затем добей из супердробовика."
+
+vault_hornet = "«Шершень»"
+vault_hornet_desc = "Строгги используют «Шершней» для стратегической обороны важных объектов. Несмотря на большие размеры, они обладают высокой манёвренностью, что позволяет им патрулировать как помещения, так и открытую местность. Эти подвижные огневые средства вооружены двумя автопушками и парой ракетниц, что позволяет им эффективно подавлять противника.\nОценка защиты и оружия: высокая опасность\nПримечание: берегись автопушки «Шершня», она бьёт точно и больно. Используй укрытия с умом и старайся не загонять себя в угол, иначе получишь ракетой прямо в лицо."
+
+vault_icarus = "«Икар»"
+vault_icarus_desc = "Использует огромный реактивный ранец, прикреплённый к спине, и лазерные бластеры на плечах.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: прочная броня, высокая манёвренность и неутолимая жажда уничтожения превращают «Икара» в настоящий ужас на крыльях."
+
+vault_infantry = "Пехотинец"
+vault_infantry_desc = "Сильный, мускулистый боец, стреляющий из чудовищно скорострельной автопушки.\nОценка защиты и оружия: средняя опасность\nПримечание: десантник, у этих говнюков есть только одна цель - как можно скорее нафаршировать тебя свинцом. Они весьма живучие и ловко уворачиваются от выстрелов. В предсмертных конвульсиях пехотинцы нажимают на спусковой крючок. Если видишь, что кто-то из них упал на колени, - отойди в сторону, чтобы не попасть под очередь из автопушки."
+
+vault_insane_human = "Обезумевший человек"
+vault_insane_human_desc = "Строгги перерабатывают этих несчастных людей в пищу и создают из них своих жутких бойцов. Строгги довели их до безумия. Эти люди не могут постоять за себя и вообще что-либо сделать. Они безропотно ждут своей участи.\nОценка защиты и оружия: безвредные\nПримечание: ..."
+
+vault_iron_maiden = "«Железная дева»"
+vault_iron_maiden_desc = "По уровню огневой мощи эта роковая красотка сравнима с пулемётчиком: у неё есть ракетная установка на руке и сильные когти, способные разрывать плоть.\nОценка защиты и оружия: средняя опасность\nПримечание: кибернетическая стерва из ада... твоя мама не будет рада, если ты приведёшь это домой."
+
+vault_iron_maiden_heat_seeking = "«Железная дева» с навед."
+vault_iron_maiden_heat_seeking_desc = "Её модифицированная наручная ракетная установка использует ракеты с тепловым наведением.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: с этой стервой шутки плохи. Её ракеты могут наводиться на тебя, но не умеют огибать преграды. Если она открыла огонь, беги в укрытие."
+
+vault_jorg = "«Йорг»"
+vault_jorg_desc = "Мы почти ничего не знаем про систему «Йорг», кроме того, что её использует предводитель строггов Макрон.\nОценка защиты и оружия: колоссальная опасность\nПримечание: самая живучая боевая платформа из всех, которые нам доводилось видеть. Используй против неё всё, что у тебя есть."
+
+vault_makron = "Макрон"
+vault_makron_desc = "Мы знаем про Макрона ещё меньше, чем про «Йорг». Макрон использует систему «Йорг» в качестве средства передвижения, но, покинув её, не становится безобиднее и может применять ещё более опасные виды оружия.\nОценка защиты и оружия: колоссальная опасность\nПримечание: это твоя главная цель. Удачи!"
+
+vault_medic = "Медик"
+vault_medic_desc = "Как можно догадаться, это опасное существо умеет реанимировать мёртвых строггов.\nОценка защиты и оружия: средняя опасность\nПримечание: когда медик не занят лечением, он перемещается на двух гидравлических ногах и быстро стреляет из лазерного бластера."
+
+vault_medic_commander = "Медик-командир"
+vault_medic_commander_desc = "Эти солдаты используют модифицированный вариант гипербластера в качестве боевого протеза.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: он не только умеет реанимировать мёртвых союзников и создавать новых врагов, но также стреляет из улучшенного бластера. Этот засранец обязательно попытается прожечь в тебе пару отверстий, так что будь осторожнее."
+
+vault_mutant = "Мутант"
+vault_mutant_desc = "Перерабатывающие заводы строггов отравляли экосистему планеты на протяжении многих веков, в результате чего это некогда безобидное существо мутировало в быстрого, свирепого зверя, способного разорвать человека на части.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: видишь - беги."
+
+vault_parasite = "Паразит"
+vault_parasite_desc = "Четырёхногая тварь с зондом на спине. Попав в тело, зонд закрепляется и позволяет твари буквально высасывать из жертвы жизнь.\nОценка защиты и оружия: средняя опасность\nПримечание: этих паразитов лучше не гладить."
+
+vault_shambler = "Шамблер"
+vault_shambler_desc = "Эта тварь родом явно не со Строггоса. Возможно, она жила на другой планете, когда-то захваченной строггами, или вообще прибыла из другого измерения. Мы не можем сказать наверняка.\nОценка защиты и оружия: средняя опасность\nПримечание: некоторые особи покрыты мехом, который встаёт дыбом, когда тварь выпускает молнии, но есть и другие, мощное тело которых покрыто только кожей."
+
+vault_soldier_light = "Солдат с бластером"
+vault_soldier_light_desc = "Самый слабый из трёх вариантов модифицированных людей, вооружённый простым бластером.\nОценка защиты и оружия: низкая опасность\nПримечание: их оружие скорее жалит, чем убивает, но они иногда нападают группами или зовут на помощь своих более опасных союзников."
+
+vault_soldier_shotgun = "Солдат с дробовиком"
+vault_soldier_shotgun_desc = "Эти послушные солдаты вооружены протезом с автоматическим дробовиком.\nОценка защиты и оружия: низкая опасность\nПримечание: умирает быстро, но бьёт больно."
+
+vault_soldier_machinegun = "Солдат с пулемётом"
+vault_soldier_machinegun_desc = "Крупнее, злее и опаснее, чем обычный солдат... с пулемётом вместо правой руки.\nОценка защиты и оружия: низкая опасность\nПримечание: стараются нападать группами и метко стреляют."
+
+vault_soldier_ripper = "Солдат с резаком"
+vault_soldier_ripper_desc = "На его руке установлено довольно опасное оружие: ионный резак, способный разрубить тело жертвы.\nОценка защиты и оружия: низкая/средняя опасность\nПримечание: остерегайся рикошетов. Пролетев мимо в первый раз, снаряд резака может задеть тебя на обратном пути."
+
+vault_soldier_hyper = "Солдат с гипербластером"
+vault_soldier_hyper_desc = "Эти солдаты используют модифицированный вариант гипербластера в качестве боевого протеза.\nОценка защиты и оружия: низкая опасность\nПримечание: с этими врагами легко расправиться, но синие сгустки энергии из их оружия быстро испепелят зазевавшегося космодесантника."
+
+vault_soldier_laser = "Солдат с лазером"
+vault_soldier_laser_desc = "Благодаря передовым технологиям строггов на руке этого охранника появился мощный лазер.\nОценка защиты и оружия: низкая опасность\nПримечание: эти солдаты отличаются меткостью и умением стрелять по движущимся целям. Берегись их лазеров, десантник."
+
+vault_stalker = "Охотник"
+vault_stalker_desc = "Охотники - это паукообразные киборги, которые любят поджидать в неожиданных местах. Издалека они стреляют из улучшенных бластеров, установленных в разъёмах на спине. Оказавшись вблизи, они наносят мощные удары наотмашь.\nОценка защиты и оружия: средняя/высокая опасность\nПримечание: эти мелкие уродцы очень опасны. Зависнув на потолке, они падают на голову жертвы, наносят удар и снова прыгают на потолок, чтобы не получить сдачи."
+
+vault_super_tank = "Супертанк"
+vault_super_tank_desc = "Идеальный гибрид человека и машины стал ещё опаснее за счёт мощной энергоброни.\nОценка защиты и оружия: высокая опасность\nПримечание: стреляй, пока не уничтожишь. Ему всегда будет мало."
+
+vault_super_tank_heat_seeking = "Супертанк с навед."
+vault_super_tank_heat_seeking_desc = "Такой же, как супертанк, только хуже, поскольку использует ракеты с тепловым самонаведением.\nОценка защиты и оружия: высокая опасность\nПримечание: неужели кому-то было мало оригинальной модели?"
+
+vault_tank = "Танк"
+vault_tank_desc = "В арсенале танка есть три вида оружия, которые он использует случайным образом: пулемёт и лазерный бластер, установленные на руках, и ракетницу на плече.\nОценка защиты и оружия: высокая опасность\nПримечание: выскочил, выстрелил, спрятался. Повторять до победного конца. Эти металлические чудища могут выдержать очень мощную атаку."
+
+vault_tank_commander = "Танк-командир"
+vault_tank_commander_desc = "Особая разновидность танков, созданная специально для защиты внутреннего города от захватчиков.\nОценка защиты и оружия: высокая опасность\nПримечание: постарайся заранее спланировать тактику боя. На него не стоит бросаться, не подумав."
+
+vault_tank_commander_dead = "Танк-командир (мёртвый)"
+vault_tank_commander_dead_desc = "Танк-командир, неудачно вступивший с нами в огневой контакт на поле боя. Мы доставили его в лабораторию для изучения.\nОценка защиты и оружия: безвредный\nПримечание: как же в них много деталей!"
+
+vault_technician = "Техник"
+vault_technician_desc = "Почти полностью роботизированная тварь. За действия отвечает мозг, который плавает в ёмкости с красной консервационной жидкостью. Это существо перемещается с помощью четырёх реактивных двигателей, расположенных в нижней части тела, и использует три вида оружия: электрический зонд, острые когти и лазерный бластер. Энергоброня придётся кстати.\nОценка защиты и оружия: средняя опасность\nПримечание: в техника легко попасть, но он весьма живучий. Всади ему из супердробовика в упор, чтобы он держался подальше."
+
+vault_turret = "Турель"
+vault_turret_desc = "Скорострельные орудия, установленные на полу и потолках. Они реагируют на присутствие и открывают огонь автоматически. Есть три вида турелей: бластерная, пулемётная и ракетная.\nОценка защиты и оружия: низкая/средняя опасность\nПримечание: все они используют широкий арсенал боевых средств и чрезвычайно опасны. Если встретишь такую турель - танцуй!"
+
+item_grapple_desc = "Эти крюки создавались для буксировки десантных капсул в невесомости, но десантники догадались использовать их в свободное время в развлекательных целях. Когда солдаты начали массово попадать в лазареты с сотрясениями, верховное командование запретило неуставные способы применения крюка, но это не отбило у пехотинцев охоту применять его в бою."
+item_blaster_desc = "Табельный энергетический пистолет. Не требует боеприпасов и перезаряжается автоматически. С его помощью можно убивать охранников, взрывать бочки, нажимать кнопки, которые реагируют на выстрелы, и открывать секретные двери. Всегда держи его при себе."
+item_chainfist_desc = "Огромная бензопила, закреплённая на руке. Идеальное оружие в ситуации, когда нужно прорубиться через толпу врагов."
+item_shotgun_desc = "Это оружие использует дробовые патроны. Большой разброс дроби при выстреле позволяет быстро уничтожить цель в ближнем бою или поразить нескольких врагов на расстоянии. Идеальное оружие для не самого меткого стрелка. Дробовик особенно эффективен против строггов-охранников и летунов."
+item_super_shotgun_desc = "Суровый старший брат обычного дробовика. Старайся целиться как можно точнее. Скорострельность оружия невысокая, поэтому у тебя будет не очень много времени прикончить врага, прежде чем он подойдёт к тебе вплотную. Тратит больше патронов, чем простой дробовик, но зрелище того стоит."
+item_machinegun_desc = "Пулемёт прост в использовании, но он слишком лёгкий, поэтому сильно трясётся во время стрельбы. Пока не научишься контролировать отдачу, веди огонь короткими очередями."
+item_etf_rifle_desc = "Мощный, эффективный, пробивает броню. Что ещё нужно для счастья? Это оружие использует разрывные пули, которые помогут решить твои проблемы очень быстро."
+item_chaingun_desc = "Автопушка сделает фарш из любого врага, но тратит безумное количество патронов. На раскрутку и остановку ствола уходит много времени, поэтому автопушка наиболее эффективна, когда нужно стрелять непрерывно."
+item_grenades_desc = "Поверни крышку гранаты, чтобы активировать таймер взрывателя. Чем дольше ты держишь активную гранату, тем дальше она полетит при броске. Главное - не забудь бросить. Ручная граната не издаёт звуков в момент броска, и строгги вряд ли смогут догадаться, откуда она прилетела."
+item_trap_desc = "Установи ловушку на земле, чтобы она засосала находящихся рядом врагов и превратила их в энергокубы, которые ты сможешь съесть. Многие десантники утверждают, что на вкус эти кубы как курица."
+item_tesla_desc = "Метни «Теслу» - и, как только она сработает, смертоносные щупальца молний будут хлестать всех врагов, которым не повезло оказаться рядом. Отличный способ перекрыть путь противнику."
+item_grenade_launcher_desc = "Гранатомёт позволяет поражать цели в труднодоступных местах и зачищать места потенциальных засад. Не рекомендуется стрелять из гранатомёта в тесных помещениях."
+item_prox_launcher_desc = "После запуска неконтактная мина прикрепляется к поверхности и взрывается, когда её сенсор обнаруживает врага. Миномёт позволяет устанавливать мины с высокой степенью точности."
+item_rocket_launcher_desc = "Ракетница наносит целям высокий урон. Старайся не использовать это оружие в ближнем бою."
+item_hyperblaster_desc = "Гипербластер - это энергетическая автопушка с мгновенной раскруткой ствола. Высокая скорострельность позволяет эффективно уничтожать врагов и не менее эффективно избавляться от запаса батарей."
+item_ionripper_desc = "Ионный резак стреляет сияющими энергетическими бумерангами, которые отскакивают от стен. Идеальное оружие для уничтожения противников за углом и вне зоны прямой видимости."
+item_plasma_beam_desc = "Высокотехнологичное оружие, которое испускает пылающий луч самой настоящей смерти. Поджарит любого, кто оказался на вашем пути. Плазменный луч расходует батареи и делает это очень быстро, поэтому используй это оружие с умом."
+item_railgun_desc = "Рельсотрон стреляет снарядами из обеднённого урана, которые летят с огромной скоростью и оставляют за собой характерный дымный след в форме спирали. Попробуй сосчитать, скольких строггов прошьёт такой снаряд, прежде чем воткнётся в бетон."
+item_phalanx_desc = "Пучковая пушка «Фаланга» выпускает два магниевых снаряда с квантовым ускорением и может сильно удивить ничего не подозревающих врагов. Это оружие обладает большой огневой мощью, но на короткой дистанции его следует использовать с особой осторожностью."
+item_bfg10k_desc = "Охрененно большая пушка. Это оружие для настоящих художников. Пальни из BFG10K в небольшом набитом строггами зале и полюбуйся оригинальными красными узорами на стенах."
+item_disruptor_desc = "Экспериментальное сверхсекретное оружие, сочетающее технологии людей и строггов. Долгое время считалось, что разрушитель - всего лишь миф. Он отличается высокой скорострельностью и не уступает по урону BFG10K, но за один выстрел поражает только одного врага."
+
+
+// PATCH LOC
+m_waterwarp = "Искажения под водой"
+m_drop_tech = "Бросить гаджет ЗФ"
+m_always_run_joy = "Всегда бежать (геймпад)"
+m_always_run_joy = "Всегда бежать (геймпад)"
+m_always_run_joy <ps4 ps5> = "Всегда бежать (контроллер)"
+m_always_run_joy <switch> = "Всегда бежать (контроллер)"
+m_always_run_joy <xboxone xboxseries winstore> = "Всегда бежать (геймпад)"
