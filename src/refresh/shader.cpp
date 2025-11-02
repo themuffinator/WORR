@@ -690,17 +690,30 @@ static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
 static void write_height_fog(sizebuf_t *buf, glStateBits_t bits)
 {
     GLSL({
-        float dir_z = normalize(v_world_pos - u_vieworg.xyz).z;
-        float s = sign(dir_z);
-        dir_z += 0.00001 * (1.0 - s * s);
+        vec3 view_vec = v_world_pos - u_vieworg.xyz;
+        float ray_len = length(view_vec);
+        vec3 dir = view_vec / max(ray_len, 1e-6);
         float eye = u_vieworg.z - u_heightfog_start.w;
+        float end_height = eye + dir.z * ray_len;
+        float falloff = u_heightfog_falloff;
+        float integral;
+
+        if (falloff != 0.0) {
+            float exp_eye = exp(-falloff * eye);
+            float exp_end = exp(-falloff * end_height);
+            if (abs(dir.z) > 1e-4)
+                integral = (exp_eye - exp_end) / (falloff * dir.z);
+            else
+                integral = exp_eye * ray_len;
+        } else {
+            integral = ray_len;
+        }
+
+        integral = max(integral, 0.0);
+        float fog = 1.0 - clamp(exp(-u_heightfog_density * integral), 0.0, 1.0);
         float pos = v_world_pos.z - u_heightfog_start.w;
-        float density = (exp(-u_heightfog_falloff * eye) -
-                         exp(-u_heightfog_falloff * pos)) / (u_heightfog_falloff * dir_z);
-        float extinction = 1.0 - clamp(exp(-density), 0.0, 1.0);
         float fraction = clamp((pos - u_heightfog_start.w) / (u_heightfog_end.w - u_heightfog_start.w), 0.0, 1.0);
-        vec3 fog_color = mix(u_heightfog_start.rgb, u_heightfog_end.rgb, fraction) * extinction;
-        float fog = (1.0 - exp(-(u_heightfog_density * frag_depth))) * extinction;
+        vec3 fog_color = mix(u_heightfog_start.rgb, u_heightfog_end.rgb, fraction);
         diffuse.rgb = mix(diffuse.rgb, fog_color.rgb, fog);
     )
 
