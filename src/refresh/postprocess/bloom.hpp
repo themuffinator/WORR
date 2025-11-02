@@ -13,6 +13,7 @@ struct BloomRenderContext {
     bool waterwarp;
     bool depthOfField;
     bool showDebug;
+    bool crt;
     void (*runDepthOfField)();
 };
 

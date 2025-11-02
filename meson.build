@@ -225,6 +225,7 @@ refresh_src = [
   'src/refresh/mesh.cpp',
   'src/refresh/models.cpp',
   'src/refresh/postprocess/bloom.cpp',
+  'src/refresh/postprocess/crt.cpp',
   'src/refresh/qgl.cpp',
   'src/refresh/shader.cpp',
   'src/refresh/sky.cpp',
@@ -238,6 +239,7 @@ refresh_src = [
   'src/refresh/arbfp.hpp',
   'src/refresh/gl.hpp',
   'src/refresh/postprocess/bloom.hpp',
+  'src/refresh/postprocess/crt.hpp',
   'src/refresh/images.hpp',
   'src/refresh/qgl.hpp',
 

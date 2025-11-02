@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
+#include "postprocess/crt.hpp"
 #include "font_freetype.hpp"
 #include <array>
 
@@ -790,6 +791,7 @@ typedef enum {
     PP_WATERWARP = BIT(0),
     PP_BLOOM     = BIT(1),
     PP_DEPTH_OF_FIELD = BIT(2),
+    PP_CRT = BIT(3),
 } pp_flags_t;
 
 constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
@@ -851,6 +853,7 @@ static void GL_DrawBloom(pp_flags_t flags)
         .waterwarp = waterwarp,
         .depthOfField = depth_of_field,
         .showDebug = show_bloom,
+        .crt = (flags & PP_CRT) != 0,
         .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
     };
 
@@ -868,6 +871,10 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     glStateBits_t bits = GLS_DEFAULT;
     if (waterwarp)
         bits |= GLS_WARP_ENABLE;
+    if (flags & PP_CRT) {
+        CRT_UpdateUniforms(glr.fd.width, glr.fd.height);
+        bits |= GLS_CRT;
+    }
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
 
@@ -878,6 +885,7 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
+static int32_t r_crt_modified = 0;
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
@@ -897,18 +905,23 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (dof_active)
         flags |= PP_DEPTH_OF_FIELD;
 
+    if (CRT_IsEnabled())
+        flags |= PP_CRT;
+
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
-        gl_dof->modified_count != gl_dof_modified) {
+        gl_dof->modified_count != gl_dof_modified ||
+        CRT_ModifiedCount() != r_crt_modified) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         r_bloom_modified = r_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
+        r_crt_modified = CRT_ModifiedCount();
         if (flags & PP_BLOOM)
             gl_backend->update_blur();
     }
@@ -1021,9 +1034,17 @@ void R_RenderFrame(const refdef_t *fd)
         GL_DrawBloom(pp_flags);
     } else if (pp_flags & PP_DEPTH_OF_FIELD) {
         GL_DrawDepthOfField(pp_flags);
-    } else if (pp_flags & PP_WATERWARP) {
+    } else if ((pp_flags & PP_WATERWARP) || (pp_flags & PP_CRT)) {
+        glStateBits_t bits = GLS_DEFAULT;
+        if (pp_flags & PP_WATERWARP)
+            bits |= GLS_WARP_ENABLE;
+        if (pp_flags & PP_CRT) {
+            CRT_UpdateUniforms(glr.fd.width, glr.fd.height);
+            bits |= GLS_CRT;
+        }
+
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        GL_PostProcess(GLS_WARP_ENABLE, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     }
 
     if (gl_polyblend->integer)
@@ -1271,6 +1292,7 @@ static void GL_Register(void)
     r_bloom = Cvar_Get("r_bloom", "1", 0);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
     r_bloomThreshold = Cvar_Get("r_bloomThreshold", "0.8", 0);
+    CRT_RegisterCvars();
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;

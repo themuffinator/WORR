@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
+#include "postprocess/crt.hpp"
 #include "font_freetype.hpp"
 #include "common/prompt.hpp"
 #include <algorithm>
@@ -1213,7 +1214,7 @@ bool GL_InitFramebuffers(void)
     int dof_w = 0, dof_h = 0;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 
-    if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active) {
+    if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active || CRT_IsEnabled()) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }

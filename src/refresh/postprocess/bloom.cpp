@@ -1,5 +1,7 @@
 #include "refresh/postprocess/bloom.hpp"
 
+#include "refresh/postprocess/crt.hpp"
+
 #include <algorithm>
 
 #include "refresh/qgl.hpp"
@@ -214,6 +216,11 @@ void BloomEffect::render(const BloomRenderContext &ctx)
     GL_Setup2D();
 
     glStateBits_t bits = ctx.showDebug ? GLS_DEFAULT : GLS_BLOOM_OUTPUT;
+    if (!ctx.showDebug && ctx.crt) {
+        CRT_UpdateUniforms(ctx.viewportWidth, ctx.viewportHeight);
+        bits |= GLS_CRT;
+    }
+
     if (ctx.showDebug) {
         GL_ForceTexture(TMU_TEXTURE, bloomTexture);
     } else {

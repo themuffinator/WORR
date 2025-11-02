@@ -19,6 +19,22 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "common/sizebuf.hpp"
 
+// CRT post-processing shader code adapts portions of the CRT-Lottes shader by Timothy Lottes.
+// Copyright (C) 2011 Timothy Lottes
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+// and associated documentation files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or
+// substantial portions of the Software.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+// PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+// FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 #define MAX_SHADER_CHARS    4096
 
 #define GLSL(x)     SZ_Write(buf, CONST_STR_LEN(#x "\n"));
@@ -120,6 +136,9 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_dof_screen;
         vec4 u_dof_depth;
         vec4 u_vieworg;
+        vec4 u_crt_params1;
+        vec4 u_crt_params2;
+        vec4 u_crt_params3;
     )
     GLSF("};\n");
 }
@@ -781,6 +800,189 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_BLOOM_BRIGHTPASS)
         GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
 
+    if (bits & GLS_CRT) {
+        GLSL(const float crt_shape = 2.0;)
+        GLSL(const float crt_hardBloomScan = -2.0;)
+        GLSL(const float crt_hardBloomPix = -1.5;)
+        GLSL(const float crt_bloomAmount = 1.0 / 16.0;)
+
+        GLSL(float crt_to_linear1(float c) {
+            if (u_crt_params2.x == 0.0) return c;
+            return (c <= 0.04045) ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+        })
+        GLSL(vec3 crt_to_linear(vec3 c) {
+            return vec3(crt_to_linear1(c.r), crt_to_linear1(c.g), crt_to_linear1(c.b));
+        })
+        GLSL(float crt_to_srgb1(float c) {
+            if (u_crt_params2.x == 0.0) return c;
+            return (c < 0.0031308) ? c * 12.92 : 1.055 * pow(c, 0.41666) - 0.055;
+        })
+        GLSL(vec3 crt_to_srgb(vec3 c) {
+            return vec3(crt_to_srgb1(c.r), crt_to_srgb1(c.g), crt_to_srgb1(c.b));
+        })
+
+        GLSL(vec3 crt_fetch(vec2 pos, vec2 off, vec2 texture_size) {
+            pos = (floor(pos * texture_size + off) + vec2(0.5, 0.5)) / texture_size;
+            vec3 color = texture(u_texture, pos).rgb * u_crt_params2.z;
+            return crt_to_linear(color);
+        })
+        GLSL(vec2 crt_dist(vec2 pos, vec2 texture_size) {
+            pos *= texture_size;
+            return -((pos - floor(pos)) - vec2(0.5, 0.5));
+        })
+        GLSL(float crt_gauss(float pos, float scale) {
+            return exp2(scale * pow(abs(pos), crt_shape));
+        })
+
+        GLSL(vec3 crt_horz3(vec2 pos, float off, vec2 texture_size) {
+            vec3 b = crt_fetch(pos, vec2(-1.0, off), texture_size);
+            vec3 c = crt_fetch(pos, vec2(0.0, off), texture_size);
+            vec3 d = crt_fetch(pos, vec2(1.0, off), texture_size);
+            float dst = crt_dist(pos, texture_size).x;
+            float scale = u_crt_params1.y;
+            float wb = crt_gauss(dst - 1.0, scale);
+            float wc = crt_gauss(dst + 0.0, scale);
+            float wd = crt_gauss(dst + 1.0, scale);
+            return (b * wb + c * wc + d * wd) / (wb + wc + wd);
+        })
+        GLSL(vec3 crt_horz5(vec2 pos, float off, vec2 texture_size) {
+            vec3 a = crt_fetch(pos, vec2(-2.0, off), texture_size);
+            vec3 b = crt_fetch(pos, vec2(-1.0, off), texture_size);
+            vec3 c = crt_fetch(pos, vec2(0.0, off), texture_size);
+            vec3 d = crt_fetch(pos, vec2(1.0, off), texture_size);
+            vec3 e = crt_fetch(pos, vec2(2.0, off), texture_size);
+            float dst = crt_dist(pos, texture_size).x;
+            float scale = u_crt_params1.y;
+            float wa = crt_gauss(dst - 2.0, scale);
+            float wb = crt_gauss(dst - 1.0, scale);
+            float wc = crt_gauss(dst + 0.0, scale);
+            float wd = crt_gauss(dst + 1.0, scale);
+            float we = crt_gauss(dst + 2.0, scale);
+            return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
+        })
+        GLSL(vec3 crt_horz7(vec2 pos, float off, vec2 texture_size) {
+            vec3 a = crt_fetch(pos, vec2(-3.0, off), texture_size);
+            vec3 b = crt_fetch(pos, vec2(-2.0, off), texture_size);
+            vec3 c = crt_fetch(pos, vec2(-1.0, off), texture_size);
+            vec3 d = crt_fetch(pos, vec2(0.0, off), texture_size);
+            vec3 e = crt_fetch(pos, vec2(1.0, off), texture_size);
+            vec3 f = crt_fetch(pos, vec2(2.0, off), texture_size);
+            vec3 g = crt_fetch(pos, vec2(3.0, off), texture_size);
+            float dst = crt_dist(pos, texture_size).x;
+            float scale = crt_hardBloomPix;
+            float wa = crt_gauss(dst - 3.0, scale);
+            float wb = crt_gauss(dst - 2.0, scale);
+            float wc = crt_gauss(dst - 1.0, scale);
+            float wd = crt_gauss(dst + 0.0, scale);
+            float we = crt_gauss(dst + 1.0, scale);
+            float wf = crt_gauss(dst + 2.0, scale);
+            float wg = crt_gauss(dst + 3.0, scale);
+            return (a * wa + b * wb + c * wc + d * wd + e * we + f * wf + g * wg) /
+                   (wa + wb + wc + wd + we + wf + wg);
+        })
+
+        GLSL(float crt_scan(vec2 pos, float off, vec2 texture_size) {
+            float dst = crt_dist(pos, texture_size).y;
+            return crt_gauss(dst + off, u_crt_params1.x);
+        })
+        GLSL(float crt_bloom_scan(vec2 pos, float off, vec2 texture_size) {
+            float dst = crt_dist(pos, texture_size).y;
+            return crt_gauss(dst + off, crt_hardBloomScan);
+        })
+        GLSL(vec3 crt_tri(vec2 pos, vec2 texture_size) {
+            vec3 a = crt_horz3(pos, -1.0, texture_size);
+            vec3 b = crt_horz5(pos, 0.0, texture_size);
+            vec3 c = crt_horz3(pos, 1.0, texture_size);
+            float wa = crt_scan(pos, -1.0, texture_size);
+            float wb = crt_scan(pos, 0.0, texture_size);
+            float wc = crt_scan(pos, 1.0, texture_size);
+            return a * wa + b * wb + c * wc;
+        })
+        GLSL(vec3 crt_bloom(vec2 pos, vec2 texture_size) {
+            vec3 a = crt_horz5(pos, -2.0, texture_size);
+            vec3 b = crt_horz7(pos, -1.0, texture_size);
+            vec3 c = crt_horz7(pos, 0.0, texture_size);
+            vec3 d = crt_horz7(pos, 1.0, texture_size);
+            vec3 e = crt_horz5(pos, 2.0, texture_size);
+            float wa = crt_bloom_scan(pos, -2.0, texture_size);
+            float wb = crt_bloom_scan(pos, -1.0, texture_size);
+            float wc = crt_bloom_scan(pos, 0.0, texture_size);
+            float wd = crt_bloom_scan(pos, 1.0, texture_size);
+            float we = crt_bloom_scan(pos, 2.0, texture_size);
+            return a * wa + b * wb + c * wc + d * wd + e * we;
+        })
+
+        GLSL(vec2 crt_warp(vec2 pos) {
+            pos = pos * 2.0 - 1.0;
+            pos *= vec2(1.0 + (pos.y * pos.y) * u_crt_params3.x,
+                        1.0 + (pos.x * pos.x) * u_crt_params3.y);
+            return pos * 0.5 + 0.5;
+        })
+
+        GLSL(vec3 crt_mask(vec2 pos) {
+            float maskDark = u_crt_params1.z;
+            float maskLight = u_crt_params1.w;
+            float shadowMask = u_crt_params2.y;
+            vec3 mask = vec3(maskDark);
+
+            if (shadowMask > 0.5 && shadowMask < 1.5) {
+                float mask_line = maskLight;
+                float odd = fract(pos.x / 6.0) < 0.5 ? 1.0 : 0.0;
+                if (fract((pos.y + odd) / 2.0) < 0.5)
+                    mask_line = maskDark;
+                float channel = fract(pos.x / 3.0);
+                if (channel < 0.333)
+                    mask.r = maskLight;
+                else if (channel < 0.666)
+                    mask.g = maskLight;
+                else
+                    mask.b = maskLight;
+                mask *= mask_line;
+            } else if (shadowMask > 1.5 && shadowMask < 2.5) {
+                float channel = fract(pos.x / 3.0);
+                if (channel < 0.333)
+                    mask.r = maskLight;
+                else if (channel < 0.666)
+                    mask.g = maskLight;
+                else
+                    mask.b = maskLight;
+            } else if (shadowMask > 2.5 && shadowMask < 3.5) {
+                float channel = fract((pos.x + pos.y * 3.0) / 6.0);
+                if (channel < 0.333)
+                    mask.r = maskLight;
+                else if (channel < 0.666)
+                    mask.g = maskLight;
+                else
+                    mask.b = maskLight;
+            } else if (shadowMask > 3.5 && shadowMask < 4.5) {
+                vec2 cell = floor(pos * vec2(1.0, 0.5));
+                float channel = fract((cell.x + cell.y * 3.0) / 6.0);
+                if (channel < 0.333)
+                    mask.r = maskLight;
+                else if (channel < 0.666)
+                    mask.g = maskLight;
+                else
+                    mask.b = maskLight;
+            }
+
+            return mask;
+        })
+
+        GLSL(vec4 crt_apply(vec2 tc) {
+            vec2 texture_size = max(vec2(1.0), vec2(u_crt_params3.z, u_crt_params3.w));
+            vec2 video_size = texture_size;
+            vec2 output_size = texture_size;
+            vec2 pos = crt_warp(tc * (texture_size / video_size)) * (video_size / texture_size);
+            vec3 color = crt_tri(pos, texture_size);
+            color += crt_bloom(pos, texture_size) * crt_bloomAmount;
+            if (u_crt_params2.y > 0.5) {
+                vec2 mask_pos = floor(tc * (texture_size / video_size) * output_size) + vec2(0.5, 0.5);
+                color *= crt_mask(mask_pos);
+            }
+            return vec4(crt_to_srgb(color), 1.0);
+        })
+    }
+
     GLSF("void main() {\n");
     if (bits & GLS_CLASSIC_SKY) {
         GLSL(
@@ -800,7 +1002,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_WARP_ENABLE)
             GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
 
-        if (bits & GLS_BLUR_MASK)
+        if (bits & GLS_CRT)
+            GLSL(vec4 diffuse = crt_apply(tc);)
+        else if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
