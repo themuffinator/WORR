@@ -1231,8 +1231,8 @@ bool GL_InitFramebuffers(void)
 
     const int bloom_down_w = bloom_w / 4;
     const int bloom_down_h = bloom_h / 4;
-    const int dof_half_w = dof_w > 0 ? std::max(dof_w / 2, 1) : 0;
-    const int dof_half_h = dof_h > 0 ? std::max(dof_h / 2, 1) : 0;
+    const int dof_half_w = dof_w > 0 ? (std::max)(dof_w / 2, 1) : 0;
+    const int dof_half_h = dof_h > 0 ? (std::max)(dof_h / 2, 1) : 0;
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_InitPostProcTexture(scene_w, scene_h);
