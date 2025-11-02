@@ -271,10 +271,3 @@ SoundSystem &S_GetSoundSystem()
     static SoundSystem system;
     return system;
 }
-
-vec3_t &listener_origin = S_GetSoundSystem().listener_origin();
-vec3_t &listener_forward = S_GetSoundSystem().listener_forward();
-vec3_t &listener_right = S_GetSoundSystem().listener_right();
-vec3_t &listener_up = S_GetSoundSystem().listener_up();
-int &listener_entnum = S_GetSoundSystem().listener_entnum();
-
