@@ -881,6 +881,7 @@ typedef struct {
     GLfloat     heightfog_falloff;
     GLfloat     pad;
     GLfloat     pad2;
+    vec4_t      bbr_params;
     vec4_t      dof_params;
     vec4_t      dof_screen;
     vec4_t      dof_depth;
