@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
+#include "postprocess/crt.hpp"
 #include "font_freetype.hpp"
 #include <algorithm>
 #include <array>
@@ -88,6 +89,14 @@ cvar_t *r_motionBlurShutterSpeed;
 cvar_t *r_ui_sdr_style;
 cvar_t *r_debug_histogram;
 cvar_t *r_debug_tonemap;
+cvar_t *r_crtmode;
+cvar_t *r_crt_hardScan;
+cvar_t *r_crt_hardPix;
+cvar_t *r_crt_maskDark;
+cvar_t *r_crt_maskLight;
+cvar_t *r_crt_scaleInLinearGamma;
+cvar_t *r_crt_shadowMask;
+cvar_t *r_crt_brightBoost;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
 
@@ -1036,6 +1045,7 @@ typedef enum {
     PP_BLOOM     = BIT(1),
     PP_DEPTH_OF_FIELD = BIT(2),
     PP_HDR       = BIT(3),
+    PP_CRT       = BIT(4),
     PP_MOTION_BLUR = BIT(4),
 } pp_flags_t;
 
@@ -1123,6 +1133,8 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     if (flags & PP_HDR)
         bits |= GLS_TONEMAP_ENABLE;
 
+    bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
     if (glr.motion_blur_ready) {
         bits |= GLS_MOTION_BLUR;
@@ -1182,6 +1194,8 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (gl_static.hdr.active)
         flags |= PP_HDR;
 
+    if (R_CRTEnabled())
+        flags |= PP_CRT;
     if (motion_blur_enabled)
         flags |= PP_MOTION_BLUR;
 
@@ -1338,6 +1352,7 @@ void R_RenderFrame(const refdef_t *fd)
         if (pp_flags & PP_HDR) {
             R_HDRUpdateUniforms();
             bits |= GLS_TONEMAP_ENABLE;
+        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
         }
 
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
@@ -1347,6 +1362,17 @@ void R_RenderFrame(const refdef_t *fd)
         }
 
         qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    } else if (pp_flags & PP_HDR) {
+        glStateBits_t bits = GLS_TONEMAP_ENABLE;
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        R_HDRUpdateUniforms();
+        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    } else if (pp_flags & PP_CRT) {
+        glStateBits_t bits = GLS_DEFAULT;
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
         GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     }
 
@@ -1621,6 +1647,14 @@ static void GL_Register(void)
     r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
     r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
     r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
+    r_crtmode = Cvar_Get("r_crtmode", "0", CVAR_ARCHIVE);
+    r_crt_hardScan = Cvar_Get("r_crt_hardScan", "-8.0", CVAR_ARCHIVE);
+    r_crt_hardPix = Cvar_Get("r_crt_hardPix", "-3.0", CVAR_ARCHIVE);
+    r_crt_maskDark = Cvar_Get("r_crt_maskDark", "0.5", CVAR_ARCHIVE);
+    r_crt_maskLight = Cvar_Get("r_crt_maskLight", "1.5", CVAR_ARCHIVE);
+    r_crt_scaleInLinearGamma = Cvar_Get("r_crt_scaleInLinearGamma", "1", CVAR_ARCHIVE);
+    r_crt_shadowMask = Cvar_Get("r_crt_shadowMask", "3", CVAR_ARCHIVE);
+    r_crt_brightBoost = Cvar_Get("r_crt_brightBoost", "1.0", CVAR_ARCHIVE);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;

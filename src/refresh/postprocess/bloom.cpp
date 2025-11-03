@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "../qgl.hpp"
+#include "crt.hpp"
 
 BloomEffect g_bloom_effect;
 
@@ -182,6 +183,9 @@ void BloomEffect::render(const BloomRenderContext& ctx)
                         GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
                 }
 
+                if (!ctx.showDebug)
+                        bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
+
                 qglBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
                 return;
@@ -239,6 +243,7 @@ void BloomEffect::render(const BloomRenderContext& ctx)
                         ctx.updateHdrUniforms();
                 if (ctx.tonemap)
                         bits |= GLS_TONEMAP_ENABLE;
+                bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
                 if (ctx.motionBlurReady) {
                         bits |= GLS_MOTION_BLUR;
                         GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
