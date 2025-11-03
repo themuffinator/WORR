@@ -24,6 +24,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/atomic.hpp"
 
 #include <array>
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cwctype>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #if USE_WINSVC
 #include <winsvc.h>
@@ -69,460 +78,196 @@ CONSOLE I/O
 
 #if USE_SYSCON
 
-#define MAX_CONSOLE_INPUT_EVENTS    16
+namespace {
 
-static HANDLE   hinput = INVALID_HANDLE_VALUE;
-static HANDLE   houtput = INVALID_HANDLE_VALUE;
+constexpr DWORD kMaxConsoleInputEvents = 64;
+constexpr wchar_t kPromptPrefix = L']';
 
-static commandPrompt_t  sys_con;
-static int              sys_hidden;
-static bool             gotConsole;
-
-static void write_console_data(const char *data, size_t len)
-{
-    DWORD res;
-    WriteFile(houtput, data, len, &res, NULL);
-}
-
-static void hide_console_input(void)
-{
-    CONSOLE_SCREEN_BUFFER_INFO info;
-
-    if (!sys_hidden && GetConsoleScreenBufferInfo(houtput, &info)) {
-        size_t len = strlen(sys_con.inputLine.text);
-        COORD pos = { 0, info.dwCursorPosition.Y };
-        DWORD res = min(len + 1, info.dwSize.X);
-        FillConsoleOutputCharacter(houtput, ' ', res, pos, &res);
-        SetConsoleCursorPosition(houtput, pos);
-    }
-    sys_hidden++;
-}
-
-static void show_console_input(void)
-{
-    CONSOLE_SCREEN_BUFFER_INFO info;
-
-    if (sys_hidden && !--sys_hidden && GetConsoleScreenBufferInfo(houtput, &info)) {
-        inputField_t *f = &sys_con.inputLine;
-        size_t pos = f->cursorPos;
-        char *text = f->text;
-
-        // update line width after resize
-        f->visibleChars = info.dwSize.X - 1;
-
-        // scroll horizontally
-        if (pos >= f->visibleChars) {
-            pos = f->visibleChars - 1;
-            text += f->cursorPos - pos;
+class Utf8Converter {
+public:
+    std::wstring fromUtf8(std::string_view text) const
+    {
+        if (text.empty()) {
+            return {};
         }
 
-        size_t len = strlen(text);
-        DWORD res, nch = min(len, f->visibleChars);
-        WriteConsoleOutputCharacterA(houtput,  "]",   1, COORD{ 0, info.dwCursorPosition.Y }, &res);
-        WriteConsoleOutputCharacterA(houtput, text, nch, COORD{ 1, info.dwCursorPosition.Y }, &res);
-        SetConsoleCursorPosition(houtput, COORD{ static_cast<SHORT>(pos + 1), info.dwCursorPosition.Y });
-    }
-}
-
-static void console_delete(inputField_t *f)
-{
-    if (f->text[f->cursorPos]) {
-        hide_console_input();
-        memmove(f->text + f->cursorPos, f->text + f->cursorPos + 1, sizeof(f->text) - f->cursorPos - 1);
-        show_console_input();
-    }
-}
-
-static void console_move_cursor(inputField_t *f, size_t pos)
-{
-    size_t oldpos = f->cursorPos;
-    f->cursorPos = pos = min(pos, f->maxChars - 1);
-
-    if (oldpos < f->visibleChars && pos < f->visibleChars) {
-        CONSOLE_SCREEN_BUFFER_INFO info;
-        if (GetConsoleScreenBufferInfo(houtput, &info)) {
-            SetConsoleCursorPosition(houtput, COORD{ static_cast<SHORT>(pos + 1), info.dwCursorPosition.Y });
+        int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+        if (required <= 0) {
+            std::wstring fallback(text.size(), L'\0');
+            std::transform(text.begin(), text.end(), fallback.begin(), [](unsigned char c) { return static_cast<wchar_t>(c); });
+            return fallback;
         }
-    } else {
-        hide_console_input();
-        show_console_input();
-    }
-}
 
-static void console_move_right(inputField_t *f)
-{
-    if (f->text[f->cursorPos] && f->cursorPos < f->maxChars - 1) {
-        console_move_cursor(f, f->cursorPos + 1);
+        std::wstring result(required, L'\0');
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
+        return result;
     }
-}
+};
 
-static void console_move_left(inputField_t *f)
-{
-    if (f->cursorPos > 0) {
-        console_move_cursor(f, f->cursorPos - 1);
-    }
-}
-
-static void console_replace_char(inputField_t *f, int ch)
-{
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    if (GetConsoleScreenBufferInfo(houtput, &info)) {
-        DWORD res;
-        FillConsoleOutputCharacter(houtput, ch, 1, info.dwCursorPosition, &res);
-    }
-}
-
-static void scroll_console_window(int key)
-{
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    if (GetConsoleScreenBufferInfo(houtput, &info)) {
-        int lo = -info.srWindow.Top;
-        int hi = max(info.dwCursorPosition.Y - info.srWindow.Bottom, 0);
-        int page = info.srWindow.Bottom - info.srWindow.Top + 1;
-        int rows = 0;
-        switch (key) {
-            case VK_HOME: rows = lo; break;
-            case VK_END:  rows = hi; break;
-            case VK_PRIOR: rows = max(-page, lo); break;
-            case VK_NEXT:  rows = min( page, hi); break;
-        }
-        if (rows) {
-            SMALL_RECT rect{ 0, static_cast<SHORT>(rows), 0, static_cast<SHORT>(rows) };
-            SetConsoleWindowInfo(houtput, FALSE, &rect);
+class ConsoleFontController {
+public:
+    ConsoleFontController()
+    {
+        HMODULE kernel = GetModuleHandleW(L"kernel32.dll");
+        getFont_ = reinterpret_cast<GetFontFn>(GetProcAddress(kernel, "GetCurrentConsoleFontEx"));
+        setFont_ = reinterpret_cast<SetFontFn>(GetProcAddress(kernel, "SetCurrentConsoleFontEx"));
+        available_ = getFont_ && setFont_;
+        if (available_) {
+            original_.cbSize = sizeof(original_);
         }
     }
-}
 
-static void clear_console_window(void)
-{
-    CONSOLE_SCREEN_BUFFER_INFO info;
-
-    if (sys_hidden)
-        scroll_console_window(VK_END);
-
-    hide_console_input();
-    if (GetConsoleScreenBufferInfo(houtput, &info)) {
-        COORD pos = { 0, info.srWindow.Top };
-        DWORD res = (info.srWindow.Bottom - info.srWindow.Top) * info.dwSize.X;
-        FillConsoleOutputCharacter(houtput, ' ', res, pos, &res);
-        SetConsoleCursorPosition(houtput, pos);
-    }
-    show_console_input();
-}
-
-/*
-================
-Sys_ConsoleInput
-================
-*/
-void Sys_RunConsole(void)
-{
-    INPUT_RECORD    recs[MAX_CONSOLE_INPUT_EVENTS];
-    int             i, ch;
-    DWORD           numread, numevents;
-    inputField_t    *f = &sys_con.inputLine;
-    char            *s;
-
-    if (hinput == INVALID_HANDLE_VALUE) {
-        return;
-    }
-
-    if (!gotConsole) {
-        return;
-    }
-
-    while (1) {
-        if (!GetNumberOfConsoleInputEvents(hinput, &numevents)) {
-            Com_EPrintf("Error %lu getting number of console events.\n", GetLastError());
-            gotConsole = false;
+    void captureOriginal(HANDLE output)
+    {
+        if (!available_ || captured_) {
             return;
         }
 
-        if (numevents < 1)
-            break;
-        if (numevents > MAX_CONSOLE_INPUT_EVENTS) {
-            numevents = MAX_CONSOLE_INPUT_EVENTS;
+        CONSOLE_FONT_INFOEX font{ sizeof(font) };
+        if (getFont_(output, FALSE, &font)) {
+            original_ = font;
+            captured_ = true;
         }
+    }
 
-        if (!ReadConsoleInput(hinput, recs, numevents, &numread)) {
-            Com_EPrintf("Error %lu reading console input.\n", GetLastError());
-            gotConsole = false;
+    void applyPreferred(HANDLE output)
+    {
+        if (!available_) {
             return;
         }
 
-        for (i = 0; i < numread; i++) {
-            if (recs[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
-                // determine terminal width
-                COORD size = recs[i].Event.WindowBufferSizeEvent.dwSize;
-                WORD width = size.X;
+        captureOriginal(output);
 
-                if (width < 2) {
-                    Com_EPrintf("Invalid console buffer width.\n");
-                    continue;
-                }
-
-                // figure out input line width
-                if (width != sys_con.widthInChars) {
-                    sys_con.widthInChars = width;
-                    sys_con.inputLine.visibleChars = 0; // force refresh
-                }
-
-                Com_DPrintf("System console resized (%d cols, %d rows).\n", size.X, size.Y);
-                continue;
-            }
-            if (recs[i].EventType != KEY_EVENT) {
-                continue;
-            }
-
-            if (!recs[i].Event.KeyEvent.bKeyDown) {
-                continue;
-            }
-
-            WORD key = recs[i].Event.KeyEvent.wVirtualKeyCode;
-            DWORD mod = recs[i].Event.KeyEvent.dwControlKeyState;
-            size_t pos;
-
-            if (mod & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) {
-                switch (key) {
-                case 'A':
-                    console_move_cursor(f, 0);
-                    break;
-                case 'E':
-                    console_move_cursor(f, strlen(f->text));
-                    break;
-
-                case 'B':
-                    console_move_left(f);
-                    break;
-                case 'F':
-                    console_move_right(f);
-                    break;
-
-                case 'C':
-                    GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
-                    break;
-
-                case 'D':
-                    console_delete(f);
-                    break;
-
-                case 'W':
-                    pos = f->cursorPos;
-                    while (pos > 0 && f->text[pos - 1] <= ' ') {
-                        pos--;
-                    }
-                    while (pos > 0 && f->text[pos - 1] > ' ') {
-                        pos--;
-                    }
-                    if (pos < f->cursorPos) {
-                        hide_console_input();
-                        memmove(f->text + pos, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos);
-                        f->cursorPos = pos;
-                        show_console_input();
-                    }
-                    break;
-
-                case 'U':
-                    if (f->cursorPos > 0) {
-                        hide_console_input();
-                        memmove(f->text, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos);
-                        f->cursorPos = 0;
-                        show_console_input();
-                    }
-                    break;
-
-                case 'K':
-                    if (f->text[f->cursorPos]) {
-                        hide_console_input();
-                        f->text[f->cursorPos] = 0;
-                        show_console_input();
-                    }
-                    break;
-
-                case 'L':
-                    clear_console_window();
-                    break;
-
-                case 'N':
-                    hide_console_input();
-                    Prompt_HistoryDown(&sys_con);
-                    show_console_input();
-                    break;
-
-                case 'P':
-                    hide_console_input();
-                    Prompt_HistoryUp(&sys_con);
-                    show_console_input();
-                    break;
-
-                case 'R':
-                    hide_console_input();
-                    Prompt_CompleteHistory(&sys_con, false);
-                    show_console_input();
-                    break;
-
-                case 'S':
-                    hide_console_input();
-                    Prompt_CompleteHistory(&sys_con, true);
-                    show_console_input();
-                    break;
-
-                case VK_HOME:
-                case VK_END:
-                    scroll_console_window(key);
-                    break;
-                }
-                continue;
-            }
-
-            if (mod & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) {
-                switch (key) {
-                case 'B':
-                    pos = f->cursorPos;
-                    while (pos > 0 && f->text[pos - 1] <= ' ') {
-                        pos--;
-                    }
-                    while (pos > 0 && f->text[pos - 1] > ' ') {
-                        pos--;
-                    }
-                    console_move_cursor(f, pos);
-                    break;
-
-                case 'F':
-                    pos = f->cursorPos;
-                    while (f->text[pos] && f->text[pos] <= ' ') {
-                        pos++;
-                    }
-                    while (f->text[pos] > ' ') {
-                        pos++;
-                    }
-                    console_move_cursor(f, pos);
-                    break;
-                }
-                continue;
-            }
-
-            switch (key) {
-            case VK_UP:
-                hide_console_input();
-                Prompt_HistoryUp(&sys_con);
-                show_console_input();
-                break;
-
-            case VK_DOWN:
-                hide_console_input();
-                Prompt_HistoryDown(&sys_con);
-                show_console_input();
-                break;
-
-            case VK_PRIOR:
-            case VK_NEXT:
-                scroll_console_window(key);
-                break;
-
-            case VK_RETURN:
-                hide_console_input();
-                s = Prompt_Action(&sys_con);
-                if (s) {
-                    if (*s == '\\' || *s == '/') {
-                        s++;
-                    }
-                    Sys_Printf("]%s\n", s);
-                    Cbuf_AddText(&cmd_buffer, s);
-                    Cbuf_AddText(&cmd_buffer, "\n");
-                } else {
-                    write_console_data("]\n", 2);
-                }
-                show_console_input();
-                break;
-
-            case VK_BACK:
-                if (f->cursorPos > 0) {
-                    if (f->text[f->cursorPos] == 0 && f->cursorPos < f->visibleChars) {
-                        f->text[--f->cursorPos] = 0;
-                        write_console_data("\b \b", 3);
-                    } else {
-                        hide_console_input();
-                        memmove(f->text + f->cursorPos - 1, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos);
-                        f->cursorPos--;
-                        show_console_input();
-                    }
-                }
-                break;
-
-            case VK_DELETE:
-                console_delete(f);
-                break;
-
-            case VK_END:
-                console_move_cursor(f, strlen(f->text));
-                break;
-            case VK_HOME:
-                console_move_cursor(f, 0);
-                break;
-
-            case VK_RIGHT:
-                console_move_right(f);
-                break;
-            case VK_LEFT:
-                console_move_left(f);
-                break;
-
-            case VK_TAB:
-                hide_console_input();
-                Prompt_CompleteCommand(&sys_con, false);
-                show_console_input();
-                break;
-
-            default:
-                ch = recs[i].Event.KeyEvent.uChar.AsciiChar;
-                if (ch < 32) {
-                    break;
-                }
-                if (f->cursorPos == f->maxChars - 1) {
-                    // buffer limit reached, replace the character under
-                    // cursor. replace without moving cursor to prevent
-                    // newline when cursor is at the rightmost column.
-                    console_replace_char(f, ch);
-                    f->text[f->cursorPos + 0] = ch;
-                    f->text[f->cursorPos + 1] = 0;
-                } else if (f->text[f->cursorPos] == 0 && f->cursorPos + 1 < f->visibleChars) {
-                    char chBuf[1]{ static_cast<char>(ch) };
-                    write_console_data(chBuf, 1);
-                    f->text[f->cursorPos + 0] = ch;
-                    f->text[f->cursorPos + 1] = 0;
-                    f->cursorPos++;
-                } else {
-                    hide_console_input();
-                    memmove(f->text + f->cursorPos + 1, f->text + f->cursorPos, sizeof(f->text) - f->cursorPos - 1);
-                    f->text[f->cursorPos++] = ch;
-                    f->text[f->maxChars] = 0;
-                    show_console_input();
-                }
-                break;
-            }
+        CONSOLE_FONT_INFOEX font{ sizeof(font) };
+        if (!getFont_(output, FALSE, &font)) {
+            return;
         }
-    }
-}
 
-void Sys_LoadHistory(void)
-{
-    if (gotConsole && sys_history && sys_history->integer > 0) {
-        Prompt_LoadHistory(&sys_con, SYS_HISTORYFILE_NAME);
+        constexpr wchar_t kPreferredFont[] = L"Consolas";
+        std::wcsncpy(font.FaceName, kPreferredFont, std::size(font.FaceName) - 1);
+        font.FaceName[std::size(font.FaceName) - 1] = L'\0';
+        font.dwFontSize.Y = std::max<SHORT>(font.dwFontSize.Y, 16);
+        setFont_(output, FALSE, &font);
     }
-}
 
-void Sys_SaveHistory(void)
+    void restore(HANDLE output)
+    {
+        if (!available_ || !captured_) {
+            return;
+        }
+
+        auto font = original_;
+        setFont_(output, FALSE, &font);
+    }
+
+private:
+    using GetFontFn = BOOL (WINAPI *)(HANDLE, BOOL, PCONSOLE_FONT_INFOEX);
+    using SetFontFn = BOOL (WINAPI *)(HANDLE, BOOL, PCONSOLE_FONT_INFOEX);
+
+    GetFontFn getFont_ = nullptr;
+    SetFontFn setFont_ = nullptr;
+    CONSOLE_FONT_INFOEX original_{};
+    bool available_ = false;
+    bool captured_ = false;
+};
+
+#ifdef _DEBUG
+// hack'd version of OutputDebugStringA that can be given a specific size
+static void __stdcall QOutputDebugStringA(LPCSTR lpOutputString, size_t len)
 {
-    if (gotConsole && sys_history && sys_history->integer > 0) {
-        Prompt_SaveHistory(&sys_con, SYS_HISTORYFILE_NAME, sys_history->integer);
+    std::array<ULONG_PTR, 2> args{};
+    args[0] = static_cast<ULONG_PTR>(len);
+    args[1] = reinterpret_cast<ULONG_PTR>(lpOutputString);
+
+    __try {
+        RaiseException(DBG_PRINTEXCEPTION_C, 0, static_cast<DWORD>(args.size()), args.data());
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
     }
 }
+#endif
+
+class WinConsole {
+public:
+    bool initialize();
+    void shutdown();
+    void run();
+    void write(std::string_view text);
+    void setColor(color_index_t color);
+    void setTitle(const char *title);
+    void loadHistory();
+    void saveHistory();
+
+private:
+    class InputScope {
+    public:
+        explicit InputScope(WinConsole &console) : console_(console) { console_.hideInput(); }
+        ~InputScope() { console_.showInput(); }
+
+        InputScope(const InputScope &) = delete;
+        InputScope &operator=(const InputScope &) = delete;
+
+    private:
+        WinConsole &console_;
+    };
+
+    std::optional<CONSOLE_SCREEN_BUFFER_INFO> queryBufferInfo() const;
+    void updateDimensions(const CONSOLE_SCREEN_BUFFER_INFO &info);
+    void markInputDirty();
+    void hideInput();
+    void showInput();
+    void renderInputLine();
+    void applyFont();
+    void handleWindowEvent(const WINDOW_BUFFER_SIZE_RECORD &record);
+    void handleKeyEvent(const KEY_EVENT_RECORD &record);
+    bool handleCtrlShortcut(WORD key, DWORD controlState);
+    bool handleAltShortcut(WORD key);
+    bool handleCtrlNavigation(WORD key);
+    void handlePrintableCharacter(char ch);
+    void submitCurrentLine();
+    void moveCursorTo(size_t position);
+    void moveCursorLeft();
+    void moveCursorRight();
+    void moveCursorWordLeft();
+    void moveCursorWordRight();
+    void moveCursorToStart();
+    void moveCursorToEnd();
+    void deleteCharAtCursor();
+    void deletePreviousChar();
+    void deletePreviousWord();
+    void deleteNextWord();
+    void deleteToStart();
+    void deleteToEnd();
+    void insertCharacter(char ch);
+    void historyUp();
+    void historyDown();
+    void searchHistory(bool forward);
+    void completeCommand(bool useBackslash);
+    void scroll(int deltaRows);
+    void scrollPage(int direction);
+    void scrollToEdge(bool top);
+    void adjustWindow(const CONSOLE_SCREEN_BUFFER_INFO &info, int deltaRows);
+    void clearWindow();
+    void writeWrapped(std::string_view text);
+    void writeWrapped(const std::wstring &text);
+
+    HANDLE input_ = INVALID_HANDLE_VALUE;
+    HANDLE output_ = INVALID_HANDLE_VALUE;
+    bool ready_ = false;
+    uint16_t width_ = 0;
+    int hiddenDepth_ = 0;
+    bool inputDirty_ = true;
+    ConsoleFontController fontController_{};
+    Utf8Converter utf8_{};
+};
+
+static commandPrompt_t sys_con;
+static WinConsole g_console;
 
 #define FOREGROUND_BLACK    0
 #define FOREGROUND_WHITE    (FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_RED)
 
-static const std::array<WORD, 8> textColors = {
+constexpr std::array<WORD, 8> kTextColors = {
     FOREGROUND_BLACK,
     FOREGROUND_RED,
     FOREGROUND_GREEN,
@@ -533,113 +278,923 @@ static const std::array<WORD, 8> textColors = {
     FOREGROUND_WHITE
 };
 
-void Sys_SetConsoleColor(color_index_t color)
+std::optional<CONSOLE_SCREEN_BUFFER_INFO> WinConsole::queryBufferInfo() const
 {
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    WORD    attr, w;
+    if (output_ == INVALID_HANDLE_VALUE) {
+        return std::nullopt;
+    }
 
-    if (houtput == INVALID_HANDLE_VALUE) {
+    CONSOLE_SCREEN_BUFFER_INFO info{};
+    if (!GetConsoleScreenBufferInfo(output_, &info)) {
+        return std::nullopt;
+    }
+
+    return info;
+}
+
+void WinConsole::updateDimensions(const CONSOLE_SCREEN_BUFFER_INFO &info)
+{
+    width_ = static_cast<uint16_t>(std::max<LONG>(info.dwSize.X, 1));
+    sys_con.widthInChars = width_;
+
+    auto &field = sys_con.inputLine;
+    if (field.maxChars) {
+        const size_t available = width_ > 0 ? static_cast<size_t>(std::max<int>(width_ - 1, 0)) : 0;
+        field.visibleChars = std::min(available, field.maxChars);
+    }
+}
+
+void WinConsole::markInputDirty()
+{
+    inputDirty_ = true;
+}
+
+void WinConsole::hideInput()
+{
+    if (!ready_) {
         return;
     }
 
-    if (!gotConsole) {
+    if (++hiddenDepth_ > 1) {
         return;
     }
 
-    if (!GetConsoleScreenBufferInfo(houtput, &info)) {
+    if (auto info = queryBufferInfo()) {
+        COORD pos{ 0, info->dwCursorPosition.Y };
+        DWORD cleared = 0;
+        FillConsoleOutputCharacterW(output_, L' ', info->dwSize.X, pos, &cleared);
+        FillConsoleOutputAttribute(output_, info->wAttributes, info->dwSize.X, pos, &cleared);
+        SetConsoleCursorPosition(output_, pos);
+    }
+}
+
+void WinConsole::showInput()
+{
+    if (!ready_ || hiddenDepth_ == 0) {
         return;
     }
 
-    attr = info.wAttributes & ~FOREGROUND_WHITE;
+    if (--hiddenDepth_ == 0) {
+        renderInputLine();
+    }
+}
 
-    switch (color) {
-    case COLOR_INDEX_NONE:
-        w = attr | FOREGROUND_WHITE;
-        break;
-    case COLOR_INDEX_ALT:
-        w = attr | FOREGROUND_GREEN;
-        break;
+void WinConsole::renderInputLine()
+{
+    if (!ready_) {
+        return;
+    }
+
+    auto info = queryBufferInfo();
+    if (!info) {
+        return;
+    }
+
+    updateDimensions(*info);
+
+    auto &field = sys_con.inputLine;
+    const size_t maxChars = field.maxChars ? field.maxChars - 1 : 0;
+    const size_t cursor = std::min(field.cursorPos, maxChars);
+    const size_t textLen = std::strlen(field.text);
+
+    size_t startIndex = 0;
+    if (field.visibleChars > 0 && cursor >= field.visibleChars) {
+        startIndex = cursor - (field.visibleChars - 1);
+    }
+    if (startIndex > textLen) {
+        startIndex = textLen;
+    }
+
+    const size_t visibleLen = field.visibleChars == 0 ? 0 : std::min(field.visibleChars, textLen - startIndex);
+    std::string_view view(field.text + startIndex, visibleLen);
+    std::wstring line = utf8_.fromUtf8(view);
+    std::wstring buffer(field.visibleChars, L' ');
+    std::copy_n(line.begin(), std::min(line.size(), buffer.size()), buffer.begin());
+
+    COORD promptPos{ 0, info->dwCursorPosition.Y };
+    DWORD written = 0;
+    FillConsoleOutputCharacterW(output_, L' ', info->dwSize.X, promptPos, &written);
+    FillConsoleOutputAttribute(output_, info->wAttributes, info->dwSize.X, promptPos, &written);
+    WriteConsoleOutputCharacterW(output_, &kPromptPrefix, 1, promptPos, &written);
+
+    if (!buffer.empty()) {
+        WriteConsoleOutputCharacterW(output_, buffer.c_str(), static_cast<DWORD>(buffer.size()), COORD{ 1, promptPos.Y }, &written);
+    }
+
+    const size_t cursorOffset = cursor >= startIndex ? cursor - startIndex : 0;
+    SetConsoleCursorPosition(output_, COORD{ static_cast<SHORT>(cursorOffset + 1), promptPos.Y });
+    inputDirty_ = false;
+}
+
+void WinConsole::applyFont()
+{
+    if (output_ != INVALID_HANDLE_VALUE) {
+        fontController_.applyPreferred(output_);
+    }
+}
+
+void WinConsole::handleWindowEvent(const WINDOW_BUFFER_SIZE_RECORD &record)
+{
+    if (record.dwSize.X < 2) {
+        Com_EPrintf("Invalid console buffer width.\n");
+        return;
+    }
+
+    width_ = record.dwSize.X;
+    markInputDirty();
+    showInput();
+
+    Com_DPrintf("System console resized (%d cols, %d rows).\n", record.dwSize.X, record.dwSize.Y);
+}
+
+void WinConsole::handleKeyEvent(const KEY_EVENT_RECORD &record)
+{
+    if (!record.bKeyDown) {
+        return;
+    }
+
+    const WORD key = record.wVirtualKeyCode;
+    const DWORD state = record.dwControlKeyState;
+    const bool ctrl = (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0;
+    const bool alt = (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0;
+    const bool shift = (state & SHIFT_PRESSED) != 0;
+
+    if (ctrl && handleCtrlShortcut(key, state)) {
+        return;
+    }
+
+    if (alt && handleAltShortcut(key)) {
+        return;
+    }
+
+    if (ctrl && handleCtrlNavigation(key)) {
+        return;
+    }
+
+    switch (key) {
+    case VK_UP:
+        historyUp();
+        return;
+    case VK_DOWN:
+        historyDown();
+        return;
+    case VK_PRIOR:
+        scrollPage(-1);
+        return;
+    case VK_NEXT:
+        scrollPage(1);
+        return;
+    case VK_RETURN:
+        submitCurrentLine();
+        return;
+    case VK_BACK:
+        deletePreviousChar();
+        return;
+    case VK_DELETE:
+        deleteCharAtCursor();
+        return;
+    case VK_HOME:
+        moveCursorToStart();
+        return;
+    case VK_END:
+        moveCursorToEnd();
+        return;
+    case VK_LEFT:
+        moveCursorLeft();
+        return;
+    case VK_RIGHT:
+        moveCursorRight();
+        return;
+    case VK_TAB:
+        completeCommand(shift);
+        return;
     default:
-        w = attr | textColors[color & 7];
         break;
     }
 
-    if (color != COLOR_INDEX_NONE) {
-        hide_console_input();
-    }
-    SetConsoleTextAttribute(houtput, w);
-    if (color == COLOR_INDEX_NONE) {
-        show_console_input();
+    const wchar_t ch = record.uChar.UnicodeChar;
+    if (!ctrl && !alt && ch >= 32 && ch < 128) {
+        handlePrintableCharacter(static_cast<char>(ch));
     }
 }
 
-#ifdef _DEBUG
-// hack'd version of OutputDebugStringA that can
-// be given a specific size rather than strlen'ing the input
-static void __stdcall QOutputDebugStringA(LPCSTR lpOutputString, size_t len)
+bool WinConsole::handleCtrlShortcut(WORD key, DWORD controlState)
 {
-    std::array<ULONG_PTR, 2> args;
-    args[0] = (ULONG_PTR)len;
-    args[1] = (ULONG_PTR)lpOutputString;
-
-    __try
-    {
-        RaiseException(DBG_PRINTEXCEPTION_C, 0, static_cast<DWORD>(args.size()), args.data());
+    switch (key) {
+    case 'A':
+        moveCursorToStart();
+        return true;
+    case 'E':
+        moveCursorToEnd();
+        return true;
+    case 'B':
+        moveCursorLeft();
+        return true;
+    case 'F':
+        moveCursorRight();
+        return true;
+    case 'C':
+        GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+        return true;
+    case 'D':
+        deleteCharAtCursor();
+        return true;
+    case 'W':
+        deletePreviousWord();
+        return true;
+    case 'U':
+        deleteToStart();
+        return true;
+    case 'K':
+        deleteToEnd();
+        return true;
+    case 'L':
+        clearWindow();
+        return true;
+    case 'N':
+        historyDown();
+        return true;
+    case 'P':
+        historyUp();
+        return true;
+    case 'R':
+        searchHistory(false);
+        return true;
+    case 'S':
+        searchHistory(true);
+        return true;
+    case VK_HOME:
+        scrollToEdge(true);
+        return true;
+    case VK_END:
+        scrollToEdge(false);
+        return true;
+    case VK_PRIOR:
+        scrollPage(-1);
+        return true;
+    case VK_NEXT:
+        scrollPage(1);
+        return true;
+    case VK_BACK:
+        deletePreviousWord();
+        return true;
+    case VK_DELETE:
+        deleteNextWord();
+        return true;
+    default:
+        break;
     }
-    __except(EXCEPTION_EXECUTE_HANDLER)
-    {
+
+    if (key == VK_LEFT || key == VK_RIGHT) {
+        if (key == VK_LEFT) {
+            moveCursorWordLeft();
+        } else {
+            moveCursorWordRight();
+        }
+        return true;
+    }
+
+    if (key == 'V' && (controlState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))) {
+        return false;
+    }
+
+    return false;
+}
+
+bool WinConsole::handleAltShortcut(WORD key)
+{
+    switch (key) {
+    case 'B':
+        moveCursorWordLeft();
+        return true;
+    case 'F':
+        moveCursorWordRight();
+        return true;
+    case 'D':
+        deleteNextWord();
+        return true;
+    default:
+        break;
+    }
+
+    return false;
+}
+
+bool WinConsole::handleCtrlNavigation(WORD key)
+{
+    switch (key) {
+    case VK_LEFT:
+        moveCursorWordLeft();
+        return true;
+    case VK_RIGHT:
+        moveCursorWordRight();
+        return true;
+    default:
+        break;
+    }
+
+    return false;
+}
+
+void WinConsole::handlePrintableCharacter(char ch)
+{
+    markInputDirty();
+    InputScope scope(*this);
+    insertCharacter(ch);
+}
+
+void WinConsole::submitCurrentLine()
+{
+    markInputDirty();
+    InputScope scope(*this);
+    char *s = Prompt_Action(&sys_con);
+    if (s) {
+        if (*s == '\\' || *s == '/') {
+            ++s;
+        }
+        Sys_Printf("]%s\n", s);
+        Cbuf_AddText(&cmd_buffer, s);
+        Cbuf_AddText(&cmd_buffer, "\n");
+    } else {
+        write("]\n");
     }
 }
-#endif
 
-/*
-================
-Sys_ConsoleOutput
-
-Print text to the dedicated console
-================
-*/
-void Sys_ConsoleOutput(const char *text, size_t len)
+void WinConsole::moveCursorTo(size_t position)
 {
+    auto &field = sys_con.inputLine;
+    if (!field.maxChars) {
+        return;
+    }
+
+    const size_t limit = field.maxChars ? field.maxChars - 1 : 0;
+    position = std::min(position, limit);
+    if (field.cursorPos != position) {
+        field.cursorPos = position;
+        markInputDirty();
+        if (hiddenDepth_ > 0) {
+            showInput();
+        } else {
+            renderInputLine();
+        }
+    }
+}
+
+void WinConsole::moveCursorLeft()
+{
+    auto &field = sys_con.inputLine;
+    if (field.cursorPos > 0) {
+        moveCursorTo(field.cursorPos - 1);
+    }
+}
+
+void WinConsole::moveCursorRight()
+{
+    auto &field = sys_con.inputLine;
+    const size_t len = std::strlen(field.text);
+    if (field.cursorPos < len && field.cursorPos < field.maxChars - 1) {
+        moveCursorTo(field.cursorPos + 1);
+    }
+}
+
+void WinConsole::moveCursorWordLeft()
+{
+    auto &field = sys_con.inputLine;
+    size_t pos = field.cursorPos;
+    while (pos > 0 && field.text[pos - 1] <= ' ') {
+        --pos;
+    }
+    while (pos > 0 && field.text[pos - 1] > ' ') {
+        --pos;
+    }
+    moveCursorTo(pos);
+}
+
+void WinConsole::moveCursorWordRight()
+{
+    auto &field = sys_con.inputLine;
+    size_t pos = field.cursorPos;
+    const size_t len = std::strlen(field.text);
+    while (pos < len && field.text[pos] <= ' ') {
+        ++pos;
+    }
+    while (pos < len && field.text[pos] > ' ') {
+        ++pos;
+    }
+    moveCursorTo(pos);
+}
+
+void WinConsole::moveCursorToStart()
+{
+    moveCursorTo(0);
+}
+
+void WinConsole::moveCursorToEnd()
+{
+    moveCursorTo(std::strlen(sys_con.inputLine.text));
+}
+
+void WinConsole::deleteCharAtCursor()
+{
+    auto &field = sys_con.inputLine;
+    if (!field.text[field.cursorPos]) {
+        return;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    const size_t len = std::strlen(field.text);
+    memmove(field.text + field.cursorPos, field.text + field.cursorPos + 1, len - field.cursorPos);
+}
+
+void WinConsole::deletePreviousChar()
+{
+    auto &field = sys_con.inputLine;
+    if (field.cursorPos == 0) {
+        return;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    const size_t len = std::strlen(field.text);
+    memmove(field.text + field.cursorPos - 1, field.text + field.cursorPos, len - field.cursorPos + 1);
+    field.cursorPos--;
+}
+
+void WinConsole::deletePreviousWord()
+{
+    auto &field = sys_con.inputLine;
+    if (field.cursorPos == 0) {
+        return;
+    }
+
+    size_t pos = field.cursorPos;
+    while (pos > 0 && field.text[pos - 1] <= ' ') {
+        --pos;
+    }
+    while (pos > 0 && field.text[pos - 1] > ' ') {
+        --pos;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    memmove(field.text + pos, field.text + field.cursorPos, std::strlen(field.text + field.cursorPos) + 1);
+    field.cursorPos = pos;
+}
+
+void WinConsole::deleteNextWord()
+{
+    auto &field = sys_con.inputLine;
+    size_t pos = field.cursorPos;
+    const size_t len = std::strlen(field.text);
+    if (pos >= len) {
+        return;
+    }
+
+    while (pos < len && field.text[pos] <= ' ') {
+        ++pos;
+    }
+    while (pos < len && field.text[pos] > ' ') {
+        ++pos;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    memmove(field.text + field.cursorPos, field.text + pos, len - pos + 1);
+}
+
+void WinConsole::deleteToStart()
+{
+    auto &field = sys_con.inputLine;
+    if (field.cursorPos == 0) {
+        return;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    memmove(field.text, field.text + field.cursorPos, std::strlen(field.text + field.cursorPos) + 1);
+    field.cursorPos = 0;
+}
+
+void WinConsole::deleteToEnd()
+{
+    auto &field = sys_con.inputLine;
+    markInputDirty();
+    InputScope scope(*this);
+    field.text[field.cursorPos] = 0;
+}
+
+void WinConsole::insertCharacter(char ch)
+{
+    auto &field = sys_con.inputLine;
+    if (!field.maxChars) {
+        return;
+    }
+
+    const size_t len = std::strlen(field.text);
+    if (field.cursorPos >= field.maxChars - 1) {
+        field.text[field.cursorPos] = ch;
+        if (field.cursorPos == len) {
+            field.text[field.cursorPos + 1] = 0;
+        }
+        return;
+    }
+
+    memmove(field.text + field.cursorPos + 1, field.text + field.cursorPos, len - field.cursorPos + 1);
+    field.text[field.cursorPos++] = ch;
+}
+
+void WinConsole::historyUp()
+{
+    markInputDirty();
+    InputScope scope(*this);
+    Prompt_HistoryUp(&sys_con);
+}
+
+void WinConsole::historyDown()
+{
+    markInputDirty();
+    InputScope scope(*this);
+    Prompt_HistoryDown(&sys_con);
+}
+
+void WinConsole::searchHistory(bool forward)
+{
+    markInputDirty();
+    InputScope scope(*this);
+    Prompt_CompleteHistory(&sys_con, forward);
+}
+
+void WinConsole::completeCommand(bool useBackslash)
+{
+    markInputDirty();
+    InputScope scope(*this);
+    Prompt_CompleteCommand(&sys_con, useBackslash);
+}
+
+void WinConsole::adjustWindow(const CONSOLE_SCREEN_BUFFER_INFO &info, int deltaRows)
+{
+    if (deltaRows == 0) {
+        return;
+    }
+
+    SMALL_RECT window = info.srWindow;
+    const int height = window.Bottom - window.Top + 1;
+    const int maxTop = std::max<int>(0, info.dwSize.Y - height);
+    const int desiredTop = std::clamp<int>(window.Top + deltaRows, 0, maxTop);
+    const int offset = desiredTop - window.Top;
+    if (!offset) {
+        return;
+    }
+
+    window.Top = static_cast<SHORT>(window.Top + offset);
+    window.Bottom = static_cast<SHORT>(window.Bottom + offset);
+    SetConsoleWindowInfo(output_, TRUE, &window);
+}
+
+void WinConsole::scroll(int deltaRows)
+{
+    if (!ready_ || deltaRows == 0) {
+        return;
+    }
+
+    if (auto info = queryBufferInfo()) {
+        adjustWindow(*info, deltaRows);
+    }
+}
+
+void WinConsole::scrollPage(int direction)
+{
+    if (!ready_ || direction == 0) {
+        return;
+    }
+
+    if (auto info = queryBufferInfo()) {
+        const int height = info->srWindow.Bottom - info->srWindow.Top + 1;
+        adjustWindow(*info, direction * std::max(1, height));
+    }
+}
+
+void WinConsole::scrollToEdge(bool top)
+{
+    if (!ready_) {
+        return;
+    }
+
+    if (auto info = queryBufferInfo()) {
+        const int height = info->srWindow.Bottom - info->srWindow.Top + 1;
+        const int maxTop = std::max<int>(0, info->dwSize.Y - height);
+        const int target = top ? 0 : maxTop;
+        adjustWindow(*info, target - info->srWindow.Top);
+    }
+}
+
+void WinConsole::clearWindow()
+{
+    if (!ready_) {
+        return;
+    }
+
+    markInputDirty();
+    InputScope scope(*this);
+    if (auto info = queryBufferInfo()) {
+        const int height = info->srWindow.Bottom - info->srWindow.Top + 1;
+        const DWORD cells = static_cast<DWORD>(height) * info->dwSize.X;
+        COORD origin{ 0, info->srWindow.Top };
+        DWORD written = 0;
+        FillConsoleOutputCharacterW(output_, L' ', cells, origin, &written);
+        FillConsoleOutputAttribute(output_, info->wAttributes, cells, origin, &written);
+        SetConsoleCursorPosition(output_, origin);
+    }
+}
+
+void WinConsole::writeWrapped(std::string_view text)
+{
+    std::wstring wide = utf8_.fromUtf8(text);
+    wide.erase(std::remove(wide.begin(), wide.end(), L'\r'), wide.end());
+    writeWrapped(wide);
+}
+
+void WinConsole::writeWrapped(const std::wstring &text)
+{
+    if (text.empty()) {
+        return;
+    }
+
+    const size_t width = width_ ? static_cast<size_t>(width_) : 80;
+    size_t index = 0;
+    DWORD written = 0;
+
+    while (index < text.size()) {
+        size_t newline = text.find(L'\n', index);
+        const size_t lineEnd = (newline == std::wstring::npos) ? text.size() : newline;
+        size_t start = index;
+
+        while (start < lineEnd) {
+            size_t remaining = lineEnd - start;
+            size_t chunk = std::min(remaining, width);
+            if (chunk < remaining) {
+                size_t wrap = chunk;
+                while (wrap > 0 && !std::iswspace(text[start + wrap - 1])) {
+                    --wrap;
+                }
+                if (wrap > 0) {
+                    chunk = wrap;
+                }
+            }
+
+            if (chunk == 0) {
+                chunk = std::min(remaining, width);
+                if (chunk == 0) {
+                    break;
+                }
+            }
+
+            WriteConsoleW(output_, text.data() + start, static_cast<DWORD>(chunk), &written, nullptr);
+            start += chunk;
+
+            if (start < lineEnd) {
+                WriteConsoleW(output_, L"\n", 1, &written, nullptr);
+                while (start < lineEnd && std::iswspace(text[start]) && text[start] != L'\n') {
+                    ++start;
+                }
+            }
+        }
+
+        if (newline != std::wstring::npos) {
+            WriteConsoleW(output_, L"\n", 1, &written, nullptr);
+            index = newline + 1;
+        } else {
+            index = lineEnd;
+        }
+    }
+}
+
+bool WinConsole::initialize()
+{
+    input_ = GetStdHandle(STD_INPUT_HANDLE);
+    output_ = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if (input_ == INVALID_HANDLE_VALUE || output_ == INVALID_HANDLE_VALUE) {
+        Com_EPrintf("Couldn't acquire console handles.\n");
+        return false;
+    }
+
+    auto info = queryBufferInfo();
+    if (!info) {
+        Com_EPrintf("Couldn't get console buffer info.\n");
+        return false;
+    }
+
+    DWORD inputMode = 0;
+    if (!GetConsoleMode(input_, &inputMode)) {
+        Com_EPrintf("Couldn't get console input mode.\n");
+        return false;
+    }
+
+    inputMode &= ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+    inputMode |= ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE;
+    if (!SetConsoleMode(input_, inputMode)) {
+        Com_EPrintf("Couldn't set console input mode.\n");
+        return false;
+    }
+
+    DWORD outputMode = 0;
+    if (GetConsoleMode(output_, &outputMode)) {
+        outputMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(output_, outputMode);
+    }
+
+    applyFont();
+
+    SetConsoleTitleA(PRODUCT " console");
+
+    sys_con.printf = Sys_Printf;
+    sys_con.widthInChars = info->dwSize.X;
+    IF_Init(&sys_con.inputLine, info->dwSize.X > 0 ? info->dwSize.X - 1 : 0, MAX_FIELD_TEXT - 1);
+
+    updateDimensions(*info);
+
+    ready_ = true;
+    hiddenDepth_ = 1;
+    markInputDirty();
+    showInput();
+
+    Com_DPrintf("System console initialized (%d cols, %d rows).\n", info->dwSize.X, info->dwSize.Y);
+    return true;
+}
+
+void WinConsole::shutdown()
+{
+    if (!ready_) {
+        return;
+    }
+
+    fontController_.restore(output_);
+    ready_ = false;
+    input_ = INVALID_HANDLE_VALUE;
+    output_ = INVALID_HANDLE_VALUE;
+}
+
+void WinConsole::run()
+{
+    if (!ready_ || input_ == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    std::array<INPUT_RECORD, kMaxConsoleInputEvents> records{};
+
+    while (true) {
+        DWORD pending = 0;
+        if (!GetNumberOfConsoleInputEvents(input_, &pending)) {
+            Com_EPrintf("Error %lu getting number of console events.\n", GetLastError());
+            shutdown();
+            return;
+        }
+
+        if (pending == 0) {
+            break;
+        }
+
+        if (pending > records.size()) {
+            pending = static_cast<DWORD>(records.size());
+        }
+
+        DWORD read = 0;
+        if (!ReadConsoleInputW(input_, records.data(), pending, &read)) {
+            Com_EPrintf("Error %lu reading console input.\n", GetLastError());
+            shutdown();
+            return;
+        }
+
+        for (DWORD i = 0; i < read; ++i) {
+            const INPUT_RECORD &event = records[i];
+            if (event.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+                handleWindowEvent(event.Event.WindowBufferSizeEvent);
+            } else if (event.EventType == KEY_EVENT) {
+                handleKeyEvent(event.Event.KeyEvent);
+            }
+        }
+    }
+}
+
+void WinConsole::write(std::string_view text)
+{
+    if (text.empty()) {
+        return;
+    }
+
 #ifdef _DEBUG
     if (sys_debugprint && sys_debugprint->integer) {
-        QOutputDebugStringA(text, len);
+        QOutputDebugStringA(text.data(), text.size());
         QOutputDebugStringA("\r\n", 2);
     }
 #endif
 
-    if (houtput == INVALID_HANDLE_VALUE) {
+    if (!ready_ || output_ == INVALID_HANDLE_VALUE) {
+        HANDLE handle = output_ != INVALID_HANDLE_VALUE ? output_ : GetStdHandle(STD_OUTPUT_HANDLE);
+        if (handle == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        DWORD written = 0;
+        WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
         return;
     }
 
-    if (!len) {
+    markInputDirty();
+    InputScope scope(*this);
+    writeWrapped(text);
+}
+
+void WinConsole::setColor(color_index_t color)
+{
+    if (!ready_) {
         return;
     }
 
-    if (!gotConsole) {
-        write_console_data(text, len);
-    } else {
-        static bool hack = false;
-
-        if (!hack) {
-            hide_console_input();
-            hack = true;
-        }
-
-        write_console_data(text, len);
-
-        if (text[len - 1] == '\n') {
-            show_console_input();
-            hack = false;
-        }
+    auto info = queryBufferInfo();
+    if (!info) {
+        return;
     }
+
+    WORD attr = info->wAttributes & ~FOREGROUND_WHITE;
+    WORD value = attr | FOREGROUND_WHITE;
+
+    switch (color) {
+    case COLOR_INDEX_NONE:
+        value = attr | FOREGROUND_WHITE;
+        break;
+    case COLOR_INDEX_ALT:
+        value = attr | FOREGROUND_GREEN;
+        break;
+    default:
+        value = attr | kTextColors[color & 7];
+        break;
+    }
+
+    if (color != COLOR_INDEX_NONE) {
+        hideInput();
+    }
+    SetConsoleTextAttribute(output_, value);
+    if (color == COLOR_INDEX_NONE) {
+        markInputDirty();
+        showInput();
+    }
+}
+
+void WinConsole::setTitle(const char *title)
+{
+    if (ready_) {
+        SetConsoleTitleA(title);
+    }
+}
+
+void WinConsole::loadHistory()
+{
+    if (ready_ && sys_history && sys_history->integer > 0) {
+        Prompt_LoadHistory(&sys_con, SYS_HISTORYFILE_NAME);
+        markInputDirty();
+        showInput();
+    }
+}
+
+void WinConsole::saveHistory()
+{
+    if (ready_ && sys_history && sys_history->integer > 0) {
+        Prompt_SaveHistory(&sys_con, SYS_HISTORYFILE_NAME, sys_history->integer);
+    }
+}
+
+} // namespace
+
+void Sys_RunConsole(void)
+{
+    g_console.run();
+}
+
+void Sys_ConsoleOutput(const char *text, size_t len)
+{
+    g_console.write(std::string_view{text, len});
 }
 
 void Sys_SetConsoleTitle(const char *title)
 {
-    if (gotConsole) {
-        SetConsoleTitleA(title);
-    }
+    g_console.setTitle(title);
+}
+
+void Sys_SetConsoleColor(color_index_t color)
+{
+    g_console.setColor(color);
+}
+
+void Sys_LoadHistory(void)
+{
+    g_console.loadHistory();
+}
+
+void Sys_SaveHistory(void)
+{
+    g_console.saveHistory();
 }
 
 static BOOL WINAPI Sys_ConsoleCtrlHandler(DWORD dwCtrlType)
@@ -654,10 +1209,6 @@ static BOOL WINAPI Sys_ConsoleCtrlHandler(DWORD dwCtrlType)
 
 static void Sys_ConsoleInit(void)
 {
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    DWORD mode;
-    WORD width;
-
 #if USE_WINSVC
     if (statusHandle) {
         return;
@@ -673,47 +1224,15 @@ static void Sys_ConsoleInit(void)
     freopen("CONOUT$", "w", stderr);
 #endif
 
-    hinput = GetStdHandle(STD_INPUT_HANDLE);
-    houtput = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (!GetConsoleScreenBufferInfo(houtput, &info)) {
-        Com_EPrintf("Couldn't get console buffer info.\n");
-        return;
-    }
-
-    // determine terminal width
-    width = info.dwSize.X;
-    if (width < 2) {
-        Com_EPrintf("Invalid console buffer width.\n");
-        return;
-    }
-
-    if (!GetConsoleMode(hinput, &mode)) {
-        Com_EPrintf("Couldn't get console input mode.\n");
-        return;
-    }
-
-    mode &= ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-    mode |= ENABLE_WINDOW_INPUT;
-    if (!SetConsoleMode(hinput, mode)) {
-        Com_EPrintf("Couldn't set console input mode.\n");
-        return;
-    }
-
-    SetConsoleTitleA(PRODUCT " console");
     SetConsoleCtrlHandler(Sys_ConsoleCtrlHandler, TRUE);
 
-    sys_con.widthInChars = width;
-    sys_con.printf = Sys_Printf;
-    gotConsole = true;
-
-    // figure out input line width
-    IF_Init(&sys_con.inputLine, width - 1, MAX_FIELD_TEXT - 1);
-
-    Com_DPrintf("System console initialized (%d cols, %d rows).\n",
-                info.dwSize.X, info.dwSize.Y);
+    if (!g_console.initialize()) {
+        return;
+    }
 }
 
 #endif // USE_SYSCON
+
 
 /*
 ===============================================================================
