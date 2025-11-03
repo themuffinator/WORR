@@ -748,6 +748,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_BOKEH_GATHER        BIT_ULL(39)
 #define GLS_BOKEH_COMBINE       BIT_ULL(40)
 #define GLS_TONEMAP_ENABLE      BIT_ULL(41)
+#define GLS_CRT_ENABLE          BIT_ULL(42)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -762,10 +763,10 @@ void GL_LoadWorld(const char *name);
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE)
+                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE)
+                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -872,6 +873,10 @@ typedef struct {
     vec4_t      hdr_params1;
     vec4_t      hdr_params2;
     vec4_t      hdr_params3;
+    vec4_t      crt_params0;
+    vec4_t      crt_params1;
+    vec4_t      crt_params2;
+    vec4_t      crt_screen;
     vec4_t      hdr_histogram[16];
 } glUniformBlock_t;
 

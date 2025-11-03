@@ -125,6 +125,10 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_hdr_params1;
         vec4 u_hdr_params2;
         vec4 u_hdr_params3;
+        vec4 u_crt_params0;
+        vec4 u_crt_params1;
+        vec4 u_crt_params2;
+        vec4 u_crt_screen;
         vec4 u_hdr_histogram[16];
     )
     GLSF("};\n");
@@ -544,6 +548,175 @@ static void write_box_blur(sizebuf_t *buf)
     )
 }
 
+static void write_crt_block(sizebuf_t *buf, bool tonemap)
+{
+    GLSL(float crt_to_linear_component(float value) {
+        if (u_crt_params1.z <= 0.5)
+            return value;
+        return (value <= 0.04045) ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4);
+    })
+
+    GLSL(vec3 crt_to_linear(vec3 color) {
+        if (u_crt_params1.z <= 0.5)
+            return color;
+        return vec3(
+            crt_to_linear_component(color.r),
+            crt_to_linear_component(color.g),
+            crt_to_linear_component(color.b));
+    })
+
+    GLSL(float crt_to_srgb_component(float value) {
+        if (u_crt_params1.z <= 0.5)
+            return value;
+        return value < 0.0031308 ? value * 12.92 : 1.055 * pow(value, 0.41666) - 0.055;
+    })
+
+    GLSL(vec3 crt_to_srgb(vec3 color) {
+        if (u_crt_params1.z <= 0.5)
+            return color;
+        return vec3(
+            crt_to_srgb_component(color.r),
+            crt_to_srgb_component(color.g),
+            crt_to_srgb_component(color.b));
+    })
+
+    GLSL(vec3 crt_fetch(vec2 pos, vec2 offset) {
+        vec2 size = vec2(u_crt_screen.x, u_crt_screen.y);
+        vec2 sample = floor(pos * size + offset);
+        if (sample.x < 0.0 || sample.y < 0.0 || sample.x >= size.x || sample.y >= size.y)
+            return vec3(0.0);
+        vec2 invSize = vec2(u_crt_screen.z, u_crt_screen.w);
+        vec2 uv = (sample + vec2(0.5)) * invSize;
+        vec3 color = texture(u_texture, uv).rgb * u_crt_params2.x;
+        return crt_to_linear(color);
+    })
+
+    GLSL(vec2 crt_dist(vec2 pos) {
+        vec2 scaled = pos * vec2(u_crt_screen.x, u_crt_screen.y);
+        vec2 fracPart = scaled - floor(scaled);
+        return -((fracPart) - vec2(0.5));
+    })
+
+    GLSL(float crt_gaussian(float value, float scale) {
+        const float shape = 2.0;
+        return exp2(scale * pow(abs(value), shape));
+    })
+
+    GLSL(vec3 crt_horz3(vec2 pos, float offset) {
+        vec3 b = crt_fetch(pos, vec2(-1.0, offset));
+        vec3 c = crt_fetch(pos, vec2( 0.0, offset));
+        vec3 d = crt_fetch(pos, vec2( 1.0, offset));
+        float dst = crt_dist(pos).x;
+        float scale = u_crt_params0.y;
+        float wb = crt_gaussian(dst - 1.0, scale);
+        float wc = crt_gaussian(dst + 0.0, scale);
+        float wd = crt_gaussian(dst + 1.0, scale);
+        return (b * wb + c * wc + d * wd) / (wb + wc + wd);
+    })
+
+    GLSL(vec3 crt_horz5(vec2 pos, float offset) {
+        vec3 a = crt_fetch(pos, vec2(-2.0, offset));
+        vec3 b = crt_fetch(pos, vec2(-1.0, offset));
+        vec3 c = crt_fetch(pos, vec2( 0.0, offset));
+        vec3 d = crt_fetch(pos, vec2( 1.0, offset));
+        vec3 e = crt_fetch(pos, vec2( 2.0, offset));
+        float dst = crt_dist(pos).x;
+        float scale = u_crt_params0.y;
+        float wa = crt_gaussian(dst - 2.0, scale);
+        float wb = crt_gaussian(dst - 1.0, scale);
+        float wc = crt_gaussian(dst + 0.0, scale);
+        float wd = crt_gaussian(dst + 1.0, scale);
+        float we = crt_gaussian(dst + 2.0, scale);
+        return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
+    })
+
+    GLSL(float crt_scan(vec2 pos, float offset) {
+        float dst = crt_dist(pos).y;
+        return crt_gaussian(dst + offset, u_crt_params0.x);
+    })
+
+    GLSL(vec3 crt_tri(vec2 pos) {
+        vec3 a = crt_horz3(pos, -1.0);
+        vec3 b = crt_horz5(pos,  0.0);
+        vec3 c = crt_horz3(pos,  1.0);
+        float wa = crt_scan(pos, -1.0);
+        float wb = crt_scan(pos,  0.0);
+        float wc = crt_scan(pos,  1.0);
+        return a * wa + b * wb + c * wc;
+    })
+
+    GLSL(vec2 crt_warp(vec2 pos) {
+        vec2 centered = pos * 2.0 - 1.0;
+        centered *= vec2(1.0 + (centered.y * centered.y) * u_crt_params1.x,
+                         1.0 + (centered.x * centered.x) * u_crt_params1.y);
+        return centered * 0.5 + 0.5;
+    })
+
+    GLSL(vec3 crt_mask(vec2 coord) {
+        vec3 mask = vec3(u_crt_params0.z);
+        float maskLight = u_crt_params0.w;
+        float type = floor(u_crt_params1.w + 0.5);
+        if (type < 0.5)
+            return mask;
+
+        if (type < 1.5) {
+            float line = maskLight;
+            float odd = 0.0;
+            if (fract(coord.x * 0.166666666) < 0.5)
+                odd = 1.0;
+            if (fract((coord.y + odd) * 0.5) < 0.5)
+                line = u_crt_params0.z;
+            float phase = fract(coord.x * 0.333333333);
+            if (phase < 0.333333333)
+                mask.r = maskLight;
+            else if (phase < 0.666666667)
+                mask.g = maskLight;
+            else
+                mask.b = maskLight;
+            mask *= line;
+        } else if (type < 2.5) {
+            float phase = fract(coord.x * 0.333333333);
+            if (phase < 0.333333333)
+                mask.r = maskLight;
+            else if (phase < 0.666666667)
+                mask.g = maskLight;
+            else
+                mask.b = maskLight;
+        } else if (type < 3.5) {
+            float phase = fract((coord.x + coord.y * 3.0) * 0.166666666);
+            if (phase < 0.333333333)
+                mask.r = maskLight;
+            else if (phase < 0.666666667)
+                mask.g = maskLight;
+            else
+                mask.b = maskLight;
+        } else {
+            vec2 cell = floor(coord * vec2(1.0, 0.5));
+            float phase = fract((cell.x + cell.y * 3.0) * 0.166666666);
+            if (phase < 0.333333333)
+                mask.r = maskLight;
+            else if (phase < 0.666666667)
+                mask.g = maskLight;
+            else
+                mask.b = maskLight;
+        }
+        return mask;
+    })
+
+    GLSF("vec3 crt_apply(vec2 uv, vec2 baseTc, vec2 fragCoord) {\n");
+    GLSL(vec2 pos = crt_warp(uv););
+    GLSL(vec3 color = crt_tri(pos););
+    GLSL(float maskType = floor(u_crt_params1.w + 0.5););
+    GLSL(if (maskType > 0.5) color *= crt_mask(fragCoord * 1.000001););
+    if (tonemap)
+        GLSL(color = hdr_apply(color, baseTc, fragCoord););
+    else
+        GLSL(color = crt_to_srgb(color););
+    GLSL(color = clamp(color, 0.0, 1.0););
+    GLSL(return color;);
+    GLSF("}\n");
+}
+
 static void write_tonemap_block(sizebuf_t *buf)
 {
     GLSF("#define TONEMAP_ACES 0\n");
@@ -878,6 +1051,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_TONEMAP_ENABLE)
         write_tonemap_block(buf);
 
+    if (bits & GLS_CRT_ENABLE)
+        write_crt_block(buf, (bits & GLS_TONEMAP_ENABLE) != 0);
+
     if (bits & GLS_DYNAMIC_LIGHTS)
         write_dynamic_light_block(buf);
 
@@ -956,6 +1132,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 
         if (bits & GLS_WARP_ENABLE)
             GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
+
+        if (bits & GLS_CRT_ENABLE)
+            GLSL(vec2 crt_uv = tc;)
 
         if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
@@ -1068,8 +1247,13 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_BLOOM_GENERATE)
         GLSL(o_bloom = bloom;)
 
-    if (bits & GLS_TONEMAP_ENABLE)
+    if ((bits & GLS_TONEMAP_ENABLE) && !(bits & GLS_CRT_ENABLE))
         GLSL(diffuse.rgb = hdr_apply(diffuse.rgb, tc, gl_FragCoord.xy);)
+
+    if (bits & GLS_CRT_ENABLE) {
+        GLSL(diffuse.rgb = crt_apply(crt_uv, tc, gl_FragCoord.xy);)
+        GLSL(diffuse.a = 1.0;)
+    }
 
     GLSL(o_color = diffuse;)
     GLSF("}\n");
