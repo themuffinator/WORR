@@ -120,6 +120,9 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_dof_screen;
         vec4 u_dof_depth;
         vec4 u_vieworg;
+        mat4 motion_prev_view_proj;
+        mat4 motion_inv_view_proj;
+        vec4 motion_params;
         vec4 u_hdr_exposure;
         vec4 u_hdr_params0;
         vec4 u_hdr_params1;
@@ -909,6 +912,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_GLOWMAP_ENABLE)
         GLSL(uniform sampler2D u_glowmap;)
 
+    if (bits & GLS_MOTION_BLUR)
+        GLSL(uniform sampler2D u_depth;)
+
     if (!(bits & GLS_TEXTURE_REPLACE))
         GLSL(in vec4 v_color;)
 
@@ -934,6 +940,51 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         write_gaussian_blur(buf);
     else if (bits & GLS_BLUR_BOX)
         write_box_blur(buf);
+
+    if (bits & GLS_MOTION_BLUR) {
+        GLSP("const int motion_max_samples = %d;\n", int(R_MOTION_BLUR_MAX_SAMPLES));
+        GLSL(vec3 apply_motion_blur(vec3 color, vec2 uv) {
+            if (motion_params.z <= 0.0 || motion_params.w <= 0.0)
+                return color;
+            float depth = texture(u_depth, uv).r;
+            if (depth >= 1.0)
+                return color;
+            float blur_strength = motion_params.x;
+            if (blur_strength <= 0.0)
+                return color;
+            vec4 current_clip = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            vec4 world_pos = motion_inv_view_proj * current_clip;
+            if (abs(world_pos.w) <= 1e-6)
+                return color;
+            world_pos /= world_pos.w;
+            vec4 prev_clip = motion_prev_view_proj * world_pos;
+            if (abs(prev_clip.w) <= 1e-6)
+                return color;
+            vec2 prev_ndc = prev_clip.xy / prev_clip.w;
+            vec2 current_ndc = current_clip.xy / current_clip.w;
+            vec2 velocity = (current_ndc - prev_ndc) * 0.5 * blur_strength;
+            vec2 viewport = vec2(motion_params.z, motion_params.w);
+            vec2 velocity_pixels = velocity * viewport;
+            float sample_count_f = min(motion_params.y, length(velocity_pixels));
+            int sample_count = int(floor(sample_count_f));
+            if (sample_count <= 0)
+                return color;
+            vec3 accum = color;
+            float weight = 1.0;
+            float inv_steps = 1.0 / (float(sample_count) + 1.0);
+            for (int i = 1; i <= motion_max_samples; ++i) {
+                if (i > sample_count)
+                    break;
+                float t = float(i) * inv_steps;
+                vec2 offset = -velocity * t;
+                vec2 sample_uv = clamp(uv + offset, vec2(0.0), vec2(1.0));
+                float w = 1.0 - t * 0.5;
+                accum += texture(u_texture, sample_uv).rgb * w;
+                weight += w;
+            }
+            return accum / weight;
+        });
+    }
 
     if (bits & GLS_BLOOM_BRIGHTPASS)
         GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
@@ -1032,6 +1083,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
                 GLSL(bloom.rgb *= u_intensity2;)
         }
     }
+
+    if (bits & GLS_MOTION_BLUR)
+        GLSL(diffuse.rgb = apply_motion_blur(diffuse.rgb, tc);)
 
     if (bits & GLS_BLOOM_GENERATE) {
         if (bits & GLS_BLOOM_SHELL)
@@ -1265,6 +1319,9 @@ static GLuint create_and_use_program(glStateBits_t bits)
 
     if (bits & GLS_GLOWMAP_ENABLE)
         bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
+
+    if (bits & GLS_MOTION_BLUR)
+        bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
     
     return program;
 
