@@ -707,15 +707,15 @@ static void write_crt_block(sizebuf_t *buf, bool tonemap)
     })
 
     GLSF("vec3 crt_apply(vec2 uv, vec2 baseTc, vec2 fragCoord) {\n");
-    GLSL(vec2 pos = crt_warp(uv););
-    GLSL(vec3 color = crt_tri(pos););
-    GLSL(float maskType = floor(u_crt_params1.w + 0.5););
-    GLSL(if (maskType > 0.5) color *= crt_mask(fragCoord * 1.000001););
+    GLSL(vec2 pos = crt_warp(uv);)
+    GLSL(vec3 color = crt_tri(pos);)
+    GLSL(float maskType = floor(u_crt_params1.w + 0.5);)
+    GLSL(if (maskType > 0.5) color *= crt_mask(fragCoord * 1.000001);)
     if (tonemap)
-        GLSL(color = hdr_apply(color, baseTc, fragCoord););
+        GLSL(color = hdr_apply(color, baseTc, fragCoord);)
     else
-        GLSL(color = crt_to_srgb(color););
-    GLSL(color = clamp(color, 0.0, 1.0););
+        GLSL(color = crt_to_srgb(color);)
+    GLSL(color = clamp(color, 0.0, 1.0);)
     GLSL(return color;);
     GLSF("}\n");
 }

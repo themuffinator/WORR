@@ -36,7 +36,7 @@ struct CrtConfig {
         .maskLight = r_crt_maskLight ? r_crt_maskLight->value : 1.5f,
         .scaleInLinearGamma = (r_crt_scaleInLinearGamma && r_crt_scaleInLinearGamma->integer) ? 1.0f : 0.0f,
         .shadowMask = r_crt_shadowMask ? std::clamp(r_crt_shadowMask->value, 0.0f, 4.0f) : 3.0f,
-        .brightBoost = r_crt_brightBoost ? std::max(r_crt_brightBoost->value, 0.0f) : 1.0f,
+        .brightBoost = r_crt_brightBoost ? (std::max)(r_crt_brightBoost->value, 0.0f) : 1.0f,
         .warpX = warpX,
         .warpY = warpY,
     };
@@ -56,8 +56,8 @@ glStateBits_t R_CRTPrepare(glStateBits_t bits, int viewportWidth, int viewportHe
     const auto mode = r_crtmode->integer;
     const CrtConfig config = gather_config(mode);
 
-    const float width = static_cast<float>(std::max(viewportWidth, 1));
-    const float height = static_cast<float>(std::max(viewportHeight, 1));
+    const float width = static_cast<float>((std::max)(viewportWidth, 1));
+    const float height = static_cast<float>((std::max)(viewportHeight, 1));
     const float invWidth = 1.0f / width;
     const float invHeight = 1.0f / height;
 
