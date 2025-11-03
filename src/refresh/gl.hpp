@@ -783,6 +783,7 @@ void GL_LoadWorld(const char *name);
                                  GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR)
 
 inline constexpr float R_MOTION_BLUR_MAX_SAMPLES = 12.0f;
+inline constexpr float R_MOTION_BLUR_MATRIX_EPSILON = 1.0e-4f;
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
