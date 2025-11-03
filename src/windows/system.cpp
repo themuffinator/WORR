@@ -38,6 +38,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string_view>
 #include <vector>
 
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
+
 #if USE_WINSVC
 #include <winsvc.h>
 #include <setjmp.h>
