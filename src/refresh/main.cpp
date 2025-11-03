@@ -1374,8 +1374,10 @@ void R_RenderFrame(const refdef_t *fd)
         if (pp_flags & PP_HDR) {
             R_HDRUpdateUniforms();
             bits |= GLS_TONEMAP_ENABLE;
-        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
         }
+
+        if (pp_flags & PP_CRT)
+            bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
 
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         if (glr.motion_blur_ready) {
@@ -1389,7 +1391,8 @@ void R_RenderFrame(const refdef_t *fd)
         glStateBits_t bits = GLS_TONEMAP_ENABLE;
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         R_HDRUpdateUniforms();
-        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+        if (pp_flags & PP_CRT)
+            bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
         GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     } else if (pp_flags & PP_CRT) {
         glStateBits_t bits = GLS_DEFAULT;
