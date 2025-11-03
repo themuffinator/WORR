@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/loc.hpp"
 #include "common/gamedll.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <type_traits>
 
@@ -32,9 +33,46 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 static cvar_t* scr_alpha;
 static cvar_t* scr_font;
 
+namespace {
+
+        constexpr const char* CG_LEGACY_FONT = "conchars";
+
+        static qhandle_t CG_RegisterFontWithFallback(const char* name)
+        {
+                if (!name || !*name)
+                        return 0;
+
+                qhandle_t handle = R_RegisterFont(name);
+                if (handle)
+                        return handle;
+
+                if (Q_stricmp(name, CG_LEGACY_FONT))
+                        return R_RegisterFont(CG_LEGACY_FONT);
+
+                return 0;
+        }
+}
+
 static void scr_font_changed(cvar_t* self)
 {
-	scr.font_pic = R_RegisterFont(self->string);
+        scr.font_pic = R_RegisterFont(self->string);
+
+        if (!scr.font_pic && strcmp(self->string, self->default_string)) {
+                Cvar_Reset(self);
+                scr.font_pic = R_RegisterFont(self->default_string);
+        }
+
+        if (!scr.font_pic && Q_stricmp(self->default_string, CG_LEGACY_FONT)) {
+                scr.font_pic = CG_RegisterFontWithFallback(self->default_string);
+                if (scr.font_pic && Q_stricmp(self->string, CG_LEGACY_FONT))
+                        Cvar_Set(self->name, CG_LEGACY_FONT);
+        }
+
+        if (!scr.font_pic)
+                scr.font_pic = CG_RegisterFontWithFallback(CG_LEGACY_FONT);
+
+        if (!scr.font_pic)
+                Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
 }
 
 static bool CGX_IsExtendedServer(void)
@@ -55,7 +93,7 @@ static color_t apply_scr_alpha(color_t color)
 
 static void CGX_DrawCharEx(int x, int y, int flags, int ch, color_t color)
 {
-	R_DrawChar(x, y, flags, ch, apply_scr_alpha(color), scr.font_pic);
+        SCR_DrawGlyph(x, y, 1, flags, static_cast<unsigned char>(ch), apply_scr_alpha(color));
 }
 
 static const pmoveParams_t* CGX_GetPmoveParams(void)
@@ -79,7 +117,7 @@ static cgame_q2pro_extended_support_ext_t cgame_q2pro_extended_support = CGX_Cre
 void CG_Init(void)
 {
 	scr_alpha = Cvar_Get("scr_alpha", "1", 0);
-	scr_font = Cvar_Get("scr_font", "conchars", 0);
+        scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
 	scr_font->changed = scr_font_changed;
 	scr_font_changed(scr_font);
 }
@@ -240,8 +278,8 @@ static void CG_Draw_GetPicSize(int* w, int* h, const char* name)
 
 static void CG_SCR_DrawChar(int x, int y, int scale, int num, bool shadow)
 {
-	int draw_flags = shadow ? UI_DROPSHADOW : 0;
-	R_DrawChar(x, y, draw_flags, num, apply_scr_alpha(COLOR_WHITE), scr.font_pic);
+        int draw_flags = shadow ? UI_DROPSHADOW : 0;
+        SCR_DrawGlyph(x, y, scale, draw_flags, static_cast<unsigned char>(num), apply_scr_alpha(COLOR_WHITE));
 }
 
 static void CG_SCR_DrawPic(int x, int y, int w, int h, const char* name)

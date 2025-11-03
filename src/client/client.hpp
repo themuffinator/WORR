@@ -1290,6 +1290,7 @@ void    SCR_AddNetgraph(void);
 float   SCR_FadeAlpha(unsigned startTime, unsigned visTime, unsigned fadeTime);
 int     SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
+void    SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, color_t color);
 
 qhandle_t SCR_DefaultFontHandle(void);
 int     SCR_FontLineHeight(int scale, qhandle_t font);
