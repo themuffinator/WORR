@@ -197,31 +197,34 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	const float invW = 1.0f / downsampleWidth_;
 	const float invH = 1.0f / downsampleHeight_;
 
-	gls.u_block.fog_color[0] = invW;
-	gls.u_block.fog_color[1] = invH;
-	gls.u_block.fog_color[2] = 0.0f;
-	GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
-	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
-	GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
+        gls.u_block.bbr_params[0] = invW;
+        gls.u_block.bbr_params[1] = invH;
+        gls.u_block.bbr_params[2] = 0.0f;
+        gls.u_block_dirty = true;
+        GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
+        qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
+        GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
 
-	gls.u_block.fog_color[0] = invW;
-	gls.u_block.fog_color[1] = invH;
-	gls.u_block.fog_color[2] = r_bloomThreshold->value;
-	GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
-	GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
-	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
-	GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
+        gls.u_block.bbr_params[0] = invW;
+        gls.u_block.bbr_params[1] = invH;
+        gls.u_block.bbr_params[2] = r_bloomThreshold->value;
+        gls.u_block_dirty = true;
+        GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
+        GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
+        qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
+        GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
 
-	GLuint currentTexture = textures_[BrightPass];
-	for (int axis = 0; axis < 2; ++axis) {
-		const bool horizontal = axis == 0;
-		gls.u_block.fog_color[0] = horizontal ? invW : 0.0f;
-		gls.u_block.fog_color[1] = horizontal ? 0.0f : invH;
-		GL_ForceTexture(TMU_TEXTURE, currentTexture);
-		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-		GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, downsampleWidth_, downsampleHeight_);
-		currentTexture = textures_[Blur0 + axis];
-	}
+        GLuint currentTexture = textures_[BrightPass];
+        for (int axis = 0; axis < 2; ++axis) {
+                const bool horizontal = axis == 0;
+                gls.u_block.bbr_params[0] = horizontal ? invW : 0.0f;
+                gls.u_block.bbr_params[1] = horizontal ? 0.0f : invH;
+                gls.u_block_dirty = true;
+                GL_ForceTexture(TMU_TEXTURE, currentTexture);
+                qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
+                GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, downsampleWidth_, downsampleHeight_);
+                currentTexture = textures_[Blur0 + axis];
+        }
 
 	const GLuint bloomTexture = currentTexture;
 

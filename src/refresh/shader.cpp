@@ -156,6 +156,7 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         float u_heightfog_falloff;
         float pad_5;
         float pad_4;
+        vec4 u_bbr_params;
         vec4 u_dof_params;
         vec4 u_dof_screen;
         vec4 u_dof_depth;
@@ -1228,14 +1229,14 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
             GLSL(vec2 crt_uv = tc;)
 
         if (bits & GLS_BLUR_MASK)
-            GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
+            GLSL(vec4 diffuse = blur(u_texture, tc, u_bbr_params.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
 
         if (bits & GLS_BLOOM_BRIGHTPASS) {
             GLSL(vec4 scene = texture(u_scene, tc);)
             GLSL(float luminance = dot(scene.rgb, bloom_luminance);)
-            GLSL(float threshold = u_fog_color.z;)
+            GLSL(float threshold = u_bbr_params.z;)
             GLSL(luminance = max(0.0, luminance - threshold);)
             GLSL(diffuse.rgb *= sign(luminance);)
             GLSL(diffuse.a = 1.0;)
