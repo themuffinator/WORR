@@ -34,11 +34,11 @@ static cvar_t   *cl_add_particles;
 static cvar_t   *cl_add_lights;
 static cvar_t   *cl_add_entities;
 static cvar_t   *cl_add_blend;
-static cvar_t   *cl_dof;
-static cvar_t   *cl_dof_blur_range;
-static cvar_t   *cl_dof_focus_distance;
-static cvar_t   *cl_dof_focus_range;
-static cvar_t   *cl_dof_luma_strength;
+static cvar_t   *r_dof;
+static cvar_t   *r_dof_blur_range;
+static cvar_t   *r_dof_focus_distance;
+static cvar_t   *r_dof_focus_range;
+static cvar_t   *r_dof_luma_strength;
 
 #if USE_DEBUG
 static cvar_t   *cl_testparticles;
@@ -657,13 +657,15 @@ void V_RenderView(void)
         }
     }
 
-    if (cl_dof->integer) {
+    const bool slow_time_active = cl.frame.valid && cl.frame.ps.stats[STAT_SLOW_TIME];
+
+    if (r_dof->integer && slow_time_active) {
         const float time_scale = (std::max)(CL_ActiveTimeScale(), 0.0f);
         const float base_blend = Q_clipf(1.0f - time_scale, 0.0f, 1.0f);
-        const float blur_range = (std::max)(cl_dof_blur_range->value * base_blend, 0.0f);
-        const float focus_distance = (std::max)(cl_dof_focus_distance->value, 0.0f);
-        const float focus_range = (std::max)(cl_dof_focus_range->value, 0.001f);
-        const float luma_strength = (std::max)(cl_dof_luma_strength->value, 0.0f);
+        const float blur_range = (std::max)(r_dof_blur_range->value * base_blend, 0.0f);
+        const float focus_distance = (std::max)(r_dof_focus_distance->value, 0.0f);
+        const float focus_range = (std::max)(r_dof_focus_range->value, 0.001f);
+        const float luma_strength = (std::max)(r_dof_luma_strength->value, 0.0f);
 
         cl.refdef.depth_of_field = base_blend > 0.0f && blur_range > 0.0f;
         cl.refdef.dof_blur_range = blur_range;
@@ -747,11 +749,11 @@ void V_Init(void)
     cl_add_particles = Cvar_Get("cl_particles", "1", 0);
     cl_add_entities = Cvar_Get("cl_entities", "1", 0);
     cl_add_blend = Cvar_Get("cl_blend", "1", 0);
-    cl_dof = Cvar_Get("cl_dof", "1", 0);
-    cl_dof_blur_range = Cvar_Get("cl_dof_blur_range", "1.0", 0);
-    cl_dof_focus_distance = Cvar_Get("cl_dof_focus_distance", "1.0", 0);
-    cl_dof_focus_range = Cvar_Get("cl_dof_focus_range", "1.0", 0);
-    cl_dof_luma_strength = Cvar_Get("cl_dof_luma_strength", "1.0", 0);
+    r_dof = Cvar_Get("r_dof", "1", 0);
+    r_dof_blur_range = Cvar_Get("r_dofBlurRange", "0.0", 0);
+    r_dof_focus_distance = Cvar_Get("r_dofFocusDistance", "0.0", 0);
+    r_dof_focus_range = Cvar_Get("r_dofFocusRange", "0.0", 0);
+    r_dof_luma_strength = Cvar_Get("r_dofLumaStrength", "1.0", 0);
     cl_add_blend->changed = cl_add_blend_changed;
 
     cl_adjustfov = Cvar_Get("cl_adjustfov", "1", 0);
