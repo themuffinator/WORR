@@ -21,6 +21,41 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #define MAX_SHADER_CHARS    4096
 
+class ShaderSourceBuffer {
+public:
+    ShaderSourceBuffer()
+    {
+        SZ_InitGrowable(&buffer_, MAX_SHADER_CHARS, "GLSL");
+    }
+
+    ShaderSourceBuffer(const ShaderSourceBuffer &) = delete;
+    ShaderSourceBuffer &operator=(const ShaderSourceBuffer &) = delete;
+
+    ~ShaderSourceBuffer()
+    {
+        if (buffer_.growable)
+            SZ_Destroy(&buffer_);
+    }
+
+    sizebuf_t *get()
+    {
+        return &buffer_;
+    }
+
+    const sizebuf_t *get() const
+    {
+        return &buffer_;
+    }
+
+    void clear()
+    {
+        SZ_Clear(&buffer_);
+    }
+
+private:
+    sizebuf_t buffer_{};
+};
+
 #define GLSL(x)     SZ_Write(buf, CONST_STR_LEN(#x "\n"));
 #define GLSF(x)     SZ_Write(buf, CONST_STR_LEN(x))
 #define GLSP(...)   shader_printf(buf, __VA_ARGS__)
@@ -1380,8 +1415,8 @@ static void bind_texture_unit(GLuint program, const char *name, GLuint tmu)
 
 static GLuint create_and_use_program(glStateBits_t bits)
 {
-    char buffer[MAX_SHADER_CHARS];
-    sizebuf_t sb;
+    ShaderSourceBuffer shader_source;
+    sizebuf_t *sb = shader_source.get();
 
     GLuint program = qglCreateProgram();
     if (!program) {
@@ -1393,15 +1428,14 @@ static GLuint create_and_use_program(glStateBits_t bits)
     GLuint shader_f = 0;
     GLint status = 0;
 
-    SZ_Init(&sb, buffer, sizeof(buffer), "GLSL");
-    write_vertex_shader(&sb, bits);
-    shader_v = create_shader(GL_VERTEX_SHADER, &sb);
+    write_vertex_shader(sb, bits);
+    shader_v = create_shader(GL_VERTEX_SHADER, sb);
     if (!shader_v)
         goto fail;
 
-    SZ_Clear(&sb);
-    write_fragment_shader(&sb, bits);
-    shader_f = create_shader(GL_FRAGMENT_SHADER, &sb);
+    shader_source.clear();
+    write_fragment_shader(sb, bits);
+    shader_f = create_shader(GL_FRAGMENT_SHADER, sb);
     if (!shader_f)
         goto fail;
 
