@@ -223,6 +223,10 @@ typedef struct {
     bool            motion_blur_enabled;
     bool            motion_blur_ready;
     float           motion_blur_scale;
+    int             motion_blur_viewport_width;
+    int             motion_blur_viewport_height;
+    float           motion_blur_fov_x;
+    float           motion_blur_fov_y;
 } glRefdef_t;
 
 typedef enum {

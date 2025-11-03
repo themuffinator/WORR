@@ -30,6 +30,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <cmath>
 #include <vector>
 
+namespace {
+constexpr float MOTION_BLUR_FOV_EPSILON = 0.01f;
+constexpr float MOTION_BLUR_MAX_FRAME_TIME = 0.25f;
+}
+
 glRefdef_t glr;
 glStatic_t gl_static;
 glConfig_t gl_config;
@@ -1249,6 +1254,19 @@ void R_RenderFrame(const refdef_t *fd)
     glr.drawframe++;
 
     glr.fd = *fd;
+
+    const bool viewport_changed = glr.motion_blur_viewport_width != glr.fd.width ||
+        glr.motion_blur_viewport_height != glr.fd.height;
+    const bool fov_changed = std::fabs(glr.motion_blur_fov_x - glr.fd.fov_x) > MOTION_BLUR_FOV_EPSILON ||
+        std::fabs(glr.motion_blur_fov_y - glr.fd.fov_y) > MOTION_BLUR_FOV_EPSILON;
+
+    if (viewport_changed || fov_changed)
+        glr.prev_view_proj_valid = false;
+
+    glr.motion_blur_viewport_width = glr.fd.width;
+    glr.motion_blur_viewport_height = glr.fd.height;
+    glr.motion_blur_fov_x = glr.fd.fov_x;
+    glr.motion_blur_fov_y = glr.fd.fov_y;
     glr.ppl_bits  = 0;
 
     glr.motion_blur_enabled = gl_static.use_shaders && r_motionBlur->integer &&
@@ -1258,8 +1276,12 @@ void R_RenderFrame(const refdef_t *fd)
     if (glr.motion_blur_enabled) {
         const float shutter_speed = (std::max)(r_motionBlurShutterSpeed->value, 0.0001f);
         const float frame_time = (std::max)(glr.fd.frametime, 1.0e-6f);
-        const float exposure = 1.0f / shutter_speed;
-        motion_blur_scale = Q_bound(0.0f, exposure / frame_time, 1.0f);
+        if (frame_time <= MOTION_BLUR_MAX_FRAME_TIME) {
+            const float exposure = 1.0f / shutter_speed;
+            motion_blur_scale = Q_bound(0.0f, exposure / frame_time, 1.0f);
+        } else {
+            glr.prev_view_proj_valid = false;
+        }
     } else {
         glr.prev_view_proj_valid = false;
     }

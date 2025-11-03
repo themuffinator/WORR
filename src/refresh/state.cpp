@@ -300,8 +300,10 @@ void GL_Setup3D(void)
 
         gls.u_block.motion_params[0] = (glr.motion_blur_ready && glr.view_proj_valid) ? glr.motion_blur_scale : 0.0f;
         gls.u_block.motion_params[1] = R_MOTION_BLUR_MAX_SAMPLES;
-        gls.u_block.motion_params[2] = static_cast<float>(glr.fd.width);
-        gls.u_block.motion_params[3] = static_cast<float>(glr.fd.height);
+        const float viewport_width = glr.fd.width > 0 ? static_cast<float>(glr.fd.width) : 1.0f;
+        const float viewport_height = glr.fd.height > 0 ? static_cast<float>(glr.fd.height) : 1.0f;
+        gls.u_block.motion_params[2] = viewport_width;
+        gls.u_block.motion_params[3] = viewport_height;
         gls.u_block_dirty = true;
     } else {
         glr.view_proj_valid = false;
