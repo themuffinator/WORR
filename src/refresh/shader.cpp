@@ -1089,8 +1089,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
 
     write_header(buf, bits);
 
-    if (bits & GLS_UNIFORM_MASK)
-        write_block(buf, bits);
+    write_block(buf, bits);
 
     if (bits & GLS_TONEMAP_ENABLE)
         write_tonemap_block(buf);
