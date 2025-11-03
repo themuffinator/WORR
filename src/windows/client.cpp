@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.hpp"
 #include <hidusage.h>
+#include <xinput.h>
 
 #include <array>
 
@@ -33,6 +34,168 @@ static cvar_t   *win_alwaysontop;
 static cvar_t   *win_noborder;
 
 static void     Win_ClipCursor(void);
+static void     Win_PollGamepads(void);
+
+static constexpr int PAD_STICK_DEADZONE = 16000;
+static constexpr int PAD_TRIGGER_DEADZONE = XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+
+enum class PadAxisKey : size_t {
+    LSTICK_LEFT,
+    LSTICK_RIGHT,
+    LSTICK_UP,
+    LSTICK_DOWN,
+    RSTICK_LEFT,
+    RSTICK_RIGHT,
+    RSTICK_UP,
+    RSTICK_DOWN,
+    LTRIGGER,
+    RTRIGGER,
+    COUNT
+};
+
+static constexpr std::array<unsigned, static_cast<size_t>(PadAxisKey::COUNT)> pad_axis_keys = {
+    K_PAD_LSTICK_LEFT,
+    K_PAD_LSTICK_RIGHT,
+    K_PAD_LSTICK_UP,
+    K_PAD_LSTICK_DOWN,
+    K_PAD_RSTICK_LEFT,
+    K_PAD_RSTICK_RIGHT,
+    K_PAD_RSTICK_UP,
+    K_PAD_RSTICK_DOWN,
+    K_PAD_LTRIGGER,
+    K_PAD_RTRIGGER,
+};
+
+struct XInputButtonMapping {
+    WORD      mask;
+    unsigned  key;
+};
+
+static constexpr XInputButtonMapping xinput_button_map[] = {
+    { XINPUT_GAMEPAD_A,             K_PAD_A },
+    { XINPUT_GAMEPAD_B,             K_PAD_B },
+    { XINPUT_GAMEPAD_X,             K_PAD_X },
+    { XINPUT_GAMEPAD_Y,             K_PAD_Y },
+    { XINPUT_GAMEPAD_BACK,          K_PAD_BACK },
+    { XINPUT_GAMEPAD_START,         K_PAD_START },
+    { XINPUT_GAMEPAD_LEFT_SHOULDER, K_PAD_LSHOULDER },
+    { XINPUT_GAMEPAD_RIGHT_SHOULDER, K_PAD_RSHOULDER },
+    { XINPUT_GAMEPAD_LEFT_THUMB,    K_PAD_LSTICK },
+    { XINPUT_GAMEPAD_RIGHT_THUMB,   K_PAD_RSTICK },
+    { XINPUT_GAMEPAD_DPAD_UP,       K_PAD_DPAD_UP },
+    { XINPUT_GAMEPAD_DPAD_DOWN,     K_PAD_DPAD_DOWN },
+    { XINPUT_GAMEPAD_DPAD_LEFT,     K_PAD_DPAD_LEFT },
+    { XINPUT_GAMEPAD_DPAD_RIGHT,    K_PAD_DPAD_RIGHT },
+#ifdef XINPUT_GAMEPAD_GUIDE
+    { XINPUT_GAMEPAD_GUIDE,         K_PAD_GUIDE },
+#endif
+};
+
+struct xinput_controller_t {
+    bool connected = false;
+    std::array<bool, q_countof(xinput_button_map)> button_down{};
+    std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> axis_down{};
+};
+
+static std::array<xinput_controller_t, XUSER_MAX_COUNT> xinput_controllers;
+
+static void pad_axis_change(std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> &states,
+                            PadAxisKey axis, bool down, unsigned time)
+{
+    size_t idx = static_cast<size_t>(axis);
+    if (states[idx] == down)
+        return;
+
+    states[idx] = down;
+    Key_Event(pad_axis_keys[idx], down, time);
+}
+
+static void clear_axis_state(std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> &states,
+                             unsigned time)
+{
+    for (size_t i = 0; i < states.size(); i++) {
+        if (states[i]) {
+            states[i] = false;
+            Key_Event(pad_axis_keys[i], false, time);
+        }
+    }
+}
+
+static void release_controller(xinput_controller_t &pad, unsigned time)
+{
+    for (size_t i = 0; i < pad.button_down.size(); i++) {
+        if (pad.button_down[i]) {
+            pad.button_down[i] = false;
+            Key_Event(xinput_button_map[i].key, false, time);
+        }
+    }
+
+    clear_axis_state(pad.axis_down, time);
+}
+
+static void Win_ShutdownGamepads(void)
+{
+    unsigned time = Sys_Milliseconds();
+    for (auto &pad : xinput_controllers) {
+        release_controller(pad, time);
+        pad = {};
+    }
+}
+
+static void Win_PollGamepads(void)
+{
+    unsigned time = win.lastMsgTime;
+
+    for (DWORD i = 0; i < xinput_controllers.size(); i++) {
+        xinput_controller_t &pad = xinput_controllers[i];
+        XINPUT_STATE state;
+        DWORD result = XInputGetState(i, &state);
+
+        if (result == ERROR_SUCCESS) {
+            if (!pad.connected) {
+                pad.connected = true;
+                pad.button_down.fill(false);
+                pad.axis_down.fill(false);
+                Com_Printf("Gamepad %lu connected\n", static_cast<unsigned long>(i + 1));
+            }
+
+            for (size_t b = 0; b < pad.button_down.size(); b++) {
+                bool down = (state.Gamepad.wButtons & xinput_button_map[b].mask) != 0;
+                if (pad.button_down[b] != down) {
+                    pad.button_down[b] = down;
+                    Key_Event(xinput_button_map[b].key, down, time);
+                }
+            }
+
+            pad_axis_change(pad.axis_down, PadAxisKey::LTRIGGER,
+                            state.Gamepad.bLeftTrigger >= PAD_TRIGGER_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::RTRIGGER,
+                            state.Gamepad.bRightTrigger >= PAD_TRIGGER_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::LSTICK_LEFT,
+                            state.Gamepad.sThumbLX <= -PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::LSTICK_RIGHT,
+                            state.Gamepad.sThumbLX >= PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::LSTICK_UP,
+                            state.Gamepad.sThumbLY >= PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::LSTICK_DOWN,
+                            state.Gamepad.sThumbLY <= -PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::RSTICK_LEFT,
+                            state.Gamepad.sThumbRX <= -PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::RSTICK_RIGHT,
+                            state.Gamepad.sThumbRX >= PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::RSTICK_UP,
+                            state.Gamepad.sThumbRY >= PAD_STICK_DEADZONE, time);
+            pad_axis_change(pad.axis_down, PadAxisKey::RSTICK_DOWN,
+                            state.Gamepad.sThumbRY <= -PAD_STICK_DEADZONE, time);
+        } else {
+            if (pad.connected) {
+                pad.connected = false;
+                release_controller(pad, time);
+                Com_Printf("Gamepad %lu disconnected\n", static_cast<unsigned long>(i + 1));
+            }
+        }
+    }
+}
 
 /*
 ===============================================================================
@@ -903,6 +1066,8 @@ void Win_PumpEvents(void)
         DispatchMessage(&msg);
     }
 
+    Win_PollGamepads();
+
     if (win.mode_changed) {
         if (win.mode_changed & win_state_t::MODE_REPOSITION) {
             Win_SetPosition();
@@ -1010,6 +1175,8 @@ Win_Shutdown
 */
 void Win_Shutdown(void)
 {
+    Win_ShutdownGamepads();
+
     if (win.flags & QVF_GAMMARAMP) {
         SetDeviceGammaRamp(win.dc, win.gamma_orig);
     }

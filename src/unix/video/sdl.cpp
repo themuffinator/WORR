@@ -51,6 +51,459 @@ static struct {
     int             focus_hack;
 } sdl;
 
+static constexpr size_t MAX_GAME_CONTROLLERS = 8;
+static constexpr int PAD_STICK_DEADZONE = 16000;
+static constexpr int PAD_TRIGGER_DEADZONE = 16000;
+
+enum class PadAxisKey : size_t {
+    LSTICK_LEFT,
+    LSTICK_RIGHT,
+    LSTICK_UP,
+    LSTICK_DOWN,
+    RSTICK_LEFT,
+    RSTICK_RIGHT,
+    RSTICK_UP,
+    RSTICK_DOWN,
+    LTRIGGER,
+    RTRIGGER,
+    COUNT
+};
+
+static constexpr std::array<unsigned, static_cast<size_t>(PadAxisKey::COUNT)> pad_axis_keys = {
+    K_PAD_LSTICK_LEFT,
+    K_PAD_LSTICK_RIGHT,
+    K_PAD_LSTICK_UP,
+    K_PAD_LSTICK_DOWN,
+    K_PAD_RSTICK_LEFT,
+    K_PAD_RSTICK_RIGHT,
+    K_PAD_RSTICK_UP,
+    K_PAD_RSTICK_DOWN,
+    K_PAD_LTRIGGER,
+    K_PAD_RTRIGGER,
+};
+
+struct controller_state_t {
+    SDL_GameController                           *controller = nullptr;
+    SDL_JoystickID                               instance = -1;
+    std::array<bool, SDL_CONTROLLER_BUTTON_MAX>  button_down{};
+    std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> axis_down{};
+};
+
+struct joystick_state_t {
+    SDL_Joystick                                 *joystick = nullptr;
+    SDL_JoystickID                               instance = -1;
+    std::array<bool, 32>                         button_down{};
+    std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> axis_down{};
+    std::array<bool, 4>                          hat_down{};
+};
+
+static std::array<controller_state_t, MAX_GAME_CONTROLLERS> controllers;
+static std::array<joystick_state_t, MAX_GAME_CONTROLLERS> joysticks;
+
+static controller_state_t *alloc_controller(void)
+{
+    for (auto &c : controllers) {
+        if (!c.controller)
+            return &c;
+    }
+    return NULL;
+}
+
+static controller_state_t *find_controller(SDL_JoystickID instance)
+{
+    for (auto &c : controllers) {
+        if (c.controller && c.instance == instance)
+            return &c;
+    }
+    return NULL;
+}
+
+static joystick_state_t *alloc_joystick(void)
+{
+    for (auto &j : joysticks) {
+        if (!j.joystick)
+            return &j;
+    }
+    return NULL;
+}
+
+static joystick_state_t *find_joystick(SDL_JoystickID instance)
+{
+    for (auto &j : joysticks) {
+        if (j.joystick && j.instance == instance)
+            return &j;
+    }
+    return NULL;
+}
+
+static void pad_axis_change(std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> &states,
+                            PadAxisKey axis, bool down, unsigned timestamp)
+{
+    size_t idx = static_cast<size_t>(axis);
+    if (states[idx] == down)
+        return;
+
+    states[idx] = down;
+    Key_Event(pad_axis_keys[idx], down, timestamp);
+}
+
+static void clear_axis_state(std::array<bool, static_cast<size_t>(PadAxisKey::COUNT)> &states,
+                             unsigned timestamp)
+{
+    for (size_t i = 0; i < states.size(); i++) {
+        if (states[i]) {
+            states[i] = false;
+            Key_Event(pad_axis_keys[i], false, timestamp);
+        }
+    }
+}
+
+static unsigned controller_button_key(SDL_GameControllerButton button)
+{
+    switch (button) {
+    case SDL_CONTROLLER_BUTTON_A:             return K_PAD_A;
+    case SDL_CONTROLLER_BUTTON_B:             return K_PAD_B;
+    case SDL_CONTROLLER_BUTTON_X:             return K_PAD_X;
+    case SDL_CONTROLLER_BUTTON_Y:             return K_PAD_Y;
+    case SDL_CONTROLLER_BUTTON_BACK:          return K_PAD_BACK;
+    case SDL_CONTROLLER_BUTTON_GUIDE:         return K_PAD_GUIDE;
+    case SDL_CONTROLLER_BUTTON_START:         return K_PAD_START;
+    case SDL_CONTROLLER_BUTTON_LEFTSTICK:     return K_PAD_LSTICK;
+    case SDL_CONTROLLER_BUTTON_RIGHTSTICK:    return K_PAD_RSTICK;
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  return K_PAD_LSHOULDER;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return K_PAD_RSHOULDER;
+    case SDL_CONTROLLER_BUTTON_DPAD_UP:       return K_PAD_DPAD_UP;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:     return K_PAD_DPAD_DOWN;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:     return K_PAD_DPAD_LEFT;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:    return K_PAD_DPAD_RIGHT;
+#ifdef SDL_CONTROLLER_BUTTON_MISC1
+    case SDL_CONTROLLER_BUTTON_MISC1:         return K_PAD_MISC1;
+#endif
+#ifdef SDL_CONTROLLER_BUTTON_PADDLE1
+    case SDL_CONTROLLER_BUTTON_PADDLE1:       return K_PAD_PADDLE1;
+    case SDL_CONTROLLER_BUTTON_PADDLE2:       return K_PAD_PADDLE2;
+    case SDL_CONTROLLER_BUTTON_PADDLE3:       return K_PAD_PADDLE3;
+    case SDL_CONTROLLER_BUTTON_PADDLE4:       return K_PAD_PADDLE4;
+#endif
+#ifdef SDL_CONTROLLER_BUTTON_TOUCHPAD
+    case SDL_CONTROLLER_BUTTON_TOUCHPAD:      return K_PAD_TOUCHPAD;
+#endif
+    default:
+        return 0;
+    }
+}
+
+static unsigned joystick_button_key(size_t index)
+{
+    switch (index) {
+    case 0:  return K_PAD_A;
+    case 1:  return K_PAD_B;
+    case 2:  return K_PAD_X;
+    case 3:  return K_PAD_Y;
+    case 4:  return K_PAD_LSHOULDER;
+    case 5:  return K_PAD_RSHOULDER;
+    case 6:  return K_PAD_BACK;
+    case 7:  return K_PAD_START;
+    case 8:  return K_PAD_LSTICK;
+    case 9:  return K_PAD_RSTICK;
+    case 10: return K_PAD_MISC1;
+    case 11: return K_PAD_MISC2;
+    case 12: return K_PAD_MISC3;
+    case 13: return K_PAD_MISC4;
+    case 14: return K_PAD_MISC5;
+    case 15: return K_PAD_MISC6;
+    case 16: return K_PAD_MISC7;
+    case 17: return K_PAD_MISC8;
+    default: return 0;
+    }
+}
+
+static void close_controller(controller_state_t &c)
+{
+    if (!c.controller)
+        return;
+
+    unsigned timestamp = Sys_Milliseconds();
+    for (size_t i = 0; i < c.button_down.size(); i++) {
+        if (c.button_down[i]) {
+            c.button_down[i] = false;
+            unsigned key = controller_button_key(static_cast<SDL_GameControllerButton>(i));
+            if (key)
+                Key_Event(key, false, timestamp);
+        }
+    }
+
+    clear_axis_state(c.axis_down, timestamp);
+
+    SDL_GameControllerClose(c.controller);
+    c.controller = NULL;
+    c.instance = -1;
+}
+
+static void close_joystick(joystick_state_t &j)
+{
+    if (!j.joystick)
+        return;
+
+    unsigned timestamp = Sys_Milliseconds();
+    for (size_t i = 0; i < j.button_down.size(); i++) {
+        if (j.button_down[i]) {
+            j.button_down[i] = false;
+            unsigned key = joystick_button_key(i);
+            if (key)
+                Key_Event(key, false, timestamp);
+        }
+    }
+
+    clear_axis_state(j.axis_down, timestamp);
+
+    for (size_t i = 0; i < j.hat_down.size(); i++) {
+        if (j.hat_down[i]) {
+            j.hat_down[i] = false;
+            unsigned key = 0;
+            switch (i) {
+            case 0: key = K_PAD_DPAD_UP; break;
+            case 1: key = K_PAD_DPAD_DOWN; break;
+            case 2: key = K_PAD_DPAD_LEFT; break;
+            case 3: key = K_PAD_DPAD_RIGHT; break;
+            }
+            if (key)
+                Key_Event(key, false, timestamp);
+        }
+    }
+
+    SDL_JoystickClose(j.joystick);
+    j.joystick = NULL;
+    j.instance = -1;
+}
+
+static void controller_added(int device_index)
+{
+    SDL_GameController *gc = SDL_GameControllerOpen(device_index);
+    if (!gc) {
+        Com_EPrintf("Couldn't open game controller %d: %s\n", device_index, SDL_GetError());
+        return;
+    }
+
+    SDL_Joystick *joy = SDL_GameControllerGetJoystick(gc);
+    SDL_JoystickID instance = SDL_JoystickInstanceID(joy);
+
+    if (find_controller(instance)) {
+        SDL_GameControllerClose(gc);
+        return;
+    }
+
+    controller_state_t *slot = alloc_controller();
+    if (!slot) {
+        Com_DPrintf("No free controller slots for device %d\n", device_index);
+        SDL_GameControllerClose(gc);
+        return;
+    }
+
+    slot->controller = gc;
+    slot->instance = instance;
+    slot->button_down.fill(false);
+    slot->axis_down.fill(false);
+
+    const char *name = SDL_GameControllerName(gc);
+    Com_Printf("Gamepad connected: %s\n", name ? name : "Unknown");
+}
+
+static void controller_removed(SDL_JoystickID instance)
+{
+    controller_state_t *slot = find_controller(instance);
+    if (!slot)
+        return;
+
+    const char *name = SDL_GameControllerName(slot->controller);
+    Com_Printf("Gamepad disconnected: %s\n", name ? name : "Unknown");
+    close_controller(*slot);
+}
+
+static void controller_button_event(SDL_ControllerButtonEvent *event)
+{
+    controller_state_t *slot = find_controller(event->which);
+    if (!slot)
+        return;
+
+    if (event->button >= SDL_CONTROLLER_BUTTON_MAX)
+        return;
+
+    bool down = event->state == SDL_PRESSED;
+    size_t idx = event->button;
+
+    if (slot->button_down[idx] == down)
+        return;
+
+    slot->button_down[idx] = down;
+    unsigned key = controller_button_key(static_cast<SDL_GameControllerButton>(event->button));
+    if (key)
+        Key_Event(key, down, event->timestamp);
+}
+
+static void controller_axis_event(SDL_ControllerAxisEvent *event)
+{
+    controller_state_t *slot = find_controller(event->which);
+    if (!slot)
+        return;
+
+    int value = event->value;
+    unsigned time = event->timestamp;
+
+    switch (event->axis) {
+    case SDL_CONTROLLER_AXIS_LEFTX:
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_LEFT, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_RIGHT, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case SDL_CONTROLLER_AXIS_LEFTY:
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_UP, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_DOWN, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case SDL_CONTROLLER_AXIS_RIGHTX:
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_LEFT, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_RIGHT, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case SDL_CONTROLLER_AXIS_RIGHTY:
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_UP, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_DOWN, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+        pad_axis_change(slot->axis_down, PadAxisKey::LTRIGGER, value >= PAD_TRIGGER_DEADZONE, time);
+        break;
+    case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+        pad_axis_change(slot->axis_down, PadAxisKey::RTRIGGER, value >= PAD_TRIGGER_DEADZONE, time);
+        break;
+    default:
+        break;
+    }
+}
+
+static void joystick_added(int device_index)
+{
+    if (SDL_IsGameController(device_index))
+        return;
+
+    SDL_Joystick *joy = SDL_JoystickOpen(device_index);
+    if (!joy) {
+        Com_EPrintf("Couldn't open joystick %d: %s\n", device_index, SDL_GetError());
+        return;
+    }
+
+    SDL_JoystickID instance = SDL_JoystickInstanceID(joy);
+
+    if (find_joystick(instance)) {
+        SDL_JoystickClose(joy);
+        return;
+    }
+
+    joystick_state_t *slot = alloc_joystick();
+    if (!slot) {
+        Com_DPrintf("No free joystick slots for device %d\n", device_index);
+        SDL_JoystickClose(joy);
+        return;
+    }
+
+    slot->joystick = joy;
+    slot->instance = instance;
+    slot->button_down.fill(false);
+    slot->axis_down.fill(false);
+    slot->hat_down.fill(false);
+
+    const char *name = SDL_JoystickName(joy);
+    Com_Printf("Joystick connected: %s\n", name ? name : "Unknown");
+}
+
+static void joystick_removed(SDL_JoystickID instance)
+{
+    joystick_state_t *slot = find_joystick(instance);
+    if (!slot)
+        return;
+
+    const char *name = SDL_JoystickName(slot->joystick);
+    Com_Printf("Joystick disconnected: %s\n", name ? name : "Unknown");
+    close_joystick(*slot);
+}
+
+static void joystick_button_event(SDL_JoyButtonEvent *event)
+{
+    joystick_state_t *slot = find_joystick(event->which);
+    if (!slot)
+        return;
+
+    size_t idx = event->button;
+    if (idx >= slot->button_down.size())
+        return;
+
+    bool down = event->state == SDL_PRESSED;
+    if (slot->button_down[idx] == down)
+        return;
+
+    slot->button_down[idx] = down;
+    unsigned key = joystick_button_key(idx);
+    if (key)
+        Key_Event(key, down, event->timestamp);
+}
+
+static void joystick_axis_event(SDL_JoyAxisEvent *event)
+{
+    joystick_state_t *slot = find_joystick(event->which);
+    if (!slot)
+        return;
+
+    int value = event->value;
+    unsigned time = event->timestamp;
+
+    switch (event->axis) {
+    case 0:
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_LEFT, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_RIGHT, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case 1:
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_UP, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::LSTICK_DOWN, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case 2:
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_LEFT, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_RIGHT, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case 3:
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_UP, value <= -PAD_STICK_DEADZONE, time);
+        pad_axis_change(slot->axis_down, PadAxisKey::RSTICK_DOWN, value >= PAD_STICK_DEADZONE, time);
+        break;
+    case 4:
+        pad_axis_change(slot->axis_down, PadAxisKey::LTRIGGER, value >= PAD_TRIGGER_DEADZONE, time);
+        break;
+    case 5:
+        pad_axis_change(slot->axis_down, PadAxisKey::RTRIGGER, value >= PAD_TRIGGER_DEADZONE, time);
+        break;
+    default:
+        break;
+    }
+}
+
+static void joystick_hat_event(SDL_JoyHatEvent *event)
+{
+    joystick_state_t *slot = find_joystick(event->which);
+    if (!slot)
+        return;
+
+    if (event->hat != 0)
+        return;
+
+    auto update_hat = [&](size_t idx, unsigned key, bool down) {
+        if (slot->hat_down[idx] == down)
+            return;
+        slot->hat_down[idx] = down;
+        Key_Event(key, down, event->timestamp);
+    };
+
+    Uint8 value = event->value;
+    update_hat(0, K_PAD_DPAD_UP,    (value & SDL_HAT_UP) != 0);
+    update_hat(1, K_PAD_DPAD_DOWN,  (value & SDL_HAT_DOWN) != 0);
+    update_hat(2, K_PAD_DPAD_LEFT,  (value & SDL_HAT_LEFT) != 0);
+    update_hat(3, K_PAD_DPAD_RIGHT, (value & SDL_HAT_RIGHT) != 0);
+}
+
 /*
 ===============================================================================
 
@@ -245,13 +698,22 @@ static int get_dpi_scale(void)
 
 static void shutdown(void)
 {
+    for (auto &c : controllers)
+        close_controller(c);
+    for (auto &j : joysticks)
+        close_joystick(j);
+
     if (sdl.context)
         SDL_GL_DeleteContext(sdl.context);
 
     if (sdl.window)
         SDL_DestroyWindow(sdl.window);
 
+    SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+
+    controllers = {};
+    joysticks = {};
     memset(&sdl, 0, sizeof(sdl));
 }
 
@@ -282,6 +744,21 @@ static bool init(void)
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) == -1) {
         Com_EPrintf("Couldn't initialize SDL video: %s\n", SDL_GetError());
         return false;
+    }
+
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) == -1) {
+        Com_EPrintf("Couldn't initialize SDL controller support: %s\n", SDL_GetError());
+    } else {
+        SDL_GameControllerEventState(SDL_ENABLE);
+        SDL_JoystickEventState(SDL_ENABLE);
+
+        int num = SDL_NumJoysticks();
+        for (int i = 0; i < num; i++) {
+            if (SDL_IsGameController(i))
+                controller_added(i);
+            else
+                joystick_added(i);
+        }
     }
 
     set_gl_attributes();
@@ -495,6 +972,35 @@ static void pump_events(void)
         case SDL_KEYDOWN:
         case SDL_KEYUP:
             key_event(&event.key);
+            break;
+        case SDL_CONTROLLERDEVICEADDED:
+            controller_added(event.cdevice.which);
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            controller_removed(event.cdevice.which);
+            break;
+        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_CONTROLLERBUTTONUP:
+            controller_button_event(&event.cbutton);
+            break;
+        case SDL_CONTROLLERAXISMOTION:
+            controller_axis_event(&event.caxis);
+            break;
+        case SDL_JOYDEVICEADDED:
+            joystick_added(event.jdevice.which);
+            break;
+        case SDL_JOYDEVICEREMOVED:
+            joystick_removed(event.jdevice.which);
+            break;
+        case SDL_JOYBUTTONDOWN:
+        case SDL_JOYBUTTONUP:
+            joystick_button_event(&event.jbutton);
+            break;
+        case SDL_JOYAXISMOTION:
+            joystick_axis_event(&event.jaxis);
+            break;
+        case SDL_JOYHATMOTION:
+            joystick_hat_event(&event.jhat);
             break;
         case SDL_MOUSEMOTION:
             if (sdl.win_width && sdl.win_height)
