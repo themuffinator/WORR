@@ -562,10 +562,10 @@ SCR_DrawStringMultiStretch
 ==============
 */
 void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen,
-	const char* s, color_t color, qhandle_t font)
+        const char* s, color_t color, qhandle_t font)
 {
-	const char* p;
-	size_t  len;
+        const char* p;
+        size_t  len;
 	int     last_x = x;
 	int     last_y = y;
 	color_t currentColor = color;
@@ -601,6 +601,36 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
 			R_DrawStretchChar(last_x, last_y, CONCHAR_WIDTH * clampedScale, CONCHAR_HEIGHT * clampedScale,
 				flags, 11, currentColor, font);
 	}
+}
+
+void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, color_t color)
+{
+        const int clampedScale = max(scale, 1);
+        const unsigned char baseGlyph = glyph & 0x7f;
+        const bool hasAltColor = (glyph & 0x80) != 0;
+
+#if USE_FREETYPE
+        const qhandle_t fontHandle = SCR_DefaultFontHandle();
+        if (SCR_ShouldUseFreeType(fontHandle) && baseGlyph >= KFONT_ASCII_MIN) {
+                char text[2] = { static_cast<char>(baseGlyph), '\0' };
+                color_t finalColor = color;
+                if (hasAltColor)
+                        finalColor = ColorSetAlpha(COLOR_WHITE, color.a);
+                SCR_DrawStringStretch(x, y, clampedScale, flags, 1, text, finalColor, fontHandle);
+                return;
+        }
+#endif
+
+        if (SCR_ShouldUseKFont() && baseGlyph >= KFONT_ASCII_MIN) {
+                color_t finalColor = color;
+                if (hasAltColor)
+                        finalColor = ColorSetAlpha(COLOR_WHITE, color.a);
+                R_DrawKFontChar(x, y, clampedScale, flags, baseGlyph, finalColor, &scr.kfont);
+                return;
+        }
+
+        R_DrawStretchChar(x, y, CONCHAR_WIDTH * clampedScale, CONCHAR_HEIGHT * clampedScale,
+                flags, glyph, color, scr.font_pic);
 }
 
 
@@ -1661,18 +1691,51 @@ void SCR_ModeChanged(void)
 		scr.hud_scale = R_ClampScale(scr_scale);
 }
 
+namespace {
+        constexpr const char* SCR_LEGACY_FONT = "conchars";
+
+        static qhandle_t SCR_RegisterFontWithFallback(const char* name)
+        {
+                if (!name || !*name)
+                        return 0;
+
+                qhandle_t handle = R_RegisterFont(name);
+                if (handle)
+                        return handle;
+
+                if (Q_stricmp(name, SCR_LEGACY_FONT))
+                        return R_RegisterFont(SCR_LEGACY_FONT);
+
+                return 0;
+        }
+} // namespace
+
 static void scr_font_changed(cvar_t* self)
 {
-	scr.font_pic = R_RegisterFont(self->string);
-	if (!scr.font_pic && strcmp(self->string, self->default_string)) {
-		Cvar_Reset(self);
-		scr.font_pic = R_RegisterFont(self->default_string);
-	}
+        scr.font_pic = R_RegisterFont(self->string);
+
+        if (!scr.font_pic && strcmp(self->string, self->default_string)) {
+                Cvar_Reset(self);
+                scr.font_pic = R_RegisterFont(self->default_string);
+        }
+
+        if (!scr.font_pic && Q_stricmp(self->default_string, SCR_LEGACY_FONT)) {
+                scr.font_pic = SCR_RegisterFontWithFallback(self->default_string);
+                if (scr.font_pic && Q_stricmp(self->string, SCR_LEGACY_FONT))
+                        Cvar_Set(self->name, SCR_LEGACY_FONT);
+        }
+
+        if (!scr.font_pic)
+                scr.font_pic = SCR_RegisterFontWithFallback(SCR_LEGACY_FONT);
+
+        if (!scr.font_pic)
+                Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+
 #if USE_FREETYPE
-	if (scr.font_pic)
-		SCR_LoadDefaultFreeTypeFont();
-	if (scr_text_backend)
-		scr_text_backend_changed(scr_text_backend);
+        if (scr.font_pic)
+                SCR_LoadDefaultFreeTypeFont();
+        if (scr_text_backend)
+                scr_text_backend_changed(scr_text_backend);
 #endif
 }
 
@@ -1901,7 +1964,7 @@ void SCR_Init(void)
 	scr_viewsize = Cvar_Get("viewsize", "100", CVAR_ARCHIVE);
 	scr_showpause = Cvar_Get("scr_showpause", "1", 0);
 	scr_demobar = Cvar_Get("scr_demobar", "1", 0);
-	scr_font = Cvar_Get("scr_font", "conchars", 0);
+        scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
 	scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
 	scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
