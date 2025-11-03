@@ -3,17 +3,19 @@
 #include "../gl.hpp"
 
 struct BloomRenderContext {
-	GLuint sceneTexture;
-	GLuint bloomTexture;
-	GLuint dofTexture;
-	int viewportX;
-	int viewportY;
+        GLuint sceneTexture;
+        GLuint bloomTexture;
+        GLuint dofTexture;
+        GLuint depthTexture;
+        int viewportX;
+        int viewportY;
         int viewportWidth;
         int viewportHeight;
         bool waterwarp;
         bool depthOfField;
         bool showDebug;
         bool tonemap;
+        bool motionBlurReady;
         void (*updateHdrUniforms)();
         void (*runDepthOfField)();
 };

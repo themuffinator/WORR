@@ -245,6 +245,8 @@ void GL_Frustum(GLfloat fov_x, GLfloat fov_y, GLfloat reflect_x)
     glr.view_zfar = zfar;
 
     Matrix_Frustum(fov_x, fov_y, reflect_x, znear, zfar, matrix);
+    for (int i = 0; i < 16; ++i)
+        glr.projmatrix[i] = matrix[i];
     gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 
@@ -273,6 +275,38 @@ void GL_Setup3D(void)
     GL_Frustum(glr.fd.fov_x, glr.fd.fov_y, 1.0f);
 
     GL_RotateForViewer();
+
+    if (gl_static.use_shaders) {
+        Matrix_Multiply(glr.projmatrix, glr.viewmatrix, glr.view_proj_matrix);
+        glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
+        if (!glr.view_proj_valid)
+            glr.motion_blur_ready = false;
+
+        if (glr.view_proj_valid) {
+            for (int i = 0; i < 16; ++i)
+                gls.u_block.motion_inv_view_proj[i] = glr.inv_view_proj_matrix[i];
+        } else {
+            for (int i = 0; i < 16; ++i)
+                gls.u_block.motion_inv_view_proj[i] = gl_identity[i];
+        }
+
+        if (glr.prev_view_proj_valid) {
+            for (int i = 0; i < 16; ++i)
+                gls.u_block.motion_prev_view_proj[i] = glr.prev_view_proj_matrix[i];
+        } else {
+            for (int i = 0; i < 16; ++i)
+                gls.u_block.motion_prev_view_proj[i] = gl_identity[i];
+        }
+
+        gls.u_block.motion_params[0] = (glr.motion_blur_ready && glr.view_proj_valid) ? glr.motion_blur_scale : 0.0f;
+        gls.u_block.motion_params[1] = R_MOTION_BLUR_MAX_SAMPLES;
+        gls.u_block.motion_params[2] = static_cast<float>(glr.fd.width);
+        gls.u_block.motion_params[3] = static_cast<float>(glr.fd.height);
+        gls.u_block_dirty = true;
+    } else {
+        glr.view_proj_valid = false;
+        glr.motion_blur_ready = false;
+    }
 
     // enable depth writes before clearing
     GL_StateBits(GLS_DEFAULT);
