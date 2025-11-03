@@ -5,6 +5,11 @@ client_src += files('client.cpp', 'wgl.cpp')
 
 common_deps += cc.find_library('ws2_32')
 client_deps += cc.find_library('opengl32')
+xinput_lib = cc.find_library('xinput', required: false)
+if not xinput_lib.found()
+  xinput_lib = cc.find_library('xinput9_1_0')
+endif
+client_deps += xinput_lib
 
 rc_args = ['-DHAVE_CONFIG_H']
 rc_inc = meson.project_build_root()
