@@ -16,6 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "client.hpp"
 #include "common/cvar.hpp"
 #include "common/field.hpp"
@@ -263,6 +267,7 @@ private:
 
 static commandPrompt_t sys_con;
 static WinConsole g_console;
+static bool g_allocatedConsole = false;
 
 #define FOREGROUND_BLACK    0
 #define FOREGROUND_WHITE    (FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_RED)
@@ -1220,6 +1225,7 @@ static void Sys_ConsoleInit(void)
         Com_EPrintf("Couldn't create system console.\n");
         return;
     }
+    g_allocatedConsole = true;
     freopen("CONOUT$", "w", stdout);
     freopen("CONOUT$", "w", stderr);
 #endif
@@ -1380,12 +1386,15 @@ void Sys_Error(const char *error, ...)
         exit(1);
 
 #if USE_SYSCON
-    if (gotConsole) {
+    if (g_allocatedConsole) {
         DWORD list;
         if (GetConsoleProcessList(&list, 1) > 1)
             exit(1);
-        hide_console_input();
-        SetConsoleMode(hinput, ENABLE_PROCESSED_INPUT);
+        g_console.shutdown();
+        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+        if (input != INVALID_HANDLE_VALUE) {
+            SetConsoleMode(input, ENABLE_PROCESSED_INPUT);
+        }
         Sys_Printf("Press Ctrl+C to exit.\n");
         Sleep(INFINITE);
     }
@@ -1486,7 +1495,6 @@ void Sys_Init(void)
 #endif
 
 #if USE_SYSCON
-    houtput = GetStdHandle(STD_OUTPUT_HANDLE);
 #if USE_CLIENT
     cvar_t *sys_viewlog = Cvar_Get("sys_viewlog", "0", CVAR_NOSET);
 
