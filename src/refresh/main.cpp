@@ -1242,8 +1242,8 @@ void R_RenderFrame(const refdef_t *fd)
 
     float motion_blur_scale = 0.0f;
     if (glr.motion_blur_enabled) {
-        const float shutter_speed = std::max(r_motionBlurShutterSpeed->value, 0.0001f);
-        const float frame_time = std::max(glr.fd.frametime, 1.0e-6f);
+        const float shutter_speed = (std::max)(r_motionBlurShutterSpeed->value, 0.0001f);
+        const float frame_time = (std::max)(glr.fd.frametime, 1.0e-6f);
         const float exposure = 1.0f / shutter_speed;
         motion_blur_scale = Q_bound(0.0f, exposure / frame_time, 1.0f);
     } else {
