@@ -1,267 +1,1284 @@
-/*
-Copyright (C) 1997-2001 Id Software, Inc.
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/
-// console.c
-
 #include "client.hpp"
 
-#define CON_TIMES       16
-#define CON_TIMES_MASK  (CON_TIMES - 1)
+#include "common/q3colors.hpp"
 
-#define CON_TOTALLINES          1024    // total lines in console scrollback
-#define CON_TOTALLINES_MASK     (CON_TOTALLINES - 1)
+#include <algorithm>
+#include <array>
+#include <cstdarg>
+#include <string>
+#include <string_view>
 
-#define CON_LINEWIDTH   126     // fixed width, do not need more
+namespace {
 
-typedef enum {
-    CHAT_NONE,
-    CHAT_DEFAULT,
-    CHAT_TEAM
-} chatMode_t;
+constexpr int kConsoleTimes = 16;
+constexpr int kConsoleTimesMask = kConsoleTimes - 1;
+constexpr int kTotalLines = 1024;
+constexpr int kTotalLinesMask = kTotalLines - 1;
+constexpr int kLegacyLineWidth = 126;
+constexpr int kPromptPadding = 2;
+constexpr int kScrollLargeStep = 6;
+constexpr int kScrollSmallStep = 2;
+constexpr float kMinConsoleHeight = 0.1f;
 
-typedef enum {
-    CON_POPUP,
-    CON_DEFAULT,
-    CON_REMOTE
-} consoleMode_t;
+class Console;
 
-typedef struct {
-    byte    color;
-    byte    ts_len;
-    char    text[CON_LINEWIDTH];
-} consoleLine_t;
+static void Con_Dump_c(genctx_t* ctx, int argnum);
 
-typedef struct {
-    consoleLine_t   text[CON_TOTALLINES];
+enum class ChatMode {
+    None,
+    Default,
+    Team,
+};
 
-    int            current;        // line where next message will be printed
-    int            x;              // offset in current line for next print
-    int            display;        // bottom of console displays this line
-    color_index_t  color;
-    int            newline;
+enum class ConsoleMode {
+    Popup,
+    Default,
+    Remote,
+};
 
-    int     linewidth;      // characters across screen
-    int     vidWidth, vidHeight;
-    float   scale;
-    color_t ts_color;
+struct ConsoleLine {
+    color_index_t color{ COLOR_INDEX_NONE };
+    std::string timestamp{};
+    std::string content{};
+    int timestampPixelWidth{ 0 };
 
-    unsigned    times[CON_TIMES];   // cls.realtime time the line was generated
-                                    // for transparent notify lines
-    bool    skipNotify;
-    bool    initialized;
-
-    qhandle_t   backImage;
-    qhandle_t   charsetImage;
-
-    float   currentHeight;  // approaches scr_conlines at scr_conspeed
-    float   destHeight;     // 0.0 to 1.0 lines of console to display
-
-    commandPrompt_t chatPrompt;
-    commandPrompt_t prompt;
-
-    chatMode_t chat;
-    consoleMode_t mode;
-    netadr_t remoteAddress;
-    char *remotePassword;
-
-    load_state_t loadstate;
-} console_t;
-
-static console_t    con;
-
-static cvar_t   *con_notifytime;
-static cvar_t   *con_notifylines;
-static cvar_t   *con_clock;
-static cvar_t   *con_height;
-static cvar_t   *con_speed;
-static cvar_t   *con_alpha;
-static cvar_t   *con_scale;
-static cvar_t   *con_font;
-static cvar_t   *con_background;
-static cvar_t   *con_scroll;
-static cvar_t   *con_history;
-static cvar_t   *con_timestamps;
-static cvar_t   *con_timestampsformat;
-static cvar_t   *con_timestampscolor;
-static cvar_t   *con_auto_chat;
-
-// ============================================================================
-
-/*
-================
-Con_SkipNotify
-================
-*/
-void Con_SkipNotify(bool skip)
-{
-    con.skipNotify = skip;
-}
-
-/*
-================
-Con_ClearTyping
-================
-*/
-void Con_ClearTyping(void)
-{
-    // clear any typing
-    IF_Clear(&con.prompt.inputLine);
-    Prompt_ClearState(&con.prompt);
-}
-
-/*
-================
-Con_Close
-
-Instantly removes the console. Unless `force' is true, does not remove the console
-if user has typed something into it since the last call to Con_Popup.
-================
-*/
-void Con_Close(bool force)
-{
-    if (con.mode > CON_POPUP && !force) {
-        return;
+    void clear() noexcept
+    {
+        timestamp.clear();
+        content.clear();
+        timestampPixelWidth = 0;
+        color = COLOR_INDEX_NONE;
     }
 
-    // if not connected, console or menu should be up
-    if (cls.state < ca_active && !(cls.key_dest & KEY_MENU)) {
-        return;
+    [[nodiscard]] bool empty() const noexcept
+    {
+        return timestamp.empty() && content.empty();
     }
 
-    Con_ClearTyping();
-    Con_ClearNotify_f();
+    [[nodiscard]] std::string combined() const
+    {
+        std::string result;
+        result.reserve(timestamp.size() + content.size());
+        result.append(timestamp);
+        result.append(content);
+        return result;
+    }
+};
+
+class Console {
+public:
+    static Console& instance()
+    {
+        static Console console;
+        return console;
+    }
+
+    void init();
+    void postInit();
+    void shutdown();
+
+    void skipNotify(bool skip) noexcept { skipNotify_ = skip; }
+    void clearTyping();
+    void close(bool force);
+    void popup(bool force);
+    void toggle(ConsoleMode mode, ChatMode chat);
+
+    void setColor(color_index_t color) noexcept { currentColor_ = color; }
+    void loadState(load_state_t state);
+
+    void print(std::string_view text);
+    void draw();
+    void run();
+    void registerMedia();
+    void checkResize();
+    void clearNotify();
+
+    void keyEvent(int key);
+    void charEvent(int key);
+    void messageKeyEvent(int key);
+    void messageCharEvent(int key);
+
+    void clear();
+    void dumpToFile(const char* name) const;
+    void messageMode(ChatMode mode);
+    void remoteMode();
+
+    [[nodiscard]] bool initialized() const noexcept { return initialized_; }
+
+    commandPrompt_t& prompt() noexcept { return prompt_; }
+    commandPrompt_t& chatPrompt() noexcept { return chatPrompt_; }
+
+private:
+    Console();
+
+    void ensureCarriageReturn();
+    void carriageReturn();
+    void lineFeed();
+    void advanceLine();
+    void updateNotifyTime();
+
+    void interactiveMode();
+    void executePrompt();
+    void paste(char* (*provider)(void));
+    void searchUp();
+    void searchDown();
+    void sendChat(const char* msg);
+
+    [[nodiscard]] qhandle_t fontHandle() const noexcept;
+    [[nodiscard]] int lineHeight() const noexcept;
+    [[nodiscard]] int charWidth() const noexcept;
+    [[nodiscard]] int availablePixelWidth() const noexcept;
+
+    [[nodiscard]] ConsoleLine& currentLine() noexcept
+    {
+        return lines_[currentIndex_ & kTotalLinesMask];
+    }
+
+    [[nodiscard]] const ConsoleLine& lineForRow(int row) const noexcept
+    {
+        return lines_[row & kTotalLinesMask];
+    }
+
+    void appendToCurrent(std::string_view chunk);
+    void appendCharacter(char ch);
+    void appendSpace();
+    void appendTab();
+    void appendControl(char ch);
+
+    [[nodiscard]] bool needsWrap(std::string_view word) const;
+    [[nodiscard]] int measureContentPixels(std::string_view text) const;
+    void updateContentWidth();
+
+    void drawSolid();
+    void drawNotify();
+    int drawLine(int y, int row, float alpha, bool notify);
+    void refreshTimestampColor();
+
+private:
+    std::array<ConsoleLine, kTotalLines> lines_{};
+    std::array<unsigned, kConsoleTimes> notifyTimes_{};
+
+    int currentIndex_{ 0 };
+    int displayIndex_{ 0 };
+    int contentPixelWidth_{ 0 };
+    int lineWrapColumns_{ 0 };
+
+    int vidWidth_{ 0 };
+    int vidHeight_{ 0 };
+    float scale_{ 1.0f };
+
+    color_index_t currentColor_{ COLOR_INDEX_NONE };
+    bool skipNotify_{ false };
+    bool initialized_{ false };
+
+    char pendingNewline_{ '\r' };
+
+    qhandle_t backgroundImage_{ 0 };
+    qhandle_t registeredFont_{ 0 };
+
+    float currentHeight_{ 0.0f };
+    float destinationHeight_{ 0.0f };
+
+    commandPrompt_t prompt_{};
+    commandPrompt_t chatPrompt_{};
+
+    ChatMode chatMode_{ ChatMode::None };
+    ConsoleMode mode_{ ConsoleMode::Popup };
+    netadr_t remoteAddress_{};
+    std::string remotePassword_{};
+
+    load_state_t loadState_{ LOAD_NONE };
+
+    cvar_t* notifyTime_{ nullptr };
+    cvar_t* notifyLines_{ nullptr };
+    cvar_t* clock_{ nullptr };
+    cvar_t* height_{ nullptr };
+    cvar_t* speed_{ nullptr };
+    cvar_t* alpha_{ nullptr };
+    cvar_t* scaleCvar_{ nullptr };
+    cvar_t* font_{ nullptr };
+    cvar_t* background_{ nullptr };
+    cvar_t* scroll_{ nullptr };
+    cvar_t* history_{ nullptr };
+    cvar_t* timestamps_{ nullptr };
+    cvar_t* timestampsFormat_{ nullptr };
+    cvar_t* timestampsColor_{ nullptr };
+    cvar_t* autoChat_{ nullptr };
+
+    color_t timestampColor_{ ColorRGB(170, 170, 170) };
+};
+
+Console::Console()
+{
+    IF_Init(&prompt_.inputLine, 0, MAX_FIELD_TEXT - 1);
+    IF_Init(&chatPrompt_.inputLine, 0, MAX_FIELD_TEXT - 1);
+    prompt_.printf = Con_Printf;
+}
+
+void Console::init()
+{
+    if (initialized_)
+        return;
+
+    static const cmdreg_t consoleCommands[] = {
+        { "toggleconsole", Con_ToggleConsole_f },
+        { "messagemode", Con_MessageMode_f },
+        { "messagemode2", Con_MessageMode2_f },
+        { "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
+        { "clear", Con_Clear_f },
+        { "clearnotify", Con_ClearNotify_f },
+        { "condump", Con_Dump_f, Con_Dump_c },
+        { nullptr, nullptr }
+    };
+    Cmd_Register(consoleCommands);
+
+    notifyTime_ = Cvar_Get("con_notifytime", "3", 0);
+    notifyTime_->changed = cl_timeout_changed;
+    notifyTime_->changed(notifyTime_);
+    notifyLines_ = Cvar_Get("con_notifylines", "4", 0);
+    clock_ = Cvar_Get("con_clock", "0", 0);
+    height_ = Cvar_Get("con_height", "0.5", 0);
+    speed_ = Cvar_Get("scr_conspeed", "3", 0);
+    alpha_ = Cvar_Get("con_alpha", "1", 0);
+    scaleCvar_ = Cvar_Get("con_scale", "0", 0);
+    scaleCvar_->changed = [](cvar_t* self) {
+        if (cls.ref_initialized)
+            Console::instance().checkResize();
+    };
+
+    font_ = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
+    font_->changed = [](cvar_t* self) {
+        if (cls.ref_initialized)
+            Console::instance().registerMedia();
+    };
+
+    background_ = Cvar_Get("con_background", "conback", 0);
+    background_->changed = [](cvar_t* self) {
+        if (cls.ref_initialized)
+            Console::instance().registerMedia();
+    };
+
+    scroll_ = Cvar_Get("con_scroll", "0", 0);
+    history_ = Cvar_Get("con_history", STRINGIFY(HISTORY_SIZE), 0);
+    timestamps_ = Cvar_Get("con_timestamps", "0", 0);
+    timestamps_->changed = [](cvar_t* self) {
+        if (cls.ref_initialized)
+            Console::instance().checkResize();
+    };
+
+    timestampsFormat_ = Cvar_Get("con_timestampsformat", "%H:%M:%S ", 0);
+    timestampsFormat_->changed = [](cvar_t* self) {
+        if (cls.ref_initialized)
+            Console::instance().checkResize();
+    };
+
+    timestampsColor_ = Cvar_Get("con_timestampscolor", "#aaa", 0);
+    timestampsColor_->changed = [](cvar_t* self) {
+        Console::instance().refreshTimestampColor();
+    };
+    refreshTimestampColor();
+
+    autoChat_ = Cvar_Get("con_auto_chat", "0", 0);
+
+    r_config.width = SCREEN_WIDTH;
+    r_config.height = SCREEN_HEIGHT;
+
+    scale_ = 1.0f;
+    lineWrapColumns_ = -1;
+    pendingNewline_ = '\r';
+    currentColor_ = COLOR_INDEX_NONE;
+
+    checkResize();
+
+    initialized_ = true;
+}
+
+void Console::postInit()
+{
+    if (history_->integer > 0) {
+        Prompt_LoadHistory(&prompt_, COM_HISTORYFILE_NAME);
+    }
+}
+
+void Console::shutdown()
+{
+    if (!initialized_)
+        return;
+
+    if (history_->integer > 0) {
+        Prompt_SaveHistory(&prompt_, COM_HISTORYFILE_NAME, history_->integer);
+    }
+
+    Prompt_Clear(&prompt_);
+    Prompt_Clear(&chatPrompt_);
+    remotePassword_.clear();
+    initialized_ = false;
+}
+
+void Console::clearTyping()
+{
+    IF_Clear(&prompt_.inputLine);
+    Prompt_ClearState(&prompt_);
+}
+
+void Console::close(bool force)
+{
+    if (mode_ > ConsoleMode::Popup && !force)
+        return;
+
+    if (cls.state < ca_active && !(cls.key_dest & KEY_MENU))
+        return;
+
+    clearTyping();
+    clearNotify();
 
     Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_CONSOLE));
 
-    con.destHeight = con.currentHeight = 0;
-    con.mode = CON_POPUP;
-    con.chat = CHAT_NONE;
+    destinationHeight_ = currentHeight_ = 0.0f;
+    mode_ = ConsoleMode::Popup;
+    chatMode_ = ChatMode::None;
 }
 
-/*
-================
-Con_Popup
-
-Drop to connection screen. Unless `force' is true, does not change console mode to popup.
-================
-*/
-void Con_Popup(bool force)
+void Console::popup(bool force)
 {
-    if (force) {
-        con.mode = CON_POPUP;
-    }
+    if (force)
+        mode_ = ConsoleMode::Popup;
 
     Key_SetDest(Key_FromMask(cls.key_dest | KEY_CONSOLE));
-    Con_RunConsole();
+    run();
 }
 
-/*
-================
-Con_ToggleConsole_f
-
-Toggles console up/down animation.
-================
-*/
-static void toggle_console(consoleMode_t mode, chatMode_t chat)
+void Console::toggle(ConsoleMode mode, ChatMode chat)
 {
-    SCR_EndLoadingPlaque();    // get rid of loading plaque
+    SCR_EndLoadingPlaque();
 
-    Con_ClearTyping();
-    Con_ClearNotify_f();
+    clearTyping();
+    clearNotify();
 
     if (cls.key_dest & KEY_CONSOLE) {
         Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_CONSOLE));
-        con.mode = CON_POPUP;
-        con.chat = CHAT_NONE;
+        mode_ = ConsoleMode::Popup;
+        chatMode_ = ChatMode::None;
         return;
     }
 
-    // toggling console discards chat message
     Key_SetDest(Key_FromMask((cls.key_dest | KEY_CONSOLE) & ~KEY_MESSAGE));
-    con.mode = mode;
-    con.chat = chat;
+    mode_ = mode;
+    chatMode_ = chat;
 }
 
-void Con_ToggleConsole_f(void)
+void Console::loadState(load_state_t state)
 {
-    toggle_console(CON_DEFAULT, CHAT_NONE);
+    loadState_ = state;
+    SCR_UpdateScreen();
+    if (vid)
+        vid->pump_events();
+    S_GetSoundSystem().Update();
 }
 
-/*
-================
-Con_Clear_f
-================
-*/
-static void Con_Clear_f(void)
+void Console::ensureCarriageReturn()
 {
-    memset(con.text, 0, sizeof(con.text));
-    con.display = con.current = 0;
-    con.newline = '\r';
-}
-
-static void Con_Dump_c(genctx_t *ctx, int argnum)
-{
-    if (argnum == 1) {
-        FS_File_g("condumps", ".txt", FS_SEARCH_STRIPEXT, ctx);
+    if (pendingNewline_) {
+        if (pendingNewline_ == '\n')
+            lineFeed();
+        else
+            carriageReturn();
+        pendingNewline_ = 0;
     }
 }
 
-/*
-================
-Con_Dump_f
-
-Save the console contents out to a file
-================
-*/
-static void Con_Dump_f(void)
+void Console::carriageReturn()
 {
-    int     l;
-    qhandle_t f;
-    char    name[MAX_OSPATH];
+    ConsoleLine& line = currentLine();
+    line.clear();
+    line.color = currentColor_;
 
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: %s <filename>\n", Cmd_Argv(0));
+    if (timestamps_->integer) {
+        char timestampBuffer[kLegacyLineWidth]{};
+        int written = Com_FormatLocalTime(timestampBuffer, sizeof(timestampBuffer), timestampsFormat_->string);
+        if (written > 0) {
+            line.timestamp.assign(timestampBuffer, timestampBuffer + written);
+            line.timestampPixelWidth = measureContentPixels(line.timestamp);
+        }
+    }
+
+    contentPixelWidth_ = 0;
+    updateNotifyTime();
+}
+
+void Console::updateNotifyTime()
+{
+    if (!skipNotify_)
+        notifyTimes_[currentIndex_ & kConsoleTimesMask] = cls.realtime;
+}
+
+void Console::advanceLine()
+{
+    if (displayIndex_ == currentIndex_)
+        ++displayIndex_;
+
+    ++currentIndex_;
+
+    if (scroll_->integer & 2)
+        displayIndex_ = currentIndex_;
+    else {
+        int top = currentIndex_ - kTotalLines + 1;
+        if (top < 0)
+            top = 0;
+        if (displayIndex_ < top)
+            displayIndex_ = top;
+    }
+
+    if (currentIndex_ >= kTotalLines * 2) {
+        currentIndex_ -= kTotalLines;
+        displayIndex_ -= kTotalLines;
+    }
+}
+
+void Console::lineFeed()
+{
+    advanceLine();
+    carriageReturn();
+}
+
+void Console::appendToCurrent(std::string_view chunk)
+{
+    if (chunk.empty())
+        return;
+
+    ConsoleLine& line = currentLine();
+    line.content.append(chunk);
+    updateContentWidth();
+}
+
+void Console::appendCharacter(char ch)
+{
+    ensureCarriageReturn();
+
+    char text[2] = { ch, 0 };
+    const int charPixels = SCR_MeasureString(1, 0, 1, text, fontHandle());
+    if (contentPixelWidth_ + charPixels > availablePixelWidth() && contentPixelWidth_ > 0) {
+        lineFeed();
+        ensureCarriageReturn();
+    }
+
+    ConsoleLine& line = currentLine();
+    line.content.push_back(ch);
+    updateContentWidth();
+}
+
+void Console::appendSpace()
+{
+    appendToCurrent(" ");
+}
+
+void Console::appendTab()
+{
+    constexpr int tabSize = 4;
+    const int position = contentPixelWidth_ / std::max(charWidth(), 1);
+    const int spacesToInsert = tabSize - (position % tabSize);
+    for (int i = 0; i < spacesToInsert; ++i)
+        appendSpace();
+}
+
+void Console::appendControl(char ch)
+{
+    switch (ch) {
+    case '\n':
+    case '\r':
+        pendingNewline_ = ch;
+        break;
+    case '\t':
+        appendTab();
+        break;
+    default:
+        appendCharacter(' ');
+        break;
+    }
+}
+
+int Console::measureContentPixels(std::string_view text) const
+{
+    if (text.empty())
+        return 0;
+
+    return SCR_MeasureString(1, 0, text.size(), text.data(), fontHandle());
+}
+
+void Console::updateContentWidth()
+{
+    contentPixelWidth_ = measureContentPixels(currentLine().content);
+}
+
+bool Console::needsWrap(std::string_view word) const
+{
+    if (word.empty())
+        return false;
+
+    const int wordPixels = SCR_MeasureString(1, 0, word.size(), word.data(), fontHandle());
+    if (wordPixels >= availablePixelWidth())
+        return false;
+
+    return contentPixelWidth_ + wordPixels > availablePixelWidth();
+}
+
+void Console::print(std::string_view text)
+{
+    if (!initialized_ || text.empty())
+        return;
+
+    const char* ptr = text.data();
+    size_t remaining = text.size();
+
+    color_t ignoredColor;
+
+    while (remaining) {
+        ensureCarriageReturn();
+
+        size_t consumed = 0;
+        if (Q3_ParseColorEscape(ptr, remaining, ignoredColor, consumed)) {
+            appendToCurrent(std::string_view(ptr, consumed));
+            ptr += consumed;
+            remaining -= consumed;
+            continue;
+        }
+
+        if (*ptr > 32) {
+            size_t wordLen = 0;
+            size_t inspectRemaining = remaining;
+            const char* inspectPtr = ptr;
+            while (inspectRemaining && *inspectPtr > 32) {
+                size_t colorConsumed = 0;
+                if (Q3_ParseColorEscape(inspectPtr, inspectRemaining, ignoredColor, colorConsumed)) {
+                    inspectPtr += colorConsumed;
+                    inspectRemaining -= colorConsumed;
+                    wordLen += colorConsumed;
+                    continue;
+                }
+                ++inspectPtr;
+                --inspectRemaining;
+                ++wordLen;
+            }
+
+            if (wordLen && needsWrap(std::string_view(ptr, wordLen))) {
+                lineFeed();
+                ensureCarriageReturn();
+            }
+        }
+
+        const char ch = *ptr;
+        if (ch == '\r' || ch == '\n' || ch == '\t') {
+            appendControl(ch);
+        } else if (ch == ' ') {
+            appendCharacter(' ');
+        } else {
+            appendCharacter(ch);
+        }
+
+        ++ptr;
+        --remaining;
+    }
+
+    updateNotifyTime();
+}
+
+void Console::drawSolid()
+{
+    const int visibleLines = std::clamp(static_cast<int>(vidHeight_ * currentHeight_), 0, vidHeight_);
+    if (!visibleLines)
+        return;
+
+    color_t drawColor = COLOR_WHITE;
+
+    if (cls.state >= ca_active && !(cls.key_dest & KEY_MENU) && alpha_->value) {
+        const float alphaScale = 0.5f + 0.5f * (currentHeight_ / std::max(height_->value, kMinConsoleHeight));
+        drawColor.a *= alphaScale * Cvar_ClampValue(alpha_, 0, 1);
+    }
+
+    if (cls.state < ca_active || (cls.key_dest & KEY_MENU) || alpha_->value) {
+        if (backgroundImage_)
+            R_DrawKeepAspectPic(0, visibleLines - vidHeight_, vidWidth_, vidHeight_, drawColor, backgroundImage_);
+    }
+
+    int y = visibleLines - (lineHeight() * 3 + lineHeight() / 4);
+    int rows = y / lineHeight() + 1;
+
+    if (displayIndex_ != currentIndex_) {
+        const int glyphAdvance = std::max(charWidth(), 1);
+        const int spacing = glyphAdvance * 2;
+        for (int i = 1; i < vidWidth_ / spacing; i += 4) {
+            SCR_DrawGlyph(i * glyphAdvance, y, 1, 0, '^', ColorSetAlpha(COLOR_RED, drawColor.a));
+        }
+        y -= lineHeight();
+        --rows;
+    }
+
+    int row = displayIndex_;
+
+    for (int i = 0; i < rows; ++i) {
+        if (row < 0)
+            break;
+        if (currentIndex_ - row > kTotalLines - 1)
+            break;
+
+        int x = drawLine(y, row, 1.0f, false);
+
+        y -= lineHeight();
+        --row;
+    }
+
+    if (cls.download.current) {
+        char pos[16];
+        char suffix[32];
+        const char* text = cls.download.current->path;
+        if (const char* slash = strrchr(text, '/'))
+            text = slash + 1;
+
+        Com_FormatSizeLong(pos, sizeof(pos), cls.download.position);
+        const int suffixLen = Q_scnprintf(suffix, sizeof(suffix), " %d%% (%s)", cls.download.percent, pos);
+
+        const int maxWidth = lineWrapColumns_;
+        std::string fileName{text};
+        if (maxWidth > 6 && static_cast<int>(fileName.size()) > maxWidth / 3) {
+            fileName = fileName.substr(0, std::max(0, maxWidth / 3 - 3)) + "...";
+        }
+
+        std::string buffer = fileName + ": ";
+        buffer.push_back('\x80');
+        const int fill = std::max(0, maxWidth - static_cast<int>(fileName.size()) - suffixLen);
+        const int dot = fill * cls.download.percent / 100;
+        for (int i = 0; i < fill; ++i)
+            buffer.push_back(i == dot ? '\x83' : '\x81');
+        buffer.push_back('\x82');
+        buffer.append(suffix);
+
+        SCR_DrawStringStretch(charWidth(), visibleLines - (lineHeight() * 3), 1, 0, buffer.size(), buffer.c_str(), COLOR_WHITE, fontHandle());
+    } else if (cls.state == ca_loading) {
+        const char* text = nullptr;
+        switch (loadState_) {
+        case LOAD_MAP: text = cl.configstrings[cl.csr.models + 1]; break;
+        case LOAD_MODELS: text = "models"; break;
+        case LOAD_IMAGES: text = "images"; break;
+        case LOAD_CLIENTS: text = "clients"; break;
+        case LOAD_SOUNDS: text = "sounds"; break;
+        default: break;
+        }
+
+        if (text) {
+            char buffer[128];
+            Q_snprintf(buffer, sizeof(buffer), "Loading %s...", text);
+            SCR_DrawStringStretch(charWidth(), visibleLines - (lineHeight() * 3), 1, 0, strlen(buffer), buffer, COLOR_WHITE, fontHandle());
+        }
+    }
+
+    const int baseFooterY = visibleLines - (lineHeight() * 2);
+
+    if (cls.key_dest & KEY_CONSOLE) {
+        const int inputY = baseFooterY;
+        const int promptGlyph = mode_ == ConsoleMode::Remote ? '#' : 17;
+        SCR_DrawGlyph(charWidth(), inputY, 1, 0, promptGlyph, COLOR_YELLOW);
+        const int promptRight = IF_Draw(&prompt_.inputLine, charWidth() * 2, inputY, UI_DRAWCURSOR, fontHandle());
+        const int promptWidth = std::max(0, promptRight - charWidth() * 2);
+
+        constexpr std::string_view appVersion = APPNAME " " VERSION;
+        const int versionWidth = SCR_MeasureString(1, 0, appVersion.size(), appVersion.data(), fontHandle());
+        int footerY = baseFooterY;
+        if (promptWidth + versionWidth + charWidth() > vidWidth_)
+            footerY -= lineHeight();
+
+        if (clock_->integer) {
+            char buffer[64];
+            const int len = Com_Time_m(buffer, sizeof(buffer));
+            if (len > 0) {
+                const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
+                SCR_DrawStringStretch(vidWidth_ - width, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+            }
+        }
+
+        SCR_DrawStringStretch(vidWidth_ - versionWidth, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
         return;
     }
 
-    f = FS_EasyOpenFile(name, sizeof(name), FS_MODE_WRITE | FS_FLAG_TEXT,
-                        "condumps/", Cmd_Argv(1), ".txt");
-    if (!f) {
+    constexpr std::string_view appVersion = APPNAME " " VERSION;
+    const int versionWidth = SCR_MeasureString(1, 0, appVersion.size(), appVersion.data(), fontHandle());
+    int footerY = baseFooterY;
+
+    if (clock_->integer) {
+        char buffer[64];
+        const int len = Com_Time_m(buffer, sizeof(buffer));
+        if (len > 0) {
+            const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
+            SCR_DrawStringStretch(vidWidth_ - width, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+        }
+    }
+
+    SCR_DrawStringStretch(vidWidth_ - versionWidth, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
+}
+
+void Console::drawNotify()
+{
+    if (cls.state != ca_active)
+        return;
+    if (cls.key_dest & (KEY_MENU | KEY_CONSOLE))
+        return;
+    if (currentHeight_)
+        return;
+
+    const int notifyCount = std::clamp(notifyLines_->integer, 0, kConsoleTimes);
+    const int startRow = currentIndex_ - notifyCount + 1;
+    const int minRow = std::max(0, currentIndex_ - kTotalLines + 1);
+
+    int y = 0;
+
+    for (int i = startRow; i <= currentIndex_; ++i) {
+        if (i < minRow)
+            continue;
+
+        const unsigned time = notifyTimes_[i & kConsoleTimesMask];
+        if (!time)
+            continue;
+
+        const float delta = (cls.realtime - time) * 0.001f;
+        if (delta >= notifyTime_->value)
+            continue;
+
+        const float alpha = 1.0f - delta / notifyTime_->value;
+        y += lineHeight();
+        drawLine(y, i, alpha, true);
+    }
+
+    if (cls.key_dest & KEY_MESSAGE) {
+        const char* label = chatMode_ == ChatMode::Team ? "say_team:" : "say:";
+        const int skip = chatMode_ == ChatMode::Team ? 11 : 5;
+        SCR_DrawStringStretch(charWidth(), y, 1, 0, strlen(label), label, COLOR_WHITE, fontHandle());
+        chatPrompt_.inputLine.visibleChars = std::max(1, lineWrapColumns_ - skip + 1);
+        IF_Draw(&chatPrompt_.inputLine, skip * charWidth(), y, UI_DRAWCURSOR, fontHandle());
+    }
+}
+
+int Console::drawLine(int y, int row, float alpha, bool notify)
+{
+    const ConsoleLine& line = lineForRow(row);
+    int x = charWidth();
+    int width = lineWrapColumns_;
+
+    if (notify)
+        width -= static_cast<int>(line.timestamp.size());
+
+    if (!line.timestamp.empty() && !notify) {
+        const color_t tsColor = ColorSetAlpha(timestampColor_, alpha);
+        SCR_DrawStringStretch(x, y, 1, 0, line.timestamp.size(), line.timestamp.c_str(), tsColor, fontHandle());
+        x += line.timestampPixelWidth;
+        width -= static_cast<int>(line.timestamp.size());
+    }
+
+    if (width < 1)
+        return x;
+
+    int flags = 0;
+    color_t drawColor = COLOR_WHITE;
+
+    switch (line.color) {
+    case COLOR_INDEX_ALT:
+        flags = UI_ALTCOLOR;
+        break;
+    case COLOR_INDEX_NONE:
+        break;
+    default:
+        drawColor = colorTable[line.color & 7];
+        break;
+    }
+
+    drawColor.a *= alpha;
+    SCR_DrawStringStretch(x, y, 1, flags, line.content.size(), line.content.c_str(), drawColor, fontHandle());
+    return x + measureContentPixels(line.content);
+}
+
+void Console::draw()
+{
+    R_SetScale(scale_);
+    drawSolid();
+    drawNotify();
+    R_SetScale(1.0f);
+}
+
+void Console::run()
+{
+    if (cls.disable_screen) {
+        destinationHeight_ = currentHeight_ = 0.0f;
         return;
     }
 
-    // skip empty lines
-    for (l = con.current - CON_TOTALLINES + 1; l <= con.current; l++) {
-        if (con.text[l & CON_TOTALLINES_MASK].text[0]) {
+    if (!(cls.key_dest & KEY_MENU)) {
+        if (cls.state == ca_disconnected) {
+            destinationHeight_ = currentHeight_ = 1.0f;
+            return;
+        }
+        if (cls.state > ca_disconnected && cls.state < ca_active) {
+            destinationHeight_ = currentHeight_ = 0.5f;
+            return;
+        }
+    }
+
+    if (cls.key_dest & KEY_CONSOLE)
+        destinationHeight_ = Cvar_ClampValue(height_, kMinConsoleHeight, 1.0f);
+    else
+        destinationHeight_ = 0.0f;
+
+    if (speed_->value <= 0.0f) {
+        currentHeight_ = destinationHeight_;
+        return;
+    }
+
+    CL_AdvanceValue(&currentHeight_, destinationHeight_, speed_->value);
+}
+
+qhandle_t Console::fontHandle() const noexcept
+{
+    if (registeredFont_)
+        return registeredFont_;
+    return SCR_DefaultFontHandle();
+}
+
+int Console::lineHeight() const noexcept
+{
+    return SCR_FontLineHeight(1, fontHandle());
+}
+
+int Console::charWidth() const noexcept
+{
+    return std::max(1, SCR_MeasureString(1, UI_IGNORECOLOR, 1, " ", fontHandle()));
+}
+
+int Console::availablePixelWidth() const noexcept
+{
+    return std::max(0, vidWidth_ - charWidth() * kPromptPadding);
+}
+
+void Console::registerMedia()
+{
+    registeredFont_ = R_RegisterFont(font_->string);
+    if (!registeredFont_) {
+        if (strcmp(font_->string, font_->default_string)) {
+            Cvar_Reset(font_);
+            registeredFont_ = R_RegisterFont(font_->default_string);
+        }
+        if (!registeredFont_)
+            registeredFont_ = R_RegisterFont("conchars");
+        if (!registeredFont_)
+            Com_Error(ERR_FATAL, "%s", Com_GetLastError());
+    }
+
+    backgroundImage_ = R_RegisterPic(background_->string);
+    if (!backgroundImage_ && strcmp(background_->string, background_->default_string)) {
+        Cvar_Reset(background_);
+        backgroundImage_ = R_RegisterPic(background_->default_string);
+    }
+
+    checkResize();
+}
+
+void Console::checkResize()
+{
+    scale_ = R_ClampScale(scaleCvar_);
+
+    vidWidth_ = Q_rint(r_config.width * scale_);
+    vidHeight_ = Q_rint(r_config.height * scale_);
+
+    const int widthInPixels = availablePixelWidth();
+    const int charWidthPixels = std::max(charWidth(), 1);
+    lineWrapColumns_ = std::clamp(widthInPixels / charWidthPixels, 0, kLegacyLineWidth);
+
+    const int visibleChars = std::max(lineWrapColumns_, 1);
+    prompt_.inputLine.visibleChars = visibleChars;
+    prompt_.widthInChars = visibleChars;
+    chatPrompt_.inputLine.visibleChars = visibleChars;
+
+    if (timestamps_->integer) {
+        char temp[kLegacyLineWidth];
+        const int timestampChars = Com_FormatLocalTime(temp, lineWrapColumns_, timestampsFormat_->string);
+        prompt_.widthInChars = std::max(1, prompt_.widthInChars - timestampChars);
+    }
+}
+
+void Console::clearNotify()
+{
+    notifyTimes_.fill(0);
+}
+
+void Console::interactiveMode()
+{
+    if (mode_ == ConsoleMode::Popup)
+        mode_ = ConsoleMode::Default;
+}
+
+void Console::executePrompt()
+{
+    const char* cmd = Prompt_Action(&prompt_);
+    interactiveMode();
+
+    if (!cmd) {
+        Con_Printf("]\n");
+        return;
+    }
+
+    const bool hasBackslash = cmd[0] == '\\' || cmd[0] == '/';
+
+    if (mode_ == ConsoleMode::Remote) {
+        CL_SendRcon(&remoteAddress_, remotePassword_.c_str(), cmd + hasBackslash);
+    } else {
+        if (!hasBackslash && cls.state == ca_active) {
+            switch (autoChat_->integer) {
+            case static_cast<int>(ChatMode::Default):
+                Cbuf_AddText(&cmd_buffer, "cmd say ");
+                break;
+            case static_cast<int>(ChatMode::Team):
+                Cbuf_AddText(&cmd_buffer, "cmd say_team ");
+                break;
+            }
+        }
+        Cbuf_AddText(&cmd_buffer, cmd + hasBackslash);
+        Cbuf_AddText(&cmd_buffer, "\n");
+    }
+
+    Con_Printf("]%s\n", cmd);
+
+    if (cls.state == ca_disconnected)
+        SCR_UpdateScreen();
+}
+
+void Console::paste(char* (*provider)(void))
+{
+    interactiveMode();
+
+    if (!provider)
+        return;
+
+    char* data = provider();
+    if (!data)
+        return;
+
+    char* cursor = data;
+    while (*cursor) {
+        const int c = *cursor++;
+        switch (c) {
+        case '\n':
+            if (*cursor)
+                executePrompt();
+            break;
+        case '\r':
+        case '\t':
+            IF_CharEvent(&prompt_.inputLine, ' ');
+            break;
+        default:
+            IF_CharEvent(&prompt_.inputLine, Q_isprint(c) ? c : '?');
             break;
         }
     }
 
-    // write the remaining lines
-    for (; l <= con.current; l++) {
-        char buffer[CON_LINEWIDTH + 1];
-        const char *p = con.text[l & CON_TOTALLINES_MASK].text;
-        int i;
+    Z_Free(data);
+}
 
-        for (i = 0; i < CON_LINEWIDTH && p[i]; i++)
-            buffer[i] = Q_charascii(p[i]);
-        buffer[i] = '\n';
+void Console::sendChat(const char* msg)
+{
+    if (!msg || !*msg)
+        return;
 
-        FS_Write(buffer, i + 1, f);
+    const char* suffix = chatMode_ == ChatMode::Team ? "_team" : "";
+    CL_ClientCommand(va("say%s \"%s\"", suffix, msg));
+}
+
+void Console::clear()
+{
+    for (auto& line : lines_)
+        line.clear();
+    currentIndex_ = displayIndex_ = 0;
+    contentPixelWidth_ = 0;
+    notifyTimes_.fill(0);
+    pendingNewline_ = '\r';
+}
+
+void Console::searchUp()
+{
+    char buffer[kLegacyLineWidth + 1];
+    const char* needle = prompt_.inputLine.text;
+    int top = currentIndex_ - kTotalLines + 1;
+    if (top < 0)
+        top = 0;
+    if (!*needle)
+        return;
+
+    for (int row = displayIndex_ - 1; row >= top; --row) {
+        const ConsoleLine& line = lineForRow(row);
+        const std::string& content = line.content;
+        const int length = std::min(static_cast<int>(content.size()), kLegacyLineWidth);
+        for (int i = 0; i < length; ++i)
+            buffer[i] = Q_charascii(content[i]);
+        buffer[length] = 0;
+        if (Q_stristr(buffer, needle)) {
+            displayIndex_ = row;
+            break;
+        }
+    }
+}
+
+void Console::searchDown()
+{
+    char buffer[kLegacyLineWidth + 1];
+    const char* needle = prompt_.inputLine.text;
+    if (!*needle)
+        return;
+
+    for (int row = displayIndex_ + 1; row <= currentIndex_; ++row) {
+        const ConsoleLine& line = lineForRow(row);
+        const std::string& content = line.content;
+        const int length = std::min(static_cast<int>(content.size()), kLegacyLineWidth);
+        for (int i = 0; i < length; ++i)
+            buffer[i] = Q_charascii(content[i]);
+        buffer[length] = 0;
+        if (Q_stristr(buffer, needle)) {
+            displayIndex_ = row;
+            break;
+        }
+    }
+}
+
+void Console::keyEvent(int key)
+{
+    switch (key) {
+    case '`':
+    case '~':
+    case K_ESCAPE:
+        toggle(ConsoleMode::Default, ChatMode::None);
+        return;
+    case 'l':
+        if (Key_IsDown(K_CTRL)) {
+            clear();
+            return;
+        }
+        break;
+    case 'c':
+        if (Key_IsDown(K_CTRL)) {
+            paste(vid ? vid->get_clipboard_data : nullptr);
+            return;
+        }
+        break;
+    case 'v':
+        if (Key_IsDown(K_CTRL)) {
+            paste(vid ? vid->get_clipboard_data : nullptr);
+            return;
+        }
+        break;
+    case 'y':
+        if (Key_IsDown(K_CTRL)) {
+            paste(vid ? vid->get_clipboard_data : nullptr);
+            return;
+        }
+        break;
+    case K_ENTER:
+    case K_KP_ENTER:
+        executePrompt();
+        return;
+    case K_TAB:
+        Prompt_CompleteCommand(&prompt_, Key_IsDown(K_SHIFT));
+        return;
+    case 'r':
+        if (Key_IsDown(K_CTRL)) {
+            Prompt_CompleteHistory(&prompt_, false);
+            return;
+        }
+        break;
+    case 's':
+        if (Key_IsDown(K_CTRL)) {
+            Prompt_CompleteHistory(&prompt_, true);
+            return;
+        }
+        break;
+    case 'p':
+        if (Key_IsDown(K_CTRL)) {
+            Prompt_HistoryUp(&prompt_);
+            if (scroll_->integer & 1)
+                displayIndex_ = currentIndex_;
+            return;
+        }
+        break;
+    case 'n':
+        if (Key_IsDown(K_CTRL)) {
+            Prompt_HistoryDown(&prompt_);
+            if (scroll_->integer & 1)
+                displayIndex_ = currentIndex_;
+            return;
+        }
+        break;
+    case 'f':
+        if (Key_IsDown(K_CTRL)) {
+            searchDown();
+            return;
+        }
+        break;
+    case 'b':
+        if (Key_IsDown(K_CTRL)) {
+            searchUp();
+            return;
+        }
+        break;
+    case K_PGUP:
+    case K_MWHEELUP:
+        displayIndex_ -= Key_IsDown(K_CTRL) ? kScrollLargeStep : kScrollSmallStep;
+        if (displayIndex_ < 0)
+            displayIndex_ = 0;
+        return;
+    case K_PGDN:
+    case K_MWHEELDOWN:
+        displayIndex_ += Key_IsDown(K_CTRL) ? kScrollLargeStep : kScrollSmallStep;
+        if (displayIndex_ > currentIndex_)
+            displayIndex_ = currentIndex_;
+        return;
+    case K_HOME:
+        if (Key_IsDown(K_CTRL)) {
+            displayIndex_ = 0;
+            return;
+        }
+        break;
+    case K_END:
+        if (Key_IsDown(K_CTRL)) {
+            displayIndex_ = currentIndex_;
+            return;
+        }
+        displayIndex_ = currentIndex_;
+        return;
+    default:
+        break;
+    }
+
+    if (IF_KeyEvent(&prompt_.inputLine, key)) {
+        Prompt_ClearState(&prompt_);
+        interactiveMode();
+    }
+
+    if (scroll_->integer & 1)
+        displayIndex_ = currentIndex_;
+}
+
+void Console::charEvent(int key)
+{
+    if (IF_CharEvent(&prompt_.inputLine, key))
+        interactiveMode();
+}
+
+void Console::messageKeyEvent(int key)
+{
+    if (key == 'l' && Key_IsDown(K_CTRL)) {
+        IF_Clear(&chatPrompt_.inputLine);
+        return;
+    }
+
+    if (key == K_ENTER || key == K_KP_ENTER) {
+        if (const char* cmd = Prompt_Action(&chatPrompt_))
+            sendChat(cmd);
+        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
+        return;
+    }
+
+    if (key == K_ESCAPE) {
+        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
+        IF_Clear(&chatPrompt_.inputLine);
+        return;
+    }
+
+    if (key == 'r' && Key_IsDown(K_CTRL)) {
+        Prompt_CompleteHistory(&chatPrompt_, false);
+        return;
+    }
+
+    if (key == 's' && Key_IsDown(K_CTRL)) {
+        Prompt_CompleteHistory(&chatPrompt_, true);
+        return;
+    }
+
+    if (key == K_UPARROW || (key == 'p' && Key_IsDown(K_CTRL))) {
+        Prompt_HistoryUp(&chatPrompt_);
+        return;
+    }
+
+    if (key == K_DOWNARROW || (key == 'n' && Key_IsDown(K_CTRL))) {
+        Prompt_HistoryDown(&chatPrompt_);
+        return;
+    }
+
+    if (IF_KeyEvent(&chatPrompt_.inputLine, key))
+        Prompt_ClearState(&chatPrompt_);
+}
+
+void Console::messageCharEvent(int key)
+{
+    IF_CharEvent(&chatPrompt_.inputLine, key);
+}
+
+void Console::messageMode(ChatMode mode)
+{
+    if (cls.state != ca_active || cls.demo.playback) {
+        Com_Printf("You must be in a level to chat.\n");
+        return;
+    }
+
+    if (cls.key_dest & KEY_CONSOLE)
+        close(true);
+
+    chatMode_ = mode;
+    IF_Replace(&chatPrompt_.inputLine, COM_StripQuotes(Cmd_RawArgs()));
+    Key_SetDest(Key_FromMask(cls.key_dest | KEY_MESSAGE));
+}
+
+void Console::remoteMode()
+{
+    if (Cmd_Argc() != 3) {
+        Com_Printf("Usage: %s <address> <password>\n", Cmd_Argv(0));
+        return;
+    }
+
+    netadr_t adr;
+    if (!NET_StringToAdr(Cmd_Argv(1), &adr, PORT_SERVER)) {
+        Com_Printf("Bad address: %s\n", Cmd_Argv(1));
+        return;
+    }
+
+    if (!(cls.key_dest & KEY_CONSOLE))
+        toggle(ConsoleMode::Remote, ChatMode::None);
+    else {
+        mode_ = ConsoleMode::Remote;
+        chatMode_ = ChatMode::None;
+    }
+
+    remoteAddress_ = adr;
+    remotePassword_ = Cmd_Argv(2);
+}
+
+void Console::dumpToFile(const char* name) const
+{
+    if (!name || !*name)
+        return;
+
+    fileHandle_t f = FS_FOpenFileWrite(name);
+    if (!f) {
+        Com_EPrintf("Couldn't open %s\n", name);
+        return;
+    }
+
+    char buffer[kLegacyLineWidth + 1];
+    for (int i = currentIndex_ - kTotalLines + 1; i <= currentIndex_; ++i) {
+        if (i < 0)
+            continue;
+        if (currentIndex_ - i >= kTotalLines)
+            continue;
+
+        const ConsoleLine& line = lineForRow(i);
+        std::string combined = line.combined();
+        int len = std::min(static_cast<int>(combined.size()), kLegacyLineWidth);
+        for (int j = 0; j < len; ++j)
+            buffer[j] = Q_charascii(combined[j]);
+        buffer[len++] = '\n';
+        FS_Write(buffer, len, f);
     }
 
     if (FS_CloseFile(f))
@@ -270,1108 +1287,164 @@ static void Con_Dump_f(void)
         Com_Printf("Dumped console text to %s.\n", name);
 }
 
-/*
-================
-Con_ClearNotify_f
-================
-*/
-void Con_ClearNotify_f(void)
+void Console::refreshTimestampColor()
 {
-    int     i;
-
-    for (i = 0; i < CON_TIMES; i++)
-        con.times[i] = 0;
-}
-
-/*
-================
-Con_MessageMode_f
-================
-*/
-static void start_message_mode(chatMode_t mode)
-{
-    if (cls.state != ca_active || cls.demo.playback) {
-        Com_Printf("You must be in a level to chat.\n");
-        return;
-    }
-
-    // starting messagemode closes console
-    if (cls.key_dest & KEY_CONSOLE) {
-        Con_Close(true);
-    }
-
-    con.chat = mode;
-    IF_Replace(&con.chatPrompt.inputLine, COM_StripQuotes(Cmd_RawArgs()));
-    Key_SetDest(Key_FromMask(cls.key_dest | KEY_MESSAGE));
-}
-
-static void Con_MessageMode_f(void)
-{
-    start_message_mode(CHAT_DEFAULT);
-}
-
-static void Con_MessageMode2_f(void)
-{
-    start_message_mode(CHAT_TEAM);
-}
-
-/*
-================
-Con_RemoteMode_f
-================
-*/
-static void Con_RemoteMode_f(void)
-{
-    netadr_t adr;
-    char *s;
-
-    if (Cmd_Argc() != 3) {
-        Com_Printf("Usage: %s <address> <password>\n", Cmd_Argv(0));
-        return;
-    }
-
-    s = Cmd_Argv(1);
-    if (!NET_StringToAdr(s, &adr, PORT_SERVER)) {
-        Com_Printf("Bad address: %s\n", s);
-        return;
-    }
-
-    s = Cmd_Argv(2);
-
-    if (!(cls.key_dest & KEY_CONSOLE)) {
-        toggle_console(CON_REMOTE, CHAT_NONE);
-    } else {
-        con.mode = CON_REMOTE;
-        con.chat = CHAT_NONE;
-    }
-
-    Z_Free(con.remotePassword);
-
-    con.remoteAddress = adr;
-    con.remotePassword = Z_CopyString(s);
-}
-
-static void CL_RemoteMode_c(genctx_t *ctx, int argnum)
-{
-    if (argnum == 1) {
-        Com_Address_g(ctx);
+    if (!SCR_ParseColor(timestampsColor_->string, &timestampColor_)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", timestampsColor_->string, timestampsColor_->name);
+        Cvar_Reset(timestampsColor_);
+        timestampColor_ = ColorRGB(170, 170, 170);
     }
 }
 
-/*
-================
-Con_CheckResize
+} // namespace
 
-If the line width has changed, reformat the buffer.
-================
-*/
-void Con_CheckResize(void)
-{
-    con.scale = R_ClampScale(con_scale);
+// Public API wrappers -------------------------------------------------------
 
-    con.vidWidth = Q_rint(r_config.width * con.scale);
-    con.vidHeight = Q_rint(r_config.height * con.scale);
-
-    con.linewidth = Q_clip(con.vidWidth / CONCHAR_WIDTH - 2, 0, CON_LINEWIDTH);
-    con.prompt.inputLine.visibleChars = con.linewidth;
-    con.prompt.widthInChars = con.linewidth;
-    con.chatPrompt.inputLine.visibleChars = con.linewidth;
-
-    if (con_timestamps->integer) {
-        char temp[CON_LINEWIDTH];
-        con.prompt.widthInChars -= Com_FormatLocalTime(temp, con.linewidth, con_timestampsformat->string);
-    }
-}
-
-/*
-================
-Con_CheckTop
-
-Make sure at least one line is visible if console is backscrolled.
-================
-*/
-static void Con_CheckTop(void)
-{
-    int top = con.current - CON_TOTALLINES + 1;
-
-    if (top < 0) {
-        top = 0;
-    }
-    if (con.display < top) {
-        con.display = top;
-    }
-}
-
-static void con_media_changed(cvar_t *self)
-{
-    if (con.initialized && cls.ref_initialized) {
-        Con_RegisterMedia();
-    }
-}
-
-static void con_width_changed(cvar_t *self)
-{
-    if (con.initialized && cls.ref_initialized) {
-        Con_CheckResize();
-    }
-}
-
-static void con_timestampscolor_changed(cvar_t *self)
-{
-    if (!SCR_ParseColor(self->string, &con.ts_color)) {
-        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
-        Cvar_Reset(self);
-        con.ts_color = ColorRGB(170, 170, 170);
-    }
-}
-
-static const cmdreg_t c_console[] = {
-    { "toggleconsole", Con_ToggleConsole_f },
-    { "messagemode", Con_MessageMode_f },
-    { "messagemode2", Con_MessageMode2_f },
-    { "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
-    { "clear", Con_Clear_f },
-    { "clearnotify", Con_ClearNotify_f },
-    { "condump", Con_Dump_f, Con_Dump_c },
-
-    { NULL }
-};
-
-/*
-================
-Con_Init
-================
-*/
 void Con_Init(void)
 {
-    memset(&con, 0, sizeof(con));
-
-//
-// register our commands
-//
-    Cmd_Register(c_console);
-
-    con_notifytime = Cvar_Get("con_notifytime", "3", 0);
-    con_notifytime->changed = cl_timeout_changed;
-    con_notifytime->changed(con_notifytime);
-    con_notifylines = Cvar_Get("con_notifylines", "4", 0);
-    con_clock = Cvar_Get("con_clock", "0", 0);
-    con_height = Cvar_Get("con_height", "0.5", 0);
-    con_speed = Cvar_Get("scr_conspeed", "3", 0);
-    con_alpha = Cvar_Get("con_alpha", "1", 0);
-    con_scale = Cvar_Get("con_scale", "0", 0);
-    con_scale->changed = con_width_changed;
-    con_font = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
-    con_font->changed = con_media_changed;
-    con_background = Cvar_Get("con_background", "conback", 0);
-    con_background->changed = con_media_changed;
-    con_scroll = Cvar_Get("con_scroll", "0", 0);
-    con_history = Cvar_Get("con_history", STRINGIFY(HISTORY_SIZE), 0);
-    con_timestamps = Cvar_Get("con_timestamps", "0", 0);
-    con_timestamps->changed = con_width_changed;
-    con_timestampsformat = Cvar_Get("con_timestampsformat", "%H:%M:%S ", 0);
-    con_timestampsformat->changed = con_width_changed;
-    con_timestampscolor = Cvar_Get("con_timestampscolor", "#aaa", 0);
-    con_timestampscolor->changed = con_timestampscolor_changed;
-    con_timestampscolor_changed(con_timestampscolor);
-    con_auto_chat = Cvar_Get("con_auto_chat", "0", 0);
-
-    IF_Init(&con.prompt.inputLine, 0, MAX_FIELD_TEXT - 1);
-    IF_Init(&con.chatPrompt.inputLine, 0, MAX_FIELD_TEXT - 1);
-
-    con.prompt.printf = Con_Printf;
-
-    // use default width since no video is initialized yet
-    r_config.width = SCREEN_WIDTH;
-    r_config.height = SCREEN_HEIGHT;
-    con.linewidth = -1;
-    con.scale = 1;
-    con.color = COLOR_INDEX_NONE;
-    con.newline = '\r';
-
-    Con_CheckResize();
-
-    con.initialized = true;
+    Console::instance().init();
 }
 
 void Con_PostInit(void)
 {
-    if (con_history->integer > 0) {
-        Prompt_LoadHistory(&con.prompt, COM_HISTORYFILE_NAME);
-    }
+    Console::instance().postInit();
 }
 
-/*
-================
-Con_Shutdown
-================
-*/
 void Con_Shutdown(void)
 {
-    if (con_history->integer > 0) {
-        Prompt_SaveHistory(&con.prompt, COM_HISTORYFILE_NAME, con_history->integer);
-    }
-    Prompt_Clear(&con.prompt);
-}
-
-static void Con_CarriageRet(void)
-{
-    consoleLine_t *line = &con.text[con.current & CON_TOTALLINES_MASK];
-
-    // add color from last line
-    line->color = con.color;
-
-    // add timestamp
-    con.x = 0;
-    if (con_timestamps->integer)
-        con.x = Com_FormatLocalTime(line->text, con.linewidth, con_timestampsformat->string);
-    line->ts_len = con.x;
-
-    // init text (must be after timestamp format which may overflow)
-    memset(line->text + con.x, 0, CON_LINEWIDTH - con.x);
-
-    // update time for transparent overlay
-    if (!con.skipNotify)
-        con.times[con.current & CON_TIMES_MASK] = cls.realtime;
-}
-
-static void Con_Linefeed(void)
-{
-    if (con.display == con.current)
-        con.display++;
-    con.current++;
-
-    Con_CarriageRet();
-
-    if (con_scroll->integer & 2) {
-        con.display = con.current;
-    } else {
-        Con_CheckTop();
-    }
-
-    // wrap to avoid integer overflow
-    if (con.current >= CON_TOTALLINES * 2) {
-        con.current -= CON_TOTALLINES;
-        con.display -= CON_TOTALLINES;
-    }
+    Console::instance().shutdown();
 }
 
 void Con_SetColor(color_index_t color)
 {
-    con.color = color;
+    Console::instance().setColor(color);
 }
 
-/*
-=================
-CL_LoadState
-=================
-*/
 void CL_LoadState(load_state_t state)
 {
-    con.loadstate = state;
-    SCR_UpdateScreen();
-    if (vid)
-        vid->pump_events();
-    S_GetSoundSystem().Update();
+    Console::instance().loadState(state);
 }
 
-/*
-================
-Con_Print
-
-Handles cursor positioning, line wrapping, etc
-All console printing must go through this in order to be displayed on screen
-If no console is visible, the text will appear at the top of the game window
-================
-*/
-void Con_Print(const char *txt)
+void Con_Print(const char* text)
 {
-    char *p;
-    int l;
-
-    if (!con.initialized)
-        return;
-
-    while (*txt) {
-        if (con.newline) {
-            if (con.newline == '\n') {
-                Con_Linefeed();
-            } else {
-                Con_CarriageRet();
-            }
-            con.newline = 0;
-        }
-
-        // count word length
-        for (p = (char *)txt; *p > 32; p++)
-            ;
-        l = p - txt;
-
-        // word wrap
-        if (l < con.linewidth && con.x + l > con.linewidth) {
-            Con_Linefeed();
-        }
-
-        switch (*txt) {
-        case '\r':
-        case '\n':
-            con.newline = *txt;
-            break;
-        default:    // display character and advance
-            if (con.x == con.linewidth) {
-                Con_Linefeed();
-            }
-            p = con.text[con.current & CON_TOTALLINES_MASK].text;
-            p[con.x++] = *txt;
-            break;
-        }
-
-        txt++;
-    }
-
-    // update time for transparent overlay
-    if (!con.skipNotify)
-        con.times[con.current & CON_TIMES_MASK] = cls.realtime;
+    Console::instance().print(text ? text : "");
 }
 
-/*
-================
-Con_Printf
-
-Print text to graphical console only,
-bypassing system console and logfiles
-================
-*/
-void Con_Printf(const char *fmt, ...)
+void Con_Printf(const char* fmt, ...)
 {
-    va_list     argptr;
-    char        msg[MAXPRINTMSG];
-
-    va_start(argptr, fmt);
-    Q_vsnprintf(msg, sizeof(msg), fmt, argptr);
-    va_end(argptr);
-
-    Con_Print(msg);
+    char buffer[MAXPRINTMSG];
+    va_list args;
+    va_start(args, fmt);
+    Q_vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    Con_Print(buffer);
 }
 
-/*
-================
-Con_RegisterMedia
-================
-*/
-void Con_RegisterMedia(void)
-{
-    con.charsetImage = R_RegisterFont(con_font->string);
-    if (!con.charsetImage) {
-        if (strcmp(con_font->string, con_font->default_string)) {
-            Cvar_Reset(con_font);
-            con.charsetImage = R_RegisterFont(con_font->default_string);
-        }
-        if (!con.charsetImage) {
-            con.charsetImage = R_RegisterFont("conchars");
-        }
-        if (!con.charsetImage) {
-            Com_Error(ERR_FATAL, "%s", Com_GetLastError());
-        }
-    }
-
-    con.backImage = R_RegisterPic(con_background->string);
-    if (!con.backImage) {
-        if (strcmp(con_background->string, con_background->default_string)) {
-            Cvar_Reset(con_background);
-            con.backImage = R_RegisterPic(con_background->default_string);
-        }
-    }
-}
-
-/*
-==============================================================================
-
-DRAWING
-
-==============================================================================
-*/
-
-static int Con_DrawLine(int v, int row, float alpha, bool notify)
-{
-    const consoleLine_t *line = &con.text[row & CON_TOTALLINES_MASK];
-    const char *s = line->text;
-    int flags = 0;
-    int x = CONCHAR_WIDTH;
-    int w = con.linewidth;
-    color_t color;
-
-    if (notify) {
-        s += line->ts_len;
-    } else if (line->ts_len) {
-        color = ColorSetAlpha(con.ts_color, alpha);
-        x = R_DrawString(x, v, 0, line->ts_len, s, color, con.charsetImage);
-        s += line->ts_len;
-        w -= line->ts_len;
-    }
-    if (w < 1)
-        return x;
-
-    switch (line->color) {
-    case COLOR_INDEX_ALT:
-        flags = UI_ALTCOLOR;
-        // fall through
-    case COLOR_INDEX_NONE:
-        color = COLOR_WHITE;
-        break;
-    default:
-        color = colorTable[line->color & 7];
-        break;
-    }
-    color.a *= alpha;
-
-    return R_DrawString(x, v, flags, w, s, color, con.charsetImage);
-}
-
-#define CON_PRESTEP     (CONCHAR_HEIGHT * 3 + CONCHAR_HEIGHT / 4)
-
-/*
-================
-Con_DrawNotify
-
-Draws the last few lines of output transparently over the game top
-================
-*/
-static void Con_DrawNotify(void)
-{
-    int     v;
-    const char  *text;
-    int     i, j;
-    unsigned    time;
-    int     skip;
-    float   alpha;
-
-    // only draw notify in game
-    if (cls.state != ca_active) {
-        return;
-    }
-    if (cls.key_dest & (KEY_MENU | KEY_CONSOLE)) {
-        return;
-    }
-    if (con.currentHeight) {
-        return;
-    }
-
-    j = con_notifylines->integer;
-    if (j > CON_TIMES) {
-        j = CON_TIMES;
-    }
-
-    v = 0;
-    for (i = con.current - j + 1; i <= con.current; i++) {
-        if (i < 0)
-            continue;
-        time = con.times[i & CON_TIMES_MASK];
-        if (time == 0)
-            continue;
-        // alpha fade the last string left on screen
-        alpha = SCR_FadeAlpha(time, con_notifytime->integer, 300);
-        if (!alpha)
-            continue;
-        if (v || i != con.current) {
-            alpha = 1;  // don't fade
-        }
-
-        Con_DrawLine(v, i, alpha, true);
-
-        v += CONCHAR_HEIGHT;
-    }
-
-    if (cls.key_dest & KEY_MESSAGE) {
-        if (con.chat == CHAT_TEAM) {
-            text = "say_team:";
-            skip = 11;
-        } else {
-            text = "say:";
-            skip = 5;
-        }
-
-        R_DrawString(CONCHAR_WIDTH, v, 0, MAX_STRING_CHARS, text,
-                     COLOR_WHITE, con.charsetImage);
-        con.chatPrompt.inputLine.visibleChars = con.linewidth - skip + 1;
-        IF_Draw(&con.chatPrompt.inputLine, skip * CONCHAR_WIDTH, v,
-                UI_DRAWCURSOR, con.charsetImage);
-    }
-}
-
-/*
-================
-Con_DrawSolidConsole
-
-Draws the console with the solid background
-================
-*/
-static void Con_DrawSolidConsole(void)
-{
-    int             i, x, y;
-    int             rows;
-    const char      *text;
-    int             row;
-    char            buffer[CON_LINEWIDTH];
-    int             vislines;
-    float           alpha;
-    int             widths[2];
-
-    vislines = con.vidHeight * con.currentHeight;
-    if (vislines <= 0)
-        return;
-
-    if (vislines > con.vidHeight)
-        vislines = con.vidHeight;
-
-// setup transparency
-    color_t color = COLOR_WHITE;
-
-    if (cls.state >= ca_active && !(cls.key_dest & KEY_MENU) && con_alpha->value) {
-        alpha = 0.5f + 0.5f * (con.currentHeight / con_height->value);
-        color.a *= alpha * Cvar_ClampValue(con_alpha, 0, 1);
-    }
-
-// draw the background
-    if (cls.state < ca_active || (cls.key_dest & KEY_MENU) || con_alpha->value) {
-        R_DrawKeepAspectPic(0, vislines - con.vidHeight,
-                            con.vidWidth, con.vidHeight, color, con.backImage);
-    }
-
-// draw the text
-    y = vislines - CON_PRESTEP;
-    rows = y / CONCHAR_HEIGHT + 1;  // rows of text to draw
-
-// draw arrows to show the buffer is backscrolled
-    if (con.display != con.current) {
-        for (i = 1; i < con.linewidth / 2; i += 4) {
-            R_DrawChar(i * CONCHAR_WIDTH, y, 0, '^', ColorSetAlpha(COLOR_RED, color.a), con.charsetImage);
-        }
-
-        y -= CONCHAR_HEIGHT;
-        rows--;
-    }
-
-// draw from the bottom up
-    row = con.display;
-    widths[0] = widths[1] = 0;
-    for (i = 0; i < rows; i++) {
-        if (row < 0)
-            break;
-        if (con.current - row > CON_TOTALLINES - 1)
-            break;      // past scrollback wrap point
-
-        x = Con_DrawLine(y, row, 1, false);
-        if (i < 2) {
-            widths[i] = x;
-        }
-
-        y -= CONCHAR_HEIGHT;
-        row--;
-    }
-
-    // draw the download bar
-    if (cls.download.current) {
-        char pos[16], suf[32];
-        int n, j;
-
-        if ((text = strrchr(cls.download.current->path, '/')) != NULL)
-            text++;
-        else
-            text = cls.download.current->path;
-
-        Com_FormatSizeLong(pos, sizeof(pos), cls.download.position);
-        n = 4 + Q_scnprintf(suf, sizeof(suf), " %d%% (%s)", cls.download.percent, pos);
-
-        // figure out width
-        x = con.linewidth;
-        y = x - strlen(text) - n;
-        i = x / 3;
-        if (strlen(text) > i) {
-            y = x - i - n - 3;
-            memcpy(buffer, text, i);
-            buffer[i] = 0;
-            strcat(buffer, "...");
-        } else {
-            strcpy(buffer, text);
-        }
-        strcat(buffer, ": ");
-        i = strlen(buffer);
-        buffer[i++] = '\x80';
-        // where's the dot go?
-        n = y * cls.download.percent / 100;
-        for (j = 0; j < y; j++) {
-            if (j == n) {
-                buffer[i++] = '\x83';
-            } else {
-                buffer[i++] = '\x81';
-            }
-        }
-        buffer[i++] = '\x82';
-        buffer[i] = 0;
-
-        Q_strlcat(buffer, suf, sizeof(buffer));
-
-        // draw it
-        y = vislines - CON_PRESTEP + CONCHAR_HEIGHT * 2;
-        R_DrawString(CONCHAR_WIDTH, y, 0, con.linewidth, buffer, COLOR_WHITE, con.charsetImage);
-    } else if (cls.state == ca_loading) {
-        // draw loading state
-        switch (con.loadstate) {
-        case LOAD_MAP:
-            text = cl.configstrings[cl.csr.models + 1];
-            break;
-        case LOAD_MODELS:
-            text = "models";
-            break;
-        case LOAD_IMAGES:
-            text = "images";
-            break;
-        case LOAD_CLIENTS:
-            text = "clients";
-            break;
-        case LOAD_SOUNDS:
-            text = "sounds";
-            break;
-        default:
-            text = NULL;
-            break;
-        }
-
-        if (text) {
-            Q_snprintf(buffer, sizeof(buffer), "Loading %s...", text);
-
-            // draw it
-            y = vislines - CON_PRESTEP + CONCHAR_HEIGHT * 2;
-            R_DrawString(CONCHAR_WIDTH, y, 0, con.linewidth, buffer, COLOR_WHITE, con.charsetImage);
-        }
-    }
-
-// draw the input prompt, user text, and cursor if desired
-    x = 0;
-    if (cls.key_dest & KEY_CONSOLE) {
-        y = vislines - CON_PRESTEP + CONCHAR_HEIGHT;
-
-        // draw command prompt
-        i = con.mode == CON_REMOTE ? '#' : 17;
-        R_DrawChar(CONCHAR_WIDTH, y, 0, i, COLOR_YELLOW, con.charsetImage);
-
-        // draw input line
-        x = IF_Draw(&con.prompt.inputLine, 2 * CONCHAR_WIDTH, y,
-                    UI_DRAWCURSOR, con.charsetImage);
-    }
-
-#define APP_VERSION APPLICATION " " VERSION
-#define VER_WIDTH ((int)(sizeof(APP_VERSION) * CONCHAR_WIDTH))
-
-    y = vislines - CON_PRESTEP + CONCHAR_HEIGHT;
-    row = 0;
-    // shift version upwards to prevent overdraw
-    if (x > con.vidWidth - VER_WIDTH - CONCHAR_WIDTH) {
-        y -= CONCHAR_HEIGHT;
-        row++;
-    }
-
-// draw clock
-    if (con_clock->integer) {
-        x = (Com_Time_m(buffer, sizeof(buffer)) + 1) * CONCHAR_WIDTH;
-        if (widths[row] + x + CONCHAR_WIDTH <= con.vidWidth) {
-            R_DrawString(con.vidWidth - x, y - CONCHAR_HEIGHT, UI_RIGHT,
-                         MAX_STRING_CHARS, buffer, COLOR_CYAN, con.charsetImage);
-        }
-    }
-
-// draw version
-    if (!row || widths[0] + VER_WIDTH + CONCHAR_WIDTH <= con.vidWidth) {
-        R_DrawString(con.vidWidth - VER_WIDTH, y, UI_RIGHT,
-                     MAX_STRING_CHARS, APP_VERSION, COLOR_CYAN, con.charsetImage);
-    }
-}
-
-//=============================================================================
-
-/*
-==================
-Con_RunConsole
-
-Scroll it up or down
-==================
-*/
-void Con_RunConsole(void)
-{
-    if (cls.disable_screen) {
-        con.destHeight = con.currentHeight = 0;
-        return;
-    }
-
-    if (!(cls.key_dest & KEY_MENU)) {
-        if (cls.state == ca_disconnected) {
-            // draw fullscreen console
-            con.destHeight = con.currentHeight = 1;
-            return;
-        }
-        if (cls.state > ca_disconnected && cls.state < ca_active) {
-            // draw half-screen console
-            con.destHeight = con.currentHeight = 0.5f;
-            return;
-        }
-    }
-
-// decide on the height of the console
-    if (cls.key_dest & KEY_CONSOLE) {
-        con.destHeight = Cvar_ClampValue(con_height, 0.1f, 1);
-    } else {
-        con.destHeight = 0;             // none visible
-    }
-
-    if (con_speed->value <= 0) {
-        con.currentHeight = con.destHeight;
-        return;
-    }
-
-    CL_AdvanceValue(&con.currentHeight, con.destHeight, con_speed->value);
-}
-
-/*
-==================
-SCR_DrawConsole
-==================
-*/
 void Con_DrawConsole(void)
 {
-    R_SetScale(con.scale);
-    Con_DrawSolidConsole();
-    Con_DrawNotify();
-    R_SetScale(1.0f);
+    Console::instance().draw();
 }
 
-
-/*
-==============================================================================
-
-            LINE TYPING INTO THE CONSOLE AND COMMAND COMPLETION
-
-==============================================================================
-*/
-
-static void Con_Say(const char *msg)
+void Con_RunConsole(void)
 {
-    CL_ClientCommand(va("say%s \"%s\"", con.chat == CHAT_TEAM ? "_team" : "", msg));
+    Console::instance().run();
 }
 
-// don't close console after connecting
-static void Con_InteractiveMode(void)
+void Con_RegisterMedia(void)
 {
-    if (con.mode == CON_POPUP) {
-        con.mode = CON_DEFAULT;
-    }
+    Console::instance().registerMedia();
 }
 
-static void Con_Action(void)
+void Con_CheckResize(void)
 {
-    const char *cmd = Prompt_Action(&con.prompt);
-
-    Con_InteractiveMode();
-
-    if (!cmd) {
-        Con_Printf("]\n");
-        return;
-    }
-
-    // backslash text are commands, else chat
-    int backslash = cmd[0] == '\\' || cmd[0] == '/';
-
-    if (con.mode == CON_REMOTE) {
-        CL_SendRcon(&con.remoteAddress, con.remotePassword, cmd + backslash);
-    } else {
-        if (!backslash && cls.state == ca_active) {
-            switch (con_auto_chat->integer) {
-            case CHAT_DEFAULT:
-                Cbuf_AddText(&cmd_buffer, "cmd say ");
-                break;
-            case CHAT_TEAM:
-                Cbuf_AddText(&cmd_buffer, "cmd say_team ");
-                break;
-            }
-        }
-        Cbuf_AddText(&cmd_buffer, cmd + backslash);
-        Cbuf_AddText(&cmd_buffer, "\n");
-    }
-
-    Con_Printf("]%s\n", cmd);
-
-    if (cls.state == ca_disconnected) {
-        // force an update, because the command may take some time
-        SCR_UpdateScreen();
-    }
+    Console::instance().checkResize();
 }
 
-static void Con_Paste(char *(*func)(void))
+void Con_ClearNotify_f(void)
 {
-    char *cbd, *s;
-
-    Con_InteractiveMode();
-
-    if (!func || !(cbd = func())) {
-        return;
-    }
-
-    s = cbd;
-    while (*s) {
-        int c = *s++;
-        switch (c) {
-        case '\n':
-            if (*s) {
-                Con_Action();
-            }
-            break;
-        case '\r':
-        case '\t':
-            IF_CharEvent(&con.prompt.inputLine, ' ');
-            break;
-        default:
-            if (!Q_isprint(c)) {
-                c = '?';
-            }
-            IF_CharEvent(&con.prompt.inputLine, c);
-            break;
-        }
-    }
-
-    Z_Free(cbd);
+    Console::instance().clearNotify();
 }
 
-// console lines are not necessarily NUL-terminated
-static void Con_ClearLine(char *buf, int row)
+void Con_ClearTyping(void)
 {
-    const consoleLine_t *line = &con.text[row & CON_TOTALLINES_MASK];
-    const char *s = line->text + line->ts_len;
-    int w = con.linewidth - line->ts_len;
-
-    while (w-- > 0 && *s)
-        *buf++ = *s++ & 127;
-    *buf = 0;
+    Console::instance().clearTyping();
 }
 
-static void Con_SearchUp(void)
+void Con_Close(bool force)
 {
-    char buf[CON_LINEWIDTH + 1];
-    const char *s = con.prompt.inputLine.text;
-    int top = con.current - CON_TOTALLINES + 1;
-
-    if (top < 0)
-        top = 0;
-
-    if (!*s)
-        return;
-
-    for (int row = con.display - 1; row >= top; row--) {
-        Con_ClearLine(buf, row);
-        if (Q_stristr(buf, s)) {
-            con.display = row;
-            break;
-        }
-    }
+    Console::instance().close(force);
 }
 
-static void Con_SearchDown(void)
+void Con_Popup(bool force)
 {
-    char buf[CON_LINEWIDTH + 1];
-    const char *s = con.prompt.inputLine.text;
-
-    if (!*s)
-        return;
-
-    for (int row = con.display + 1; row <= con.current; row++) {
-        Con_ClearLine(buf, row);
-        if (Q_stristr(buf, s)) {
-            con.display = row;
-            break;
-        }
-    }
+    Console::instance().popup(force);
 }
 
-/*
-====================
-Key_Console
+void Con_SkipNotify(bool skip)
+{
+    Console::instance().skipNotify(skip);
+}
 
-Interactive line editing and console scrollback
-====================
-*/
+void Con_Clear_f(void)
+{
+    Console::instance().clear();
+}
+
+void Con_Dump_f(void)
+{
+    const char* name = Cmd_Argc() > 1 ? Cmd_Argv(1) : nullptr;
+    if (!name)
+        name = "condump.txt";
+    Console::instance().dumpToFile(name);
+}
+
+void Con_MessageMode_f(void)
+{
+    Console::instance().messageMode(ChatMode::Default);
+}
+
+void Con_MessageMode2_f(void)
+{
+    Console::instance().messageMode(ChatMode::Team);
+}
+
+void Con_RemoteMode_f(void)
+{
+    Console::instance().remoteMode();
+}
+
+void Con_ToggleConsole_f(void)
+{
+    Console::instance().toggle(ConsoleMode::Default, ChatMode::None);
+}
+
 void Key_Console(int key)
 {
-    if (key == 'l' && Key_IsDown(K_CTRL)) {
-        Con_Clear_f();
-        return;
-    }
-
-    if (key == 'd' && Key_IsDown(K_CTRL)) {
-        con.mode = CON_DEFAULT;
-        return;
-    }
-
-    if (key == K_ENTER || key == K_KP_ENTER) {
-        Con_Action();
-        goto scroll;
-    }
-
-    if (key == 'v' && Key_IsDown(K_CTRL)) {
-        if (vid)
-            Con_Paste(vid->get_clipboard_data);
-        goto scroll;
-    }
-
-    if ((key == K_INS && Key_IsDown(K_SHIFT)) || key == K_MOUSE3) {
-        if (vid)
-            Con_Paste(vid->get_selection_data);
-        goto scroll;
-    }
-
-    if (key == K_TAB) {
-        if (con_timestamps->integer)
-            Con_CheckResize();
-        Prompt_CompleteCommand(&con.prompt, true);
-        goto scroll;
-    }
-
-    if (key == 'r' && Key_IsDown(K_CTRL)) {
-        Prompt_CompleteHistory(&con.prompt, false);
-        goto scroll;
-    }
-
-    if (key == 's' && Key_IsDown(K_CTRL)) {
-        Prompt_CompleteHistory(&con.prompt, true);
-        goto scroll;
-    }
-
-    if (key == K_UPARROW && Key_IsDown(K_CTRL)) {
-        Con_SearchUp();
-        return;
-    }
-
-    if (key == K_DOWNARROW && Key_IsDown(K_CTRL)) {
-        Con_SearchDown();
-        return;
-    }
-
-    if (key == K_UPARROW || (key == 'p' && Key_IsDown(K_CTRL))) {
-        Prompt_HistoryUp(&con.prompt);
-        goto scroll;
-    }
-
-    if (key == K_DOWNARROW || (key == 'n' && Key_IsDown(K_CTRL))) {
-        Prompt_HistoryDown(&con.prompt);
-        goto scroll;
-    }
-
-    if (key == K_PGUP || key == K_MWHEELUP) {
-        if (Key_IsDown(K_CTRL)) {
-            con.display -= 6;
-        } else {
-            con.display -= 2;
-        }
-        Con_CheckTop();
-        return;
-    }
-
-    if (key == K_PGDN || key == K_MWHEELDOWN) {
-        if (Key_IsDown(K_CTRL)) {
-            con.display += 6;
-        } else {
-            con.display += 2;
-        }
-        if (con.display > con.current) {
-            con.display = con.current;
-        }
-        return;
-    } else if (key == K_END) {
-        con.display = con.current;
-        return;
-    }
-
-    if (key == K_HOME && Key_IsDown(K_CTRL)) {
-        con.display = 0;
-        Con_CheckTop();
-        return;
-    }
-
-    if (key == K_END && Key_IsDown(K_CTRL)) {
-        con.display = con.current;
-        return;
-    }
-
-    if (IF_KeyEvent(&con.prompt.inputLine, key)) {
-        Prompt_ClearState(&con.prompt);
-        Con_InteractiveMode();
-    }
-
-scroll:
-    if (con_scroll->integer & 1) {
-        con.display = con.current;
-    }
+    Console::instance().keyEvent(key);
 }
 
 void Char_Console(int key)
 {
-    if (IF_CharEvent(&con.prompt.inputLine, key)) {
-        Con_InteractiveMode();
-    }
+    Console::instance().charEvent(key);
 }
 
-/*
-====================
-Key_Message
-====================
-*/
 void Key_Message(int key)
 {
-    if (key == 'l' && Key_IsDown(K_CTRL)) {
-        IF_Clear(&con.chatPrompt.inputLine);
-        return;
-    }
-
-    if (key == K_ENTER || key == K_KP_ENTER) {
-        const char *cmd = Prompt_Action(&con.chatPrompt);
-
-        if (cmd) {
-            Con_Say(cmd);
-        }
-        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
-        return;
-    }
-
-    if (key == K_ESCAPE) {
-        Key_SetDest(Key_FromMask(cls.key_dest & ~KEY_MESSAGE));
-        IF_Clear(&con.chatPrompt.inputLine);
-        return;
-    }
-
-    if (key == 'r' && Key_IsDown(K_CTRL)) {
-        Prompt_CompleteHistory(&con.chatPrompt, false);
-        return;
-    }
-
-    if (key == 's' && Key_IsDown(K_CTRL)) {
-        Prompt_CompleteHistory(&con.chatPrompt, true);
-        return;
-    }
-
-    if (key == K_UPARROW || (key == 'p' && Key_IsDown(K_CTRL))) {
-        Prompt_HistoryUp(&con.chatPrompt);
-        return;
-    }
-
-    if (key == K_DOWNARROW || (key == 'n' && Key_IsDown(K_CTRL))) {
-        Prompt_HistoryDown(&con.chatPrompt);
-        return;
-    }
-
-    if (IF_KeyEvent(&con.chatPrompt.inputLine, key)) {
-        Prompt_ClearState(&con.chatPrompt);
-    }
+    Console::instance().messageKeyEvent(key);
 }
 
 void Char_Message(int key)
 {
-    IF_CharEvent(&con.chatPrompt.inputLine, key);
+    Console::instance().messageCharEvent(key);
 }
+
+namespace {
+
+static void Con_Dump_c(genctx_t* ctx, int argnum)
+{
+    if (argnum == 1)
+        FS_File_g("condumps", ".txt", FS_SEARCH_STRIPEXT, ctx);
+}
+
+} // namespace
+
