@@ -398,7 +398,23 @@ static int get_wheel_draw_size(void)
      * transparent pixels, ignore those then calculating scaling */
     const int wheel_padding = 74;
     const int wheel_content_size = scr.wheel_size - wheel_padding;
-    int real_hud_height = scr.hud_height / scr.hud_scale;
+
+    float hud_scale = scr.hud_scale;
+    if (hud_scale <= 0.0f)
+        hud_scale = 1.0f;
+
+    int physical_hud_height = scr.hud_height;
+
+    if (scr.virtual_height > 0) {
+        int virtual_hud_height = static_cast<int>(scr.virtual_height / hud_scale);
+
+        if (virtual_hud_height > 0)
+            physical_hud_height = min(physical_hud_height, virtual_hud_height);
+    }
+
+    int real_hud_height = static_cast<int>(physical_hud_height / hud_scale);
+    if (real_hud_height <= 0)
+        return static_cast<int>(scr.wheel_size * hud_scale);
     int wheel_draw_size;
     if (wheel_content_size >= real_hud_height) {
         int wheel_size_div = (2 * wheel_content_size - 1) / real_hud_height;
@@ -407,7 +423,7 @@ static int get_wheel_draw_size(void)
         int wheel_size_mul = real_hud_height / wheel_content_size;
         wheel_draw_size = scr.wheel_size * wheel_size_mul;
     }
-    return wheel_draw_size * scr.hud_scale;
+    return static_cast<int>(wheel_draw_size * hud_scale);
 }
 
 void CL_Wheel_Input(int x, int y)
