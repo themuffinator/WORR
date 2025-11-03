@@ -757,9 +757,9 @@ static void HDR_UpdateConfig(void)
     gl_static.hdr.ui_sdr_mix = r_ui_sdr_style->integer ? 1.0f : 0.0f;
     gl_static.hdr.debug_histogram = r_debug_histogram->integer != 0;
     gl_static.hdr.debug_tonemap = r_debug_tonemap->integer != 0;
-    gl_static.hdr.tonemap = Q_bound(TONEMAP_ACES, r_tonemap->integer, TONEMAP_LINEAR);
+    gl_static.hdr.tonemap = Q_bound<int>(TONEMAP_ACES, r_tonemap->integer, TONEMAP_LINEAR);
 
-    int hdr_mode = Q_bound(HDR_MODE_SDR, r_hdr_mode->integer, HDR_MODE_AUTO);
+    int hdr_mode = Q_bound<int>(HDR_MODE_SDR, r_hdr_mode->integer, HDR_MODE_AUTO);
     if (hdr_mode == HDR_MODE_AUTO)
         hdr_mode = gl_static.hdr.supported ? HDR_MODE_HDR10 : HDR_MODE_SDR;
     gl_static.hdr.mode = hdr_mode;
