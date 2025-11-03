@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 
+#include <cmath>
+
 glState_t gls;
 
 const glbackend_t *gl_backend;
@@ -279,8 +281,18 @@ void GL_Setup3D(void)
     if (gl_static.use_shaders) {
         Matrix_Multiply(glr.projmatrix, glr.viewmatrix, glr.view_proj_matrix);
         glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
-        if (!glr.view_proj_valid)
-            glr.motion_blur_ready = false;
+
+        bool motion_ready = false;
+        if (glr.motion_blur_enabled && glr.prev_view_proj_valid && glr.view_proj_valid && glr.motion_blur_scale > 0.0f) {
+            float max_delta = 0.0f;
+            for (int i = 0; i < 16; ++i) {
+                const float delta = std::fabs(glr.view_proj_matrix[i] - glr.prev_view_proj_matrix[i]);
+                if (delta > max_delta)
+                    max_delta = delta;
+            }
+            motion_ready = max_delta > R_MOTION_BLUR_MATRIX_EPSILON;
+        }
+        glr.motion_blur_ready = motion_ready;
 
         if (glr.view_proj_valid) {
             for (int i = 0; i < 16; ++i)
@@ -288,6 +300,7 @@ void GL_Setup3D(void)
         } else {
             for (int i = 0; i < 16; ++i)
                 gls.u_block.motion_inv_view_proj[i] = gl_identity[i];
+            glr.motion_blur_ready = false;
         }
 
         if (glr.prev_view_proj_valid) {
@@ -298,7 +311,7 @@ void GL_Setup3D(void)
                 gls.u_block.motion_prev_view_proj[i] = gl_identity[i];
         }
 
-        gls.u_block.motion_params[0] = (glr.motion_blur_ready && glr.view_proj_valid) ? glr.motion_blur_scale : 0.0f;
+        gls.u_block.motion_params[0] = glr.motion_blur_ready ? glr.motion_blur_scale : 0.0f;
         gls.u_block.motion_params[1] = R_MOTION_BLUR_MAX_SAMPLES;
         const float viewport_width = glr.fd.width > 0 ? static_cast<float>(glr.fd.width) : 1.0f;
         const float viewport_height = glr.fd.height > 0 ? static_cast<float>(glr.fd.height) : 1.0f;

@@ -1287,7 +1287,7 @@ void R_RenderFrame(const refdef_t *fd)
     }
 
     glr.motion_blur_scale = motion_blur_scale;
-    glr.motion_blur_ready = glr.motion_blur_enabled && glr.prev_view_proj_valid && motion_blur_scale > 0.0f;
+    glr.motion_blur_ready = false;
     glr.view_proj_valid = false;
 
     if (gl_dynamic->integer != 1 || gl_vertexlight->integer)
