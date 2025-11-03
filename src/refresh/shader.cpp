@@ -102,6 +102,11 @@ static void write_header(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_MESH_ANY)
             GLSL(precision mediump int;)
     }
+
+    GLSF("#if __VERSION__ < 130\n");
+    GLSF("vec4 texture(sampler2D s, vec2 coord) { return texture2D(s, coord); }\n");
+    GLSF("vec4 texture(samplerCube s, vec3 coord) { return textureCube(s, coord); }\n");
+    GLSF("#endif\n");
 }
 
 static void write_block(sizebuf_t *buf, glStateBits_t bits)

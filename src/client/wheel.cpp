@@ -371,7 +371,8 @@ float CL_Wheel_TimeScale(void)
 float CL_ActiveTimeScale(void)
 {
     const float slow_factor = cl.slow_time.initialized ? cl.slow_time.factor : 1.0f;
-    return max(0.0f, cl.wheel.timescale * slow_factor);
+    const float wheel_factor = cl.wheel.timescale > 0.0f ? cl.wheel.timescale : 1.0f;
+    return max(0.0f, wheel_factor * slow_factor);
 }
 
 void CL_Wheel_ClearInput(void)
