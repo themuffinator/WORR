@@ -178,6 +178,10 @@ void BloomEffect::render(const BloomRenderContext& ctx)
                         ctx.updateHdrUniforms();
                 if (!ctx.showDebug && ctx.tonemap)
                         bits |= GLS_TONEMAP_ENABLE;
+                if (!ctx.showDebug && ctx.motionBlurReady) {
+                        bits |= GLS_MOTION_BLUR;
+                        GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
+                }
 
                 if (!ctx.showDebug)
                         bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
@@ -240,6 +244,10 @@ void BloomEffect::render(const BloomRenderContext& ctx)
                 if (ctx.tonemap)
                         bits |= GLS_TONEMAP_ENABLE;
                 bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
+                if (ctx.motionBlurReady) {
+                        bits |= GLS_MOTION_BLUR;
+                        GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
+                }
         }
 
         qglBindFramebuffer(GL_FRAMEBUFFER, 0);

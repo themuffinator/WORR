@@ -183,6 +183,10 @@ typedef struct {
     refdef_t        fd;
     vec3_t          viewaxis[3];
     mat4_t          viewmatrix;
+    mat4_t          projmatrix;
+    mat4_t          view_proj_matrix;
+    mat4_t          prev_view_proj_matrix;
+    mat4_t          inv_view_proj_matrix;
     unsigned        visframe;
     unsigned        drawframe;
     unsigned        dlightframe;
@@ -214,6 +218,11 @@ typedef struct {
     float           view_zfar;
     bool            framebuffer_ok;
     bool            framebuffer_bound;
+    bool            prev_view_proj_valid;
+    bool            view_proj_valid;
+    bool            motion_blur_enabled;
+    bool            motion_blur_ready;
+    float           motion_blur_scale;
 } glRefdef_t;
 
 typedef enum {
@@ -749,6 +758,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_BOKEH_COMBINE       BIT_ULL(40)
 #define GLS_TONEMAP_ENABLE      BIT_ULL(41)
 #define GLS_CRT_ENABLE          BIT_ULL(42)
+#define GLS_MOTION_BLUR         BIT_ULL(42)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -763,10 +773,12 @@ void GL_LoadWorld(const char *name);
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE)
+                                 GLS_TONEMAP_ENABLE | GLS_MOTION_BLUR)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE)
+                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR)
+
+inline constexpr float R_MOTION_BLUR_MAX_SAMPLES = 12.0f;
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -868,6 +880,9 @@ typedef struct {
     vec4_t      dof_screen;
     vec4_t      dof_depth;
     vec4_t      vieworg;
+    mat4_t      motion_prev_view_proj;
+    mat4_t      motion_inv_view_proj;
+    vec4_t      motion_params;
     vec4_t      hdr_exposure;
     vec4_t      hdr_params0;
     vec4_t      hdr_params1;

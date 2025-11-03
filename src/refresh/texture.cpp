@@ -1216,8 +1216,9 @@ bool GL_InitFramebuffers(void)
     int bloom_w = 0, bloom_h = 0;
     int dof_w = 0, dof_h = 0;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+    const bool motion_blur_active = glr.motion_blur_enabled;
 
-    if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active) {
+    if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active || motion_blur_active) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }

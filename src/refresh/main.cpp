@@ -25,6 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "postprocess/bloom.hpp"
 #include "postprocess/crt.hpp"
 #include "font_freetype.hpp"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
@@ -83,6 +84,8 @@ cvar_t *r_exposure_ev_max;
 cvar_t *r_output_paper_white;
 cvar_t *r_output_peak_white;
 cvar_t *r_dither;
+cvar_t *r_motionBlur;
+cvar_t *r_motionBlurShutterSpeed;
 cvar_t *r_ui_sdr_style;
 cvar_t *r_debug_histogram;
 cvar_t *r_debug_tonemap;
@@ -766,9 +769,9 @@ static void HDR_UpdateConfig(void)
     gl_static.hdr.ui_sdr_mix = r_ui_sdr_style->integer ? 1.0f : 0.0f;
     gl_static.hdr.debug_histogram = r_debug_histogram->integer != 0;
     gl_static.hdr.debug_tonemap = r_debug_tonemap->integer != 0;
-    gl_static.hdr.tonemap = Q_bound(TONEMAP_ACES, r_tonemap->integer, TONEMAP_LINEAR);
+    gl_static.hdr.tonemap = Q_bound<int>(TONEMAP_ACES, r_tonemap->integer, TONEMAP_LINEAR);
 
-    int hdr_mode = Q_bound(HDR_MODE_SDR, r_hdr_mode->integer, HDR_MODE_AUTO);
+    int hdr_mode = Q_bound<int>(HDR_MODE_SDR, r_hdr_mode->integer, HDR_MODE_AUTO);
     if (hdr_mode == HDR_MODE_AUTO)
         hdr_mode = gl_static.hdr.supported ? HDR_MODE_HDR10 : HDR_MODE_SDR;
     gl_static.hdr.mode = hdr_mode;
@@ -1043,6 +1046,7 @@ typedef enum {
     PP_DEPTH_OF_FIELD = BIT(2),
     PP_HDR       = BIT(3),
     PP_CRT       = BIT(4),
+    PP_MOTION_BLUR = BIT(4),
 } pp_flags_t;
 
 constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
@@ -1097,6 +1101,7 @@ static void GL_DrawBloom(pp_flags_t flags)
         .sceneTexture = TEXNUM_PP_SCENE,
         .bloomTexture = TEXNUM_PP_BLOOM,
         .dofTexture = TEXNUM_PP_DOF_RESULT,
+        .depthTexture = TEXNUM_PP_DEPTH,
         .viewportX = glr.fd.x,
         .viewportY = glr.fd.y,
         .viewportWidth = glr.fd.width,
@@ -1105,6 +1110,7 @@ static void GL_DrawBloom(pp_flags_t flags)
         .depthOfField = depth_of_field,
         .showDebug = show_bloom,
         .tonemap = (flags & PP_HDR) != 0,
+        .motionBlurReady = glr.motion_blur_ready,
         .updateHdrUniforms = R_HDRUpdateUniforms,
         .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
     };
@@ -1130,6 +1136,10 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+    if (glr.motion_blur_ready) {
+        bits |= GLS_MOTION_BLUR;
+        GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+    }
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
     GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
@@ -1138,12 +1148,14 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
+static int32_t r_motionBlur_modified = 0;
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
     bool resized = false;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+    const bool motion_blur_enabled = glr.motion_blur_enabled;
 
     if (!gl_static.use_shaders)
         return PP_NONE;
@@ -1184,6 +1196,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 
     if (R_CRTEnabled())
         flags |= PP_CRT;
+    if (motion_blur_enabled)
+        flags |= PP_MOTION_BLUR;
 
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
@@ -1191,6 +1205,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
         gl_dof->modified_count != gl_dof_modified ||
+        r_motionBlur->modified_count != r_motionBlur_modified ||
         hdr_prev != gl_static.hdr.active) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
         glr.framebuffer_width  = glr.fd.width;
@@ -1198,6 +1213,7 @@ static pp_flags_t GL_BindFramebuffer(void)
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         r_bloom_modified = r_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
+        r_motionBlur_modified = r_motionBlur->modified_count;
         if (flags & PP_BLOOM)
             gl_backend->update_blur();
     }
@@ -1234,6 +1250,23 @@ void R_RenderFrame(const refdef_t *fd)
 
     glr.fd = *fd;
     glr.ppl_bits  = 0;
+
+    glr.motion_blur_enabled = gl_static.use_shaders && r_motionBlur->integer &&
+        !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
+
+    float motion_blur_scale = 0.0f;
+    if (glr.motion_blur_enabled) {
+        const float shutter_speed = (std::max)(r_motionBlurShutterSpeed->value, 0.0001f);
+        const float frame_time = (std::max)(glr.fd.frametime, 1.0e-6f);
+        const float exposure = 1.0f / shutter_speed;
+        motion_blur_scale = Q_bound(0.0f, exposure / frame_time, 1.0f);
+    } else {
+        glr.prev_view_proj_valid = false;
+    }
+
+    glr.motion_blur_scale = motion_blur_scale;
+    glr.motion_blur_ready = glr.motion_blur_enabled && glr.prev_view_proj_valid && motion_blur_scale > 0.0f;
+    glr.view_proj_valid = false;
 
     if (gl_dynamic->integer != 1 || gl_vertexlight->integer)
         glr.fd.num_dlights = 0;
@@ -1312,13 +1345,23 @@ void R_RenderFrame(const refdef_t *fd)
         GL_DrawBloom(pp_flags);
     } else if (pp_flags & PP_DEPTH_OF_FIELD) {
         GL_DrawDepthOfField(pp_flags);
-    } else if (pp_flags & PP_WATERWARP) {
-        glStateBits_t bits = GLS_WARP_ENABLE;
-        R_HDRUpdateUniforms();
-        if (pp_flags & PP_HDR)
+    } else if (pp_flags & (PP_WATERWARP | PP_HDR | PP_MOTION_BLUR)) {
+        glStateBits_t bits = GLS_DEFAULT;
+        if (pp_flags & PP_WATERWARP)
+            bits |= GLS_WARP_ENABLE;
+        if (pp_flags & PP_HDR) {
+            R_HDRUpdateUniforms();
             bits |= GLS_TONEMAP_ENABLE;
         bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+        }
+
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        if (glr.motion_blur_ready) {
+            bits |= GLS_MOTION_BLUR;
+            GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+        }
+
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
         GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     } else if (pp_flags & PP_HDR) {
         glStateBits_t bits = GLS_TONEMAP_ENABLE;
@@ -1331,6 +1374,14 @@ void R_RenderFrame(const refdef_t *fd)
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
         GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    }
+
+    if (glr.motion_blur_enabled && glr.view_proj_valid) {
+        for (int i = 0; i < 16; ++i)
+            glr.prev_view_proj_matrix[i] = glr.view_proj_matrix[i];
+        glr.prev_view_proj_valid = true;
+    } else if (!glr.motion_blur_enabled || !glr.view_proj_valid) {
+        glr.prev_view_proj_valid = false;
     }
 
     if (gl_polyblend->integer)
@@ -1591,6 +1642,8 @@ static void GL_Register(void)
     r_output_paper_white = Cvar_Get("r_output_paper_white", "200", CVAR_ARCHIVE);
     r_output_peak_white = Cvar_Get("r_output_peak_white", "1000", CVAR_ARCHIVE);
     r_dither = Cvar_Get("r_dither", "1", CVAR_ARCHIVE);
+    r_motionBlur = Cvar_Get("r_motionBlur", "0", 0);
+    r_motionBlurShutterSpeed = Cvar_Get("r_motionBlurShutterSpeed", "250.0", 0);
     r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
     r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
     r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
@@ -1652,6 +1705,7 @@ static void GL_Register(void)
     r_hdr_modified = r_hdr->modified_count;
     r_hdr_mode_modified = r_hdr_mode->modified_count;
     r_exposure_auto_modified = r_exposure_auto->modified_count;
+    r_motionBlur_modified = r_motionBlur->modified_count;
 
     Cmd_AddCommand("strings", GL_Strings_f);
 

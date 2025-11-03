@@ -427,6 +427,16 @@ static inline int Q_clip(int a, int b, int c)
     return a;
 }
 
+template <typename T>
+static inline T Q_bound(T min_value, T value, T max_value)
+{
+    if (value < min_value)
+        return min_value;
+    if (value > max_value)
+        return max_value;
+    return value;
+}
+
 static inline float Q_clipf(float a, float b, float c)
 {
 #if defined(__GNUC__) && defined(__SSE__)
