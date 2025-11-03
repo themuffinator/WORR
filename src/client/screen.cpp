@@ -210,21 +210,23 @@ static bool SCR_LoadDefaultFreeTypeFont(void)
 
 static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle)
 {
-	auto handleIt = scr.freetype.handleLookup.find(handle);
-	if (handleIt == scr.freetype.handleLookup.end())
-		return nullptr;
+        auto handleIt = scr.freetype.handleLookup.find(handle);
+        if (handleIt == scr.freetype.handleLookup.end())
+                return nullptr;
 
-	auto fontIt = scr.freetype.fonts.find(handleIt->second);
-	if (fontIt == scr.freetype.fonts.end())
-		return nullptr;
+        auto fontIt = scr.freetype.fonts.find(handleIt->second);
+        if (fontIt == scr.freetype.fonts.end())
+                return nullptr;
 
-	return &fontIt->second.renderInfo;
+        return &fontIt->second.renderInfo;
 }
 
+#endif // USE_FREETYPE
+
 enum class scr_text_backend_mode {
-	LEGACY,
-	TTF,
-	KFONT,
+        LEGACY,
+        TTF,
+        KFONT,
 };
 
 static scr_text_backend_mode scr_activeTextBackend = scr_text_backend_mode::LEGACY;
