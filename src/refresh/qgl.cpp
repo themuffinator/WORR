@@ -71,6 +71,7 @@ static constexpr glfunction_t kGl11Functions[] = {
     QGL_FN(GetString),
     QGL_FN(IsEnabled),
     QGL_FN(LineWidth),
+    QGL_FN(ReadBuffer),
     QGL_FN(PixelStorei),
     QGL_FN(PolygonOffset),
     QGL_FN(ReadPixels),
