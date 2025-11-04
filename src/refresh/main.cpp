@@ -1313,7 +1313,9 @@ static pp_flags_t GL_BindFramebuffer(void)
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
     const bool motion_blur_enabled = glr.motion_blur_enabled;
 
-    if (!gl_static.use_shaders || !r_postProcessing->integer) {
+    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+
+    if (!gl_static.use_shaders || !post_processing_enabled) {
         const bool was_hdr_active = gl_static.hdr.active;
         gl_static.hdr.active = false;
         if (was_hdr_active)
@@ -1437,7 +1439,9 @@ void R_RenderFrame(const refdef_t *fd)
     glr.motion_blur_fov_y = glr.fd.fov_y;
     glr.ppl_bits  = 0;
 
-    glr.motion_blur_enabled = gl_static.use_shaders && r_postProcessing->integer && r_motionBlur->integer &&
+    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+
+    glr.motion_blur_enabled = gl_static.use_shaders && post_processing_enabled && r_motionBlur->integer &&
         !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
 
     float motion_blur_scale = 0.0f;
