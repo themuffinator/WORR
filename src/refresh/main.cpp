@@ -1437,7 +1437,7 @@ void R_RenderFrame(const refdef_t *fd)
     glr.motion_blur_fov_y = glr.fd.fov_y;
     glr.ppl_bits  = 0;
 
-    glr.motion_blur_enabled = gl_static.use_shaders && r_motionBlur->integer &&
+    glr.motion_blur_enabled = gl_static.use_shaders && r_postProcessing->integer && r_motionBlur->integer &&
         !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
 
     float motion_blur_scale = 0.0f;
@@ -1836,25 +1836,25 @@ static void GL_Register(void)
     gl_md5_distance = Cvar_Get("gl_md5_distance", "2048", 0);
 #endif
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
-    r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
+    r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", CVAR_ARCHIVE);
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     r_shadows = Cvar_Get("r_shadows", "1", CVAR_ARCHIVE);
     r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
-    r_postProcessing = Cvar_Get("r_postProcessing", "1", 0);
-    r_bloom = Cvar_Get("r_bloom", "1", 0);
+    r_postProcessing = Cvar_Get("r_postProcessing", "1", CVAR_ARCHIVE);
+    r_bloom = Cvar_Get("r_bloom", "1", CVAR_ARCHIVE);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", CVAR_ARCHIVE);
     r_bloomBlurFalloff = Cvar_Get("r_bloomBlurFalloff", "0.75", CVAR_ARCHIVE);
     r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.75", CVAR_ARCHIVE);
     r_bloomIntensity = Cvar_Get("r_bloomIntensity", "0.05", CVAR_ARCHIVE);
-    r_bloomScale = Cvar_Get("r_bloomScale", "4.0", 0);
-    r_bloomKernel = Cvar_Get("r_bloomKernel", "0", 0);
+    r_bloomScale = Cvar_Get("r_bloomScale", "4.0", CVAR_ARCHIVE);
+    r_bloomKernel = Cvar_Get("r_bloomKernel", "0", CVAR_ARCHIVE);
     r_bloomBlurScale = Cvar_Get("r_bloomBlurScale", "1.0", CVAR_ARCHIVE);
     r_bloomPasses = Cvar_Get("r_bloomPasses", "1", CVAR_ARCHIVE);
     r_bloomSaturation = Cvar_Get("r_bloomSaturation", "1.0", CVAR_ARCHIVE);
     r_bloomSceneIntensity = Cvar_Get("r_bloomSceneIntensity", "1.0", CVAR_ARCHIVE);
     r_bloomSceneSaturation = Cvar_Get("r_bloomSceneSaturation", "1.0", CVAR_ARCHIVE);
     r_colorCorrect = Cvar_Get("r_colorCorrect", "1.0", CVAR_ARCHIVE);
-    r_bloomThresholdLegacy = Cvar_Get("r_bloomThreshold", r_bloomBrightThreshold->string, 0);
+    r_bloomThresholdLegacy = Cvar_Get("r_bloomThreshold", r_bloomBrightThreshold->string, CVAR_ARCHIVE);
     if (r_bloomThresholdLegacy && r_bloomBrightThreshold &&
         r_bloomThresholdLegacy->value != r_bloomBrightThreshold->value)
         Cvar_SetValue(r_bloomBrightThreshold, r_bloomThresholdLegacy->value, FROM_CODE);
@@ -1872,10 +1872,10 @@ static void GL_Register(void)
     r_output_paper_white = Cvar_Get("r_output_paper_white", "200", CVAR_ARCHIVE);
     r_output_peak_white = Cvar_Get("r_output_peak_white", "1000", CVAR_ARCHIVE);
     r_dither = Cvar_Get("r_dither", "1", CVAR_ARCHIVE);
-    r_motionBlur = Cvar_Get("r_motionBlur", "0", 0);
-    r_motionBlurShutterSpeed = Cvar_Get("r_motionBlurShutterSpeed", "250.0", 0);
-    r_motionBlurMinVelocity = Cvar_Get("r_motionBlurMinVelocity", "0.0005", 0);
-    r_motionBlurMinVelocityPixels = Cvar_Get("r_motionBlurMinVelocityPixels", "0.5", 0);
+    r_motionBlur = Cvar_Get("r_motionBlur", "0", CVAR_ARCHIVE);
+    r_motionBlurShutterSpeed = Cvar_Get("r_motionBlurShutterSpeed", "250.0", CVAR_ARCHIVE);
+    r_motionBlurMinVelocity = Cvar_Get("r_motionBlurMinVelocity", "0.0005", CVAR_ARCHIVE);
+    r_motionBlurMinVelocityPixels = Cvar_Get("r_motionBlurMinVelocityPixels", "0.5", CVAR_ARCHIVE);
     r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
     r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
     r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
@@ -1889,7 +1889,7 @@ static void GL_Register(void)
     r_crt_brightBoost = Cvar_Get("r_crt_brightBoost", "1.0", CVAR_ARCHIVE);
     r_crt_warpX = Cvar_Get("r_crt_warpX", "0.031", CVAR_ARCHIVE);
     r_crt_warpY = Cvar_Get("r_crt_warpY", "0.041", CVAR_ARCHIVE);
-    gl_dof = Cvar_Get("gl_dof", "1", 0);
+    gl_dof = Cvar_Get("gl_dof", "1", CVAR_ARCHIVE);
     gl_dof_quality = Cvar_Get("gl_dof_quality", "1", CVAR_ARCHIVE);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
