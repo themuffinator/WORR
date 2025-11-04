@@ -2039,8 +2039,8 @@ static void shader_clear_state(void)
 static void shader_update_blur(void)
 {
     float sigma = 1.0f;
-    float falloff = r_bloomBlurFalloff ? std::max(r_bloomBlurFalloff->value, 0.0001f) : 1.0f;
-    float blur_scale = r_bloomBlurScale ? std::max(r_bloomBlurScale->value, 0.0f) : 1.0f;
+    float falloff = r_bloomBlurFalloff ? (std::max)(r_bloomBlurFalloff->value, 0.0001f) : 1.0f;
+    float blur_scale = r_bloomBlurScale ? (std::max)(r_bloomBlurScale->value, 0.0f) : 1.0f;
 
     if (r_bloom->integer && glr.fd.height > 0) {
         float base_radius = Cvar_ClampValue(r_bloomBlurRadius, 1, MAX_RADIUS);
