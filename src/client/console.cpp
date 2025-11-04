@@ -1142,15 +1142,27 @@ namespace {
 				return;
 			}
 			break;
-		case 'b':
-			if (Key_IsDown(K_CTRL)) {
-				searchUp();
-				return;
-			}
-			break;
-		case K_PGUP:
-		case K_MWHEELUP:
-			displayIndex_ -= Key_IsDown(K_CTRL) ? kScrollLargeStep : kScrollSmallStep;
+                case 'b':
+                        if (Key_IsDown(K_CTRL)) {
+                                searchUp();
+                                return;
+                        }
+                        break;
+                case K_UPARROW:
+                        if (Key_IsDown(K_CTRL)) {
+                                searchUp();
+                                return;
+                        }
+                        break;
+                case K_DOWNARROW:
+                        if (Key_IsDown(K_CTRL)) {
+                                searchDown();
+                                return;
+                        }
+                        break;
+                case K_PGUP:
+                case K_MWHEELUP:
+                        displayIndex_ -= Key_IsDown(K_CTRL) ? kScrollLargeStep : kScrollSmallStep;
 			if (displayIndex_ < 0)
 				displayIndex_ = 0;
 			return;

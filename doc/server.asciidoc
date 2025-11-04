@@ -547,6 +547,8 @@ when command line editing is enabled:
 * Up arrow, Ctrl+P — previous line in command history
 * Ctrl+R — reverse search in command history
 * Ctrl+S — forward search in command history
+* Ctrl+Up arrow — search backward for the current prompt text in console output
+* Ctrl+Down arrow — search forward for the current prompt text in console output
 * Tab — complete command
 
 In Windows console additional key bindings are supported:
