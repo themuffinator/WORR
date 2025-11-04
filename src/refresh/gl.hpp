@@ -444,6 +444,7 @@ extern cvar_t *gl_md5_distance;
 #endif
 extern cvar_t *gl_damageblend_frac;
 extern cvar_t *r_skipUnderWaterFX;
+extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
 extern cvar_t *r_bloomThreshold;
