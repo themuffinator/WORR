@@ -1532,6 +1532,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         }
         scene_color *= max(u_bloom_params.x, 0.0);
         diffuse.rgb = scene_color;
+    )
     GLSL(})
 
     if (bits & GLS_BLOOM_OUTPUT) {
@@ -1543,6 +1544,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
                 bloom_color = mix(vec3(bloom_luma), bloom_color, bloom_sat);
             }
             diffuse.rgb += bloom_color * u_hdr_params0.w;
+        )
         GLSL(})
     }
 
