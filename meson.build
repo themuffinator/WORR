@@ -494,13 +494,34 @@ if freetype_opt.disabled()
   freetype = disabler()
 else
   freetype = dependency('freetype2',
-    fallback:        ['freetype2', 'freetype_dep'],
-    required:        freetype_opt,
+    required:        false,
     default_options: fallback_opt,
   )
 
-  if freetype_opt.auto() and not freetype.found()
-    warning('FreeType not found, client font rendering will be disabled')
+  if not freetype.found()
+    ft_include_dir = []
+    ft_have_inc = false
+    foreach dir : ['/usr/include/freetype2', '/usr/local/include/freetype2']
+      inc = include_directories(dir)
+      if c_compiler.has_header('ft2build.h', include_directories: inc)
+        ft_include_dir = inc
+        ft_have_inc = true
+        break
+      endif
+    endforeach
+
+    ft_lib = c_compiler.find_library('freetype', required: false)
+
+    if ft_lib.found() and ft_have_inc
+      freetype = declare_dependency(
+        dependencies: [ft_lib],
+        include_directories: [ft_include_dir],
+      )
+    endif
+  endif
+
+  if freetype_opt.enabled() and not freetype.found()
+    error('Freetype support requested, but neither pkg-config nor fallback detection succeeded')
   endif
 endif
 

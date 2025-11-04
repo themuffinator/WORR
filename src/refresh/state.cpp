@@ -341,6 +341,8 @@ void GL_Setup3D(void)
 
             motion_ready = (max_ndc_velocity >= min_ndc_threshold) || (max_pixel_velocity >= min_pixel_threshold);
         }
+        if (!glr.motion_history_textures_ready)
+            motion_ready = false;
         glr.motion_blur_ready = motion_ready;
 
         if (glr.view_proj_valid) {
@@ -382,7 +384,7 @@ void GL_Setup3D(void)
         int history_indices[R_MOTION_BLUR_HISTORY_FRAMES] = { 0, 0, 0 };
         int valid_history = 0;
 
-        if (glr.motion_blur_enabled && glr.view_proj_valid && glr.motion_blur_history_count > 0) {
+        if (glr.motion_blur_enabled && glr.view_proj_valid && glr.motion_history_textures_ready && glr.motion_blur_history_count > 0) {
             const int max_frames = (std::min)(glr.motion_blur_history_count, R_MOTION_BLUR_HISTORY_FRAMES);
             for (int i = 0; i < max_frames; ++i) {
                 int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) % R_MOTION_BLUR_HISTORY_FRAMES;
