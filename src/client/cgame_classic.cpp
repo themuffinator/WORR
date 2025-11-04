@@ -19,11 +19,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/shared.hpp"
 #include "cgame_classic.hpp"
 #include "client/client.hpp"
+#include "client/keys.hpp"
 
 #include "common/cvar.hpp"
 #include "common/game3_convert.hpp"
 #include "common/game3_pmove.hpp"
 #include "common/utils.hpp"
+
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
 #if HAVE_MALLOC_H
 #include <malloc.h>
@@ -34,6 +40,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  * the cgame_import struct are used */
 #define CONCHAR_WIDTH  8
 #define CONCHAR_HEIGHT 8
+constexpr int BIND_ICON_TARGET_HEIGHT = CONCHAR_HEIGHT * 3;
 
 #define UI_LEFT             BIT(0)
 #define UI_RIGHT            BIT(1)
@@ -46,6 +53,393 @@ static int max_stats;
 
 namespace
 {
+
+struct bind_icon_t
+{
+    std::string name;
+    int width = 0;
+    int height = 0;
+    int draw_width = 0;
+    int draw_height = 0;
+};
+
+enum class bind_segment_type_t
+{
+    text,
+    icon
+};
+
+struct bind_segment_t
+{
+    bind_segment_type_t type = bind_segment_type_t::text;
+    std::string text;
+    bind_icon_t icon;
+};
+
+static std::string CGC_FormatKeyName(const char *key_name)
+{
+    if (!key_name || !*key_name) {
+        return std::string("UNBOUND");
+    }
+
+    std::string formatted;
+    formatted.reserve(strlen(key_name));
+    for (const char *p = key_name; *p; ++p) {
+        const char ch = *p;
+        if (ch == '_') {
+            formatted.push_back(' ');
+        } else {
+            formatted.push_back(static_cast<char>(Q_toupper(static_cast<unsigned char>(ch))));
+        }
+    }
+    return formatted;
+}
+
+static bool CGC_KeyNameToKeynum(const char *key_name, int *keynum)
+{
+    if (!key_name || !*key_name) {
+        return false;
+    }
+
+    if (!key_name[1]) {
+        *keynum = static_cast<unsigned char>(key_name[0]);
+        return true;
+    }
+
+    struct mapping_t {
+        const char *name;
+        int keynum;
+    };
+
+    static const mapping_t key_mappings[] = {
+        {"BACKSPACE", K_BACKSPACE},
+        {"TAB", K_TAB},
+        {"ENTER", K_ENTER},
+        {"RETURN", K_ENTER},
+        {"PAUSE", K_PAUSE},
+        {"ESCAPE", K_ESCAPE},
+        {"ESC", K_ESCAPE},
+        {"SPACE", K_SPACE},
+        {"DEL", K_DEL},
+        {"DELETE", K_DEL},
+        {"UPARROW", K_UPARROW},
+        {"DOWNARROW", K_DOWNARROW},
+        {"LEFTARROW", K_LEFTARROW},
+        {"RIGHTARROW", K_RIGHTARROW},
+        {"ALT", K_ALT},
+        {"CTRL", K_CTRL},
+        {"SHIFT", K_SHIFT},
+        {"F1", K_F1},
+        {"F2", K_F2},
+        {"F3", K_F3},
+        {"F4", K_F4},
+        {"F5", K_F5},
+        {"F6", K_F6},
+        {"F7", K_F7},
+        {"F8", K_F8},
+        {"F9", K_F9},
+        {"F10", K_F10},
+        {"F11", K_F11},
+        {"F12", K_F12},
+        {"INS", K_INS},
+        {"INSERT", K_INS},
+        {"PGDN", K_PGDN},
+        {"PGUP", K_PGUP},
+        {"HOME", K_HOME},
+        {"END", K_END},
+        {"102ND", K_102ND},
+        {"NUMLOCK", K_NUMLOCK},
+        {"CAPSLOCK", K_CAPSLOCK},
+        {"SCROLLOCK", K_SCROLLOCK},
+        {"LWINKEY", K_LWINKEY},
+        {"RWINKEY", K_RWINKEY},
+        {"MENU", K_MENU},
+        {"PRINTSCREEN", K_PRINTSCREEN},
+        {"KP_HOME", K_KP_HOME},
+        {"KP_UPARROW", K_KP_UPARROW},
+        {"KP_PGUP", K_KP_PGUP},
+        {"KP_LEFTARROW", K_KP_LEFTARROW},
+        {"KP_5", K_KP_5},
+        {"KP_RIGHTARROW", K_KP_RIGHTARROW},
+        {"KP_END", K_KP_END},
+        {"KP_DOWNARROW", K_KP_DOWNARROW},
+        {"KP_PGDN", K_KP_PGDN},
+        {"KP_ENTER", K_KP_ENTER},
+        {"KP_INS", K_KP_INS},
+        {"KP_DEL", K_KP_DEL},
+        {"KP_SLASH", K_KP_SLASH},
+        {"KP_MINUS", K_KP_MINUS},
+        {"KP_PLUS", K_KP_PLUS},
+        {"KP_MULTIPLY", K_KP_MULTIPLY},
+        {"LALT", K_LALT},
+        {"RALT", K_RALT},
+        {"LCTRL", K_LCTRL},
+        {"RCTRL", K_RCTRL},
+        {"LSHIFT", K_LSHIFT},
+        {"RSHIFT", K_RSHIFT},
+        {"MOUSE1", K_MOUSE1},
+        {"MOUSE2", K_MOUSE2},
+        {"MOUSE3", K_MOUSE3},
+        {"MOUSE4", K_MOUSE4},
+        {"MOUSE5", K_MOUSE5},
+        {"MOUSE6", K_MOUSE6},
+        {"MOUSE7", K_MOUSE7},
+        {"MOUSE8", K_MOUSE8},
+        {"MWHEELDOWN", K_MWHEELDOWN},
+        {"MWHEELUP", K_MWHEELUP},
+        {"MWHEELRIGHT", K_MWHEELRIGHT},
+        {"MWHEELLEFT", K_MWHEELLEFT},
+        {"PAD_A", K_PAD_A},
+        {"PAD_B", K_PAD_B},
+        {"PAD_X", K_PAD_X},
+        {"PAD_Y", K_PAD_Y},
+        {"PAD_BACK", K_PAD_BACK},
+        {"PAD_GUIDE", K_PAD_GUIDE},
+        {"PAD_START", K_PAD_START},
+        {"PAD_LSTICK", K_PAD_LSTICK},
+        {"PAD_RSTICK", K_PAD_RSTICK},
+        {"PAD_LSHOULDER", K_PAD_LSHOULDER},
+        {"PAD_RSHOULDER", K_PAD_RSHOULDER},
+        {"PAD_DPAD_UP", K_PAD_DPAD_UP},
+        {"PAD_DPAD_DOWN", K_PAD_DPAD_DOWN},
+        {"PAD_DPAD_LEFT", K_PAD_DPAD_LEFT},
+        {"PAD_DPAD_RIGHT", K_PAD_DPAD_RIGHT},
+        {"PAD_LTRIGGER", K_PAD_LTRIGGER},
+        {"PAD_RTRIGGER", K_PAD_RTRIGGER},
+        {"PAD_LSTICK_UP", K_PAD_LSTICK_UP},
+        {"PAD_LSTICK_DOWN", K_PAD_LSTICK_DOWN},
+        {"PAD_LSTICK_LEFT", K_PAD_LSTICK_LEFT},
+        {"PAD_LSTICK_RIGHT", K_PAD_LSTICK_RIGHT},
+        {"PAD_RSTICK_UP", K_PAD_RSTICK_UP},
+        {"PAD_RSTICK_DOWN", K_PAD_RSTICK_DOWN},
+        {"PAD_RSTICK_LEFT", K_PAD_RSTICK_LEFT},
+        {"PAD_RSTICK_RIGHT", K_PAD_RSTICK_RIGHT},
+        {"PAD_PADDLE1", K_PAD_PADDLE1},
+        {"PAD_PADDLE2", K_PAD_PADDLE2},
+        {"PAD_PADDLE3", K_PAD_PADDLE3},
+        {"PAD_PADDLE4", K_PAD_PADDLE4},
+        {"PAD_TOUCHPAD", K_PAD_TOUCHPAD},
+        {"PAD_MISC1", K_PAD_MISC1},
+        {"PAD_MISC2", K_PAD_MISC2},
+        {"PAD_MISC3", K_PAD_MISC3},
+        {"PAD_MISC4", K_PAD_MISC4},
+        {"PAD_MISC5", K_PAD_MISC5},
+        {"PAD_MISC6", K_PAD_MISC6},
+        {"PAD_MISC7", K_PAD_MISC7},
+        {"PAD_MISC8", K_PAD_MISC8},
+        {"SEMICOLON", ';'},
+    };
+
+    for (const mapping_t &m : key_mappings) {
+        if (!Q_stricmp(key_name, m.name)) {
+            *keynum = m.keynum;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool CGC_KeynumToIcon(int keynum, bind_icon_t &icon)
+{
+    char pic[MAX_QPATH];
+
+    auto set_keyboard_icon = [&](int value) -> bool {
+        Q_snprintf(pic, sizeof(pic), "gfx/controller/keyboard/%d.png", value);
+        int w = 0;
+        int h = 0;
+        cgi.Draw_GetPicSize(&w, &h, pic);
+        if (!w || !h) {
+            return false;
+        }
+        icon.name = pic;
+        icon.width = w;
+        icon.height = h;
+        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+        if (icon.draw_width <= 0) {
+            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+        }
+        return true;
+    };
+
+    if (keynum >= 0 && keynum < 256 && keynum != '"') {
+        if (set_keyboard_icon(keynum)) {
+            return true;
+        }
+    }
+
+    if (keynum >= K_UPARROW && keynum <= K_KP_MULTIPLY) {
+        return set_keyboard_icon(keynum + 128);
+    }
+
+    if (keynum >= K_LALT && keynum <= K_RSHIFT) {
+        return set_keyboard_icon(keynum + 128);
+    }
+
+    if (keynum >= K_MOUSEFIRST && keynum <= K_MOUSE8) {
+        const int index = keynum - K_MOUSEFIRST;
+        Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
+        int w = 0;
+        int h = 0;
+        cgi.Draw_GetPicSize(&w, &h, pic);
+        if (!w || !h) {
+            return false;
+        }
+        icon.name = pic;
+        icon.width = w;
+        icon.height = h;
+        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+        if (icon.draw_width <= 0) {
+            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+        }
+        return true;
+    }
+
+    if (keynum == K_MWHEELUP || keynum == K_MWHEELDOWN) {
+        const int index = (keynum == K_MWHEELUP) ? 8 : 9;
+        Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
+        int w = 0;
+        int h = 0;
+        cgi.Draw_GetPicSize(&w, &h, pic);
+        if (!w || !h) {
+            return false;
+        }
+        icon.name = pic;
+        icon.width = w;
+        icon.height = h;
+        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+        if (icon.draw_width <= 0) {
+            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+        }
+        return true;
+    }
+
+    if (keynum >= K_PAD_FIRST && keynum <= K_PAD_FIRST + 0x22) {
+        const int index = keynum - K_PAD_FIRST;
+        Q_snprintf(pic, sizeof(pic), "gfx/controller/generic/f%04x.png", index);
+        int w = 0;
+        int h = 0;
+        cgi.Draw_GetPicSize(&w, &h, pic);
+        if (!w || !h) {
+            return false;
+        }
+        icon.name = pic;
+        icon.width = w;
+        icon.height = h;
+        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+        if (icon.draw_width <= 0) {
+            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+static bool CGC_BuildBindIcon(const char *binding, bind_icon_t &icon, std::string &fallback)
+{
+    fallback.clear();
+    if (!binding || !*binding) {
+        fallback.assign("UNBOUND");
+        return false;
+    }
+
+    const char *key_name = cgi.CL_GetKeyBinding(binding);
+    if (!key_name || !*key_name) {
+        fallback.assign("UNBOUND");
+        return false;
+    }
+
+    int keynum;
+    if (!CGC_KeyNameToKeynum(key_name, &keynum)) {
+        fallback = CGC_FormatKeyName(key_name);
+        return false;
+    }
+
+    if (CGC_KeynumToIcon(keynum, icon)) {
+        return true;
+    }
+
+    fallback = CGC_FormatKeyName(key_name);
+    return false;
+}
+
+static void CGC_BuildBindSegments(const char *line, size_t line_limit,
+                                  std::vector<bind_segment_t> &segments,
+                                  int &line_width, int &line_height)
+{
+    segments.clear();
+    std::string text_buffer;
+
+    const char *cursor = line;
+    const char *line_end = line + line_limit;
+
+    auto flush_text = [&]() {
+        if (text_buffer.empty()) {
+            return;
+        }
+        if (!segments.empty() && segments.back().type == bind_segment_type_t::text) {
+            segments.back().text.append(text_buffer);
+        } else {
+            bind_segment_t seg;
+            seg.type = bind_segment_type_t::text;
+            seg.text = text_buffer;
+            segments.push_back(std::move(seg));
+        }
+        text_buffer.clear();
+    };
+
+    while (cursor < line_end) {
+        if ((line_end - cursor) >= 6 && !strncmp(cursor, ":bind:", 6)) {
+            const char *command_start = cursor + 6;
+            const char *command_end = command_start;
+            while (command_end < line_end && *command_end != ':') {
+                ++command_end;
+            }
+
+            if (command_end < line_end && *command_end == ':') {
+                flush_text();
+                std::string command(command_start, command_end - command_start);
+                bind_icon_t icon;
+                std::string fallback;
+                if (CGC_BuildBindIcon(command.c_str(), icon, fallback)) {
+                    bind_segment_t seg;
+                    seg.type = bind_segment_type_t::icon;
+                    seg.icon = std::move(icon);
+                    segments.push_back(std::move(seg));
+                } else if (!fallback.empty()) {
+                    text_buffer.append(fallback);
+                }
+                cursor = command_end + 1;
+                continue;
+            }
+        }
+
+        text_buffer.push_back(*cursor);
+        ++cursor;
+    }
+
+    flush_text();
+
+    line_width = 0;
+    line_height = CONCHAR_HEIGHT;
+
+    for (const bind_segment_t &seg : segments) {
+        if (seg.type == bind_segment_type_t::text) {
+            line_width += static_cast<int>(seg.text.length()) * CONCHAR_WIDTH;
+        } else {
+            line_width += seg.icon.draw_width;
+            if (seg.icon.draw_height > line_height) {
+                line_height = seg.icon.draw_height;
+            }
+        }
+    }
+}
+
 
 struct hud_space_t
 {
@@ -172,23 +566,53 @@ DrawStringMulti
 */
 static void CG_DrawStringMulti(int x, int y, int flags, size_t maxlen, const char *s, color_t color)
 {
-    const char  *p;
-    size_t       len;
+    if (!s || !maxlen) {
+        return;
+    }
+
+    std::vector<bind_segment_t> segments;
 
     while (*s) {
-        p = strchr(s, '\n');
-        if (!p) {
-            CG_DrawStringEx(x, y, flags, maxlen, s, color);
-            break;
-        }
-
-        len = p - s;
+        const char *p = strchr(s, '\n');
+        size_t len = p ? static_cast<size_t>(p - s) : strlen(s);
         if (len > maxlen) {
             len = maxlen;
         }
-        CG_DrawStringEx(x, y, flags, len, s, color);
 
-        y += CONCHAR_HEIGHT;
+        int line_width = 0;
+        int line_height = CONCHAR_HEIGHT;
+        CGC_BuildBindSegments(s, len, segments, line_width, line_height);
+
+        int draw_x = x;
+        if ((flags & UI_CENTER) == UI_CENTER) {
+            draw_x -= line_width / 2;
+        } else if (flags & UI_RIGHT) {
+            draw_x -= line_width;
+        }
+
+        const int text_flags = flags & ~(UI_CENTER | UI_RIGHT);
+        const int text_y = y + (line_height - CONCHAR_HEIGHT) / 2;
+
+        for (const bind_segment_t &seg : segments) {
+            if (seg.type == bind_segment_type_t::text) {
+                if (!seg.text.empty()) {
+                    CG_DrawString(draw_x, text_y, text_flags,
+                                  seg.text.length(), seg.text.c_str(), color);
+                    draw_x += static_cast<int>(seg.text.length()) * CONCHAR_WIDTH;
+                }
+            } else {
+                const int icon_y = y + (line_height - seg.icon.draw_height) / 2;
+                cgi.SCR_DrawPic(draw_x, icon_y, seg.icon.draw_width,
+                                seg.icon.draw_height, seg.icon.name.c_str());
+                draw_x += seg.icon.draw_width;
+            }
+        }
+
+        y += line_height;
+
+        if (!p) {
+            break;
+        }
         s = p + 1;
     }
 }
