@@ -20,6 +20,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/list.hpp"
 
 #include <array>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include "common/common.hpp"
 #include "common/cvar.hpp"
 #include "common/error.hpp"
@@ -241,6 +244,14 @@ static void open_zip_file(file_t *file);
 static void close_zip_file(file_t *file);
 static int read_zip_file(file_t *file, void *buf, size_t len);
 static int seek_zip_file(file_t *file, int64_t offset, int whence);
+
+struct cached_zip_pack_t {
+    pack_t      *pack;
+    file_info_t info;
+};
+
+static std::unordered_map<std::string, cached_zip_pack_t> fs_cached_zip_packs;
+static void clear_cached_zip_packs(void);
 #endif
 
 // for tracking users of pack_t instance
@@ -450,6 +461,47 @@ static file_t *file_for_handle(qhandle_t f)
         return NULL;
 
     return file;
+}
+
+bool FS_GetFileSource(qhandle_t f, fs_file_source_t *out)
+{
+    file_t *file = file_for_handle(f);
+
+    if (!file || !out) {
+        return false;
+    }
+
+    memset(out, 0, sizeof(*out));
+
+    if (file->pack) {
+        out->from_pack = true;
+        out->from_builtin = (file->pack->type == FS_BUILTIN);
+        if (file->pack->type == FS_BUILTIN) {
+            Q_strlcpy(out->pack_path, "builtin", sizeof(out->pack_path));
+        } else {
+            Q_strlcpy(out->pack_path, file->pack->filename, sizeof(out->pack_path));
+        }
+        if (file->entry) {
+            Q_strlcpy(out->entry_path, file->pack->names + file->entry->nameofs, sizeof(out->entry_path));
+        }
+        return true;
+    }
+
+    if (file->type == FS_BUILTIN) {
+        out->from_pack = true;
+        out->from_builtin = true;
+        Q_strlcpy(out->pack_path, "builtin", sizeof(out->pack_path));
+        if (file->entry && file->pack) {
+            Q_strlcpy(out->entry_path, file->pack->names + file->entry->nameofs, sizeof(out->entry_path));
+        }
+        return true;
+    }
+
+    out->from_pack = false;
+    out->from_builtin = false;
+    out->pack_path[0] = 0;
+    out->entry_path[0] = 0;
+    return true;
 }
 
 // expects a buffer of at least MAX_OSPATH bytes!
@@ -2126,6 +2178,16 @@ static void pack_put(pack_t *pack)
     }
 }
 
+#if USE_ZLIB
+static void clear_cached_zip_packs(void)
+{
+    for (auto &entry : fs_cached_zip_packs) {
+        pack_put(entry.second.pack);
+    }
+    fs_cached_zip_packs.clear();
+}
+#endif
+
 // allocates pack_t instance along with filenames
 static pack_t *pack_alloc(FILE *fp, filetype_t type, const char *name,
                           unsigned num_files, size_t names_len)
@@ -2520,7 +2582,7 @@ skip:
     return true;
 }
 
-static pack_t *load_zip_file(const char *packfile)
+static pack_t *load_zip_file_uncached(const char *packfile)
 {
     packfile_t      *file;
     char            *name;
@@ -2692,6 +2754,46 @@ static int pakcmp(const void *p1, const void *p2)
 
 alphacmp:
     return Q_stricmp(s1, s2);
+}
+
+static pack_t *load_zip_file(const char *packfile)
+{
+    file_info_t info;
+    std::string key(packfile);
+
+    if (get_path_info(packfile, &info)) {
+        auto it = fs_cached_zip_packs.find(key);
+        if (it != fs_cached_zip_packs.end()) {
+            pack_put(it->second.pack);
+            fs_cached_zip_packs.erase(it);
+        }
+        return load_zip_file_uncached(packfile);
+    }
+
+    auto it = fs_cached_zip_packs.find(key);
+    if (it != fs_cached_zip_packs.end()) {
+        const cached_zip_pack_t &cached = it->second;
+        if (cached.info.size == info.size &&
+            cached.info.ctime == info.ctime &&
+            cached.info.mtime == info.mtime) {
+            FS_DPrintf("%s: reusing cached pack %s\n", __func__, packfile);
+            return pack_get(cached.pack);
+        }
+
+        pack_put(cached.pack);
+        fs_cached_zip_packs.erase(it);
+    }
+
+    pack_t *pack = load_zip_file_uncached(packfile);
+    if (!pack) {
+        return NULL;
+    }
+
+    cached_zip_pack_t entry{};
+    entry.pack = pack_get(pack);
+    entry.info = info;
+    fs_cached_zip_packs.emplace(std::move(key), entry);
+    return pack;
 }
 
 // sets fs_gamedir, adds the directory to the head of the path,
@@ -3851,6 +3953,7 @@ void FS_Shutdown(void)
     free_all_paths();
 
 #if USE_ZLIB
+    clear_cached_zip_packs();
     inflateEnd(&fs_zipstream.stream);
 #endif
 

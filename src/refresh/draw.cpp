@@ -19,7 +19,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "font_freetype.hpp"
 #include "common/q3colors.hpp"
+#include <algorithm>
 #include <array>
+#include <limits>
+#include <string>
 
 #if USE_FREETYPE
 #include <ft2build.h>
@@ -1129,16 +1132,88 @@ const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
     return ch;
 }
 
+static std::string SCR_NormalizeKFontPath(const char *filename)
+{
+    if (!filename || !*filename)
+        return std::string();
+
+    std::string normalized(filename);
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+
+    if (normalized.front() != '/')
+        normalized.insert(normalized.begin(), '/');
+
+    if (normalized.rfind("/fonts/", 0) != 0) {
+        const size_t slash = normalized.find_last_of('/');
+        const char *basename = normalized.c_str() + ((slash == std::string::npos) ? 0 : slash + 1);
+        normalized.assign("/fonts/");
+        normalized.append(basename);
+    }
+
+    return normalized;
+}
+
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
     memset(font, 0, sizeof(*font));
 
-    char *buffer;
-
-    if (FS_LoadFile(filename, reinterpret_cast<void **>(&buffer)) < 0)
+    const std::string normalized = SCR_NormalizeKFontPath(filename);
+    if (normalized.empty())
         return;
 
-    const char *data = buffer;
+    qhandle_t handle = 0;
+    int64_t fileLength = FS_OpenFile(normalized.c_str(), &handle, FS_MODE_READ | FS_TYPE_PAK);
+    if (fileLength < 0) {
+        Com_Printf("SCR: failed to open KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(fileLength));
+        return;
+    }
+
+    fs_file_source_t source{};
+    if (!FS_GetFileSource(handle, &source)) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: failed to resolve source for KFont '%s'\n", normalized.c_str());
+        return;
+    }
+
+    if (!source.from_pack) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: KFont '%s' not loaded from a pack file\n", normalized.c_str());
+        return;
+    }
+
+    const char *packBaseName = COM_SkipPath(source.pack_path);
+    if (!packBaseName || Q_stricmp(packBaseName, "Q2Game.kpf")) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf (found '%s')\n",
+                normalized.c_str(), source.pack_path);
+        return;
+    }
+
+    if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
+        return;
+    }
+
+    std::string fileContents;
+    fileContents.resize(static_cast<size_t>(fileLength));
+    int bytesRead = FS_Read(fileContents.data(), fileContents.size(), handle);
+    if (bytesRead < 0) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: failed to read KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(bytesRead));
+        return;
+    }
+
+    if (static_cast<size_t>(bytesRead) != fileContents.size()) {
+        FS_CloseFile(handle);
+        Com_Printf("SCR: short read while loading KFont '%s'\n", normalized.c_str());
+        return;
+    }
+
+    FS_CloseFile(handle);
+
+    fileContents.push_back('\0');
+    const char *data = fileContents.c_str();
 
     while (true) {
         const char *token = COM_Parse(&data);
@@ -1161,7 +1236,7 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 
                 uint32_t codepoint = strtoul(token, NULL, 10);
                 uint32_t x, y, w, h;
-                
+
                 x = strtoul(COM_Parse(&data), NULL, 10);
                 y = strtoul(COM_Parse(&data), NULL, 10);
                 w = strtoul(COM_Parse(&data), NULL, 10);
@@ -1181,11 +1256,18 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
             }
         }
     }
-    
+
+    if (!font->pic) {
+        Com_Printf("SCR: KFont '%s' did not specify a texture\n", normalized.c_str());
+        return;
+    }
+
     font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
     font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
-    FS_FreeFile(buffer);
+    const char *entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
+    Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
+            normalized.c_str(), source.pack_path, entryName, font->line_height);
 }
 
 qhandle_t r_charset;
