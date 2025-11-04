@@ -40,6 +40,13 @@ static cvar_t   *r_dof_focus_distance;
 static cvar_t   *r_dof_focus_range;
 static cvar_t   *r_dof_luma_strength;
 
+namespace {
+constexpr float kDefaultDofBlurRange = 6.0f;
+constexpr float kDefaultDofFocusDistance = 64.0f;
+constexpr float kDefaultDofFocusRange = 192.0f;
+constexpr float kDefaultDofLumaStrength = 1.0f;
+}
+
 #if USE_DEBUG
 static cvar_t   *cl_testparticles;
 static cvar_t   *cl_testentities;
@@ -657,17 +664,22 @@ void V_RenderView(void)
         }
     }
 
-    const bool slow_time_active = cl.frame.valid && cl.frame.ps.stats[STAT_SLOW_TIME];
+    const bool slow_time_flagged = cl.frame.valid && cl.frame.ps.stats[STAT_SLOW_TIME];
 
-    if (r_dof->integer && slow_time_active) {
-        const float time_scale = (std::max)(CL_ActiveTimeScale(), 0.0f);
-        const float base_blend = Q_clipf(1.0f - time_scale, 0.0f, 1.0f);
-        const float blur_range = (std::max)(r_dof_blur_range->value * base_blend, 0.0f);
-        const float focus_distance = (std::max)(r_dof_focus_distance->value, 0.0f);
-        const float focus_range = (std::max)(r_dof_focus_range->value, 0.001f);
-        const float luma_strength = (std::max)(r_dof_luma_strength->value, 0.0f);
+    if (slow_time_flagged && r_dof->integer) {
+        const bool allow_slow_motion = cl.maxclients <= 1;
+        const float time_scale = allow_slow_motion ? (std::max)(CL_ActiveTimeScale(), 0.0f) : 1.0f;
+        const float base_blend = allow_slow_motion ? Q_clipf(1.0f - time_scale, 0.0f, 1.0f) : 1.0f;
 
-        cl.refdef.depth_of_field = base_blend > 0.0f && blur_range > 0.0f;
+        const float blur_range_base = r_dof_blur_range->value > 0.0f ? r_dof_blur_range->value : kDefaultDofBlurRange;
+        const float focus_distance = (r_dof_focus_distance->value > 0.0f) ? r_dof_focus_distance->value : kDefaultDofFocusDistance;
+        const float focus_range_base = (r_dof_focus_range->value > 0.0f) ? r_dof_focus_range->value : kDefaultDofFocusRange;
+        const float luma_strength = (r_dof_luma_strength->value > 0.0f) ? r_dof_luma_strength->value : kDefaultDofLumaStrength;
+
+        const float blur_range = (std::max)(blur_range_base * base_blend, 0.0f);
+        const float focus_range = (std::max)(focus_range_base, 0.001f);
+
+        cl.refdef.depth_of_field = blur_range > 0.0f;
         cl.refdef.dof_blur_range = blur_range;
         cl.refdef.dof_focus_distance = focus_distance;
         cl.refdef.dof_focus_range = focus_range;
@@ -750,10 +762,10 @@ void V_Init(void)
     cl_add_entities = Cvar_Get("cl_entities", "1", 0);
     cl_add_blend = Cvar_Get("cl_blend", "1", 0);
     r_dof = Cvar_Get("r_dof", "1", 0);
-    r_dof_blur_range = Cvar_Get("r_dofBlurRange", "0.0", 0);
-    r_dof_focus_distance = Cvar_Get("r_dofFocusDistance", "0.0", 0);
-    r_dof_focus_range = Cvar_Get("r_dofFocusRange", "0.0", 0);
-    r_dof_luma_strength = Cvar_Get("r_dofLumaStrength", "1.0", 0);
+    r_dof_blur_range = Cvar_Get("r_dofBlurRange", va("%g", kDefaultDofBlurRange), 0);
+    r_dof_focus_distance = Cvar_Get("r_dofFocusDistance", va("%g", kDefaultDofFocusDistance), 0);
+    r_dof_focus_range = Cvar_Get("r_dofFocusRange", va("%g", kDefaultDofFocusRange), 0);
+    r_dof_luma_strength = Cvar_Get("r_dofLumaStrength", va("%g", kDefaultDofLumaStrength), 0);
     cl_add_blend->changed = cl_add_blend_changed;
 
     cl_adjustfov = Cvar_Get("cl_adjustfov", "1", 0);
