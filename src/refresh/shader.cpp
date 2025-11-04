@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "common/sizebuf.hpp"
 
+#include <cstring>
+
 #define MAX_SHADER_CHARS    4096
 
 class ShaderSourceBuffer {
@@ -61,6 +63,9 @@ private:
 #define GLSP(...)   shader_printf(buf, __VA_ARGS__)
 
 cvar_t *gl_per_pixel_lighting;
+static cvar_t *gl_clustered_shading;
+static cvar_t *gl_cluster_show_overdraw;
+static cvar_t *gl_cluster_show_normals;
 
 q_printf(2, 3)
 static void shader_printf(sizebuf_t *buf, const char *fmt, ...)
@@ -237,6 +242,88 @@ static void write_dynamic_lights(sizebuf_t *buf)
 
         return shade;
     })
+}
+
+static void write_clustered_light_support(sizebuf_t *buf)
+{
+    GLSP("#define MAX_SHADOW_VIEWS %d\n", int(MAX_SHADOW_VIEWS));
+    GLSL(
+        struct quakeLightClusterInfo_s
+        {
+            vec4 position_range;
+            vec4 color_intensity;
+            vec4 cone_dir_angle;
+            vec4 world_origin_shadow;
+        };
+
+        struct quakeUBShadowStruct_s
+        {
+            mat4 volume_matrix;
+            vec4 viewport_rect;
+            vec4 source_position;
+            float bias;
+            float shade_amount;
+            float pad0;
+            float pad1;
+        };
+
+        struct quakeLightClusterLookup_s
+        {
+            uint offset;
+            uint count;
+        };
+
+        layout(std140) uniform ClusterParams
+        {
+            float uClusterMinZ;
+            float uClusterZSliceFactor;
+            int uClusterEnabled;
+            int uShadowEnabled;
+            int uShowOverdraw;
+            int uShowNormals;
+            vec2 uClusterPadding;
+        };
+
+        layout(std140) uniform LightCluster
+        {
+            quakeLightClusterInfo_s uClusterLights[1];
+        };
+
+        layout(std140) uniform ShadowItems
+        {
+            quakeUBShadowStruct_s sbShadowItems[MAX_SHADOW_VIEWS];
+        };
+
+        float ComputeShadow(vec3 projCoords, const quakeUBShadowStruct_s shadowItem)
+        {
+            (void)projCoords;
+            (void)shadowItem;
+            return 1.0;
+        }
+
+        float ComputeClusteredShading(inout vec4 modulatedColor,
+                                      const quakeLightClusterLookup_s lookup,
+                                      vec2 fragCoord, float fragZ, vec3 normals)
+        {
+            (void)lookup;
+            (void)fragCoord;
+            (void)fragZ;
+            (void)normals;
+            vec3 legacy = calc_dynamic_lights();
+            modulatedColor.rgb += legacy;
+            return length(legacy);
+        }
+
+        vec3 ApplyClusteredLighting(vec3 worldPos, vec3 normal)
+        {
+            (void)worldPos;
+            (void)normal;
+            if (uClusterEnabled == 0)
+                return calc_dynamic_lights();
+
+            return calc_dynamic_lights();
+        }
+    );
 }
 
 static void write_shadedot(sizebuf_t *buf)
@@ -1151,6 +1238,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_DYNAMIC_LIGHTS) {
         GLSL(in vec3 v_norm;)
         write_dynamic_lights(buf);
+        write_clustered_light_support(buf);
     }
 
     if (bits & GLS_BLUR_GAUSS)
@@ -1276,13 +1364,13 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
   
         if (bits & GLS_DYNAMIC_LIGHTS) {
             GLSL(
-                lightmap.rgb += calc_dynamic_lights();
+                lightmap.rgb += ApplyClusteredLighting(v_world_pos, v_norm);
             )
         }
 
         GLSL(diffuse.rgb *= (lightmap.rgb + u_add) * u_modulate;)
     } else if ((bits & GLS_DYNAMIC_LIGHTS) && !(bits & GLS_TEXTURE_REPLACE)) {
-        GLSL(color.rgb += calc_dynamic_lights() * u_modulate;)
+        GLSL(color.rgb += ApplyClusteredLighting(v_world_pos, v_norm) * u_modulate;)
     }
 
     if (bits & GLS_INTENSITY_ENABLE)
@@ -1517,6 +1605,12 @@ static GLuint create_and_use_program(glStateBits_t bits)
     if (bits & GLS_DYNAMIC_LIGHTS) {
         if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights), UBO_DLIGHTS))
             goto fail;
+        if (!bind_uniform_block(program, "ClusterParams", sizeof(gls.u_cluster_params), UBO_CLUSTER_PARAMS))
+            goto fail;
+        if (!bind_uniform_block(program, "LightCluster", sizeof(glClusterLight_t), UBO_CLUSTER_LIGHTS))
+            goto fail;
+        if (!bind_uniform_block(program, "ShadowItems", sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, UBO_SHADOW_ITEMS))
+            goto fail;
     }
 
     qglUseProgram(program);
@@ -1653,6 +1747,28 @@ static void shader_load_uniforms(void)
 
 static void shader_load_lights(void)
 {
+    gls.u_cluster_params.cluster_enabled = gl_clustered_shading ? gl_clustered_shading->integer : 0;
+    gls.u_cluster_params.shadow_enabled = gls.u_cluster_params.cluster_enabled;
+    gls.u_cluster_params.show_overdraw = gl_cluster_show_overdraw ? gl_cluster_show_overdraw->integer : 0;
+    gls.u_cluster_params.show_normals = gl_cluster_show_normals ? gl_cluster_show_normals->integer : 0;
+
+    if (gl_static.cluster_params_buffer) {
+        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_params_buffer);
+        qglBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(gls.u_cluster_params), &gls.u_cluster_params);
+    }
+
+    if (gl_static.cluster_light_buffer && !gls.cluster_lights.empty()) {
+        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_light_buffer);
+        qglBufferSubData(GL_UNIFORM_BUFFER, 0,
+            gls.cluster_lights.size() * sizeof(glClusterLight_t), gls.cluster_lights.data());
+    }
+
+    if (gl_static.shadow_item_buffer && !gls.shadow_items.empty()) {
+        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.shadow_item_buffer);
+        qglBufferSubData(GL_UNIFORM_BUFFER, 0,
+            gls.shadow_items.size() * sizeof(glShadowItem_t), gls.shadow_items.data());
+    }
+
     // dlight bits changed, set up the buffer.
     // if you didn't modify dlights just leave the bits
     // # alone or set to 0.
@@ -1770,8 +1886,11 @@ static void shader_setup_3d(void)
     // setup default matrices for world
     memcpy(gls.u_block.m_sky, glr.skymatrix, sizeof(gls.u_block.m_sky));
     memcpy(gls.u_block.m_model, gl_identity, sizeof(gls.u_block.m_model));
-    
+
     VectorCopy(glr.fd.vieworg, gls.u_block.vieworg);
+
+    gls.u_cluster_params.cluster_min_z = 1.0f;
+    gls.u_cluster_params.cluster_zslice_factor = 1.0f;
 }
 
 static void shader_disable_state(void)
@@ -1848,13 +1967,33 @@ static void shader_init(void)
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
+    gls.cluster_lights.clear();
+    gls.cluster_lights.resize(1);
+    std::memset(gls.cluster_lights.data(), 0, gls.cluster_lights.size() * sizeof(glClusterLight_t));
+
+    gls.shadow_items.clear();
+    gls.shadow_items.resize(MAX_SHADOW_VIEWS);
+    std::memset(gls.shadow_items.data(), 0, gls.shadow_items.size() * sizeof(glShadowItem_t));
+
     shader_update_blur();
 
     qglGenBuffers(1, &gl_static.uniform_buffer);
     GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
     qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_block), NULL, GL_DYNAMIC_DRAW);
 
-#if USE_MD5
+    qglGenBuffers(1, &gl_static.cluster_params_buffer);
+    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_PARAMS, gl_static.cluster_params_buffer);
+    qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_cluster_params), NULL, GL_DYNAMIC_DRAW);
+
+    qglGenBuffers(1, &gl_static.cluster_light_buffer);
+    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_LIGHTS, gl_static.cluster_light_buffer);
+    qglBufferData(GL_UNIFORM_BUFFER, sizeof(glClusterLight_t), NULL, GL_DYNAMIC_DRAW);
+
+    qglGenBuffers(1, &gl_static.shadow_item_buffer);
+    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOW_ITEMS, gl_static.shadow_item_buffer);
+    qglBufferData(GL_UNIFORM_BUFFER, sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, NULL, GL_DYNAMIC_DRAW);
+
+    #if USE_MD5
     if (gl_config.caps & QGL_CAP_SKELETON_MASK) {
         qglGenBuffers(1, &gl_static.skeleton_buffer);
         GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SKELETON, gl_static.skeleton_buffer);
@@ -1866,7 +2005,7 @@ static void shader_init(void)
 
     if (gl_config.ver_gl >= QGL_VER(3, 2))
         qglEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-    
+
     qglGenBuffers(1, &gl_static.dlight_buffer);
     GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.dlight_buffer);
     GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_DLIGHTS, gl_static.dlight_buffer);
@@ -1876,6 +2015,9 @@ static void shader_init(void)
     shader_use_program(GLS_DEFAULT);
 
     gl_per_pixel_lighting = Cvar_Get("gl_per_pixel_lighting", "1", 0);
+    gl_clustered_shading = Cvar_Get("gl_clustered_shading", "0", 0);
+    gl_cluster_show_overdraw = Cvar_Get("gl_cluster_show_overdraw", "0", 0);
+    gl_cluster_show_normals = Cvar_Get("gl_cluster_show_normals", "0", 0);
 }
 
 static void shader_shutdown(void)
@@ -1899,6 +2041,18 @@ static void shader_shutdown(void)
     if (gl_static.uniform_buffer) {
         qglDeleteBuffers(1, &gl_static.uniform_buffer);
         gl_static.uniform_buffer = 0;
+    }
+    if (gl_static.cluster_params_buffer) {
+        qglDeleteBuffers(1, &gl_static.cluster_params_buffer);
+        gl_static.cluster_params_buffer = 0;
+    }
+    if (gl_static.cluster_light_buffer) {
+        qglDeleteBuffers(1, &gl_static.cluster_light_buffer);
+        gl_static.cluster_light_buffer = 0;
+    }
+    if (gl_static.shadow_item_buffer) {
+        qglDeleteBuffers(1, &gl_static.shadow_item_buffer);
+        gl_static.shadow_item_buffer = 0;
     }
     if (gl_static.dlight_buffer) {
         qglDeleteBuffers(1, &gl_static.dlight_buffer);
