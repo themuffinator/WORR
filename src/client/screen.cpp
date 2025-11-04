@@ -676,7 +676,7 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
 			break;
 		}
 
-		len = min(p - s, maxlen);
+                len = std::min<size_t>(static_cast<size_t>(p - s), maxlen);
 		const auto metrics = SCR_TextMetrics(s, len, flags, currentColor);
 		last_x = SCR_DrawStringStretch(x, y, scale, flags, len, s, currentColor, font);
 		last_y = y;
@@ -861,7 +861,7 @@ void SCR_AddNetgraph(void)
 		color = 0xd0;
 	}
 
-	SCR_DebugGraph(min(ping, 30), color);
+        SCR_DebugGraph(std::min<unsigned>(ping, 30u), color);
 }
 
 #define GRAPH_SAMPLES   4096
