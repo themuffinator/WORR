@@ -174,6 +174,7 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_hdr_params1;
         vec4 u_hdr_params2;
         vec4 u_hdr_params3;
+        vec4 u_hdr_reduce_params;
         vec4 u_crt_params0;
         vec4 u_crt_params1;
         vec4 u_crt_params2;
@@ -1324,7 +1325,21 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_CRT_ENABLE)
             GLSL(vec2 crt_uv = tc;)
 
-        if (bits & GLS_BLUR_MASK)
+        if (bits & GLS_HDR_REDUCE) {
+            GLSL(vec2 offset = u_hdr_reduce_params.xy;)
+            GLSL(vec2 clamp_min = vec2(0.0);)
+            GLSL(vec2 clamp_max = vec2(1.0);)
+            GLSL(vec2 o0 = vec2(-offset.x, -offset.y);)
+            GLSL(vec2 o1 = vec2( offset.x, -offset.y);)
+            GLSL(vec2 o2 = vec2(-offset.x,  offset.y);)
+            GLSL(vec2 o3 = vec2( offset.x,  offset.y);)
+            GLSL(vec3 accum = vec3(0.0);)
+            GLSL(accum += texture(u_texture, clamp(tc + o0, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o1, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o2, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o3, clamp_min, clamp_max)).rgb;)
+            GLSL(vec4 diffuse = vec4(accum * 0.25, 1.0);)
+        } else if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_bbr_params.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)

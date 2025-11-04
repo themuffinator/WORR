@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
+#include "postprocess/hdr_luminance.hpp"
 #include "font_freetype.hpp"
 #include "common/prompt.hpp"
 #include <algorithm>
@@ -1294,6 +1295,9 @@ bool GL_InitFramebuffers(void)
     else
         g_bloom_effect.resize(0, 0);
 
+    if (!g_hdr_luminance.resize(scene_w, scene_h))
+        g_hdr_luminance.shutdown();
+
     return true;
 }
 
@@ -1408,6 +1412,7 @@ void GL_ShutdownImages(void)
     gl_partshape->changed = NULL;
 
     g_bloom_effect.shutdown();
+    g_hdr_luminance.shutdown();
 
     // delete auto textures
     qglDeleteTextures(NUM_AUTO_TEXTURES, gl_static.texnums);
