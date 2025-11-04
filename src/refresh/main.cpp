@@ -1052,7 +1052,7 @@ typedef enum {
     PP_DEPTH_OF_FIELD = BIT(2),
     PP_HDR       = BIT(3),
     PP_CRT       = BIT(4),
-    PP_MOTION_BLUR = BIT(4),
+    PP_MOTION_BLUR = BIT(5),
 } pp_flags_t;
 
 constexpr pp_flags_t operator|(pp_flags_t lhs, pp_flags_t rhs) noexcept
