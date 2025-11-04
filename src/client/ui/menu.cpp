@@ -21,8 +21,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.hpp"
 
 #include <limits.h>
+#include <algorithm>
 
 static menuDropdown_t *ui_activeDropdown = NULL;
+
+static void Dropdown_Close(menuDropdown_t *d, bool applyHovered);
 
 static void UI_FreeConditionList(uiItemCondition_t *list)
 {
@@ -1214,7 +1217,7 @@ static void Dropdown_UpdateScroll(menuDropdown_t *d)
         return;
     }
 
-    const int visible = Q_min(d->maxVisibleItems, d->spin.numItems);
+    const int visible = std::min(d->maxVisibleItems, d->spin.numItems);
     if (visible <= 0)
         return;
 
@@ -1289,7 +1292,7 @@ static void Dropdown_DrawList(menuDropdown_t *d)
     if (!d->open || d->spin.numItems <= 0)
         return;
 
-    const int visible = Q_min(d->maxVisibleItems, d->spin.numItems);
+    const int visible = std::min(d->maxVisibleItems, d->spin.numItems);
     if (visible <= 0)
         return;
 
@@ -1304,7 +1307,7 @@ static void Dropdown_DrawList(menuDropdown_t *d)
     d->listRect.width = valueRect.width;
     d->listRect.height = visible * itemHeight;
 
-    color_t background = ColorSetAlpha(uis.color.background, 220);
+    color_t background = ColorSetAlpha(uis.color.background, static_cast<uint8_t>(220));
     R_DrawFill32(d->listRect.x, d->listRect.y - 1, d->listRect.width, d->listRect.height + 2, background);
     UI_DrawRect8(&d->listRect, 1, 223);
 
@@ -1317,7 +1320,7 @@ static void Dropdown_DrawList(menuDropdown_t *d)
         bool highlighted = (index == d->hovered);
 
         if (highlighted) {
-            color_t highlight = ColorSetAlpha(uis.color.selection, 200);
+            color_t highlight = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
             R_DrawFill32(d->listRect.x, y, d->listRect.width, itemHeight, highlight);
         }
 
@@ -1355,7 +1358,7 @@ static void Dropdown_Draw(menuDropdown_t *d)
     else
         valueColor = uis.color.selection;
 
-    color_t fill = ColorSetAlpha(uis.color.background, 200);
+    color_t fill = ColorSetAlpha(uis.color.background, static_cast<uint8_t>(200));
     R_DrawFill32(valueRect.x, valueRect.y, valueRect.width, valueRect.height, fill);
     UI_DrawRect8(&valueRect, 1, 223);
 
@@ -3115,11 +3118,11 @@ static void Menu_DrawGroups(menuFrameWork_t *menu)
         if (group->rect.width <= 0 || group->rect.height <= 0)
             continue;
 
-        color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, 160);
+        color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, static_cast<uint8_t>(160));
         R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
 
         if (group->border) {
-            color_t border = ColorSetAlpha(uis.color.selection, 200);
+            color_t border = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
             R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
             R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
             R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);

@@ -1189,7 +1189,8 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
         return;
     }
 
-    if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
+    const auto maxSize = (std::numeric_limits<size_t>::max)();
+    if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
         FS_CloseFile(handle);
         Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
         return;
