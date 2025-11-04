@@ -295,48 +295,48 @@ void GL_Setup3D(void)
 
             float max_ndc_velocity = 0.0f;
             float max_pixel_velocity = 0.0f;
-            static const float sample_points[][4] = {
-                { 0.0f,  0.0f,  0.0f, 1.0f },
-                { 0.0f,  0.0f, -0.5f, 1.0f },
-                { 0.0f,  0.0f,  0.5f, 1.0f },
-                {-0.75f, -0.75f, 0.0f, 1.0f },
-                { 0.75f, -0.75f, 0.0f, 1.0f },
-                {-0.75f,  0.75f, 0.0f, 1.0f },
-                { 0.75f,  0.75f, 0.0f, 1.0f },
-                { 0.0f, -0.75f, 0.0f, 1.0f },
-                { 0.0f,  0.75f, 0.0f, 1.0f }
-            };
+            const int grid = R_MOTION_BLUR_GRID_SIZE;
+            const float inv_grid = 1.0f / static_cast<float>(grid);
 
-            for (size_t i = 0; i < sizeof(sample_points) / sizeof(sample_points[0]); ++i) {
-                vec4_t current_clip = { sample_points[i][0], sample_points[i][1], sample_points[i][2], sample_points[i][3] };
-                vec4_t previous_clip;
-                Matrix_TransformVec4(current_clip, current_to_prev, previous_clip);
+            // Sample a coarse 20x20 grid of clip-space points to estimate motion strength
+            // in a way that mirrors the rerelease's tiled velocity analysis.
+            for (int gy = 0; gy < grid; ++gy) {
+                const float v = (static_cast<float>(gy) + 0.5f) * inv_grid;
+                const float ndc_y = v * 2.0f - 1.0f;
+                for (int gx = 0; gx < grid; ++gx) {
+                    const float u = (static_cast<float>(gx) + 0.5f) * inv_grid;
+                    const float ndc_x = u * 2.0f - 1.0f;
 
-                const float curr_w = current_clip[3];
-                const float prev_w = previous_clip[3];
-                if (std::fabs(curr_w) <= 1.0e-6f || std::fabs(prev_w) <= 1.0e-6f)
-                    continue;
+                    vec4_t current_clip = { ndc_x, ndc_y, 0.0f, 1.0f };
+                    vec4_t previous_clip;
+                    Matrix_TransformVec4(current_clip, current_to_prev, previous_clip);
 
-                const float inv_curr_w = 1.0f / curr_w;
-                const float inv_prev_w = 1.0f / prev_w;
-                const float current_ndc_x = current_clip[0] * inv_curr_w;
-                const float current_ndc_y = current_clip[1] * inv_curr_w;
-                const float prev_ndc_x = previous_clip[0] * inv_prev_w;
-                const float prev_ndc_y = previous_clip[1] * inv_prev_w;
-                const float velocity_x = (current_ndc_x - prev_ndc_x) * 0.5f;
-                const float velocity_y = (current_ndc_y - prev_ndc_y) * 0.5f;
+                    const float curr_w = current_clip[3];
+                    const float prev_w = previous_clip[3];
+                    if (std::fabs(curr_w) <= 1.0e-6f || std::fabs(prev_w) <= 1.0e-6f)
+                        continue;
 
-                const float base_ndc_speed = std::sqrt(velocity_x * velocity_x + velocity_y * velocity_y);
-                const float scaled_ndc_speed = base_ndc_speed * glr.motion_blur_scale;
-                if (scaled_ndc_speed > max_ndc_velocity)
-                    max_ndc_velocity = scaled_ndc_speed;
+                    const float inv_curr_w = 1.0f / curr_w;
+                    const float inv_prev_w = 1.0f / prev_w;
+                    const float current_ndc_x = current_clip[0] * inv_curr_w;
+                    const float current_ndc_y = current_clip[1] * inv_curr_w;
+                    const float prev_ndc_x = previous_clip[0] * inv_prev_w;
+                    const float prev_ndc_y = previous_clip[1] * inv_prev_w;
+                    const float velocity_x = (current_ndc_x - prev_ndc_x) * 0.5f;
+                    const float velocity_y = (current_ndc_y - prev_ndc_y) * 0.5f;
 
-                const float pixel_velocity_x = velocity_x * viewport_width;
-                const float pixel_velocity_y = velocity_y * viewport_height;
-                const float base_pixel_speed = std::sqrt(pixel_velocity_x * pixel_velocity_x + pixel_velocity_y * pixel_velocity_y);
-                const float scaled_pixel_speed = base_pixel_speed * glr.motion_blur_scale;
-                if (scaled_pixel_speed > max_pixel_velocity)
-                    max_pixel_velocity = scaled_pixel_speed;
+                    const float base_ndc_speed = std::sqrt(velocity_x * velocity_x + velocity_y * velocity_y);
+                    const float scaled_ndc_speed = base_ndc_speed * glr.motion_blur_scale;
+                    if (scaled_ndc_speed > max_ndc_velocity)
+                        max_ndc_velocity = scaled_ndc_speed;
+
+                    const float pixel_velocity_x = velocity_x * viewport_width;
+                    const float pixel_velocity_y = velocity_y * viewport_height;
+                    const float base_pixel_speed = std::sqrt(pixel_velocity_x * pixel_velocity_x + pixel_velocity_y * pixel_velocity_y);
+                    const float scaled_pixel_speed = base_pixel_speed * glr.motion_blur_scale;
+                    if (scaled_pixel_speed > max_pixel_velocity)
+                        max_pixel_velocity = scaled_pixel_speed;
+                }
             }
 
             motion_ready = (max_ndc_velocity >= min_ndc_threshold) || (max_pixel_velocity >= min_pixel_threshold);
@@ -360,10 +360,11 @@ void GL_Setup3D(void)
                 gls.u_block.motion_prev_view_proj[i] = gl_identity[i];
         }
 
-        gls.u_block.motion_params[0] = glr.motion_blur_ready ? glr.motion_blur_scale : 0.0f;
-        gls.u_block.motion_params[1] = R_MOTION_BLUR_MAX_SAMPLES;
-        gls.u_block.motion_params[2] = viewport_width;
-        gls.u_block.motion_params[3] = viewport_height;
+        const float blur_strength = glr.motion_blur_ready ? Q_bound(0.0f, glr.motion_blur_scale, 1.0f) : 0.0f;
+        gls.u_block.motion_params[0] = blur_strength;
+        gls.u_block.motion_params[1] = 0.0f;
+        gls.u_block.motion_params[2] = 0.0f;
+        gls.u_block.motion_params[3] = 0.0f;
 
         float search_radius_pixels = 0.0f;
         if (glr.fd.width > 0 && glr.fd.height > 0) {
@@ -376,6 +377,46 @@ void GL_Setup3D(void)
         gls.u_block.motion_thresholds[1] = min_pixel_threshold;
         gls.u_block.motion_thresholds[2] = search_radius_pixels;
         gls.u_block.motion_thresholds[3] = jitter;
+
+        float history_weights[R_MOTION_BLUR_HISTORY_FRAMES] = { 0.0f, 0.0f, 0.0f };
+        int history_indices[R_MOTION_BLUR_HISTORY_FRAMES] = { 0, 0, 0 };
+        int valid_history = 0;
+
+        if (glr.motion_blur_enabled && glr.view_proj_valid && glr.motion_blur_history_count > 0) {
+            const int max_frames = (std::min)(glr.motion_blur_history_count, R_MOTION_BLUR_HISTORY_FRAMES);
+            for (int i = 0; i < max_frames; ++i) {
+                int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) % R_MOTION_BLUR_HISTORY_FRAMES;
+                if (!glr.motion_history_valid[slot])
+                    continue;
+                history_indices[valid_history++] = slot;
+            }
+        }
+
+        const float current_weight = (std::max)(1.0f - blur_strength, 0.0f);
+        const float history_total = blur_strength;
+        const float per_history_weight = (valid_history > 0) ? history_total / static_cast<float>(valid_history) : 0.0f;
+        for (int i = 0; i < valid_history; ++i)
+            history_weights[i] = per_history_weight;
+
+        gls.u_block.motion_history_params[0] = static_cast<float>(valid_history);
+        gls.u_block.motion_history_params[1] = current_weight;
+        gls.u_block.motion_history_params[2] = blur_strength;
+        gls.u_block.motion_history_params[3] = 0.0f;
+
+        gls.u_block.motion_history_weights[0] = history_weights[0];
+        gls.u_block.motion_history_weights[1] = history_weights[1];
+        gls.u_block.motion_history_weights[2] = history_weights[2];
+        gls.u_block.motion_history_weights[3] = 0.0f;
+
+        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+            const float *source = gl_identity;
+            if (i < valid_history) {
+                const int slot = history_indices[i];
+                source = glr.motion_history_view_proj[slot];
+            }
+            for (int j = 0; j < 16; ++j)
+                gls.u_block.motion_history_view_proj[i][j] = source[j];
+        }
         gls.u_block_dirty = true;
     } else {
         glr.view_proj_valid = false;
@@ -384,6 +425,22 @@ void GL_Setup3D(void)
         gls.u_block.motion_thresholds[1] = 0.0f;
         gls.u_block.motion_thresholds[2] = 0.0f;
         gls.u_block.motion_thresholds[3] = 0.0f;
+        gls.u_block.motion_params[0] = 0.0f;
+        gls.u_block.motion_params[1] = 0.0f;
+        gls.u_block.motion_params[2] = 0.0f;
+        gls.u_block.motion_params[3] = 0.0f;
+        gls.u_block.motion_history_params[0] = 0.0f;
+        gls.u_block.motion_history_params[1] = 0.0f;
+        gls.u_block.motion_history_params[2] = 0.0f;
+        gls.u_block.motion_history_params[3] = 0.0f;
+        gls.u_block.motion_history_weights[0] = 0.0f;
+        gls.u_block.motion_history_weights[1] = 0.0f;
+        gls.u_block.motion_history_weights[2] = 0.0f;
+        gls.u_block.motion_history_weights[3] = 0.0f;
+        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+            for (int j = 0; j < 16; ++j)
+                gls.u_block.motion_history_view_proj[i][j] = gl_identity[j];
+        }
     }
 
     // enable depth writes before clearing

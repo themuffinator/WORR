@@ -170,6 +170,11 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         mat4 motion_inv_view_proj;
         vec4 motion_params;
         vec4 motion_thresholds;
+        vec4 motion_history_params;
+        vec4 motion_history_weights;
+    );
+    GLSP("        mat4 motion_history_view_proj[%d];\n", R_MOTION_BLUR_HISTORY_FRAMES);
+    GLSL(
         vec4 u_hdr_exposure;
         vec4 u_hdr_params0;
         vec4 u_hdr_params1;
@@ -1253,74 +1258,84 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         write_box_blur(buf);
 
     if (bits & GLS_MOTION_BLUR) {
-        GLSP("const int motion_max_samples = %d;\n", int(R_MOTION_BLUR_MAX_SAMPLES));
+        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i)
+            GLSP("uniform sampler2D u_history%d;\n", i);
         GLSL(vec3 apply_motion_blur(vec3 color, vec2 uv) {
-            if (motion_params.z <= 0.0 || motion_params.w <= 0.0)
+            float history_count = motion_history_params.x;
+            float blur_strength = clamp(motion_history_params.z, 0.0, 1.0);
+            if (history_count <= 0.0 || blur_strength <= 0.0)
                 return color;
-            float blur_strength = motion_params.x;
-            if (blur_strength <= 0.0)
-                return color;
-            vec2 viewport = vec2(motion_params.z, motion_params.w);
-            vec2 inv_viewport = 1.0 / viewport;
             float depth = texture(u_depth, uv).r;
-            vec2 depth_uv = uv;
-            if (depth >= 1.0) {
-                float radius_pixels = max(1.0, motion_thresholds.z);
-                float base_angle = 6.28318530718 * fract(motion_thresholds.w + dot(uv, vec2(0.06711056, 0.00583715)));
-                float radius_step = radius_pixels / 4.0;
-                float best_depth = depth;
-                vec2 best_uv = depth_uv;
-                for (int i = 0; i < 4; ++i) {
-                    float radius = (float(i) + 1.0) * radius_step;
-                    float angle = base_angle + float(i) * 1.57079632679;
-                    vec2 offset = vec2(cos(angle), sin(angle)) * radius * inv_viewport;
-                    vec2 sample_uv = clamp(uv + offset, vec2(0.0), vec2(1.0));
-                    float sample_depth = texture(u_depth, sample_uv).r;
-                    if (sample_depth < best_depth) {
-                        best_depth = sample_depth;
-                        best_uv = sample_uv;
-                    }
-                }
-                depth = best_depth;
-                depth_uv = best_uv;
-                if (depth >= 1.0)
-                    return color;
-            }
-            vec4 current_clip = vec4(depth_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            if (depth >= 1.0)
+                return color;
+            vec4 current_clip = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
             vec4 world_pos = motion_inv_view_proj * current_clip;
             if (abs(world_pos.w) <= 1e-6)
                 return color;
             world_pos /= world_pos.w;
-            vec4 prev_clip = motion_prev_view_proj * world_pos;
-            if (abs(prev_clip.w) <= 1e-6)
-                return color;
-            vec2 prev_ndc = prev_clip.xy / prev_clip.w;
-            vec2 current_ndc = current_clip.xy / current_clip.w;
-            vec2 base_velocity = (current_ndc - prev_ndc) * 0.5;
-            vec2 velocity = base_velocity * blur_strength;
-            float ndc_speed = length(velocity);
-            vec2 velocity_pixels = velocity * viewport;
-            float pixel_speed = length(velocity_pixels);
-            if (ndc_speed < motion_thresholds.x && pixel_speed < motion_thresholds.y)
-                return color;
-            float sample_count_f = min(motion_params.y, pixel_speed);
-            int sample_count = int(floor(sample_count_f));
-            if (sample_count <= 0)
-                return color;
-            vec3 accum = color;
-            float weight = 1.0;
-            float inv_steps = 1.0 / (float(sample_count) + 1.0);
-            for (int i = 1; i <= motion_max_samples; ++i) {
-                if (i > sample_count)
-                    break;
-                float t = float(i) * inv_steps;
-                vec2 offset = -velocity * t;
-                vec2 sample_uv = clamp(uv + offset, vec2(0.0), vec2(1.0));
-                float w = 1.0 - t * 0.5;
-                accum += texture(u_texture, sample_uv).rgb * w;
-                weight += w;
+
+            float current_weight = motion_history_params.y;
+            vec3 accum = color * current_weight;
+            float total_weight = current_weight;
+
+            if (history_count > 0.0) {
+                float weight = motion_history_weights[0];
+                if (weight > 0.0) {
+                    vec4 clip = motion_history_view_proj[0] * world_pos;
+                    if (abs(clip.w) > 1e-6) {
+                        vec3 ndc = clip.xyz / clip.w;
+                        if (ndc.z >= -1.0 && ndc.z <= 1.0) {
+                            vec2 history_uv = ndc.xy * 0.5 + 0.5;
+                            if (history_uv.x >= 0.0 && history_uv.x <= 1.0 && history_uv.y >= 0.0 && history_uv.y <= 1.0) {
+                                vec3 history_color = texture(u_history0, history_uv).rgb;
+                                accum += history_color * weight;
+                                total_weight += weight;
+                            }
+                        }
+                    }
+                }
             }
-            return accum / weight;
+
+            if (history_count > 1.0) {
+                float weight = motion_history_weights[1];
+                if (weight > 0.0) {
+                    vec4 clip = motion_history_view_proj[1] * world_pos;
+                    if (abs(clip.w) > 1e-6) {
+                        vec3 ndc = clip.xyz / clip.w;
+                        if (ndc.z >= -1.0 && ndc.z <= 1.0) {
+                            vec2 history_uv = ndc.xy * 0.5 + 0.5;
+                            if (history_uv.x >= 0.0 && history_uv.x <= 1.0 && history_uv.y >= 0.0 && history_uv.y <= 1.0) {
+                                vec3 history_color = texture(u_history1, history_uv).rgb;
+                                accum += history_color * weight;
+                                total_weight += weight;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (history_count > 2.0) {
+                float weight = motion_history_weights[2];
+                if (weight > 0.0) {
+                    vec4 clip = motion_history_view_proj[2] * world_pos;
+                    if (abs(clip.w) > 1e-6) {
+                        vec3 ndc = clip.xyz / clip.w;
+                        if (ndc.z >= -1.0 && ndc.z <= 1.0) {
+                            vec2 history_uv = ndc.xy * 0.5 + 0.5;
+                            if (history_uv.x >= 0.0 && history_uv.x <= 1.0 && history_uv.y >= 0.0 && history_uv.y <= 1.0) {
+                                vec3 history_color = texture(u_history2, history_uv).rgb;
+                                accum += history_color * weight;
+                                total_weight += weight;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (total_weight <= 0.0)
+                return color;
+            vec3 blended = accum / total_weight;
+            return mix(color, blended, blur_strength);
         });
     }
 
@@ -1690,8 +1705,12 @@ static GLuint create_and_use_program(glStateBits_t bits)
     if (bits & GLS_GLOWMAP_ENABLE)
         bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
 
-    if (bits & GLS_MOTION_BLUR)
+    if (bits & GLS_MOTION_BLUR) {
         bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
+        bind_texture_unit(program, "u_history0", TMU_HISTORY0);
+        bind_texture_unit(program, "u_history1", TMU_HISTORY1);
+        bind_texture_unit(program, "u_history2", TMU_HISTORY2);
+    }
     
     return program;
 
