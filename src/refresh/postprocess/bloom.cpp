@@ -14,19 +14,22 @@ namespace {
 }
 
 BloomEffect::BloomEffect() noexcept
-	: textures_{},
-	framebuffers_{},
-	sceneWidth_(0),
-	sceneHeight_(0),
-	downsampleWidth_(0),
-	downsampleHeight_(0),
-	initialized_(false)
+        : textures_{},
+        framebuffers_{},
+        sceneWidth_(0),
+        sceneHeight_(0),
+        downsampleWidth_(0),
+        downsampleHeight_(0),
+        postprocessInternalFormat_(0),
+        postprocessFormat_(0),
+        postprocessType_(0),
+        initialized_(false)
 {
 }
 
 BloomEffect::~BloomEffect()
 {
-	shutdown();
+        shutdown();
 }
 
 void BloomEffect::destroyTextures()
@@ -71,29 +74,28 @@ void BloomEffect::shutdown()
 	if (!initialized_)
 		return;
 
-	destroyTextures();
-	destroyFramebuffers();
+        destroyTextures();
+        destroyFramebuffers();
 
-	sceneWidth_ = 0;
-	sceneHeight_ = 0;
-	downsampleWidth_ = 0;
-	downsampleHeight_ = 0;
-	initialized_ = false;
+        sceneWidth_ = 0;
+        sceneHeight_ = 0;
+        downsampleWidth_ = 0;
+        downsampleHeight_ = 0;
+        postprocessInternalFormat_ = 0;
+        postprocessFormat_ = 0;
+        postprocessType_ = 0;
+        initialized_ = false;
 }
 
-void BloomEffect::allocateTexture(GLuint tex, int width, int height) const
+void BloomEffect::allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const
 {
-	qglBindTexture(GL_TEXTURE_2D, tex);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        qglBindTexture(GL_TEXTURE_2D, tex);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
-	const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
-	const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
-
-	qglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
+        qglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
 }
 
 bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const
@@ -129,26 +131,34 @@ void BloomEffect::resize(int sceneWidth, int sceneHeight)
 		return;
 	}
 
-	ensureInitialized();
-	if (!initialized_)
-		return;
+        ensureInitialized();
+        if (!initialized_)
+                return;
 
-	int downW = (std::max)(sceneWidth / 4, 1);
-	int downH = (std::max)(sceneHeight / 4, 1);
+        int downW = (std::max)(sceneWidth / 4, 1);
+        int downH = (std::max)(sceneHeight / 4, 1);
+        const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
+        const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
+        const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
 
-	if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
-		downsampleWidth_ == downW && downsampleHeight_ == downH)
-		return;
+        if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
+                downsampleWidth_ == downW && downsampleHeight_ == downH &&
+                postprocessInternalFormat_ == internalFormat && postprocessFormat_ == format &&
+                postprocessType_ == type)
+                return;
 
-	sceneWidth_ = sceneWidth;
-	sceneHeight_ = sceneHeight;
-	downsampleWidth_ = downW;
-	downsampleHeight_ = downH;
+        sceneWidth_ = sceneWidth;
+        sceneHeight_ = sceneHeight;
+        downsampleWidth_ = downW;
+        downsampleHeight_ = downH;
+        postprocessInternalFormat_ = internalFormat;
+        postprocessFormat_ = format;
+        postprocessType_ = type;
 
-	allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_);
-	allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_);
-	allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_);
-	allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_);
+        allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+        allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+        allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+        allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
 
 	bool ok = true;
 	ok &= attachFramebuffer(framebuffers_[DownsampleFbo], textures_[Downsample], downsampleWidth_, downsampleHeight_, "BLOOM_DOWNSAMPLE");

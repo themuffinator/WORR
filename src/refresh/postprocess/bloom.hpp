@@ -50,19 +50,22 @@ private:
 		FramebufferCount
 	};
 
-	void destroyTextures();
-	void destroyFramebuffers();
-	void ensureInitialized();
-	void allocateTexture(GLuint tex, int width, int height) const;
-	bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const;
+        void destroyTextures();
+        void destroyFramebuffers();
+        void ensureInitialized();
+        void allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const;
+        bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const;
 
-	GLuint textures_[TextureCount];
-	GLuint framebuffers_[FramebufferCount];
-	int sceneWidth_;
-	int sceneHeight_;
-	int downsampleWidth_;
-	int downsampleHeight_;
-	bool initialized_;
+        GLuint textures_[TextureCount];
+        GLuint framebuffers_[FramebufferCount];
+        int sceneWidth_;
+        int sceneHeight_;
+        int downsampleWidth_;
+        int downsampleHeight_;
+        GLenum postprocessInternalFormat_;
+        GLenum postprocessFormat_;
+        GLenum postprocessType_;
+        bool initialized_;
 };
 
 extern BloomEffect g_bloom_effect;

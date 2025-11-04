@@ -245,6 +245,8 @@ typedef struct {
     bool            motion_blur_enabled;
     bool            motion_blur_ready;
     float           motion_blur_scale;
+    float           motion_blur_min_velocity;
+    float           motion_blur_min_velocity_pixels;
     int             motion_blur_viewport_width;
     int             motion_blur_viewport_height;
     float           motion_blur_fov_x;
@@ -787,6 +789,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_TONEMAP_ENABLE      BIT_ULL(41)
 #define GLS_CRT_ENABLE          BIT_ULL(42)
 #define GLS_MOTION_BLUR         BIT_ULL(43)
+#define GLS_HDR_REDUCE          BIT_ULL(44)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_BOKEH_MASK          (GLS_BOKEH_COC | GLS_BOKEH_INITIAL | GLS_BOKEH_DOWNSAMPLE | GLS_BOKEH_GATHER | GLS_BOKEH_COMBINE)
@@ -801,13 +804,12 @@ void GL_LoadWorld(const char *name);
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR)
+                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR | GLS_HDR_REDUCE)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
-                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR)
+                                 GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR | GLS_HDR_REDUCE)
 
 inline constexpr float R_MOTION_BLUR_MAX_SAMPLES = 12.0f;
-inline constexpr float R_MOTION_BLUR_MATRIX_EPSILON = 1.0e-4f;
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -920,11 +922,13 @@ typedef struct {
     mat4_t      motion_prev_view_proj;
     mat4_t      motion_inv_view_proj;
     vec4_t      motion_params;
+    vec4_t      motion_thresholds;
     vec4_t      hdr_exposure;
     vec4_t      hdr_params0;
     vec4_t      hdr_params1;
     vec4_t      hdr_params2;
     vec4_t      hdr_params3;
+    vec4_t      hdr_reduce_params;
     vec4_t      crt_params0;
     vec4_t      crt_params1;
     vec4_t      crt_params2;

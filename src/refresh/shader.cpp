@@ -169,11 +169,13 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         mat4 motion_prev_view_proj;
         mat4 motion_inv_view_proj;
         vec4 motion_params;
+        vec4 motion_thresholds;
         vec4 u_hdr_exposure;
         vec4 u_hdr_params0;
         vec4 u_hdr_params1;
         vec4 u_hdr_params2;
         vec4 u_hdr_params3;
+        vec4 u_hdr_reduce_params;
         vec4 u_crt_params0;
         vec4 u_crt_params1;
         vec4 u_crt_params2;
@@ -1255,20 +1257,36 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(vec3 apply_motion_blur(vec3 color, vec2 uv) {
             if (motion_params.z <= 0.0 || motion_params.w <= 0.0)
                 return color;
-            const vec2 grid_count = vec2(20.0, 20.0);
-            vec2 cell_index = floor(uv * grid_count);
-            vec2 cell_center_uv = (cell_index + 0.5) / grid_count;
-            float depth = texture(u_depth, cell_center_uv).r;
-            if (depth >= 1.0) {
-                depth = texture(u_depth, uv).r;
-                if (depth >= 1.0)
-                    return color;
-                cell_center_uv = uv;
-            }
             float blur_strength = motion_params.x;
             if (blur_strength <= 0.0)
                 return color;
-            vec4 current_clip = vec4(cell_center_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            vec2 viewport = vec2(motion_params.z, motion_params.w);
+            vec2 inv_viewport = 1.0 / viewport;
+            float depth = texture(u_depth, uv).r;
+            vec2 depth_uv = uv;
+            if (depth >= 1.0) {
+                float radius_pixels = max(1.0, motion_thresholds.z);
+                float base_angle = 6.28318530718 * fract(motion_thresholds.w + dot(uv, vec2(0.06711056, 0.00583715)));
+                float radius_step = radius_pixels / 4.0;
+                float best_depth = depth;
+                vec2 best_uv = depth_uv;
+                for (int i = 0; i < 4; ++i) {
+                    float radius = (float(i) + 1.0) * radius_step;
+                    float angle = base_angle + float(i) * 1.57079632679;
+                    vec2 offset = vec2(cos(angle), sin(angle)) * radius * inv_viewport;
+                    vec2 sample_uv = clamp(uv + offset, vec2(0.0), vec2(1.0));
+                    float sample_depth = texture(u_depth, sample_uv).r;
+                    if (sample_depth < best_depth) {
+                        best_depth = sample_depth;
+                        best_uv = sample_uv;
+                    }
+                }
+                depth = best_depth;
+                depth_uv = best_uv;
+                if (depth >= 1.0)
+                    return color;
+            }
+            vec4 current_clip = vec4(depth_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
             vec4 world_pos = motion_inv_view_proj * current_clip;
             if (abs(world_pos.w) <= 1e-6)
                 return color;
@@ -1278,10 +1296,14 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
                 return color;
             vec2 prev_ndc = prev_clip.xy / prev_clip.w;
             vec2 current_ndc = current_clip.xy / current_clip.w;
-            vec2 velocity = (current_ndc - prev_ndc) * 0.5 * blur_strength;
-            vec2 viewport = vec2(motion_params.z, motion_params.w);
+            vec2 base_velocity = (current_ndc - prev_ndc) * 0.5;
+            vec2 velocity = base_velocity * blur_strength;
+            float ndc_speed = length(velocity);
             vec2 velocity_pixels = velocity * viewport;
-            float sample_count_f = min(motion_params.y, length(velocity_pixels));
+            float pixel_speed = length(velocity_pixels);
+            if (ndc_speed < motion_thresholds.x && pixel_speed < motion_thresholds.y)
+                return color;
+            float sample_count_f = min(motion_params.y, pixel_speed);
             int sample_count = int(floor(sample_count_f));
             if (sample_count <= 0)
                 return color;
@@ -1328,7 +1350,21 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_CRT_ENABLE)
             GLSL(vec2 crt_uv = tc;)
 
-        if (bits & GLS_BLUR_MASK)
+        if (bits & GLS_HDR_REDUCE) {
+            GLSL(vec2 offset = u_hdr_reduce_params.xy;)
+            GLSL(vec2 clamp_min = vec2(0.0);)
+            GLSL(vec2 clamp_max = vec2(1.0);)
+            GLSL(vec2 o0 = vec2(-offset.x, -offset.y);)
+            GLSL(vec2 o1 = vec2( offset.x, -offset.y);)
+            GLSL(vec2 o2 = vec2(-offset.x,  offset.y);)
+            GLSL(vec2 o3 = vec2( offset.x,  offset.y);)
+            GLSL(vec3 accum = vec3(0.0);)
+            GLSL(accum += texture(u_texture, clamp(tc + o0, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o1, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o2, clamp_min, clamp_max)).rgb;)
+            GLSL(accum += texture(u_texture, clamp(tc + o3, clamp_min, clamp_max)).rgb;)
+            GLSL(vec4 diffuse = vec4(accum * 0.25, 1.0);)
+        } else if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_bbr_params.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)

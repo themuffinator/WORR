@@ -24,6 +24,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
 #include "postprocess/crt.hpp"
+#include "postprocess/hdr_luminance.hpp"
 #include "font_freetype.hpp"
 #include <algorithm>
 #include <array>
@@ -94,6 +95,8 @@ cvar_t *r_output_peak_white;
 cvar_t *r_dither;
 cvar_t *r_motionBlur;
 cvar_t *r_motionBlurShutterSpeed;
+cvar_t *r_motionBlurMinVelocity;
+cvar_t *r_motionBlurMinVelocityPixels;
 cvar_t *r_ui_sdr_style;
 cvar_t *r_debug_histogram;
 cvar_t *r_debug_tonemap;
@@ -105,6 +108,8 @@ cvar_t *r_crt_maskLight;
 cvar_t *r_crt_scaleInLinearGamma;
 cvar_t *r_crt_shadowMask;
 cvar_t *r_crt_brightBoost;
+cvar_t *r_crt_warpX;
+cvar_t *r_crt_warpY;
 cvar_t *gl_dof;
 cvar_t *gl_dof_quality;
 cvar_t *gl_swapinterval;
@@ -157,6 +162,8 @@ enum tonemap_mode_t {
 };
 
 struct hdrStateLocal_t {
+    bool gpu_reduce_supported = false;
+    bool legacy_auto_supported = false;
     bool auto_supported = false;
     float noise_seed = 0.0f;
     std::vector<float> histogram_scratch;
@@ -761,7 +768,9 @@ static void HDR_InitializeCapabilities(void)
 {
     const bool float_textures = (gl_config.ver_gl >= QGL_VER(3, 0)) || (gl_config.ver_es >= QGL_VER(3, 0));
     gl_static.hdr.supported = float_textures;
-    hdr_state_local.auto_supported = qglGetTexImage != nullptr;
+    hdr_state_local.gpu_reduce_supported = gl_static.use_shaders;
+    hdr_state_local.legacy_auto_supported = qglGetTexImage != nullptr;
+    hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
 }
 
 static void HDR_UpdateConfig(void)
@@ -811,18 +820,43 @@ static void HDR_ComputeHistogram(int width, int height)
         return;
 
     const int sample_limit = 128;
-    const int sample_w = min(width, sample_limit);
-    const int sample_h = min(height, sample_limit);
-    if (sample_w <= 0 || sample_h <= 0)
+    int sample_w = min(width, sample_limit);
+    int sample_h = min(height, sample_limit);
+    float *scratch = nullptr;
+
+    bool have_samples = false;
+    if (hdr_state_local.gpu_reduce_supported && g_hdr_luminance.available()) {
+        int reduce_w = 0;
+        int reduce_h = 0;
+        if (g_hdr_luminance.readbackHistogram(sample_limit, hdr_state_local.histogram_scratch, reduce_w, reduce_h)) {
+            sample_w = reduce_w;
+            sample_h = reduce_h;
+            scratch = hdr_state_local.histogram_scratch.data();
+            have_samples = true;
+        }
+    }
+
+    if (!have_samples) {
+        if (!qglReadPixels)
+            return;
+
+        sample_w = min(width, sample_limit);
+        sample_h = min(height, sample_limit);
+        if (sample_w <= 0 || sample_h <= 0)
+            return;
+
+        hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
+        scratch = hdr_state_local.histogram_scratch.data();
+
+        qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+        qglReadBuffer(GL_COLOR_ATTACHMENT0);
+        qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        have_samples = true;
+    }
+
+    if (!have_samples || !scratch)
         return;
-
-    hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
-    float *scratch = hdr_state_local.histogram_scratch.data();
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
-    qglReadBuffer(GL_COLOR_ATTACHMENT0);
-    qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     constexpr int bins = 64;
     std::array<float, bins> counts{};
@@ -865,16 +899,43 @@ static void HDR_UpdateExposure(int width, int height)
     hdr_state_local.noise_seed = glr.fd.time;
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    if (qglGenerateMipmap)
-        qglGenerateMipmap(GL_TEXTURE_2D);
+
+    const bool need_reduction = hdr_state_local.gpu_reduce_supported &&
+        (gl_static.hdr.auto_exposure || gl_static.hdr.debug_histogram || gl_static.hdr.debug_tonemap);
+    bool reduction_ok = false;
+    if (need_reduction)
+        reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, width, height);
+
+    if (need_reduction && !reduction_ok)
+        hdr_state_local.gpu_reduce_supported = false;
 
     const int max_dim = max(width, height);
-    gl_static.hdr.max_mip_level = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
+    const int fallback_mip = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
+    bool use_fallback = !reduction_ok;
+    int target_mip = use_fallback ? fallback_mip : 0;
+
+    if (use_fallback && qglGenerateMipmap)
+        qglGenerateMipmap(GL_TEXTURE_2D);
 
     float pixel[4] = { gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, 1.0f };
-    if (hdr_state_local.auto_supported && qglGetTexImage) {
+    if (reduction_ok) {
+        if (!g_hdr_luminance.readbackAverage(pixel)) {
+            reduction_ok = false;
+            hdr_state_local.gpu_reduce_supported = false;
+            if (!use_fallback && qglGenerateMipmap)
+                qglGenerateMipmap(GL_TEXTURE_2D);
+            use_fallback = true;
+            target_mip = fallback_mip;
+        }
+    }
+
+    gl_static.hdr.max_mip_level = target_mip;
+
+    if (use_fallback && hdr_state_local.legacy_auto_supported && qglGetTexImage) {
         qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
     }
+
+    hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
 
     const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
     gl_static.hdr.average_luminance = luminance;
@@ -1305,6 +1366,8 @@ void R_RenderFrame(const refdef_t *fd)
         glr.prev_view_proj_valid = false;
     }
 
+    glr.motion_blur_min_velocity = (std::max)(r_motionBlurMinVelocity->value, 0.0f);
+    glr.motion_blur_min_velocity_pixels = (std::max)(r_motionBlurMinVelocityPixels->value, 0.0f);
     glr.motion_blur_scale = motion_blur_scale;
     glr.motion_blur_ready = false;
     glr.view_proj_valid = false;
@@ -1691,6 +1754,8 @@ static void GL_Register(void)
     r_dither = Cvar_Get("r_dither", "1", CVAR_ARCHIVE);
     r_motionBlur = Cvar_Get("r_motionBlur", "0", 0);
     r_motionBlurShutterSpeed = Cvar_Get("r_motionBlurShutterSpeed", "250.0", 0);
+    r_motionBlurMinVelocity = Cvar_Get("r_motionBlurMinVelocity", "0.0005", 0);
+    r_motionBlurMinVelocityPixels = Cvar_Get("r_motionBlurMinVelocityPixels", "0.5", 0);
     r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
     r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
     r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
@@ -1702,6 +1767,8 @@ static void GL_Register(void)
     r_crt_scaleInLinearGamma = Cvar_Get("r_crt_scaleInLinearGamma", "1", CVAR_ARCHIVE);
     r_crt_shadowMask = Cvar_Get("r_crt_shadowMask", "3", CVAR_ARCHIVE);
     r_crt_brightBoost = Cvar_Get("r_crt_brightBoost", "1.0", CVAR_ARCHIVE);
+    r_crt_warpX = Cvar_Get("r_crt_warpX", "0.031", CVAR_ARCHIVE);
+    r_crt_warpY = Cvar_Get("r_crt_warpY", "0.041", CVAR_ARCHIVE);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_dof_quality = Cvar_Get("gl_dof_quality", "1", CVAR_ARCHIVE);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);

@@ -755,6 +755,48 @@ r_bloomThreshold::
     this threshold are ignored during the bright-pass filter. Default value is
     0.8.
 
+r_crtmode::
+    Enables the CRT-Lottes post-processing shader. Default value is 0 (disabled).
+      - 0 — bypass the effect entirely
+      - 1 — enable CRT simulation using the shader parameters below
+
+r_crt_hardScan::
+    Adjusts scanline hardness. Lower (more negative) values sharpen dark scanline
+    falloff, higher values soften the transition. Default value is -8.0.
+
+r_crt_hardPix::
+    Controls pixel hardness within the shader's subpixel simulation. Default
+    value is -3.0.
+
+r_crt_maskDark::
+    Specifies the intensity of dark phosphor stripes in the simulated mask.
+    Default value is 0.5.
+
+r_crt_maskLight::
+    Specifies the intensity of bright phosphor stripes in the simulated mask.
+    Default value is 1.5.
+
+r_crt_scaleInLinearGamma::
+    Chooses whether mask computations are done in linear gamma space. Set to 1
+    to reduce banding and maintain brightness consistency. Default value is 1.
+
+r_crt_shadowMask::
+    Selects the shadow mask pattern. Values range from 0 to 4, with higher
+    values emulating denser phosphor layouts. Default value is 3.
+
+r_crt_brightBoost::
+    Increases overall brightness to compensate for mask darkening. Default value
+    is 1.0.
+
+r_crt_warpX::
+    Controls horizontal curvature. Use small positive values (default 0.031) for
+    subtle barrel distortion, or set to 0 to keep the display flat while
+    retaining scanlines and masks.
+
+r_crt_warpY::
+    Controls vertical curvature. Use small positive values (default 0.041) for a
+    rounded top/bottom edge, or set to 0 for a flat presentation.
+
 gl_flarespeed::
     Specifies flare fading effect speed. Default value is 8. Set this to 0
     for instant fading.
