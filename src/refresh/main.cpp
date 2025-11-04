@@ -95,6 +95,8 @@ cvar_t *r_output_peak_white;
 cvar_t *r_dither;
 cvar_t *r_motionBlur;
 cvar_t *r_motionBlurShutterSpeed;
+cvar_t *r_motionBlurMinVelocity;
+cvar_t *r_motionBlurMinVelocityPixels;
 cvar_t *r_ui_sdr_style;
 cvar_t *r_debug_histogram;
 cvar_t *r_debug_tonemap;
@@ -1357,6 +1359,8 @@ void R_RenderFrame(const refdef_t *fd)
         glr.prev_view_proj_valid = false;
     }
 
+    glr.motion_blur_min_velocity = (std::max)(r_motionBlurMinVelocity->value, 0.0f);
+    glr.motion_blur_min_velocity_pixels = (std::max)(r_motionBlurMinVelocityPixels->value, 0.0f);
     glr.motion_blur_scale = motion_blur_scale;
     glr.motion_blur_ready = false;
     glr.view_proj_valid = false;
@@ -1743,6 +1747,8 @@ static void GL_Register(void)
     r_dither = Cvar_Get("r_dither", "1", CVAR_ARCHIVE);
     r_motionBlur = Cvar_Get("r_motionBlur", "0", 0);
     r_motionBlurShutterSpeed = Cvar_Get("r_motionBlurShutterSpeed", "250.0", 0);
+    r_motionBlurMinVelocity = Cvar_Get("r_motionBlurMinVelocity", "0.0005", 0);
+    r_motionBlurMinVelocityPixels = Cvar_Get("r_motionBlurMinVelocityPixels", "0.5", 0);
     r_ui_sdr_style = Cvar_Get("r_ui_sdr_style", "1", CVAR_ARCHIVE);
     r_debug_histogram = Cvar_Get("r_debug_histogram", "0", CVAR_CHEAT);
     r_debug_tonemap = Cvar_Get("r_debug_tonemap", "0", CVAR_CHEAT);
