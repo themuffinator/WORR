@@ -20,6 +20,12 @@ To add a convincing cathode-ray tube presentation while staying performant, adop
 3. Expose key uniforms (mask strength, scanline weight, curvature, sharpness) to configuration so players can tailor the look.
 4. Consider pairing with an adjustable bloom pass to simulate phosphor persistence when bright highlights fade.
 
+### In-game configuration
+- `r_crt_hardScan`, `r_crt_hardPix`, and the mask/light controls focus on scanline thickness and subpixel layout.
+- `r_crt_warpX` and `r_crt_warpY` now provide direct access to horizontal and vertical curvature. Setting either value to `0`
+  flattens the display without altering scanline or mask intensity. Mode `0` of `r_crtmode` remains a quick way to disable the
+  entire post-process without changing stored curvature values.
+
 ## Licensing and Provenance
 - **License:** MIT (compatible with WORR's licensing).
 - **Source:** Maintained within the [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders/blob/master/crt/shaders/crt-lottes.glsl) repository and mirrored in the ReShade shader collection.
