@@ -105,6 +105,8 @@ cvar_t *r_crt_maskLight;
 cvar_t *r_crt_scaleInLinearGamma;
 cvar_t *r_crt_shadowMask;
 cvar_t *r_crt_brightBoost;
+cvar_t *r_crt_warpX;
+cvar_t *r_crt_warpY;
 cvar_t *gl_dof;
 cvar_t *gl_swapinterval;
 
@@ -1695,6 +1697,8 @@ static void GL_Register(void)
     r_crt_scaleInLinearGamma = Cvar_Get("r_crt_scaleInLinearGamma", "1", CVAR_ARCHIVE);
     r_crt_shadowMask = Cvar_Get("r_crt_shadowMask", "3", CVAR_ARCHIVE);
     r_crt_brightBoost = Cvar_Get("r_crt_brightBoost", "1.0", CVAR_ARCHIVE);
+    r_crt_warpX = Cvar_Get("r_crt_warpX", "0.031", CVAR_ARCHIVE);
+    r_crt_warpY = Cvar_Get("r_crt_warpY", "0.041", CVAR_ARCHIVE);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;

@@ -11,6 +11,8 @@ extern cvar_t* r_crt_maskLight;
 extern cvar_t* r_crt_scaleInLinearGamma;
 extern cvar_t* r_crt_shadowMask;
 extern cvar_t* r_crt_brightBoost;
+extern cvar_t* r_crt_warpX;
+extern cvar_t* r_crt_warpY;
 
 namespace {
         struct CrtConfig {
@@ -54,8 +56,9 @@ namespace {
 
         [[nodiscard]] CrtConfig gather_config(int mode) noexcept
         {
-                const float warpX = (mode == 1) ? 0.031f : 0.0f;
-                const float warpY = (mode == 1) ? 0.041f : 0.0f;
+                const bool warp_enabled = mode != 0;
+                const float warpX = warp_enabled ? (r_crt_warpX ? r_crt_warpX->value : 0.031f) : 0.0f;
+                const float warpY = warp_enabled ? (r_crt_warpY ? r_crt_warpY->value : 0.041f) : 0.0f;
 
                 return CrtConfig{
                         .hardScan = r_crt_hardScan ? r_crt_hardScan->value : -8.0f,
