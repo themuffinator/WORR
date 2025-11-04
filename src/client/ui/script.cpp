@@ -111,6 +111,9 @@ typedef enum {
     ITEM_KIND_SAVEGAME,
     ITEM_KIND_LOADGAME,
     ITEM_KIND_TOGGLE,
+    ITEM_KIND_CHECKBOX,
+    ITEM_KIND_DROPDOWN,
+    ITEM_KIND_RADIO,
     ITEM_KIND_FIELD,
     ITEM_KIND_BLANK,
     ITEM_KIND_IMAGEVALUES,
@@ -145,6 +148,12 @@ static menuItemTypeInfo ParseItemType(const char *type)
         return { MTYPE_LOADGAME, ITEM_KIND_LOADGAME };
     if (!Q_stricmp(type, "toggle"))
         return { MTYPE_TOGGLE, ITEM_KIND_TOGGLE };
+    if (!Q_stricmp(type, "checkbox"))
+        return { MTYPE_CHECKBOX, ITEM_KIND_CHECKBOX };
+    if (!Q_stricmp(type, "dropdown"))
+        return { MTYPE_DROPDOWN, ITEM_KIND_DROPDOWN };
+    if (!Q_stricmp(type, "radio"))
+        return { MTYPE_RADIO, ITEM_KIND_RADIO };
     if (!Q_stricmp(type, "field"))
         return { MTYPE_FIELD, ITEM_KIND_FIELD };
     if (!Q_stricmp(type, "blank"))
@@ -208,6 +217,146 @@ static bool Json_ReadBool(json_parse_t *parser)
     bool value = parser->buffer[tok->start] == 't';
     Json_Next(parser);
     return value;
+}
+
+static char *Json_CopyValueStringUI(json_parse_t *parser)
+{
+    jsmntok_t *tok = parser->pos;
+
+    if (tok->type == JSMN_STRING)
+        return Json_CopyStringUI(parser);
+    if (tok->type == JSMN_PRIMITIVE) {
+        size_t len = tok->end - tok->start;
+        char *out = UI_Malloc(len + 1);
+        memcpy(out, parser->buffer + tok->start, len);
+        out[len] = '\0';
+        Json_Next(parser);
+        return out;
+    }
+
+    Json_Error(parser, tok, "expected string or primitive value");
+    return NULL;
+}
+
+static uiItemCondition_t *ParseConditionObject(json_parse_t *parser)
+{
+    jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+    char *cvarName = NULL;
+    char *value = NULL;
+    float numericValue = 0.0f;
+    bool numericSet = false;
+    uiConditionOp_t op = UI_CONDITION_EQUALS;
+    bool opSet = false;
+
+    for (int i = 0; i < object->size; i++) {
+        if (!Json_Strcmp(parser, "cvar")) {
+            Json_Next(parser);
+            Z_Free(cvarName);
+            cvarName = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "equals")) {
+            Json_Next(parser);
+            Z_Free(value);
+            value = Json_CopyValueStringUI(parser);
+            op = UI_CONDITION_EQUALS;
+            opSet = true;
+            numericSet = false;
+        } else if (!Json_Strcmp(parser, "notEquals")) {
+            Json_Next(parser);
+            Z_Free(value);
+            value = Json_CopyValueStringUI(parser);
+            op = UI_CONDITION_NOT_EQUALS;
+            opSet = true;
+            numericSet = false;
+        } else if (!Json_Strcmp(parser, "greater")) {
+            Json_Next(parser);
+            numericValue = Json_ReadFloat(parser);
+            numericSet = true;
+            op = UI_CONDITION_GREATER;
+            opSet = true;
+        } else if (!Json_Strcmp(parser, "greaterOrEquals")) {
+            Json_Next(parser);
+            numericValue = Json_ReadFloat(parser);
+            numericSet = true;
+            op = UI_CONDITION_GREATER_EQUAL;
+            opSet = true;
+        } else if (!Json_Strcmp(parser, "less")) {
+            Json_Next(parser);
+            numericValue = Json_ReadFloat(parser);
+            numericSet = true;
+            op = UI_CONDITION_LESS;
+            opSet = true;
+        } else if (!Json_Strcmp(parser, "lessOrEquals")) {
+            Json_Next(parser);
+            numericValue = Json_ReadFloat(parser);
+            numericSet = true;
+            op = UI_CONDITION_LESS_EQUAL;
+            opSet = true;
+        } else {
+            Json_Next(parser);
+            Json_SkipToken(parser);
+        }
+    }
+
+    if (!cvarName)
+        Json_Error(parser, object, "condition requires cvar");
+    if (!opSet)
+        Json_Error(parser, object, "condition requires comparator");
+
+    uiItemCondition_t *condition = UI_Mallocz(sizeof(*condition));
+    condition->cvar = Cvar_WeakGet(cvarName);
+    condition->op = op;
+    condition->value = value;
+    condition->numericValue = numericValue;
+    condition->hasNumericValue = numericSet;
+
+    Z_Free(cvarName);
+
+    return condition;
+}
+
+static uiItemCondition_t *ParseConditionList(json_parse_t *parser, jsmntok_t *parent)
+{
+    uiItemCondition_t *head = NULL;
+    uiItemCondition_t **tail = &head;
+
+    if (parser->pos->type == JSMN_ARRAY) {
+        jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
+        for (int i = 0; i < array->size; i++) {
+            uiItemCondition_t *cond = ParseConditionObject(parser);
+            *tail = cond;
+            tail = &cond->next;
+        }
+    } else if (parser->pos->type == JSMN_OBJECT) {
+        uiItemCondition_t *cond = ParseConditionObject(parser);
+        *tail = cond;
+    } else {
+        Json_Error(parser, parser->pos, "conditional block must be an array or object");
+    }
+
+    if (!head)
+        Json_Error(parser, parent, "conditional block cannot be empty");
+
+    return head;
+}
+
+static void AttachCondition(menuCommon_t *common, uiItemCondition_t *conditions, bool enable)
+{
+    if (!conditions)
+        return;
+
+    if (!common->conditional)
+        common->conditional = UI_Mallocz(sizeof(*common->conditional));
+
+    uiItemCondition_t **target = enable ? &common->conditional->enable : &common->conditional->disable;
+
+    if (!*target) {
+        *target = conditions;
+    } else {
+        uiItemCondition_t *tail = *target;
+        while (tail->next)
+            tail = tail->next;
+        tail->next = conditions;
+    }
 }
 
 static void FinalizeSpinItems(menuSpinControl_t *s)
@@ -282,6 +431,20 @@ static void ParsePairOptions(json_parse_t *parser, menuSpinControl_t *s)
     }
 }
 
+static uiItemGroup_t *Menu_FindGroup(menuFrameWork_t *menu, const char *name)
+{
+    if (!menu->groups)
+        return NULL;
+
+    for (int i = 0; i < menu->numGroups; i++) {
+        uiItemGroup_t *group = menu->groups[i];
+        if (group && group->name && !Q_stricmp(group->name, name))
+            return group;
+    }
+
+    return NULL;
+}
+
 static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
 {
     static const char *const yes_no_names[] = { "no", "yes", NULL };
@@ -321,6 +484,9 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
     menuSeparator_t *separator = NULL;
     menuEpisodeSelector_t *episode = NULL;
     menuUnitSelector_t *unit = NULL;
+    menuCheckbox_t *checkbox = NULL;
+    menuDropdown_t *dropdown = NULL;
+    menuRadioButton_t *radio = NULL;
 
     switch (info.kind) {
     case ITEM_KIND_VALUES:
@@ -330,6 +496,24 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
     case ITEM_KIND_TOGGLE:
         spin = UI_Mallocz(sizeof(*spin));
         common = &spin->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_CHECKBOX:
+        checkbox = UI_Mallocz(sizeof(*checkbox));
+        common = &checkbox->generic;
+        common->type = info.type;
+        break;
+    case ITEM_KIND_DROPDOWN:
+        dropdown = UI_Mallocz(sizeof(*dropdown));
+        spin = &dropdown->spin;
+        common = &spin->generic;
+        common->type = info.type;
+        dropdown->binding = DROPDOWN_BINDING_LABEL;
+        dropdown->maxVisibleItems = 8;
+        break;
+    case ITEM_KIND_RADIO:
+        radio = UI_Mallocz(sizeof(*radio));
+        common = &radio->generic;
         common->type = info.type;
         break;
     case ITEM_KIND_RANGE:
@@ -410,6 +594,18 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
             Json_Next(parser);
             Z_Free(common->status);
             common->status = Json_CopyStringUI(parser);
+        } else if (!Json_Strcmp(parser, "group")) {
+            Json_Next(parser);
+            if (parser->pos->type != JSMN_STRING)
+                Json_Error(parser, parser->pos, "group must be a string");
+            char *groupName = Json_CopyStringUI(parser);
+            uiItemGroup_t *group = Menu_FindGroup(menu, groupName);
+            if (!group)
+                Json_Error(parser, object, "menu item references unknown group");
+            common->group = group;
+            if (group)
+                group->hasItems = true;
+            Z_Free(groupName);
         } else if (!Json_Strcmp(parser, "command")) {
             Json_Next(parser);
             char *cmd = Json_CopyStringUI(parser);
@@ -421,6 +617,18 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
                 bind->cmd = cmd;
             else
                 Z_Free(cmd);
+        } else if (!Json_Strcmp(parser, "disabled")) {
+            Json_Next(parser);
+            if (Json_ReadBool(parser))
+                common->flags |= QMF_DISABLED;
+            else
+                common->flags &= ~QMF_DISABLED;
+        } else if (!Json_Strcmp(parser, "enableWhen")) {
+            Json_Next(parser);
+            AttachCondition(common, ParseConditionList(parser, object), true);
+        } else if (!Json_Strcmp(parser, "disableWhen")) {
+            Json_Next(parser);
+            AttachCondition(common, ParseConditionList(parser, object), false);
         } else if (!Json_Strcmp(parser, "align")) {
             Json_Next(parser);
             char align[16];
@@ -440,15 +648,32 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
                 slider->cvar = Cvar_WeakGet(cvar);
             else if (field)
                 field->cvar = Cvar_WeakGet(cvar);
+            else if (checkbox)
+                checkbox->cvar = Cvar_WeakGet(cvar);
+            else if (radio)
+                radio->cvar = Cvar_WeakGet(cvar);
             Z_Free(cvar);
         } else if (!Json_Strcmp(parser, "options")) {
             Json_Next(parser);
             if (!spin)
                 Json_Error(parser, object, "options only valid for spin controls");
-            if (info.kind == ITEM_KIND_PAIRS)
+            jsmntok_t *arrayTok = Json_Ensure(parser, JSMN_ARRAY);
+            bool objects = arrayTok->size > 0 && (arrayTok + 1)->type == JSMN_OBJECT;
+            if (info.kind == ITEM_KIND_PAIRS || (dropdown && objects)) {
                 ParsePairOptions(parser, spin);
-            else
+                if (dropdown)
+                    dropdown->binding = DROPDOWN_BINDING_VALUE;
+            } else {
                 ParseSpinOptions(parser, spin);
+                if (dropdown && dropdown->binding == DROPDOWN_BINDING_VALUE)
+                    dropdown->binding = DROPDOWN_BINDING_LABEL;
+            }
+        } else if (!Json_Strcmp(parser, "value")) {
+            Json_Next(parser);
+            if (!radio)
+                Json_Error(parser, object, "value only valid for radio buttons");
+            Z_Free(radio->value);
+            radio->value = Json_CopyValueStringUI(parser);
         } else if (!Json_Strcmp(parser, "min")) {
             Json_Next(parser);
             if (!slider)
@@ -488,18 +713,27 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
             Z_Free(name);
         } else if (!Json_Strcmp(parser, "negate")) {
             Json_Next(parser);
-            if (!spin || (info.kind != ITEM_KIND_TOGGLE))
-                Json_Error(parser, object, "negate only valid for toggles");
-            spin->negate = Json_ReadBool(parser);
+            if (spin && info.kind == ITEM_KIND_TOGGLE) {
+                spin->negate = Json_ReadBool(parser);
+            } else if (checkbox) {
+                checkbox->negate = Json_ReadBool(parser);
+            } else {
+                Json_Error(parser, object, "negate only valid for toggles or checkboxes");
+            }
         } else if (!Json_Strcmp(parser, "bit")) {
             Json_Next(parser);
-            if (!spin || (info.kind != ITEM_KIND_TOGGLE))
-                Json_Error(parser, object, "bit only valid for toggles");
             int bit = Json_ReadInt(parser);
             if (bit < 0 || bit >= 32)
                 Json_Error(parser, object, "toggle bit must be between 0 and 31");
-            spin->mask = 1u << bit;
-            spin->generic.type = MTYPE_BITFIELD;
+            if (spin && info.kind == ITEM_KIND_TOGGLE) {
+                spin->mask = 1u << bit;
+                spin->generic.type = MTYPE_BITFIELD;
+            } else if (checkbox) {
+                checkbox->mask = 1u << bit;
+                checkbox->useBitmask = true;
+            } else {
+                Json_Error(parser, object, "bit only valid for toggles or checkboxes");
+            }
         } else if (!Json_Strcmp(parser, "center")) {
             Json_Next(parser);
             if (!field)
@@ -523,12 +757,51 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
                 field->width = width;
             } else if (spin && info.kind == ITEM_KIND_IMAGEVALUES) {
                 spin->generic.width = width;
+            } else if (dropdown) {
+                dropdown->spin.generic.width = width;
             }
         } else if (!Json_Strcmp(parser, "height")) {
             Json_Next(parser);
             if (!spin || info.kind != ITEM_KIND_IMAGEVALUES)
                 Json_Error(parser, object, "height only valid for image spin controls");
             spin->generic.height = Json_ReadInt(parser);
+        } else if (!Json_Strcmp(parser, "maxVisible")) {
+            Json_Next(parser);
+            if (!dropdown)
+                Json_Error(parser, object, "maxVisible only valid for dropdowns");
+            int maxVisible = Json_ReadInt(parser);
+            if (maxVisible < 1)
+                maxVisible = 1;
+            dropdown->maxVisibleItems = maxVisible;
+        } else if (!Json_Strcmp(parser, "valueBinding")) {
+            Json_Next(parser);
+            if (!dropdown)
+                Json_Error(parser, object, "valueBinding only valid for dropdowns");
+            char binding[16];
+            Json_CopyStringToBuffer(parser, binding, sizeof(binding));
+            if (!Q_stricmp(binding, "label")) {
+                dropdown->binding = DROPDOWN_BINDING_LABEL;
+            } else if (!Q_stricmp(binding, "value")) {
+                dropdown->binding = DROPDOWN_BINDING_VALUE;
+            } else if (!Q_stricmp(binding, "index")) {
+                dropdown->binding = DROPDOWN_BINDING_INDEX;
+            } else {
+                Json_Error(parser, object, "unsupported dropdown valueBinding");
+            }
+        } else if (!Json_Strcmp(parser, "checkedValue")) {
+            Json_Next(parser);
+            if (!checkbox)
+                Json_Error(parser, object, "checkedValue only valid for checkboxes");
+            Z_Free(checkbox->checkedValue);
+            checkbox->checkedValue = Json_CopyValueStringUI(parser);
+            checkbox->useStrings = true;
+        } else if (!Json_Strcmp(parser, "uncheckedValue")) {
+            Json_Next(parser);
+            if (!checkbox)
+                Json_Error(parser, object, "uncheckedValue only valid for checkboxes");
+            Z_Free(checkbox->uncheckedValue);
+            checkbox->uncheckedValue = Json_CopyValueStringUI(parser);
+            checkbox->useStrings = true;
         } else if (!Json_Strcmp(parser, "path")) {
             Json_Next(parser);
             if (!spin || info.kind != ITEM_KIND_IMAGEVALUES)
@@ -589,6 +862,28 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
             spin->mask = 1;
         spin->numItems = 2;
         break;
+    case ITEM_KIND_CHECKBOX:
+        if (!checkbox || !checkbox->cvar)
+            Json_Error(parser, object, "checkbox requires cvar");
+        if (checkbox->useStrings) {
+            if (!checkbox->checkedValue || !checkbox->uncheckedValue)
+                Json_Error(parser, object, "checkbox string values require checked and unchecked values");
+            if (checkbox->useBitmask)
+                Json_Error(parser, object, "checkbox cannot mix bitmask and string values");
+        }
+        if (checkbox->useBitmask && !checkbox->mask)
+            Json_Error(parser, object, "checkbox bit must be between 0 and 31");
+        break;
+    case ITEM_KIND_DROPDOWN:
+        if (!dropdown || !spin || !spin->cvar || !spin->itemnames)
+            Json_Error(parser, object, "dropdown requires cvar and options");
+        if (dropdown->maxVisibleItems < 1)
+            dropdown->maxVisibleItems = 1;
+        break;
+    case ITEM_KIND_RADIO:
+        if (!radio || !radio->cvar || !radio->value)
+            Json_Error(parser, object, "radio button requires cvar and value");
+        break;
     case ITEM_KIND_FIELD:
         if (!field || !field->cvar)
             Json_Error(parser, object, "field requires cvar");
@@ -613,7 +908,76 @@ static void ParseMenuItem(json_parse_t *parser, menuFrameWork_t *menu)
         break;
     }
 
+    common->defaultDisabled = (common->flags & QMF_DISABLED) != 0;
     Menu_AddItem(menu, common);
+}
+
+static void ParseMenuGroups(json_parse_t *parser, menuFrameWork_t *menu)
+{
+    jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+    menu->numGroups = array->size;
+    if (!menu->numGroups)
+        return;
+
+    menu->groups = UI_Mallocz(sizeof(uiItemGroup_t *) * menu->numGroups);
+
+    for (int i = 0; i < array->size; i++) {
+        jsmntok_t *object = Json_EnsureNext(parser, JSMN_OBJECT);
+        uiItemGroup_t *group = UI_Mallocz(sizeof(*group));
+        group->indent = RCOLUMN_OFFSET;
+        group->padding = MENU_SPACING / 2;
+        group->headerHeight = MENU_SPACING;
+
+        for (int j = 0; j < object->size; j++) {
+            if (!Json_Strcmp(parser, "name")) {
+                Json_Next(parser);
+                Z_Free(group->name);
+                group->name = Json_CopyStringUI(parser);
+            } else if (!Json_Strcmp(parser, "label")) {
+                Json_Next(parser);
+                Z_Free(group->label);
+                group->label = Json_CopyStringUI(parser);
+            } else if (!Json_Strcmp(parser, "indent")) {
+                Json_Next(parser);
+                group->indent = Json_ReadInt(parser);
+                if (group->indent < 0)
+                    group->indent = 0;
+            } else if (!Json_Strcmp(parser, "padding")) {
+                Json_Next(parser);
+                group->padding = Json_ReadInt(parser);
+                if (group->padding < 0)
+                    group->padding = 0;
+            } else if (!Json_Strcmp(parser, "border")) {
+                Json_Next(parser);
+                group->border = Json_ReadBool(parser);
+            } else if (!Json_Strcmp(parser, "background")) {
+                Json_Next(parser);
+                if (parser->pos->type != JSMN_STRING)
+                    Json_Error(parser, parser->pos, "group background must be a string");
+                char *value = Json_CopyStringUI(parser);
+                if (!SCR_ParseColor(value, &group->background))
+                    Json_Error(parser, object, "invalid group background color");
+                group->hasBackground = true;
+                Z_Free(value);
+            } else if (!Json_Strcmp(parser, "headerHeight")) {
+                Json_Next(parser);
+                group->headerHeight = Json_ReadInt(parser);
+                if (group->headerHeight < 0)
+                    group->headerHeight = 0;
+            } else {
+                Json_Next(parser);
+                Json_SkipToken(parser);
+            }
+        }
+
+        if (!group->name)
+            Json_Error(parser, object, "menu group missing name");
+        if (!group->label)
+            group->headerHeight = 0;
+
+        menu->groups[i] = group;
+    }
 }
 
 static void ApplyMenuBackground(menuFrameWork_t *menu, const char *value)
@@ -744,6 +1108,9 @@ static void ParseMenu(json_parse_t *parser)
         } else if (!Json_Strcmp(parser, "style")) {
             Json_Next(parser);
             ParseMenuStyle(parser, menu);
+        } else if (!Json_Strcmp(parser, "groups")) {
+            Json_Next(parser);
+            ParseMenuGroups(parser, menu);
         } else if (!Json_Strcmp(parser, "items")) {
             Json_Next(parser);
             jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);

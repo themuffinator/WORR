@@ -20,6 +20,111 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server/server.hpp"
 #include "common/files.hpp"
 
+#include <limits.h>
+
+static menuDropdown_t *ui_activeDropdown = NULL;
+
+static void UI_FreeConditionList(uiItemCondition_t *list)
+{
+    while (list) {
+        uiItemCondition_t *next = list->next;
+        Z_Free(list->value);
+        Z_Free(list);
+        list = next;
+    }
+}
+
+static void UI_FreeCommonExtensions(menuCommon_t *item)
+{
+    if (item->conditional) {
+        UI_FreeConditionList(item->conditional->enable);
+        UI_FreeConditionList(item->conditional->disable);
+        Z_Free(item->conditional);
+        item->conditional = NULL;
+    }
+}
+
+static bool UI_TestCondition(const uiItemCondition_t *condition)
+{
+    if (!condition)
+        return true;
+
+    const char *currentString = "";
+    float currentValue = 0.0f;
+
+    if (condition->cvar) {
+        currentString = condition->cvar->string ? condition->cvar->string : "";
+        currentValue = condition->cvar->value;
+    }
+
+    switch (condition->op) {
+    case UI_CONDITION_EQUALS:
+        if (!condition->value)
+            return currentString[0] == '\0';
+        return !strcmp(currentString, condition->value);
+    case UI_CONDITION_NOT_EQUALS:
+        if (!condition->value)
+            return currentString[0] != '\0';
+        return strcmp(currentString, condition->value) != 0;
+    case UI_CONDITION_GREATER:
+        return currentValue > condition->numericValue;
+    case UI_CONDITION_GREATER_EQUAL:
+        return currentValue >= condition->numericValue;
+    case UI_CONDITION_LESS:
+        return currentValue < condition->numericValue;
+    case UI_CONDITION_LESS_EQUAL:
+        return currentValue <= condition->numericValue;
+    }
+
+    return false;
+}
+
+static bool UI_EvaluateConditionAll(const uiItemCondition_t *conditions)
+{
+    for (const uiItemCondition_t *it = conditions; it; it = it->next) {
+        if (!UI_TestCondition(it))
+            return false;
+    }
+    return true;
+}
+
+static bool UI_EvaluateConditionAny(const uiItemCondition_t *conditions)
+{
+    for (const uiItemCondition_t *it = conditions; it; it = it->next) {
+        if (UI_TestCondition(it))
+            return true;
+    }
+    return false;
+}
+
+static void Menu_UpdateConditionalState(menuFrameWork_t *menu)
+{
+    for (int i = 0; i < menu->nitems; i++) {
+        auto *item = static_cast<menuCommon_t *>(menu->items[i]);
+        bool disabled = item->defaultDisabled;
+
+        if (item->conditional) {
+            if (item->conditional->enable)
+                disabled = !UI_EvaluateConditionAll(item->conditional->enable);
+            if (!disabled && item->conditional->disable)
+                disabled = UI_EvaluateConditionAny(item->conditional->disable);
+        }
+
+        if (disabled)
+            item->flags |= QMF_DISABLED;
+        else
+            item->flags &= ~QMF_DISABLED;
+    }
+
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu) {
+        if (ui_activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
+            Dropdown_Close(ui_activeDropdown, false);
+    }
+}
+
+static void Menu_DrawGroups(menuFrameWork_t *menu);
+static void Menu_UpdateGroupBounds(menuFrameWork_t *menu);
+
 /*
 ===================================================================
 
@@ -895,6 +1000,707 @@ static void Toggle_Pop(menuSpinControl_t *s)
         int value = s->negate ? (s->curvalue ? 0 : 1) : s->curvalue;
         Cvar_SetInteger(s->cvar, value, FROM_MENU);
     }
+}
+
+/*
+===================================================================
+
+CHECKBOX CONTROL
+
+===================================================================
+*/
+
+static bool Checkbox_GetState(const menuCheckbox_t *c)
+{
+    if (!c->cvar)
+        return false;
+
+    if (c->useBitmask)
+        return (c->cvar->integer & c->mask) != 0;
+
+    if (c->useStrings) {
+        if (!c->checkedValue)
+            return false;
+        return !strcmp(c->cvar->string ? c->cvar->string : "", c->checkedValue);
+    }
+
+    bool state = c->cvar->integer != 0;
+    return c->negate ? !state : state;
+}
+
+static void Checkbox_SetState(menuCheckbox_t *c, bool enable)
+{
+    if (!c->cvar)
+        return;
+
+    if (c->useBitmask) {
+        int value = c->cvar->integer;
+        if (enable)
+            value |= c->mask;
+        else
+            value &= ~c->mask;
+        Cvar_SetInteger(c->cvar, value, FROM_MENU);
+        return;
+    }
+
+    if (c->useStrings) {
+        const char *value = enable ? c->checkedValue : c->uncheckedValue;
+        if (value)
+            Cvar_SetByVar(c->cvar, value, FROM_MENU);
+        return;
+    }
+
+    int value = enable ? 1 : 0;
+    if (c->negate)
+        value = enable ? 0 : 1;
+    Cvar_SetInteger(c->cvar, value, FROM_MENU);
+}
+
+static menuSound_t Checkbox_Activate(menuCommon_t *item)
+{
+    auto *checkbox = reinterpret_cast<menuCheckbox_t *>(item);
+    bool checked = Checkbox_GetState(checkbox);
+    Checkbox_SetState(checkbox, !checked);
+
+    if (item->change)
+        item->change(item);
+
+    return QMS_MOVE;
+}
+
+static menuSound_t Checkbox_Keydown(menuCommon_t *item, int key)
+{
+    switch (key) {
+    case K_SPACE:
+        return Checkbox_Activate(item);
+    default:
+        return QMS_NOTHANDLED;
+    }
+}
+
+static menuSound_t Checkbox_Slide(menuCheckbox_t *c, int dir)
+{
+    if (dir == 0)
+        return QMS_NOTHANDLED;
+
+    bool current = Checkbox_GetState(c);
+    bool desired = dir > 0;
+
+    if (desired == current)
+        return QMS_BEEP;
+
+    Checkbox_SetState(c, desired);
+
+    if (c->generic.change)
+        c->generic.change(&c->generic);
+
+    return QMS_MOVE;
+}
+
+static void Checkbox_Init(menuCheckbox_t *c)
+{
+    c->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+
+    c->generic.rect.x = c->generic.x + LCOLUMN_OFFSET;
+    c->generic.rect.y = c->generic.y;
+    UI_StringDimensions(&c->generic.rect, c->generic.uiFlags | UI_RIGHT, c->generic.name ? c->generic.name : "");
+
+    const int padding = (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + CONCHAR_WIDTH * 4;
+    c->generic.rect.width += padding;
+    c->generic.rect.height = CONCHAR_HEIGHT;
+    c->generic.activate = Checkbox_Activate;
+    c->generic.keydown = Checkbox_Keydown;
+}
+
+static void Checkbox_Draw(menuCheckbox_t *c)
+{
+    const bool disabled = (c->generic.flags & QMF_DISABLED) != 0;
+    const bool focused = (c->generic.flags & QMF_HASFOCUS) != 0;
+
+    color_t labelColor = disabled ? uis.color.disabled : uis.color.normal;
+    color_t valueColor = disabled ? uis.color.disabled : (focused ? uis.color.active : uis.color.selection);
+
+    UI_DrawString(c->generic.x + LCOLUMN_OFFSET, c->generic.y,
+                  c->generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, labelColor,
+                  c->generic.name ? c->generic.name : "");
+
+    if (focused) {
+        if ((uis.realtime >> 8) & 1) {
+            UI_DrawChar(c->generic.x + RCOLUMN_OFFSET / 2, c->generic.y,
+                        c->generic.uiFlags | UI_RIGHT, valueColor, 13);
+        }
+    }
+
+    const char *mark = Checkbox_GetState(c) ? "[x]" : "[ ]";
+    UI_DrawString(c->generic.x + RCOLUMN_OFFSET, c->generic.y,
+                  c->generic.uiFlags | UI_LEFT, valueColor, mark);
+}
+
+static void Checkbox_Free(menuCheckbox_t *c)
+{
+    Z_Free(c->generic.name);
+    Z_Free(c->generic.status);
+    Z_Free(c->checkedValue);
+    Z_Free(c->uncheckedValue);
+    Z_Free(c);
+}
+
+/*
+===================================================================
+
+DROPDOWN CONTROL
+
+===================================================================
+*/
+
+static int Dropdown_ValueWidth(const menuDropdown_t *d)
+{
+    const int minimumWidth = CONCHAR_WIDTH * 10;
+    int width = d->spin.generic.rect.width - (RCOLUMN_OFFSET - LCOLUMN_OFFSET);
+    if (width < minimumWidth)
+        width = minimumWidth;
+    return width;
+}
+
+static vrect_t Dropdown_ValueRect(const menuDropdown_t *d)
+{
+    vrect_t rect;
+    rect.x = d->spin.generic.x + RCOLUMN_OFFSET;
+    rect.y = d->spin.generic.y;
+    rect.width = Dropdown_ValueWidth(d);
+    rect.height = CONCHAR_HEIGHT;
+    return rect;
+}
+
+static const char *Dropdown_GetLabel(const menuDropdown_t *d, int index)
+{
+    if (!d->spin.itemnames || index < 0 || index >= d->spin.numItems)
+        return "";
+    return d->spin.itemnames[index] ? d->spin.itemnames[index] : "";
+}
+
+static const char *Dropdown_GetValue(const menuDropdown_t *d, int index)
+{
+    if (index < 0 || index >= d->spin.numItems)
+        return "";
+    if (!d->spin.itemvalues || !d->spin.itemvalues[index])
+        return Dropdown_GetLabel(d, index);
+    return d->spin.itemvalues[index];
+}
+
+static void Dropdown_Commit(menuDropdown_t *d)
+{
+    menuSpinControl_t *spin = &d->spin;
+    if (!spin->cvar || spin->curvalue < 0 || spin->curvalue >= spin->numItems)
+        return;
+
+    switch (d->binding) {
+    case DROPDOWN_BINDING_LABEL:
+        Cvar_SetByVar(spin->cvar, Dropdown_GetLabel(d, spin->curvalue), FROM_MENU);
+        break;
+    case DROPDOWN_BINDING_VALUE:
+        Cvar_SetByVar(spin->cvar, Dropdown_GetValue(d, spin->curvalue), FROM_MENU);
+        break;
+    case DROPDOWN_BINDING_INDEX:
+        Cvar_SetInteger(spin->cvar, spin->curvalue, FROM_MENU);
+        break;
+    }
+}
+
+static void Dropdown_UpdateScroll(menuDropdown_t *d)
+{
+    if (!d->spin.numItems) {
+        d->scrollOffset = 0;
+        return;
+    }
+
+    const int visible = Q_min(d->maxVisibleItems, d->spin.numItems);
+    if (visible <= 0)
+        return;
+
+    if (d->scrollOffset < 0)
+        d->scrollOffset = 0;
+    if (d->scrollOffset > d->spin.numItems - visible)
+        d->scrollOffset = d->spin.numItems - visible;
+
+    int target = d->open ? d->hovered : d->spin.curvalue;
+    if (target < 0)
+        target = 0;
+
+    if (target < d->scrollOffset)
+        d->scrollOffset = target;
+    else if (target >= d->scrollOffset + visible)
+        d->scrollOffset = target - visible + 1;
+}
+
+static void Dropdown_SetSelection(menuDropdown_t *d, int index, bool notify)
+{
+    menuSpinControl_t *spin = &d->spin;
+    if (index < 0 || index >= spin->numItems)
+        return;
+
+    if (spin->curvalue == index && !notify)
+        return;
+
+    spin->curvalue = index;
+    Dropdown_Commit(d);
+
+    if (notify && spin->generic.change)
+        spin->generic.change(&spin->generic);
+
+    if (d->open)
+        d->hovered = index;
+
+    Dropdown_UpdateScroll(d);
+}
+
+static void Dropdown_Close(menuDropdown_t *d, bool applyHovered)
+{
+    if (!d || !d->open)
+        return;
+
+    if (applyHovered && d->hovered >= 0 && d->hovered < d->spin.numItems)
+        Dropdown_SetSelection(d, d->hovered, true);
+
+    d->open = false;
+    d->hovered = -1;
+    d->listRect = {};
+
+    if (ui_activeDropdown == d)
+        ui_activeDropdown = NULL;
+}
+
+static void Dropdown_Open(menuDropdown_t *d)
+{
+    if (!d)
+        return;
+
+    if (ui_activeDropdown && ui_activeDropdown != d)
+        Dropdown_Close(ui_activeDropdown, false);
+
+    d->open = true;
+    ui_activeDropdown = d;
+    d->hovered = d->spin.curvalue;
+    Dropdown_UpdateScroll(d);
+}
+
+static void Dropdown_DrawList(menuDropdown_t *d)
+{
+    if (!d->open || d->spin.numItems <= 0)
+        return;
+
+    const int visible = Q_min(d->maxVisibleItems, d->spin.numItems);
+    if (visible <= 0)
+        return;
+
+    Dropdown_UpdateScroll(d);
+
+    vrect_t valueRect = Dropdown_ValueRect(d);
+    const int itemHeight = CONCHAR_HEIGHT;
+    const int spacing = 2;
+
+    d->listRect.x = valueRect.x;
+    d->listRect.y = valueRect.y + valueRect.height + spacing;
+    d->listRect.width = valueRect.width;
+    d->listRect.height = visible * itemHeight;
+
+    color_t background = ColorSetAlpha(uis.color.background, 220);
+    R_DrawFill32(d->listRect.x, d->listRect.y - 1, d->listRect.width, d->listRect.height + 2, background);
+    UI_DrawRect8(&d->listRect, 1, 223);
+
+    for (int i = 0; i < visible; i++) {
+        int index = d->scrollOffset + i;
+        if (index >= d->spin.numItems)
+            break;
+
+        int y = d->listRect.y + i * itemHeight;
+        bool highlighted = (index == d->hovered);
+
+        if (highlighted) {
+            color_t highlight = ColorSetAlpha(uis.color.selection, 200);
+            R_DrawFill32(d->listRect.x, y, d->listRect.width, itemHeight, highlight);
+        }
+
+        color_t textColor;
+        if (d->spin.generic.flags & QMF_DISABLED)
+            textColor = uis.color.disabled;
+        else if (highlighted)
+            textColor = uis.color.active;
+        else
+            textColor = uis.color.normal;
+
+        UI_DrawString(d->listRect.x + CONCHAR_WIDTH, y,
+                      UI_LEFT, textColor, Dropdown_GetLabel(d, index));
+    }
+}
+
+static void Dropdown_Draw(menuDropdown_t *d)
+{
+    menuCommon_t &generic = d->spin.generic;
+    const bool disabled = (generic.flags & QMF_DISABLED) != 0;
+    const bool focused = (generic.flags & QMF_HASFOCUS) != 0;
+
+    color_t labelColor = disabled ? uis.color.disabled : uis.color.normal;
+    UI_DrawString(generic.x + LCOLUMN_OFFSET, generic.y,
+                  generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, labelColor,
+                  generic.name ? generic.name : "");
+
+    vrect_t valueRect = Dropdown_ValueRect(d);
+
+    color_t valueColor;
+    if (disabled)
+        valueColor = uis.color.disabled;
+    else if (focused || d->open)
+        valueColor = uis.color.active;
+    else
+        valueColor = uis.color.selection;
+
+    color_t fill = ColorSetAlpha(uis.color.background, 200);
+    R_DrawFill32(valueRect.x, valueRect.y, valueRect.width, valueRect.height, fill);
+    UI_DrawRect8(&valueRect, 1, 223);
+
+    if (focused && !d->open) {
+        if ((uis.realtime >> 8) & 1) {
+            UI_DrawChar(generic.x + RCOLUMN_OFFSET / 2, generic.y,
+                        generic.uiFlags | UI_RIGHT, valueColor, 13);
+        }
+    }
+
+    const char *label = (d->spin.curvalue >= 0 && d->spin.curvalue < d->spin.numItems)
+                            ? Dropdown_GetLabel(d, d->spin.curvalue)
+                            : "";
+
+    UI_DrawString(valueRect.x + CONCHAR_WIDTH, valueRect.y,
+                  UI_LEFT, valueColor, label);
+
+    const char *caret = d->open ? "^" : "v";
+    UI_DrawString(valueRect.x + valueRect.width - CONCHAR_WIDTH * 2, valueRect.y,
+                  UI_LEFT, valueColor, caret);
+
+    if (!d->open)
+        d->listRect = {};
+}
+
+static menuSound_t Dropdown_Activate(menuCommon_t *item)
+{
+    auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+
+    if (dropdown->open) {
+        Dropdown_Close(dropdown, dropdown->hovered >= 0);
+        return QMS_MOVE;
+    }
+
+    if (!(item->flags & QMF_DISABLED)) {
+        Dropdown_Open(dropdown);
+        Dropdown_UpdateScroll(dropdown);
+        return QMS_IN;
+    }
+
+    return QMS_NOTHANDLED;
+}
+
+static menuSound_t Dropdown_Keydown(menuCommon_t *item, int key)
+{
+    auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+
+    if (dropdown->open) {
+        switch (key) {
+        case K_ESCAPE:
+            Dropdown_Close(dropdown, false);
+            return QMS_SILENT;
+        case K_ENTER:
+        case K_KP_ENTER:
+            Dropdown_Close(dropdown, true);
+            return QMS_MOVE;
+        case K_KP_UPARROW:
+        case K_UPARROW:
+        case 'k':
+        case K_MWHEELUP:
+            if (dropdown->hovered > 0) {
+                dropdown->hovered--;
+                Dropdown_UpdateScroll(dropdown);
+                return QMS_MOVE;
+            }
+            return QMS_BEEP;
+        case K_KP_DOWNARROW:
+        case K_DOWNARROW:
+        case 'j':
+        case K_MWHEELDOWN:
+            if (dropdown->hovered < dropdown->spin.numItems - 1) {
+                dropdown->hovered++;
+                Dropdown_UpdateScroll(dropdown);
+                return QMS_MOVE;
+            }
+            return QMS_BEEP;
+        case K_HOME:
+        case K_KP_HOME:
+            dropdown->hovered = 0;
+            Dropdown_UpdateScroll(dropdown);
+            return QMS_MOVE;
+        case K_END:
+        case K_KP_END:
+            dropdown->hovered = dropdown->spin.numItems - 1;
+            Dropdown_UpdateScroll(dropdown);
+            return QMS_MOVE;
+        case K_SPACE:
+            Dropdown_Close(dropdown, true);
+            return QMS_MOVE;
+        default:
+            break;
+        }
+    } else {
+        switch (key) {
+        case K_SPACE:
+        case K_ENTER:
+        case K_KP_ENTER:
+            return Dropdown_Activate(item);
+        default:
+            break;
+        }
+    }
+
+    return QMS_NOTHANDLED;
+}
+
+static menuSound_t Dropdown_MouseMove(menuDropdown_t *d)
+{
+    if (!d->open)
+        return QMS_NOTHANDLED;
+
+    if (d->spin.numItems <= 0)
+        return QMS_NOTHANDLED;
+
+    if (!UI_CursorInRect(&d->listRect)) {
+        if (d->hovered != -1) {
+            d->hovered = -1;
+            return QMS_MOVE;
+        }
+        return QMS_NOTHANDLED;
+    }
+
+    int relative = uis.mouseCoords[1] - d->listRect.y;
+    if (relative < 0)
+        relative = 0;
+
+    int index = d->scrollOffset + relative / CONCHAR_HEIGHT;
+    index = Q_clip(index, 0, d->spin.numItems - 1);
+
+    if (index != d->hovered) {
+        d->hovered = index;
+        return QMS_MOVE;
+    }
+
+    return QMS_NOTHANDLED;
+}
+
+static menuSound_t Dropdown_Slide(menuDropdown_t *d, int dir)
+{
+    if (!d->spin.numItems)
+        return QMS_BEEP;
+
+    int next = d->spin.curvalue + dir;
+
+    if (next < 0)
+        next = d->spin.numItems - 1;
+    else if (next >= d->spin.numItems)
+        next = 0;
+
+    if (next == d->spin.curvalue)
+        return QMS_BEEP;
+
+    Dropdown_SetSelection(d, next, true);
+    return QMS_MOVE;
+}
+
+static void Dropdown_Init(menuDropdown_t *d)
+{
+    SpinControl_Init(&d->spin);
+
+    d->spin.generic.activate = Dropdown_Activate;
+    d->spin.generic.keydown = Dropdown_Keydown;
+    d->hovered = -1;
+    d->scrollOffset = 0;
+    d->open = false;
+    d->listRect = {};
+
+    // ensure enough width for dropdown visuals
+    vrect_t rect = Dropdown_ValueRect(d);
+    d->spin.generic.rect.width = (rect.x + rect.width) - (d->spin.generic.x + LCOLUMN_OFFSET);
+    d->spin.generic.rect.height = CONCHAR_HEIGHT;
+}
+
+static void Dropdown_Push(menuDropdown_t *d)
+{
+    menuSpinControl_t *spin = &d->spin;
+    spin->curvalue = -1;
+
+    if (!spin->cvar)
+        return;
+
+    switch (d->binding) {
+    case DROPDOWN_BINDING_LABEL: {
+        const char *value = spin->cvar->string ? spin->cvar->string : "";
+        for (int i = 0; i < spin->numItems; i++) {
+            if (!Q_stricmp(Dropdown_GetLabel(d, i), value)) {
+                spin->curvalue = i;
+                break;
+            }
+        }
+        break;
+    }
+    case DROPDOWN_BINDING_VALUE: {
+        const char *value = spin->cvar->string ? spin->cvar->string : "";
+        for (int i = 0; i < spin->numItems; i++) {
+            if (!Q_stricmp(Dropdown_GetValue(d, i), value)) {
+                spin->curvalue = i;
+                break;
+            }
+        }
+        break;
+    }
+    case DROPDOWN_BINDING_INDEX: {
+        int value = spin->cvar->integer;
+        if (value >= 0 && value < spin->numItems)
+            spin->curvalue = value;
+        break;
+    }
+    }
+
+    if (spin->curvalue < 0 && spin->numItems)
+        spin->curvalue = 0;
+
+    Dropdown_UpdateScroll(d);
+}
+
+static void Dropdown_Pop(menuDropdown_t *d)
+{
+    Dropdown_Close(d, false);
+    Dropdown_Commit(d);
+}
+
+static void Dropdown_Free(menuDropdown_t *d)
+{
+    if (ui_activeDropdown == d)
+        ui_activeDropdown = NULL;
+
+    Z_Free(d->spin.generic.name);
+    Z_Free(d->spin.generic.status);
+
+    if (d->spin.itemnames) {
+        for (int i = 0; i < d->spin.numItems; i++)
+            Z_Free(d->spin.itemnames[i]);
+        Z_Free(d->spin.itemnames);
+    }
+
+    if (d->spin.itemvalues) {
+        for (int i = 0; i < d->spin.numItems; i++)
+            Z_Free(d->spin.itemvalues[i]);
+        Z_Free(d->spin.itemvalues);
+    }
+
+    Z_Free(d);
+}
+
+/*
+===================================================================
+
+RADIO BUTTON CONTROL
+
+===================================================================
+*/
+
+static bool RadioButton_IsSelected(const menuRadioButton_t *r)
+{
+    if (!r->cvar || !r->value)
+        return false;
+
+    const char *current = r->cvar->string ? r->cvar->string : "";
+    return !Q_stricmp(current, r->value);
+}
+
+static void RadioButton_Select(menuRadioButton_t *r)
+{
+    if (!r->cvar || !r->value)
+        return;
+
+    if (RadioButton_IsSelected(r))
+        return;
+
+    Cvar_SetByVar(r->cvar, r->value, FROM_MENU);
+
+    if (r->generic.change)
+        r->generic.change(&r->generic);
+}
+
+static menuSound_t RadioButton_Activate(menuCommon_t *item)
+{
+    auto *radio = reinterpret_cast<menuRadioButton_t *>(item);
+
+    if (item->flags & QMF_DISABLED)
+        return QMS_BEEP;
+
+    RadioButton_Select(radio);
+    return QMS_MOVE;
+}
+
+static menuSound_t RadioButton_Keydown(menuCommon_t *item, int key)
+{
+    switch (key) {
+    case K_SPACE:
+        return RadioButton_Activate(item);
+    default:
+        return QMS_NOTHANDLED;
+    }
+}
+
+static void RadioButton_Init(menuRadioButton_t *r)
+{
+    r->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+
+    r->generic.rect.x = r->generic.x + LCOLUMN_OFFSET;
+    r->generic.rect.y = r->generic.y;
+    UI_StringDimensions(&r->generic.rect,
+                        r->generic.uiFlags | UI_RIGHT, r->generic.name ? r->generic.name : "");
+
+    const int padding = (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + CONCHAR_WIDTH * 4;
+    r->generic.rect.width += padding;
+    r->generic.rect.height = CONCHAR_HEIGHT;
+
+    r->generic.activate = RadioButton_Activate;
+    r->generic.keydown = RadioButton_Keydown;
+}
+
+static void RadioButton_Draw(menuRadioButton_t *r)
+{
+    const bool disabled = (r->generic.flags & QMF_DISABLED) != 0;
+    const bool focused = (r->generic.flags & QMF_HASFOCUS) != 0;
+    const bool selected = RadioButton_IsSelected(r);
+
+    color_t labelColor = disabled ? uis.color.disabled : uis.color.normal;
+    color_t valueColor = disabled ? uis.color.disabled : (selected ? uis.color.active : uis.color.selection);
+
+    UI_DrawString(r->generic.x + LCOLUMN_OFFSET, r->generic.y,
+                  r->generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, labelColor,
+                  r->generic.name ? r->generic.name : "");
+
+    if (focused) {
+        if ((uis.realtime >> 8) & 1) {
+            UI_DrawChar(r->generic.x + RCOLUMN_OFFSET / 2, r->generic.y,
+                        r->generic.uiFlags | UI_RIGHT, valueColor, 13);
+        }
+    }
+
+    const char *mark = selected ? "(o)" : "( )";
+    UI_DrawString(r->generic.x + RCOLUMN_OFFSET, r->generic.y,
+                  r->generic.uiFlags | UI_LEFT, valueColor, mark);
+}
+
+static void RadioButton_Free(menuRadioButton_t *r)
+{
+    Z_Free(r->generic.name);
+    Z_Free(r->generic.status);
+    Z_Free(r->value);
+    Z_Free(r);
 }
 
 // Episode selector
@@ -1987,6 +2793,15 @@ void Menu_Init(menuFrameWork_t *menu)
         case MTYPE_IMAGESPINCONTROL:
             ImageSpinControl_Init(static_cast<menuSpinControl_t *>(rawItem));
             break;
+        case MTYPE_CHECKBOX:
+            Checkbox_Init(reinterpret_cast<menuCheckbox_t *>(rawItem));
+            break;
+        case MTYPE_DROPDOWN:
+            Dropdown_Init(reinterpret_cast<menuDropdown_t *>(rawItem));
+            break;
+        case MTYPE_RADIO:
+            RadioButton_Init(reinterpret_cast<menuRadioButton_t *>(rawItem));
+            break;
         case MTYPE_ACTION:
         case MTYPE_SAVEGAME:
         case MTYPE_LOADGAME:
@@ -2018,12 +2833,25 @@ void Menu_Init(menuFrameWork_t *menu)
         }
     }
 
+    Menu_UpdateGroupBounds(menu);
+
     // calc menu bounding box
     UI_ClearBounds(menu->mins, menu->maxs);
 
     for (int i = 0; i < menu->nitems; i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         UI_AddRectToBounds(&item->rect, menu->mins, menu->maxs);
+    }
+
+    if (menu->groups) {
+        for (int i = 0; i < menu->numGroups; i++) {
+            uiItemGroup_t *group = menu->groups[i];
+            if (!group || !group->active)
+                continue;
+            if (group->rect.width <= 0 || group->rect.height <= 0)
+                continue;
+            UI_AddRectToBounds(&group->rect, menu->mins, menu->maxs);
+        }
     }
 
     // expand
@@ -2044,18 +2872,48 @@ void Menu_Size(menuFrameWork_t *menu)
     int x, y, w;
     int h = 0;
     int widest = -1;
+    uiItemGroup_t *currentGroup = NULL;
 
-    // count visible items
+    if (menu->groups) {
+        for (int i = 0; i < menu->numGroups; i++) {
+            uiItemGroup_t *group = menu->groups[i];
+            if (!group)
+                continue;
+            group->active = false;
+            group->contentTop = 0;
+            group->contentBottom = 0;
+            group->headerY = 0;
+            group->baseX = 0;
+            group->rect = {};
+            group->headerRect = {};
+        }
+    }
+
+    // count visible items including groups
     for (int i = 0; i < menu->nitems; i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
-        if (item->flags & QMF_HIDDEN) {
+        if (item->flags & QMF_HIDDEN)
             continue;
+
+        uiItemGroup_t *group = item->group;
+        if (group && !group->hasItems)
+            group = NULL;
+
+        if (group != currentGroup) {
+            if (currentGroup)
+                h += currentGroup->padding;
+            if (group) {
+                group->active = true;
+                h += group->headerHeight;
+                h += group->padding;
+            }
+            currentGroup = group;
         }
+
         if (item->type == MTYPE_BITMAP) {
             h += GENERIC_SPACING(item->height);
-            if (widest < item->width) {
+            if (widest < item->width)
                 widest = item->width;
-            }
         } else if (item->type == MTYPE_IMAGESPINCONTROL) {
             h += GENERIC_SPACING(item->height);
         } else {
@@ -2063,10 +2921,12 @@ void Menu_Size(menuFrameWork_t *menu)
         }
     }
 
+    if (currentGroup)
+        h += currentGroup->padding;
+
     // account for banner
-    if (menu->banner) {
+    if (menu->banner)
         h += GENERIC_SPACING(menu->banner_rc.height);
-    }
 
     // set menu top/bottom
     if (menu->compact) {
@@ -2084,16 +2944,25 @@ void Menu_Size(menuFrameWork_t *menu)
         // if menu has bitmaps, it is expected to have plaque and logo
         // align them horizontally to avoid going off screen on small resolution
         w = widest + CURSOR_WIDTH;
-        if (menu->plaque_rc.width > menu->logo_rc.width) {
+        if (menu->plaque_rc.width > menu->logo_rc.width)
             w += menu->plaque_rc.width;
-        } else {
+        else
             w += menu->logo_rc.width;
-        }
         x = (uis.width + w) / 2 - widest;
     }
 
     // set menu vertical base
     y = (uis.height - h) / 2;
+
+    if (menu->groups) {
+        for (int i = 0; i < menu->numGroups; i++) {
+            uiItemGroup_t *group = menu->groups[i];
+            if (!group)
+                continue;
+            group->contentTop = 0;
+            group->contentBottom = 0;
+        }
+    }
 
     // banner is horizontally centered and
     // positioned on top of all menu items
@@ -2106,12 +2975,10 @@ void Menu_Size(menuFrameWork_t *menu)
     // plaque and logo are vertically centered and
     // positioned to the left of bitmaps and cursor
     h = 0;
-    if (menu->plaque) {
+    if (menu->plaque)
         h += menu->plaque_rc.height;
-    }
-    if (menu->logo) {
+    if (menu->logo)
         h += menu->logo_rc.height + 5;
-    }
 
     if (menu->plaque) {
         menu->plaque_rc.x = x - CURSOR_WIDTH - menu->plaque_rc.width;
@@ -2124,13 +2991,33 @@ void Menu_Size(menuFrameWork_t *menu)
     }
 
     // align items
+    currentGroup = NULL;
     for (int i = 0; i < menu->nitems; i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
-        if (item->flags & QMF_HIDDEN) {
+        if (item->flags & QMF_HIDDEN)
             continue;
+
+        uiItemGroup_t *group = item->group;
+        if (group && !group->hasItems)
+            group = NULL;
+
+        if (group != currentGroup) {
+            if (currentGroup)
+                y += currentGroup->padding;
+            if (group) {
+                group->headerY = y;
+                group->baseX = x + group->indent;
+                if (group->headerHeight > 0)
+                    y += group->headerHeight;
+                y += group->padding;
+                group->contentTop = y;
+            }
+            currentGroup = group;
         }
-        item->x = x;
+
+        item->x = group ? x + group->indent : x;
         item->y = y;
+
         if (item->type == MTYPE_BITMAP) {
             y += GENERIC_SPACING(item->height);
         } else if (item->type == MTYPE_IMAGESPINCONTROL) {
@@ -2138,8 +3025,113 @@ void Menu_Size(menuFrameWork_t *menu)
         } else {
             y += MENU_SPACING;
         }
+
+        if (group)
+            group->contentBottom = y;
     }
 
+    if (currentGroup)
+        y += currentGroup->padding;
+}
+
+static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
+{
+    if (!menu->groups)
+        return;
+
+    for (int i = 0; i < menu->numGroups; i++) {
+        uiItemGroup_t *group = menu->groups[i];
+        if (!group)
+            continue;
+
+        if (!group->active) {
+            group->rect = {};
+            group->headerRect = {};
+            continue;
+        }
+
+        int minX = INT_MAX;
+        int maxX = INT_MIN;
+        int minY = INT_MAX;
+        int maxY = INT_MIN;
+
+        for (int j = 0; j < menu->nitems; j++) {
+            auto *item = static_cast<menuCommon_t *>(menu->items[j]);
+            if (item->flags & QMF_HIDDEN)
+                continue;
+            if (item->group != group)
+                continue;
+
+            const vrect_t &rect = item->rect;
+            if (minX > rect.x)
+                minX = rect.x;
+            if (maxX < rect.x + rect.width)
+                maxX = rect.x + rect.width;
+            if (minY > rect.y)
+                minY = rect.y;
+            if (maxY < rect.y + rect.height)
+                maxY = rect.y + rect.height;
+        }
+
+        if (minX == INT_MAX || maxX == INT_MIN) {
+            group->active = false;
+            group->rect = {};
+            group->headerRect = {};
+            continue;
+        }
+
+        int top = group->headerHeight > 0 ? group->headerY : group->contentTop - group->padding;
+        int bottom = group->contentBottom + group->padding;
+        if (bottom < top)
+            bottom = top + group->headerHeight;
+
+        group->rect.x = minX - group->padding;
+        group->rect.y = top;
+        group->rect.width = (maxX - minX) + group->padding * 2;
+        group->rect.height = bottom - top;
+
+        if (group->rect.width < CONCHAR_WIDTH)
+            group->rect.width = CONCHAR_WIDTH;
+        if (group->rect.height < group->headerHeight)
+            group->rect.height = group->headerHeight;
+
+        group->headerRect.x = group->baseX;
+        group->headerRect.y = group->headerY;
+        group->headerRect.width = group->rect.width;
+        group->headerRect.height = group->headerHeight;
+    }
+}
+
+static void Menu_DrawGroups(menuFrameWork_t *menu)
+{
+    if (!menu->groups)
+        return;
+
+    for (int i = 0; i < menu->numGroups; i++) {
+        uiItemGroup_t *group = menu->groups[i];
+        if (!group || !group->active)
+            continue;
+
+        if (group->rect.width <= 0 || group->rect.height <= 0)
+            continue;
+
+        color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, 160);
+        R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
+
+        if (group->border) {
+            color_t border = ColorSetAlpha(uis.color.selection, 200);
+            R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
+            R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
+            R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);
+            R_DrawFill32(group->rect.x + group->rect.width - 1, group->rect.y, 1, group->rect.height, border);
+        }
+
+        if (group->label && group->headerHeight > 0) {
+            color_t labelColor = uis.color.normal;
+            UI_DrawString(group->baseX + LCOLUMN_OFFSET, group->headerRect.y,
+                          UI_LEFT | UI_ALTCOLOR, labelColor, group->label);
+        }
+    }
 }
 
 menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
@@ -2168,6 +3160,11 @@ void Menu_SetFocus(menuCommon_t *focus)
     }
 
     menu = focus->parent;
+
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu &&
+        &ui_activeDropdown->spin.generic != focus) {
+        Dropdown_Close(ui_activeDropdown, false);
+    }
 
     for (i = 0; i < menu->nitems; i++) {
         item = static_cast<menuCommon_t *>(menu->items[i]);
@@ -2309,6 +3306,37 @@ void Menu_Draw(menuFrameWork_t *menu)
 {
     color_t color = COLOR_WHITE;
 
+    Menu_UpdateConditionalState(menu);
+
+    menuCommon_t *focusItem = Menu_ItemAtCursor(menu);
+    if (focusItem && !UI_IsItemSelectable(focusItem)) {
+        focusItem->flags &= ~QMF_HASFOCUS;
+        focusItem = NULL;
+    }
+
+    if (!focusItem) {
+        for (int i = 0; i < menu->nitems; i++) {
+            auto *candidate = static_cast<menuCommon_t *>(menu->items[i]);
+            if (candidate->flags & QMF_HIDDEN)
+                continue;
+            if (!UI_IsItemSelectable(candidate)) {
+                candidate->flags &= ~QMF_HASFOCUS;
+                continue;
+            }
+            Menu_SetFocus(candidate);
+            focusItem = candidate;
+            break;
+        }
+        if (!focusItem)
+            menu->status = NULL;
+    }
+
+    Menu_UpdateGroupBounds(menu);
+
+    menuDropdown_t *openDropdown = NULL;
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open)
+        openDropdown = ui_activeDropdown;
+
 //
 // draw background
 //
@@ -2341,6 +3369,8 @@ void Menu_Draw(menuFrameWork_t *menu)
         R_DrawPic(menu->logo_rc.x, menu->logo_rc.y, color, menu->logo);
     }
 
+    Menu_DrawGroups(menu);
+
 //
 // draw contents
 //
@@ -2371,6 +3401,15 @@ void Menu_Draw(menuFrameWork_t *menu)
         case MTYPE_UNIT:
             SpinControl_Draw(static_cast<menuSpinControl_t *>(rawItem));
             break;
+        case MTYPE_CHECKBOX:
+            Checkbox_Draw(static_cast<menuCheckbox_t *>(rawItem));
+            break;
+        case MTYPE_DROPDOWN:
+            Dropdown_Draw(static_cast<menuDropdown_t *>(rawItem));
+            break;
+        case MTYPE_RADIO:
+            RadioButton_Draw(static_cast<menuRadioButton_t *>(rawItem));
+            break;
         case MTYPE_ACTION:
         case MTYPE_SAVEGAME:
         case MTYPE_LOADGAME:
@@ -2399,6 +3438,9 @@ void Menu_Draw(menuFrameWork_t *menu)
             UI_DrawRect8(&item->rect, 1, 223);
         }
     }
+
+    if (openDropdown)
+        Dropdown_DrawList(openDropdown);
 
 //
 // draw status bar
@@ -2438,6 +3480,9 @@ menuSound_t Menu_SelectItem(menuFrameWork_t *s)
     case MTYPE_BITMAP:
     case MTYPE_SAVEGAME:
     case MTYPE_LOADGAME:
+    case MTYPE_CHECKBOX:
+    case MTYPE_DROPDOWN:
+    case MTYPE_RADIO:
         return Common_DoEnter(item);
     default:
         return QMS_NOTHANDLED;
@@ -2466,6 +3511,10 @@ menuSound_t Menu_SlideItem(menuFrameWork_t *s, int dir)
     case MTYPE_UNIT:
         return static_cast<menuSound_t>(
             SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
+    case MTYPE_CHECKBOX:
+        return Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
+    case MTYPE_DROPDOWN:
+        return Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
     default:
         return QMS_NOTHANDLED;
     }
@@ -2513,6 +3562,8 @@ menuSound_t Menu_MouseMove(menuCommon_t *item)
         return MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
     case MTYPE_SLIDER:
         return Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
+    case MTYPE_DROPDOWN:
+        return Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
     default:
         return QMS_NOTHANDLED;
     }
@@ -2521,6 +3572,30 @@ menuSound_t Menu_MouseMove(menuCommon_t *item)
 static menuSound_t Menu_DefaultKey(menuFrameWork_t *m, int key)
 {
     menuCommon_t *item;
+
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == m && ui_activeDropdown->open) {
+        menuDropdown_t *dropdown = ui_activeDropdown;
+        if (key == K_ESCAPE) {
+            Dropdown_Close(dropdown, false);
+            return QMS_SILENT;
+        }
+
+        if (key == K_MOUSE2) {
+            Dropdown_Close(dropdown, false);
+            return QMS_SILENT;
+        }
+
+        if (key == K_MOUSE1) {
+            if (UI_CursorInRect(&dropdown->listRect)) {
+                if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
+                    Dropdown_SetSelection(dropdown, dropdown->hovered, true);
+                Dropdown_Close(dropdown, false);
+                return QMS_MOVE;
+            }
+
+            Dropdown_Close(dropdown, false);
+        }
+    }
 
     switch (key) {
     case K_ESCAPE:
@@ -2606,6 +3681,11 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
         return NULL;
     }
 
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open) {
+        if (UI_CursorInRect(&ui_activeDropdown->listRect))
+            return &ui_activeDropdown->spin.generic;
+    }
+
     for (int i = 0; i < menu->nitems; i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN) {
@@ -2645,6 +3725,9 @@ bool Menu_Push(menuFrameWork_t *menu)
         case MTYPE_TOGGLE:
             Toggle_Push(static_cast<menuSpinControl_t *>(rawItem));
             break;
+        case MTYPE_DROPDOWN:
+            Dropdown_Push(reinterpret_cast<menuDropdown_t *>(rawItem));
+            break;
         case MTYPE_KEYBIND:
             Keybind_Push(static_cast<menuKeybind_t *>(rawItem));
             break;
@@ -2668,6 +3751,8 @@ bool Menu_Push(menuFrameWork_t *menu)
             break;
         }
     }
+
+    Menu_UpdateConditionalState(menu);
     return true;
 }
 
@@ -2696,6 +3781,9 @@ void Menu_Pop(menuFrameWork_t *menu)
         case MTYPE_TOGGLE:
             Toggle_Pop(static_cast<menuSpinControl_t *>(rawItem));
             break;
+        case MTYPE_DROPDOWN:
+            Dropdown_Pop(reinterpret_cast<menuDropdown_t *>(rawItem));
+            break;
         case MTYPE_KEYBIND:
             Keybind_Pop(static_cast<menuKeybind_t *>(rawItem));
             break;
@@ -2723,6 +3811,8 @@ void Menu_Free(menuFrameWork_t *menu)
         void *rawItem = menu->items[i];
         auto *item = static_cast<menuCommon_t *>(rawItem);
 
+        UI_FreeCommonExtensions(item);
+
         switch (item->type) {
         case MTYPE_ACTION:
         case MTYPE_SAVEGAME:
@@ -2743,6 +3833,15 @@ void Menu_Free(menuFrameWork_t *menu)
         case MTYPE_STRINGS:
         case MTYPE_EPISODE:
             SpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
+            break;
+        case MTYPE_CHECKBOX:
+            Checkbox_Free(reinterpret_cast<menuCheckbox_t *>(rawItem));
+            break;
+        case MTYPE_DROPDOWN:
+            Dropdown_Free(reinterpret_cast<menuDropdown_t *>(rawItem));
+            break;
+        case MTYPE_RADIO:
+            RadioButton_Free(reinterpret_cast<menuRadioButton_t *>(rawItem));
             break;
         case MTYPE_UNIT:
             Unit_Free(static_cast<menuUnitSelector_t *>(rawItem));
@@ -2765,6 +3864,21 @@ void Menu_Free(menuFrameWork_t *menu)
         default:
             break;
         }
+    }
+
+    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
+        ui_activeDropdown = NULL;
+
+    if (menu->groups) {
+        for (int i = 0; i < menu->numGroups; i++) {
+            uiItemGroup_t *group = menu->groups[i];
+            if (!group)
+                continue;
+            Z_Free(group->name);
+            Z_Free(group->label);
+            Z_Free(group);
+        }
+        Z_Free(menu->groups);
     }
 
     Z_Free(menu->items);

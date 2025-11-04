@@ -54,6 +54,9 @@ typedef enum {
     MTYPE_STRINGS,
     MTYPE_VALUES,
     MTYPE_TOGGLE,
+    MTYPE_CHECKBOX,
+    MTYPE_DROPDOWN,
+    MTYPE_RADIO,
     MTYPE_STATIC,
     MTYPE_KEYBIND,
     MTYPE_BITMAP,
@@ -95,6 +98,9 @@ typedef enum {
      (item)->type != MTYPE_STATIC && \
      !((item)->flags & (QMF_GRAYED | QMF_HIDDEN | QMF_DISABLED)))
 
+struct uiItemGroup_s;
+struct uiConditionalBlock_s;
+
 typedef struct menuFrameWork_s {
     list_t  entry;
 
@@ -102,6 +108,9 @@ typedef struct menuFrameWork_s {
 
     void    **items;
     int     nitems;
+
+    struct uiItemGroup_s   **groups;
+    int                     numGroups;
 
     bool compact;
     bool transparent;
@@ -146,6 +155,10 @@ typedef struct menuCommon_s {
 
     int flags;
     int uiFlags;
+
+    struct uiItemGroup_s *group;
+    struct uiConditionalBlock_s *conditional;
+    bool defaultDisabled;
 
     menuSound_t (*activate)(struct menuCommon_s *);
     menuSound_t (*change)(struct menuCommon_s *);
@@ -244,6 +257,81 @@ typedef struct {
     menuSpinControl_t   spin;
     int                 *itemindices;
 } menuUnitSelector_t;
+
+typedef enum {
+    UI_CONDITION_EQUALS,
+    UI_CONDITION_NOT_EQUALS,
+    UI_CONDITION_GREATER,
+    UI_CONDITION_GREATER_EQUAL,
+    UI_CONDITION_LESS,
+    UI_CONDITION_LESS_EQUAL,
+} uiConditionOp_t;
+
+typedef struct uiItemCondition_s {
+    struct uiItemCondition_s *next;
+    cvar_t *cvar;
+    char *value;
+    float numericValue;
+    bool hasNumericValue;
+    uiConditionOp_t op;
+} uiItemCondition_t;
+
+typedef struct uiConditionalBlock_s {
+    uiItemCondition_t *enable;
+    uiItemCondition_t *disable;
+} uiConditionalBlock_t;
+
+typedef struct uiItemGroup_s {
+    char *name;
+    char *label;
+    color_t background;
+    bool hasBackground;
+    bool border;
+    int indent;
+    int padding;
+    int headerHeight;
+    int headerY;
+    int contentTop;
+    int contentBottom;
+    int baseX;
+    bool active;
+    bool hasItems;
+    vrect_t rect;
+    vrect_t headerRect;
+} uiItemGroup_t;
+
+typedef struct {
+    menuCommon_t generic;
+    cvar_t *cvar;
+    uint32_t mask;
+    bool useBitmask;
+    bool negate;
+    bool useStrings;
+    char *checkedValue;
+    char *uncheckedValue;
+} menuCheckbox_t;
+
+typedef enum {
+    DROPDOWN_BINDING_LABEL,
+    DROPDOWN_BINDING_VALUE,
+    DROPDOWN_BINDING_INDEX,
+} menuDropdownBinding_t;
+
+typedef struct {
+    menuSpinControl_t   spin;
+    menuDropdownBinding_t binding;
+    int                 maxVisibleItems;
+    int                 hovered;
+    int                 scrollOffset;
+    bool                open;
+    vrect_t             listRect;
+} menuDropdown_t;
+
+typedef struct {
+    menuCommon_t generic;
+    cvar_t *cvar;
+    char *value;
+} menuRadioButton_t;
 
 typedef struct {
     menuCommon_t generic;

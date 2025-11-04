@@ -153,41 +153,78 @@
     {
       "name": "sound",
       "title": "Sound Setup",
+      "groups": [
+        {
+          "name": "playback",
+          "label": "Playback",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "music",
+          "label": "Music",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb10"
+        }
+      ],
       "items": [
         {
           "type": "values",
           "label": "sound engine",
           "cvar": "s_enable",
+          "group": "playback",
           "options": [
             "no sound",
             "software",
             "OpenAL"
           ]
         },
-        { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.2 },
-        { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1 },
-        { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1 },
-        { "type": "toggle", "label": "enable music", "cvar": "ogg_enable" },
-        { "type": "toggle", "label": "shuffle tracks", "cvar": "ogg_shuffle" },
-        { "type": "toggle", "label": "underwater effect", "cvar": "s_underwater" },
         {
-          "type": "values",
-          "label": "ambient sounds",
-          "cvar": "s_ambient",
+          "type": "dropdown",
+          "label": "sample rate",
+          "cvar": "s_khz",
+          "group": "playback",
+          "maxVisible": 3,
+          "valueBinding": "value",
+          "disableWhen": [
+            { "cvar": "s_enable", "equals": "0" }
+          ],
           "options": [
-            "no",
-            "yes",
-            "only player's own"
+            { "label": "11 kHz", "value": "11" },
+            { "label": "22 kHz", "value": "22" },
+            { "label": "44 kHz", "value": "44" }
           ]
         },
+        { "type": "checkbox", "label": "swap stereo channels", "cvar": "s_swapstereo", "group": "playback" },
+        { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.2, "group": "playback" },
+        { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1, "group": "playback" },
+        { "type": "checkbox", "label": "underwater effect", "cvar": "s_underwater", "group": "playback" },
+        { "type": "radio", "label": "ambient sounds off", "cvar": "s_ambient", "value": "0", "group": "playback" },
+        { "type": "radio", "label": "ambient sounds on", "cvar": "s_ambient", "value": "1", "group": "playback" },
+        { "type": "radio", "label": "ambient player's own", "cvar": "s_ambient", "value": "2", "group": "playback" },
         {
           "type": "values",
           "label": "chat beep",
           "cvar": "cl_chat_sound",
+          "group": "playback",
           "options": [
             "disabled",
             "default",
             "alternative"
+          ]
+        },
+        { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1, "group": "music" },
+        { "type": "checkbox", "label": "enable music", "cvar": "ogg_enable", "group": "music" },
+        {
+          "type": "checkbox",
+          "label": "shuffle tracks",
+          "cvar": "ogg_shuffle",
+          "group": "music",
+          "enableWhen": [
+            { "cvar": "ogg_enable", "equals": "1" }
           ]
         }
       ]
