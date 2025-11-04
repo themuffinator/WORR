@@ -929,8 +929,11 @@ static void HDR_UpdateExposure(int width, int height)
     if (need_reduction)
         reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, width, height);
 
-    if (need_reduction && !reduction_ok)
+    if (need_reduction && !reduction_ok) {
         hdr_state_local.gpu_reduce_supported = false;
+        if (gl_showerrors->integer)
+            Com_EPrintf("HDR exposure: GPU reduction failed for %dx%d, forcing fallback\n", width, height);
+    }
 
     const int max_dim = max(width, height);
     const int fallback_mip = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
@@ -954,11 +957,21 @@ static void HDR_UpdateExposure(int width, int height)
 
     gl_static.hdr.max_mip_level = target_mip;
 
+    bool fallback_read_ok = true;
     if (use_fallback && hdr_state_local.legacy_auto_supported && qglGetTexImage) {
+        GL_ClearErrors();
         qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
+        fallback_read_ok = !GL_ShowErrors("HDR exposure fallback readback");
+        if (!fallback_read_ok) {
+            hdr_state_local.legacy_auto_supported = false;
+            hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+            if (gl_showerrors->integer)
+                Com_EPrintf("HDR exposure: disabling legacy fallback after failed readback\n");
+        }
     }
 
-    hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+    if (!use_fallback || fallback_read_ok)
+        hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
 
     const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
     gl_static.hdr.average_luminance = luminance;
@@ -990,6 +1003,13 @@ static void HDR_UpdateExposure(int width, int height)
     gl_static.hdr.exposure = exposure;
 
     HDR_ComputeHistogram(width, height);
+
+    if (gl_showerrors->integer > 1) {
+        Com_DPrintf("HDR exposure: reduction_ok=%d fallback=%d mip=%d gpu_supported=%d legacy_supported=%d auto_supported=%d luminance=%g exposure=%g\n",
+            reduction_ok, use_fallback, gl_static.hdr.max_mip_level,
+            hdr_state_local.gpu_reduce_supported, hdr_state_local.legacy_auto_supported,
+            hdr_state_local.auto_supported, luminance, exposure);
+    }
 }
 
 void R_HDRUpdateUniforms(void)

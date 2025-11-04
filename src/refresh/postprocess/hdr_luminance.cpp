@@ -45,6 +45,19 @@ namespace {
 			qglBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
 	}
 
+	static void logReducerFailure(const char* reason, size_t levelIndex, int srcWidth, int srcHeight, int dstWidth, int dstHeight, GLenum status = GL_NO_ERROR)
+	{
+		if (!gl_showerrors || !gl_showerrors->integer)
+			return;
+
+		if (status != GL_NO_ERROR)
+			Com_EPrintf("HDR luminance reduce failed: %s at level %zu (%dx%d -> %dx%d) [status=%#x]\n",
+				reason, levelIndex, srcWidth, srcHeight, dstWidth, dstHeight, status);
+		else
+			Com_EPrintf("HDR luminance reduce failed: %s at level %zu (%dx%d -> %dx%d)\n",
+				reason, levelIndex, srcWidth, srcHeight, dstWidth, dstHeight);
+	}
+
 } // namespace
 
 HdrLuminanceReducer g_hdr_luminance;
@@ -146,13 +159,17 @@ bool HdrLuminanceReducer::ensureSize(int width, int height) noexcept
 
 bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noexcept
 {
+	has_result_ = false;
+
 	if (!ensureSize(width, height)) {
-		has_result_ = false;
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_EPrintf("HDR luminance reduce skipped: unable to ensure size for %dx%d\n", width, height);
 		return false;
 	}
 
 	if (levels_.empty()) {
-		has_result_ = false;
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_EPrintf("HDR luminance reduce skipped: no reduction levels available\n");
 		return false;
 	}
 
@@ -164,6 +181,10 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 	GLuint current_texture = sceneTexture;
 	int current_w = width;
 	int current_h = height;
+
+	GL_ClearErrors();
+	bool success = true;
+	size_t level_index = 0;
 
 	for (Level& level : levels_) {
 		const float inv_w = current_w > 0 ? 0.5f / static_cast<float>(current_w) : 0.0f;
@@ -180,19 +201,34 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 
 		GL_ForceTexture(TMU_TEXTURE, current_texture);
 		qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
+
+		const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			logReducerFailure("framebuffer incomplete", level_index, current_w, current_h, level.width, level.height, status);
+			success = false;
+			break;
+		}
+
 		GL_PostProcess(GLS_HDR_REDUCE, 0, 0, level.width, level.height);
+
+		if (GL_ShowErrors("HDR luminance reduce")) {
+			logReducerFailure("GL error after post-process", level_index, current_w, current_h, level.width, level.height);
+			success = false;
+			break;
+		}
 
 		current_texture = level.texture;
 		current_w = level.width;
 		current_h = level.height;
+		++level_index;
 	}
 
 	restoreFramebuffer(prev_fbo);
 	GL_ForceTexture(TMU_TEXTURE, sceneTexture);
 	qglViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
-	has_result_ = true;
-	return true;
+	has_result_ = success;
+	return success;
 }
 
 GLuint HdrLuminanceReducer::resultTexture() const noexcept
