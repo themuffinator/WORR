@@ -140,6 +140,7 @@ namespace {
 		[[nodiscard]] int lineHeight() const noexcept;
 		[[nodiscard]] int charWidth() const noexcept;
 		[[nodiscard]] int availablePixelWidth() const noexcept;
+		[[nodiscard]] int rightScreenEdge() const noexcept;
 
 		[[nodiscard]] ConsoleLine& currentLine() noexcept
 		{
@@ -701,9 +702,10 @@ namespace {
 			constexpr std::string_view appVersion = VERSION;
 #endif
 			const int versionWidth = SCR_MeasureString(1, 0, appVersion.size(), appVersion.data(), fontHandle());
+			const int rightEdge = rightScreenEdge();
 
 			int footerY = baseFooterY;
-			if (promptWidth + versionWidth + charWidth() > vidWidth_)
+			if (promptWidth + versionWidth + charWidth() > rightEdge)
 				footerY -= lineHeight();
 
 			if (clock_->integer) {
@@ -711,11 +713,11 @@ namespace {
 				const int len = Com_Time_m(buffer, sizeof(buffer));
 				if (len > 0) {
 					const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
-					SCR_DrawStringStretch(vidWidth_ - width, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+					SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
 				}
 			}
 
-			SCR_DrawStringStretch(vidWidth_ - versionWidth, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
+			SCR_DrawStringStretch(rightEdge, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
 			return;
 		}
 
@@ -724,7 +726,7 @@ namespace {
 #else
 		constexpr std::string_view appVersion = VERSION;
 #endif
-		const int versionWidth = SCR_MeasureString(1, 0, appVersion.size(), appVersion.data(), fontHandle());
+		const int rightEdge = rightScreenEdge();
 
 		int footerY = baseFooterY;
 
@@ -733,11 +735,11 @@ namespace {
 			const int len = Com_Time_m(buffer, sizeof(buffer));
 			if (len > 0) {
 				const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
-				SCR_DrawStringStretch(vidWidth_ - width, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+				SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
 			}
 		}
 
-		SCR_DrawStringStretch(vidWidth_ - versionWidth, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
+		SCR_DrawStringStretch(rightEdge, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
 	}
 
 	void Console::drawNotify()
@@ -878,6 +880,24 @@ namespace {
 	int Console::availablePixelWidth() const noexcept
 	{
 		return std::max(0, vidWidth_ - charWidth() * kPromptPadding);
+	}
+
+	int Console::rightScreenEdge() const noexcept
+	{
+		int edge = vidWidth_;
+
+		const float hudScale = scr.hud_scale;
+		if (hudScale > 0.0f) {
+			const vrect_t& right = scr.virtual_screens[RIGHT];
+			if (right.width > 0) {
+				const float ratio = scale_ / hudScale;
+				if (ratio > 0.0f) {
+					edge = std::clamp(Q_rint((right.x + right.width) * ratio), 0, vidWidth_);
+				}
+			}
+		}
+
+		return std::max(edge, charWidth());
 	}
 
 	void Console::registerMedia()
