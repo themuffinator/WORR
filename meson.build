@@ -495,6 +495,7 @@ if freetype_opt.disabled()
 else
   freetype = dependency('freetype2',
     required:        false,
+    fallback:        ['freetype2', 'freetype_dep'],
     default_options: fallback_opt,
   )
 
