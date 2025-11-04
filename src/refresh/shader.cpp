@@ -1163,13 +1163,20 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(vec3 apply_motion_blur(vec3 color, vec2 uv) {
             if (motion_params.z <= 0.0 || motion_params.w <= 0.0)
                 return color;
-            float depth = texture(u_depth, uv).r;
-            if (depth >= 1.0)
-                return color;
+            const vec2 grid_count = vec2(20.0, 20.0);
+            vec2 cell_index = floor(uv * grid_count);
+            vec2 cell_center_uv = (cell_index + 0.5) / grid_count;
+            float depth = texture(u_depth, cell_center_uv).r;
+            if (depth >= 1.0) {
+                depth = texture(u_depth, uv).r;
+                if (depth >= 1.0)
+                    return color;
+                cell_center_uv = uv;
+            }
             float blur_strength = motion_params.x;
             if (blur_strength <= 0.0)
                 return color;
-            vec4 current_clip = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            vec4 current_clip = vec4(cell_center_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
             vec4 world_pos = motion_inv_view_proj * current_clip;
             if (abs(world_pos.w) <= 1e-6)
                 return color;
