@@ -1215,8 +1215,11 @@ bool GL_InitFramebuffers(void)
 {
     int scene_w = 0, scene_h = 0;
     int bloom_w = 0, bloom_h = 0;
-    int dof_w = 0, dof_h = 0;
+    int dof_full_w = 0, dof_full_h = 0;
+    int dof_result_w = 0, dof_result_h = 0;
+    int dof_half_w = 0, dof_half_h = 0;
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+    const bool dof_reduced = dof_active && gl_dof_quality && gl_dof_quality->integer;
     const bool motion_blur_active = glr.motion_blur_enabled;
 
     if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active || motion_blur_active) {
@@ -1230,14 +1233,30 @@ bool GL_InitFramebuffers(void)
     }
 
     if (dof_active) {
-        dof_w = glr.fd.width;
-        dof_h = glr.fd.height;
+        dof_full_w = glr.fd.width;
+        dof_full_h = glr.fd.height;
+
+        if (dof_full_w > 0 && dof_full_h > 0) {
+            if (dof_reduced) {
+                dof_result_w = (std::max)(dof_full_w / 2, 1);
+                dof_result_h = (std::max)(dof_full_h / 2, 1);
+            } else {
+                dof_result_w = dof_full_w;
+                dof_result_h = dof_full_h;
+            }
+
+            dof_half_w = dof_result_w > 0 ? (std::max)(dof_result_w / 2, 1) : 0;
+            dof_half_h = dof_result_h > 0 ? (std::max)(dof_result_h / 2, 1) : 0;
+        }
+    }
+
+    if (!dof_active) {
+        dof_full_w = dof_full_h = 0;
+        dof_result_w = dof_result_h = 0;
+        dof_half_w = dof_half_h = 0;
     }
 
     GL_ClearErrors();
-
-    const int dof_half_w = dof_w > 0 ? (std::max)(dof_w / 2, 1) : 0;
-    const int dof_half_h = dof_h > 0 ? (std::max)(dof_h / 2, 1) : 0;
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_InitPostProcTexture(scene_w, scene_h);
@@ -1246,10 +1265,10 @@ bool GL_InitFramebuffers(void)
     GL_InitPostProcTexture(bloom_w, bloom_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_COC);
-    GL_InitPostProcTexture(dof_w, dof_h);
+    GL_InitPostProcTexture(dof_full_w, dof_full_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
-    GL_InitPostProcTexture(dof_w, dof_h);
+    GL_InitPostProcTexture(dof_result_w, dof_result_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
     GL_InitPostProcTexture(dof_half_w, dof_half_h);
@@ -1269,24 +1288,24 @@ bool GL_InitFramebuffers(void)
     CHECK_FB(scene_w, "FBO_SCENE");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_COC : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_full_w ? TEXNUM_PP_DOF_COC : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_BOKEH_COC");
+    CHECK_FB(dof_full_w, "FBO_BOKEH_COC");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_RESULT : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_result_w ? TEXNUM_PP_DOF_RESULT : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_BOKEH_RESULT");
+    CHECK_FB(dof_result_w, "FBO_BOKEH_RESULT");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_HALF : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_half_w ? TEXNUM_PP_DOF_HALF : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_BOKEH_HALF");
+    CHECK_FB(dof_half_w, "FBO_BOKEH_HALF");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_w ? TEXNUM_PP_DOF_GATHER : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_half_w ? TEXNUM_PP_DOF_GATHER : GL_NONE, 0);
 
-    CHECK_FB(dof_w, "FBO_BOKEH_GATHER");
+    CHECK_FB(dof_half_w, "FBO_BOKEH_GATHER");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -1295,6 +1314,13 @@ bool GL_InitFramebuffers(void)
     else
         g_bloom_effect.resize(0, 0);
 
+    gl_static.dof.full_width = dof_full_w;
+    gl_static.dof.full_height = dof_full_h;
+    gl_static.dof.result_width = dof_result_w;
+    gl_static.dof.result_height = dof_result_h;
+    gl_static.dof.half_width = dof_half_w;
+    gl_static.dof.half_height = dof_half_h;
+    gl_static.dof.reduced_resolution = dof_reduced;
     if (!g_hdr_luminance.resize(scene_w, scene_h))
         g_hdr_luminance.shutdown();
 
