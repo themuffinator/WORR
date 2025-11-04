@@ -218,15 +218,19 @@ typedef struct {
 } cl_fog_params_t;
 
 typedef struct {
-	vec3_t      origin;
-	float       radius;
-	int         resolution;
-	float       intensity;
-	float       fade_start, fade_end;
-	int         lightstyle;
-	float       coneangle; // spot if non-zero
-	vec3_t      conedirection;
-	color_t     color;
+        vec3_t              origin;
+        color_t             color;
+        shadow_light_type_t lighttype;
+        float               radius;
+        int                 resolution;
+        float               intensity;
+        float               fade_start;
+        float               fade_end;
+        int                 lightstyle;
+        float               coneangle; // spot if non-zero
+        vec3_t              conedirection;
+        float               bias;
+        bool                casts_shadow;
 } cl_shadow_light_t;
 
 //
@@ -934,7 +938,7 @@ void V_Shutdown(void);
 void V_RenderView(void);
 void V_AddEntity(const entity_t* ent);
 void V_AddParticle(const particle_t* p);
-void V_AddLightEx(cl_shadow_light_t* light);
+void CL_SubmitShadowLight(int entity_number, const cl_shadow_light_t* light);
 void V_AddLight(const vec3_t org, float intensity, float r, float g, float b);
 void V_AddLightStyle(int style, float value);
 void CL_UpdateBlendSetting(void);
@@ -1036,13 +1040,19 @@ typedef struct cparticle_s {
 } cparticle_t;
 
 typedef struct {
-	int     key;        // so entities can reuse same entry
-	vec3_t  color;
-	vec3_t  origin;
-	float   radius;
-	int     die;        // stop lighting after this time
-	int     start;
-	bool    fade;
+        int                 key;        // so entities can reuse same entry
+        vec3_t              color;
+        vec3_t              origin;
+        float               radius;
+        int                 die;        // stop lighting after this time
+        int                 start;
+        bool                fade;
+        shadow_light_type_t lighttype;
+        int                 resolution;
+        float               fade_start;
+        float               fade_end;
+        float               bias;
+        bool                casts_shadow;
 } cdlight_t;
 
 typedef enum {

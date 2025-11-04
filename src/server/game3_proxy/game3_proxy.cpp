@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "../server.hpp"
 #include "shared/game3_shared.hpp"
 #include "shared/game3.hpp"
+#include "shared/game.hpp"
 #include "game3_proxy.hpp"
 #include "shared/base85.hpp"
 #include "common/game3_pmove.hpp"
@@ -47,6 +48,7 @@ static game_import_t game_import;
 static game3_export_t *game3_export;
 static const game3_export_ex_t *game3_export_ex;
 static game_export_t game_export;
+static const shadow_light_data_t *(*game3_real_GetShadowLightData)(int32_t) = nullptr;
 
 static void wrap_RestartFilesystem(void)
 {
@@ -1071,7 +1073,8 @@ static bool wrap_Entity_IsVisibleToPlayer(edict_t *ent, edict_t *player)
 
 static const shadow_light_data_t *wrap_GetShadowLightData(int32_t entity_number)
 {
-    // currently not supported
+    if (game3_real_GetShadowLightData)
+        return game3_real_GetShadowLightData(entity_number);
     return NULL;
 }
 
@@ -1154,6 +1157,11 @@ game_export_t *GetGame3Proxy(game_import_t *import, void *game3_entry, void *gam
     import3.AreasConnected = import->AreasConnected;
 
     game3_export = entry(&import3);
+    if (game3_export && !game3_real_GetShadowLightData) {
+        const game_export_t *maybe = reinterpret_cast<const game_export_t *>(game3_export);
+        if (maybe->GetShadowLightData && maybe->GetShadowLightData != wrap_GetShadowLightData)
+            game3_real_GetShadowLightData = maybe->GetShadowLightData;
+    }
     if (game3_ex_entry)
     {
         game3_export_ex = entry_ex(&game3_import_ex);

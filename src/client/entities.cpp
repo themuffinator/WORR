@@ -889,20 +889,24 @@ static void CL_AddPacketEntities(void)
             CL_Trace(&trace, start, end, vec3_origin, vec3_origin, NULL, mask);
 
             if (is_per_pixel) {
-                cl_shadow_light_t light;
-                light.fade_end = light.fade_start = 0;
+                cl_shadow_light_t light{};
+                light.lighttype = shadow_light_type_cone;
+                light.fade_start = 0.0f;
+                light.fade_end = 0.0f;
                 light.lightstyle = -1;
-                light.resolution = 512.0f;
+                light.resolution = 512;
                 light.intensity = 2.0f;
                 light.radius = 512.0f;
                 light.coneangle = 22.0f;
                 VectorCopy(forward, light.conedirection);
                 light.color = COLOR_WHITE;
+                light.bias = 0.0f;
+                light.casts_shadow = true;
                 VectorCopy(start, light.origin);
                 if (s1->number == cl.frame.clientNum + 1 && info_hand->integer != 2) {
                     VectorMA(light.origin, info_hand->integer ? -7 : 7, cl.v_right, light.origin);
                 }
-                V_AddLightEx(&light);
+                CL_SubmitShadowLight(s1->number, &light);
             } else {
                 // smooth out distance "jumps"
                 LerpVector(start, end, cent->flashlightfrac, end);

@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "common/cvar.hpp"
 #include "common/error.hpp"
+#include "shared/game.hpp"
 
 // Some client UI constants are required by inline helpers in this header. They
 // are normally provided by client headers, but a few refresh translation units
@@ -121,6 +122,23 @@ typedef struct {
     vec4_t  sphere;
     float   conecos;
 } dlight_t;
+
+typedef struct {
+    vec3_t                  origin;
+    vec3_t                  direction;
+    color_t                 color;
+    shadow_light_type_t     lighttype;
+    float                   radius;
+    int                     resolution;
+    float                   intensity;
+    float                   fade_start;
+    float                   fade_end;
+    int                     lightstyle;
+    float                   coneangle;
+    float                   bias;
+    int                     entity_number;
+    bool                    casts_shadow;
+} shadow_light_submission_t;
 
 typedef struct {
     vec3_t  origin;
@@ -339,6 +357,12 @@ void    R_EndRegistration(void);
 
 void    R_RenderFrame(const refdef_t *fd);
 void    R_LightPoint(const vec3_t origin, vec3_t light);
+
+void    R_ClearShadowLights(void);
+void    R_QueueShadowLight(const shadow_light_submission_t &light);
+size_t  R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
+                              dlight_t *dlights, size_t max_dlights);
+const shadow_light_submission_t *R_GetQueuedShadowLights(size_t *count);
 
 void    R_SetClipRect(const clipRect_t *clip);
 float   R_ClampScale(cvar_t *var);

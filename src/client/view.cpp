@@ -81,6 +81,7 @@ static void V_ClearScene(void)
     r_numdlights = 0;
     r_numentities = 0;
     r_numparticles = 0;
+    R_ClearShadowLights();
 }
 
 /*
@@ -122,80 +123,28 @@ void V_AddParticle(const particle_t *p)
     r_particles[r_numparticles++] = *p;
 }
 
-static void cone_to_bounding_sphere(const vec3_t origin, const vec3_t forward, float size, float angle_radians, float c, float s, vec4_t out)
+void CL_SubmitShadowLight(int entity_number, const cl_shadow_light_t *light)
 {
-    if(angle_radians > M_PI/4.0f)
-    {
-        VectorMA(origin, c * size, forward, out);
-        out[3]   = s * size;
-    }
-    else
-    {
-        VectorMA(origin, size / (2.0f * c), forward, out);
-        out[3]   = size / (2.0f * c);
-    }
-}
-
-// calculate the fade distance from screen to light
-static inline float fade_distance_to_light(const vec2_t fade, const vec3_t light_origin, const vec3_t org)
-{
-    if (fade[0] <= 1.0f && fade[1] <= 1.0f)
-        return 1.0f;
-    else if (fade[0] > fade[1])
-        return 1.0f;
-
-    float dist_to_light = VectorDistance(org, light_origin);
-    float frac_to_end = Q_clipf(dist_to_light / fade[1], 0.0f, 1.0f);
-    float min_frag_dist = fade[0] / fade[1];
-    
-    if (min_frag_dist > 1.0f)
-        return 1.0f;
-    else if (min_frag_dist <= 0)
-        return frac_to_end;
-
-    return 1.0f - smoothstep(min_frag_dist, 1.0f, frac_to_end);
-}
-
-/*
-=====================
-V_AddLightEx
-
-=====================
-*/
-void V_AddLightEx(cl_shadow_light_t *light)
-{
-    dlight_t    *dl;
-
-    if (r_numdlights >= MAX_DLIGHTS)
-        return;
-    
-    const vec2_t fade_range = { light->fade_start, light->fade_end };
-    float fade = fade_distance_to_light(fade_range, light->origin, cl.refdef.vieworg);
-
-    if (fade <= 0.0f)
+    if (!light)
         return;
 
-    dl = &r_dlights[r_numdlights++];
-    VectorCopy(light->origin, dl->origin);
-    dl->radius = light->radius;
-    dl->intensity = light->intensity * (light->lightstyle == -1 ? 1.0f : r_lightstyles[light->lightstyle].white) * fade;
-    dl->color[0] = light->color.r / 255.f;
-    dl->color[1] = light->color.g / 255.f;
-    dl->color[2] = light->color.b / 255.f;
+    shadow_light_submission_t submission{};
+    submission.entity_number = entity_number;
+    VectorCopy(light->origin, submission.origin);
+    VectorCopy(light->conedirection, submission.direction);
+    submission.color = light->color;
+    submission.lighttype = light->lighttype;
+    submission.radius = light->radius;
+    submission.resolution = light->resolution;
+    submission.intensity = light->intensity;
+    submission.fade_start = light->fade_start;
+    submission.fade_end = light->fade_end;
+    submission.lightstyle = light->lightstyle;
+    submission.coneangle = light->coneangle;
+    submission.bias = light->bias;
+    submission.casts_shadow = light->casts_shadow;
 
-    if (light->coneangle) {
-        VectorCopy(light->conedirection, dl->cone);
-        dl->cone[3] = DEG2RAD(light->coneangle);
-        dl->conecos = cosf(dl->cone[3]);
-        cone_to_bounding_sphere(dl->origin, dl->cone, dl->radius, dl->cone[3], dl->conecos, sinf(dl->cone[3]), dl->sphere);
-    } else {
-        dl->conecos = 0;
-        VectorCopy(dl->origin, dl->sphere);
-        dl->sphere[3] = dl->radius;
-    }
-
-    dl->fade[0] = light->fade_start;
-    dl->fade[1] = light->fade_end;
+    R_QueueShadowLight(submission);
 }
 
 /*
@@ -611,6 +560,9 @@ void V_RenderView(void)
             r_numparticles = 0;
         if (!cl_add_lights->integer)
             r_numdlights = 0;
+        else
+            r_numdlights += R_CollectShadowLights(cl.refdef.vieworg, r_lightstyles,
+                r_dlights + r_numdlights, MAX_DLIGHTS - r_numdlights);
         if (!cl_add_blend->integer) {
             Vector4Clear(cl.refdef.screen_blend);
             Vector4Clear(cl.refdef.damage_blend);

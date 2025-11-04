@@ -1914,7 +1914,7 @@ void CL_AddShadowLights(void)
         VectorCopy(ent->current.origin, cl.shadowdefs[i].light.origin);
         cl.shadowdefs[i].light.color = color;
 
-        V_AddLightEx(&cl.shadowdefs[i].light);
+        CL_SubmitShadowLight(cl.shadowdefs[i].number, &cl.shadowdefs[i].light);
     }
 }
 
