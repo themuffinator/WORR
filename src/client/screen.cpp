@@ -153,6 +153,16 @@ static std::string SCR_NormalizeFontPath(const std::string& rawPath)
                 normalized.append(filename);
         }
 
+        const size_t dot = normalized.find_last_of('.');
+        if (dot == std::string::npos) {
+                normalized.append(".ttf");
+        } else {
+                const char* ext = normalized.c_str() + dot;
+                if (!Q_stricmp(ext, ".pcx")) {
+                        normalized.replace(dot, std::string::npos, ".ttf");
+                }
+        }
+
         return normalized;
 }
 
