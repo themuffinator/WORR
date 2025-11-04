@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 
+#include "shared/types.hpp"
+
 enum {
     MZ2_TANK_BLASTER_1 = 1,
     MZ2_TANK_BLASTER_2,

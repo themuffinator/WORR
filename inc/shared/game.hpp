@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include "shared/shared.hpp"
+
 #include "shared/list.hpp"
 #include "shared/m_flash.hpp"
 

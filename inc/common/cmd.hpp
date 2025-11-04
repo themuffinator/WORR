@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include "shared/shared.hpp"
+
 //
 // cmd.h -- command text buffering and command execution
 //
