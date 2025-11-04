@@ -13,6 +13,9 @@ zlib_dep = dependency('zlib',
   required: false,
   fallback: ['zlib-ng', 'zlib_ng_dep'],
 )
+if zlib_dep.found()
+  cmake_opts.add_cmake_dep('ZLIB', zlib_dep)
+endif
 cmake_opts.add_cmake_defines({
   'CMAKE_DISABLE_FIND_PACKAGE_ZLIB': zlib_dep.found() ? 'OFF' : 'ON',
 })
