@@ -1083,17 +1083,29 @@ namespace {
 				return;
 			}
 			break;
-		case 'c':
-			if (Key_IsDown(K_CTRL)) {
-				paste(vid ? vid->get_clipboard_data : nullptr);
-				return;
-			}
-			break;
-		case 'v':
-			if (Key_IsDown(K_CTRL)) {
-				paste(vid ? vid->get_clipboard_data : nullptr);
-				return;
-			}
+                case 'c':
+                        if (Key_IsDown(K_CTRL)) {
+                                paste(vid ? vid->get_clipboard_data : nullptr);
+                                return;
+                        }
+                        break;
+                case 'd':
+                        if (Key_IsDown(K_CTRL)) {
+                                if (mode_ == ConsoleMode::Remote) {
+                                        clearTyping();
+                                        mode_ = ConsoleMode::Default;
+                                        chatMode_ = ChatMode::None;
+                                        remoteAddress_ = {};
+                                        remotePassword_.clear();
+                                }
+                                return;
+                        }
+                        break;
+                case 'v':
+                        if (Key_IsDown(K_CTRL)) {
+                                paste(vid ? vid->get_clipboard_data : nullptr);
+                                return;
+                        }
 			break;
 		case 'y':
 			if (Key_IsDown(K_CTRL)) {
