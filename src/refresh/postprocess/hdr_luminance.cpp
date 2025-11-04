@@ -208,14 +208,20 @@ bool HdrLuminanceReducer::readbackAverage(float* rgba) const noexcept
 		return false;
 
 	const Level& level = levels_.back();
-	GLint prev_fbo = 0;
-	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-	qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
-	if (qglReadBuffer)
-		qglReadBuffer(kColorAttachment);
-	qglReadPixels(0, 0, level.width, level.height, GL_RGBA, GL_FLOAT, rgba);
-	restoreFramebuffer(prev_fbo);
-	return true;
+        GLint prev_fbo = 0;
+        GLint prev_read_buffer = 0;
+        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+        if (qglReadBuffer)
+                qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+
+        qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
+        if (qglReadBuffer)
+                qglReadBuffer(kColorAttachment);
+        qglReadPixels(0, 0, level.width, level.height, GL_RGBA, GL_FLOAT, rgba);
+        restoreFramebuffer(prev_fbo);
+        if (qglReadBuffer)
+                qglReadBuffer(prev_read_buffer);
+        return true;
 }
 
 bool HdrLuminanceReducer::readbackHistogram(int maxSamples, std::vector<float>& scratch, int& outWidth, int& outHeight) const noexcept
@@ -240,16 +246,22 @@ bool HdrLuminanceReducer::readbackHistogram(int maxSamples, std::vector<float>& 
 	const size_t total_pixels = static_cast<size_t>(target->width) * target->height;
 	scratch.resize(total_pixels * 4);
 
-	GLint prev_fbo = 0;
-	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-	qglBindFramebuffer(GL_FRAMEBUFFER, target->fbo);
-	if (qglReadBuffer)
-		qglReadBuffer(kColorAttachment);
-	qglReadPixels(0, 0, target->width, target->height, GL_RGBA, GL_FLOAT, scratch.data());
-	restoreFramebuffer(prev_fbo);
+        GLint prev_fbo = 0;
+        GLint prev_read_buffer = 0;
+        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+        if (qglReadBuffer)
+                qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 
-	outWidth = target->width;
-	outHeight = target->height;
+        qglBindFramebuffer(GL_FRAMEBUFFER, target->fbo);
+        if (qglReadBuffer)
+                qglReadBuffer(kColorAttachment);
+        qglReadPixels(0, 0, target->width, target->height, GL_RGBA, GL_FLOAT, scratch.data());
+        restoreFramebuffer(prev_fbo);
+        if (qglReadBuffer)
+                qglReadBuffer(prev_read_buffer);
+
+        outWidth = target->width;
+        outHeight = target->height;
 	return true;
 }
 
