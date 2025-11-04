@@ -141,7 +141,11 @@ typedef struct {
     bool                    casts_shadow;
 } shadow_light_submission_t;
 
+#if defined(_MSC_VER) && !defined(__clang__)
 struct shadow_view_parameters_t {
+#else
+struct alignas(16) shadow_view_parameters_t {
+#endif
     mat4_t view_projection;
     vec4_t viewport_rect;
     vec4_t source_position;
@@ -151,6 +155,10 @@ struct shadow_view_parameters_t {
 
 static_assert(sizeof(shadow_view_parameters_t) == 104,
     "shadow_view_parameters_t must remain 104 bytes (compatible with quakeUBShadowStruct_s)");
+#if !defined(_MSC_VER) || defined(__clang__)
+static_assert(alignof(shadow_view_parameters_t) == 16,
+    "shadow_view_parameters_t must stay 16-byte aligned to match GPU expectations");
+#endif
 
 struct shadow_view_assignment_t {
     shadow_view_parameters_t parameters;
