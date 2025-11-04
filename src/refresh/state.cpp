@@ -429,11 +429,17 @@ void GL_InitState(void)
     gl_backend = gl_static.use_shaders ? &backend_shader : &backend_legacy;
     gl_backend->init();
 
+    if (!R_ShadowAtlasInit()) {
+        Com_DPrintf("Shadow atlas initialization failed; disabling shadow atlas support.\n");
+    }
+
     Com_Printf("Using %s rendering backend.\n", gl_backend->name);
 }
 
 void GL_ShutdownState(void)
 {
+    R_ShadowAtlasShutdown();
+
     if (gl_backend) {
         gl_backend->shutdown();
         gl_backend = NULL;

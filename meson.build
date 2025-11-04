@@ -229,6 +229,7 @@ refresh_src = [
   'src/refresh/qgl.cpp',
   'src/refresh/shader.cpp',
   'src/refresh/sky.cpp',
+  'src/refresh/shadow.cpp',
   'src/refresh/shadow_lights.cpp',
   'src/refresh/state.cpp',
   'src/refresh/surf.cpp',
