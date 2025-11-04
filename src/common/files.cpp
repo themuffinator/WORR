@@ -208,6 +208,7 @@ static searchpath_t *fs_base_searchpaths;
 
 static list_t       fs_hard_links;
 static list_t       fs_soft_links;
+static symlink_t   *fs_game_kpf_symlink;
 
 static file_t       fs_files[MAX_FILE_HANDLES];
 static int          fs_num_files;
@@ -3020,6 +3021,15 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
             return NULL;
         }
 
+        size_t expanded_len = pathlen;
+        if (expand_links(&fs_hard_links, normalized.data(), &expanded_len) && expanded_len >= normalized.size()) {
+            return NULL;
+        }
+        if (expand_links(&fs_soft_links, normalized.data(), &expanded_len) && expanded_len >= normalized.size()) {
+            return NULL;
+        }
+
+        pathlen = expanded_len;
         path = normalized.data();
     }
 
@@ -3473,8 +3483,12 @@ recheck:
                 return;
             }
 
-            Com_Printf("Symbolic link ('%s' --> '%s') in effect.\n",
-                       link->name, link->target);
+            if (link != fs_game_kpf_symlink) {
+                Com_Printf("Symbolic link ('%s' --> '%s') in effect.\n",
+                           link->name, link->target);
+            } else {
+                link = NULL;
+            }
             goto recheck;
         }
     }
@@ -3611,12 +3625,41 @@ static void free_all_links(list_t *list)
     symlink_t *link, *next;
 
     FOR_EACH_SYMLINK_SAFE(link, next, list) {
+        if (link == fs_game_kpf_symlink) {
+            fs_game_kpf_symlink = NULL;
+        }
         Z_Free(link->target);
         Z_Free(link);
     }
 
     List_Init(list);
 }
+
+#if USE_ZLIB
+static void ensure_game_kpf_symlink(void)
+{
+    if (fs_game_kpf_symlink) {
+        if (fs_game_kpf_symlink->targlen || fs_game_kpf_symlink->target[0]) {
+            Z_Free(fs_game_kpf_symlink->target);
+            fs_game_kpf_symlink->target = FS_CopyString("");
+            fs_game_kpf_symlink->targlen = 0;
+        }
+        return;
+    }
+
+    static const char name[] = "Q2Game.kpf/";
+    const size_t namelen = sizeof(name) - 1;
+
+    symlink_t *link = static_cast<symlink_t *>(FS_Malloc(sizeof(*link) + namelen));
+    memcpy(link->name, name, namelen + 1);
+    link->namelen = namelen;
+    link->target = FS_CopyString("");
+    link->targlen = 0;
+
+    List_Append(&fs_soft_links, &link->entry);
+    fs_game_kpf_symlink = link;
+}
+#endif
 
 static void FS_UnLink_f(void)
 {
@@ -3661,6 +3704,9 @@ static void FS_UnLink_f(void)
     FOR_EACH_SYMLINK(link, list) {
         if (!FS_pathcmp(link->name, name)) {
             List_Remove(&link->entry);
+            if (link == fs_game_kpf_symlink) {
+                fs_game_kpf_symlink = NULL;
+            }
             Z_Free(link->target);
             Z_Free(link);
             return;
@@ -3797,6 +3843,8 @@ static void add_game_kpf(unsigned mode, const char *dir)
     pack = load_zip_file(path.data());
     if (!pack)
         return;
+
+    ensure_game_kpf_symlink();
 
     search = FS_Malloc(sizeof(*search));
     search->mode = mode;
@@ -4128,6 +4176,7 @@ void FS_Init(void)
 
     List_Init(&fs_hard_links);
     List_Init(&fs_soft_links);
+    fs_game_kpf_symlink = NULL;
 
     Cmd_Register(c_fs);
 
