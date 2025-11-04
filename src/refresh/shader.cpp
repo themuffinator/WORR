@@ -1228,6 +1228,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(vec4 diffuse = texture(u_texture, v_dir);)
     } else {
         GLSL(vec2 tc = v_tc;)
+        GLSL(vec2 v_texture = tc;)
 
         if (bits & GLS_WARP_ENABLE)
             GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
@@ -1253,8 +1254,12 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_ALPHATEST_ENABLE)
         GLSL(if (diffuse.a <= 0.666) discard;)
 
+    GLSL(vec3 v_rgb = vec3(1.0);)
+
     if (!(bits & GLS_TEXTURE_REPLACE))
         GLSL(vec4 color = v_color;)
+    if (!(bits & GLS_TEXTURE_REPLACE))
+        GLSL(v_rgb = color.rgb;)
 
     if (bits & GLS_BLOOM_GENERATE)        GLSL(vec4 bloom = vec4(0.0);)
 
