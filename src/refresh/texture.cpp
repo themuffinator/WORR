@@ -1309,10 +1309,12 @@ bool GL_InitFramebuffers(void)
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    if (r_bloom->integer)
-        g_bloom_effect.resize(bloom_w, bloom_h);
-    else
+    if (r_bloom->integer) {
+        if (!g_bloom_effect.resize(bloom_w, bloom_h))
+            g_bloom_effect.resize(0, 0);
+    } else {
         g_bloom_effect.resize(0, 0);
+    }
 
     gl_static.dof.full_width = dof_full_w;
     gl_static.dof.full_height = dof_full_h;

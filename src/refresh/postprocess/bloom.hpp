@@ -28,10 +28,10 @@ public:
 	void initialize();
 	void shutdown();
 
-	void resize(int sceneWidth, int sceneHeight);
-	void render(const BloomRenderContext& ctx);
+        bool resize(int sceneWidth, int sceneHeight);
+        void render(const BloomRenderContext& ctx);
 
-	[[nodiscard]] bool isInitialized() const noexcept { return initialized_; }
+        [[nodiscard]] bool isInitialized() const noexcept { return initialized_; }
 
 private:
 	enum TextureSlot : size_t {
@@ -66,6 +66,7 @@ private:
         GLenum postprocessFormat_;
         GLenum postprocessType_;
         bool initialized_;
+        bool resizeErrorLogged_;
 };
 
 extern BloomEffect g_bloom_effect;
