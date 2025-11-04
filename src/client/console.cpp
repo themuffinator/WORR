@@ -1482,11 +1482,14 @@ namespace {
 			FS_File_g("condumps", ".txt", FS_SEARCH_STRIPEXT, ctx);
 	}
 
-	static void CL_RemoteMode_c(genctx_t* ctx, int argnum)
-	{
-		(void)ctx;
-		(void)argnum;
-	}
+        static void CL_RemoteMode_c(genctx_t* ctx, int argnum)
+        {
+                if (argnum == 1) {
+                        Com_Address_g(ctx);
+                } else if (argnum > 1) {
+                        Com_Generic_c(ctx, argnum - 2);
+                }
+        }
 
 } // namespace
 
