@@ -1,11 +1,11 @@
 #include "client.hpp"
 
+#include "common/files.hpp"
 #include "common/q3colors.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdarg>
-#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -18,18 +18,6 @@
 #ifdef clamp
 #undef clamp
 #endif
-
-// Filesystem forward declarations (matches Quake II-style API)
-using fileHandle_t = int;
-
-// Opens a file for writing and returns a handle, or 0 on failure.
-fileHandle_t FS_FOpenFileWrite(const char* name);
-
-// Writes 'len' bytes from buffer to the file, returns number of bytes written.
-int FS_Write(const void* buffer, int len, fileHandle_t f);
-
-// Closes the file, returns 0 on success, non-zero on error.
-int FS_CloseFile(fileHandle_t f);
 
 namespace {
 
@@ -244,17 +232,16 @@ namespace {
 		if (initialized_)
 			return;
 
-		static const cmdreg_t consoleCommands[] = {
-			{ "toggleconsole", Con_ToggleConsole_f },
-			{ "messagemode", Con_MessageMode_f },
-			{ "messagemode2", Con_MessageMode2_f },
-			{ "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
-			{ "clear", Con_Clear_f },
-			{ "clearnotify", Con_ClearNotify_f },
-			{ "condump", Con_Dump_f, Con_Dump_c },
-			{ "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
-			{ nullptr, nullptr }
-		};
+                static const cmdreg_t consoleCommands[] = {
+                        { "toggleconsole", Con_ToggleConsole_f },
+                        { "messagemode", Con_MessageMode_f },
+                        { "messagemode2", Con_MessageMode2_f },
+                        { "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
+                        { "clear", Con_Clear_f },
+                        { "clearnotify", Con_ClearNotify_f },
+                        { "condump", Con_Dump_f, Con_Dump_c },
+                        { nullptr, nullptr }
+                };
 		Cmd_Register(consoleCommands);
 
 		notifyTime_ = Cvar_Get("con_notifytime", "3", 0);
@@ -1298,16 +1285,15 @@ namespace {
 		if (!name || !*name)
 			return;
 
-		// Open a plain text file in the current working directory
-		FILE* f = std::fopen(name, "wb");
-		if (!f) {
-			Com_EPrintf("Couldn't open %s\n", name);
-			return;
-		}
+                char path[MAX_OSPATH];
+                qhandle_t file = FS_EasyOpenFile(path, sizeof(path), FS_MODE_WRITE | FS_FLAG_TEXT,
+                        "condumps/", name, ".txt");
+                if (!file)
+                        return;
 
-		char buffer[kLegacyLineWidth + 1];
+                char buffer[kLegacyLineWidth + 1];
 
-		for (int i = currentIndex_ - kTotalLines + 1; i <= currentIndex_; ++i) {
+                for (int i = currentIndex_ - kTotalLines + 1; i <= currentIndex_; ++i) {
 			if (i < 0)
 				continue;
 			if (currentIndex_ - i >= kTotalLines)
@@ -1322,18 +1308,20 @@ namespace {
 
 			buffer[len++] = '\n';
 
-			if (std::fwrite(buffer, 1, static_cast<size_t>(len), f) != static_cast<size_t>(len)) {
-				Com_EPrintf("Error writing %s\n", name);
-				std::fclose(f);
-				return;
-			}
-		}
+                        const int written = FS_Write(buffer, static_cast<size_t>(len), file);
+                        if (written != len) {
+                                Com_EPrintf("Error writing %s\n", path);
+                                FS_CloseFile(file);
+                                return;
+                        }
+                }
 
-		if (std::fclose(f) != 0)
-			Com_EPrintf("Error writing %s\n", name);
-		else
-			Com_Printf("Dumped console text to %s.\n", name);
-	}
+                const int closeResult = FS_CloseFile(file);
+                if (closeResult)
+                        Com_EPrintf("Error writing %s\n", path);
+                else
+                        Com_Printf("Dumped console text to %s.\n", path);
+        }
 
 	void Console::refreshTimestampColor()
 	{
@@ -1378,7 +1366,7 @@ void Con_Print(const char* text)
 	Console::instance().print(text ? text : "");
 }
 
-static void Con_Printf(const char* fmt, ...)
+void Con_Printf(const char* fmt, ...)
 {
 	char buffer[MAXPRINTMSG];
 	va_list args;
