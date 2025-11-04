@@ -34,6 +34,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #endif
 
+static inline void GL_StretchPic_(
+    float x, float y, float w, float h,
+    float s1, float t1, float s2, float t2,
+    color_t color, int texnum, int flags);
+
 drawStatic_t draw;
 
 #if USE_FREETYPE
@@ -249,11 +254,6 @@ static FtFont *Ft_FontForImage(const image_t *image)
         return nullptr;
     return it->second.get();
 }
-
-static inline void GL_StretchPic_(
-    float x, float y, float w, float h,
-    float s1, float t1, float s2, float t2,
-    color_t color, int texnum, int flags);
 
 static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
                          size_t maxlen, const char *s, color_t color)
