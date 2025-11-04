@@ -38,32 +38,32 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define MAX_TEXTURE_SIZE    8192
 
 typedef enum {
-    IM_PCX,
-    IM_WAL,
+	IM_PCX,
+	IM_WAL,
 #if USE_TGA
-    IM_TGA,
+	IM_TGA,
 #endif
 #if USE_JPG
-    IM_JPG,
+	IM_JPG,
 #endif
 #if USE_PNG
-    IM_PNG,
+	IM_PNG,
 #endif
-    IM_MAX
+	IM_MAX
 } imageformat_t;
 
 typedef struct image_s {
-    list_t          entry;
-    char            name[MAX_QPATH]; // game path
-    uint8_t         baselen; // without extension
-    uint8_t         type;
-    uint16_t        flags;
-    uint16_t        width, height; // source image
-    uint16_t        upload_width, upload_height; // after power of two and picmip
-    unsigned        registration_sequence;
-    unsigned        texnum, texnum2; // gl texture binding
-    float           sl, sh, tl, th;
-    float           aspect;
+	list_t          entry;
+	char            name[MAX_QPATH]; // game path
+	uint8_t         baselen; // without extension
+	uint8_t         type;
+	uint16_t        flags;
+	uint16_t        width, height; // source image
+	uint16_t        upload_width, upload_height; // after power of two and picmip
+	unsigned        registration_sequence;
+	unsigned        texnum, texnum2; // gl texture binding
+	float           sl, sh, tl, th;
+	float           aspect;
 } image_t;
 
 #define MAX_RIMAGES     8192
@@ -80,29 +80,29 @@ extern unsigned r_registration_sequence;
 
 extern uint32_t d_8to24table[256];
 
-image_t *IMG_Find(const char *name, imagetype_t type, imageflags_t flags);
+image_t* IMG_Find(const char* name, imagetype_t type, imageflags_t flags);
 void IMG_FreeUnused(void);
 void IMG_FreeAll(void);
 void IMG_Init(void);
 void IMG_Shutdown(void);
 void IMG_GetPalette(void);
 
-image_t *IMG_ForHandle(qhandle_t h);
+image_t* IMG_ForHandle(qhandle_t h);
 
-void IMG_Unload(image_t *image);
-void IMG_Load(image_t *image, byte *pic);
+void IMG_Unload(image_t* image);
+void IMG_Load(image_t* image, byte* pic);
 
 typedef struct screenshot_s screenshot_t;
 
-typedef int (*save_cb_t)(const screenshot_t *);
+typedef int (*save_cb_t)(const screenshot_t*);
 
 struct screenshot_s {
-    save_cb_t save_cb;
-    byte *pixels;
-    FILE *fp;
-    char *filename;
-    int width, height, rowbytes, bpp, status, param;
-    bool async;
+	save_cb_t save_cb;
+	byte* pixels;
+	FILE* fp;
+	char* filename;
+	int width, height, rowbytes, bpp, status, param;
+	bool async;
 };
 
-int IMG_ReadPixels(screenshot_t *s);
+int IMG_ReadPixels(screenshot_t* s);
