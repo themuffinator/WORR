@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 #include <type_traits>
+#include <vector>
 
 #include "shared/shared.hpp"
 #include "common/bsp.hpp"
@@ -149,6 +150,9 @@ typedef struct {
     GLuint          framebuffers[FBO_COUNT];
     GLuint          uniform_buffer;
     GLuint          dlight_buffer;
+    GLuint          cluster_params_buffer;
+    GLuint          cluster_light_buffer;
+    GLuint          shadow_item_buffer;
 #if USE_MD5
     GLuint          skeleton_buffer;
     GLuint          skeleton_tex[2];
@@ -840,7 +844,14 @@ typedef enum {
     GLB_COUNT
 } glBufferBinding_t;
 
-enum { UBO_UNIFORMS, UBO_SKELETON, UBO_DLIGHTS };
+enum {
+    UBO_UNIFORMS,
+    UBO_SKELETON,
+    UBO_DLIGHTS,
+    UBO_CLUSTER_PARAMS,
+    UBO_CLUSTER_LIGHTS,
+    UBO_SHADOW_ITEMS
+};
 enum { SSBO_WEIGHTS, SSBO_JOINTNUMS };
 
 typedef struct {
@@ -911,11 +922,43 @@ typedef struct {
     vec4_t      hdr_histogram[16];
 } glUniformBlock_t;
 
+struct alignas(16) glClusterLight_t {
+    vec4_t position_range;
+    vec4_t color_intensity;
+    vec4_t cone_dir_angle;
+    vec4_t world_origin_shadow;
+};
+
+struct glClusterLookup_t {
+    uint32_t offset;
+    uint32_t count;
+    uint32_t _pad0;
+    uint32_t _pad1;
+};
+
+struct glShadowItem_t {
+    mat4_t volume_matrix;
+    vec4_t viewport_rect;
+    vec4_t source_position;
+    float  bias;
+    float  shade_amount;
+};
+
 typedef struct {
     GLint          num_dlights;
     GLint          pad[3];
     glDlight_t     lights[MAX_DLIGHTS];
 } glUniformDlights_t;
+
+typedef struct {
+    float           cluster_min_z;
+    float           cluster_zslice_factor;
+    int32_t         cluster_enabled;
+    int32_t         shadow_enabled;
+    int32_t         show_overdraw;
+    int32_t         show_normals;
+    vec2_t          _pad_cluster;
+} glClusterParams_t;
 
 typedef struct {
     glTmu_t             client_tmu;
@@ -934,6 +977,9 @@ typedef struct {
     bool                u_block_dirty;
     glUniformDlights_t  u_dlights;
     uint64_t            dlight_bits;
+    glClusterParams_t   u_cluster_params;
+    std::vector<glClusterLight_t> cluster_lights;
+    std::vector<glShadowItem_t>   shadow_items;
 } glState_t;
 
 extern glState_t gls;
