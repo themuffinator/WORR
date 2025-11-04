@@ -73,6 +73,7 @@ cvar_t *gl_md5_distance;
 cvar_t *gl_damageblend_frac;
 cvar_t *r_skipUnderWaterFX;
 cvar_t *r_enablefog;
+cvar_t *r_postProcessing;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
 cvar_t *r_bloomThreshold;
@@ -1162,8 +1163,14 @@ static pp_flags_t GL_BindFramebuffer(void)
     const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
     const bool motion_blur_enabled = glr.motion_blur_enabled;
 
-    if (!gl_static.use_shaders)
+    if (!gl_static.use_shaders || !r_postProcessing->integer) {
+        const bool was_hdr_active = gl_static.hdr.active;
+        gl_static.hdr.active = false;
+        if (was_hdr_active)
+            HDR_UpdatePostprocessFormats();
+        glr.framebuffer_bound = false;
         return PP_NONE;
+    }
 
     HDR_UpdateConfig();
 
@@ -1651,6 +1658,7 @@ static void GL_Register(void)
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
+    r_postProcessing = Cvar_Get("r_postProcessing", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
     r_bloomThreshold = Cvar_Get("r_bloomThreshold", "1.0", 0);
