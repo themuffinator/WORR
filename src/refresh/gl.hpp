@@ -236,6 +236,8 @@ typedef struct {
     bool            motion_blur_enabled;
     bool            motion_blur_ready;
     float           motion_blur_scale;
+    float           motion_blur_min_velocity;
+    float           motion_blur_min_velocity_pixels;
     int             motion_blur_viewport_width;
     int             motion_blur_viewport_height;
     float           motion_blur_fov_x;
@@ -797,7 +799,6 @@ void GL_LoadWorld(const char *name);
                                  GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR)
 
 inline constexpr float R_MOTION_BLUR_MAX_SAMPLES = 12.0f;
-inline constexpr float R_MOTION_BLUR_MATRIX_EPSILON = 1.0e-4f;
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -910,6 +911,7 @@ typedef struct {
     mat4_t      motion_prev_view_proj;
     mat4_t      motion_inv_view_proj;
     vec4_t      motion_params;
+    vec4_t      motion_thresholds;
     vec4_t      hdr_exposure;
     vec4_t      hdr_params0;
     vec4_t      hdr_params1;

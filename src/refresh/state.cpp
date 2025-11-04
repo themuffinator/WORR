@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 glState_t gls;
@@ -282,15 +283,63 @@ void GL_Setup3D(void)
         Matrix_Multiply(glr.projmatrix, glr.viewmatrix, glr.view_proj_matrix);
         glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
 
+        const float viewport_width = glr.fd.width > 0 ? static_cast<float>(glr.fd.width) : 1.0f;
+        const float viewport_height = glr.fd.height > 0 ? static_cast<float>(glr.fd.height) : 1.0f;
+        const float min_ndc_threshold = (std::max)(glr.motion_blur_min_velocity, 0.0f);
+        const float min_pixel_threshold = (std::max)(glr.motion_blur_min_velocity_pixels, 0.0f);
+
         bool motion_ready = false;
         if (glr.motion_blur_enabled && glr.prev_view_proj_valid && glr.view_proj_valid && glr.motion_blur_scale > 0.0f) {
-            float max_delta = 0.0f;
-            for (int i = 0; i < 16; ++i) {
-                const float delta = std::fabs(glr.view_proj_matrix[i] - glr.prev_view_proj_matrix[i]);
-                if (delta > max_delta)
-                    max_delta = delta;
+            mat4_t current_to_prev;
+            Matrix_Multiply(glr.prev_view_proj_matrix, glr.inv_view_proj_matrix, current_to_prev);
+
+            float max_ndc_velocity = 0.0f;
+            float max_pixel_velocity = 0.0f;
+            static const float sample_points[][4] = {
+                { 0.0f,  0.0f,  0.0f, 1.0f },
+                { 0.0f,  0.0f, -0.5f, 1.0f },
+                { 0.0f,  0.0f,  0.5f, 1.0f },
+                {-0.75f, -0.75f, 0.0f, 1.0f },
+                { 0.75f, -0.75f, 0.0f, 1.0f },
+                {-0.75f,  0.75f, 0.0f, 1.0f },
+                { 0.75f,  0.75f, 0.0f, 1.0f },
+                { 0.0f, -0.75f, 0.0f, 1.0f },
+                { 0.0f,  0.75f, 0.0f, 1.0f }
+            };
+
+            for (size_t i = 0; i < sizeof(sample_points) / sizeof(sample_points[0]); ++i) {
+                vec4_t current_clip = { sample_points[i][0], sample_points[i][1], sample_points[i][2], sample_points[i][3] };
+                vec4_t previous_clip;
+                Matrix_TransformVec4(current_clip, current_to_prev, previous_clip);
+
+                const float curr_w = current_clip[3];
+                const float prev_w = previous_clip[3];
+                if (std::fabs(curr_w) <= 1.0e-6f || std::fabs(prev_w) <= 1.0e-6f)
+                    continue;
+
+                const float inv_curr_w = 1.0f / curr_w;
+                const float inv_prev_w = 1.0f / prev_w;
+                const float current_ndc_x = current_clip[0] * inv_curr_w;
+                const float current_ndc_y = current_clip[1] * inv_curr_w;
+                const float prev_ndc_x = previous_clip[0] * inv_prev_w;
+                const float prev_ndc_y = previous_clip[1] * inv_prev_w;
+                const float velocity_x = (current_ndc_x - prev_ndc_x) * 0.5f;
+                const float velocity_y = (current_ndc_y - prev_ndc_y) * 0.5f;
+
+                const float base_ndc_speed = std::sqrt(velocity_x * velocity_x + velocity_y * velocity_y);
+                const float scaled_ndc_speed = base_ndc_speed * glr.motion_blur_scale;
+                if (scaled_ndc_speed > max_ndc_velocity)
+                    max_ndc_velocity = scaled_ndc_speed;
+
+                const float pixel_velocity_x = velocity_x * viewport_width;
+                const float pixel_velocity_y = velocity_y * viewport_height;
+                const float base_pixel_speed = std::sqrt(pixel_velocity_x * pixel_velocity_x + pixel_velocity_y * pixel_velocity_y);
+                const float scaled_pixel_speed = base_pixel_speed * glr.motion_blur_scale;
+                if (scaled_pixel_speed > max_pixel_velocity)
+                    max_pixel_velocity = scaled_pixel_speed;
             }
-            motion_ready = max_delta > R_MOTION_BLUR_MATRIX_EPSILON;
+
+            motion_ready = (max_ndc_velocity >= min_ndc_threshold) || (max_pixel_velocity >= min_pixel_threshold);
         }
         glr.motion_blur_ready = motion_ready;
 
@@ -313,14 +362,28 @@ void GL_Setup3D(void)
 
         gls.u_block.motion_params[0] = glr.motion_blur_ready ? glr.motion_blur_scale : 0.0f;
         gls.u_block.motion_params[1] = R_MOTION_BLUR_MAX_SAMPLES;
-        const float viewport_width = glr.fd.width > 0 ? static_cast<float>(glr.fd.width) : 1.0f;
-        const float viewport_height = glr.fd.height > 0 ? static_cast<float>(glr.fd.height) : 1.0f;
         gls.u_block.motion_params[2] = viewport_width;
         gls.u_block.motion_params[3] = viewport_height;
+
+        float search_radius_pixels = 0.0f;
+        if (glr.fd.width > 0 && glr.fd.height > 0) {
+            const float viewport_max = (std::max)(viewport_width, viewport_height);
+            search_radius_pixels = Q_bound(1.0f, viewport_max * 0.0025f, 8.0f);
+        }
+        const float jitter = std::fmod(static_cast<float>(glr.drawframe) * 0.61803398875f, 1.0f);
+
+        gls.u_block.motion_thresholds[0] = min_ndc_threshold;
+        gls.u_block.motion_thresholds[1] = min_pixel_threshold;
+        gls.u_block.motion_thresholds[2] = search_radius_pixels;
+        gls.u_block.motion_thresholds[3] = jitter;
         gls.u_block_dirty = true;
     } else {
         glr.view_proj_valid = false;
         glr.motion_blur_ready = false;
+        gls.u_block.motion_thresholds[0] = 0.0f;
+        gls.u_block.motion_thresholds[1] = 0.0f;
+        gls.u_block.motion_thresholds[2] = 0.0f;
+        gls.u_block.motion_thresholds[3] = 0.0f;
     }
 
     // enable depth writes before clearing
