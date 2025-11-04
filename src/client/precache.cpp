@@ -564,7 +564,7 @@ static void CS_LoadShadowLight(int index, const char *s)
     }
 
     // bad shadow light
-    if (n != 11) {
+    if (n < 11) {
         return;
     }
 
@@ -572,7 +572,7 @@ static void CS_LoadShadowLight(int index, const char *s)
 
     const char *p = buf;
     cl.shadowdefs[index - cl.csr.shadowlights].number = Q_atoi(COM_Parse(&p));
-    bool is_cone = !!Q_atoi(COM_Parse(&p));
+    light->lighttype = static_cast<shadow_light_type_t>(Q_atoi(COM_Parse(&p)));
     light->radius = Q_atof(COM_Parse(&p));
     light->resolution = Q_atoi(COM_Parse(&p));
     light->intensity = Q_atof(COM_Parse(&p));
@@ -584,8 +584,15 @@ static void CS_LoadShadowLight(int index, const char *s)
     light->conedirection[1] = Q_atof(COM_Parse(&p));
     light->conedirection[2] = Q_atof(COM_Parse(&p));
 
-    if (!is_cone) {
+    const char *token = COM_Parse(&p);
+    light->bias = (token && *token) ? Q_atof(token) : 0.0f;
+
+    token = COM_Parse(&p);
+    light->casts_shadow = !(token && *token) ? true : Q_atoi(token) != 0;
+
+    if (light->lighttype != shadow_light_type_cone) {
         light->coneangle = 0.0f;
+        VectorClear(light->conedirection);
     }
 }
 
