@@ -1013,12 +1013,12 @@ void R_HDRUpdateUniforms(void)
     gls.u_block.hdr_params3[2] = gl_static.hdr.debug_tonemap ? 1.0f : 0.0f;
     gls.u_block.hdr_params3[3] = gl_static.hdr.ui_sdr_mix;
 
-    gls.u_block.bloom_params[0] = std::max(r_bloomSceneIntensity->value, 0.0f);
-    gls.u_block.bloom_params[1] = std::max(r_bloomSceneSaturation->value, 0.0f);
-    gls.u_block.bloom_params[2] = std::max(r_bloomSaturation->value, 0.0f);
+    gls.u_block.bloom_params[0] = (std::max)(r_bloomSceneIntensity->value, 0.0f);
+    gls.u_block.bloom_params[1] = (std::max)(r_bloomSceneSaturation->value, 0.0f);
+    gls.u_block.bloom_params[2] = (std::max)(r_bloomSaturation->value, 0.0f);
     gls.u_block.bloom_params[3] = 0.0f;
 
-    const float color_correct_strength = std::max(r_colorCorrect->value, 0.0f);
+    const float color_correct_strength = (std::max)(r_colorCorrect->value, 0.0f);
     gls.u_block.color_correction[0] = color_correct_strength;
     gls.u_block.color_correction[1] = 0.95f;
     gls.u_block.color_correction[2] = 1.0f;
