@@ -21,3 +21,15 @@ cmake_opts.add_cmake_defines({
 })
 
 cmake_proj = cmake.configure('freetype2', options: cmake_opts)
+
+cmake_freetype_dep = cmake_proj.dependency('freetype')
+freetype_dep = declare_dependency(
+  include_directories: cmake_freetype_dep.get_include_dirs(),
+  compile_args: cmake_freetype_dep.get_compile_args(),
+  link_args: cmake_freetype_dep.get_link_args(),
+  link_with: cmake_freetype_dep.libraries,
+  dependencies: cmake_freetype_dep.ext_deps,
+  objects: cmake_freetype_dep.objects,
+  sources: cmake_freetype_dep.get_sources(),
+  extra_files: cmake_freetype_dep.get_extra_files(),
+)
