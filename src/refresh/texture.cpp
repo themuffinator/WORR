@@ -1279,6 +1279,14 @@ bool GL_InitFramebuffers(void)
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
     GL_InitDepthTexture(scene_w, scene_h);
 
+    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_MOTION_HISTORY(i));
+        if (motion_blur_active)
+            GL_InitPostProcTexture(scene_w, scene_h);
+        else
+            GL_InitPostProcTexture(0, 0);
+    }
+
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_SCENE : GL_NONE, 0);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLOOM : GL_NONE, 0);
@@ -1306,6 +1314,13 @@ bool GL_InitFramebuffers(void)
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_half_w ? TEXNUM_PP_DOF_GATHER : GL_NONE, 0);
 
     CHECK_FB(dof_half_w, "FBO_BOKEH_GATHER");
+
+    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+        qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(i));
+        GLuint tex = (motion_blur_active && scene_w && scene_h) ? TEXNUM_PP_MOTION_HISTORY(i) : GL_NONE;
+        qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+        CHECK_FB(motion_blur_active && scene_w && scene_h, "FBO_MOTION_HISTORY");
+    }
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 

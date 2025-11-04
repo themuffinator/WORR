@@ -36,6 +36,10 @@ constexpr float MOTION_BLUR_FOV_EPSILON = 0.01f;
 constexpr float MOTION_BLUR_MAX_FRAME_TIME = 0.25f;
 }
 
+static void R_ClearMotionBlurHistory(void);
+static void R_BindMotionHistoryTextures(void);
+static void R_StoreMotionBlurHistory(void);
+
 glRefdef_t glr;
 glStatic_t gl_static;
 glConfig_t gl_config;
@@ -1190,7 +1194,61 @@ static void GL_DrawBloom(pp_flags_t flags)
         .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
     };
 
+    if (context.motionBlurReady)
+        R_BindMotionHistoryTextures();
+
     g_bloom_effect.render(context);
+}
+
+static void R_ClearMotionBlurHistory(void)
+{
+    glr.motion_blur_history_count = 0;
+    glr.motion_blur_history_index = 0;
+    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+        glr.motion_history_valid[i] = false;
+        for (int j = 0; j < 16; ++j)
+            glr.motion_history_view_proj[i][j] = gl_identity[j];
+    }
+}
+
+static void R_BindMotionHistoryTextures(void)
+{
+    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+        glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+        GLuint tex = TEXNUM_BLACK;
+        if (i < glr.motion_blur_history_count) {
+            int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) %
+                R_MOTION_BLUR_HISTORY_FRAMES;
+            if (glr.motion_history_valid[slot])
+                tex = TEXNUM_PP_MOTION_HISTORY(slot);
+        }
+        GL_ForceTexture(tmu, tex);
+    }
+}
+
+static void R_StoreMotionBlurHistory(void)
+{
+    if (!glr.motion_blur_enabled || !glr.view_proj_valid)
+        return;
+    if (glr.fd.width <= 0 || glr.fd.height <= 0)
+        return;
+
+    const int target_index = glr.motion_blur_history_index;
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(target_index));
+    qglViewport(0, 0, glr.fd.width, glr.fd.height);
+    GL_Ortho(0, glr.fd.width, glr.fd.height, 0, -1, 1);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_PostProcess(GLS_DEFAULT, 0, 0, glr.fd.width, glr.fd.height);
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GL_Setup2D();
+
+    for (int i = 0; i < 16; ++i)
+        glr.motion_history_view_proj[target_index][i] = glr.view_proj_matrix[i];
+    glr.motion_history_valid[target_index] = true;
+    glr.motion_blur_history_index = (target_index + 1) % R_MOTION_BLUR_HISTORY_FRAMES;
+    if (glr.motion_blur_history_count < R_MOTION_BLUR_HISTORY_FRAMES)
+        glr.motion_blur_history_count++;
 }
 
 static void GL_DrawDepthOfField(pp_flags_t flags)
@@ -1214,6 +1272,7 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
     if (glr.motion_blur_ready) {
         bits |= GLS_MOTION_BLUR;
         GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+        R_BindMotionHistoryTextures();
     }
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1348,8 +1407,10 @@ void R_RenderFrame(const refdef_t *fd)
     const bool fov_changed = std::fabs(glr.motion_blur_fov_x - glr.fd.fov_x) > MOTION_BLUR_FOV_EPSILON ||
         std::fabs(glr.motion_blur_fov_y - glr.fd.fov_y) > MOTION_BLUR_FOV_EPSILON;
 
-    if (viewport_changed || fov_changed)
+    if (viewport_changed || fov_changed) {
         glr.prev_view_proj_valid = false;
+        R_ClearMotionBlurHistory();
+    }
 
     glr.motion_blur_viewport_width = glr.fd.width;
     glr.motion_blur_viewport_height = glr.fd.height;
@@ -1369,9 +1430,11 @@ void R_RenderFrame(const refdef_t *fd)
             motion_blur_scale = Q_bound(0.0f, exposure / frame_time, 1.0f);
         } else {
             glr.prev_view_proj_valid = false;
+            R_ClearMotionBlurHistory();
         }
     } else {
         glr.prev_view_proj_valid = false;
+        R_ClearMotionBlurHistory();
     }
 
     glr.motion_blur_min_velocity = (std::max)(r_motionBlurMinVelocity->value, 0.0f);
@@ -1473,6 +1536,7 @@ void R_RenderFrame(const refdef_t *fd)
         if (glr.motion_blur_ready) {
             bits |= GLS_MOTION_BLUR;
             GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+            R_BindMotionHistoryTextures();
         }
 
         qglBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1491,12 +1555,16 @@ void R_RenderFrame(const refdef_t *fd)
         GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
     }
 
+    if (glr.motion_blur_enabled)
+        R_StoreMotionBlurHistory();
+
     if (glr.motion_blur_enabled && glr.view_proj_valid) {
         for (int i = 0; i < 16; ++i)
             glr.prev_view_proj_matrix[i] = glr.view_proj_matrix[i];
         glr.prev_view_proj_valid = true;
     } else if (!glr.motion_blur_enabled || !glr.view_proj_valid) {
         glr.prev_view_proj_valid = false;
+        R_ClearMotionBlurHistory();
     }
 
     if (gl_polyblend->integer)
@@ -1962,6 +2030,7 @@ static void GL_PostInit(void)
         gl_shaders_modified = gl_shaders->modified_count;
     }
     GL_ClearState();
+    R_ClearMotionBlurHistory();
     GL_InitImages();
     GL_InitQueries();
     MOD_Init();

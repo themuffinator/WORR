@@ -60,6 +60,11 @@ typedef GLuint glIndex_t;
 
 typedef uint64_t glStateBits_t;
 
+inline constexpr int R_MOTION_BLUR_HISTORY_FRAMES = 3;
+inline constexpr int R_MOTION_BLUR_GRID_SIZE = 20;
+
+static_assert(R_MOTION_BLUR_HISTORY_FRAMES == 3, "Update motion blur history macros when changing frame count");
+
 template <typename Enum>
 constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum>
 {
@@ -70,7 +75,7 @@ constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum
 #define TAB_COS(x)  gl_static.sintab[((x) + 64) & 255]
 
 // auto textures
-#define NUM_AUTO_TEXTURES       18
+#define NUM_AUTO_TEXTURES       (18 + R_MOTION_BLUR_HISTORY_FRAMES)
 #define AUTO_TEX(n)             gl_static.texnums[n]
 
 #define TEXNUM_DEFAULT          AUTO_TEX(0)
@@ -91,14 +96,19 @@ constexpr auto to_underlying(Enum value) noexcept -> std::underlying_type_t<Enum
 #define TEXNUM_PP_DOF_HALF      AUTO_TEX(15)
 #define TEXNUM_PP_DOF_GATHER    AUTO_TEX(16)
 #define TEXNUM_PP_DEPTH         AUTO_TEX(17)
+#define TEXNUM_PP_MOTION_HISTORY(i) AUTO_TEX(18 + (i))
+#define TEXNUM_PP_MOTION_HISTORY0   TEXNUM_PP_MOTION_HISTORY(0)
+#define TEXNUM_PP_MOTION_HISTORY1   TEXNUM_PP_MOTION_HISTORY(1)
+#define TEXNUM_PP_MOTION_HISTORY2   TEXNUM_PP_MOTION_HISTORY(2)
 
 // framebuffers
-#define FBO_COUNT   5
+#define FBO_COUNT   (5 + R_MOTION_BLUR_HISTORY_FRAMES)
 #define FBO_SCENE   gl_static.framebuffers[0]
 #define FBO_BOKEH_COC      gl_static.framebuffers[1]
 #define FBO_BOKEH_RESULT   gl_static.framebuffers[2]
 #define FBO_BOKEH_HALF     gl_static.framebuffers[3]
 #define FBO_BOKEH_GATHER   gl_static.framebuffers[4]
+#define FBO_MOTION_HISTORY(i) gl_static.framebuffers[5 + (i)]
 
 typedef struct {
     GLuint query;
@@ -252,6 +262,10 @@ typedef struct {
     int             motion_blur_viewport_height;
     float           motion_blur_fov_x;
     float           motion_blur_fov_y;
+    mat4_t          motion_history_view_proj[R_MOTION_BLUR_HISTORY_FRAMES];
+    std::array<bool, R_MOTION_BLUR_HISTORY_FRAMES> motion_history_valid;
+    int             motion_blur_history_index;
+    int             motion_blur_history_count;
 } glRefdef_t;
 
 typedef enum {
@@ -812,7 +826,6 @@ void GL_LoadWorld(const char *name);
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | GLS_BOKEH_MASK | \
                                  GLS_TONEMAP_ENABLE | GLS_CRT_ENABLE | GLS_MOTION_BLUR | GLS_HDR_REDUCE)
 
-inline constexpr float R_MOTION_BLUR_MAX_SAMPLES = 12.0f;
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -844,6 +857,9 @@ typedef enum {
     TMU_TEXTURE,
     TMU_LIGHTMAP,
     TMU_GLOWMAP,
+    TMU_HISTORY0,
+    TMU_HISTORY1,
+    TMU_HISTORY2,
     MAX_TMUS,
 
     // MD5
@@ -926,6 +942,9 @@ typedef struct {
     mat4_t      motion_inv_view_proj;
     vec4_t      motion_params;
     vec4_t      motion_thresholds;
+    vec4_t      motion_history_params;
+    vec4_t      motion_history_weights;
+    mat4_t      motion_history_view_proj[R_MOTION_BLUR_HISTORY_FRAMES];
     vec4_t      hdr_exposure;
     vec4_t      hdr_params0;
     vec4_t      hdr_params1;
