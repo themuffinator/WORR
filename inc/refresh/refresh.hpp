@@ -409,43 +409,43 @@ void    R_DrawChar(int x, int y, int flags, int ch, color_t color, qhandle_t fon
 void    R_DrawStretchChar(int x, int y, int w, int h, int flags, int ch, color_t color, qhandle_t font);
 int     R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
                             const char *string, color_t color, qhandle_t font,
-                            const struct ftfont_t *ftFont = nullptr);  // returns advanced x coord
+                            const ftfont_t *ftFont = nullptr);  // returns advanced x coord
 static inline int R_DrawString(int x, int y, int flags, size_t maxChars,
                                const char *string, color_t color, qhandle_t font,
-                               const struct ftfont_t *ftFont = nullptr)
+                               const ftfont_t *ftFont = nullptr)
 {
     return R_DrawStringStretch(x, y, 1, flags, maxChars, string, color, font, ftFont);
 }
 
 #if USE_FREETYPE
-bool    R_AcquireFreeTypeFont(qhandle_t font, struct ftfont_t *outFont);
-void    R_ReleaseFreeTypeFont(struct ftfont_t *font);
+bool    R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont);
+void    R_ReleaseFreeTypeFont(ftfont_t *font);
 int     R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
                              const char *string, color_t color, qhandle_t font,
-                             const struct ftfont_t *ftFont = nullptr);
+                             const ftfont_t *ftFont = nullptr);
 int     R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
                                 const char *string, qhandle_t font,
-                                const struct ftfont_t *ftFont = nullptr);
-float   R_FreeTypeFontLineHeight(int scale, const struct ftfont_t *ftFont = nullptr);
+                                const ftfont_t *ftFont = nullptr);
+float   R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont = nullptr);
 #else
-inline bool R_AcquireFreeTypeFont(qhandle_t, struct ftfont_t *)
+inline bool R_AcquireFreeTypeFont(qhandle_t, ftfont_t *)
 {
     return false;
 }
 
-inline void R_ReleaseFreeTypeFont(struct ftfont_t *)
+inline void R_ReleaseFreeTypeFont(ftfont_t *)
 {
 }
 
 inline int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
                                 const char *string, color_t color, qhandle_t font,
-                                const struct ftfont_t *ftFont = nullptr)
+                                const ftfont_t *ftFont = nullptr)
 {
     return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, ftFont);
 }
 
 inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
-                                   const char *string, qhandle_t, const struct ftfont_t * = nullptr)
+                                   const char *string, qhandle_t, const ftfont_t * = nullptr)
 {
     int width = 0;
     int maxWidth = 0;
@@ -468,7 +468,7 @@ inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
     return (std::max)(maxWidth, width);
 }
 
-inline float R_FreeTypeFontLineHeight(int scale, const struct ftfont_t * = nullptr)
+inline float R_FreeTypeFontLineHeight(int scale, const ftfont_t * = nullptr)
 {
     return CONCHAR_HEIGHT * (std::max)(scale, 1);
 }
