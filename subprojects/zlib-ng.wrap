@@ -10,5 +10,4 @@ source_fallback_url = https://github.com/mesonbuild/wrapdb/releases/download/zli
 wrapdb_version = 2.2.4-2
 
 [provide]
-zlib = zlib_ng_dep
 zlib-ng = zlib_ng_dep

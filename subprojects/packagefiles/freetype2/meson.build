@@ -9,10 +9,10 @@ cmake_opts.add_cmake_defines({
   'CMAKE_DISABLE_FIND_PACKAGE_PNG': 'ON',
 })
 
-zlib_dep = dependency('zlib',
-  required: false,
-  fallback: ['zlib-ng', 'zlib_ng_dep'],
-)
+zlib_dep = dependency('zlib', required: false)
+if not zlib_dep.found()
+  zlib_dep = dependency('zlib-ng', required: false, fallback: ['zlib-ng', 'zlib_ng_dep'])
+endif
 if zlib_dep.found()
   cmake_opts.add_cmake_dep('ZLIB', zlib_dep)
 endif
