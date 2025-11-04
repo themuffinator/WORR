@@ -79,10 +79,18 @@ cvar_t *r_staticshadows;
 cvar_t *r_postProcessing;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
-cvar_t *r_bloomThreshold;
+cvar_t *r_bloomBlurFalloff;
+cvar_t *r_bloomBrightThreshold;
 cvar_t *r_bloomIntensity;
 cvar_t *r_bloomScale;
 cvar_t *r_bloomKernel;
+cvar_t *r_bloomBlurScale;
+cvar_t *r_bloomPasses;
+cvar_t *r_bloomSaturation;
+cvar_t *r_bloomSceneIntensity;
+cvar_t *r_bloomSceneSaturation;
+cvar_t *r_colorCorrect;
+static cvar_t *r_bloomThresholdLegacy;
 cvar_t *r_hdr;
 cvar_t *r_hdr_mode;
 cvar_t *r_tonemap;
@@ -1001,6 +1009,17 @@ void R_HDRUpdateUniforms(void)
     gls.u_block.hdr_params3[2] = gl_static.hdr.debug_tonemap ? 1.0f : 0.0f;
     gls.u_block.hdr_params3[3] = gl_static.hdr.ui_sdr_mix;
 
+    gls.u_block.bloom_params[0] = std::max(r_bloomSceneIntensity->value, 0.0f);
+    gls.u_block.bloom_params[1] = std::max(r_bloomSceneSaturation->value, 0.0f);
+    gls.u_block.bloom_params[2] = std::max(r_bloomSaturation->value, 0.0f);
+    gls.u_block.bloom_params[3] = 0.0f;
+
+    const float color_correct_strength = std::max(r_colorCorrect->value, 0.0f);
+    gls.u_block.color_correction[0] = color_correct_strength;
+    gls.u_block.color_correction[1] = 0.95f;
+    gls.u_block.color_correction[2] = 1.0f;
+    gls.u_block.color_correction[3] = 1.05f;
+
     for (int i = 0; i < 16; ++i)
         for (int j = 0; j < 4; ++j)
             gls.u_block.hdr_histogram[i][j] = gl_static.hdr.histogram[i * 4 + j];
@@ -1668,6 +1687,16 @@ static void gl_modulate_changed(cvar_t *self)
     gl_modulate_entities_changed(self);
 }
 
+static void r_bloom_threshold_legacy_changed(cvar_t *self)
+{
+    (void)self;
+
+    if (!r_bloomBrightThreshold || !r_bloomThresholdLegacy)
+        return;
+
+    Cvar_SetValue(r_bloomBrightThreshold, r_bloomThresholdLegacy->value, FROM_CODE);
+}
+
 // ugly hack to reset sky
 static void gl_drawsky_changed(cvar_t *self)
 {
@@ -1745,11 +1774,24 @@ static void GL_Register(void)
     r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
     r_postProcessing = Cvar_Get("r_postProcessing", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
-    r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
-    r_bloomThreshold = Cvar_Get("r_bloomThreshold", "1.0", 0);
+    r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", CVAR_ARCHIVE);
+    r_bloomBlurFalloff = Cvar_Get("r_bloomBlurFalloff", "0.75", CVAR_ARCHIVE);
+    r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.75", CVAR_ARCHIVE);
     r_bloomIntensity = Cvar_Get("r_bloomIntensity", "0.05", CVAR_ARCHIVE);
     r_bloomScale = Cvar_Get("r_bloomScale", "4.0", 0);
     r_bloomKernel = Cvar_Get("r_bloomKernel", "0", 0);
+    r_bloomBlurScale = Cvar_Get("r_bloomBlurScale", "1.0", CVAR_ARCHIVE);
+    r_bloomPasses = Cvar_Get("r_bloomPasses", "1", CVAR_ARCHIVE);
+    r_bloomSaturation = Cvar_Get("r_bloomSaturation", "1.0", CVAR_ARCHIVE);
+    r_bloomSceneIntensity = Cvar_Get("r_bloomSceneIntensity", "1.0", CVAR_ARCHIVE);
+    r_bloomSceneSaturation = Cvar_Get("r_bloomSceneSaturation", "1.0", CVAR_ARCHIVE);
+    r_colorCorrect = Cvar_Get("r_colorCorrect", "1.0", CVAR_ARCHIVE);
+    r_bloomThresholdLegacy = Cvar_Get("r_bloomThreshold", r_bloomBrightThreshold->string, 0);
+    if (r_bloomThresholdLegacy && r_bloomBrightThreshold &&
+        r_bloomThresholdLegacy->value != r_bloomBrightThreshold->value)
+        Cvar_SetValue(r_bloomBrightThreshold, r_bloomThresholdLegacy->value, FROM_CODE);
+    if (r_bloomThresholdLegacy)
+        r_bloomThresholdLegacy->changed = r_bloom_threshold_legacy_changed;
     r_hdr = Cvar_Get("r_hdr", "0", CVAR_ARCHIVE);
     r_hdr_mode = Cvar_Get("r_hdr_mode", "3", CVAR_ARCHIVE);
     r_tonemap = Cvar_Get("r_tonemap", "0", CVAR_ARCHIVE);
