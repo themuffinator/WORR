@@ -1320,6 +1320,9 @@ static void screenshot_done_cb(void* arg)
 
 	if (s->async) {
 		Z_Free(s->filename);
+	}
+
+	if (s->owns_storage) {
 		Z_Free(s);
 	}
 }
@@ -1344,6 +1347,7 @@ static void make_screenshot(const char* name, const char* ext,
 	s.status = -1;
 	s.param = param;
 	s.async = async;
+	s.owns_storage = false;
 
 	ret = IMG_ReadPixels(&s);
 	if (ret < 0) {
@@ -1356,7 +1360,9 @@ static void make_screenshot(const char* name, const char* ext,
 		asyncwork_t work{};
 		work.work_cb = screenshot_work_cb;
 		work.done_cb = screenshot_done_cb;
-		work.cb_arg = Z_CopyStruct(&s);
+		auto* async_s = Z_CopyStruct(&s);
+		async_s->owns_storage = true;
+		work.cb_arg = async_s;
 		Com_QueueAsyncWork(&work);
 	}
 	else {
