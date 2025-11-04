@@ -750,10 +750,44 @@ r_bloomBlurRadius::
     defined in pixels at 1080p and scale with the framebuffer size. Default
     value is 12.
 
-r_bloomThreshold::
+r_bloomBlurFalloff::
+    Controls the gaussian curve falloff for bloom weights. Lower values
+    produce softer highlights by spreading the blur energy across more
+    samples, while higher values concentrate the glow. Default value is 0.75.
+
+r_bloomBlurScale::
+    Scales the blur radius prior to building the gaussian kernel. Larger
+    values widen the blur for bloom highlights, while values near zero
+    effectively disable the blur stage. Default value is 1.0.
+
+r_bloomBrightThreshold::
     Minimum luminance for a fragment to contribute to bloom. Fragments below
     this threshold are ignored during the bright-pass filter. Default value is
-    0.8.
+    0.75.
+
+r_bloomPasses::
+    Number of blur iterations executed when filtering the bloom texture.
+    Increasing this value widens the glow at the expense of additional GPU
+    cost. Values are clamped between 1 and 8. Default value is 1.
+
+r_bloomIntensity::
+    Multiplier applied to the final bloom texture when compositing with the
+    scene. Higher values amplify the bloom contribution. Default value is 0.05.
+
+r_bloomSaturation::
+    Adjusts the color saturation of the bloom texture before it is added to
+    the scene. Values above 1.0 intensify bloom colors while values below 1.0
+    push the bloom closer to grayscale. Default value is 1.0.
+
+r_bloomSceneIntensity::
+    Scales the base scene color prior to combining it with bloom. Use values
+    below 1.0 to tame overly bright scenes while keeping bloom strength intact.
+    Default value is 1.0.
+
+r_bloomSceneSaturation::
+    Controls scene saturation before bloom is composited. This allows the
+    base scene to be desaturated or enriched independently of the bloom pass.
+    Default value is 1.0.
 
 r_bloomScale::
     Controls the bloom buffer downsampling factor relative to the main
@@ -766,6 +800,11 @@ r_bloomKernel::
     (Gaussian kernel). Supported values are:
       - 0 — Gaussian blur (uses ``r_bloomBlurRadius`` to size the kernel)
       - 1 — Box blur (uniform weights)
+
+r_colorCorrect::
+    Enables the post-tonemap color grading pass. The value controls blend
+    strength between the original tone-mapped image and a cinematic ACES-style
+    grade. Set to 0 to disable the correction. Default value is 1.0.
 
 r_crtmode::
     Enables the CRT-Lottes post-processing shader. Default value is 0 (disabled).

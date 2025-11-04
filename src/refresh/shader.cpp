@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "common/sizebuf.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #define MAX_SHADER_CHARS    4096
@@ -181,6 +182,8 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_hdr_params2;
         vec4 u_hdr_params3;
         vec4 u_hdr_reduce_params;
+        vec4 u_bloom_params;
+        vec4 u_color_correction;
         vec4 u_crt_params0;
         vec4 u_crt_params1;
         vec4 u_crt_params2;
@@ -621,9 +624,13 @@ static void write_gaussian_blur(sizebuf_t *buf)
         return;
     }
 
+    float falloff = gl_static.bloom_falloff;
+    if (falloff < 0.0001f)
+        falloff = 0.0001f;
+
     float sum = 0;
     for (int i = -radius, j = 0; i <= radius; i++, j++) {
-        float w = expf(-(i * i) / (sigma * sigma));
+        float w = expf(-(i * i) / (sigma * sigma * falloff));
         weights[j] = w;
         sum += w;
     }
@@ -1003,6 +1010,29 @@ static void write_tonemap_block(sizebuf_t *buf)
     })
 }
 
+static void write_color_correction_block(sizebuf_t *buf)
+{
+    GLSL(vec3 apply_color_correction(vec3 color) {
+        float strength = clamp(u_color_correction.x, 0.0, 1.0);
+        if (strength <= 0.0)
+            return color;
+
+        const mat3 srgb_to_ap1 = mat3(
+            0.59719, 0.35458, 0.04823,
+            0.07600, 0.90834, 0.01566,
+            0.02840, 0.13383, 0.83777);
+        const mat3 ap1_to_srgb = mat3(
+            1.60475, -0.53108, -0.07367,
+           -0.10208,  1.10813, -0.00605,
+           -0.00327, -0.07276,  1.07602);
+
+        vec3 ap1 = max(srgb_to_ap1 * color, vec3(0.0));
+        vec3 graded = pow(ap1, vec3(u_color_correction.y, u_color_correction.z, u_color_correction.w));
+        graded = clamp(ap1_to_srgb * graded, 0.0, 1.0);
+        return mix(color, graded, strength);
+    })
+}
+
 static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
 {
     write_header(buf, bits);
@@ -1193,6 +1223,8 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_TONEMAP_ENABLE)
         write_tonemap_block(buf);
 
+    write_color_correction_block(buf);
+
     if (bits & GLS_CRT_ENABLE)
         write_crt_block(buf, (bits & GLS_TONEMAP_ENABLE) != 0);
 
@@ -1339,7 +1371,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         });
     }
 
-    if (bits & GLS_BLOOM_BRIGHTPASS)
+    if (bits & (GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT))
         GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
 
     GLSF("void main() {\n");
@@ -1491,8 +1523,28 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_FOG_SKY)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
 
-    if (bits & GLS_BLOOM_OUTPUT)
-        GLSL(diffuse.rgb += texture(u_bloom, tc).rgb * u_hdr_params0.w;)
+    GLSL({
+        vec3 scene_color = diffuse.rgb;
+        float scene_sat = u_bloom_params.y;
+        if (abs(scene_sat - 1.0) > 0.0001) {
+            float scene_luma = dot(scene_color, bloom_luminance);
+            scene_color = mix(vec3(scene_luma), scene_color, scene_sat);
+        }
+        scene_color *= max(u_bloom_params.x, 0.0);
+        diffuse.rgb = scene_color;
+    GLSL(})
+
+    if (bits & GLS_BLOOM_OUTPUT) {
+        GLSL({
+            vec3 bloom_color = texture(u_bloom, tc).rgb;
+            float bloom_sat = u_bloom_params.z;
+            if (abs(bloom_sat - 1.0) > 0.0001) {
+                float bloom_luma = dot(bloom_color, bloom_luminance);
+                bloom_color = mix(vec3(bloom_luma), bloom_color, bloom_sat);
+            }
+            diffuse.rgb += bloom_color * u_hdr_params0.w;
+        GLSL(})
+    }
 
     if (bits & GLS_BLOOM_GENERATE)
         GLSL(o_bloom = bloom;)
@@ -1504,6 +1556,8 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(diffuse.rgb = crt_apply(crt_uv, tc, gl_FragCoord.xy);)
         GLSL(diffuse.a = 1.0;)
     }
+
+    GLSL(diffuse.rgb = apply_color_correction(diffuse.rgb);)
 
     GLSL(o_color = diffuse;)
     GLSF("}\n");
@@ -1983,25 +2037,35 @@ static void shader_clear_state(void)
 static void shader_update_blur(void)
 {
     float sigma = 1.0f;
+    float falloff = r_bloomBlurFalloff ? std::max(r_bloomBlurFalloff->value, 0.0001f) : 1.0f;
+    float blur_scale = r_bloomBlurScale ? std::max(r_bloomBlurScale->value, 0.0f) : 1.0f;
 
     if (r_bloom->integer && glr.fd.height > 0) {
         float base_radius = Cvar_ClampValue(r_bloomBlurRadius, 1, MAX_RADIUS);
         float scaled_radius = base_radius * glr.fd.height / 1080.0f;
-        if (scaled_radius > 0.0f) {
-            sigma = scaled_radius * 0.5f;
+        if (scaled_radius > 0.0f && blur_scale > 0.0f) {
+            sigma = scaled_radius * blur_scale * 0.5f;
             if (sigma < 1.0f)
                 sigma = 1.0f;
         }
     }
 
+    if (blur_scale <= 0.0f)
+        sigma = 1.0f;
+
     const int kernel = static_cast<int>(Cvar_ClampValue(r_bloomKernel, 0.0f, 1.0f));
     const bool kernel_changed = gl_static.bloom_kernel != kernel;
     gl_static.bloom_kernel = kernel;
 
-    if (!kernel_changed && gl_static.bloom_sigma == sigma)
+    const bool params_changed = gl_static.bloom_sigma != sigma || gl_static.bloom_falloff != falloff ||
+                                gl_static.bloom_scale != blur_scale;
+
+    if (!kernel_changed && !params_changed)
         return;
 
     gl_static.bloom_sigma = sigma;
+    gl_static.bloom_falloff = falloff;
+    gl_static.bloom_scale = blur_scale;
 
     if (!gl_static.programs)
         return;
@@ -2051,12 +2115,28 @@ static void r_bloom_kernel_changed(cvar_t *self)
     shader_update_blur();
 }
 
+static void r_bloom_blur_scale_changed(cvar_t *self)
+{
+    (void)self;
+    shader_update_blur();
+}
+
+static void r_bloom_blur_falloff_changed(cvar_t *self)
+{
+    (void)self;
+    shader_update_blur();
+}
+
 static void shader_init(void)
 {
     if (r_bloomBlurRadius)
         r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
     if (r_bloomKernel)
         r_bloomKernel->changed = r_bloom_kernel_changed;
+    if (r_bloomBlurScale)
+        r_bloomBlurScale->changed = r_bloom_blur_scale_changed;
+    if (r_bloomBlurFalloff)
+        r_bloomBlurFalloff->changed = r_bloom_blur_falloff_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
@@ -2122,6 +2202,10 @@ static void shader_shutdown(void)
         r_bloomBlurRadius->changed = NULL;
     if (r_bloomKernel)
         r_bloomKernel->changed = NULL;
+    if (r_bloomBlurScale)
+        r_bloomBlurScale->changed = NULL;
+    if (r_bloomBlurFalloff)
+        r_bloomBlurFalloff->changed = NULL;
 
     if (gl_static.programs) {
         uint32_t map_size = HashMap_Size(gl_static.programs);

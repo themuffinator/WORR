@@ -254,6 +254,9 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 
         const float invW = 1.0f / downsampleWidth_;
         const float invH = 1.0f / downsampleHeight_;
+        const float blurScale = (std::max)(r_bloomBlurScale->value, 0.0f);
+        const bool useBlur = blurScale > 0.0f;
+        const int passes = (std::max)(static_cast<int>(Cvar_ClampValue(r_bloomPasses, 1.0f, 8.0f)), 1);
         const int kernelMode = static_cast<int>(Cvar_ClampValue(r_bloomKernel, 0.0f, 1.0f));
         const glStateBits_t blurMode = kernelMode == 0 ? GLS_BLUR_GAUSS : GLS_BLUR_BOX;
 
@@ -267,7 +270,7 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 
         gls.u_block.bbr_params[0] = invW;
         gls.u_block.bbr_params[1] = invH;
-        gls.u_block.bbr_params[2] = (std::max)(r_bloomThreshold->value, 0.0f);
+        gls.u_block.bbr_params[2] = (std::max)(r_bloomBrightThreshold->value, 0.0f);
         gls.u_block_dirty = true;
         GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
         GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
@@ -275,15 +278,20 @@ void BloomEffect::render(const BloomRenderContext& ctx)
         GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
 
         GLuint currentTexture = textures_[BrightPass];
-        for (int axis = 0; axis < 2; ++axis) {
-                const bool horizontal = axis == 0;
-                gls.u_block.bbr_params[0] = horizontal ? invW : 0.0f;
-                gls.u_block.bbr_params[1] = horizontal ? 0.0f : invH;
-                gls.u_block_dirty = true;
-                GL_ForceTexture(TMU_TEXTURE, currentTexture);
-                qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-                GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_);
-                currentTexture = textures_[Blur0 + axis];
+        if (useBlur) {
+                const float texelScale = blurScale;
+                for (int pass = 0; pass < passes; ++pass) {
+                        for (int axis = 0; axis < 2; ++axis) {
+                                const bool horizontal = axis == 0;
+                                gls.u_block.bbr_params[0] = horizontal ? invW * texelScale : 0.0f;
+                                gls.u_block.bbr_params[1] = horizontal ? 0.0f : invH * texelScale;
+                                gls.u_block_dirty = true;
+                                GL_ForceTexture(TMU_TEXTURE, currentTexture);
+                                qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
+                                GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_);
+                                currentTexture = textures_[Blur0 + axis];
+                        }
+                }
         }
 
         const GLuint bloomTexture = currentTexture;

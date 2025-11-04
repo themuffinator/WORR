@@ -189,6 +189,8 @@ typedef struct {
     GLenum          postprocess_type;
     float           entity_modulate;
     float           bloom_sigma;
+    float           bloom_falloff;
+    float           bloom_scale;
     int             bloom_kernel;
     uint32_t        inverse_intensity_33;
     uint32_t        inverse_intensity_66;
@@ -486,9 +488,17 @@ extern cvar_t *r_skipUnderWaterFX;
 extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
-extern cvar_t *r_bloomThreshold;
+extern cvar_t *r_bloomBlurFalloff;
+extern cvar_t *r_bloomBrightThreshold;
+extern cvar_t *r_bloomIntensity;
 extern cvar_t *r_bloomScale;
 extern cvar_t *r_bloomKernel;
+extern cvar_t *r_bloomBlurScale;
+extern cvar_t *r_bloomPasses;
+extern cvar_t *r_bloomSaturation;
+extern cvar_t *r_bloomSceneIntensity;
+extern cvar_t *r_bloomSceneSaturation;
+extern cvar_t *r_colorCorrect;
 extern cvar_t *gl_dof;
 extern cvar_t *gl_dof_quality;
 
@@ -951,6 +961,8 @@ typedef struct {
     vec4_t      hdr_params2;
     vec4_t      hdr_params3;
     vec4_t      hdr_reduce_params;
+    vec4_t      bloom_params;
+    vec4_t      color_correction;
     vec4_t      crt_params0;
     vec4_t      crt_params1;
     vec4_t      crt_params2;
