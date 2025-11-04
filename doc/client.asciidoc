@@ -755,6 +755,18 @@ r_bloomThreshold::
     this threshold are ignored during the bright-pass filter. Default value is
     0.8.
 
+r_bloomScale::
+    Controls the bloom buffer downsampling factor relative to the main
+    framebuffer. Lower values (closer to 1) render the bloom at higher
+    resolution while higher values reduce cost at the expense of sharpness.
+    Values are clamped between 1 and 16. Default value is 4.0.
+
+r_bloomKernel::
+    Selects the blur kernel used for bloom blur passes. Default value is 0
+    (Gaussian kernel). Supported values are:
+      - 0 — Gaussian blur (uses ``r_bloomBlurRadius`` to size the kernel)
+      - 1 — Box blur (uniform weights)
+
 r_crtmode::
     Enables the CRT-Lottes post-processing shader. Default value is 0 (disabled).
       - 0 — bypass the effect entirely

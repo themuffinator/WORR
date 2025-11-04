@@ -1975,7 +1975,11 @@ static void shader_update_blur(void)
         }
     }
 
-    if (gl_static.bloom_sigma == sigma)
+    const int kernel = static_cast<int>(Cvar_ClampValue(r_bloomKernel, 0.0f, 1.0f));
+    const bool kernel_changed = gl_static.bloom_kernel != kernel;
+    gl_static.bloom_kernel = kernel;
+
+    if (!kernel_changed && gl_static.bloom_sigma == sigma)
         return;
 
     gl_static.bloom_sigma = sigma;
@@ -1983,9 +1987,26 @@ static void shader_update_blur(void)
     if (!gl_static.programs)
         return;
 
-    bool changed = false;
     uint32_t map_size = HashMap_Size(gl_static.programs);
-    for (int i = 0; i < map_size; i++) {
+
+    if (kernel != 0) {
+        if (kernel_changed) {
+            for (uint32_t i = 0; i < map_size; i++) {
+                glStateBits_t *bits = HashMap_GetKey(glStateBits_t, gl_static.programs, i);
+                if (*bits & GLS_BLUR_GAUSS) {
+                    GLuint *prog = HashMap_GetValue(GLuint, gl_static.programs, i);
+                    if (*prog) {
+                        qglDeleteProgram(*prog);
+                        *prog = 0;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    bool changed = false;
+    for (uint32_t i = 0; i < map_size; i++) {
         glStateBits_t *bits = HashMap_GetKey(glStateBits_t, gl_static.programs, i);
         if (*bits & GLS_BLUR_GAUSS) {
             GLuint *prog = HashMap_GetValue(GLuint, gl_static.programs, i);
@@ -2005,10 +2026,18 @@ static void r_bloom_blur_radius_changed(cvar_t *self)
     shader_update_blur();
 }
 
+static void r_bloom_kernel_changed(cvar_t *self)
+{
+    (void)self;
+    shader_update_blur();
+}
+
 static void shader_init(void)
 {
     if (r_bloomBlurRadius)
         r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
+    if (r_bloomKernel)
+        r_bloomKernel->changed = r_bloom_kernel_changed;
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
@@ -2072,6 +2101,8 @@ static void shader_shutdown(void)
 
     if (r_bloomBlurRadius)
         r_bloomBlurRadius->changed = NULL;
+    if (r_bloomKernel)
+        r_bloomKernel->changed = NULL;
 
     if (gl_static.programs) {
         uint32_t map_size = HashMap_Size(gl_static.programs);
