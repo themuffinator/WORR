@@ -31,6 +31,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #undef max
 #endif
 
+using std::max;
+using std::min;
+
 static cvar_t* scr_viewsize;
 static cvar_t* scr_showpause;
 #if USE_DEBUG
