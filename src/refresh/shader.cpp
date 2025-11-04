@@ -1103,8 +1103,10 @@ static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
     }
 
     if (bits & GLS_BOKEH_DOWNSAMPLE) {
-        GLSL(vec2 inv_resolution = vec2(u_dof_screen.z, u_dof_screen.w););
-        GLSL(vec4 offset = inv_resolution.xyxy * vec2(-0.5, 0.5).xxyy;);
+        GLSL(vec2 inv_source = vec2(u_dof_screen.z, u_dof_screen.w););
+        GLSL(vec2 sample_scale = vec2(u_dof_screen.x, u_dof_screen.y););
+        GLSL(vec2 sample_step = inv_source * sample_scale;);
+        GLSL(vec4 offset = sample_step.xyxy * vec2(-0.5, 0.5).xxyy;);
         GLSL(float coc1 = texture(u_bokeh_coc, tc + offset.xy).r;);
         GLSL(float coc2 = texture(u_bokeh_coc, tc + offset.zy).r;);
         GLSL(float coc3 = texture(u_bokeh_coc, tc + offset.xw).r;);
@@ -1118,8 +1120,10 @@ static void write_bokeh_fragment(sizebuf_t *buf, glStateBits_t bits)
     }
 
     if (bits & GLS_BOKEH_GATHER) {
-        GLSL(vec2 inv_resolution = vec2(u_dof_screen.z, u_dof_screen.w););
-        GLSL(vec4 offset = inv_resolution.xyxy * vec2(-0.5, 0.5).xxyy;);
+        GLSL(vec2 inv_source = vec2(u_dof_screen.z, u_dof_screen.w););
+        GLSL(vec2 sample_scale = vec2(u_dof_screen.x, u_dof_screen.y););
+        GLSL(vec2 sample_step = inv_source * sample_scale;);
+        GLSL(vec4 offset = sample_step.xyxy * vec2(-0.5, 0.5).xxyy;);
         GLSL(vec4 color = texture(u_bokeh_source, tc + offset.xy););
         GLSL(color += texture(u_bokeh_source, tc + offset.zy););
         GLSL(color += texture(u_bokeh_source, tc + offset.xw););

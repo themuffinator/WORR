@@ -106,6 +106,7 @@ cvar_t *r_crt_scaleInLinearGamma;
 cvar_t *r_crt_shadowMask;
 cvar_t *r_crt_brightBoost;
 cvar_t *gl_dof;
+cvar_t *gl_dof_quality;
 cvar_t *gl_swapinterval;
 
 // development variables
@@ -968,81 +969,84 @@ static void GL_BokehViewport(int w, int h)
     GL_Ortho(0, w, h, 0, -1, 1);
 }
 
-static void GL_BokehSetScreen(int w, int h)
+static void GL_BokehSetScreen(int target_w, int target_h, int source_w, int source_h)
 {
-    const float inv_w = w > 0 ? 1.0f / w : 0.0f;
-    const float inv_h = h > 0 ? 1.0f / h : 0.0f;
-    Vector4Set(gls.u_block.dof_screen, static_cast<float>(w), static_cast<float>(h), inv_w, inv_h);
+    const float ratio_w = (target_w > 0 && source_w > 0) ? static_cast<float>(source_w) / static_cast<float>(target_w) : 0.0f;
+    const float ratio_h = (target_h > 0 && source_h > 0) ? static_cast<float>(source_h) / static_cast<float>(target_h) : 0.0f;
+    const float inv_source_w = source_w > 0 ? 1.0f / static_cast<float>(source_w) : 0.0f;
+    const float inv_source_h = source_h > 0 ? 1.0f / static_cast<float>(source_h) : 0.0f;
+    Vector4Set(gls.u_block.dof_screen, ratio_w, ratio_h, inv_source_w, inv_source_h);
     gls.u_block_dirty = true;
 }
 
-static void GL_BokehCoCPass(int w, int h)
+static void GL_BokehCoCPass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(w, h);
-    GL_BokehSetScreen(w, h);
+    GL_BokehViewport(target_w, target_h);
+    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
-    GL_PostProcess(GLS_BOKEH_COC, 0, 0, w, h);
+    GL_PostProcess(GLS_BOKEH_COC, 0, 0, target_w, target_h);
 }
 
-static void GL_BokehInitialBlurPass(int w, int h)
+static void GL_BokehInitialBlurPass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(w, h);
-    GL_BokehSetScreen(w, h);
+    GL_BokehViewport(target_w, target_h);
+    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, w, h);
+    GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, target_w, target_h);
 }
 
-static void GL_BokehDownsamplePass(int w, int h)
+static void GL_BokehDownsamplePass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(w, h);
-    GL_BokehSetScreen(w, h);
+    GL_BokehViewport(target_w, target_h);
+    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
-    GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, w, h);
+    GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, target_w, target_h);
 }
 
-static void GL_BokehGatherPass(int w, int h)
+static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(w, h);
-    GL_BokehSetScreen(w, h);
+    GL_BokehViewport(target_w, target_h);
+    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
-    GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, w, h);
+    GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h);
 }
 
-static void GL_BokehCombinePass(int w, int h)
+static void GL_BokehCombinePass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(w, h);
-    GL_BokehSetScreen(w, h);
+    GL_BokehViewport(target_w, target_h);
+    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
     GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, w, h);
+    GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, target_w, target_h);
 }
 
 static void GL_RunDepthOfField(void)
 {
-    const int w = glr.fd.width;
-    const int h = glr.fd.height;
+    const int full_w = gl_static.dof.full_width;
+    const int full_h = gl_static.dof.full_height;
+    const int result_w = gl_static.dof.result_width;
+    const int result_h = gl_static.dof.result_height;
+    const int half_w = gl_static.dof.half_width;
+    const int half_h = gl_static.dof.half_height;
 
-    if (w <= 0 || h <= 0)
+    if (full_w <= 0 || full_h <= 0 || result_w <= 0 || result_h <= 0 || half_w <= 0 || half_h <= 0)
         return;
-
-    const int half_w = max(w / 2, 1);
-    const int half_h = max(h / 2, 1);
 
     GL_Setup2D();
 
-    GL_BokehCoCPass(w, h);
-    GL_BokehInitialBlurPass(w, h);
-    GL_BokehDownsamplePass(half_w, half_h);
-    GL_BokehGatherPass(half_w, half_h);
-    GL_BokehCombinePass(w, h);
+    GL_BokehCoCPass(full_w, full_h, full_w, full_h);
+    GL_BokehInitialBlurPass(result_w, result_h, full_w, full_h);
+    GL_BokehDownsamplePass(half_w, half_h, result_w, result_h);
+    GL_BokehGatherPass(half_w, half_h, half_w, half_h);
+    GL_BokehCombinePass(full_w, full_h, half_w, half_h);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -1156,6 +1160,7 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
 static int32_t gl_dof_modified = 0;
+static int32_t gl_dof_quality_modified = 0;
 static int32_t r_motionBlur_modified = 0;
 
 static pp_flags_t GL_BindFramebuffer(void)
@@ -1219,6 +1224,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
         gl_dof->modified_count != gl_dof_modified ||
+        gl_dof_quality->modified_count != gl_dof_quality_modified ||
         r_motionBlur->modified_count != r_motionBlur_modified ||
         hdr_prev != gl_static.hdr.active) {
         glr.framebuffer_ok     = GL_InitFramebuffers();
@@ -1227,6 +1233,7 @@ static pp_flags_t GL_BindFramebuffer(void)
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         r_bloom_modified = r_bloom->modified_count;
         gl_dof_modified = gl_dof->modified_count;
+        gl_dof_quality_modified = gl_dof_quality->modified_count;
         r_motionBlur_modified = r_motionBlur->modified_count;
         if (flags & PP_BLOOM)
             gl_backend->update_blur();
@@ -1696,6 +1703,7 @@ static void GL_Register(void)
     r_crt_shadowMask = Cvar_Get("r_crt_shadowMask", "3", CVAR_ARCHIVE);
     r_crt_brightBoost = Cvar_Get("r_crt_brightBoost", "1.0", CVAR_ARCHIVE);
     gl_dof = Cvar_Get("gl_dof", "1", 0);
+    gl_dof_quality = Cvar_Get("gl_dof_quality", "1", CVAR_ARCHIVE);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 
