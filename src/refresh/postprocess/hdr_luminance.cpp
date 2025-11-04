@@ -1,5 +1,6 @@
 #include "hdr_luminance.hpp"
-#include "hdr_luminance.hpp"
+
+extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
 
 #include <algorithm>
 
