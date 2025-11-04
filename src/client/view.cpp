@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 //=============
 //
@@ -45,6 +46,10 @@ constexpr float kDefaultDofBlurRange = 6.0f;
 constexpr float kDefaultDofFocusDistance = 64.0f;
 constexpr float kDefaultDofFocusRange = 192.0f;
 constexpr float kDefaultDofLumaStrength = 1.0f;
+constexpr float kDefaultFocusTraceDistance = 4096.0f;
+constexpr float kFocusLerpSpeed = 10.0f;
+
+float s_focus_distance = kDefaultDofFocusDistance;
 }
 
 #if USE_DEBUG
@@ -617,32 +622,60 @@ void V_RenderView(void)
     }
 
     const bool slow_time_flagged = cl.frame.valid && cl.frame.ps.stats[STAT_SLOW_TIME];
+    const bool allow_slow_motion = r_dof->integer && cl.maxclients <= 1;
 
-    if (slow_time_flagged && r_dof->integer) {
-        const bool allow_slow_motion = cl.maxclients <= 1;
-        const float time_scale = allow_slow_motion ? (std::max)(CL_ActiveTimeScale(), 0.0f) : 1.0f;
-        const float base_blend = allow_slow_motion ? Q_clipf(1.0f - time_scale, 0.0f, 1.0f) : 1.0f;
+    const float blur_range_base = r_dof_blur_range->value > 0.0f ? r_dof_blur_range->value : kDefaultDofBlurRange;
+    const float fallback_focus_distance = (r_dof_focus_distance->value > 0.0f)
+        ? r_dof_focus_distance->value
+        : kDefaultDofFocusDistance;
+    const float focus_range_base = (r_dof_focus_range->value > 0.0f) ? r_dof_focus_range->value : kDefaultDofFocusRange;
+    const float luma_strength_base = (r_dof_luma_strength->value > 0.0f) ? r_dof_luma_strength->value : kDefaultDofLumaStrength;
 
-        const float blur_range_base = r_dof_blur_range->value > 0.0f ? r_dof_blur_range->value : kDefaultDofBlurRange;
-        const float focus_distance = (r_dof_focus_distance->value > 0.0f) ? r_dof_focus_distance->value : kDefaultDofFocusDistance;
-        const float focus_range_base = (r_dof_focus_range->value > 0.0f) ? r_dof_focus_range->value : kDefaultDofFocusRange;
-        const float luma_strength = (r_dof_luma_strength->value > 0.0f) ? r_dof_luma_strength->value : kDefaultDofLumaStrength;
+    const float slow_factor = (allow_slow_motion && cl.slow_time.initialized) ? cl.slow_time.factor : 1.0f;
+    const float base_blend = allow_slow_motion ? Q_clipf(1.0f - slow_factor, 0.0f, 1.0f) : 0.0f;
+    const bool slow_time_active = slow_time_flagged || base_blend > 0.0f;
 
+    if (allow_slow_motion && slow_time_active) {
         const float blur_range = (std::max)(blur_range_base * base_blend, 0.0f);
         const float focus_range = (std::max)(focus_range_base, 0.001f);
 
-        cl.refdef.depth_of_field = blur_range > 0.0f;
-        cl.refdef.dof_blur_range = blur_range;
-        cl.refdef.dof_focus_distance = focus_distance;
-        cl.refdef.dof_focus_range = focus_range;
-        cl.refdef.dof_luma_strength = luma_strength;
-    } else {
-        cl.refdef.depth_of_field = false;
-        cl.refdef.dof_blur_range = 0.0f;
-        cl.refdef.dof_focus_distance = 0.0f;
-        cl.refdef.dof_focus_range = 1.0f;
-        cl.refdef.dof_luma_strength = 0.0f;
+        if (blur_range > 0.0f) {
+            const float trace_distance = (std::max)(fallback_focus_distance, kDefaultFocusTraceDistance);
+            vec3_t focus_end;
+            VectorMA(cl.refdef.vieworg, trace_distance, cl.v_forward, focus_end);
+
+            trace_t focus_trace{};
+            CL_Trace(&focus_trace, cl.refdef.vieworg, focus_end, vec3_origin, vec3_origin, NULL, MASK_PLAYERSOLID | MASK_WATER);
+
+            float focus_target = fallback_focus_distance;
+            if (!focus_trace.startsolid) {
+                if (focus_trace.fraction < 1.0f)
+                    focus_target = focus_trace.fraction * trace_distance;
+                else
+                    focus_target = fallback_focus_distance;
+            }
+
+            focus_target = std::clamp(focus_target, 0.0f, trace_distance);
+
+            const float focus_alpha = 1.0f - std::exp(-cl.refdef.frametime * kFocusLerpSpeed);
+            const float lerp_amount = std::clamp(focus_alpha, 0.0f, 1.0f);
+            s_focus_distance = std::lerp(s_focus_distance, focus_target, lerp_amount);
+
+            cl.refdef.depth_of_field = true;
+            cl.refdef.dof_blur_range = blur_range;
+            cl.refdef.dof_focus_distance = s_focus_distance;
+            cl.refdef.dof_focus_range = focus_range;
+            cl.refdef.dof_luma_strength = luma_strength_base * base_blend;
+            return;
+        }
     }
+
+    s_focus_distance = fallback_focus_distance;
+    cl.refdef.depth_of_field = false;
+    cl.refdef.dof_blur_range = 0.0f;
+    cl.refdef.dof_focus_distance = 0.0f;
+    cl.refdef.dof_focus_range = 1.0f;
+    cl.refdef.dof_luma_strength = 0.0f;
 
     R_RenderFrame(&cl.refdef);
 #if USE_DEBUG
