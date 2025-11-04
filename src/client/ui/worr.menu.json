@@ -13,11 +13,46 @@
     {
       "name": "video",
       "banner": "m_banner_video",
+      "title": "Display Settings",
+      "groups": [
+        {
+          "name": "display",
+          "label": "Display",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "rendering",
+          "label": "Rendering",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb10"
+        },
+        {
+          "name": "post",
+          "label": "Post Effects",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb08"
+        },
+        {
+          "name": "hdr",
+          "label": "HDR & Tone Mapping",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb05"
+        }
+      ],
       "items": [
         {
           "type": "values",
-          "label": "video mode",
+          "label": "display mode",
           "cvar": "vid_fullscreen",
+          "group": "display",
           "options": [
             "windowed",
             "$$vid_modelist"
@@ -27,20 +62,18 @@
           "type": "values",
           "label": "fov scaling",
           "cvar": "cl_adjustfov",
+          "group": "display",
           "options": [
             "vert-",
             "hor+"
           ]
         },
-        {
-          "type": "toggle",
-          "label": "vertical sync",
-          "cvar": "gl_swapinterval"
-        },
+        { "type": "toggle", "label": "vertical sync", "cvar": "gl_swapinterval", "group": "display" },
         {
           "type": "pairs",
           "label": "anti-aliasing",
           "cvar": "gl_multisamples",
+          "group": "display",
           "options": [
             { "label": "no", "value": "0" },
             { "label": "2x MSAA", "value": "2" },
@@ -52,18 +85,17 @@
           "type": "range",
           "label": "texture gamma",
           "cvar": "vid_gamma",
-          "min": 1.3,
-          "max": 0.3
+          "group": "display",
+          "min": 0.3,
+          "max": 1.3,
+          "step": 0.01
         },
-        {
-          "type": "toggle",
-          "label": "hardware gamma",
-          "cvar": "vid_hwgamma"
-        },
+        { "type": "toggle", "label": "hardware gamma", "cvar": "vid_hwgamma", "group": "display" },
         {
           "type": "range",
           "label": "texture quality",
           "cvar": "gl_picmip",
+          "group": "display",
           "min": 3,
           "max": 0,
           "step": -1
@@ -72,6 +104,7 @@
           "type": "pairs",
           "label": "texture filter",
           "cvar": "gl_texturemode",
+          "group": "display",
           "options": [
             { "label": "nearest", "value": "GL_NEAREST" },
             { "label": "linear", "value": "GL_LINEAR" },
@@ -83,6 +116,7 @@
           "type": "pairs",
           "label": "anisotropic filter",
           "cvar": "gl_anisotropy",
+          "group": "display",
           "options": [
             { "label": "no", "value": "1" },
             { "label": "2x", "value": "2" },
@@ -95,13 +129,16 @@
           "type": "range",
           "label": "texture saturation",
           "cvar": "gl_saturation",
+          "group": "display",
           "min": 0,
-          "max": 1
+          "max": 1,
+          "step": 0.05
         },
         {
           "type": "pairs",
           "label": "texture intensity",
           "cvar": "intensity",
+          "group": "display",
           "options": [
             { "label": "1x", "value": "1" },
             { "label": "2x", "value": "2" },
@@ -112,24 +149,142 @@
           "type": "range",
           "label": "lightmap saturation",
           "cvar": "gl_coloredlightmaps",
+          "group": "display",
           "min": 0,
-          "max": 1
+          "max": 1,
+          "step": 0.05
         },
         {
           "type": "range",
           "label": "lightmap brightness",
           "cvar": "gl_brightness",
+          "group": "display",
           "min": 0,
-          "max": 0.3
+          "max": 0.3,
+          "step": 0.01
         },
         {
           "type": "values",
           "label": "rendering backend",
           "cvar": "gl_shaders",
+          "group": "rendering",
           "options": [
             "legacy",
             "shaders"
           ]
+        },
+        {
+          "type": "values",
+          "label": "dynamic lighting",
+          "cvar": "gl_dynamic",
+          "group": "rendering",
+          "options": [
+            "no",
+            "yes",
+            "only switchable"
+          ]
+        },
+        {
+          "type": "values",
+          "label": "entity cel-shading",
+          "cvar": "gl_celshading",
+          "group": "rendering",
+          "options": [
+            "no",
+            "1x",
+            "2x",
+            "3x"
+          ]
+        },
+        { "type": "toggle", "label": "entity glowing", "cvar": "cl_noglow", "negate": true, "group": "rendering" },
+        {
+          "type": "values",
+          "label": "ground shadows",
+          "cvar": "gl_shadows",
+          "group": "rendering",
+          "options": [
+            "no",
+            "yes",
+            "fade"
+          ]
+        },
+        { "type": "toggle", "label": "fog", "cvar": "r_enablefog", "group": "rendering" },
+        { "type": "toggle", "label": "screen blending", "cvar": "gl_polyblend", "group": "rendering" },
+        { "type": "toggle", "label": "screen warping", "cvar": "r_skipUnderWaterFX", "negate": true, "group": "rendering" },
+        {
+          "type": "toggle",
+          "label": "post processing",
+          "cvar": "r_postProcessing",
+          "group": "post"
+        },
+        { "type": "toggle", "label": "bloom", "cvar": "r_bloom", "group": "post" },
+        {
+          "type": "range",
+          "label": "bloom intensity",
+          "cvar": "r_bloomIntensity",
+          "group": "post",
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "type": "range",
+          "label": "bloom threshold",
+          "cvar": "r_bloomBrightThreshold",
+          "group": "post",
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "type": "range",
+          "label": "bloom scale",
+          "cvar": "r_bloomScale",
+          "group": "post",
+          "min": 1,
+          "max": 8,
+          "step": 0.5
+        },
+        { "type": "toggle", "label": "depth of field", "cvar": "gl_dof", "group": "post" },
+        { "type": "toggle", "label": "motion blur", "cvar": "r_motionBlur", "group": "post" },
+        {
+          "type": "range",
+          "label": "motion shutter speed",
+          "cvar": "r_motionBlurShutterSpeed",
+          "group": "post",
+          "min": 60,
+          "max": 500,
+          "step": 5
+        },
+        { "type": "toggle", "label": "crt simulation", "cvar": "r_crtmode", "group": "post" },
+        { "type": "toggle", "label": "hdr output", "cvar": "r_hdr", "group": "hdr" },
+        { "type": "toggle", "label": "auto exposure", "cvar": "r_exposure_auto", "group": "hdr" },
+        {
+          "type": "range",
+          "label": "exposure key",
+          "cvar": "r_exposure_key",
+          "group": "hdr",
+          "min": 0.05,
+          "max": 1.0,
+          "step": 0.05
+        },
+        {
+          "type": "range",
+          "label": "exposure speed up",
+          "cvar": "r_exposure_speed_up",
+          "group": "hdr",
+          "min": 0.5,
+          "max": 5.0,
+          "step": 0.1
+        },
+        {
+          "type": "range",
+          "label": "exposure speed down",
+          "cvar": "r_exposure_speed_down",
+          "group": "hdr",
+          "min": 0.5,
+          "max": 5.0,
+          "step": 0.1
         }
       ]
     },
@@ -137,22 +292,23 @@
       "name": "options",
       "banner": "m_banner_options",
       "items": [
-        { "type": "action", "label": "player setup", "command": "pushmenu players" },
-        { "type": "action", "label": "input setup", "command": "pushmenu input" },
+        { "type": "action", "label": "input settings", "command": "pushmenu options_input" },
+        { "type": "action", "label": "gameplay", "command": "pushmenu options_gameplay" },
+        { "type": "action", "label": "hud & ui", "command": "pushmenu options_hud" },
+        { "type": "action", "label": "display", "command": "pushmenu video" },
+        { "type": "action", "label": "audio", "command": "pushmenu options_audio" },
+        { "type": "action", "label": "accessibility", "command": "pushmenu options_accessibility" },
         { "type": "action", "label": "key bindings", "command": "pushmenu keys" },
         { "type": "action", "label": "weapon bindings", "command": "pushmenu weapons" },
-        { "type": "action", "label": "video setup", "command": "pushmenu video" },
-        { "type": "action", "label": "sound setup", "command": "pushmenu sound" },
-        { "type": "action", "label": "effects setup", "command": "pushmenu effects" },
-        { "type": "action", "label": "screen setup", "command": "pushmenu screen" },
+        { "type": "action", "label": "crosshair setup...", "command": "pushmenu crosshair" },
         { "type": "action", "label": "download options", "command": "pushmenu downloads" },
         { "type": "action", "label": "advanced options", "command": "pushmenu advanced" },
         { "type": "action", "label": "address book", "command": "pushmenu addressbook" }
       ]
     },
     {
-      "name": "sound",
-      "title": "Sound Setup",
+      "name": "options_audio",
+      "title": "Audio Settings",
       "groups": [
         {
           "name": "playback",
@@ -168,6 +324,13 @@
           "indent": 24,
           "padding": 12,
           "background": "#0f90eb10"
+        },
+        {
+          "name": "effects",
+          "label": "Effects",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb08"
         }
       ],
       "items": [
@@ -199,12 +362,20 @@
           ]
         },
         { "type": "checkbox", "label": "swap stereo channels", "cvar": "s_swapstereo", "group": "playback" },
-        { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.2, "group": "playback" },
-        { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1, "group": "playback" },
+        { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.25, "step": 0.01, "group": "playback" },
+        { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1, "step": 0.05, "group": "playback" },
         { "type": "checkbox", "label": "underwater effect", "cvar": "s_underwater", "group": "playback" },
-        { "type": "radio", "label": "ambient sounds off", "cvar": "s_ambient", "value": "0", "group": "playback" },
-        { "type": "radio", "label": "ambient sounds on", "cvar": "s_ambient", "value": "1", "group": "playback" },
-        { "type": "radio", "label": "ambient player's own", "cvar": "s_ambient", "value": "2", "group": "playback" },
+        {
+          "type": "values",
+          "label": "ambient sounds",
+          "cvar": "s_ambient",
+          "group": "playback",
+          "options": [
+            { "label": "off", "value": "0" },
+            { "label": "all", "value": "1" },
+            { "label": "player only", "value": "2" }
+          ]
+        },
         {
           "type": "values",
           "label": "chat beep",
@@ -216,7 +387,7 @@
             "alternative"
           ]
         },
-        { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1, "group": "music" },
+        { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1, "step": 0.05, "group": "music" },
         { "type": "checkbox", "label": "enable music", "cvar": "ogg_enable", "group": "music" },
         {
           "type": "checkbox",
@@ -226,7 +397,9 @@
           "enableWhen": [
             { "cvar": "ogg_enable", "equals": "1" }
           ]
-        }
+        },
+        { "type": "toggle", "label": "reverb", "cvar": "s_use_reverb", "group": "effects" },
+        { "type": "range", "label": "reverb blend time", "cvar": "al_reverb_lerp_time", "min": 0.5, "max": 5.0, "step": 0.1, "group": "effects" }
       ]
     },
     {
@@ -279,47 +452,76 @@
       ]
     },
     {
-      "name": "effects",
-      "title": "Effects Setup",
+      "name": "options_gameplay",
+      "title": "Gameplay",
+      "groups": [
+        {
+          "name": "gameplay",
+          "label": "Movement & Combat",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "effects",
+          "label": "Visual Effects",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb10"
+        },
+        {
+          "name": "notifications",
+          "label": "Notifications",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb08"
+        }
+      ],
       "items": [
+        { "type": "toggle", "label": "client prediction", "cvar": "cl_predict", "group": "gameplay" },
+        { "type": "toggle", "label": "auto pause in menus", "cvar": "cl_autopause", "group": "gameplay" },
+        { "type": "toggle", "label": "footstep sounds", "cvar": "cl_footsteps", "group": "gameplay" },
+        { "type": "toggle", "label": "third-person weapons", "cvar": "cl_vwep", "group": "gameplay" },
+        { "type": "toggle", "label": "weapon view model", "cvar": "cl_gun", "group": "gameplay" },
+        { "type": "range", "label": "weapon opacity", "cvar": "cl_gunalpha", "group": "gameplay", "min": 0, "max": 1, "step": 0.05 },
+        { "type": "range", "label": "weapon fov", "cvar": "cl_gunfov", "group": "gameplay", "min": 70, "max": 120, "step": 1 },
+        { "type": "range", "label": "weapon offset x", "cvar": "cl_gun_x", "group": "gameplay", "min": -10, "max": 10, "step": 0.5 },
+        { "type": "range", "label": "weapon offset y", "cvar": "cl_gun_y", "group": "gameplay", "min": -10, "max": 10, "step": 0.5 },
+        { "type": "range", "label": "weapon offset z", "cvar": "cl_gun_z", "group": "gameplay", "min": -10, "max": 10, "step": 0.5 },
+        { "type": "toggle", "label": "player skins", "cvar": "cl_noskins", "negate": true, "group": "effects" },
         {
           "type": "values",
-          "label": "dynamic lighting",
-          "cvar": "gl_dynamic",
+          "label": "item bob style",
+          "cvar": "cl_item_bob_style",
+          "group": "effects",
           "options": [
-            "no",
-            "yes",
-            "only switchable"
+            { "label": "off", "value": "0" },
+            { "label": "classic", "value": "1" },
+            { "label": "enhanced", "value": "2" }
           ]
         },
         {
           "type": "values",
-          "label": "entity cel-shading",
-          "cvar": "gl_celshading",
+          "label": "item rotation",
+          "cvar": "cl_item_rotate_style",
+          "group": "effects",
           "options": [
-            "no",
-            "1x",
-            "2x",
-            "3x"
+            { "label": "off", "value": "0" },
+            { "label": "classic", "value": "1" },
+            { "label": "smooth", "value": "2" }
           ]
         },
-        { "type": "toggle", "label": "entity glowing", "cvar": "cl_noglow", "negate": true },
-        {
-          "type": "values",
-          "label": "ground shadows",
-          "cvar": "gl_shadows",
-          "options": [
-            "no",
-            "yes",
-            "fade"
-          ]
-        },
-        { "type": "toggle", "label": "screen blending", "cvar": "gl_polyblend" },
-        { "type": "toggle", "label": "screen warping", "cvar": "r_skipUnderWaterFX", "negate": true },
-        { "type": "toggle", "label": "grenade explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 0 },
-        { "type": "toggle", "label": "rocket explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 1 },
-        { "type": "blank" },
-        { "type": "action", "label": "railgun trail setup...", "command": "pushmenu railtrail", "align": "left" }
+        { "type": "toggle", "label": "particle effects", "cvar": "cl_disable_particles", "negate": true, "group": "effects" },
+        { "type": "toggle", "label": "smooth explosions", "cvar": "cl_smooth_explosions", "group": "effects" },
+        { "type": "toggle", "label": "dynamic flares", "cvar": "cl_flares", "group": "effects" },
+        { "type": "toggle", "label": "gibs", "cvar": "cl_gibs", "group": "effects" },
+        { "type": "toggle", "label": "grenade explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 0, "group": "effects" },
+        { "type": "toggle", "label": "rocket explosions", "cvar": "cl_disable_explosions", "negate": true, "bit": 1, "group": "effects" },
+        { "type": "action", "label": "railgun trail setup...", "command": "pushmenu railtrail", "group": "effects", "align": "left" },
+        { "type": "toggle", "label": "game notifications", "cvar": "cl_cgame_notify", "group": "notifications" },
+        { "type": "toggle", "label": "chat notifications", "cvar": "cl_chat_notify", "group": "notifications" }
       ]
     },
     {
@@ -355,27 +557,73 @@
       ]
     },
     {
-      "name": "screen",
-      "title": "Screen Setup",
+      "name": "options_hud",
+      "title": "HUD & UI",
+      "groups": [
+        {
+          "name": "hud",
+          "label": "HUD",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "scaling",
+          "label": "Scaling",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb10"
+        },
+        {
+          "name": "chat",
+          "label": "Chat & Notifications",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb08"
+        },
+        {
+          "name": "wheel",
+          "label": "Weapon Wheel",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb06"
+        }
+      ],
       "items": [
-        { "type": "range", "label": "screen size", "cvar": "viewsize", "min": 40, "max": 100, "step": 10 },
-        { "type": "toggle", "label": "ping graph", "cvar": "scr_lag_draw" },
+        { "type": "range", "label": "screen size", "cvar": "viewsize", "group": "hud", "min": 40, "max": 100, "step": 5 },
+        {
+          "type": "values",
+          "label": "hud draw mode",
+          "cvar": "scr_draw2d",
+          "group": "hud",
+          "options": [
+            { "label": "off", "value": "0" },
+            { "label": "minimal", "value": "1" },
+            { "label": "full", "value": "2" },
+            { "label": "split screen", "value": "3" }
+          ]
+        },
+        { "type": "toggle", "label": "ping graph", "cvar": "scr_lag_draw", "group": "hud" },
         {
           "type": "values",
           "label": "demo bar",
           "cvar": "scr_demobar",
+          "group": "hud",
           "options": [
             "no",
             "yes",
             "verbose"
           ]
         },
-        { "type": "range", "label": "HUD opacity", "cvar": "scr_alpha", "min": 0, "max": 1 },
-        { "type": "range", "label": "console opacity", "cvar": "con_alpha", "min": 0, "max": 1 },
+        { "type": "range", "label": "HUD opacity", "cvar": "scr_alpha", "group": "hud", "min": 0, "max": 1, "step": 0.05 },
+        { "type": "range", "label": "safe zone", "cvar": "scr_safezone", "group": "hud", "min": 0, "max": 0.25, "step": 0.01 },
+        { "type": "range", "label": "console opacity", "cvar": "con_alpha", "group": "scaling", "min": 0, "max": 1, "step": 0.05 },
         {
           "type": "pairs",
           "label": "HUD scale",
           "cvar": "scr_scale",
+          "group": "scaling",
           "options": [
             { "label": "auto", "value": "0" },
             { "label": "1x", "value": "1" },
@@ -390,6 +638,7 @@
           "type": "pairs",
           "label": "console scale",
           "cvar": "con_scale",
+          "group": "scaling",
           "options": [
             { "label": "auto", "value": "0" },
             { "label": "1x", "value": "1" },
@@ -404,6 +653,7 @@
           "type": "pairs",
           "label": "menu scale",
           "cvar": "ui_scale",
+          "group": "scaling",
           "options": [
             { "label": "auto", "value": "0" },
             { "label": "1x", "value": "1" },
@@ -414,8 +664,54 @@
             { "label": "6x", "value": "6" }
           ]
         },
-        { "type": "blank" },
-        { "type": "action", "label": "crosshair setup...", "command": "pushmenu crosshair", "align": "left" }
+        { "type": "toggle", "label": "chat HUD", "cvar": "scr_chathud", "group": "chat" },
+        { "type": "range", "label": "chat lines", "cvar": "scr_chathud_lines", "group": "chat", "min": 1, "max": 10, "step": 1 },
+        { "type": "range", "label": "chat fade time", "cvar": "scr_chathud_time", "group": "chat", "min": 0, "max": 60, "step": 1 },
+        { "type": "range", "label": "chat offset x", "cvar": "scr_chathud_x", "group": "chat", "min": -320, "max": 320, "step": 4 },
+        { "type": "range", "label": "chat offset y", "cvar": "scr_chathud_y", "group": "chat", "min": -320, "max": 320, "step": 4 },
+        { "type": "range", "label": "wheel open speed", "cvar": "ww_timer_speed", "group": "wheel", "min": 1, "max": 6, "step": 0.1 },
+        { "type": "range", "label": "wheel ammo scale", "cvar": "ww_ammo_scale", "group": "wheel", "min": 0.25, "max": 1.5, "step": 0.05 },
+        { "type": "action", "label": "crosshair setup...", "command": "pushmenu crosshair", "group": "hud", "align": "left" }
+      ]
+    },
+    {
+      "name": "options_accessibility",
+      "title": "Accessibility",
+      "groups": [
+        {
+          "name": "feedback",
+          "label": "Combat Feedback",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "indicators",
+          "label": "Screen Indicators",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb10"
+        }
+      ],
+      "items": [
+        {
+          "type": "values",
+          "label": "hit markers",
+          "cvar": "cl_hit_markers",
+          "group": "feedback",
+          "options": [
+            { "label": "off", "value": "0" },
+            { "label": "visual", "value": "1" },
+            { "label": "visual + sound", "value": "2" }
+          ]
+        },
+        { "type": "range", "label": "hit marker duration", "cvar": "scr_hit_marker_time", "group": "feedback", "min": 100, "max": 2000, "step": 50 },
+        { "type": "toggle", "label": "damage indicators", "cvar": "scr_damage_indicators", "group": "feedback" },
+        { "type": "range", "label": "indicator duration", "cvar": "scr_damage_indicator_time", "group": "feedback", "min": 250, "max": 3000, "step": 50 },
+        { "type": "toggle", "label": "points of interest", "cvar": "scr_pois", "group": "indicators" },
+        { "type": "range", "label": "poi edge distance", "cvar": "scr_poi_edge_frac", "group": "indicators", "min": 0.05, "max": 0.4, "step": 0.01 },
+        { "type": "range", "label": "poi max scale", "cvar": "scr_poi_max_scale", "group": "indicators", "min": 1.0, "max": 2.0, "step": 0.05 }
       ]
     },
     {
@@ -437,7 +733,16 @@
       "name": "advanced",
       "title": "Advanced Options",
       "items": [
-        { "type": "toggle", "label": "draw FPS", "cvar": "cl_drawfps" }
+        { "type": "toggle", "label": "draw FPS", "cvar": "cl_drawfps" },
+        { "type": "toggle", "label": "warn on fps rounding", "cvar": "cl_warn_on_fps_rounding" },
+        { "type": "toggle", "label": "allow video restart", "cvar": "cl_allow_vid_restart" },
+        { "type": "toggle", "label": "asynchronous networking", "cvar": "cl_async" },
+        { "type": "toggle", "label": "batch commands", "cvar": "cl_batchcmds" },
+        { "type": "toggle", "label": "instant packet send", "cvar": "cl_instantpacket" },
+        { "type": "range", "label": "client max FPS", "cvar": "cl_maxfps", "min": 0, "max": 250, "step": 1 },
+        { "type": "range", "label": "renderer max FPS", "cvar": "r_maxfps", "min": 0, "max": 250, "step": 1 },
+        { "type": "range", "label": "max packets", "cvar": "cl_maxpackets", "min": 10, "max": 125, "step": 1 },
+        { "type": "range", "label": "packet duplicates", "cvar": "cl_packetdup", "min": 0, "max": 5, "step": 1 }
       ]
     },
     {
@@ -631,14 +936,41 @@
       ]
     },
     {
-      "name": "input",
-      "title": "Input Setup",
+      "name": "options_input",
+      "title": "Input Settings",
+      "groups": [
+        {
+          "name": "mouse",
+          "label": "Mouse",
+          "indent": 24,
+          "padding": 12,
+          "border": true,
+          "background": "#0f90eb20"
+        },
+        {
+          "name": "movement",
+          "label": "Movement",
+          "indent": 24,
+          "padding": 12,
+          "background": "#0f90eb10"
+        }
+      ],
       "items": [
-        { "type": "field", "label": "mouse sens", "cvar": "sensitivity", "numeric": true, "width": 8 },
-        { "type": "toggle", "label": "auto sens", "cvar": "m_autosens" },
-        { "type": "toggle", "label": "mouse filter", "cvar": "m_filter" },
-        { "type": "toggle", "label": "free look", "cvar": "freelook" },
-        { "type": "toggle", "label": "always run", "cvar": "cl_run" }
+        { "type": "range", "label": "look sensitivity", "cvar": "sensitivity", "group": "mouse", "min": 0.1, "max": 12, "step": 0.1 },
+        { "type": "range", "label": "vertical sensitivity", "cvar": "m_pitch", "group": "mouse", "min": -0.05, "max": 0.05, "step": 0.001 },
+        { "type": "range", "label": "horizontal sensitivity", "cvar": "m_yaw", "group": "mouse", "min": 0.005, "max": 0.05, "step": 0.001 },
+        { "type": "toggle", "label": "mouse filter", "cvar": "m_filter", "group": "mouse" },
+        { "type": "toggle", "label": "auto sensitivity", "cvar": "m_autosens", "group": "mouse" },
+        { "type": "range", "label": "mouse acceleration", "cvar": "m_accel", "group": "mouse", "min": 0, "max": 2, "step": 0.05 },
+        { "type": "toggle", "label": "free look", "cvar": "freelook", "group": "movement" },
+        { "type": "toggle", "label": "always run", "cvar": "cl_run", "group": "movement" },
+        { "type": "toggle", "label": "look spring", "cvar": "lookspring", "group": "movement" },
+        { "type": "toggle", "label": "look strafe", "cvar": "lookstrafe", "group": "movement" },
+        { "type": "range", "label": "forward speed", "cvar": "cl_forwardspeed", "group": "movement", "min": 100, "max": 400, "step": 5 },
+        { "type": "range", "label": "side speed", "cvar": "cl_sidespeed", "group": "movement", "min": 100, "max": 400, "step": 5 },
+        { "type": "range", "label": "up speed", "cvar": "cl_upspeed", "group": "movement", "min": 100, "max": 400, "step": 5 },
+        { "type": "range", "label": "keyboard yaw speed", "cvar": "cl_yawspeed", "group": "movement", "min": 40, "max": 360, "step": 5 },
+        { "type": "range", "label": "keyboard pitch speed", "cvar": "cl_pitchspeed", "group": "movement", "min": 40, "max": 360, "step": 5 }
       ]
     },
     {
