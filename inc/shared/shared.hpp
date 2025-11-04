@@ -59,10 +59,21 @@ typedef intptr_t ssize_t;
 #define YAW                 1       // left / right
 #define ROLL                2       // fall over
 
+#ifndef MAX_STRING_CHARS
 #define MAX_STRING_CHARS    1024    // max length of a string passed to Cmd_TokenizeString
+#endif
+
+#ifndef MAX_STRING_TOKENS
 #define MAX_STRING_TOKENS   256     // max tokens resulting from Cmd_TokenizeString
+#endif
+
+#ifndef MAX_TOKEN_CHARS
 #define MAX_TOKEN_CHARS     1024    // max length of an individual token
+#endif
+
+#ifndef MAX_NET_STRING
 #define MAX_NET_STRING      2048    // max length of a string used in network protocol
+#endif
 
 #define MAX_QPATH           64      // max length of a quake game pathname
 #define MAX_OSPATH          256     // max length of a filesystem pathname
@@ -1008,7 +1019,10 @@ struct cvar_s;
 struct genctx_s;
 
 typedef void (*xchanged_t)(struct cvar_s *);
+#ifndef XGENERATOR_T_DEFINED
 typedef void (*xgenerator_t)(struct genctx_s *);
+#define XGENERATOR_T_DEFINED 1
+#endif
 #endif
 
 // nothing outside the cvar.*() functions should modify these fields!
