@@ -73,6 +73,8 @@ cvar_t *gl_md5_distance;
 cvar_t *gl_damageblend_frac;
 cvar_t *r_skipUnderWaterFX;
 cvar_t *r_enablefog;
+cvar_t *r_shadows;
+cvar_t *r_staticshadows;
 cvar_t *r_postProcessing;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
@@ -1262,6 +1264,9 @@ void R_RenderFrame(const refdef_t *fd)
 
     glr.fd = *fd;
 
+    if (r_shadows && r_shadows->integer > 0)
+        R_ShadowAtlasBeginFrame();
+
     const bool viewport_changed = glr.motion_blur_viewport_width != glr.fd.width ||
         glr.motion_blur_viewport_height != glr.fd.height;
     const bool fov_changed = std::fabs(glr.motion_blur_fov_x - glr.fd.fov_x) > MOTION_BLUR_FOV_EPSILON ||
@@ -1658,6 +1663,8 @@ static void GL_Register(void)
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", 0);
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
+    r_shadows = Cvar_Get("r_shadows", "1", CVAR_ARCHIVE);
+    r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
     r_postProcessing = Cvar_Get("r_postProcessing", "1", 0);
     r_bloom = Cvar_Get("r_bloom", "1", 0);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);

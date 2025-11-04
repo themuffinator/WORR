@@ -62,6 +62,7 @@ struct ftfont_t;
 #define MAX_ENTITIES    2048
 #define MAX_PARTICLES   8192
 #define MAX_LIGHTSTYLES 256
+#define MAX_SHADOW_VIEWS 256
 
 #define POWERSUIT_SCALE     4.0f
 #define WEAPONSHELL_SCALE   0.5f
@@ -139,6 +140,26 @@ typedef struct {
     int                     entity_number;
     bool                    casts_shadow;
 } shadow_light_submission_t;
+
+struct alignas(16) shadow_view_parameters_t {
+    mat4_t view_projection;
+    vec4_t viewport_rect;
+    vec4_t source_position;
+    float  bias;
+    float  shade_amount;
+};
+
+static_assert(sizeof(shadow_view_parameters_t) == 104,
+    "shadow_view_parameters_t must remain 104 bytes (compatible with quakeUBShadowStruct_s)");
+
+struct shadow_view_assignment_t {
+    shadow_view_parameters_t parameters;
+    vec4_t cube_face_offset;
+    int    atlas_index;
+    int    face;
+    int    resolution;
+    bool   valid;
+};
 
 typedef struct {
     vec3_t  origin;
@@ -363,6 +384,14 @@ void    R_QueueShadowLight(const shadow_light_submission_t &light);
 size_t  R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
                               dlight_t *dlights, size_t max_dlights);
 const shadow_light_submission_t *R_GetQueuedShadowLights(size_t *count);
+bool    R_ShadowAtlasInit(void);
+void    R_ShadowAtlasShutdown(void);
+void    R_ShadowAtlasBeginFrame(void);
+bool    R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
+                                  int face, int resolution,
+                                  shadow_view_assignment_t *out_assignment);
+size_t  R_ShadowAtlasViewCount(void);
+const shadow_view_assignment_t *R_ShadowAtlasViews(void);
 
 void    R_SetClipRect(const clipRect_t *clip);
 float   R_ClampScale(cvar_t *var);

@@ -177,6 +177,15 @@ typedef struct {
     vec4_t          clearcolor;
     hash_map_t      *queries;
     hash_map_t      *programs;
+    struct {
+        bool                                                        supported;
+        GLuint                                                      texture;
+        GLuint                                                      framebuffer;
+        int                                                         width;
+        int                                                         height;
+        size_t                                                      view_count;
+        std::array<shadow_view_assignment_t, MAX_SHADOW_VIEWS>       assignments;
+    } shadow;
 } glStatic_t;
 
 typedef struct {
