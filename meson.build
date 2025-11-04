@@ -444,11 +444,14 @@ texture_formats = []
 
 fallback_opt = ['default_library=static']
 
-zlib = dependency('zlib',
-  fallback:        'zlib-ng',
-  required:        get_option('zlib'),
-  default_options: fallback_opt + [ 'tests=disabled', 'zlib-compat=true', 'force-sse2=true' ],
-)
+zlib = dependency('zlib', required: get_option('zlib'))
+if not zlib.found()
+  zlib = dependency('zlib-ng',
+    fallback:        ['zlib-ng', 'zlib_ng_dep'],
+    required:        get_option('zlib'),
+    default_options: fallback_opt + [ 'tests=disabled', 'zlib-compat=true', 'force-sse2=true' ],
+  )
+endif
 
 if not zlib.found()
   warning('zlib not found, client will be unable to connect to protocol 35 servers')

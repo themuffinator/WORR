@@ -209,6 +209,9 @@ else
 endif
 
 zlib = dependency('zlib', required: false)
+if not zlib.found()
+  zlib = dependency('zlib-ng', required: false, fallback: ['zlib-ng', 'zlib_ng_dep'])
+endif
 if zlib.found()
   args += '-DHAVE_LIBZ'
 endif
