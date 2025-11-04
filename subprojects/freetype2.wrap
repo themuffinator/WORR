@@ -1,0 +1,9 @@
+[wrap-file]
+directory = freetype-2.13.3
+source_url = https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz
+source_filename = freetype-2.13.3.tar.xz
+source_hash = 5181951adf9be12d981f4f09c066cb8cb7fa5e3bb7be93231d2df2be09cdc5cd
+patch_directory = freetype2
+
+[provide]
+freetype2 = freetype_dep

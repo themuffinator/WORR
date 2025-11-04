@@ -488,10 +488,21 @@ if sdl2.found()
   config.set('USE_SDL', 'USE_CLIENT')
 endif
 
-freetype = dependency('freetype2',
-  required:        get_option('freetype'),
-  default_options: fallback_opt,
-)
+freetype_opt = get_option('freetype')
+
+if freetype_opt.disabled()
+  freetype = disabler()
+else
+  freetype = dependency('freetype2',
+    fallback:        ['freetype2', 'freetype_dep'],
+    required:        freetype_opt,
+    default_options: fallback_opt,
+  )
+
+  if freetype_opt.auto() and not freetype.found()
+    warning('FreeType not found, client font rendering will be disabled')
+  endif
+endif
 
 config.set10('USE_FREETYPE', freetype.found())
 
