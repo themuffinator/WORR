@@ -153,8 +153,10 @@ static std::string SCR_NormalizeFontPath(const std::string& rawPath)
                 normalized.append(filename);
         }
 
+        const size_t lastSlash = normalized.find_last_of('/');
         const size_t dot = normalized.find_last_of('.');
-        if (dot == std::string::npos) {
+        const bool hasExtension = (dot != std::string::npos) && (lastSlash == std::string::npos || dot > lastSlash);
+        if (!hasExtension) {
                 normalized.append(".ttf");
         } else {
                 const char* ext = normalized.c_str() + dot;
