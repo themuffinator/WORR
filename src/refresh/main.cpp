@@ -81,6 +81,8 @@ cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
 cvar_t *r_bloomThreshold;
 cvar_t *r_bloomIntensity;
+cvar_t *r_bloomScale;
+cvar_t *r_bloomKernel;
 cvar_t *r_hdr;
 cvar_t *r_hdr_mode;
 cvar_t *r_tonemap;
@@ -1216,6 +1218,8 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
+static int32_t r_bloomScale_modified = 0;
+static int32_t r_bloomKernel_modified = 0;
 static int32_t gl_dof_modified = 0;
 static int32_t r_motionBlur_modified = 0;
 
@@ -1279,6 +1283,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 
     if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
         r_bloom->modified_count != r_bloom_modified ||
+        r_bloomScale->modified_count != r_bloomScale_modified ||
+        r_bloomKernel->modified_count != r_bloomKernel_modified ||
         gl_dof->modified_count != gl_dof_modified ||
         r_motionBlur->modified_count != r_motionBlur_modified ||
         hdr_prev != gl_static.hdr.active) {
@@ -1287,6 +1293,8 @@ static pp_flags_t GL_BindFramebuffer(void)
         glr.framebuffer_height = glr.fd.height;
         r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
         r_bloom_modified = r_bloom->modified_count;
+        r_bloomScale_modified = r_bloomScale->modified_count;
+        r_bloomKernel_modified = r_bloomKernel->modified_count;
         gl_dof_modified = gl_dof->modified_count;
         r_motionBlur_modified = r_motionBlur->modified_count;
         if (flags & PP_BLOOM)
@@ -1733,6 +1741,8 @@ static void GL_Register(void)
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", 0);
     r_bloomThreshold = Cvar_Get("r_bloomThreshold", "1.0", 0);
     r_bloomIntensity = Cvar_Get("r_bloomIntensity", "0.05", CVAR_ARCHIVE);
+    r_bloomScale = Cvar_Get("r_bloomScale", "4.0", 0);
+    r_bloomKernel = Cvar_Get("r_bloomKernel", "0", 0);
     r_hdr = Cvar_Get("r_hdr", "0", CVAR_ARCHIVE);
     r_hdr_mode = Cvar_Get("r_hdr_mode", "3", CVAR_ARCHIVE);
     r_tonemap = Cvar_Get("r_tonemap", "0", CVAR_ARCHIVE);

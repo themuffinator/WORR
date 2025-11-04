@@ -170,6 +170,7 @@ typedef struct {
     GLenum          postprocess_type;
     float           entity_modulate;
     float           bloom_sigma;
+    int             bloom_kernel;
     uint32_t        inverse_intensity_33;
     uint32_t        inverse_intensity_66;
     uint32_t        inverse_intensity_100;
@@ -463,6 +464,8 @@ extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
 extern cvar_t *r_bloomThreshold;
+extern cvar_t *r_bloomScale;
+extern cvar_t *r_bloomKernel;
 extern cvar_t *gl_dof;
 
 // development variables
