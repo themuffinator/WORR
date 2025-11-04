@@ -1071,6 +1071,8 @@ namespace {
 
 	void Console::keyEvent(int key)
 	{
+		char* (*selectionProvider)(void) = (vid && vid->get_selection_data) ? vid->get_selection_data : nullptr;
+
 		switch (key) {
 		case '`':
 		case '~':
@@ -1098,6 +1100,13 @@ namespace {
 		case 'y':
 			if (Key_IsDown(K_CTRL)) {
 				paste(vid ? vid->get_clipboard_data : nullptr);
+				return;
+			}
+			break;
+		case K_INS:
+			if (Key_IsDown(K_SHIFT)) {
+				if (selectionProvider)
+					paste(selectionProvider);
 				return;
 			}
 			break;
@@ -1172,6 +1181,16 @@ namespace {
 				return;
 			}
 			displayIndex_ = currentIndex_;
+			return;
+		case K_MOUSE3:
+#if defined(K_AUX2)
+		case K_AUX2:
+#endif
+#if defined(K_MBUTTON3)
+		case K_MBUTTON3:
+#endif
+			if (selectionProvider)
+				paste(selectionProvider);
 			return;
 		default:
 			break;
