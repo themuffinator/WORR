@@ -500,9 +500,8 @@ static inline bool GL_ClipNode(const mnode_t *node, int *clipflags)
 
 static inline void GL_DrawLeaf(const mleaf_t *leaf)
 {
-    // FIXME: use `&' here?
-    if (leaf->contents[0] == CONTENTS_SOLID)
-        return; // solid leaf
+    if (leaf->contents[0] & CONTENTS_SOLID)
+        return; // skip any solid leaf (even with extra flags)
 
     if (glr.fd.areabits && !Q_IsBitSet(glr.fd.areabits, leaf->area))
         return; // door blocks sight
