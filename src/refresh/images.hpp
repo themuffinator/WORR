@@ -100,9 +100,10 @@ struct screenshot_s {
 	save_cb_t save_cb;
 	byte* pixels;
 	FILE* fp;
-	char* filename;
-	int width, height, rowbytes, bpp, status, param;
-	bool async;
+        char* filename;
+        int width, height, rowbytes, bpp, status, param;
+        bool async;
+        bool owns_storage;
 };
 
 int IMG_ReadPixels(screenshot_t* s);
