@@ -141,7 +141,7 @@ typedef struct {
     bool                    casts_shadow;
 } shadow_light_submission_t;
 
-struct alignas(16) shadow_view_parameters_t {
+struct shadow_view_parameters_t {
     mat4_t view_projection;
     vec4_t viewport_rect;
     vec4_t source_position;
