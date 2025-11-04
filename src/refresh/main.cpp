@@ -862,10 +862,19 @@ static void HDR_ComputeHistogram(int width, int height)
         hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
         scratch = hdr_state_local.histogram_scratch.data();
 
+        GLint prev_fbo = 0;
+        GLint prev_read_buffer = 0;
+        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+        if (qglReadBuffer)
+            qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+
         qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
-        qglReadBuffer(GL_COLOR_ATTACHMENT0);
+        if (qglReadBuffer)
+            qglReadBuffer(GL_COLOR_ATTACHMENT0);
         qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+        if (qglReadBuffer)
+            qglReadBuffer(prev_read_buffer);
         have_samples = true;
     }
 
