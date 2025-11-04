@@ -1274,6 +1274,38 @@ ui_pingrate::
     second. Default value is 0, which estimates the default pinging rate based
     on ‘rate’ client variable.
 
+Menu JSON
+~~~~~~~~~
+
+The UI menu shipped with the client (`worr.menu.json`) defines its controls via
+JSON. The schema now recognises additional item types and layout helpers that
+make it easier to express complex interactions:
+
+* `checkbox` items toggle a boolean cvar, a named bit within a mask, or a pair
+  of string values (`checkedValue`/`uncheckedValue`). They accept the same
+  `negate`/`bit` helpers as legacy toggles.
+* `dropdown` items behave like a compact spin control. Provide the visible
+  `options`, an optional `valueBinding` (`label`, `value`, or `index`), and the
+  number of rows that may be shown at once via `maxVisible`.
+* `radio` items represent a single choice. Multiple radio definitions that
+  share the same cvar automatically behave as a group and set the cvar to their
+  `value` when activated.
+* Menu items may now react to cvars through `enableWhen` and `disableWhen`. Each
+  property accepts a condition object or an array of conditions containing
+  `cvar` along with `equals`, `notEquals`, `greater`, `greaterOrEquals`, `less`,
+  or `lessOrEquals` comparators.
+* Individual menus can declare `groups` to cluster items. A group definition
+  supplies `name`, an optional `label`, visual hints such as `background` colour
+  and `border`, and layout hints (`indent`, `padding`, `headerHeight`). Menu
+  items reference a group by name through their `group` property.
+
+The checkbox, radio, and dropdown controls currently use font glyphs as a
+placeholder. UI artists should create dedicated 32×32 glyphs for the checked
+and unchecked checkbox states, radio on/off states, and a dropdown caret, and
+store them alongside the rest of the UI artwork (for example under
+`pics/ui/checkbox_checked.tga`, `pics/ui/radio_on.tga`, and
+`pics/ui/dropdown_caret.tga`).
+
 com_time_format::
     Time format used by ‘com_time’ macro. Default value is "%H.%M" on Win32 and
     "%H:%M" on UNIX. See strftime(3) for syntax description.
