@@ -41,7 +41,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define UI_MULTILINE (1u << 9)
 #endif
 
-#if USE_FREETYPE
+#if USE_FREETYPE && defined(USE_REF) && USE_REF
 #include <ft2build.h>
 #include FT_FREETYPE_H
 struct ref_freetype_font_t {
