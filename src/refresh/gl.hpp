@@ -141,6 +141,15 @@ typedef struct {
         std::array<float, 64> histogram;
     } hdr;
     struct {
+        int     full_width;
+        int     full_height;
+        int     result_width;
+        int     result_height;
+        int     half_width;
+        int     half_height;
+        bool    reduced_resolution;
+    } dof;
+    struct {
         bsp_t       *cache;
         vec_t       *vertices;
         GLuint      buffer;
@@ -170,6 +179,7 @@ typedef struct {
     GLenum          postprocess_type;
     float           entity_modulate;
     float           bloom_sigma;
+    int             bloom_kernel;
     uint32_t        inverse_intensity_33;
     uint32_t        inverse_intensity_66;
     uint32_t        inverse_intensity_100;
@@ -463,7 +473,10 @@ extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
 extern cvar_t *r_bloomThreshold;
+extern cvar_t *r_bloomScale;
+extern cvar_t *r_bloomKernel;
 extern cvar_t *gl_dof;
+extern cvar_t *gl_dof_quality;
 
 // development variables
 extern cvar_t *gl_znear;

@@ -135,8 +135,9 @@ void BloomEffect::resize(int sceneWidth, int sceneHeight)
         if (!initialized_)
                 return;
 
-        int downW = (std::max)(sceneWidth / 4, 1);
-        int downH = (std::max)(sceneHeight / 4, 1);
+        const float downscale = (std::max)(Cvar_ClampValue(r_bloomScale, 1.0f, 16.0f), 1.0f);
+        const int downW = (std::max)(static_cast<int>(sceneWidth / downscale), 1);
+        const int downH = (std::max)(static_cast<int>(sceneHeight / downscale), 1);
         const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
         const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
         const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
@@ -204,8 +205,10 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	qglViewport(0, 0, downsampleWidth_, downsampleHeight_);
 	GL_Ortho(0, downsampleWidth_, downsampleHeight_, 0, -1, 1);
 
-	const float invW = 1.0f / downsampleWidth_;
-	const float invH = 1.0f / downsampleHeight_;
+        const float invW = 1.0f / downsampleWidth_;
+        const float invH = 1.0f / downsampleHeight_;
+        const int kernelMode = static_cast<int>(Cvar_ClampValue(r_bloomKernel, 0.0f, 1.0f));
+        const glStateBits_t blurMode = kernelMode == 0 ? GLS_BLUR_GAUSS : GLS_BLUR_BOX;
 
 	gls.u_block.bbr_params[0] = invW;
 	gls.u_block.bbr_params[1] = invH;
@@ -232,7 +235,7 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 		gls.u_block_dirty = true;
 		GL_ForceTexture(TMU_TEXTURE, currentTexture);
 		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-		GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, downsampleWidth_, downsampleHeight_);
+                GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_);
 		currentTexture = textures_[Blur0 + axis];
 	}
 
