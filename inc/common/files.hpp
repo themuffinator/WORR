@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/error.hpp"
 #include "common/zone.hpp"
 #include "shared/files.hpp"
+#include "shared/shared.hpp"
 #include "common/natsort.hpp"
 #include "system/system.hpp"
 
@@ -131,6 +132,15 @@ char *FS_ReplaceSeparators(char *s, int separator);
 void FS_File_g(const char *path, const char *ext, unsigned flags, genctx_t *ctx);
 
 FILE *Q_fopen(const char *path, const char *mode);
+
+typedef struct fs_file_source_s {
+    bool    from_pack;
+    bool    from_builtin;
+    char    pack_path[MAX_OSPATH];
+    char    entry_path[MAX_QPATH];
+} fs_file_source_t;
+
+bool FS_GetFileSource(qhandle_t f, fs_file_source_t *out);
 
 extern cvar_t   *fs_game;
 
