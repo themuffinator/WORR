@@ -1315,12 +1315,21 @@ bool GL_InitFramebuffers(void)
 
     CHECK_FB(dof_half_w, "FBO_BOKEH_GATHER");
 
+    glr.motion_history_textures_ready = false;
+
+    const bool motion_history_expected = motion_blur_active && scene_w > 0 && scene_h > 0;
+
     for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
         qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(i));
         GLuint tex = (motion_blur_active && scene_w && scene_h) ? TEXNUM_PP_MOTION_HISTORY(i) : GL_NONE;
         qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
-        CHECK_FB(motion_blur_active && scene_w && scene_h, "FBO_MOTION_HISTORY");
+        if (!GL_CheckFramebufferStatus(motion_history_expected, "FBO_MOTION_HISTORY"))
+            return false;
+        if (motion_history_expected && gl_showerrors->integer)
+            Com_DPrintf("FBO_MOTION_HISTORY(%d) complete (%dx%d)\n", i, scene_w, scene_h);
     }
+
+    glr.motion_history_textures_ready = motion_history_expected;
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
