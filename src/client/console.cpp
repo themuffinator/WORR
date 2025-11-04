@@ -1169,18 +1169,26 @@ namespace {
                                 return;
                         }
                         break;
-                case K_UPARROW:
+               case K_UPARROW:
                         if (Key_IsDown(K_CTRL)) {
                                 searchUp();
                                 return;
                         }
-                        break;
+
+                        Prompt_HistoryUp(&prompt_);
+                        if (scroll_->integer & 1)
+                                displayIndex_ = currentIndex_;
+                        return;
                 case K_DOWNARROW:
                         if (Key_IsDown(K_CTRL)) {
                                 searchDown();
                                 return;
                         }
-                        break;
+
+                        Prompt_HistoryDown(&prompt_);
+                        if (scroll_->integer & 1)
+                                displayIndex_ = currentIndex_;
+                        return;
                 case K_PGUP:
                 case K_MWHEELUP:
                         displayIndex_ -= Key_IsDown(K_CTRL) ? kScrollLargeStep : kScrollSmallStep;
