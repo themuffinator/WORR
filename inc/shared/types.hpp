@@ -29,6 +29,22 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define BIT_ULL(n)      (1ULL << (n))
 #endif
 
+#ifndef MAX_STRING_CHARS
+#define MAX_STRING_CHARS    1024    // max length of a string passed to Cmd_TokenizeString
+#endif
+
+#ifndef MAX_STRING_TOKENS
+#define MAX_STRING_TOKENS   256     // max tokens resulting from Cmd_TokenizeString
+#endif
+
+#ifndef MAX_TOKEN_CHARS
+#define MAX_TOKEN_CHARS     1024    // max length of an individual token
+#endif
+
+#ifndef MAX_NET_STRING
+#define MAX_NET_STRING      2048    // max length of a string used in network protocol
+#endif
+
 typedef unsigned char byte;
 
 typedef int qhandle_t;
@@ -47,5 +63,12 @@ typedef struct vrect_s {
     int height;
 } vrect_t;
 
+struct genctx_s;
 struct cvar_s;
+
 typedef struct cvar_s cvar_t;
+
+#ifndef XGENERATOR_T_DEFINED
+typedef void (*xgenerator_t)(struct genctx_s *);
+#define XGENERATOR_T_DEFINED 1
+#endif
