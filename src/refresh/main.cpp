@@ -1241,6 +1241,14 @@ static void R_ClearMotionBlurHistory(void)
 
 static void R_BindMotionHistoryTextures(void)
 {
+    if (!glr.motion_history_textures_ready) {
+        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+            glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+            GL_ForceTexture(tmu, TEXNUM_BLACK);
+        }
+        return;
+    }
+
     for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
         glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
         GLuint tex = TEXNUM_BLACK;
@@ -1257,6 +1265,8 @@ static void R_BindMotionHistoryTextures(void)
 static void R_StoreMotionBlurHistory(void)
 {
     if (!glr.motion_blur_enabled || !glr.view_proj_valid)
+        return;
+    if (!glr.motion_history_textures_ready)
         return;
     if (glr.fd.width <= 0 || glr.fd.height <= 0)
         return;

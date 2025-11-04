@@ -257,6 +257,7 @@ typedef struct {
     bool            view_proj_valid;
     bool            motion_blur_enabled;
     bool            motion_blur_ready;
+    bool            motion_history_textures_ready;
     float           motion_blur_scale;
     float           motion_blur_min_velocity;
     float           motion_blur_min_velocity_pixels;
