@@ -26,6 +26,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <utility>
 
+#if defined(_WIN32)
+#undef min
+#undef max
+#endif
+
 static cvar_t* scr_viewsize;
 static cvar_t* scr_showpause;
 #if USE_DEBUG
