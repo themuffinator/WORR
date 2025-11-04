@@ -1217,7 +1217,7 @@ static void Dropdown_UpdateScroll(menuDropdown_t *d)
         return;
     }
 
-    const int visible = std::min(d->maxVisibleItems, d->spin.numItems);
+    const int visible = (std::min)(d->maxVisibleItems, d->spin.numItems);
     if (visible <= 0)
         return;
 
@@ -1292,7 +1292,7 @@ static void Dropdown_DrawList(menuDropdown_t *d)
     if (!d->open || d->spin.numItems <= 0)
         return;
 
-    const int visible = std::min(d->maxVisibleItems, d->spin.numItems);
+    const int visible = (std::min)(d->maxVisibleItems, d->spin.numItems);
     if (visible <= 0)
         return;
 
