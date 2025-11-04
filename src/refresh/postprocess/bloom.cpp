@@ -5,6 +5,8 @@
 #include "../qgl.hpp"
 #include "crt.hpp"
 
+extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
+
 BloomEffect g_bloom_effect;
 
 namespace {
@@ -219,8 +221,6 @@ bool BloomEffect::resize(int sceneWidth, int sceneHeight)
         resizeErrorLogged_ = false;
         return true;
 }
-
-extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
 
 void BloomEffect::render(const BloomRenderContext& ctx)
 {
