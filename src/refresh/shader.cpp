@@ -792,8 +792,8 @@ static void write_tonemap_block(sizebuf_t *buf)
     GLSL(const float hdr_hable_F = 0.30;)
     GLSL(const float hdr_hable_white = 11.2;)
     GLSL(const float hdr_hable_white_scale = 1.0 /
-        (((hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_C * hdr_hable_B)) + hdr_hable_D * hdr_hable_E) /
-         ((hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_B)) + hdr_hable_D * hdr_hable_F) -
+        ((hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_C * hdr_hable_B) + hdr_hable_D * hdr_hable_E) /
+         (hdr_hable_white * (hdr_hable_A * hdr_hable_white + hdr_hable_B) + hdr_hable_D * hdr_hable_F) -
          hdr_hable_E / hdr_hable_F));
 
     GLSL(vec3 hdr_hable(vec3 x) {
