@@ -3833,25 +3833,37 @@ static void add_builtin_content(void)
 static void add_game_kpf(unsigned mode, const char *dir)
 {
 #if USE_ZLIB
+    static const char *const kpf_filenames[] = {
+        "Q2Game.kpf",
+        "Q2Game.ktx",
+    };
+
     std::array<char, MAX_OSPATH> path;
-    pack_t *pack;
-    searchpath_t *search;
+    bool added_pack = false;
 
-    if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
-        return;
+    for (const char *filename : kpf_filenames) {
+        pack_t *pack;
+        searchpath_t *search;
 
-    pack = load_zip_file(path.data());
-    if (!pack)
-        return;
+        if (Q_snprintf(path.data(), path.size(), "%s/%s", dir, filename) >= path.size())
+            continue;
 
-    ensure_game_kpf_symlink();
+        pack = load_zip_file(path.data());
+        if (!pack)
+            continue;
 
-    search = FS_Malloc(sizeof(*search));
-    search->mode = mode;
-    search->filename[0] = 0;
-    search->pack = pack_get(pack);
-    search->next = fs_searchpaths;
-    fs_searchpaths = search;
+        if (!added_pack) {
+            ensure_game_kpf_symlink();
+            added_pack = true;
+        }
+
+        search = FS_Malloc(sizeof(*search));
+        search->mode = mode;
+        search->filename[0] = 0;
+        search->pack = pack_get(pack);
+        search->next = fs_searchpaths;
+        fs_searchpaths = search;
+    }
 #endif
 }
 
