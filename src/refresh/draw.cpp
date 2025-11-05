@@ -1188,10 +1188,10 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 
     const char *packBaseName = COM_SkipPath(source.pack_path);
     const bool isExpectedPack = packBaseName
-            && (!Q_stricmp(packBaseName, "Q2Game.kpf") || !Q_stricmp(packBaseName, "Q2Game.ktx"));
+            && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
     if (!isExpectedPack) {
         FS_CloseFile(handle);
-        Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf or Q2Game.ktx (found '%s')\n",
+        Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf (found '%s')\n",
                 normalized.c_str(), source.pack_path);
         return;
     }

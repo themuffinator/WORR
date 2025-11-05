@@ -209,10 +209,10 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         if (!source.from_builtin) {
                 const char* packBaseName = COM_SkipPath(source.pack_path);
                 const bool isExpectedPack = packBaseName
-                        && (!Q_stricmp(packBaseName, "Q2Game.kpf") || !Q_stricmp(packBaseName, "Q2Game.ktx"));
+                        && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
                 if (!isExpectedPack) {
                         FS_CloseFile(fileHandle);
-                        Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf or Q2Game.ktx (found '%s')\n",
+                        Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
                                 normalizedFontPath.c_str(), source.pack_path);
                         return false;
                 }
