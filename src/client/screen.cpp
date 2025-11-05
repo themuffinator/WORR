@@ -206,12 +206,16 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                 return false;
         }
 
-        const char* packBaseName = COM_SkipPath(source.pack_path);
-        if (!packBaseName || Q_stricmp(packBaseName, "Q2Game.kpf")) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
-                        normalizedFontPath.c_str(), source.pack_path);
-                return false;
+        if (!source.from_builtin) {
+                const char* packBaseName = COM_SkipPath(source.pack_path);
+                const bool isExpectedPack = packBaseName
+                        && (!Q_stricmp(packBaseName, "Q2Game.kpf") || !Q_stricmp(packBaseName, "Q2Game.ktx"));
+                if (!isExpectedPack) {
+                        FS_CloseFile(fileHandle);
+                        Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf or Q2Game.ktx (found '%s')\n",
+                                normalizedFontPath.c_str(), source.pack_path);
+                        return false;
+                }
         }
 
         if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
@@ -275,8 +279,12 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         scr.freetype.activeFontHandle = handle;
 
         const char* entryName = source.entry_path[0] ? source.entry_path : normalizedFontPath.c_str();
+        const char* packName = source.from_builtin ? "builtin" : source.pack_path;
+        if (!packName || !packName[0])
+                packName = "filesystem";
+
         Com_Printf("SCR: loaded TrueType font '%s' (%d px) from %s:%s (%zu bytes)\n",
-                normalizedFontPath.c_str(), pixelHeight, source.pack_path, entryName,
+                normalizedFontPath.c_str(), pixelHeight, packName, entryName,
                 loadedEntry ? loadedEntry->buffer.size() : 0u);
 
         return true;
