@@ -184,12 +184,54 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                 return false;
 
         const std::string normalizedFontPath = SCR_NormalizeFontPath(fontPath);
-        if (normalizedFontPath.empty())
+        if (normalizedFontPath.empty()) {
+                Com_Printf("SCR: failed to normalize font path '%s'\n", fontPath.c_str());
                 return false;
+        }
 
         std::string displayFontPath = normalizedFontPath;
         if (!displayFontPath.empty() && displayFontPath.front() != '/')
                 displayFontPath.insert(displayFontPath.begin(), '/');
+
+        auto cached = scr.freetype.fonts.find(cacheKey);
+        if (cached != scr.freetype.fonts.end()) {
+                Com_DPrintf("SCR: using cached TrueType font '%s' for handle %d (pixel height %d)\n",
+                        displayFontPath.c_str(), handle, pixelHeight);
+
+                cached->second.renderInfo.pixelHeight = pixelHeight;
+                if (R_AcquireFreeTypeFont(handle, &cached->second.renderInfo)) {
+                        scr.freetype.handleLookup[handle] = cacheKey;
+                        scr.freetype.activeFontKey = cacheKey;
+                        scr.freetype.activeFontHandle = handle;
+                        return true;
+                }
+
+                Com_Printf("SCR: cached font '%s' could not be acquired for handle %d, reloading from source\n",
+                        displayFontPath.c_str(), handle);
+
+                if (cached->second.renderInfo.face) {
+                        FT_Done_Face(cached->second.renderInfo.face);
+                        cached->second.renderInfo.face = nullptr;
+                }
+                R_ReleaseFreeTypeFont(&cached->second.renderInfo);
+
+                for (auto it = scr.freetype.handleLookup.begin(); it != scr.freetype.handleLookup.end(); ) {
+                        if (it->second == cacheKey)
+                                it = scr.freetype.handleLookup.erase(it);
+                        else
+                                ++it;
+                }
+
+                if (scr.freetype.activeFontKey == cacheKey) {
+                        scr.freetype.activeFontKey.clear();
+                        scr.freetype.activeFontHandle = 0;
+                }
+
+                scr.freetype.fonts.erase(cached);
+        }
+
+        Com_DPrintf("SCR: cache miss for '%s' (key '%s'), loading from source\n",
+                displayFontPath.c_str(), cacheKey.c_str());
 
         qhandle_t fileHandle = 0;
         int64_t fileLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle, FS_MODE_READ);
@@ -270,12 +312,32 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                         FT_Done_Face(existing->second.renderInfo.face);
                 R_ReleaseFreeTypeFont(&existing->second.renderInfo);
                 existing->second = std::move(entry);
-                R_AcquireFreeTypeFont(handle, &existing->second.renderInfo);
+                if (!R_AcquireFreeTypeFont(handle, &existing->second.renderInfo)) {
+                        Com_Printf("SCR: renderer rejected FreeType font '%s' for handle %d\n",
+                                displayFontPath.c_str(), handle);
+                        if (existing->second.renderInfo.face) {
+                                FT_Done_Face(existing->second.renderInfo.face);
+                                existing->second.renderInfo.face = nullptr;
+                        }
+                        R_ReleaseFreeTypeFont(&existing->second.renderInfo);
+                        scr.freetype.fonts.erase(existing);
+                        return false;
+                }
                 loadedEntry = &existing->second;
         } else {
-                auto [it, inserted] = scr.freetype.fonts.emplace(cacheKey, std::move(entry));
-                if (inserted)
-                        R_AcquireFreeTypeFont(handle, &it->second.renderInfo);
+                auto emplaced = scr.freetype.fonts.emplace(cacheKey, std::move(entry));
+                auto it = emplaced.first;
+                if (!R_AcquireFreeTypeFont(handle, &it->second.renderInfo)) {
+                        Com_Printf("SCR: renderer rejected FreeType font '%s' for handle %d\n",
+                                displayFontPath.c_str(), handle);
+                        if (it->second.renderInfo.face) {
+                                FT_Done_Face(it->second.renderInfo.face);
+                                it->second.renderInfo.face = nullptr;
+                        }
+                        R_ReleaseFreeTypeFont(&it->second.renderInfo);
+                        scr.freetype.fonts.erase(it);
+                        return false;
+                }
                 loadedEntry = &it->second;
         }
 
@@ -390,8 +452,8 @@ static bool SCR_ShouldUseKFont()
 #if USE_FREETYPE
 static bool SCR_ShouldUseFreeType(qhandle_t font)
 {
-	if (scr_activeTextBackend != scr_text_backend_mode::TTF)
-		return false;
+        if (scr_activeTextBackend != scr_text_backend_mode::TTF)
+                return false;
 
 	if (!font)
 		return false;
@@ -399,31 +461,60 @@ static bool SCR_ShouldUseFreeType(qhandle_t font)
 	if (scr.freetype.activeFontHandle && font == scr.freetype.activeFontHandle)
 		return true;
 
-	return SCR_FTFontForHandle(font) != nullptr;
+        return SCR_FTFontForHandle(font) != nullptr;
+}
+
+static scr_text_backend_mode SCR_SelectFallbackTextBackend()
+{
+        if (scr.kfont.pic)
+                return scr_text_backend_mode::KFONT;
+
+        return scr_text_backend_mode::LEGACY;
 }
 
 static void scr_text_backend_changed(cvar_t* self)
 {
-	const auto requested = SCR_ParseTextBackend(self->string);
-	auto newBackend = requested;
+        const auto requested = SCR_ParseTextBackend(self->string);
+        auto newBackend = requested;
 
-	if (requested == scr_text_backend_mode::TTF) {
-		if (!scr.font_pic) {
-			newBackend = scr_text_backend_mode::LEGACY;
-		}
-		else {
-			if (!scr.freetype.activeFontHandle) {
-				if (!SCR_LoadDefaultFreeTypeFont())
-					newBackend = scr_text_backend_mode::LEGACY;
-			}
+        if (requested == scr_text_backend_mode::TTF) {
+                const char* failureReason = nullptr;
+                bool fallbackRequired = false;
+                if (!scr.font_pic) {
+                        failureReason = "base font handle unavailable";
+                        fallbackRequired = true;
+                }
+                else {
+                        if (!scr.freetype.activeFontHandle) {
+                                if (!SCR_LoadDefaultFreeTypeFont())
+                                        failureReason = "failed to load default FreeType font";
+                        }
 
-			if (!scr.freetype.activeFontHandle)
-				newBackend = scr_text_backend_mode::LEGACY;
-		}
-	}
-	else if (requested == scr_text_backend_mode::KFONT) {
-		if (!scr.kfont.pic)
-			newBackend = scr_text_backend_mode::LEGACY;
+                        if (!scr.freetype.activeFontHandle) {
+                                if (!failureReason)
+                                        failureReason = "no active FreeType font handle";
+                                fallbackRequired = true;
+                        }
+                }
+
+                if (fallbackRequired) {
+                        const auto fallback = SCR_SelectFallbackTextBackend();
+                        if (failureReason)
+                                Com_DPrintf("SCR: %s; using %s text backend instead\n", failureReason,
+                                        SCR_TextBackendToString(fallback));
+                        else
+                                Com_DPrintf("SCR: FreeType font unavailable; using %s text backend instead\n",
+                                        SCR_TextBackendToString(fallback));
+                        if (scr.freetype.activeFontHandle)
+                                scr.freetype.handleLookup.erase(scr.freetype.activeFontHandle);
+                        scr.freetype.activeFontKey.clear();
+                        scr.freetype.activeFontHandle = 0;
+                        newBackend = fallback;
+                }
+        }
+        else if (requested == scr_text_backend_mode::KFONT) {
+                if (!scr.kfont.pic)
+                        newBackend = scr_text_backend_mode::LEGACY;
 	}
 
 	scr_activeTextBackend = newBackend;
