@@ -247,13 +247,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                 return false;
         }
 
-        if (!source.from_pack) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: font '%s' not loaded from a pack file\n", displayFontPath.c_str());
-                return false;
-        }
-
-        if (!source.from_builtin) {
+        if (source.from_pack && !source.from_builtin) {
                 const char* packBaseName = COM_SkipPath(source.pack_path);
                 const bool isExpectedPack = packBaseName
                         && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
