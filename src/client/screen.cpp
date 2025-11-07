@@ -248,14 +248,43 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                 return false;
         }
 
-        if (source.from_pack) {
-                const char* packName = source.pack_path[0] ? source.pack_path : "<unknown>";
-                const char* entryName = source.entry_path[0] ? source.entry_path : normalizedFontPath.c_str();
-                Com_DPrintf("SCR: loading font '%s' from pack '%s' (%s)\n",
-                        displayFontPath.c_str(), packName, entryName);
-        } else {
-                Com_DPrintf("SCR: loading font '%s' from filesystem path '%s'\n",
-                        displayFontPath.c_str(), normalizedFontPath.c_str());
+        if (source.from_pack && !source.from_builtin) {
+                const char* packBaseName = COM_SkipPath(source.pack_path);
+                const bool isExpectedPack = packBaseName
+                        && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
+                if (!isExpectedPack) {
+                        const std::string unexpectedPack = source.pack_path;
+
+                        FS_CloseFile(fileHandle);
+                        fileHandle = 0;
+
+                        int64_t filesystemLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle,
+                                FS_MODE_READ | FS_TYPE_REAL);
+                        if (filesystemLength < 0) {
+                                Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
+                                        displayFontPath.c_str(), unexpectedPack.c_str());
+                                return false;
+                        }
+
+                        fileLength = filesystemLength;
+
+                        if (!FS_GetFileSource(fileHandle, &source)) {
+                                FS_CloseFile(fileHandle);
+                                Com_Printf("SCR: failed to resolve source for font '%s'\n", displayFontPath.c_str());
+                                return false;
+                        }
+
+                        if (source.from_pack) {
+                                const char* resolvedPack = source.pack_path[0] ? source.pack_path : "<unknown>";
+                                FS_CloseFile(fileHandle);
+                                Com_Printf("SCR: font '%s' still resolved to pack '%s' after filesystem retry\n",
+                                        displayFontPath.c_str(), resolvedPack);
+                                return false;
+                        }
+
+                        Com_DPrintf("SCR: overriding font '%s' from pack '%s' with filesystem copy\n",
+                                displayFontPath.c_str(), unexpectedPack.c_str());
+                }
         }
 
         if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
