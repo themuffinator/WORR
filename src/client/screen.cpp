@@ -233,60 +233,51 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         Com_DPrintf("SCR: cache miss for '%s' (key '%s'), loading from source\n",
                 displayFontPath.c_str(), cacheKey.c_str());
 
-        qhandle_t fileHandle = 0;
-        int64_t fileLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle, FS_MODE_READ);
-        if (fileLength < 0) {
-                Com_Printf("SCR: failed to open font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileLength));
+        void* rawData = nullptr;
+        const int fileResult = FS_LoadFile(normalizedFontPath.c_str(), &rawData);
+        if (fileResult < 0 || !rawData) {
+                Com_Printf("SCR: failed to load font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileResult));
+                FS_LogFileLookup(normalizedFontPath.c_str(), FS_MODE_READ, "        ");
+                if (rawData)
+                        FS_FreeFile(rawData);
                 return false;
         }
 
-        fs_file_source_t source{};
-        if (!FS_GetFileSource(fileHandle, &source)) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: failed to resolve source for font '%s'\n", displayFontPath.c_str());
-                return false;
-        }
-
-        if (!source.from_pack) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: font '%s' not loaded from a pack file\n", displayFontPath.c_str());
-                return false;
-        }
-
-        if (!source.from_builtin) {
-                const char* packBaseName = COM_SkipPath(source.pack_path);
-                const bool isExpectedPack = packBaseName
-                        && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
-                if (!isExpectedPack) {
-                        FS_CloseFile(fileHandle);
-                        Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
-                                displayFontPath.c_str(), source.pack_path);
-                        return false;
-                }
-        }
-
-        if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: invalid length for font '%s'\n", displayFontPath.c_str());
+        if (fileResult == 0) {
+                FS_FreeFile(rawData);
+                Com_Printf("SCR: font '%s' is empty\n", displayFontPath.c_str());
                 return false;
         }
 
         scr_freetype_font_entry_t entry;
-        entry.buffer.resize(static_cast<size_t>(fileLength));
-        int bytesRead = FS_Read(entry.buffer.data(), entry.buffer.size(), fileHandle);
-        if (bytesRead < 0) {
+        const auto* rawBytes = static_cast<const uint8_t*>(rawData);
+        const size_t bufferSize = static_cast<size_t>(fileResult);
+        entry.buffer.assign(rawBytes, rawBytes + bufferSize);
+        FS_FreeFile(rawData);
+
+        fs_file_source_t source{};
+        bool haveSource = false;
+
+        qhandle_t fileHandle = 0;
+        const int64_t reopenLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle,
+                FS_MODE_READ | FS_FLAG_LOADFILE);
+        if (reopenLength >= 0 && fileHandle) {
+                haveSource = FS_GetFileSource(fileHandle, &source);
                 FS_CloseFile(fileHandle);
-                Com_Printf("SCR: failed to read font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(bytesRead));
-                return false;
         }
 
-        if (static_cast<size_t>(bytesRead) != entry.buffer.size()) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: short read while loading font '%s'\n", displayFontPath.c_str());
-                return false;
+        if (haveSource && source.from_pack) {
+                const char* packName = source.pack_path[0] ? source.pack_path : "<unknown>";
+                const char* entryName = source.entry_path[0] ? source.entry_path : normalizedFontPath.c_str();
+                Com_DPrintf("SCR: loading font '%s' from pack '%s' (%s)\n",
+                        displayFontPath.c_str(), packName, entryName);
+        } else if (haveSource) {
+                Com_DPrintf("SCR: loading font '%s' from filesystem path '%s'\n",
+                        displayFontPath.c_str(), normalizedFontPath.c_str());
+        } else {
+                Com_DPrintf("SCR: loaded font '%s' (source unknown, length %zu bytes)\n",
+                        displayFontPath.c_str(), bufferSize);
         }
-
-        FS_CloseFile(fileHandle);
 
         FT_Face face = nullptr;
         FT_Error error = FT_New_Memory_Face(scr.freetype.library, entry.buffer.data(), static_cast<long>(entry.buffer.size()), 0, &face);
@@ -347,12 +338,15 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 
         const char* entryName = source.entry_path[0] ? source.entry_path : normalizedFontPath.c_str();
         const char* packName = source.from_builtin ? "builtin" : source.pack_path;
-        if (!packName || !packName[0])
+        if (!haveSource) {
+                packName = "unknown";
+        } else if (!packName || !packName[0]) {
                 packName = "filesystem";
+        }
 
         Com_Printf("SCR: loaded TrueType font '%s' (%d px) from %s:%s (%zu bytes)\n",
                 displayFontPath.c_str(), pixelHeight, packName, entryName,
-                loadedEntry ? loadedEntry->buffer.size() : 0u);
+                loadedEntry ? loadedEntry->buffer.size() : bufferSize);
 
         return true;
 }
