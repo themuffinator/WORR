@@ -237,6 +237,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         int64_t fileLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle, FS_MODE_READ);
         if (fileLength < 0) {
                 Com_Printf("SCR: failed to open font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileLength));
+                FS_LogFileLookup(normalizedFontPath.c_str(), FS_MODE_READ, "        ");
                 return false;
         }
 

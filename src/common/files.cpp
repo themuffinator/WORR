@@ -20,9 +20,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/list.hpp"
 
 #include <array>
+#include <cstdarg>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include "common/common.hpp"
 #include "common/cvar.hpp"
 #include "common/error.hpp"
@@ -3324,6 +3326,183 @@ static void FS_Dir_f(void)
     print_file_list(path, ext, 0);
 }
 
+static void append_whereis_line(std::vector<std::string>& out, const char* fmt, ...)
+{
+    std::array<char, MAX_OSPATH * 2> buffer{};
+
+    va_list argptr;
+    va_start(argptr, fmt);
+    size_t len = Q_vsnprintf(buffer.data(), buffer.size(), fmt, argptr);
+    va_end(argptr);
+
+    if (len >= buffer.size()) {
+        len = buffer.size() - 1;
+    }
+
+    out.emplace_back(buffer.data(), len);
+}
+
+static void gather_file_lookup(const char* path, unsigned mode, bool report_all, std::vector<std::string>& out)
+{
+    if (!path) {
+        append_whereis_line(out, "Refusing to lookup empty path.");
+        return;
+    }
+
+    if (!fs_searchpaths) {
+        append_whereis_line(out, "Filesystem not initialized.");
+        return;
+    }
+
+    std::array<char, MAX_OSPATH> normalized{};
+    std::array<char, MAX_OSPATH> fullpath{};
+
+    size_t namelen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
+    if (namelen >= normalized.size()) {
+        append_whereis_line(out, "Refusing to lookup oversize path.");
+        return;
+    }
+
+    symlink_t* link = expand_links(&fs_hard_links, normalized.data(), &namelen);
+    if (link) {
+        if (namelen >= normalized.size()) {
+            append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
+            return;
+        }
+
+        append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
+    }
+
+    if (namelen == 0) {
+        append_whereis_line(out, "Refusing to lookup empty path.");
+        return;
+    }
+
+    const unsigned lookup_mode = default_lookup_flags(mode);
+
+    int total = 0;
+    link = NULL;
+
+    while (true) {
+        if (namelen >= MAX_QPATH) {
+            append_whereis_line(out,
+                    "Not searching for '%s' in pack files since path length exceedes %d characters.",
+                    normalized.data(), MAX_QPATH - 1);
+        }
+
+        const unsigned hash = FS_HashPath(normalized.data(), 0);
+        path_valid_t valid = PATH_NOT_CHECKED;
+
+        for (searchpath_t* search = fs_searchpaths; search; search = search->next) {
+            if ((lookup_mode & search->mode & FS_PATH_MASK) == 0 ||
+                    (lookup_mode & search->mode & FS_DIR_MASK) == 0) {
+                continue;
+            }
+
+            if (search->pack) {
+                if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_REAL) {
+                    continue;
+                }
+                if (namelen >= MAX_QPATH) {
+                    continue;
+                }
+
+                pack_t* pak = search->pack;
+                packfile_t* entry = pak->file_hash[hash & (pak->hash_size - 1)];
+                for (; entry; entry = entry->hash_next) {
+                    if (entry->namelen != namelen) {
+                        continue;
+                    }
+                    if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
+                        append_whereis_line(out, "%s/%s (%" PRId64 " bytes)", pak->filename,
+                                normalized.data(), static_cast<int64_t>(entry->filelen));
+                        total++;
+                        if (!report_all) {
+                            return;
+                        }
+                    }
+                }
+            } else {
+                if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_PAK) {
+                    continue;
+                }
+
+                if (valid == PATH_NOT_CHECKED) {
+                    valid = FS_ValidatePath(normalized.data());
+                    if (valid == PATH_INVALID) {
+                        append_whereis_line(out,
+                                "Not searching for '%s' in physical file system since path contains invalid characters.",
+                                normalized.data());
+                        if (!report_all) {
+                            return;
+                        }
+                    }
+                }
+                if (valid == PATH_INVALID) {
+                    continue;
+                }
+
+                size_t len = Q_concat(fullpath.data(), fullpath.size(), search->filename, "/", normalized.data());
+                if (len >= fullpath.size()) {
+                    append_whereis_line(out, "Full path length '%s/%s' exceeded %d characters.",
+                            search->filename, normalized.data(), MAX_OSPATH - 1);
+                    if (!report_all) {
+                        return;
+                    }
+                    continue;
+                }
+
+                file_info_t info{};
+                int ret = get_path_info(fullpath.data(), &info);
+
+#ifndef _WIN32
+                if (ret == Q_ERR(ENOENT) && valid == PATH_MIXED_CASE) {
+                    Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
+                    ret = get_path_info(fullpath.data(), &info);
+                    if (ret == Q_ERR_SUCCESS) {
+                        append_whereis_line(out, "Physical path found after converting to lower case.");
+                    }
+                }
+#endif
+
+                if (ret == Q_ERR_SUCCESS) {
+                    append_whereis_line(out, "%s (%" PRId64 " bytes)", fullpath.data(), info.size);
+                    total++;
+                    if (!report_all) {
+                        return;
+                    }
+                } else if (ret != Q_ERR(ENOENT)) {
+                    append_whereis_line(out, "Couldn't get info on '%s': %s", fullpath.data(), Q_ErrorString(ret));
+                    if (!report_all) {
+                        return;
+                    }
+                }
+            }
+        }
+
+        if ((total == 0 || report_all) && link == NULL) {
+            link = expand_links(&fs_soft_links, normalized.data(), &namelen);
+            if (link) {
+                if (namelen >= normalized.size()) {
+                    append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
+                    return;
+                }
+
+                append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
+                continue;
+            }
+        }
+
+        break;
+    }
+
+    if (total) {
+        append_whereis_line(out, "%d instances of %s", total, normalized.data());
+    } else {
+        append_whereis_line(out, "%s was not found", normalized.data());
+    }
+}
+
 /*
 ============
 FS_WhereIs_f
@@ -3333,165 +3512,28 @@ Verbosely looks up a filename with exactly the same logic as expand_open_file_re
 */
 static void FS_WhereIs_f(void)
 {
-    std::array<char, MAX_OSPATH> normalized;
-    std::array<char, MAX_OSPATH> fullpath;
-    searchpath_t    *search;
-    pack_t          *pak;
-    packfile_t      *entry;
-    symlink_t       *link;
-    unsigned        hash;
-    file_info_t     info;
-    int             ret, total;
-    path_valid_t    valid;
-    size_t          len, namelen;
-    bool            report_all;
-
     if (Cmd_Argc() < 2) {
         Com_Printf("Usage: %s <path> [all]\n", Cmd_Argv(0));
         return;
     }
 
-// normalize path
-    namelen = FS_NormalizePathBuffer(normalized.data(), Cmd_Argv(1), normalized.size());
-    if (namelen >= normalized.size()) {
-        Com_Printf("Refusing to lookup oversize path.\n");
-        return;
+    std::vector<std::string> lines;
+    gather_file_lookup(Cmd_Argv(1), FS_MODE_READ, Cmd_Argc() >= 3, lines);
+    for (const auto& line : lines) {
+        Com_Printf("%s\n", line.c_str());
+    }
+}
+
+void FS_LogFileLookup(const char* path, unsigned mode, const char* prefix)
+{
+    if (!prefix) {
+        prefix = "";
     }
 
-// expand hard symlinks
-    link = expand_links(&fs_hard_links, normalized.data(), &namelen);
-    if (link) {
-        if (namelen >= normalized.size()) {
-            Com_Printf("Oversize symbolic link ('%s --> '%s').\n",
-                       link->name, link->target);
-            return;
-        }
-
-        Com_Printf("Symbolic link ('%s' --> '%s') in effect.\n",
-                   link->name, link->target);
-    }
-
-    report_all = Cmd_Argc() >= 3;
-    total = 0;
-    link = NULL;
-
-// reject empty paths
-    if (namelen == 0) {
-        Com_Printf("Refusing to lookup empty path.\n");
-        return;
-    }
-
-recheck:
-
-// warn about non-standard path length
-    if (namelen >= MAX_QPATH) {
-        Com_Printf("Not searching for '%s' in pack files "
-                   "since path length exceedes %d characters.\n",
-                   normalized, MAX_QPATH - 1);
-    }
-
-    hash = FS_HashPath(normalized.data(), 0);
-
-    valid = PATH_NOT_CHECKED;
-
-// search through the path, one element at a time
-    for (search = fs_searchpaths; search; search = search->next) {
-        // is the element a pak file?
-        if (search->pack) {
-            // don't bother searching in paks if length exceedes MAX_QPATH
-            if (namelen >= MAX_QPATH) {
-                continue;
-            }
-            // look through all the pak file elements
-            pak = search->pack;
-            entry = pak->file_hash[hash & (pak->hash_size - 1)];
-            for (; entry; entry = entry->hash_next) {
-                if (entry->namelen != namelen) {
-                    continue;
-                }
-                if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
-                    // found it!
-                    Com_Printf("%s/%s (%" PRId64 " bytes)\n", pak->filename,
-                               normalized.data(), entry->filelen);
-                    if (!report_all) {
-                        return;
-                    }
-                    total++;
-                }
-            }
-        } else {
-            if (valid == PATH_NOT_CHECKED) {
-                valid = FS_ValidatePath(normalized.data());
-                if (valid == PATH_INVALID) {
-                    // warn about invalid path
-                    Com_Printf("Not searching for '%s' in physical file "
-                               "system since path contains invalid characters.\n",
-                               normalized.data());
-                }
-            }
-            if (valid == PATH_INVALID) {
-                continue;
-            }
-
-            // check a file in the directory tree
-            len = Q_concat(fullpath.data(), fullpath.size(),
-                           search->filename, "/", normalized.data());
-            if (len >= fullpath.size()) {
-                Com_WPrintf("Full path length '%s/%s' exceeded %d characters.\n",
-                            search->filename, normalized.data(), MAX_OSPATH - 1);
-                if (!report_all) {
-                    return;
-                }
-                continue;
-            }
-
-            ret = get_path_info(fullpath.data(), &info);
-
-#ifndef _WIN32
-            if (ret == Q_ERR(ENOENT) && valid == PATH_MIXED_CASE) {
-                Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
-                ret = get_path_info(fullpath.data(), &info);
-                if (ret == Q_ERR_SUCCESS)
-                    Com_Printf("Physical path found after converting to lower case.\n");
-            }
-#endif
-
-            if (ret == Q_ERR_SUCCESS) {
-                Com_Printf("%s (%" PRId64 " bytes)\n", fullpath.data(), info.size);
-                if (!report_all) {
-                    return;
-                }
-                total++;
-            } else if (ret != Q_ERR(ENOENT)) {
-                Com_EPrintf("Couldn't get info on '%s': %s\n",
-                            fullpath.data(), Q_ErrorString(ret));
-                if (!report_all) {
-                    return;
-                }
-            }
-        }
-    }
-
-    if ((total == 0 || report_all) && link == NULL) {
-        // expand soft symlinks
-        link = expand_links(&fs_soft_links, normalized.data(), &namelen);
-        if (link) {
-            if (namelen >= normalized.size()) {
-                Com_Printf("Oversize symbolic link ('%s --> '%s').\n",
-                           link->name, link->target);
-                return;
-            }
-
-            Com_Printf("Symbolic link ('%s' --> '%s') in effect.\n",
-                       link->name, link->target);
-            goto recheck;
-        }
-    }
-
-    if (total) {
-        Com_Printf("%d instances of %s\n", total, normalized.data());
-    } else {
-        Com_Printf("%s was not found\n", normalized.data());
+    std::vector<std::string> lines;
+    gather_file_lookup(path, mode, true, lines);
+    for (const auto& line : lines) {
+        Com_Printf("%s%s\n", prefix, line.c_str());
     }
 }
 
