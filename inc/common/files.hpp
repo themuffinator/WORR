@@ -142,6 +142,8 @@ typedef struct fs_file_source_s {
 
 bool FS_GetFileSource(qhandle_t f, fs_file_source_t *out);
 
+void FS_LogFileLookup(const char *path, unsigned mode, const char *prefix);
+
 extern cvar_t   *fs_game;
 
 extern char     fs_gamedir[];

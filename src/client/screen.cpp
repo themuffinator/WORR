@@ -237,6 +237,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         int64_t fileLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle, FS_MODE_READ);
         if (fileLength < 0) {
                 Com_Printf("SCR: failed to open font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileLength));
+                FS_LogFileLookup(normalizedFontPath.c_str(), FS_MODE_READ, "        ");
                 return false;
         }
 
@@ -247,22 +248,14 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
                 return false;
         }
 
-        if (!source.from_pack) {
-                FS_CloseFile(fileHandle);
-                Com_Printf("SCR: font '%s' not loaded from a pack file\n", displayFontPath.c_str());
-                return false;
-        }
-
-        if (!source.from_builtin) {
-                const char* packBaseName = COM_SkipPath(source.pack_path);
-                const bool isExpectedPack = packBaseName
-                        && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
-                if (!isExpectedPack) {
-                        FS_CloseFile(fileHandle);
-                        Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
-                                displayFontPath.c_str(), source.pack_path);
-                        return false;
-                }
+        if (source.from_pack) {
+                const char* packName = source.pack_path[0] ? source.pack_path : "<unknown>";
+                const char* entryName = source.entry_path[0] ? source.entry_path : normalizedFontPath.c_str();
+                Com_DPrintf("SCR: loading font '%s' from pack '%s' (%s)\n",
+                        displayFontPath.c_str(), packName, entryName);
+        } else {
+                Com_DPrintf("SCR: loading font '%s' from filesystem path '%s'\n",
+                        displayFontPath.c_str(), normalizedFontPath.c_str());
         }
 
         if (fileLength <= 0 || fileLength > std::numeric_limits<size_t>::max()) {
