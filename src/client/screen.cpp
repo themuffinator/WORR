@@ -1914,6 +1914,33 @@ void SCR_ModeChanged(void)
 namespace {
         constexpr const char* SCR_LEGACY_FONT = "conchars";
 
+        static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
+        {
+                if (!font_name || !*font_name || !size)
+                        return false;
+
+                std::array<char, MAX_QPATH> quake_path{};
+                size_t len = 0;
+
+                if (font_name[0] == '/' || font_name[0] == '\\')
+                        len = FS_NormalizePathBuffer(quake_path.data(), font_name + 1, quake_path.size());
+                else
+                        len = Q_concat(quake_path.data(), quake_path.size(), "pics/", font_name);
+
+                if (!len || len >= quake_path.size())
+                        return false;
+
+                len = COM_DefaultExtension(quake_path.data(), ".pcx", quake_path.size());
+                if (len >= quake_path.size())
+                        return false;
+
+                const int written = Q_snprintf(buffer, size, "%s/%s", fs_gamedir, quake_path.data());
+                if (written < 0 || static_cast<size_t>(written) >= size)
+                        return false;
+
+                return true;
+        }
+
         static qhandle_t SCR_RegisterFontWithFallback(const char* name)
         {
                 if (!name || !*name)
@@ -1948,8 +1975,13 @@ static void scr_font_changed(cvar_t* self)
         if (!scr.font_pic)
                 scr.font_pic = SCR_RegisterFontWithFallback(SCR_LEGACY_FONT);
 
-        if (!scr.font_pic)
-                Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+        if (!scr.font_pic) {
+                std::array<char, MAX_OSPATH> lookup_path{};
+                if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size()))
+                        Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
+                else
+                        Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+        }
 
 #if USE_FREETYPE
         if (scr.font_pic)
