@@ -233,27 +233,59 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
         Com_DPrintf("SCR: cache miss for '%s' (key '%s'), loading from source\n",
                 displayFontPath.c_str(), cacheKey.c_str());
 
-        void* rawData = nullptr;
-        const int fileResult = FS_LoadFile(normalizedFontPath.c_str(), &rawData);
-        if (fileResult < 0 || !rawData) {
-                Com_Printf("SCR: failed to load font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileResult));
+        qhandle_t fileHandle = 0;
+        int64_t fileLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle, FS_MODE_READ);
+        if (fileLength < 0) {
+                Com_Printf("SCR: failed to open font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileLength));
                 FS_LogFileLookup(normalizedFontPath.c_str(), FS_MODE_READ, "        ");
-                if (rawData)
-                        FS_FreeFile(rawData);
                 return false;
         }
 
-        if (fileResult == 0) {
-                FS_FreeFile(rawData);
-                Com_Printf("SCR: font '%s' is empty\n", displayFontPath.c_str());
+        fs_file_source_t source{};
+        if (!FS_GetFileSource(fileHandle, &source)) {
+                FS_CloseFile(fileHandle);
+                Com_Printf("SCR: failed to resolve source for font '%s'\n", displayFontPath.c_str());
                 return false;
         }
 
-        scr_freetype_font_entry_t entry;
-        const auto* rawBytes = static_cast<const uint8_t*>(rawData);
-        const size_t bufferSize = static_cast<size_t>(fileResult);
-        entry.buffer.assign(rawBytes, rawBytes + bufferSize);
-        FS_FreeFile(rawData);
+        if (source.from_pack && !source.from_builtin) {
+                const char* packBaseName = COM_SkipPath(source.pack_path);
+                const bool isExpectedPack = packBaseName
+                        && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
+                if (!isExpectedPack) {
+                        const std::string unexpectedPack = source.pack_path;
+
+                        FS_CloseFile(fileHandle);
+                        fileHandle = 0;
+
+                        int64_t filesystemLength = FS_OpenFile(normalizedFontPath.c_str(), &fileHandle,
+                                FS_MODE_READ | FS_TYPE_REAL);
+                        if (filesystemLength < 0) {
+                                Com_Printf("SCR: font '%s' must be provided by Q2Game.kpf (found '%s')\n",
+                                        displayFontPath.c_str(), unexpectedPack.c_str());
+                                return false;
+                        }
+
+                        fileLength = filesystemLength;
+
+                        if (!FS_GetFileSource(fileHandle, &source)) {
+                                FS_CloseFile(fileHandle);
+                                Com_Printf("SCR: failed to resolve source for font '%s'\n", displayFontPath.c_str());
+                                return false;
+                        }
+
+                        if (source.from_pack) {
+                                const char* resolvedPack = source.pack_path[0] ? source.pack_path : "<unknown>";
+                                FS_CloseFile(fileHandle);
+                                Com_Printf("SCR: font '%s' still resolved to pack '%s' after filesystem retry\n",
+                                        displayFontPath.c_str(), resolvedPack);
+                                return false;
+                        }
+
+                        Com_DPrintf("SCR: overriding font '%s' from pack '%s' with filesystem copy\n",
+                                displayFontPath.c_str(), unexpectedPack.c_str());
+                }
+        }
 
         fs_file_source_t source{};
         bool haveSource = false;
