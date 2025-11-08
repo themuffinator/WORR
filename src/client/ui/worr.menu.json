@@ -199,7 +199,49 @@
         { "type": "toggle", "label": "entity glowing", "cvar": "cl_noglow", "negate": true, "group": "rendering" },
         {
           "type": "values",
-          "label": "ground shadows",
+          "label": "dynamic shadows",
+          "cvar": "r_shadows",
+          "group": "rendering",
+          "options": [
+            "off",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "type": "values",
+          "label": "shadow filter",
+          "cvar": "gl_shadow_filter",
+          "group": "rendering",
+          "disableWhen": [
+            { "cvar": "r_shadows", "equals": "0" }
+          ],
+          "options": [
+            "hard",
+            "pcf 3x3",
+            "pcf 5x5",
+            "pcf 7x7",
+            "exponential",
+            "variance"
+          ]
+        },
+        {
+          "type": "range",
+          "label": "shadow softness",
+          "cvar": "gl_shadow_filter_radius",
+          "group": "rendering",
+          "min": 0.5,
+          "max": 4.0,
+          "step": 0.1,
+          "disableWhen": [
+            { "cvar": "r_shadows", "equals": "0" },
+            { "cvar": "gl_shadow_filter", "equals": "0" }
+          ]
+        },
+        {
+          "type": "values",
+          "label": "legacy ground shadows",
           "cvar": "gl_shadows",
           "group": "rendering",
           "options": [
