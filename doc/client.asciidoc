@@ -885,8 +885,33 @@ gl_dotshading::
     truly 3D-ish by simulating diffuse lighting from a fake light source.
     Default value is 1 (enabled).
 
+r_shadows::
+    Enables real-time shadow maps for dynamic lights when the shader rendering
+    backend is active. Default value is 1 (enabled).
+      - 0 — disabled (use legacy planar shadows only)
+      - 1 — low quality atlas (4096x4096 with 256x256 tiles)
+      - 2 — balanced quality atlas (8192x4096 with 512x256 tiles)
+      - 3 — high quality atlas (8192x8192 with 512x512 tiles)
+
+gl_shadow_filter::
+    Selects filtering technique for ‘r_shadows’ shadow maps. Default value is
+    1.
+      - 0 — hard-edged shadows (no filtering)
+      - 1 — percentage-closer filtering with a 3x3 kernel
+      - 2 — percentage-closer filtering with a 5x5 kernel
+      - 3 — percentage-closer filtering with a 7x7 kernel
+      - 4 — exponential falloff filtering
+      - 5 — variance shadow mapping (also used by higher values)
+
+gl_shadow_filter_radius::
+    Controls sample spacing used by filtered shadow map techniques. Larger
+    values increase shadow softness at the cost of additional blurring.
+    Default value is 1.5.
+
 gl_shadows::
-    Enables drawing stencil shadows underneath 3D models. Default value is 0.
+    Enables classic planar “blob” shadows underneath 3D models. These remain in
+    effect regardless of ‘r_shadows’ and serve as a fallback when real-time
+    shadows are disabled. Default value is 2.
       - 0 — disabled
       - 1 — enabled, constant alpha
       - 2 — enabled, alpha fade with distance
