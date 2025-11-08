@@ -1457,10 +1457,13 @@ void R_RenderFrame(const refdef_t *fd)
 
     glr.drawframe++;
 
-    glr.fd = *fd;
+	glr.fd = *fd;
 
-    if (r_shadows && r_shadows->integer > 0)
-        R_ShadowAtlasBeginFrame();
+	if (r_shadows && r_shadows->integer > 0)
+		R_ShadowAtlasBeginFrame();
+	if (gl_static.use_shaders && r_shadows && r_shadows->integer > 0)
+		R_RenderShadowViews();
+
 
     const bool viewport_changed = glr.motion_blur_viewport_width != glr.fd.width ||
         glr.motion_blur_viewport_height != glr.fd.height;

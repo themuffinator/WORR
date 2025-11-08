@@ -1868,7 +1868,7 @@ static void shader_load_uniforms(void)
 static void shader_load_lights(void)
 {
     gls.u_cluster_params.cluster_enabled = gl_clustered_shading ? gl_clustered_shading->integer : 0;
-    gls.u_cluster_params.shadow_enabled = gls.u_cluster_params.cluster_enabled;
+	gls.u_cluster_params.shadow_enabled = (gls.u_cluster_params.cluster_enabled && gl_static.shadow.view_count > 0) ? 1 : 0;
     gls.u_cluster_params.show_overdraw = gl_cluster_show_overdraw ? gl_cluster_show_overdraw->integer : 0;
     gls.u_cluster_params.show_normals = gl_cluster_show_normals ? gl_cluster_show_normals->integer : 0;
 

@@ -400,6 +400,7 @@ bool    R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
                                   shadow_view_assignment_t *out_assignment);
 size_t  R_ShadowAtlasViewCount(void);
 const shadow_view_assignment_t *R_ShadowAtlasViews(void);
+void    R_RenderShadowViews(void);
 
 void    R_SetClipRect(const clipRect_t *clip);
 float   R_ClampScale(cvar_t *var);

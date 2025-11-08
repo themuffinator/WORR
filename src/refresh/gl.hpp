@@ -209,6 +209,11 @@ typedef struct {
         GLuint                                                      framebuffer;
         int                                                         width;
         int                                                         height;
+        int                                                         quality;
+        int                                                         tiles_per_row;
+        int                                                         tiles_per_column;
+        int                                                         tile_width;
+        int                                                         tile_height;
         size_t                                                      view_count;
         std::array<shadow_view_assignment_t, MAX_SHADOW_VIEWS>       assignments;
     } shadow;
@@ -486,6 +491,7 @@ extern cvar_t *gl_md5_distance;
 #endif
 extern cvar_t *gl_damageblend_frac;
 extern cvar_t *r_skipUnderWaterFX;
+extern cvar_t *r_shadows;
 extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
