@@ -483,6 +483,8 @@ extern cvar_t *gl_modulate_entities;
 extern cvar_t *gl_glowmap_intensity;
 extern cvar_t *gl_flarespeed;
 extern cvar_t *gl_fontshadow;
+extern cvar_t *gl_shadow_filter;
+extern cvar_t *gl_shadow_filter_radius;
 extern cvar_t *gl_shaders;
 #if USE_MD5
 extern cvar_t *gl_md5_load;
@@ -874,6 +876,7 @@ typedef enum {
     TMU_TEXTURE,
     TMU_LIGHTMAP,
     TMU_GLOWMAP,
+    TMU_SHADOW_ATLAS,
     TMU_HISTORY0,
     TMU_HISTORY1,
     TMU_HISTORY2,
@@ -1005,15 +1008,11 @@ typedef struct {
     glDlight_t     lights[MAX_DLIGHTS];
 } glUniformDlights_t;
 
-typedef struct {
-    float           cluster_min_z;
-    float           cluster_zslice_factor;
-    int32_t         cluster_enabled;
-    int32_t         shadow_enabled;
-    int32_t         show_overdraw;
-    int32_t         show_normals;
-    vec2_t          _pad_cluster;
-} glClusterParams_t;
+struct alignas(16) glClusterParams_t {
+    vec4_t          params0;
+    vec4_t          params1;
+    vec4_t          shadow_atlas;
+};
 
 typedef struct {
     glTmu_t             client_tmu;

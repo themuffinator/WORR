@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/sizebuf.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #define MAX_SHADER_CHARS    4096
@@ -256,84 +257,217 @@ static void write_dynamic_lights(sizebuf_t *buf)
 
 static void write_clustered_light_support(sizebuf_t *buf)
 {
-    GLSP("#define MAX_SHADOW_VIEWS %d\n", int(MAX_SHADOW_VIEWS));
-    GLSL(
-        struct quakeLightClusterInfo_s
-        {
-            vec4 position_range;
-            vec4 color_intensity;
-            vec4 cone_dir_angle;
-            vec4 world_origin_shadow;
-        };
+GLSP("#define MAX_SHADOW_VIEWS %d\n", int(MAX_SHADOW_VIEWS));
+GLSL(
+struct quakeLightClusterInfo_s
+{
+vec4 position_range;
+vec4 color_intensity;
+vec4 cone_dir_angle;
+vec4 world_origin_shadow;
+};
 
-        struct quakeUBShadowStruct_s
-        {
-            mat4 volume_matrix;
-            vec4 viewport_rect;
-            vec4 source_position;
-            float bias;
-            float shade_amount;
-            float pad0;
-            float pad1;
-        };
+struct quakeUBShadowStruct_s
+{
+mat4 volume_matrix;
+vec4 viewport_rect;
+vec4 source_position;
+float bias;
+float shade_amount;
+float pad0;
+float pad1;
+};
 
-        struct quakeLightClusterLookup_s
-        {
-            uint offset;
-            uint count;
-        };
+struct quakeLightClusterLookup_s
+{
+uint offset;
+uint count;
+};
 
-        layout(std140) uniform ClusterParams
-        {
-            float uClusterMinZ;
-            float uClusterZSliceFactor;
-            int uClusterEnabled;
-            int uShadowEnabled;
-            int uShowOverdraw;
-            int uShowNormals;
-            vec2 uClusterPadding;
-        };
+layout(std140) uniform ClusterParams
+{
+vec4 uClusterParams0;
+vec4 uClusterParams1;
+vec4 uShadowAtlas;
+};
 
-        layout(std140) uniform LightCluster
-        {
-            quakeLightClusterInfo_s uClusterLights[1];
-        };
+layout(std140) uniform LightCluster
+{
+quakeLightClusterInfo_s uClusterLights[1];
+};
 
-        layout(std140) uniform ShadowItems
-        {
-            quakeUBShadowStruct_s sbShadowItems[MAX_SHADOW_VIEWS];
-        };
+layout(std140) uniform ShadowItems
+{
+quakeUBShadowStruct_s sbShadowItems[MAX_SHADOW_VIEWS];
+};
 
-        float ComputeShadow(vec3 projCoords, const quakeUBShadowStruct_s shadowItem)
-        {
-            (void)projCoords;
-            (void)shadowItem;
-            return 1.0;
-        }
+uniform sampler2D u_shadow_atlas;
 
-        float ComputeClusteredShading(inout vec4 modulatedColor,
-                                      const quakeLightClusterLookup_s lookup,
-                                      vec2 fragCoord, float fragZ, vec3 normals)
-        {
-            (void)lookup;
-            (void)fragCoord;
-            (void)fragZ;
-            (void)normals;
-            vec3 legacy = calc_dynamic_lights();
-            modulatedColor.rgb += legacy;
-            return length(legacy);
-        }
+#define uClusterMinZ uClusterParams0.x
+#define uClusterZSliceFactor uClusterParams0.y
+#define uClusterEnabled int(uClusterParams0.z + 0.5)
+#define uShadowEnabled int(uClusterParams0.w + 0.5)
+#define uShowOverdraw int(uClusterParams1.x + 0.5)
+#define uShowNormals int(uClusterParams1.y + 0.5)
+#define uShadowFilterMode int(uClusterParams1.z + 0.5)
+#define uShadowSampleRadius uClusterParams1.w
+#define uShadowAtlasSize uShadowAtlas.xy
+#define uShadowAtlasInv uShadowAtlas.zw
 
-        vec3 ApplyClusteredLighting(vec3 worldPos, vec3 normal)
-        {
-            (void)worldPos;
-            (void)normal;
-            if (uClusterEnabled == 0)
-                return calc_dynamic_lights();
+const int SHADOW_MAX_KERNEL_RADIUS = 4;
+const float SHADOW_EPSILON = 1e-6;
 
-            return calc_dynamic_lights();
-        }
-    );
+float SampleShadowDepth(vec2 pixelCoord, vec2 clampMin, vec2 clampMax)
+{
+vec2 clamped = clamp(pixelCoord, clampMin, clampMax);
+vec2 uv = clamped * uShadowAtlasInv;
+return texture(u_shadow_atlas, uv).r;
+}
+
+float ComputeShadow(vec3 worldPos, const quakeUBShadowStruct_s shadowItem)
+{
+if (uShadowAtlasSize.x <= 0.0 || uShadowAtlasSize.y <= 0.0)
+return 1.0;
+
+vec4 volumeSpace = shadowItem.volume_matrix * vec4(worldPos, 1.0);
+if (abs(volumeSpace.w) <= SHADOW_EPSILON)
+return 1.0;
+
+vec3 projCoords = volumeSpace.xyz / volumeSpace.w;
+projCoords = projCoords * 0.5 + 0.5;
+
+if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+projCoords.y < 0.0 || projCoords.y > 1.0 ||
+projCoords.z < 0.0 || projCoords.z > 1.0)
+return 1.0;
+
+vec2 viewportMin = shadowItem.viewport_rect.xy;
+vec2 viewportMax = shadowItem.viewport_rect.zw;
+vec2 viewportSize = viewportMax - viewportMin;
+if (viewportSize.x <= 0.0 || viewportSize.y <= 0.0)
+return 1.0;
+
+vec2 clampMin = viewportMin + vec2(0.5);
+vec2 clampMax = viewportMax - vec2(0.5);
+
+vec2 pixelCoord = viewportMin + projCoords.xy * viewportSize;
+pixelCoord = clamp(pixelCoord, clampMin, clampMax);
+
+float compareDepth = clamp(projCoords.z - shadowItem.bias, 0.0, 1.0);
+int filterMode = uShadowFilterMode;
+float stepScale = (filterMode > 0) ? max(uShadowSampleRadius, 1.0) : 0.0;
+
+float shadow = 1.0;
+
+if (filterMode <= 0) {
+float depth = SampleShadowDepth(pixelCoord, clampMin, clampMax);
+shadow = (compareDepth <= depth) ? 1.0 : 0.0;
+} else if (filterMode <= 3) {
+int kernelRadius = clamp(filterMode, 1, SHADOW_MAX_KERNEL_RADIUS);
+float total = 0.0;
+float count = 0.0;
+for (int y = -SHADOW_MAX_KERNEL_RADIUS; y <= SHADOW_MAX_KERNEL_RADIUS; ++y) {
+if (abs(y) > kernelRadius)
+continue;
+for (int x = -SHADOW_MAX_KERNEL_RADIUS; x <= SHADOW_MAX_KERNEL_RADIUS; ++x) {
+if (abs(x) > kernelRadius)
+continue;
+vec2 offset = vec2(float(x), float(y)) * stepScale;
+float depth = SampleShadowDepth(pixelCoord + offset, clampMin, clampMax);
+total += (compareDepth <= depth) ? 1.0 : 0.0;
+count += 1.0;
+}
+}
+shadow = (count > 0.0) ? (total / count) : 1.0;
+} else if (filterMode == 4) {
+int kernelRadius = clamp(int(stepScale + 0.5), 1, SHADOW_MAX_KERNEL_RADIUS);
+float exponent = max(stepScale, 1.0);
+float accum = 0.0;
+float count = 0.0;
+for (int y = -SHADOW_MAX_KERNEL_RADIUS; y <= SHADOW_MAX_KERNEL_RADIUS; ++y) {
+if (abs(y) > kernelRadius)
+continue;
+for (int x = -SHADOW_MAX_KERNEL_RADIUS; x <= SHADOW_MAX_KERNEL_RADIUS; ++x) {
+if (abs(x) > kernelRadius)
+continue;
+vec2 offset = vec2(float(x), float(y)) * stepScale;
+float depth = SampleShadowDepth(pixelCoord + offset, clampMin, clampMax);
+float delta = max(compareDepth - depth, 0.0);
+accum += exp(-delta * exponent);
+count += 1.0;
+}
+}
+shadow = (count > 0.0) ? (accum / count) : 1.0;
+} else {
+int kernelRadius = clamp(int(stepScale + 0.5), 1, SHADOW_MAX_KERNEL_RADIUS);
+float moments1 = 0.0;
+float moments2 = 0.0;
+float count = 0.0;
+for (int y = -SHADOW_MAX_KERNEL_RADIUS; y <= SHADOW_MAX_KERNEL_RADIUS; ++y) {
+if (abs(y) > kernelRadius)
+continue;
+for (int x = -SHADOW_MAX_KERNEL_RADIUS; x <= SHADOW_MAX_KERNEL_RADIUS; ++x) {
+if (abs(x) > kernelRadius)
+continue;
+vec2 offset = vec2(float(x), float(y)) * stepScale;
+float depth = SampleShadowDepth(pixelCoord + offset, clampMin, clampMax);
+moments1 += depth;
+moments2 += depth * depth;
+count += 1.0;
+}
+}
+if (count > 0.0) {
+float invCount = 1.0 / count;
+moments1 *= invCount;
+moments2 *= invCount;
+float variance = max(moments2 - moments1 * moments1, 0.00002);
+float d = compareDepth - moments1;
+float pMax = variance / (variance + d * d);
+float chebyshev = clamp(pMax, 0.0, 1.0);
+shadow = (compareDepth <= moments1) ? 1.0 : chebyshev;
+} else {
+shadow = 1.0;
+}
+}
+
+shadow = min(shadow + shadowItem.shade_amount, 1.0);
+return shadow;
+}
+
+#undef uClusterMinZ
+#undef uClusterZSliceFactor
+#undef uClusterEnabled
+#undef uShadowEnabled
+#undef uShowOverdraw
+#undef uShowNormals
+#undef uShadowFilterMode
+#undef uShadowSampleRadius
+#undef uShadowAtlasSize
+#undef uShadowAtlasInv
+
+float ComputeClusteredShading(inout vec4 modulatedColor,
+  const quakeLightClusterLookup_s lookup,
+  vec2 fragCoord, float fragZ, vec3 normals)
+{
+(void)lookup;
+(void)fragCoord;
+(void)fragZ;
+(void)normals;
+vec3 legacy = calc_dynamic_lights();
+modulatedColor.rgb += legacy;
+return length(legacy);
+}
+
+vec3 ApplyClusteredLighting(vec3 worldPos, vec3 normal)
+{
+(void)worldPos;
+(void)normal;
+if (uClusterEnabled == 0)
+return calc_dynamic_lights();
+
+return calc_dynamic_lights();
+}
+);
 }
 
 static void write_shadedot(sizebuf_t *buf)
@@ -389,36 +523,17 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
         GLSL(out vec3 v_world_pos;)
-    if (bits & GLS_DYNAMIC_LIGHTS)
-        GLSL(out vec3 v_norm;)
-
-    if (bits & GLS_MESH_SHADE)
-        write_shadedot(buf);
-
-    GLSF("void main() {\n");
-    GLSL(
-        vec3 out_pos = vec3(0.0);
-        vec3 out_norm = vec3(0.0);
-
-        uint start = a_vert[0];
-        uint count = a_vert[1];
-    )
-
-    GLSF("for (uint i = start; i < start + count; i++) {\n");
-        if (gl_config.caps & QGL_CAP_SHADER_STORAGE) {
-            GLSL(
-                uint jointnum = b_jointnums[i / 4U];
-                jointnum >>= (i & 3U) * 8U;
-                jointnum &= 255U;
-
-                vec4 weight = b_weights[i];
-            )
-        } else {
-            GLSL(
-                uint jointnum = texelFetch(u_jointnums, int(u_jointnum_ofs + i)).r;
-                vec4 weight   = texelFetch(u_weights,   int(u_weight_ofs   + i));
-            )
-        }
+if (bits & GLS_DYNAMIC_LIGHTS) {
+if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights), UBO_DLIGHTS))
+goto fail;
+if (!bind_uniform_block(program, "ClusterParams", sizeof(gls.u_cluster_params), UBO_CLUSTER_PARAMS))
+goto fail;
+if (!bind_uniform_block(program, "LightCluster", sizeof(glClusterLight_t), UBO_CLUSTER_LIGHTS))
+goto fail;
+if (!bind_uniform_block(program, "ShadowItems", sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, UBO_SHADOW_ITEMS))
+goto fail;
+bind_texture_unit(program, "u_shadow_atlas", TMU_SHADOW_ATLAS);
+}
         GLSL(
             Joint joint = u_joints[jointnum];
 
@@ -1717,17 +1832,17 @@ static GLuint create_and_use_program(glStateBits_t bits)
         if (!bind_uniform_block(program, "Skeleton", sizeof(glJoint_t) * MD5_MAX_JOINTS, UBO_SKELETON))
             goto fail;
 #endif
-
-    if (bits & GLS_DYNAMIC_LIGHTS) {
-        if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights), UBO_DLIGHTS))
-            goto fail;
-        if (!bind_uniform_block(program, "ClusterParams", sizeof(gls.u_cluster_params), UBO_CLUSTER_PARAMS))
-            goto fail;
-        if (!bind_uniform_block(program, "LightCluster", sizeof(glClusterLight_t), UBO_CLUSTER_LIGHTS))
-            goto fail;
-        if (!bind_uniform_block(program, "ShadowItems", sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, UBO_SHADOW_ITEMS))
-            goto fail;
-    }
+	if (bits & GLS_DYNAMIC_LIGHTS) {
+		if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights), UBO_DLIGHTS))
+			goto fail;
+		if (!bind_uniform_block(program, "ClusterParams", sizeof(gls.u_cluster_params), UBO_CLUSTER_PARAMS))
+			goto fail;
+		if (!bind_uniform_block(program, "LightCluster", sizeof(glClusterLight_t), UBO_CLUSTER_LIGHTS))
+			goto fail;
+		if (!bind_uniform_block(program, "ShadowItems", sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, UBO_SHADOW_ITEMS))
+			goto fail;
+		bind_texture_unit(program, "u_shadow_atlas", TMU_SHADOW_ATLAS);
+	}
 
     qglUseProgram(program);
 
@@ -1865,29 +1980,54 @@ static void shader_load_uniforms(void)
     c.uniformUploads++;
 }
 
+
 static void shader_load_lights(void)
 {
-    gls.u_cluster_params.cluster_enabled = gl_clustered_shading ? gl_clustered_shading->integer : 0;
-	gls.u_cluster_params.shadow_enabled = (gls.u_cluster_params.cluster_enabled && gl_static.shadow.view_count > 0) ? 1 : 0;
-    gls.u_cluster_params.show_overdraw = gl_cluster_show_overdraw ? gl_cluster_show_overdraw->integer : 0;
-    gls.u_cluster_params.show_normals = gl_cluster_show_normals ? gl_cluster_show_normals->integer : 0;
+	const float cluster_enabled = gl_clustered_shading ? static_cast<float>(gl_clustered_shading->integer) : 0.0f;
+	gls.u_cluster_params.params0[2] = cluster_enabled;
+	const float shadow_enabled = (cluster_enabled > 0.0f && gl_static.shadow.view_count > 0) ? 1.0f : 0.0f;
+	gls.u_cluster_params.params0[3] = shadow_enabled;
+	gls.u_cluster_params.params1[0] = gl_cluster_show_overdraw ? static_cast<float>(gl_cluster_show_overdraw->integer) : 0.0f;
+	gls.u_cluster_params.params1[1] = gl_cluster_show_normals ? static_cast<float>(gl_cluster_show_normals->integer) : 0.0f;
+	int filter_mode = gl_shadow_filter ? gl_shadow_filter->integer : 0;
+	filter_mode = std::clamp(filter_mode, 0, 5);
+	gls.u_cluster_params.params1[2] = static_cast<float>(filter_mode);
+	float sample_radius = gl_shadow_filter_radius ? gl_shadow_filter_radius->value : 1.0f;
+	if (!std::isfinite(sample_radius) || sample_radius < 0.0f)
+		sample_radius = 0.0f;
+	gls.u_cluster_params.params1[3] = sample_radius;
+	const float atlas_width = static_cast<float>(gl_static.shadow.width);
+	const float atlas_height = static_cast<float>(gl_static.shadow.height);
+	if (atlas_width > 0.0f && atlas_height > 0.0f) {
+		gls.u_cluster_params.shadow_atlas[0] = atlas_width;
+		gls.u_cluster_params.shadow_atlas[1] = atlas_height;
+		gls.u_cluster_params.shadow_atlas[2] = 1.0f / atlas_width;
+		gls.u_cluster_params.shadow_atlas[3] = 1.0f / atlas_height;
+	} else {
+		gls.u_cluster_params.shadow_atlas[0] = 0.0f;
+		gls.u_cluster_params.shadow_atlas[1] = 0.0f;
+		gls.u_cluster_params.shadow_atlas[2] = 0.0f;
+		gls.u_cluster_params.shadow_atlas[3] = 0.0f;
+	}
+	const GLuint atlas_tex = (shadow_enabled > 0.0f) ? gl_static.shadow.texture : 0;
+	GL_BindTexture(TMU_SHADOW_ATLAS, atlas_tex);
 
-    if (gl_static.cluster_params_buffer) {
-        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_params_buffer);
-        qglBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(gls.u_cluster_params), &gls.u_cluster_params);
-    }
+	if (gl_static.cluster_params_buffer) {
+		GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_params_buffer);
+		qglBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(gls.u_cluster_params), &gls.u_cluster_params);
+	}
 
-    if (gl_static.cluster_light_buffer && !gls.cluster_lights.empty()) {
-        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_light_buffer);
-        qglBufferSubData(GL_UNIFORM_BUFFER, 0,
-            gls.cluster_lights.size() * sizeof(glClusterLight_t), gls.cluster_lights.data());
-    }
+	if (gl_static.cluster_light_buffer && !gls.cluster_lights.empty()) {
+		GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.cluster_light_buffer);
+		qglBufferSubData(GL_UNIFORM_BUFFER, 0,
+		gls.cluster_lights.size() * sizeof(glClusterLight_t), gls.cluster_lights.data());
+	}
 
-    if (gl_static.shadow_item_buffer && !gls.shadow_items.empty()) {
-        GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.shadow_item_buffer);
-        qglBufferSubData(GL_UNIFORM_BUFFER, 0,
-            gls.shadow_items.size() * sizeof(glShadowItem_t), gls.shadow_items.data());
-    }
+	if (gl_static.shadow_item_buffer && !gls.shadow_items.empty()) {
+		GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.shadow_item_buffer);
+		qglBufferSubData(GL_UNIFORM_BUFFER, 0,
+		gls.shadow_items.size() * sizeof(glShadowItem_t), gls.shadow_items.data());
+	}
 
     // dlight bits changed, set up the buffer.
     // if you didn't modify dlights just leave the bits
@@ -2009,8 +2149,8 @@ static void shader_setup_3d(void)
 
     VectorCopy(glr.fd.vieworg, gls.u_block.vieworg);
 
-    gls.u_cluster_params.cluster_min_z = 1.0f;
-    gls.u_cluster_params.cluster_zslice_factor = 1.0f;
+gls.u_cluster_params.params0[0] = 1.0f;
+gls.u_cluster_params.params0[1] = 1.0f;
 }
 
 static void shader_disable_state(void)
