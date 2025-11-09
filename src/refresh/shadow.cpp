@@ -56,6 +56,7 @@ struct shadow_render_view_t {
 };
 
 std::vector<shadow_render_view_t> g_render_views;
+int g_shadow_requested_quality = -1;
 
 bool has_required_gl_capabilities()
 {
@@ -88,6 +89,7 @@ void destroy_resources()
 	shadow.tile_height = 0;
 	shadow.view_count = 0;
 	shadow.quality = -1;
+	g_shadow_requested_quality = -1;
 }
 
 int choose_quality_level()
@@ -418,44 +420,106 @@ qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 
 bool R_ShadowAtlasInit(void)
 {
-	destroy_resources();
-
-	if (!has_required_gl_capabilities())
-		return false;
-
-	const int quality_index = choose_quality_level();
-	apply_quality_layout(quality_index);
-
-	qglGenTextures(1, &gl_static.shadow.texture);
-	if (!gl_static.shadow.texture)
-		return false;
-
-	qglBindTexture(GL_TEXTURE_2D, gl_static.shadow.texture);
-	qglTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
-		gl_static.shadow.width, gl_static.shadow.height, 0, GL_DEPTH_COMPONENT,
-		GL_UNSIGNED_INT, nullptr);
-	configure_texture_parameters(gl_static.shadow.texture);
-
-	qglGenFramebuffers(1, &gl_static.shadow.framebuffer);
-	if (!gl_static.shadow.framebuffer) {
+	if (!has_required_gl_capabilities()) {
 		destroy_resources();
 		return false;
 	}
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadow.framebuffer);
-	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		GL_TEXTURE_2D, gl_static.shadow.texture, 0);
+	auto &shadow = gl_static.shadow;
+	GLuint old_texture = shadow.texture;
+	GLuint old_framebuffer = shadow.framebuffer;
+	shadow.supported = false;
 
-	const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	const int requested_quality = choose_quality_level();
+	const int max_texture_size = gl_config.max_texture_size;
+	GLuint new_texture = 0;
+	GLuint new_framebuffer = 0;
+	int selected_quality = -1;
 
-	if (status != GL_FRAMEBUFFER_COMPLETE) {
+	for (int quality = requested_quality; quality >= 0; --quality) {
+		const auto &config = kShadowQualityLevels[quality];
+		if (config.width > max_texture_size || config.height > max_texture_size)
+			continue;
+
+		GLuint texture = 0;
+		qglGenTextures(1, &texture);
+		if (!texture)
+			continue;
+
+		if (qglGetError) {
+			while (qglGetError() != GL_NO_ERROR) {
+			}
+		}
+
+		qglBindTexture(GL_TEXTURE_2D, texture);
+		qglTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
+			config.width, config.height, 0, GL_DEPTH_COMPONENT,
+			GL_UNSIGNED_INT, nullptr);
+
+		GLenum tex_error = GL_NO_ERROR;
+		if (qglGetError)
+			tex_error = qglGetError();
+		if (tex_error != GL_NO_ERROR) {
+			qglBindTexture(GL_TEXTURE_2D, 0);
+			if (qglDeleteTextures)
+				qglDeleteTextures(1, &texture);
+			continue;
+		}
+
+		configure_texture_parameters(texture);
+
+		GLuint framebuffer = 0;
+		qglGenFramebuffers(1, &framebuffer);
+		if (!framebuffer) {
+			if (qglDeleteTextures)
+				qglDeleteTextures(1, &texture);
+			continue;
+		}
+
+		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+			GL_TEXTURE_2D, texture, 0);
+
+		const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			if (qglDeleteFramebuffers)
+				qglDeleteFramebuffers(1, &framebuffer);
+			if (qglDeleteTextures)
+				qglDeleteTextures(1, &texture);
+			continue;
+		}
+
+		new_texture = texture;
+		new_framebuffer = framebuffer;
+		selected_quality = quality;
+		break;
+	}
+
+	if (selected_quality < 0) {
 		destroy_resources();
 		return false;
 	}
 
-	gl_static.shadow.supported = true;
+	shadow.texture = new_texture;
+	shadow.framebuffer = new_framebuffer;
+	if (old_framebuffer && old_framebuffer != new_framebuffer && qglDeleteFramebuffers)
+		qglDeleteFramebuffers(1, &old_framebuffer);
+	if (old_texture && old_texture != new_texture && qglDeleteTextures)
+		qglDeleteTextures(1, &old_texture);
+
+	apply_quality_layout(selected_quality);
+	shadow.supported = true;
 	reset_frame_state();
+	g_shadow_requested_quality = requested_quality;
+
+	if (selected_quality < requested_quality) {
+		const auto &config = kShadowQualityLevels[selected_quality];
+		Com_Printf("Shadow atlas quality downgraded from %d to %d (%dx%d)\n",
+			requested_quality + 1, selected_quality + 1,
+			config.width, config.height);
+	}
 
 	return true;
 }
@@ -471,7 +535,7 @@ void R_ShadowAtlasBeginFrame(void)
 		return;
 
 	const int desired_quality = choose_quality_level();
-	if (gl_static.shadow.quality != desired_quality) {
+	if (g_shadow_requested_quality != desired_quality) {
 		if (!R_ShadowAtlasInit())
 			return;
 	}
