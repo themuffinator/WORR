@@ -889,9 +889,9 @@ r_shadows::
     Enables real-time shadow maps for dynamic lights when the shader rendering
     backend is active. Default value is 1 (enabled).
       - 0 — disabled (use legacy planar shadows only)
-      - 1 — low quality atlas (4096x4096 with 256x256 tiles)
-      - 2 — balanced quality atlas (8192x4096 with 512x256 tiles)
-      - 3 — high quality atlas (8192x8192 with 512x512 tiles)
+      - 1 — low quality atlas (4096x4096 with 256x256 tiles, up to 256 views)
+      - 2 — balanced quality atlas (8192x4096 with 512x512 tiles, up to 128 views)
+      - 3 — high quality atlas (8192x8192 with 512x512 tiles, up to 256 views)
 
 gl_shadow_filter::
     Selects filtering technique for ‘r_shadows’ shadow maps. Default value is

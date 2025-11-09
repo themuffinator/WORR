@@ -18,7 +18,7 @@ struct shadow_quality_config_t {
 
 constexpr std::array<shadow_quality_config_t, 3> kShadowQualityLevels = {{
 	{ 4096, 4096, 16, 16 },
-	{ 8192, 4096, 16, 16 },
+	{ 8192, 4096, 16, 8 },
 	{ 8192, 8192, 16, 16 },
 }};
 
