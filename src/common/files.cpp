@@ -3898,21 +3898,35 @@ static void add_game_kpf(unsigned mode, const char *dir)
 #if USE_ZLIB
 	std::array<char, MAX_OSPATH> parent_dir{};
 	std::array<char, MAX_OSPATH> reroot{};
-	const char *candidates[4] = { NULL, NULL, NULL, NULL };
+	std::array<std::array<char, MAX_OSPATH>, 4> candidate_storage{};
+	std::array<const char *, 4> candidates{ { NULL, NULL, NULL, NULL } };
 	int count = 0;
+
+	auto store_candidate = [&](const char *path) {
+		if (count >= (int)candidates.size())
+			return false;
+		if (!path || !*path)
+			return false;
+		size_t len = Q_strlcpy(candidate_storage[count].data(), path, candidate_storage[count].size());
+		if (len >= candidate_storage[count].size())
+			return false;
+		candidates[count++] = candidate_storage[count - 1].data();
+		return true;
+	};
 
 	if (!dir || !*dir)
 		return;
 
-	candidates[count++] = dir;
+	if (!store_candidate(dir))
+		return;
 
 	if (Q_concat(reroot.data(), reroot.size(), dir, "/rerelease") < reroot.size())
-		candidates[count++] = reroot.data();
+		store_candidate(reroot.data());
 
 	if (get_parent_directory(parent_dir, dir)) {
-		candidates[count++] = parent_dir.data();
+		store_candidate(parent_dir.data());
 		if (Q_concat(reroot.data(), reroot.size(), parent_dir.data(), "/rerelease") < reroot.size())
-			candidates[count++] = reroot.data();
+			store_candidate(reroot.data());
 	}
 
 	for (int i = 0; i < count; i++) {
