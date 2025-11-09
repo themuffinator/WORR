@@ -25,6 +25,32 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MIN_KEY_VALUE_STORAGE_SIZE 16
 #define MIN_HASH_SIZE              32
 
+static constexpr uint32_t HASH_MAP_MAX_CAPACITY = 1u << 28;
+
+static inline uint32_t HashMap_ClampCapacity(uint32_t capacity)
+{
+	return min(capacity, HASH_MAP_MAX_CAPACITY);
+}
+
+static inline uint32_t HashMap_CapacityWithSlack(uint32_t capacity)
+{
+	capacity = HashMap_ClampCapacity(capacity);
+	uint32_t slack = capacity / 4;
+	if (capacity > HASH_MAP_MAX_CAPACITY - slack)
+		return HASH_MAP_MAX_CAPACITY;
+	return capacity + slack;
+}
+
+static inline uint32_t HashMap_BoundedNpot(uint32_t value, uint32_t minimum)
+{
+	value = max(value, minimum);
+	value = min(value, HASH_MAP_MAX_CAPACITY);
+	uint32_t result = Q_npot32(value);
+	if (!result || result > HASH_MAP_MAX_CAPACITY)
+		return HASH_MAP_MAX_CAPACITY;
+	return max(result, minimum);
+}
+
 typedef struct hash_map_s {
     uint32_t num_entries;
     uint32_t hash_size;
@@ -136,12 +162,15 @@ HashMap_Reserve
 */
 void HashMap_Reserve(hash_map_t *map, uint32_t capacity)
 {
-    const uint32_t new_key_value_storage_size = Q_npot32(capacity);
-    if (map->key_value_storage_size < new_key_value_storage_size)
-        HashMap_ExpandKeyValueStorage(map, new_key_value_storage_size);
-    const uint32_t new_hash_size = Q_npot32(capacity + (capacity / 4));
-    if (map->hash_size < new_hash_size)
-        HashMap_Rehash(map, new_hash_size);
+	capacity = HashMap_ClampCapacity(capacity);
+
+	const uint32_t new_key_value_storage_size = HashMap_BoundedNpot(capacity, MIN_KEY_VALUE_STORAGE_SIZE);
+	if (map->key_value_storage_size < new_key_value_storage_size)
+		HashMap_ExpandKeyValueStorage(map, new_key_value_storage_size);
+
+	const uint32_t new_hash_size = HashMap_BoundedNpot(HashMap_CapacityWithSlack(capacity), MIN_HASH_SIZE);
+	if (map->hash_size < new_hash_size)
+		HashMap_Rehash(map, new_hash_size);
 }
 
 /*
