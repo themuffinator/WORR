@@ -567,10 +567,16 @@ bool R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
 
 	const int column = static_cast<int>(index % shadow.tiles_per_row);
 	const int row = static_cast<int>(index / shadow.tiles_per_row);
-	const float x0 = static_cast<float>(column * tile_width);
-	const float y0 = static_cast<float>(row * tile_height);
-	const float x1 = x0 + static_cast<float>(tile_width);
-	const float y1 = y0 + static_cast<float>(tile_height);
+	const int max_resolution = (std::min)(tile_width, tile_height);
+	const int sanitized_resolution = resolution > 0 ? (std::min)(resolution, max_resolution) : max_resolution;
+	const float viewport_width = static_cast<float>(sanitized_resolution);
+	const float viewport_height = static_cast<float>(sanitized_resolution);
+	const float tile_origin_x = static_cast<float>(column * tile_width);
+	const float tile_origin_y = static_cast<float>(row * tile_height);
+	const float x0 = tile_origin_x + (static_cast<float>(tile_width) - viewport_width) * 0.5f;
+	const float y0 = tile_origin_y + (static_cast<float>(tile_height) - viewport_height) * 0.5f;
+	const float x1 = x0 + viewport_width;
+	const float y1 = y0 + viewport_height;
 
 	shadow_view_assignment_t assignment{};
 	assignment.parameters = params;
@@ -580,11 +586,11 @@ bool R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
 	assignment.parameters.viewport_rect[3] = y1;
 	assignment.cube_face_offset[0] = x0;
 	assignment.cube_face_offset[1] = y0;
-	assignment.cube_face_offset[2] = static_cast<float>(tile_width);
-	assignment.cube_face_offset[3] = static_cast<float>(tile_height);
+	assignment.cube_face_offset[2] = viewport_width;
+	assignment.cube_face_offset[3] = viewport_height;
 	assignment.atlas_index = static_cast<int>(index);
 	assignment.face = face;
-	assignment.resolution = resolution > 0 ? (std::min)(resolution, (std::min)(tile_width, tile_height)) : (std::min)(tile_width, tile_height);
+	assignment.resolution = sanitized_resolution;
 	assignment.valid = true;
 
 	shadow.assignments[index] = assignment;
