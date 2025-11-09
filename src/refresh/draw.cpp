@@ -377,11 +377,15 @@ static int Ft_MeasureString(FtFont &font, int scale, int flags,
 
 bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
 {
-    if (!ft_library)
+    if (!ft_library) {
+        Com_SetLastError("FreeType library is not initialized");
         return false;
+    }
 
-    if (!image || !filename)
+    if (!image || !filename) {
+        Com_SetLastError("Invalid font parameters");
         return false;
+    }
 
     auto font = std::make_unique<FtFont>();
     font->image = image;
@@ -389,7 +393,7 @@ bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
     byte *buffer = nullptr;
     int length = FS_LoadFile(filename, reinterpret_cast<void **>(&buffer));
     if (length < 0) {
-        Com_SetLastError(va("Failed to load font '%s'", filename));
+        Com_SetLastError(va("Failed to load font '%s': %s", filename, Q_ErrorString(length)));
         return false;
     }
 
@@ -399,7 +403,7 @@ bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
     FT_Face face = nullptr;
     FT_Error err = FT_New_Memory_Face(ft_library, reinterpret_cast<const FT_Byte *>(buffer), length, 0, &face);
     if (err) {
-        Com_SetLastError("FreeType failed to create font face");
+        Com_SetLastError(va("FreeType failed to create font face (%d)", err));
         FS_FreeFile(buffer);
         return false;
     }
@@ -409,7 +413,7 @@ bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
 
     err = FT_Set_Pixel_Sizes(face, 0, font->pixel_height);
     if (err) {
-        Com_SetLastError("FreeType failed to set pixel size");
+        Com_SetLastError(va("FreeType failed to set pixel size (%d)", err));
         FT_Done_Face(face);
         FS_FreeFile(buffer);
         font->face = nullptr;

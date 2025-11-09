@@ -1992,13 +1992,21 @@ static void scr_font_changed(cvar_t* self)
         if (!scr.font_pic)
                 scr.font_pic = SCR_RegisterFontWithFallback(SCR_LEGACY_FONT);
 
-        if (!scr.font_pic) {
-                std::array<char, MAX_OSPATH> lookup_path{};
-                if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size()))
-                        Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
-                else
-                        Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
-        }
+	if (!scr.font_pic) {
+		std::array<char, MAX_OSPATH> lookup_path{};
+		const char *reason = Com_GetLastError();
+		if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size())) {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, self->string, lookup_path.data(), reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
+		} else {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, self->string, reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+		}
+	}
 
 #if USE_FREETYPE
         if (scr.font_pic)
@@ -2233,7 +2241,11 @@ void SCR_Init(void)
 	scr_viewsize = Cvar_Get("viewsize", "100", CVAR_ARCHIVE);
 	scr_showpause = Cvar_Get("scr_showpause", "1", 0);
 	scr_demobar = Cvar_Get("scr_demobar", "1", 0);
-        scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
+#if USE_FREETYPE
+	scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
+#else
+	scr_font = Cvar_Get("scr_font", SCR_LEGACY_FONT, 0);
+#endif
 	scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
 	scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
