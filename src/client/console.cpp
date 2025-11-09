@@ -259,7 +259,11 @@ namespace {
 				Console::instance().checkResize();
 			};
 
+#if USE_FREETYPE
 		font_ = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
+#else
+		font_ = Cvar_Get("con_font", "conchars", 0);
+#endif
 		font_->changed = [](cvar_t* self) {
 			if (cls.ref_initialized)
 				Console::instance().registerMedia();
