@@ -3778,23 +3778,53 @@ static void add_builtin_content(void)
 static void add_game_kpf(unsigned mode, const char *dir)
 {
 #if USE_ZLIB
-    std::array<char, MAX_OSPATH> path;
-    pack_t *pack;
-    searchpath_t *search;
+	std::array<char, MAX_OSPATH> path;
+	std::array<char, MAX_OSPATH> parent_dir{};
+	const char *candidates[2] = { dir, NULL };
+	size_t base_len;
 
-    if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
-        return;
+	if (!dir || !*dir)
+		return;
 
-    pack = load_zip_file(path.data());
-    if (!pack)
-        return;
+	base_len = strlen(BASEGAME);
 
-    search = FS_Malloc(sizeof(*search));
-    search->mode = mode;
-    search->filename[0] = 0;
-    search->pack = pack_get(pack);
-    search->next = fs_searchpaths;
-    fs_searchpaths = search;
+	size_t dir_len = strlen(dir);
+	while (dir_len && (dir[dir_len - 1] == '/' || dir[dir_len - 1] == '\\'))
+		dir_len--;
+
+	if (dir_len >= base_len) {
+		const char *component = dir + dir_len - base_len;
+		if (!Q_stricmp(component, BASEGAME) && (component == dir || component[-1] == '/' || component[-1] == '\\')) {
+			size_t parent_len = (size_t)(component - dir);
+			while (parent_len && (dir[parent_len - 1] == '/' || dir[parent_len - 1] == '\\'))
+				parent_len--;
+			if (parent_len > 0 && parent_len < parent_dir.size()) {
+				memcpy(parent_dir.data(), dir, parent_len);
+				parent_dir[parent_len] = '\0';
+				candidates[1] = parent_dir.data();
+			}
+		}
+	}
+
+	for (int i = 0; i < 2 && candidates[i]; i++) {
+		pack_t *pack;
+		searchpath_t *search;
+
+		if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", candidates[i]) >= path.size())
+			continue;
+
+		pack = load_zip_file(path.data());
+		if (!pack)
+			continue;
+
+		search = FS_Malloc(sizeof(*search));
+		search->mode = mode;
+		search->filename[0] = 0;
+		search->pack = pack_get(pack);
+		search->next = fs_searchpaths;
+		fs_searchpaths = search;
+		return;
+	}
 #endif
 }
 
