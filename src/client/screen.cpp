@@ -195,7 +195,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	if (!fontPath.empty() && (fontPath.front() == '/' || fontPath.front() == '\\'))
 		preferQ2Game = true;
 	if (!preferQ2Game && !normalizedFontPath.empty() &&
-	    !Q_stricmpn(normalizedFontPath.c_str(), "fonts/", CONST_STR_LEN("fonts/")))
+	    !Q_stricmpn(normalizedFontPath.c_str(), CONST_STR_LEN("fonts/")))
 		preferQ2Game = true;
 
 	if (preferQ2Game && !q2FontPath.empty() && q2FontPath.front() != '/')
