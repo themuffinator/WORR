@@ -523,17 +523,6 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
         GLSL(out vec3 v_world_pos;)
-if (bits & GLS_DYNAMIC_LIGHTS) {
-if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights), UBO_DLIGHTS))
-goto fail;
-if (!bind_uniform_block(program, "ClusterParams", sizeof(gls.u_cluster_params), UBO_CLUSTER_PARAMS))
-goto fail;
-if (!bind_uniform_block(program, "LightCluster", sizeof(glClusterLight_t), UBO_CLUSTER_LIGHTS))
-goto fail;
-if (!bind_uniform_block(program, "ShadowItems", sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, UBO_SHADOW_ITEMS))
-goto fail;
-bind_texture_unit(program, "u_shadow_atlas", TMU_SHADOW_ATLAS);
-}
         GLSL(
             Joint joint = u_joints[jointnum];
 

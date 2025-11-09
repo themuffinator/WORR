@@ -154,20 +154,20 @@ float compute_light_bias(const shadow_light_submission_t &light)
 
 float compute_light_shade(const shadow_light_submission_t &light)
 {
-	return std::max(light.intensity, 0.0f);
+	return (std::max)(light.intensity, 0.0f);
 }
 
 float compute_shadow_far_plane(const shadow_light_submission_t &light)
 {
-	return std::max(light.radius, kMinShadowRadius);
+	return (std::max)(light.radius, kMinShadowRadius);
 }
 
 float compute_shadow_near_plane(float far_plane)
 {
-	float near_plane = std::max(far_plane * kNearPlaneFraction, kMinNearPlane);
+	float near_plane = (std::max)(far_plane * kNearPlaneFraction, kMinNearPlane);
 	if (near_plane >= far_plane)
-		near_plane = far_plane * kMaxNearPlaneFraction;
-	return std::max(near_plane, kMinNearPlane);
+	near_plane = far_plane * kMaxNearPlaneFraction;
+	return (std::max)(near_plane, kMinNearPlane);
 }
 
 void build_axis_from_direction(const vec3_t forward_in, const vec3_t up_hint, vec3_t out_axis[3])
@@ -249,9 +249,9 @@ void store_shadow_item(const shadow_view_assignment_t &assignment)
 
 int compute_view_resolution(const shadow_light_submission_t &light)
 {
-	const int base_resolution = std::min(gl_static.shadow.tile_width, gl_static.shadow.tile_height);
+	const int base_resolution = (std::min)(gl_static.shadow.tile_width, gl_static.shadow.tile_height);
 	if (base_resolution <= 0)
-		return 0;
+	return 0;
 	int resolution = light.resolution > 0 ? light.resolution : base_resolution;
 	resolution = std::clamp(resolution, 1, base_resolution);
 	return resolution;
@@ -313,20 +313,26 @@ void render_shadow_views()
 	GLint prev_read_buffer = GL_BACK;
 	GLint prev_fbo = 0;
 	GLint prev_viewport[4] = { 0, 0, 0, 0 };
-	GLboolean prev_color_mask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
+	GLint prev_color_mask_i[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
+	GLint prev_depth_mask_i = GL_TRUE;
+	GLboolean prev_color_mask[4];
 	GLboolean prev_depth_mask = GL_TRUE;
 
 	qglGetIntegerv(GL_DRAW_BUFFER, &prev_draw_buffer);
 	qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 	qglGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_fbo);
 	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
-	qglGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
-	qglGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
+	qglGetIntegerv(GL_COLOR_WRITEMASK, prev_color_mask_i);
+	qglGetIntegerv(GL_DEPTH_WRITEMASK, &prev_depth_mask_i);
+	for (int i = 0; i < 4; ++i)
+	prev_color_mask[i] = prev_color_mask_i[i] ? GL_TRUE : GL_FALSE;
+	prev_depth_mask = prev_depth_mask_i ? GL_TRUE : GL_FALSE;
 
 	const bool prev_framebuffer_bound = glr.framebuffer_bound;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadow.framebuffer);
-	qglDrawBuffer(GL_NONE);
+	const GLenum no_buffers = GL_NONE;
+	qglDrawBuffers(1, &no_buffers);
 	qglReadBuffer(GL_NONE);
 	qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 	qglDepthMask(GL_TRUE);
@@ -400,7 +406,8 @@ gl_backend->load_matrix(GL_PROJECTION, glr.projmatrix, gl_identity);
 GL_ForceMatrix(gl_identity, glr.viewmatrix);
 
 qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-	qglDrawBuffer(prev_draw_buffer);
+	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
+	qglDrawBuffers(1, &prev_draw_buffer_enum);
 	qglReadBuffer(prev_read_buffer);
 	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	qglColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
@@ -513,7 +520,7 @@ bool R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
 	assignment.cube_face_offset[3] = static_cast<float>(tile_height);
 	assignment.atlas_index = static_cast<int>(index);
 	assignment.face = face;
-	assignment.resolution = resolution > 0 ? std::min(resolution, std::min(tile_width, tile_height)) : std::min(tile_width, tile_height);
+	assignment.resolution = resolution > 0 ? (std::min)(resolution, (std::min)(tile_width, tile_height)) : (std::min)(tile_width, tile_height);
 	assignment.valid = true;
 
 	shadow.assignments[index] = assignment;
@@ -544,7 +551,7 @@ void R_RenderShadowViews(void)
 
 	std::memset(gls.shadow_items.data(), 0, gls.shadow_items.size() * sizeof(glShadowItem_t));
 	g_render_views.clear();
-	g_render_views.reserve(std::min(kMaxShadowViews, gls.shadow_items.size()));
+	g_render_views.reserve((std::min)(kMaxShadowViews, gls.shadow_items.size()));
 
 	size_t light_count = 0;
 	const shadow_light_submission_t *lights = R_GetQueuedShadowLights(&light_count);

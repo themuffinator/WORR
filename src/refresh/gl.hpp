@@ -514,6 +514,7 @@ extern cvar_t *gl_dof_quality;
 // development variables
 extern cvar_t *gl_znear;
 extern cvar_t *gl_drawsky;
+extern cvar_t *gl_drawworld;
 extern cvar_t *gl_showtris;
 #if USE_DEBUG
 extern cvar_t *gl_nobind;
@@ -1286,6 +1287,8 @@ void GL_AddSolidFace(mface_t *face);
 void GL_DrawAlphaFaces(void);
 void GL_DrawSolidFaces(void);
 void GL_ClearSolidFaces(void);
+void GL_ClassifyEntities(void);
+void GL_DrawEntities(entity_t *ent);
 
 /*
  * gl_world.c
