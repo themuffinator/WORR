@@ -2003,20 +2003,23 @@ static void scr_font_changed(cvar_t* self)
 	}
 
 	if (!scr.font_pic) {
+		const char* reason = Com_GetLastError();
 		std::array<char, MAX_OSPATH> lookup_path{};
-		const char *reason = Com_GetLastError();
-		if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size())) {
+		const char* reportFont = lastAttempt;
+		if (!reportFont || !*reportFont)
+			reportFont = self->string[0] ? self->string : SCR_LEGACY_FONT;
+
+		if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
 			if (reason && reason[0])
-				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, self->string, lookup_path.data(), reason);
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, reportFont, lookup_path.data(), reason);
 			else
-				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, reportFont, lookup_path.data());
 		} else {
 			if (reason && reason[0])
-				Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, self->string, reason);
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, reportFont, reason);
 			else
-				Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, reportFont);
 		}
-	}
 
 #if USE_FREETYPE
 		SCR_LoadDefaultFreeTypeFont();
@@ -2024,24 +2027,6 @@ static void scr_font_changed(cvar_t* self)
 			scr_text_backend_changed(scr_text_backend);
 #endif
 		return;
-	}
-
-	const char* reason = Com_GetLastError();
-	std::array<char, MAX_OSPATH> lookup_path{};
-	const char* reportFont = lastAttempt;
-	if (!reportFont || !*reportFont)
-		reportFont = self->string[0] ? self->string : SCR_LEGACY_FONT;
-
-	if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
-		if (reason && reason[0])
-			Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, reportFont, lookup_path.data(), reason);
-		else
-			Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, reportFont, lookup_path.data());
-	} else {
-		if (reason && reason[0])
-			Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, reportFont, reason);
-		else
-			Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, reportFont);
 	}
 }
 
