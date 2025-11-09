@@ -1409,6 +1409,59 @@ fail:
     return ret;
 }
 
+static bool is_q2game_pack(const pack_t *pack)
+{
+	if (!pack || !pack->filename[0])
+		return false;
+
+	const char *base = COM_SkipPath(pack->filename);
+	return base && !Q_stricmp(base, "Q2Game.kpf");
+}
+
+static int64_t open_file_read_q2game(file_t *file, const char *normalized, size_t namelen)
+{
+	searchpath_t *search;
+	unsigned hash;
+	packfile_t *entry;
+
+	if (!namelen)
+		return Q_ERR_INVALID_PATH;
+
+	if ((file->mode & FS_TYPE_MASK) == FS_TYPE_REAL)
+		return Q_ERR(ENOENT);
+
+	if (namelen >= MAX_QPATH)
+		return Q_ERR(ENOENT);
+
+	FS_COUNT_READ;
+	hash = FS_HashPath(normalized, 0);
+
+	for (search = fs_searchpaths; search; search = search->next) {
+		pack_t *pak = search->pack;
+
+		if (!pak)
+			continue;
+		if (!is_q2game_pack(pak))
+			continue;
+		if ((file->mode & search->mode & FS_PATH_MASK) == 0 ||
+		    (file->mode & search->mode & FS_DIR_MASK) == 0) {
+			continue;
+		}
+
+		entry = pak->file_hash[hash & (pak->hash_size - 1)];
+		for (; entry; entry = entry->hash_next) {
+			if (entry->namelen != namelen)
+				continue;
+			FS_COUNT_STRCMP;
+			if (!FS_pathcmp(pak->names + entry->nameofs, normalized))
+				return open_from_pack(file, pak, entry);
+		}
+	}
+
+	return Q_ERR(ENOENT);
+}
+
+
 // Finds the file in the search path.
 // Fills file_t and returns file length.
 // Used for streaming data out of either a pak file or a separate file.
@@ -1508,33 +1561,48 @@ fail:
 // Normalizes quake path, expands symlinks
 static int64_t expand_open_file_read(file_t *file, const char *name)
 {
-    std::array<char, MAX_OSPATH> normalized;
-    int64_t     ret;
-    size_t      namelen;
+	std::array<char, MAX_OSPATH> normalized;
+	int64_t	ret;
+	size_t		namelen;
+	bool		prefer_q2game = false;
 
-// normalize path
-    namelen = FS_NormalizePathBuffer(normalized.data(), name, normalized.size());
-    if (namelen >= normalized.size()) {
-        return Q_ERR(ENAMETOOLONG);
-    }
+	if (name && name[0] == '/' && (file->mode & FS_TYPE_MASK) != FS_TYPE_REAL)
+		prefer_q2game = true;
 
-// expand hard symlinks
-    if (expand_links(&fs_hard_links, normalized.data(), &namelen) && namelen >= normalized.size()) {
-        return Q_ERR(ENAMETOOLONG);
-    }
+	// normalize path
+	namelen = FS_NormalizePathBuffer(normalized.data(), name, normalized.size());
+	if (namelen >= normalized.size()) {
+		return Q_ERR(ENAMETOOLONG);
+	}
 
-    ret = open_file_read(file, normalized.data(), namelen);
-    if (ret == Q_ERR(ENOENT)) {
-// expand soft symlinks
-        if (expand_links(&fs_soft_links, normalized.data(), &namelen)) {
-            if (namelen >= normalized.size()) {
-                return Q_ERR(ENAMETOOLONG);
-            }
-            ret = open_file_read(file, normalized.data(), namelen);
-        }
-    }
+	// expand hard symlinks
+	if (expand_links(&fs_hard_links, normalized.data(), &namelen) && namelen >= normalized.size()) {
+		return Q_ERR(ENAMETOOLONG);
+	}
 
-    return ret;
+	if (prefer_q2game) {
+		ret = open_file_read_q2game(file, normalized.data(), namelen);
+		if (ret != Q_ERR(ENOENT))
+			return ret;
+	}
+
+	ret = open_file_read(file, normalized.data(), namelen);
+	if (ret == Q_ERR(ENOENT)) {
+		// expand soft symlinks
+		if (expand_links(&fs_soft_links, normalized.data(), &namelen)) {
+			if (namelen >= normalized.size()) {
+				return Q_ERR(ENAMETOOLONG);
+			}
+			if (prefer_q2game) {
+				ret = open_file_read_q2game(file, normalized.data(), namelen);
+				if (ret != Q_ERR(ENOENT))
+					return ret;
+			}
+			ret = open_file_read(file, normalized.data(), namelen);
+		}
+	}
+
+	return ret;
 }
 
 static int read_pak_file(file_t *file, void *buf, size_t len)
@@ -3783,14 +3851,14 @@ static bool add_game_kpf_candidate(unsigned mode, const char *dir)
 	searchpath_t *search;
 
 	if (!dir || !*dir)
-	return false;
+		return false;
 
 	if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
-	return false;
+		return false;
 
 	pack = load_zip_file(path.data());
 	if (!pack)
-	return false;
+		return false;
 
 	search = FS_Malloc(sizeof(*search));
 	search->mode = mode;
@@ -3806,20 +3874,20 @@ static bool get_parent_directory(std::array<char, MAX_OSPATH> &parent, const cha
 	size_t len;
 
 	if (!dir || !*dir)
-	return false;
+		return false;
 
 	len = Q_strlcpy(parent.data(), dir, parent.size());
 	if (!len || len >= parent.size())
-	return false;
+		return false;
 
 	while (len && (parent[len - 1] == '/' || parent[len - 1] == '\\'))
-	parent[--len] = '\0';
+		parent[--len] = '\0';
 
 	while (len && parent[len - 1] != '/' && parent[len - 1] != '\\')
-	parent[--len] = '\0';
+		parent[--len] = '\0';
 
 	while (len && (parent[len - 1] == '/' || parent[len - 1] == '\\'))
-	parent[--len] = '\0';
+		parent[--len] = '\0';
 
 	return len > 0;
 }
@@ -3828,52 +3896,28 @@ static bool get_parent_directory(std::array<char, MAX_OSPATH> &parent, const cha
 static void add_game_kpf(unsigned mode, const char *dir)
 {
 #if USE_ZLIB
-	std::array<char, MAX_OSPATH> path;
 	std::array<char, MAX_OSPATH> parent_dir{};
-	const char *candidates[2] = { dir, NULL };
-	size_t base_len;
+	std::array<char, MAX_OSPATH> reroot{};
+	const char *candidates[4] = { NULL, NULL, NULL, NULL };
+	int count = 0;
 
 	if (!dir || !*dir)
 		return;
 
-	base_len = strlen(BASEGAME);
+	candidates[count++] = dir;
 
-	size_t dir_len = strlen(dir);
-	while (dir_len && (dir[dir_len - 1] == '/' || dir[dir_len - 1] == '\\'))
-		dir_len--;
+	if (Q_concat(reroot.data(), reroot.size(), dir, "/rerelease") < reroot.size())
+		candidates[count++] = reroot.data();
 
-	if (dir_len >= base_len) {
-		const char *component = dir + dir_len - base_len;
-		if (!Q_stricmp(component, BASEGAME) && (component == dir || component[-1] == '/' || component[-1] == '\\')) {
-			size_t parent_len = (size_t)(component - dir);
-			while (parent_len && (dir[parent_len - 1] == '/' || dir[parent_len - 1] == '\\'))
-				parent_len--;
-			if (parent_len > 0 && parent_len < parent_dir.size()) {
-				memcpy(parent_dir.data(), dir, parent_len);
-				parent_dir[parent_len] = '\0';
-				candidates[1] = parent_dir.data();
-			}
-		}
+	if (get_parent_directory(parent_dir, dir)) {
+		candidates[count++] = parent_dir.data();
+		if (Q_concat(reroot.data(), reroot.size(), parent_dir.data(), "/rerelease") < reroot.size())
+			candidates[count++] = reroot.data();
 	}
 
-	for (int i = 0; i < 2 && candidates[i]; i++) {
-		pack_t *pack;
-		searchpath_t *search;
-
-		if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", candidates[i]) >= path.size())
-			continue;
-
-		pack = load_zip_file(path.data());
-		if (!pack)
-			continue;
-
-		search = FS_Malloc(sizeof(*search));
-		search->mode = mode;
-		search->filename[0] = 0;
-		search->pack = pack_get(pack);
-		search->next = fs_searchpaths;
-		fs_searchpaths = search;
-		return;
+	for (int i = 0; i < count; i++) {
+		if (add_game_kpf_candidate(mode, candidates[i]))
+			return;
 	}
 #endif
 }
