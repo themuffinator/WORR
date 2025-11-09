@@ -559,7 +559,7 @@ bool R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
 	if (shadow.view_count >= kMaxShadowViews || shadow.view_count >= max_tiles)
 		return false;
 
-	const size_t index = shadow.view_count++;
+	const size_t index = shadow.view_count;
 	const int tile_width = shadow.tile_width;
 	const int tile_height = shadow.tile_height;
 	if (tile_width <= 0 || tile_height <= 0)
@@ -594,6 +594,7 @@ bool R_ShadowAtlasAllocateView(const shadow_view_parameters_t &params,
 	assignment.valid = true;
 
 	shadow.assignments[index] = assignment;
+	shadow.view_count = index + 1;
 
 	if (out_assignment)
 		*out_assignment = assignment;
