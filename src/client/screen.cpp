@@ -1967,7 +1967,7 @@ static void scr_font_changed(cvar_t* self)
 	}
 
 	const char* loadedName = nullptr;
-	const char* reportFont = nullptr;
+	const char* lastAttempt = nullptr;
 	bool attemptedLegacy = false;
 	std::array<const char*, 2> attempts{ self->string, nullptr };
 	size_t attemptCount = 1;
@@ -1985,7 +1985,7 @@ static void scr_font_changed(cvar_t* self)
 		if (!Q_stricmp(candidate, SCR_LEGACY_FONT))
 			attemptedLegacy = true;
 
-		reportFont = candidate;
+		lastAttempt = candidate;
 		qhandle_t handle = R_RegisterFont(candidate);
 		if (handle) {
 			scr.font_pic = handle;
@@ -1995,16 +1995,28 @@ static void scr_font_changed(cvar_t* self)
 	}
 
 	if (!scr.font_pic && !attemptedLegacy) {
-		reportFont = SCR_LEGACY_FONT;
+		lastAttempt = SCR_LEGACY_FONT;
 		scr.font_pic = R_RegisterFont(SCR_LEGACY_FONT);
 		if (scr.font_pic)
 			loadedName = SCR_LEGACY_FONT;
 		attemptedLegacy = true;
 	}
 
-	if (scr.font_pic) {
-		if (loadedName && Q_stricmp(self->string, loadedName))
-			Cvar_Set(self->name, loadedName);
+	if (!scr.font_pic) {
+		std::array<char, MAX_OSPATH> lookup_path{};
+		const char *reason = Com_GetLastError();
+		if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size())) {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, self->string, lookup_path.data(), reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
+		} else {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, self->string, reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+		}
+	}
 
 #if USE_FREETYPE
 		SCR_LoadDefaultFreeTypeFont();
@@ -2016,6 +2028,7 @@ static void scr_font_changed(cvar_t* self)
 
 	const char* reason = Com_GetLastError();
 	std::array<char, MAX_OSPATH> lookup_path{};
+	const char* reportFont = lastAttempt;
 	if (!reportFont || !*reportFont)
 		reportFont = self->string[0] ? self->string : SCR_LEGACY_FONT;
 
