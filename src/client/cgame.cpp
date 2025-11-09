@@ -150,7 +150,11 @@ static cgame_q2pro_extended_support_ext_t cgame_q2pro_extended_support = CGX_Cre
 void CG_Init(void)
 {
 	scr_alpha = Cvar_Get("scr_alpha", "1", 0);
-        scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
+#if USE_FREETYPE
+	scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
+#else
+	scr_font = Cvar_Get("scr_font", CG_LEGACY_FONT, 0);
+#endif
 	scr_font->changed = scr_font_changed;
 	scr_font_changed(scr_font);
 }
