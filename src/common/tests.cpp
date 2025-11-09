@@ -900,6 +900,54 @@ static void UTF8_Test_f(void)
 }
 #endif
 
+#if USE_CLIENT || USE_MVD_CLIENT
+static void Com_TimespecTest_f(void)
+{
+	struct timespec_case {
+		const char *input;
+		bool expected_result;
+		int expected_frames;
+	};
+	static const timespec_case cases[] = {
+		{ "1", true, 10 },
+		{ "1.5", true, 15 },
+		{ "2:03", true, 1230 },
+		{ "3:04.5", true, 1845 },
+		{ "1.50", false, 0 },
+		{ "1.", false, 0 },
+		{ "1:60", false, 0 },
+		{ "1:02.34", false, 0 },
+		{ "1:02.", false, 0 },
+	};
+
+	bool ok = true;
+	int frames = 0;
+
+	for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		bool result = Com_ParseTimespec(cases[i].input, &frames);
+		if (result != cases[i].expected_result || (result && frames != cases[i].expected_frames)) {
+			char expect_buf[32];
+			char actual_buf[32];
+			const char *expect_status = cases[i].expected_result ? "success" : "failure";
+			const char *actual_status = result ? "success" : "failure";
+			if (cases[i].expected_result)
+				Q_snprintf(expect_buf, sizeof(expect_buf), " (%d frames)", cases[i].expected_frames);
+			else
+				expect_buf[0] = '\0';
+			if (result)
+				Q_snprintf(actual_buf, sizeof(actual_buf), " (%d frames)", frames);
+			else
+				actual_buf[0] = '\0';
+			Com_Printf("Com_ParseTimespec(\"%s\") expected %s%s, got %s%s\n", cases[i].input, expect_status, expect_buf, actual_status, actual_buf);
+			ok = false;
+		}
+	}
+
+	if (ok)
+		Com_Printf("Com_ParseTimespec tests passed\n");
+}
+#endif
+
 static const cmdreg_t c_test[] = {
     { "error", Com_Error_f },
     { "errordrop", Com_ErrorDrop_f },
@@ -920,6 +968,9 @@ static const cmdreg_t c_test[] = {
     { "soundtest", Com_TestSounds_f },
     { "activate", Com_Activate_f },
     { "utf8test", UTF8_Test_f },
+#endif
+#if USE_CLIENT || USE_MVD_CLIENT
+	{ "timespectest", Com_TimespecTest_f },
 #endif
     { "mdfourtest", Com_MdfourTest_f },
     { "mdfoursum", Com_MdfourSum_f },

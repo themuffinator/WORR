@@ -336,42 +336,49 @@ Does not check for integer overflow...
 */
 bool Com_ParseTimespec(const char *s, int *frames)
 {
-    unsigned long c1, c2, c3;
-    char *p;
+	unsigned long c1, c2;
+	char *p;
 
-    c1 = strtoul(s, &p, 10);
-    if (!*p) {
-        *frames = c1 * 10; // sec
-        return true;
-    }
+	c1 = strtoul(s, &p, 10);
+	if (p == s)
+		return false;
 
-    if (*p == '.') {
-        c2 = strtoul(p + 1, &p, 10);
-        if (*p)
-            return false;
-        *frames = c1 * 10 + c2; // sec.frac
-        return true;
-    }
+	if (!*p) {
+		*frames = c1 * 10; // sec
+		return true;
+	}
 
-    if (*p == ':') {
-        c2 = strtoul(p + 1, &p, 10);
-        if (!*p) {
-            *frames = c1 * 600 + c2 * 10; // min:sec
-            return true;
-        }
+	if (*p == '.') {
+		const char *frac = p + 1;
+		if (!Q_isdigit(*frac) || frac[1])
+			return false;
+		*frames = c1 * 10 + (*frac - '0'); // sec.frac
+		return true;
+	}
 
-        if (*p == '.') {
-            c3 = strtoul(p + 1, &p, 10);
-            if (*p)
-                return false;
-            *frames = c1 * 600 + c2 * 10 + c3; // min:sec.frac
-            return true;
-        }
+	if (*p != ':')
+		return false;
 
-        return false;
-    }
+	const char *sec_start = p + 1;
+	if (!Q_isdigit(*sec_start))
+		return false;
+	c2 = strtoul(sec_start, &p, 10);
+	if (p == sec_start || c2 >= 60)
+		return false;
 
-    return false;
+	if (!*p) {
+		*frames = c1 * 600 + c2 * 10; // min:sec
+		return true;
+	}
+
+	if (*p != '.')
+		return false;
+
+	const char *frac = p + 1;
+	if (!Q_isdigit(*frac) || frac[1])
+		return false;
+	*frames = c1 * 600 + c2 * 10 + (*frac - '0'); // min:sec.frac
+	return true;
 }
 #endif
 
