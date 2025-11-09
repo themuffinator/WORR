@@ -2002,9 +2002,21 @@ static void scr_font_changed(cvar_t* self)
 		attemptedLegacy = true;
 	}
 
-	if (scr.font_pic) {
-		if (loadedName && Q_stricmp(self->string, loadedName))
-			Cvar_Set(self->name, loadedName);
+	if (!scr.font_pic) {
+		std::array<char, MAX_OSPATH> lookup_path{};
+		const char *reason = Com_GetLastError();
+		if (SCR_BuildFontLookupPath(self->string, lookup_path.data(), lookup_path.size())) {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, self->string, lookup_path.data(), reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, self->string, lookup_path.data());
+		} else {
+			if (reason && reason[0])
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, self->string, reason);
+			else
+				Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, self->string);
+		}
+	}
 
 #if USE_FREETYPE
 		SCR_LoadDefaultFreeTypeFont();
