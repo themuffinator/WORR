@@ -3775,26 +3775,68 @@ static void add_builtin_content(void)
 }
 
 // game needs this for localized map messages
+#if USE_ZLIB
+static bool add_game_kpf_candidate(unsigned mode, const char *dir)
+{
+	std::array<char, MAX_OSPATH> path{};
+	pack_t *pack;
+	searchpath_t *search;
+
+	if (!dir || !*dir)
+	return false;
+
+	if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
+	return false;
+
+	pack = load_zip_file(path.data());
+	if (!pack)
+	return false;
+
+	search = FS_Malloc(sizeof(*search));
+	search->mode = mode;
+	search->filename[0] = 0;
+	search->pack = pack_get(pack);
+	search->next = fs_searchpaths;
+	fs_searchpaths = search;
+	return true;
+}
+
+static bool get_parent_directory(std::array<char, MAX_OSPATH> &parent, const char *dir)
+{
+	size_t len;
+
+	if (!dir || !*dir)
+	return false;
+
+	len = Q_strlcpy(parent.data(), dir, parent.size());
+	if (!len || len >= parent.size())
+	return false;
+
+	while (len && (parent[len - 1] == '/' || parent[len - 1] == '\\'))
+	parent[--len] = '\0';
+
+	while (len && parent[len - 1] != '/' && parent[len - 1] != '\\')
+	parent[--len] = '\0';
+
+	while (len && (parent[len - 1] == '/' || parent[len - 1] == '\\'))
+	parent[--len] = '\0';
+
+	return len > 0;
+}
+#endif
+
 static void add_game_kpf(unsigned mode, const char *dir)
 {
 #if USE_ZLIB
-    std::array<char, MAX_OSPATH> path;
-    pack_t *pack;
-    searchpath_t *search;
+	std::array<char, MAX_OSPATH> parent{};
 
-    if (Q_snprintf(path.data(), path.size(), "%s/Q2Game.kpf", dir) >= path.size())
-        return;
+	if (add_game_kpf_candidate(mode, dir))
+	return;
 
-    pack = load_zip_file(path.data());
-    if (!pack)
-        return;
+	if (!get_parent_directory(parent, dir))
+	return;
 
-    search = FS_Malloc(sizeof(*search));
-    search->mode = mode;
-    search->filename[0] = 0;
-    search->pack = pack_get(pack);
-    search->next = fs_searchpaths;
-    fs_searchpaths = search;
+	add_game_kpf_candidate(mode, parent.data());
 #endif
 }
 
