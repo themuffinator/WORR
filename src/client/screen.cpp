@@ -1929,68 +1929,78 @@ void SCR_ModeChanged(void)
 }
 
 namespace {
-        constexpr const char* SCR_LEGACY_FONT = "conchars";
+	constexpr const char* SCR_LEGACY_FONT = "conchars";
 
-        static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
-        {
-                if (!font_name || !*font_name || !size)
-                        return false;
+	static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
+	{
+		if (!font_name || !*font_name || !size)
+			return false;
 
-                std::array<char, MAX_QPATH> quake_path{};
-                size_t len = 0;
+		std::array<char, MAX_QPATH> quake_path{};
+		size_t len = 0;
 
-                if (font_name[0] == '/' || font_name[0] == '\\')
-                        len = FS_NormalizePathBuffer(quake_path.data(), font_name + 1, quake_path.size());
-                else
-                        len = Q_concat(quake_path.data(), quake_path.size(), "pics/", font_name);
+		if (font_name[0] == '/' || font_name[0] == '\\')
+			len = FS_NormalizePathBuffer(quake_path.data(), font_name + 1, quake_path.size());
+		else
+			len = Q_concat(quake_path.data(), quake_path.size(), "pics/", font_name);
 
-                if (!len || len >= quake_path.size())
-                        return false;
+		if (!len || len >= quake_path.size())
+			return false;
 
-                len = COM_DefaultExtension(quake_path.data(), ".pcx", quake_path.size());
-                if (len >= quake_path.size())
-                        return false;
+		len = COM_DefaultExtension(quake_path.data(), ".pcx", quake_path.size());
+		if (len >= quake_path.size())
+			return false;
 
-                const int written = Q_snprintf(buffer, size, "%s/%s", fs_gamedir, quake_path.data());
-                if (written < 0 || static_cast<size_t>(written) >= size)
-                        return false;
+		const int written = Q_snprintf(buffer, size, "%s/%s", fs_gamedir, quake_path.data());
+		if (written < 0 || static_cast<size_t>(written) >= size)
+			return false;
 
-                return true;
-        }
-
-        static qhandle_t SCR_RegisterFontWithFallback(const char* name)
-        {
-                if (!name || !*name)
-                        return 0;
-
-                qhandle_t handle = R_RegisterFont(name);
-                if (handle)
-                        return handle;
-
-                if (Q_stricmp(name, SCR_LEGACY_FONT))
-                        return R_RegisterFont(SCR_LEGACY_FONT);
-
-                return 0;
-        }
+		return true;
+	}
 } // namespace
 
 static void scr_font_changed(cvar_t* self)
 {
-        scr.font_pic = R_RegisterFont(self->string);
+	if (!cls.ref_initialized) {
+		scr.font_pic = 0;
+		return;
+	}
 
-        if (!scr.font_pic && strcmp(self->string, self->default_string)) {
-                Cvar_Reset(self);
-                scr.font_pic = R_RegisterFont(self->default_string);
-        }
+	const char* loadedName = nullptr;
+	const char* lastAttempt = nullptr;
+	bool attemptedLegacy = false;
+	std::array<const char*, 2> attempts{ self->string, nullptr };
+	size_t attemptCount = 1;
 
-        if (!scr.font_pic && Q_stricmp(self->default_string, SCR_LEGACY_FONT)) {
-                scr.font_pic = SCR_RegisterFontWithFallback(self->default_string);
-                if (scr.font_pic && Q_stricmp(self->string, SCR_LEGACY_FONT))
-                        Cvar_Set(self->name, SCR_LEGACY_FONT);
-        }
+	if (self->default_string && Q_stricmp(self->default_string, self->string))
+		attempts[attemptCount++] = self->default_string;
 
-        if (!scr.font_pic)
-                scr.font_pic = SCR_RegisterFontWithFallback(SCR_LEGACY_FONT);
+	scr.font_pic = 0;
+
+	for (size_t i = 0; i < attemptCount; ++i) {
+		const char* candidate = attempts[i];
+		if (!candidate || !*candidate)
+			continue;
+
+		if (!Q_stricmp(candidate, SCR_LEGACY_FONT))
+			attemptedLegacy = true;
+
+		lastAttempt = candidate;
+		qhandle_t handle = R_RegisterFont(candidate);
+		if (handle) {
+			scr.font_pic = handle;
+			loadedName = candidate;
+			break;
+		}
+	}
+
+	if (!scr.font_pic && !attemptedLegacy) {
+		lastAttempt = SCR_LEGACY_FONT;
+		scr.font_pic = R_RegisterFont(SCR_LEGACY_FONT);
+		if (scr.font_pic)
+			loadedName = SCR_LEGACY_FONT;
+		attemptedLegacy = true;
+	}
 
 	if (!scr.font_pic) {
 		std::array<char, MAX_OSPATH> lookup_path{};
@@ -2009,11 +2019,30 @@ static void scr_font_changed(cvar_t* self)
 	}
 
 #if USE_FREETYPE
-        if (scr.font_pic)
-                SCR_LoadDefaultFreeTypeFont();
-        if (scr_text_backend)
-                scr_text_backend_changed(scr_text_backend);
+		SCR_LoadDefaultFreeTypeFont();
+		if (scr_text_backend)
+			scr_text_backend_changed(scr_text_backend);
 #endif
+		return;
+	}
+
+	const char* reason = Com_GetLastError();
+	std::array<char, MAX_OSPATH> lookup_path{};
+	const char* reportFont = lastAttempt;
+	if (!reportFont || !*reportFont)
+		reportFont = self->string[0] ? self->string : SCR_LEGACY_FONT;
+
+	if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
+		if (reason && reason[0])
+			Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s'): %s", __func__, reportFont, lookup_path.data(), reason);
+		else
+			Com_Error(ERR_FATAL, "%s: failed to load font '%s' (looked for '%s')", __func__, reportFont, lookup_path.data());
+	} else {
+		if (reason && reason[0])
+			Com_Error(ERR_FATAL, "%s: failed to load font '%s': %s", __func__, reportFont, reason);
+		else
+			Com_Error(ERR_FATAL, "%s: failed to load font '%s'", __func__, reportFont);
+	}
 }
 
 /*
