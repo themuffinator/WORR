@@ -613,7 +613,7 @@ static void GL_OccludeFlares(void)
         qglColorMask(1, 1, 1, 1);
 }
 
-static void GL_ClassifyEntities(void)
+void GL_ClassifyEntities(void)
 {
     entity_t *ent;
     int i;
@@ -663,7 +663,7 @@ static void GL_ClassifyEntities(void)
     }
 }
 
-static void GL_DrawEntities(entity_t *ent)
+void GL_DrawEntities(entity_t *ent)
 {
     model_t *model;
 
