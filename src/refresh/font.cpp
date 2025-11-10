@@ -194,7 +194,7 @@ static FtAtlasPlacement Ft_AllocateAtlasSpace(FtFontSize &fontSize, int width, i
 		placement.y = atlas.pen_y;
 
 		atlas.pen_x += width + FT_GLYPH_PADDING;
-		atlas.row_height = std::max(atlas.row_height, height + FT_GLYPH_PADDING);
+		atlas.row_height = (std::max)(atlas.row_height, height + FT_GLYPH_PADDING);
 
 		return placement;
 	};
@@ -410,8 +410,8 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 	if (!s)
 		return x;
 
-	const int base_height = std::max(fontSize.pixel_height, 1);
-	const float target_height = CONCHAR_HEIGHT * std::max(scale, 1);
+	const int base_height = (std::max)(fontSize.pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * (std::max)(scale, 1);
 	const float scale_factor = target_height / static_cast<float>(base_height);
 	const float line_advance = (fontSize.line_height ? fontSize.line_height : base_height) * scale_factor;
 	const float ascent = (fontSize.ascent ? fontSize.ascent : base_height) * scale_factor;
@@ -424,7 +424,7 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 	bool have_prev_glyph = false;
 
 	const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
-	const int shadow_offset = drop_shadow ? std::max(scale, 1) : 0;
+	const int shadow_offset = drop_shadow ? (std::max)(scale, 1) : 0;
 
 	color_t currentColor = color;
 	color_t shadow_color = ColorA(currentColor.a);
@@ -511,8 +511,8 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 	if (!s)
 		return 0;
 
-	const int base_height = std::max(fontSize.pixel_height, 1);
-	const float target_height = CONCHAR_HEIGHT * std::max(scale, 1);
+	const int base_height = (std::max)(fontSize.pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * (std::max)(scale, 1);
 	const float scale_factor = target_height / static_cast<float>(base_height);
 	float pen_x = 0.0f;
 	float max_pen_x = 0.0f;
@@ -538,7 +538,7 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 			break;
 
 		if ((flags & UI_MULTILINE) && codepoint == '\n') {
-			max_pen_x = std::max(max_pen_x, pen_x);
+			max_pen_x = (std::max)(max_pen_x, pen_x);
 			pen_x = 0.0f;
 			have_prev_glyph = false;
 			prev_glyph_index = 0;
@@ -566,7 +566,7 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 		pen_x += glyph->advance * scale_factor;
 	}
 
-	max_pen_x = std::max(max_pen_x, pen_x);
+	max_pen_x = (std::max)(max_pen_x, pen_x);
 
 	return static_cast<int>(std::lround(max_pen_x));
 }
@@ -835,7 +835,7 @@ int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
 		char ch = *string++;
 
 		if ((flags & UI_MULTILINE) && ch == '\n') {
-			maxWidth = std::max(maxWidth, width);
+			maxWidth = (std::max)(maxWidth, width);
 			width = 0;
 			continue;
 		}
@@ -843,7 +843,7 @@ int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
 		width += CONCHAR_WIDTH * scale;
 	}
 
-	return std::max(maxWidth, width);
+	return (std::max)(maxWidth, width);
 }
 
 float R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont)
@@ -853,15 +853,15 @@ float R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont)
 		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
 	if (!ft_font)
-		return CONCHAR_HEIGHT * std::max(scale, 1);
+		return CONCHAR_HEIGHT * (std::max)(scale, 1);
 
 	int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
 	FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
 	if (!fontSize)
-		return CONCHAR_HEIGHT * std::max(scale, 1);
+		return CONCHAR_HEIGHT * (std::max)(scale, 1);
 
-	const int base_height = std::max(fontSize->pixel_height, 1);
-	const float target_height = CONCHAR_HEIGHT * std::max(scale, 1);
+	const int base_height = (std::max)(fontSize->pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * (std::max)(scale, 1);
 	const float line_height = (fontSize->line_height ? fontSize->line_height : base_height) * (target_height / static_cast<float>(base_height));
 	return line_height;
 }
