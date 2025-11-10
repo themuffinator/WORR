@@ -1587,6 +1587,15 @@ static int64_t expand_open_file_read(file_t *file, const char *name)
 	}
 
 	ret = open_file_read(file, normalized.data(), namelen);
+	if (ret == Q_ERR(ENOENT) && prefer_q2game) {
+		std::array<char, MAX_QPATH> q2game_path{};
+		size_t pref_len = Q_concat(q2game_path.data(), q2game_path.size(), "Q2Game/", normalized.data());
+		if (pref_len < q2game_path.size()) {
+			int64_t alt = open_file_read(file, q2game_path.data(), pref_len);
+			if (alt != Q_ERR(ENOENT))
+				return alt;
+		}
+	}
 	if (ret == Q_ERR(ENOENT)) {
 		// expand soft symlinks
 		if (expand_links(&fs_soft_links, normalized.data(), &namelen)) {
@@ -1599,6 +1608,15 @@ static int64_t expand_open_file_read(file_t *file, const char *name)
 					return ret;
 			}
 			ret = open_file_read(file, normalized.data(), namelen);
+			if (ret == Q_ERR(ENOENT) && prefer_q2game) {
+				std::array<char, MAX_QPATH> q2game_path{};
+				size_t pref_len = Q_concat(q2game_path.data(), q2game_path.size(), "Q2Game/", normalized.data());
+				if (pref_len < q2game_path.size()) {
+					int64_t alt = open_file_read(file, q2game_path.data(), pref_len);
+					if (alt != Q_ERR(ENOENT))
+						return alt;
+				}
+			}
 		}
 	}
 
@@ -1824,13 +1842,13 @@ int FS_Write(const void *buf, size_t len, qhandle_t f)
 
 static unsigned default_lookup_flags(unsigned flags)
 {
-    if (!(flags & FS_PATH_MASK) || !fs_game->string[0])
-        flags |= FS_PATH_MASK;
+	if (!(flags & FS_PATH_MASK))
+		flags |= FS_PATH_BASE | FS_PATH_GAME;
 
-    if (!(flags & FS_DIR_MASK) || !sys_homedir->string[0])
-        flags |= FS_DIR_MASK;
+	if (!(flags & FS_DIR_MASK) || !sys_homedir->string[0])
+		flags |= FS_DIR_MASK;
 
-    return flags;
+	return flags;
 }
 
 /*
