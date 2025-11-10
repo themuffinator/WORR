@@ -177,11 +177,9 @@ static FtAtlasPlacement Ft_AllocateAtlasSpace(FtFontSize &fontSize, int width, i
 	if (width <= 0 || height <= 0)
 		return {};
 
-	for (size_t i = 0; i < fontSize.atlases.size(); ++i) {
-		FtAtlas &atlas = fontSize.atlases[i];
-
+	auto tryAllocate = [&](FtAtlas &atlas, int index) -> FtAtlasPlacement {
 		if (width + FT_GLYPH_PADDING > atlas.width || height + FT_GLYPH_PADDING > atlas.height)
-			continue;
+			return {};
 
 		if (atlas.pen_x + width + FT_GLYPH_PADDING > atlas.width) {
 			atlas.pen_x = 0;
@@ -190,19 +188,37 @@ static FtAtlasPlacement Ft_AllocateAtlasSpace(FtFontSize &fontSize, int width, i
 		}
 
 		if (atlas.pen_y + height + FT_GLYPH_PADDING > atlas.height)
-			continue;
+			return {};
 
-		const int x = atlas.pen_x;
-		const int y = atlas.pen_y;
+		FtAtlasPlacement placement{};
+		placement.atlas = &atlas;
+		placement.atlas_index = index;
+		placement.x = atlas.pen_x;
+		placement.y = atlas.pen_y;
 
 		atlas.pen_x += width + FT_GLYPH_PADDING;
 		atlas.row_height = max(atlas.row_height, height + FT_GLYPH_PADDING);
 
-		return { &atlas, static_cast<int>(i), x, y };
+		return placement;
+	};
+
+	for (size_t i = 0; i < fontSize.atlases.size(); ++i) {
+		FtAtlasPlacement placement = tryAllocate(fontSize.atlases[i], static_cast<int>(i));
+		if (placement.atlas)
+			return placement;
 	}
 
 	FtAtlas &atlas = Ft_CreateAtlas(fontSize);
-	return Ft_AllocateAtlasSpace(fontSize, width, height);
+	const int index = static_cast<int>(fontSize.atlases.size() - 1);
+	FtAtlasPlacement placement = tryAllocate(atlas, index);
+	if (!placement.atlas) {
+		Com_DPrintf("Ft_AllocateAtlasSpace: glyph %dx%d exceeds atlas %dx%d\n",
+			width + FT_GLYPH_PADDING, height + FT_GLYPH_PADDING, atlas.width, atlas.height);
+		Com_SetLastError("FreeType glyph too large for atlas");
+		return {};
+	}
+
+	return placement;
 }
 
 static FtGlyph *Ft_EmitGlyph(FtFont &font, FtFontSize &fontSize, uint32_t codepoint)
@@ -255,6 +271,11 @@ static FtGlyph *Ft_EmitGlyph(FtFont &font, FtFontSize &fontSize, uint32_t codepo
 				glyph.width, glyph.height,
 				format, GL_UNSIGNED_BYTE, slot->bitmap.buffer);
 			qglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		} else {
+			glyph.width = 0;
+			glyph.height = 0;
+			Com_DPrintf("Ft_EmitGlyph: failed to allocate %u (%dx%d) in atlas\n",
+				static_cast<unsigned int>(codepoint), slot->bitmap.width, slot->bitmap.rows);
 		}
 	}
 
