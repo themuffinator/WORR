@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #if USE_FREETYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_SIZES_H
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -1116,24 +1117,28 @@ void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t col
 }
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
-                        const char *s, color_t color, qhandle_t font,
-                        const ftfont_t *ftFont)
+			const char *s, color_t color, qhandle_t font,
+			const ftfont_t *ftFont)
 {
-    const image_t *image = IMG_ForHandle(font);
+	const image_t *image = IMG_ForHandle(font);
 
 #if USE_FREETYPE
-    FtFont *ft_font = nullptr;
-    if (ftFont)
-        ft_font = static_cast<FtFont *>(ftFont->driverData);
+	FtFont *ft_font = nullptr;
+	if (ftFont)
+		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
-    if (!ft_font)
-        ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		ft_font = Ft_FontForImage(image);
 
-    if (ft_font) {
-        if (gl_fontshadow->integer > 0)
-            flags |= UI_DROPSHADOW;
-        return Ft_DrawString(*ft_font, x, y, scale, flags, maxlen, s, color);
-    }
+	if (ft_font) {
+		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
+		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+		if (fontSize) {
+			if (gl_fontshadow->integer > 0)
+				flags |= UI_DROPSHADOW;
+			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxlen, s, color);
+		}
+	}
 #endif
 
     if (gl_fontshadow->integer > 0)
