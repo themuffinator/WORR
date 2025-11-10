@@ -345,8 +345,69 @@ static FtFontSize *Ft_GetFontSize(FtFont &font, int pixel_height)
 	return res.first->second.get();
 }
 
+static uint32_t DecodeNextUTF8(const char *&p, size_t &remaining)
+{
+	if (!remaining || !*p)
+		return 0;
+
+	const char *start = p;
+	size_t rem = remaining;
+
+	unsigned char lead = static_cast<unsigned char>(*start++);
+	--rem;
+
+	if (lead < 0x80) {
+		p = start;
+		remaining = rem;
+		return lead;
+	}
+
+	size_t expected = 0;
+	uint32_t codepoint = 0;
+	uint32_t min_value = 0;
+
+	if ((lead & 0xE0) == 0xC0) {
+		expected = 1;
+		codepoint = lead & 0x1F;
+		min_value = 0x80;
+	} else if ((lead & 0xF0) == 0xE0) {
+		expected = 2;
+		codepoint = lead & 0x0F;
+		min_value = 0x800;
+	} else if ((lead & 0xF8) == 0xF0 && lead <= 0xF4) {
+		expected = 3;
+		codepoint = lead & 0x07;
+		min_value = 0x10000;
+	} else {
+		goto fail;
+	}
+
+	if (rem < expected)
+		goto fail;
+
+	for (size_t i = 0; i < expected; ++i) {
+		unsigned char c = static_cast<unsigned char>(*start++);
+		if ((c & 0xC0) != 0x80)
+			goto fail;
+		codepoint = (codepoint << 6) | (c & 0x3F);
+	}
+
+	if (codepoint < min_value || codepoint > 0x10FFFF ||
+	    (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+		goto fail;
+
+	remaining = rem - expected;
+	p = start;
+	return codepoint;
+
+fail:
+	++p;
+	--remaining;
+	return '?';
+}
+
 static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int scale, int flags,
-			 size_t maxlen, const char *s, color_t color)
+                         size_t maxlen, const char *s, color_t color)
 {
 	if (!s)
 		return x;
@@ -381,25 +442,26 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 			}
 		}
 
-		unsigned char ch = static_cast<unsigned char>(*p++);
-		--remaining;
+		uint32_t codepoint = DecodeNextUTF8(p, remaining);
+		if (!codepoint)
+			break;
 
-		if ((flags & UI_MULTILINE) && ch == '\n') {
+		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			pen_y += line_advance + (1.0f / draw.scale);
 			pen_x = start_x;
 			continue;
 		}
 
-		if (ch < 32)
+		if (codepoint < 32)
 			continue;
 
-		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, ch);
+		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, codepoint);
 		if (!glyph)
 			continue;
 
 		float adv = glyph->advance * scale_factor;
 		if (glyph->width > 0 && glyph->height > 0 && glyph->atlas_index >= 0 &&
-			static_cast<size_t>(glyph->atlas_index) < fontSize.atlases.size()) {
+		        static_cast<size_t>(glyph->atlas_index) < fontSize.atlases.size()) {
 			const float xpos = pen_x + glyph->bearing_x * scale_factor;
 			const float ypos = pen_y + ascent - glyph->bearing_y * scale_factor;
 			const float gw = glyph->width * scale_factor;
@@ -409,13 +471,13 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 
 			if (drop_shadow) {
 				GL_StretchPic_(xpos + shadow_offset, ypos + shadow_offset, gw, gh,
-					       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-					       shadow_color, atlas.texnum, IF_TRANSPARENT);
+				               glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+				               shadow_color, atlas.texnum, IF_TRANSPARENT);
 
 				if (gl_fontshadow->integer > 1) {
 					GL_StretchPic_(xpos + shadow_offset * 2, ypos + shadow_offset * 2, gw, gh,
-					       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-					       shadow_color, atlas.texnum, IF_TRANSPARENT);
+					               glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+					               shadow_color, atlas.texnum, IF_TRANSPARENT);
 				}
 			}
 
@@ -429,9 +491,8 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 
 	return static_cast<int>(std::lround(pen_x));
 }
-
 static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int flags,
-			 size_t maxlen, const char *s)
+                         size_t maxlen, const char *s)
 {
 	if (!s)
 		return 0;
@@ -441,20 +502,34 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 	const float scale_factor = target_height / static_cast<float>(base_height);
 	float pen_x = 0.0f;
 	float max_pen_x = 0.0f;
+	const char *p = s;
+	size_t remaining = maxlen;
+	color_t ignoredColor{};
 
-	while (maxlen-- && *s) {
-		unsigned char ch = static_cast<unsigned char>(*s++);
+	while (remaining && *p) {
+		if (!(flags & UI_IGNORECOLOR)) {
+			size_t consumed = 0;
+			if (Q3_ParseColorEscape(p, remaining, ignoredColor, consumed)) {
+				p += consumed;
+				remaining -= consumed;
+				continue;
+			}
+		}
 
-		if ((flags & UI_MULTILINE) && ch == '\n') {
+		uint32_t codepoint = DecodeNextUTF8(p, remaining);
+		if (!codepoint)
+			break;
+
+		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			max_pen_x = max(max_pen_x, pen_x);
 			pen_x = 0.0f;
 			continue;
 		}
 
-		if (ch < 32)
+		if (codepoint < 32)
 			continue;
 
-		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, ch);
+		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, codepoint);
 		if (!glyph)
 			continue;
 
