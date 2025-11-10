@@ -1221,7 +1221,7 @@ void UI_LoadScript(void)
         } else if (!Json_Strcmp(&parser, "font")) {
             Json_Next(&parser);
             char *font = Json_CopyStringUI(&parser);
-            uis.fontHandle = R_RegisterFont(font);
+            uis.fontHandle = SCR_RegisterFontPath(font);
             Z_Free(font);
         } else if (!Json_Strcmp(&parser, "cursor")) {
             Json_Next(&parser);

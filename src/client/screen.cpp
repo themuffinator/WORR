@@ -1935,6 +1935,17 @@ namespace {
 	}
 } // namespace
 
+qhandle_t SCR_RegisterFontPath(const char* name)
+{
+	if (!name || !*name)
+		return 0;
+	if (name[0] == '/' || name[0] == '\\')
+		return R_RegisterFont(name);
+	if (strpbrk(name, "/\\"))
+		return R_RegisterFont(va("/%s", name));
+	return R_RegisterFont(name);
+}
+
 static void scr_font_changed(cvar_t* self)
 {
 	if (!cls.ref_initialized) {
@@ -1962,7 +1973,7 @@ static void scr_font_changed(cvar_t* self)
 			attemptedLegacy = true;
 
 		lastAttempt = candidate;
-		qhandle_t handle = R_RegisterFont(candidate);
+		qhandle_t handle = SCR_RegisterFontPath(candidate);
 		if (handle) {
 			scr.font_pic = handle;
 			loadedName = candidate;
@@ -1972,7 +1983,7 @@ static void scr_font_changed(cvar_t* self)
 
 	if (!scr.font_pic && !attemptedLegacy) {
 		lastAttempt = SCR_LEGACY_FONT;
-		scr.font_pic = R_RegisterFont(SCR_LEGACY_FONT);
+		scr.font_pic = SCR_RegisterFontPath(SCR_LEGACY_FONT);
 		if (scr.font_pic)
 			loadedName = SCR_LEGACY_FONT;
 		attemptedLegacy = true;
