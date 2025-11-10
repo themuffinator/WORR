@@ -173,51 +173,53 @@ void SoundSystem::BeginRegistration()
 
 qhandle_t SoundSystem::RegisterSound(const char *name)
 {
-    char buffer[MAX_QPATH];
-    size_t len;
+	char buffer[MAX_QPATH];
+	size_t len;
 
-    if (s_started == SoundBackend::Not) {
-        return 0;
-    }
+	if (s_started == SoundBackend::Not) {
+		return 0;
+	}
 
-    Q_assert(name);
+	Q_assert(name);
 
-    if (!*name) {
-        return 0;
-    }
+	if (!*name) {
+		return 0;
+	}
 
-    if (*name == '*') {
-        len = Q_strlcpy(buffer, name, MAX_QPATH);
-    } else if (*name == '#') {
-        len = FS_NormalizePathBuffer(buffer, name + 1, MAX_QPATH);
-    } else {
-        len = Q_concat(buffer, MAX_QPATH, "sound/", name);
-        if (len < MAX_QPATH) {
-            len = FS_NormalizePath(buffer);
-        }
-    }
+	if (*name == '*') {
+		len = Q_strlcpy(buffer, name, MAX_QPATH);
+	} else if (*name == '#') {
+		len = FS_NormalizePathBuffer(buffer, name + 1, MAX_QPATH);
+	} else if (*name == '/' || *name == '\\') {
+		len = FS_NormalizePathBuffer(buffer, name + 1, MAX_QPATH);
+	} else {
+		len = Q_concat(buffer, MAX_QPATH, "sound/", name);
+		if (len < MAX_QPATH) {
+			len = FS_NormalizePath(buffer);
+		}
+	}
 
-    if (len >= MAX_QPATH) {
-        Com_DPrintf("%s: oversize name\n", __func__);
-        return 0;
-    }
+	if (len >= MAX_QPATH) {
+		Com_DPrintf("%s: oversize name\n", __func__);
+		return 0;
+	}
 
-    if (len == 0) {
-        Com_DPrintf("%s: empty name\n", __func__);
-        return 0;
-    }
+	if (len == 0) {
+		Com_DPrintf("%s: empty name\n", __func__);
+		return 0;
+	}
 
-    sfx_t *sfx = FindOrAllocateSfx(buffer, len);
-    if (!sfx) {
-        Com_DPrintf("%s: out of slots\n", __func__);
-        return 0;
-    }
+	sfx_t *sfx = FindOrAllocateSfx(buffer, len);
+	if (!sfx) {
+		Com_DPrintf("%s: out of slots\n", __func__);
+		return 0;
+	}
 
-    if (!registering_) {
-        LoadSound(sfx);
-    }
+	if (!registering_) {
+		LoadSound(sfx);
+	}
 
-    return static_cast<qhandle_t>((sfx - known_sfx_.data()) + 1);
+	return static_cast<qhandle_t>((sfx - known_sfx_.data()) + 1);
 }
 
 sfx_t *SoundSystem::RegisterSexedSound(int entnum, const char *base)

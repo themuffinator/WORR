@@ -693,23 +693,28 @@ void CL_RequestNextDownload(void)
             }
         }
 
-        if (allow_download_sounds->integer) {
-            for (i = 1; i < cl.csr.max_sounds; i++) {
-                name = cl.configstrings[cl.csr.sounds + i];
-                if (!name[0]) {
-                    break;
-                }
-                if (name[0] == '*') {
-                    continue;
-                }
-                if (name[0] == '#') {
-                    len = Q_strlcpy(fn, name + 1, sizeof(fn));
-                } else {
-                    len = Q_concat(fn, sizeof(fn), "sound/", name);
-                }
-                check_file_len(fn, len, DL_OTHER);
-            }
-        }
+		if (allow_download_sounds->integer) {
+			for (i = 1; i < cl.csr.max_sounds; i++) {
+				name = cl.configstrings[cl.csr.sounds + i];
+				if (!name[0]) {
+					break;
+				}
+				if (name[0] == '*') {
+					continue;
+				}
+				if (name[0] == '#') {
+					len = FS_NormalizePathBuffer(fn, name + 1, sizeof(fn));
+				} else if (name[0] == '/' || name[0] == '\\') {
+					len = FS_NormalizePathBuffer(fn, name + 1, sizeof(fn));
+				} else {
+					len = Q_concat(fn, sizeof(fn), "sound/", name);
+					if (len < sizeof(fn)) {
+						len = FS_NormalizePath(fn);
+					}
+				}
+				check_file_len(fn, len, DL_OTHER);
+			}
+		}
 
         if (allow_download_pics->integer) {
             for (i = 1; i < cl.csr.max_images; i++) {
