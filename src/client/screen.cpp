@@ -131,10 +131,6 @@ static bool SCR_EnsureFreeTypeLibrary()
 static void SCR_FreeFreeTypeFonts(void)
 {
 	for (auto& entry : scr.freetype.fonts) {
-		if (entry.second.renderInfo.face) {
-			FT_Done_Face(entry.second.renderInfo.face);
-			entry.second.renderInfo.face = nullptr;
-		}
 		R_ReleaseFreeTypeFont(&entry.second.renderInfo);
 	}
 
@@ -222,11 +218,12 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 		Com_Printf("SCR: cached font '%s' could not be acquired for handle %d, reloading from source\n",
 			displayFontPath.c_str(), handle);
 
-		if (cached->second.renderInfo.face) {
-			FT_Done_Face(cached->second.renderInfo.face);
-			cached->second.renderInfo.face = nullptr;
-		}
 		R_ReleaseFreeTypeFont(&cached->second.renderInfo);
+		cached->second.renderInfo.face = nullptr;
+		cached->second.renderInfo.driverData = nullptr;
+		cached->second.renderInfo.ascent = 0;
+		cached->second.renderInfo.descent = 0;
+		cached->second.renderInfo.lineHeight = 0;
 
 		for (auto it = scr.freetype.handleLookup.begin(); it != scr.freetype.handleLookup.end(); ) {
 			if (it->second == cacheKey)
@@ -327,37 +324,21 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 
 	FS_CloseFile(fileHandle);
 
-	FT_Face face = nullptr;
-	FT_Error error = FT_New_Memory_Face(scr.freetype.library, entry.buffer.data(), static_cast<long>(entry.buffer.size()), 0, &face);
-	if (error) {
-		Com_Printf("SCR: failed to create FreeType face for '%s' (error %d)\n", displayFontPath.c_str(), error);
-		return false;
-	}
-
-	error = FT_Set_Pixel_Sizes(face, 0, pixelHeight);
-	if (error) {
-		Com_Printf("SCR: failed to set pixel height %d for '%s' (error %d)\n", pixelHeight, displayFontPath.c_str(), error);
-		FT_Done_Face(face);
-		return false;
-	}
-
-	entry.renderInfo.face = face;
+	entry.renderInfo.face = nullptr;
 	entry.renderInfo.pixelHeight = pixelHeight;
+	entry.renderInfo.driverData = nullptr;
+	entry.renderInfo.ascent = 0;
+	entry.renderInfo.descent = 0;
+	entry.renderInfo.lineHeight = 0;
 
 	scr_freetype_font_entry_t* loadedEntry = nullptr;
 	auto existing = scr.freetype.fonts.find(cacheKey);
 	if (existing != scr.freetype.fonts.end()) {
-		if (existing->second.renderInfo.face)
-			FT_Done_Face(existing->second.renderInfo.face);
 		R_ReleaseFreeTypeFont(&existing->second.renderInfo);
 		existing->second = std::move(entry);
 		if (!R_AcquireFreeTypeFont(handle, &existing->second.renderInfo)) {
 			Com_Printf("SCR: renderer rejected FreeType font '%s' for handle %d\n",
-				displayFontPath.c_str(), handle);
-			if (existing->second.renderInfo.face) {
-				FT_Done_Face(existing->second.renderInfo.face);
-				existing->second.renderInfo.face = nullptr;
-			}
+			        displayFontPath.c_str(), handle);
 			R_ReleaseFreeTypeFont(&existing->second.renderInfo);
 			scr.freetype.fonts.erase(existing);
 			return false;
@@ -368,18 +349,13 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 		auto it = emplaced.first;
 		if (!R_AcquireFreeTypeFont(handle, &it->second.renderInfo)) {
 			Com_Printf("SCR: renderer rejected FreeType font '%s' for handle %d\n",
-				displayFontPath.c_str(), handle);
-			if (it->second.renderInfo.face) {
-				FT_Done_Face(it->second.renderInfo.face);
-				it->second.renderInfo.face = nullptr;
-			}
+			        displayFontPath.c_str(), handle);
 			R_ReleaseFreeTypeFont(&it->second.renderInfo);
 			scr.freetype.fonts.erase(it);
 			return false;
 		}
 		loadedEntry = &it->second;
 	}
-
 	scr.freetype.handleLookup[handle] = cacheKey;
 	scr.freetype.activeFontKey = cacheKey;
 	scr.freetype.activeFontHandle = handle;
