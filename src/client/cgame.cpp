@@ -70,12 +70,12 @@ namespace {
                 if (!name || !*name)
                         return 0;
 
-                qhandle_t handle = R_RegisterFont(name);
+                qhandle_t handle = SCR_RegisterFontPath(name);
                 if (handle)
                         return handle;
 
                 if (Q_stricmp(name, CG_LEGACY_FONT))
-                        return R_RegisterFont(CG_LEGACY_FONT);
+                        return SCR_RegisterFontPath(CG_LEGACY_FONT);
 
                 return 0;
         }
@@ -83,11 +83,11 @@ namespace {
 
 static void scr_font_changed(cvar_t* self)
 {
-        scr.font_pic = R_RegisterFont(self->string);
+        scr.font_pic = SCR_RegisterFontPath(self->string);
 
         if (!scr.font_pic && strcmp(self->string, self->default_string)) {
                 Cvar_Reset(self);
-                scr.font_pic = R_RegisterFont(self->default_string);
+                scr.font_pic = SCR_RegisterFontPath(self->default_string);
         }
 
         if (!scr.font_pic && Q_stricmp(self->default_string, CG_LEGACY_FONT)) {

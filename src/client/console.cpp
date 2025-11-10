@@ -906,14 +906,14 @@ namespace {
 
 	void Console::registerMedia()
 	{
-		registeredFont_ = R_RegisterFont(font_->string);
+		registeredFont_ = SCR_RegisterFontPath(font_->string);
 		if (!registeredFont_) {
 			if (strcmp(font_->string, font_->default_string)) {
 				Cvar_Reset(font_);
-				registeredFont_ = R_RegisterFont(font_->default_string);
+				registeredFont_ = SCR_RegisterFontPath(font_->default_string);
 			}
 			if (!registeredFont_)
-				registeredFont_ = R_RegisterFont("conchars");
+				registeredFont_ = SCR_RegisterFontPath("conchars");
 			if (!registeredFont_)
 				Com_Error(ERR_FATAL, "%s", Com_GetLastError());
 		}
