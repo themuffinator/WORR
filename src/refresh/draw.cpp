@@ -451,29 +451,11 @@ void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t col
 }
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
-			const char *s, color_t color, qhandle_t font,
-			const ftfont_t *ftFont)
+                        const char *s, color_t color, qhandle_t font,
+                        const ftfont_t *ftFont)
 {
-	const image_t *image = IMG_ForHandle(font);
-
-#if USE_FREETYPE
-	FtFont *ft_font = nullptr;
-	if (ftFont)
-		ft_font = static_cast<FtFont *>(ftFont->driverData);
-
-	if (!ft_font)
-		ft_font = Ft_FontForImage(image);
-
-	if (ft_font) {
-		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
-		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
-		if (fontSize) {
-			if (gl_fontshadow->integer > 0)
-				flags |= UI_DROPSHADOW;
-			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxlen, s, color);
-		}
-	}
-#endif
+    (void)ftFont;
+    const image_t *image = IMG_ForHandle(font);
 
     if (gl_fontshadow->integer > 0)
         flags |= UI_DROPSHADOW;

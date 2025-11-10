@@ -600,7 +600,7 @@ static int SCR_MeasureKFontString(int scale, int flags, size_t maxlen, const cha
 	if (!SCR_ShouldUseKFont())
 		return 0;
 
-	const int clampedScale = max(scale, 1);
+	const int clampedScale = std::max(scale, 1);
 	const char* p = s;
 	size_t remaining = maxlen;
 	int width = 0;
@@ -637,7 +637,7 @@ static int SCR_DrawKFontStringLine(int x, int y, int scale, int flags, size_t ma
 	if (!SCR_ShouldUseKFont())
 		return x;
 
-	const int clampedScale = max(scale, 1);
+	const int clampedScale = std::max(scale, 1);
 	const char* p = s;
 	size_t remaining = maxlen;
 	color_t currentColor = color;
@@ -675,7 +675,7 @@ qhandle_t SCR_DefaultFontHandle(void)
 
 int SCR_FontLineHeight(int scale, qhandle_t font)
 {
-	const int clampedScale = max(scale, 1);
+	const int clampedScale = std::max(scale, 1);
 #if USE_FREETYPE
 	if (SCR_ShouldUseFreeType(font)) {
 		if (const ftfont_t* ftFont = SCR_FTFontForHandle(font))
@@ -702,7 +702,7 @@ int SCR_MeasureString(int scale, int flags, size_t maxlen, const char* s, qhandl
 	if (SCR_ShouldUseKFont())
 		return SCR_MeasureKFontString(scale, flags, maxlen, s);
 
-	return static_cast<int>(visibleChars) * CONCHAR_WIDTH * max(scale, 1);
+	return static_cast<int>(visibleChars) * CONCHAR_WIDTH * std::max(scale, 1);
 }
 
 /*
@@ -715,7 +715,7 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 {
 	const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
 	const size_t visibleChars = metrics.visibleChars;
-	const int clampedScale = max(scale, 1);
+	const int clampedScale = std::max(scale, 1);
 
 #if USE_FREETYPE
 	const bool useFreeType = SCR_ShouldUseFreeType(font);
@@ -802,7 +802,7 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
 	}
 
 	if (flags & UI_DRAWCURSOR && com_localTime & BIT(8)) {
-		const int clampedScale = max(scale, 1);
+		const int clampedScale = std::max(scale, 1);
 		if (SCR_ShouldUseKFont())
 			R_DrawKFontChar(last_x, last_y, clampedScale, flags, 11, currentColor, &scr.kfont);
 		else
@@ -813,7 +813,7 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
 
 void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, color_t color)
 {
-        const int clampedScale = max(scale, 1);
+        const int clampedScale = std::max(scale, 1);
         const unsigned char baseGlyph = glyph & 0x7f;
         const bool hasAltColor = (glyph & 0x80) != 0;
 
