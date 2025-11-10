@@ -22,10 +22,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #undef min
@@ -142,35 +144,83 @@ static void SCR_FreeFreeTypeFonts(void)
 
 static std::string SCR_NormalizeFontPath(const std::string& rawPath)
 {
-        if (rawPath.empty())
-                return std::string();
+	if (rawPath.empty())
+		return std::string();
 
-        std::string sanitized = rawPath;
-        std::replace(sanitized.begin(), sanitized.end(), '\\', '/');
+	std::string sanitized = rawPath;
+	std::replace(sanitized.begin(), sanitized.end(), '\\', '/');
 
-        const char* input = sanitized.c_str();
-        if (!sanitized.empty() && (sanitized.front() == '/' || sanitized.front() == '\\'))
-                ++input;
+	const char* input = sanitized.c_str();
+	if (!sanitized.empty() && (sanitized.front() == '/' || sanitized.front() == '\\'))
+		++input;
 
-        std::array<char, MAX_QPATH> normalized{};
-        size_t len = FS_NormalizePathBuffer(normalized.data(), input, normalized.size());
-        if (len == 0 || len >= normalized.size())
-                return std::string();
+	std::array<char, MAX_QPATH> normalized{};
+	size_t len = FS_NormalizePathBuffer(normalized.data(), input, normalized.size());
+	if (len == 0 || len >= normalized.size())
+		return std::string();
 
-        len = COM_DefaultExtension(normalized.data(), ".ttf", normalized.size());
-        if (len >= normalized.size())
-                return std::string();
+	len = COM_DefaultExtension(normalized.data(), ".ttf", normalized.size());
+	if (len >= normalized.size())
+		return std::string();
 
-        const char* ext = COM_FileExtension(normalized.data());
-        if (!Q_stricmp(ext, "pcx")) {
-                if (len < 3)
-                        return std::string();
-                normalized[len - 3] = 't';
-                normalized[len - 2] = 't';
-                normalized[len - 1] = 'f';
-        }
+	const char* ext = COM_FileExtension(normalized.data());
+	if (!Q_stricmp(ext, "pcx")) {
+		if (len < 3)
+			return std::string();
+		normalized[len - 3] = 't';
+		normalized[len - 2] = 't';
+		normalized[len - 1] = 'f';
+	}
 
-        return std::string(normalized.data());
+	return std::string(normalized.data());
+}
+
+static std::string SCR_FindSystemFontPath(const std::string& requestedPath)
+{
+	const char* fileName = COM_SkipPath(requestedPath.c_str());
+	if (!fileName || !*fileName)
+		return std::string();
+
+	std::vector<std::string> searchRoots;
+
+#ifdef _WIN32
+	if (const char* winDir = std::getenv("WINDIR")) {
+		if (*winDir) {
+			std::string fontsDir = winDir;
+			std::replace(fontsDir.begin(), fontsDir.end(), '\\', '/');
+			if (!fontsDir.empty() && fontsDir.back() != '/')
+				fontsDir.push_back('/');
+			fontsDir += "Fonts";
+			searchRoots.emplace_back(std::move(fontsDir));
+		}
+	}
+#endif
+
+	searchRoots.emplace_back("/usr/share/fonts");
+	searchRoots.emplace_back("/usr/local/share/fonts");
+	searchRoots.emplace_back("/Library/Fonts");
+	searchRoots.emplace_back("/System/Library/Fonts");
+	searchRoots.emplace_back("/System/Library/Fonts/Supplemental");
+
+	for (const auto& root : searchRoots) {
+		if (root.empty())
+			continue;
+
+		std::string candidate = root;
+		if (!candidate.empty() && candidate.back() != '/')
+			candidate.push_back('/');
+		candidate += fileName;
+
+		std::array<char, MAX_OSPATH> normalizedCandidate{};
+		size_t len = FS_NormalizePathBuffer(normalizedCandidate.data(), candidate.c_str(), normalizedCandidate.size());
+		if (!len || len >= normalizedCandidate.size())
+			continue;
+
+		if (FS_FileExistsEx(normalizedCandidate.data(), FS_TYPE_REAL))
+			return std::string(normalizedCandidate.data());
+	}
+
+	return std::string();
 }
 
 static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string& fontPath,
@@ -198,9 +248,21 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 		q2FontPath.insert(q2FontPath.begin(), '/');
 
 	const std::string *openPath = preferQ2Game ? &q2FontPath : &normalizedFontPath;
-	std::string displayFontPath = *openPath;
-	if (!displayFontPath.empty() && displayFontPath.front() != '/')
-		displayFontPath.insert(displayFontPath.begin(), '/');
+	std::string fallbackSystemFontPath;
+	auto makeDisplayFontPath = [](const std::string& path) {
+		std::string display = path;
+		if (display.empty())
+			return display;
+		if (display.front() == '/')
+			return display;
+#ifdef _WIN32
+		if (display.size() > 1 && display[1] == ':')
+			return display;
+#endif
+		display.insert(display.begin(), '/');
+		return display;
+	};
+	std::string displayFontPath = makeDisplayFontPath(*openPath);
 
 	auto cached = scr.freetype.fonts.find(cacheKey);
 	if (cached != scr.freetype.fonts.end()) {
@@ -246,9 +308,32 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	qhandle_t fileHandle = 0;
 	int64_t fileLength = FS_OpenFile(openPath->c_str(), &fileHandle, FS_MODE_READ);
 	if (fileLength < 0) {
-		Com_Printf("SCR: failed to open font '%s' (%s)\n", displayFontPath.c_str(), Q_ErrorString(fileLength));
+		Com_Printf("SCR: failed to open font '%s' (%s)
+", displayFontPath.c_str(), Q_ErrorString(fileLength));
 		FS_LogFileLookup(openPath->c_str(), FS_MODE_READ, "        ");
-		return false;
+
+		fallbackSystemFontPath = SCR_FindSystemFontPath(normalizedFontPath);
+		if (!fallbackSystemFontPath.empty()) {
+			int64_t fallbackLength = FS_OpenFile(fallbackSystemFontPath.c_str(), &fileHandle,
+				FS_MODE_READ | FS_TYPE_REAL);
+			if (fallbackLength >= 0) {
+				fileLength = fallbackLength;
+				openPath = &fallbackSystemFontPath;
+				displayFontPath = makeDisplayFontPath(fallbackSystemFontPath);
+			} else {
+				Com_Printf("SCR: failed to open system font '%s' (%s)
+",
+					fallbackSystemFontPath.c_str(), Q_ErrorString(fallbackLength));
+			}
+		} else {
+			const char* baseName = COM_SkipPath(normalizedFontPath.c_str());
+			Com_Printf("SCR: system font '%s' not found in fallback directories
+",
+				(baseName && *baseName) ? baseName : normalizedFontPath.c_str());
+		}
+
+		if (fileLength < 0)
+			return false;
 	}
 
 	fs_file_source_t source{};
@@ -278,9 +363,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 
 			fileLength = filesystemLength;
 			openPath = &normalizedFontPath;
-			displayFontPath = *openPath;
-			if (!displayFontPath.empty() && displayFontPath.front() != '/')
-				displayFontPath.insert(displayFontPath.begin(), '/');
+			displayFontPath = makeDisplayFontPath(*openPath);
 
 			if (!FS_GetFileSource(fileHandle, &source)) {
 				FS_CloseFile(fileHandle);
