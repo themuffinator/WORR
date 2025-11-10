@@ -60,16 +60,17 @@ struct FtAtlas {
 };
 
 struct FtGlyph {
-    int atlas_index = -1;
-    float s0 = 0.0f;
-    float t0 = 0.0f;
-    float s1 = 0.0f;
-    float t1 = 0.0f;
-    int width = 0;
-    int height = 0;
-    int bearing_x = 0;
-    int bearing_y = 0;
-    int advance = 0;
+	int atlas_index = -1;
+	float s0 = 0.0f;
+	float t0 = 0.0f;
+	float s1 = 0.0f;
+	float t1 = 0.0f;
+	int width = 0;
+	int height = 0;
+	int bearing_x = 0;
+	int bearing_y = 0;
+	int advance = 0;
+	FT_UInt glyph_index = 0;
 };
 
 struct FtFontSize {
@@ -241,6 +242,7 @@ static FtGlyph *Ft_EmitGlyph(FtFont &font, FtFontSize &fontSize, uint32_t codepo
 	FT_GlyphSlot slot = font.face->glyph;
 
 	FtGlyph glyph{};
+	glyph.glyph_index = slot->glyph_index;
 	glyph.advance = slot->advance.x >> 6;
 	glyph.bearing_x = slot->bitmap_left;
 	glyph.bearing_y = slot->bitmap_top;
@@ -421,6 +423,9 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 	float pen_x = static_cast<float>(x);
 	float pen_y = static_cast<float>(y);
 	const float start_x = pen_x;
+	const bool has_kerning = font.face && FT_HAS_KERNING(font.face);
+	FT_UInt prev_glyph_index = 0;
+	bool have_prev_glyph = false;
 
 	const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
 	const int shadow_offset = drop_shadow ? max(scale, 1) : 0;
@@ -449,6 +454,8 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			pen_y += line_advance + (1.0f / draw.scale);
 			pen_x = start_x;
+			have_prev_glyph = false;
+			prev_glyph_index = 0;
 			continue;
 		}
 
@@ -458,6 +465,17 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, codepoint);
 		if (!glyph)
 			continue;
+
+		if (has_kerning && have_prev_glyph && prev_glyph_index && glyph->glyph_index) {
+			FT_Vector delta{};
+			if (!FT_Get_Kerning(font.face, prev_glyph_index, glyph->glyph_index, FT_KERNING_DEFAULT, &delta)) {
+				pen_x += (delta.x / 64.0f) * scale_factor;
+			}
+		}
+
+		have_prev_glyph = glyph->glyph_index != 0;
+		if (have_prev_glyph)
+			prev_glyph_index = glyph->glyph_index;
 
 		float adv = glyph->advance * scale_factor;
 		if (glyph->width > 0 && glyph->height > 0 && glyph->atlas_index >= 0 &&
@@ -505,6 +523,9 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 	const char *p = s;
 	size_t remaining = maxlen;
 	color_t ignoredColor{};
+	const bool has_kerning = font.face && FT_HAS_KERNING(font.face);
+	FT_UInt prev_glyph_index = 0;
+	bool have_prev_glyph = false;
 
 	while (remaining && *p) {
 		if (!(flags & UI_IGNORECOLOR)) {
@@ -523,6 +544,8 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			max_pen_x = max(max_pen_x, pen_x);
 			pen_x = 0.0f;
+			have_prev_glyph = false;
+			prev_glyph_index = 0;
 			continue;
 		}
 
@@ -532,6 +555,17 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, codepoint);
 		if (!glyph)
 			continue;
+
+		if (has_kerning && have_prev_glyph && prev_glyph_index && glyph->glyph_index) {
+			FT_Vector delta{};
+			if (!FT_Get_Kerning(font.face, prev_glyph_index, glyph->glyph_index, FT_KERNING_DEFAULT, &delta)) {
+				pen_x += (delta.x / 64.0f) * scale_factor;
+			}
+		}
+
+		have_prev_glyph = glyph->glyph_index != 0;
+		if (have_prev_glyph)
+			prev_glyph_index = glyph->glyph_index;
 
 		pen_x += glyph->advance * scale_factor;
 	}
