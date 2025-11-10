@@ -152,6 +152,7 @@ client_src = [
   'src/client/ffmpeg_utils.cpp',
   'src/client/download.cpp',
   'src/client/effects.cpp',
+  'src/client/font.cpp',
   'src/client/entities.cpp',
   'src/client/input.cpp',
   'src/client/keys.cpp',
@@ -218,6 +219,7 @@ ui_src = [
 
 refresh_src = [
   'src/refresh/draw.cpp',
+  'src/refresh/font.cpp',
   'src/refresh/hq2x.cpp',
   'src/refresh/images.cpp',
   'src/refresh/legacy.cpp',
