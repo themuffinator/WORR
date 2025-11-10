@@ -449,68 +449,118 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 
 bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
 {
-    if (!ft_library) {
-        Com_SetLastError("FreeType library is not initialized");
-        return false;
-    }
+	if (!ft_library) {
+		Com_SetLastError("FreeType library is not initialized");
+		return false;
+	}
 
-    if (!image || !filename) {
-        Com_SetLastError("Invalid font parameters");
-        return false;
-    }
+	if (!image || !filename) {
+		Com_SetLastError("Invalid font parameters");
+		return false;
+	}
 
-    auto font = std::make_unique<FtFont>();
-    font->image = image;
+	auto font = std::make_unique<FtFont>();
+	font->image = image;
 
-    byte *buffer = nullptr;
-    int length = FS_LoadFile(filename, reinterpret_cast<void **>(&buffer));
-    if (length < 0) {
-        Com_SetLastError(va("Failed to load font '%s': %s", filename, Q_ErrorString(length)));
-        return false;
-    }
+	byte *buffer = nullptr;
+	int length = FS_LoadFile(filename, reinterpret_cast<void **>(&buffer));
+	if (length < 0) {
+		Com_SetLastError(va("Failed to load font '%s': %s", filename, Q_ErrorString(length)));
+		return false;
+	}
 
-    font->file_buffer = buffer;
-    font->file_size = static_cast<size_t>(length);
+	font->file_buffer = buffer;
+	font->file_size = static_cast<size_t>(length);
 
-    FT_Face face = nullptr;
-    FT_Error err = FT_New_Memory_Face(ft_library, reinterpret_cast<const FT_Byte *>(buffer), length, 0, &face);
-    if (err) {
-        Com_SetLastError(va("FreeType failed to create font face (%d)", err));
-        FS_FreeFile(buffer);
-        return false;
-    }
+	FT_Face face = nullptr;
+	FT_Error err = FT_New_Memory_Face(ft_library, reinterpret_cast<const FT_Byte *>(buffer), length, 0, &face);
+	if (err) {
+		Com_SetLastError(va("FreeType failed to create font face (%d)", err));
+		FS_FreeFile(buffer);
+		font->file_buffer = nullptr;
+		font->file_size = 0;
+		return false;
+	}
 
-font->face = face;
+	bool has_symbol_charmap = false;
+	for (int i = 0; i < face->num_charmaps; ++i) {
+		if (face->charmaps[i] && face->charmaps[i]->encoding == FT_ENCODING_MS_SYMBOL) {
+			has_symbol_charmap = true;
+			break;
+		}
+	}
 
-FtFontSize *baseSize = Ft_GetFontSize(*font, FT_BASE_PIXEL_HEIGHT);
-if (!baseSize) {
-Com_SetLastError("FreeType failed to initialize default pixel size");
-FT_Done_Face(face);
-FS_FreeFile(buffer);
-font->face = nullptr;
-font->file_buffer = nullptr;
-font->file_size = 0;
-return false;
-}
+	FT_Error charmap_err = FT_Select_Charmap(face, FT_ENCODING_UNICODE);
+	bool using_fallback_charmap = false;
+	if (charmap_err) {
+		for (int i = 0; i < face->num_charmaps; ++i) {
+			if (!FT_Set_Charmap(face, face->charmaps[i])) {
+				using_fallback_charmap = true;
+				break;
+			}
+		}
 
-Draw_FreeFreeTypeFont(image);
+		if (!using_fallback_charmap) {
+			Com_SetLastError(va("FreeType failed to select a usable charmap for '%s' (%d)", filename, charmap_err));
+			FT_Done_Face(face);
+			FS_FreeFile(buffer);
+			font->file_buffer = nullptr;
+			font->file_size = 0;
+			return false;
+		}
+	}
 
-ft_fonts[image] = std::move(font);
+	if (!using_fallback_charmap && has_symbol_charmap) {
+		const FT_ULong probe = 'A';
+		const FT_UInt glyph_index = FT_Get_Char_Index(face, probe);
+		if (glyph_index) {
+			Com_DPrintf("FreeType: verified Unicode glyph lookup for symbol font '%s' (U+%04lX)\n", filename, probe);
+		} else {
+			Com_DPrintf("FreeType: Unicode glyph lookup failed for symbol font '%s' (U+%04lX)\n", filename, probe);
+		}
+	}
 
-    image->flags |= IF_TRANSPARENT;
-    image->width = CONCHAR_WIDTH;
-    image->height = CONCHAR_HEIGHT;
-    image->upload_width = image->width;
-    image->upload_height = image->height;
-    image->texnum = 0;
-    image->texnum2 = 0;
-    image->aspect = 1.0f;
-    image->sl = 0;
-    image->sh = 1;
-    image->tl = 0;
-    image->th = 1;
+	if (using_fallback_charmap && face->charmap && face->charmap->encoding == FT_ENCODING_MS_SYMBOL) {
+		const FT_ULong probe = 0xF000 + 'A';
+		const FT_UInt glyph_index = FT_Get_Char_Index(face, probe);
+		if (glyph_index) {
+			Com_DPrintf("FreeType: verified MS Symbol glyph lookup for '%s' (U+%04lX)\n", filename, probe);
+		} else {
+			Com_DPrintf("FreeType: MS Symbol glyph lookup failed for '%s' (U+%04lX)\n", filename, probe);
+		}
+	}
 
-    return true;
+	font->face = face;
+
+	FtFontSize *baseSize = Ft_GetFontSize(*font, FT_BASE_PIXEL_HEIGHT);
+	if (!baseSize) {
+		Com_SetLastError("FreeType failed to initialize default pixel size");
+		FT_Done_Face(face);
+		FS_FreeFile(buffer);
+		font->face = nullptr;
+		font->file_buffer = nullptr;
+		font->file_size = 0;
+		return false;
+	}
+
+	Draw_FreeFreeTypeFont(image);
+
+	ft_fonts[image] = std::move(font);
+
+	image->flags |= IF_TRANSPARENT;
+	image->width = CONCHAR_WIDTH;
+	image->height = CONCHAR_HEIGHT;
+	image->upload_width = image->width;
+	image->upload_height = image->height;
+	image->texnum = 0;
+	image->texnum2 = 0;
+	image->aspect = 1.0f;
+	image->sl = 0;
+	image->sh = 1;
+	image->tl = 0;
+	image->th = 1;
+
+	return true;
 }
 
 void Draw_FreeFreeTypeFont(image_t *image)
