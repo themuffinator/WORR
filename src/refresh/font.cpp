@@ -1,5 +1,6 @@
 #include "gl.hpp"
 #include "font_freetype.hpp"
+#include "gl_draw_utils.hpp"
 #include "common/q3colors.hpp"
 
 #include <algorithm>
@@ -17,28 +18,6 @@
 #include FT_SIZES_H
 
 extern drawStatic_t draw;
-
-static inline void GL_StretchPic_(
-        float x, float y, float w, float h,
-        float s1, float t1, float s2, float t2,
-        color_t color, int texnum, int flags)
-{
-        std::array<vec2_t, 4> vertices{};
-        std::array<vec2_t, 4> texcoords{};
-
-        Vector2Set(vertices[0], x,     y    );
-        Vector2Set(vertices[1], x + w, y    );
-        Vector2Set(vertices[2], x + w, y + h);
-        Vector2Set(vertices[3], x,     y + h);
-
-        Vector2Set(texcoords[0], s1, t1);
-        Vector2Set(texcoords[1], s2, t1);
-        Vector2Set(texcoords[2], s2, t2);
-        Vector2Set(texcoords[3], s1, t2);
-
-        GL_DrawPic(vertices.data(), texcoords.data(), color, texnum, flags);
-}
-
 
 namespace {
 
