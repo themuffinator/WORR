@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #if USE_FREETYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_SIZES_H
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -71,306 +72,377 @@ struct FtGlyph {
     int advance = 0;
 };
 
+struct FtFontSize {
+	int pixel_height = 0;
+	FT_Size size = nullptr;
+	int ascent = 0;
+	int descent = 0;
+	int line_height = 0;
+	std::vector<FtAtlas> atlases;
+	std::unordered_map<uint32_t, FtGlyph> glyphs;
+};
+
 struct FtFont {
-    image_t *image = nullptr;
-    byte *file_buffer = nullptr;
-    size_t file_size = 0;
-    FT_Face face = nullptr;
-    int ascent = 0;
-    int descent = 0;
-    int line_height = 0;
-    int pixel_height = FT_BASE_PIXEL_HEIGHT;
-    std::vector<FtAtlas> atlases;
-    std::unordered_map<uint32_t, FtGlyph> glyphs;
+	image_t *image = nullptr;
+	byte *file_buffer = nullptr;
+	size_t file_size = 0;
+	FT_Face face = nullptr;
+	std::unordered_map<int, std::unique_ptr<FtFontSize>> sizes;
 };
 
 FT_Library ft_library = nullptr;
 std::unordered_map<const image_t *, std::unique_ptr<FtFont>> ft_fonts;
 
-static void Ft_DestroyFont(FtFont &font)
+static void Ft_DestroyFontSize(FtFontSize &fontSize)
 {
-    for (FtAtlas &atlas : font.atlases) {
-        if (atlas.texnum) {
-            qglDeleteTextures(1, &atlas.texnum);
-            atlas.texnum = 0;
-        }
-    }
+	for (FtAtlas &atlas : fontSize.atlases) {
+		if (atlas.texnum) {
+			qglDeleteTextures(1, &atlas.texnum);
+			atlas.texnum = 0;
+		}
+	}
 
-    font.atlases.clear();
-    font.glyphs.clear();
+	fontSize.atlases.clear();
+	fontSize.glyphs.clear();
 
-    if (font.face) {
-        FT_Done_Face(font.face);
-        font.face = nullptr;
-    }
-
-    if (font.file_buffer) {
-        FS_FreeFile(font.file_buffer);
-        font.file_buffer = nullptr;
-        font.file_size = 0;
-    }
+	if (fontSize.size) {
+		FT_Done_Size(fontSize.size);
+		fontSize.size = nullptr;
+	}
 }
 
-static FtAtlas &Ft_CreateAtlas(FtFont &font)
+static void Ft_DestroyFont(FtFont &font)
 {
-    FtAtlas atlas{};
+	for (auto &entry : font.sizes) {
+		if (entry.second)
+			Ft_DestroyFontSize(*entry.second);
+	}
 
-    qglGenTextures(1, &atlas.texnum);
-    GL_ForceTexture(TMU_TEXTURE, atlas.texnum);
+	font.sizes.clear();
 
-    qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	if (font.face) {
+		FT_Done_Face(font.face);
+		font.face = nullptr;
+	}
+
+	if (font.file_buffer) {
+		FS_FreeFile(font.file_buffer);
+		font.file_buffer = nullptr;
+		font.file_size = 0;
+	}
+}
+
+static FtAtlas &Ft_CreateAtlas(FtFontSize &fontSize)
+{
+	FtAtlas atlas{};
+
+	qglGenTextures(1, &atlas.texnum);
+	GL_ForceTexture(TMU_TEXTURE, atlas.texnum);
+
+	qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 #if defined(GL_RED)
-    GLenum internal_format = GL_RED;
-    GLenum format = GL_RED;
+	GLenum internal_format = GL_RED;
+	GLenum format = GL_RED;
 #else
-    GLenum internal_format = GL_ALPHA;
-    GLenum format = GL_ALPHA;
+	GLenum internal_format = GL_ALPHA;
+	GLenum format = GL_ALPHA;
 #endif
-    qglTexImage2D(GL_TEXTURE_2D, 0, internal_format,
-                  atlas.width, atlas.height, 0,
-                  format, GL_UNSIGNED_BYTE, nullptr);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexImage2D(GL_TEXTURE_2D, 0, internal_format,
+		atlas.width, atlas.height, 0,
+		format, GL_UNSIGNED_BYTE, nullptr);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 #ifdef GL_CLAMP_TO_EDGE
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 #else
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 #endif
-    qglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	qglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-    font.atlases.push_back(atlas);
-    return font.atlases.back();
+	fontSize.atlases.push_back(atlas);
+	return fontSize.atlases.back();
 }
 
 struct FtAtlasPlacement {
-    FtAtlas *atlas = nullptr;
-    int atlas_index = -1;
-    int x = 0;
-    int y = 0;
+	FtAtlas *atlas = nullptr;
+	int atlas_index = -1;
+	int x = 0;
+	int y = 0;
 };
 
-static FtAtlasPlacement Ft_AllocateAtlasSpace(FtFont &font, int width, int height)
+static FtAtlasPlacement Ft_AllocateAtlasSpace(FtFontSize &fontSize, int width, int height)
 {
-    if (width <= 0 || height <= 0)
-        return {};
+	if (width <= 0 || height <= 0)
+		return {};
 
-    for (size_t i = 0; i < font.atlases.size(); ++i) {
-        FtAtlas &atlas = font.atlases[i];
+	for (size_t i = 0; i < fontSize.atlases.size(); ++i) {
+		FtAtlas &atlas = fontSize.atlases[i];
 
-        if (width + FT_GLYPH_PADDING > atlas.width || height + FT_GLYPH_PADDING > atlas.height)
-            continue;
+		if (width + FT_GLYPH_PADDING > atlas.width || height + FT_GLYPH_PADDING > atlas.height)
+			continue;
 
-        if (atlas.pen_x + width + FT_GLYPH_PADDING > atlas.width) {
-            atlas.pen_x = 0;
-            atlas.pen_y += atlas.row_height;
-            atlas.row_height = 0;
-        }
+		if (atlas.pen_x + width + FT_GLYPH_PADDING > atlas.width) {
+			atlas.pen_x = 0;
+			atlas.pen_y += atlas.row_height;
+			atlas.row_height = 0;
+		}
 
-        if (atlas.pen_y + height + FT_GLYPH_PADDING > atlas.height)
-            continue;
+		if (atlas.pen_y + height + FT_GLYPH_PADDING > atlas.height)
+			continue;
 
-        const int x = atlas.pen_x;
-        const int y = atlas.pen_y;
+		const int x = atlas.pen_x;
+		const int y = atlas.pen_y;
 
-        atlas.pen_x += width + FT_GLYPH_PADDING;
-        atlas.row_height = max(atlas.row_height, height + FT_GLYPH_PADDING);
+		atlas.pen_x += width + FT_GLYPH_PADDING;
+		atlas.row_height = max(atlas.row_height, height + FT_GLYPH_PADDING);
 
-        return { &atlas, static_cast<int>(i), x, y };
-    }
+		return { &atlas, static_cast<int>(i), x, y };
+	}
 
-    FtAtlas &atlas = Ft_CreateAtlas(font);
-    return Ft_AllocateAtlasSpace(font, width, height);
+	FtAtlas &atlas = Ft_CreateAtlas(fontSize);
+	return Ft_AllocateAtlasSpace(fontSize, width, height);
 }
 
-static FtGlyph *Ft_EmitGlyph(FtFont &font, uint32_t codepoint)
+static FtGlyph *Ft_EmitGlyph(FtFont &font, FtFontSize &fontSize, uint32_t codepoint)
 {
-    auto it = font.glyphs.find(codepoint);
-    if (it != font.glyphs.end())
-        return &it->second;
+	auto it = fontSize.glyphs.find(codepoint);
+	if (it != fontSize.glyphs.end())
+		return &it->second;
 
-    if (!font.face)
-        return nullptr;
+	if (!font.face || !fontSize.size)
+		return nullptr;
 
-    FT_Error err = FT_Load_Char(font.face, codepoint, FT_LOAD_RENDER);
-    if (err)
-        return nullptr;
+	FT_Error err = FT_Activate_Size(fontSize.size);
+	if (err)
+		return nullptr;
 
-    FT_GlyphSlot slot = font.face->glyph;
+	err = FT_Load_Char(font.face, codepoint, FT_LOAD_RENDER);
+	if (err)
+		return nullptr;
 
-    FtGlyph glyph{};
-    glyph.advance = slot->advance.x >> 6;
-    glyph.bearing_x = slot->bitmap_left;
-    glyph.bearing_y = slot->bitmap_top;
-    glyph.width = slot->bitmap.width;
-    glyph.height = slot->bitmap.rows;
+	FT_GlyphSlot slot = font.face->glyph;
 
-    if (glyph.width > 0 && glyph.height > 0 && slot->bitmap.buffer) {
-        FtAtlasPlacement placement = Ft_AllocateAtlasSpace(font, glyph.width, glyph.height);
-        if (placement.atlas) {
-            glyph.atlas_index = placement.atlas_index;
+	FtGlyph glyph{};
+	glyph.advance = slot->advance.x >> 6;
+	glyph.bearing_x = slot->bitmap_left;
+	glyph.bearing_y = slot->bitmap_top;
+	glyph.width = slot->bitmap.width;
+	glyph.height = slot->bitmap.rows;
 
-            const float inv_w = 1.0f / placement.atlas->width;
-            const float inv_h = 1.0f / placement.atlas->height;
+	if (glyph.width > 0 && glyph.height > 0 && slot->bitmap.buffer) {
+		FtAtlasPlacement placement = Ft_AllocateAtlasSpace(fontSize, glyph.width, glyph.height);
+		if (placement.atlas) {
+			glyph.atlas_index = placement.atlas_index;
 
-            glyph.s0 = placement.x * inv_w;
-            glyph.t0 = placement.y * inv_h;
-            glyph.s1 = (placement.x + glyph.width) * inv_w;
-            glyph.t1 = (placement.y + glyph.height) * inv_h;
+			const float inv_w = 1.0f / placement.atlas->width;
+			const float inv_h = 1.0f / placement.atlas->height;
 
-            GL_BindTexture(TMU_TEXTURE, placement.atlas->texnum);
-            qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			glyph.s0 = placement.x * inv_w;
+			glyph.t0 = placement.y * inv_h;
+			glyph.s1 = (placement.x + glyph.width) * inv_w;
+			glyph.t1 = (placement.y + glyph.height) * inv_h;
+
+			GL_BindTexture(TMU_TEXTURE, placement.atlas->texnum);
+			qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 #if defined(GL_RED)
-            GLenum format = GL_RED;
+			GLenum format = GL_RED;
 #else
-            GLenum format = GL_ALPHA;
+			GLenum format = GL_ALPHA;
 #endif
-            qglTexSubImage2D(GL_TEXTURE_2D, 0, placement.x, placement.y,
-                             glyph.width, glyph.height,
-                             format, GL_UNSIGNED_BYTE, slot->bitmap.buffer);
-            qglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        }
-    }
+			qglTexSubImage2D(GL_TEXTURE_2D, 0, placement.x, placement.y,
+				glyph.width, glyph.height,
+				format, GL_UNSIGNED_BYTE, slot->bitmap.buffer);
+			qglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		}
+	}
 
-    auto res = font.glyphs.emplace(codepoint, glyph);
-    return &res.first->second;
+	auto res = fontSize.glyphs.emplace(codepoint, glyph);
+	return &res.first->second;
 }
 
-static FtGlyph *Ft_LookupGlyph(FtFont &font, uint32_t codepoint)
+static FtGlyph *Ft_LookupGlyph(FtFont &font, FtFontSize &fontSize, uint32_t codepoint)
 {
-    FtGlyph *glyph = Ft_EmitGlyph(font, codepoint);
-    if (!glyph || (glyph->atlas_index < 0 && glyph->width == 0)) {
-        if (codepoint != '?')
-            glyph = Ft_EmitGlyph(font, '?');
-    }
-    return glyph;
+	FtGlyph *glyph = Ft_EmitGlyph(font, fontSize, codepoint);
+	if (!glyph || (glyph->atlas_index < 0 && glyph->width == 0)) {
+		if (codepoint != '?')
+			glyph = Ft_EmitGlyph(font, fontSize, '?');
+	}
+	return glyph;
 }
 
 static FtFont *Ft_FontForImage(const image_t *image)
 {
-    auto it = ft_fonts.find(image);
-    if (it == ft_fonts.end())
-        return nullptr;
-    return it->second.get();
+	auto it = ft_fonts.find(image);
+	if (it == ft_fonts.end())
+		return nullptr;
+	return it->second.get();
 }
 
-static int Ft_DrawString(FtFont &font, int x, int y, int scale, int flags,
-                         size_t maxlen, const char *s, color_t color)
+static FtFontSize *Ft_GetFontSize(FtFont &font, int pixel_height)
 {
-    if (!s)
-        return x;
+	if (pixel_height <= 0)
+		pixel_height = FT_BASE_PIXEL_HEIGHT;
 
-    const float target_height = CONCHAR_HEIGHT * max(scale, 1);
-    const float scale_factor = target_height / static_cast<float>(font.pixel_height);
-    const float line_advance = (font.line_height ? font.line_height : font.pixel_height) * scale_factor;
-    const float ascent = (font.ascent ? font.ascent : font.pixel_height) * scale_factor;
+	auto it = font.sizes.find(pixel_height);
+	if (it != font.sizes.end())
+		return it->second.get();
 
-    float pen_x = static_cast<float>(x);
-    float pen_y = static_cast<float>(y);
-    const float start_x = pen_x;
+	if (!font.face)
+		return nullptr;
 
-    const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
-    const int shadow_offset = drop_shadow ? max(scale, 1) : 0;
+	FT_Size size = nullptr;
+	FT_Error err = FT_New_Size(font.face, &size);
+	if (err)
+		return nullptr;
 
-    color_t currentColor = color;
-    color_t shadow_color = ColorA(currentColor.a);
+	err = FT_Activate_Size(size);
+	if (err) {
+		FT_Done_Size(size);
+		return nullptr;
+	}
 
-    const char *p = s;
-    size_t remaining = maxlen;
+	err = FT_Set_Pixel_Sizes(font.face, 0, pixel_height);
+	if (err) {
+		FT_Done_Size(size);
+		return nullptr;
+	}
 
-    while (remaining && *p) {
-        if (!(flags & UI_IGNORECOLOR)) {
-            size_t consumed = 0;
-            if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
-                p += consumed;
-                remaining -= consumed;
-                shadow_color = ColorA(currentColor.a);
-                continue;
-            }
-        }
+	auto fontSize = std::make_unique<FtFontSize>();
+	fontSize->pixel_height = pixel_height;
+	fontSize->size = size;
+	fontSize->ascent = font.face->size->metrics.ascender >> 6;
+	fontSize->descent = -(font.face->size->metrics.descender >> 6);
+	fontSize->line_height = font.face->size->metrics.height >> 6;
+	if (fontSize->line_height <= 0)
+		fontSize->line_height = pixel_height;
+	if (fontSize->ascent <= 0)
+		fontSize->ascent = pixel_height - fontSize->descent;
 
-        unsigned char ch = static_cast<unsigned char>(*p++);
-        --remaining;
-
-        if ((flags & UI_MULTILINE) && ch == '\n') {
-            pen_y += line_advance + (1.0f / draw.scale);
-            pen_x = start_x;
-            continue;
-        }
-
-        if (ch < 32)
-            continue;
-
-        FtGlyph *glyph = Ft_LookupGlyph(font, ch);
-        if (!glyph)
-            continue;
-
-        float adv = glyph->advance * scale_factor;
-        if (glyph->width > 0 && glyph->height > 0 && glyph->atlas_index >= 0) {
-            const float xpos = pen_x + glyph->bearing_x * scale_factor;
-            const float ypos = pen_y + ascent - glyph->bearing_y * scale_factor;
-            const float gw = glyph->width * scale_factor;
-            const float gh = glyph->height * scale_factor;
-
-            const FtAtlas &atlas = font.atlases[glyph->atlas_index];
-
-            if (drop_shadow) {
-                GL_StretchPic_(xpos + shadow_offset, ypos + shadow_offset, gw, gh,
-                               glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-                               shadow_color, atlas.texnum, IF_TRANSPARENT);
-
-                if (gl_fontshadow->integer > 1) {
-                    GL_StretchPic_(xpos + shadow_offset * 2, ypos + shadow_offset * 2, gw, gh,
-                                   glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-                                   shadow_color, atlas.texnum, IF_TRANSPARENT);
-                }
-            }
-
-            GL_StretchPic_(xpos, ypos, gw, gh,
-                           glyph->s0, glyph->t0, glyph->s1, glyph->t1,
-                           currentColor, atlas.texnum, IF_TRANSPARENT);
-        }
-
-        pen_x += adv;
-    }
-
-    return static_cast<int>(std::lround(pen_x));
+	auto res = font.sizes.emplace(pixel_height, std::move(fontSize));
+	return res.first->second.get();
 }
 
-static int Ft_MeasureString(FtFont &font, int scale, int flags,
-                            size_t maxlen, const char *s)
+static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int scale, int flags,
+			 size_t maxlen, const char *s, color_t color)
 {
-    if (!s)
-        return 0;
+	if (!s)
+		return x;
 
-    const float target_height = CONCHAR_HEIGHT * max(scale, 1);
-    const float scale_factor = target_height / static_cast<float>(font.pixel_height);
-    float pen_x = 0.0f;
-    float max_pen_x = 0.0f;
+	const int base_height = max(fontSize.pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * max(scale, 1);
+	const float scale_factor = target_height / static_cast<float>(base_height);
+	const float line_advance = (fontSize.line_height ? fontSize.line_height : base_height) * scale_factor;
+	const float ascent = (fontSize.ascent ? fontSize.ascent : base_height) * scale_factor;
 
-    while (maxlen-- && *s) {
-        unsigned char ch = static_cast<unsigned char>(*s++);
+	float pen_x = static_cast<float>(x);
+	float pen_y = static_cast<float>(y);
+	const float start_x = pen_x;
 
-        if ((flags & UI_MULTILINE) && ch == '\n') {
-            max_pen_x = max(max_pen_x, pen_x);
-            pen_x = 0.0f;
-            continue;
-        }
+	const bool drop_shadow = (flags & UI_DROPSHADOW) != 0;
+	const int shadow_offset = drop_shadow ? max(scale, 1) : 0;
 
-        if (ch < 32)
-            continue;
+	color_t currentColor = color;
+	color_t shadow_color = ColorA(currentColor.a);
 
-        FtGlyph *glyph = Ft_LookupGlyph(font, ch);
-        if (!glyph)
-            continue;
+	const char *p = s;
+	size_t remaining = maxlen;
 
-        pen_x += glyph->advance * scale_factor;
-    }
+	while (remaining && *p) {
+		if (!(flags & UI_IGNORECOLOR)) {
+			size_t consumed = 0;
+			if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
+				p += consumed;
+				remaining -= consumed;
+				shadow_color = ColorA(currentColor.a);
+				continue;
+			}
+		}
 
-    max_pen_x = max(max_pen_x, pen_x);
+		unsigned char ch = static_cast<unsigned char>(*p++);
+		--remaining;
 
-    return static_cast<int>(std::lround(max_pen_x));
+		if ((flags & UI_MULTILINE) && ch == '\n') {
+			pen_y += line_advance + (1.0f / draw.scale);
+			pen_x = start_x;
+			continue;
+		}
+
+		if (ch < 32)
+			continue;
+
+		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, ch);
+		if (!glyph)
+			continue;
+
+		float adv = glyph->advance * scale_factor;
+		if (glyph->width > 0 && glyph->height > 0 && glyph->atlas_index >= 0 &&
+			static_cast<size_t>(glyph->atlas_index) < fontSize.atlases.size()) {
+			const float xpos = pen_x + glyph->bearing_x * scale_factor;
+			const float ypos = pen_y + ascent - glyph->bearing_y * scale_factor;
+			const float gw = glyph->width * scale_factor;
+			const float gh = glyph->height * scale_factor;
+
+			const FtAtlas &atlas = fontSize.atlases[glyph->atlas_index];
+
+			if (drop_shadow) {
+				GL_StretchPic_(xpos + shadow_offset, ypos + shadow_offset, gw, gh,
+					       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+					       shadow_color, atlas.texnum, IF_TRANSPARENT);
+
+				if (gl_fontshadow->integer > 1) {
+					GL_StretchPic_(xpos + shadow_offset * 2, ypos + shadow_offset * 2, gw, gh,
+					       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+					       shadow_color, atlas.texnum, IF_TRANSPARENT);
+				}
+			}
+
+			GL_StretchPic_(xpos, ypos, gw, gh,
+			       glyph->s0, glyph->t0, glyph->s1, glyph->t1,
+			       currentColor, atlas.texnum, IF_TRANSPARENT);
+		}
+
+		pen_x += adv;
+	}
+
+	return static_cast<int>(std::lround(pen_x));
+}
+
+static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int flags,
+			 size_t maxlen, const char *s)
+{
+	if (!s)
+		return 0;
+
+	const int base_height = max(fontSize.pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * max(scale, 1);
+	const float scale_factor = target_height / static_cast<float>(base_height);
+	float pen_x = 0.0f;
+	float max_pen_x = 0.0f;
+
+	while (maxlen-- && *s) {
+		unsigned char ch = static_cast<unsigned char>(*s++);
+
+		if ((flags & UI_MULTILINE) && ch == '\n') {
+			max_pen_x = max(max_pen_x, pen_x);
+			pen_x = 0.0f;
+			continue;
+		}
+
+		if (ch < 32)
+			continue;
+
+		FtGlyph *glyph = Ft_LookupGlyph(font, fontSize, ch);
+		if (!glyph)
+			continue;
+
+		pen_x += glyph->advance * scale_factor;
+	}
+
+	max_pen_x = max(max_pen_x, pen_x);
+
+	return static_cast<int>(std::lround(max_pen_x));
 }
 
 } // namespace
@@ -408,32 +480,22 @@ bool Draw_LoadFreeTypeFont(image_t *image, const char *filename)
         return false;
     }
 
-    font->face = face;
-    font->pixel_height = FT_BASE_PIXEL_HEIGHT;
+font->face = face;
 
-    err = FT_Set_Pixel_Sizes(face, 0, font->pixel_height);
-    if (err) {
-        Com_SetLastError(va("FreeType failed to set pixel size (%d)", err));
-        FT_Done_Face(face);
-        FS_FreeFile(buffer);
-        font->face = nullptr;
-        font->file_buffer = nullptr;
-        font->file_size = 0;
-        return false;
-    }
+FtFontSize *baseSize = Ft_GetFontSize(*font, FT_BASE_PIXEL_HEIGHT);
+if (!baseSize) {
+Com_SetLastError("FreeType failed to initialize default pixel size");
+FT_Done_Face(face);
+FS_FreeFile(buffer);
+font->face = nullptr;
+font->file_buffer = nullptr;
+font->file_size = 0;
+return false;
+}
 
-    font->ascent = face->size->metrics.ascender >> 6;
-    font->descent = -(face->size->metrics.descender >> 6);
-    font->line_height = face->size->metrics.height >> 6;
+Draw_FreeFreeTypeFont(image);
 
-    if (font->line_height <= 0)
-        font->line_height = font->pixel_height;
-    if (font->ascent <= 0)
-        font->ascent = font->pixel_height - font->descent;
-
-    Draw_FreeFreeTypeFont(image);
-
-    ft_fonts[image] = std::move(font);
+ft_fonts[image] = std::move(font);
 
     image->flags |= IF_TRANSPARENT;
     image->width = CONCHAR_WIDTH;
@@ -490,119 +552,144 @@ void Draw_ShutdownFreeTypeFonts(void)
 
 bool R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont)
 {
-    if (!outFont)
-        return false;
+	if (!outFont)
+		return false;
 
-    outFont->driverData = nullptr;
-    outFont->ascent = 0;
-    outFont->descent = 0;
-    outFont->lineHeight = 0;
+	outFont->driverData = nullptr;
+	outFont->ascent = 0;
+	outFont->descent = 0;
+	outFont->lineHeight = 0;
 
-    const image_t *image = IMG_ForHandle(font);
-    if (!image)
-        return false;
+	const image_t *image = IMG_ForHandle(font);
+	if (!image)
+		return false;
 
-    FtFont *ft_font = Ft_FontForImage(image);
-    if (!ft_font)
-        return false;
+	FtFont *ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		return false;
 
-    outFont->driverData = ft_font;
-    outFont->ascent = ft_font->ascent;
-    outFont->descent = ft_font->descent;
-    outFont->lineHeight = ft_font->line_height;
+	int pixelHeight = outFont->pixelHeight;
+	if (pixelHeight <= 0)
+		pixelHeight = FT_BASE_PIXEL_HEIGHT;
 
-    if (!outFont->pixelHeight)
-        outFont->pixelHeight = ft_font->pixel_height;
-    if (!outFont->face)
-        outFont->face = ft_font->face;
+	FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+	if (!fontSize)
+		return false;
 
-    return true;
+	if (fontSize->size) {
+		FT_Error err = FT_Activate_Size(fontSize->size);
+		if (err)
+			return false;
+	}
+
+	outFont->driverData = ft_font;
+	outFont->pixelHeight = fontSize->pixel_height;
+	outFont->ascent = fontSize->ascent;
+	outFont->descent = fontSize->descent;
+	outFont->lineHeight = fontSize->line_height ? fontSize->line_height : fontSize->pixel_height;
+	outFont->face = ft_font->face;
+
+	return true;
 }
 
 void R_ReleaseFreeTypeFont(ftfont_t *font)
 {
-    if (!font)
-        return;
+	if (!font)
+		return;
 
-    font->driverData = nullptr;
-    font->ascent = 0;
-    font->descent = 0;
-    font->lineHeight = 0;
+	font->driverData = nullptr;
+	font->ascent = 0;
+	font->descent = 0;
+	font->lineHeight = 0;
 }
 
 int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
-                         const char *string, color_t color, qhandle_t font,
-                         const ftfont_t *ftFont)
+				 const char *string, color_t color, qhandle_t font,
+				 const ftfont_t *ftFont)
 {
-    const image_t *image = IMG_ForHandle(font);
+	const image_t *image = IMG_ForHandle(font);
 
-    FtFont *ft_font = nullptr;
-    if (ftFont)
-        ft_font = static_cast<FtFont *>(ftFont->driverData);
+	FtFont *ft_font = nullptr;
+	if (ftFont)
+		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
-    if (!ft_font)
-        ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		ft_font = Ft_FontForImage(image);
 
-    if (ft_font) {
-        if (gl_fontshadow->integer > 0)
-            flags |= UI_DROPSHADOW;
-        return Ft_DrawString(*ft_font, x, y, scale, flags, maxChars, string, color);
-    }
+	if (ft_font) {
+		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
+		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+		if (fontSize) {
+			if (gl_fontshadow->integer > 0)
+				flags |= UI_DROPSHADOW;
+			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxChars, string, color);
+		}
+	}
 
-    return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, nullptr);
+	return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, nullptr);
 }
 
 int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
-                            const char *string, qhandle_t font,
-                            const ftfont_t *ftFont)
+				 const char *string, qhandle_t font,
+				 const ftfont_t *ftFont)
 {
-    const image_t *image = IMG_ForHandle(font);
+	const image_t *image = IMG_ForHandle(font);
 
-    FtFont *ft_font = nullptr;
-    if (ftFont)
-        ft_font = static_cast<FtFont *>(ftFont->driverData);
+	FtFont *ft_font = nullptr;
+	if (ftFont)
+		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
-    if (!ft_font)
-        ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		ft_font = Ft_FontForImage(image);
 
-    if (ft_font)
-        return Ft_MeasureString(*ft_font, scale, flags, maxChars, string);
+	if (ft_font) {
+		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
+		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+		if (fontSize)
+			return Ft_MeasureString(*ft_font, *fontSize, scale, flags, maxChars, string);
+	}
 
-    int width = 0;
-    int maxWidth = 0;
+	int width = 0;
+	int maxWidth = 0;
 
-    if (!string)
-        return 0;
+	if (!string)
+		return 0;
 
-    while (maxChars-- && *string) {
-        char ch = *string++;
+	while (maxChars-- && *string) {
+		char ch = *string++;
 
-        if ((flags & UI_MULTILINE) && ch == '\n') {
-            maxWidth = max(maxWidth, width);
-            width = 0;
-            continue;
-        }
+		if ((flags & UI_MULTILINE) && ch == '\n') {
+			maxWidth = max(maxWidth, width);
+			width = 0;
+			continue;
+		}
 
-        width += CONCHAR_WIDTH * scale;
-    }
+		width += CONCHAR_WIDTH * scale;
+	}
 
-    return max(maxWidth, width);
+	return max(maxWidth, width);
 }
 
 float R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont)
 {
-    FtFont *ft_font = nullptr;
-    if (ftFont)
-        ft_font = static_cast<FtFont *>(ftFont->driverData);
+	FtFont *ft_font = nullptr;
+	if (ftFont)
+		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
-    if (!ft_font)
-        return CONCHAR_HEIGHT * max(scale, 1);
+	if (!ft_font)
+		return CONCHAR_HEIGHT * max(scale, 1);
 
-    const float target_height = CONCHAR_HEIGHT * max(scale, 1);
-    const float scale_factor = target_height / static_cast<float>(ft_font->pixel_height);
-    const float line_height = (ft_font->line_height ? ft_font->line_height : ft_font->pixel_height) * scale_factor;
-    return line_height;
+	int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
+	FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+	if (!fontSize)
+		return CONCHAR_HEIGHT * max(scale, 1);
+
+	const int base_height = max(fontSize->pixel_height, 1);
+	const float target_height = CONCHAR_HEIGHT * max(scale, 1);
+	const float line_height = (fontSize->line_height ? fontSize->line_height : base_height) * (target_height / static_cast<float>(base_height));
+	return line_height;
 }
+
 
 #endif // USE_FREETYPE
 
@@ -1030,24 +1117,28 @@ void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t col
 }
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
-                        const char *s, color_t color, qhandle_t font,
-                        const ftfont_t *ftFont)
+			const char *s, color_t color, qhandle_t font,
+			const ftfont_t *ftFont)
 {
-    const image_t *image = IMG_ForHandle(font);
+	const image_t *image = IMG_ForHandle(font);
 
 #if USE_FREETYPE
-    FtFont *ft_font = nullptr;
-    if (ftFont)
-        ft_font = static_cast<FtFont *>(ftFont->driverData);
+	FtFont *ft_font = nullptr;
+	if (ftFont)
+		ft_font = static_cast<FtFont *>(ftFont->driverData);
 
-    if (!ft_font)
-        ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		ft_font = Ft_FontForImage(image);
 
-    if (ft_font) {
-        if (gl_fontshadow->integer > 0)
-            flags |= UI_DROPSHADOW;
-        return Ft_DrawString(*ft_font, x, y, scale, flags, maxlen, s, color);
-    }
+	if (ft_font) {
+		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
+		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
+		if (fontSize) {
+			if (gl_fontshadow->integer > 0)
+				flags |= UI_DROPSHADOW;
+			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxlen, s, color);
+		}
+	}
 #endif
 
     if (gl_fontshadow->integer > 0)
