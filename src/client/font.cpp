@@ -223,8 +223,8 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	qhandle_t fileHandle = 0;
 	int64_t fileLength = FS_OpenFile(openPath->c_str(), &fileHandle, FS_MODE_READ);
 	if (fileLength < 0) {
-		Com_Printf("SCR: failed to open font '%s' (%s)
-", displayFontPath.c_str(), Q_ErrorString(fileLength));
+		Com_Printf("SCR: failed to open font '%s' (%s)\n",
+			displayFontPath.c_str(), Q_ErrorString(fileLength));
 		FS_LogFileLookup(openPath->c_str(), FS_MODE_READ, "        ");
 
 		fallbackSystemFontPath = SCR_FindSystemFontPath(normalizedFontPath);
@@ -236,14 +236,12 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 				openPath = &fallbackSystemFontPath;
 				displayFontPath = makeDisplayFontPath(fallbackSystemFontPath);
 			} else {
-				Com_Printf("SCR: failed to open system font '%s' (%s)
-",
+				Com_Printf("SCR: failed to open system font '%s' (%s)\n",
 					fallbackSystemFontPath.c_str(), Q_ErrorString(fallbackLength));
 			}
 		} else {
 			const char* baseName = COM_SkipPath(normalizedFontPath.c_str());
-			Com_Printf("SCR: system font '%s' not found in fallback directories
-",
+			Com_Printf("SCR: system font '%s' not found in fallback directories\n",
 				(baseName && *baseName) ? baseName : normalizedFontPath.c_str());
 		}
 
