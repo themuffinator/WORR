@@ -1707,8 +1707,8 @@ int FS_Write(const void *buf, size_t len, qhandle_t f)
 
 static unsigned default_lookup_flags(unsigned flags)
 {
-    if (!(flags & FS_PATH_MASK) || !fs_game->string[0])
-        flags |= FS_PATH_MASK;
+    if (!(flags & FS_PATH_MASK))
+        flags |= FS_PATH_BASE | FS_PATH_GAME;
 
     if (!(flags & FS_DIR_MASK) || !sys_homedir->string[0])
         flags |= FS_DIR_MASK;
