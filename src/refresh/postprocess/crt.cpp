@@ -76,8 +76,9 @@ namespace {
 
 [[nodiscard]] bool R_CRTEnabled() noexcept
 {
-        return gl_static.use_shaders && r_postProcessing && r_postProcessing->integer &&
-                r_crtmode && r_crtmode->integer == 1;
+	const bool fbo_active = !r_fbo || r_fbo->integer;
+	return gl_static.use_shaders && r_postProcessing && r_postProcessing->integer && fbo_active &&
+		r_crtmode && r_crtmode->integer == 1;
 }
 
 glStateBits_t R_CRTPrepare(glStateBits_t bits, int viewportWidth, int viewportHeight)
