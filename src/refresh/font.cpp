@@ -763,17 +763,19 @@ int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxBytes,
 	if (!ft_font)
 		ft_font = Ft_FontForImage(image);
 
+	int renderFlags = flags | UI_IGNORECOLOR;
+
 	if (ft_font) {
 		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
 		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
 		if (fontSize) {
 			if (gl_fontshadow->integer > 0)
-				flags |= UI_DROPSHADOW;
-			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxBytes, string, color);
+				renderFlags |= UI_DROPSHADOW;
+			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, renderFlags, maxBytes, string, color);
 		}
 	}
 
-	return R_DrawStringStretch(x, y, scale, flags, maxBytes, string, color, font, nullptr);
+	return R_DrawStringStretch(x, y, scale, renderFlags, maxBytes, string, color, font, nullptr);
 }
 
 /*
