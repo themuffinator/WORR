@@ -5,6 +5,7 @@
 #include "common/utf8.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -659,10 +660,21 @@ void Draw_ShutdownFreeTypeFonts(void)
     ft_library = nullptr;
 }
 
+/*
+=============
+R_AcquireFreeTypeFont
+
+Populate an ftfont_t instance with renderer-managed FreeType state for the provided handle.
+=============
+*/
 bool R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont)
 {
 	if (!outFont)
 		return false;
+
+#if !defined(NDEBUG)
+	assert(!outFont->driverData && "R_AcquireFreeTypeFont expects an unreleased ftfont_t");
+#endif
 
 	outFont->driverData = nullptr;
 	outFont->ascent = 0;
@@ -676,6 +688,10 @@ bool R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont)
 	FtFont *ft_font = Ft_FontForImage(image);
 	if (!ft_font)
 		return false;
+
+#if !defined(NDEBUG)
+	assert(ft_font->face && "R_AcquireFreeTypeFont requires a valid FT_Face");
+#endif
 
 	int pixelHeight = outFont->pixelHeight;
 	if (pixelHeight <= 0)
@@ -701,15 +717,28 @@ bool R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont)
 	return true;
 }
 
+/*
+=============
+R_ReleaseFreeTypeFont
+
+Reset an ftfont_t instance after its FT_Face ownership has been cleared by the caller.
+=============
+*/
 void R_ReleaseFreeTypeFont(ftfont_t *font)
 {
 	if (!font)
 		return;
 
+#if !defined(NDEBUG)
+	assert(!font->face && "R_ReleaseFreeTypeFont must be called after FT_Done_Face");
+#endif
+
 	font->driverData = nullptr;
 	font->ascent = 0;
 	font->descent = 0;
 	font->lineHeight = 0;
+	font->pixelHeight = 0;
+	font->face = nullptr;
 }
 
 /*
