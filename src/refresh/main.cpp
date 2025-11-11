@@ -83,6 +83,7 @@ cvar_t *r_enablefog;
 cvar_t *r_shadows;
 cvar_t *r_staticshadows;
 cvar_t *r_postProcessing;
+cvar_t *r_fbo;
 cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
 cvar_t *r_bloomBlurFalloff;
@@ -1332,7 +1333,7 @@ static void R_ClearMotionBlurHistory(void)
 
 static void R_BindMotionHistoryTextures(void)
 {
-    if (!glr.motion_history_textures_ready) {
+	if ((r_fbo && !r_fbo->integer) || !glr.motion_history_textures_ready) {
         for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
             glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
             GL_ForceTexture(tmu, TEXNUM_BLACK);
@@ -1362,6 +1363,8 @@ Copies the current scene into the motion blur history buffer at full window reso
 */
 static void R_StoreMotionBlurHistory(void)
 {
+	if (r_fbo && !r_fbo->integer)
+		return;
 	if (!glr.motion_blur_enabled || !glr.view_proj_valid)
 		return;
 	if (!glr.motion_history_textures_ready)
@@ -1475,6 +1478,7 @@ static void HDR_DisableFramebufferResources(void)
 	glr.framebuffer_bound = false;
 	glr.framebuffer_width = 0;
 	glr.framebuffer_height = 0;
+	glr.motion_history_textures_ready = false;
 }
 /*
 =============
@@ -1492,7 +1496,11 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool dof_active = world_visible && gl_dof->integer && glr.fd.depth_of_field;
 	const bool motion_blur_enabled = glr.motion_blur_enabled;
 	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
-	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled;
+	const bool fbo_enabled = !r_fbo || r_fbo->integer;
+	const bool fbo_disabled = r_fbo && !r_fbo->integer;
+	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
+	const bool had_framebuffer = glr.framebuffer_ok;
+	const bool had_framebuffer_resources = had_framebuffer || glr.framebuffer_width > 0 || glr.framebuffer_height > 0 || glr.motion_history_textures_ready;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
@@ -1508,6 +1516,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 			prev_type != gl_static.postprocess_type;
 		if (formats_changed)
 			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		if (fbo_disabled && had_framebuffer_resources)
+			GL_ReleaseFramebufferResources();
 		return PP_NONE;
 	}
 
@@ -1664,9 +1674,10 @@ void R_RenderFrame(const refdef_t *fd)
     glr.motion_blur_fov_y = glr.fd.fov_y;
     glr.ppl_bits  = 0;
 
-    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+	const bool fbo_active = !r_fbo || r_fbo->integer;
+	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer && fbo_active;
 
-    glr.motion_blur_enabled = gl_static.use_shaders && post_processing_enabled && r_motionBlur->integer &&
+	glr.motion_blur_enabled = gl_static.use_shaders && post_processing_enabled && r_motionBlur->integer &&
         !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
 
     float motion_blur_scale = 0.0f;
@@ -2076,12 +2087,13 @@ static void GL_Register(void)
     gl_md5_distance = Cvar_Get("gl_md5_distance", "2048", 0);
 #endif
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
-    r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", CVAR_ARCHIVE);
-    r_enablefog = Cvar_Get("r_enablefog", "1", 0);
-    r_shadows = Cvar_Get("r_shadows", "1", CVAR_ARCHIVE);
-    r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
-    r_postProcessing = Cvar_Get("r_postProcessing", "1", CVAR_ARCHIVE);
-    r_bloom = Cvar_Get("r_bloom", "1", CVAR_ARCHIVE);
+	r_skipUnderWaterFX = Cvar_Get("r_skipUnderWaterFX", "0", CVAR_ARCHIVE);
+	r_enablefog = Cvar_Get("r_enablefog", "1", 0);
+	r_shadows = Cvar_Get("r_shadows", "1", CVAR_ARCHIVE);
+	r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
+	r_postProcessing = Cvar_Get("r_postProcessing", "1", CVAR_ARCHIVE);
+	r_fbo = Cvar_Get("r_fbo", "1", CVAR_ARCHIVE);
+	r_bloom = Cvar_Get("r_bloom", "1", CVAR_ARCHIVE);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", CVAR_ARCHIVE);
     r_bloomBlurFalloff = Cvar_Get("r_bloomBlurFalloff", "0.75", CVAR_ARCHIVE);
 	r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.75", CVAR_ARCHIVE);

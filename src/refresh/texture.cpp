@@ -1223,6 +1223,9 @@ drawable dimensions.
 
 bool GL_InitFramebuffers(void)
 {
+	if (r_fbo && !r_fbo->integer)
+		return false;
+
 	static const char *const fbo_names[] = {
 		"FBO_SCENE",
 		"FBO_BOKEH_COC",
@@ -1395,6 +1398,47 @@ bool GL_InitFramebuffers(void)
 		g_hdr_luminance.shutdown();
 
 	return true;
+}
+
+/*
+=============
+GL_ReleaseFramebufferResources
+
+Releases post-processing framebuffer textures and associated state so that the
+renderer no longer depends on framebuffer objects.
+=============
+*/
+void GL_ReleaseFramebufferResources(void)
+{
+	GL_ClearErrors();
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_COC);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_GATHER);
+	GL_InitPostProcTexture(0, 0);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+	GL_InitDepthTexture(0, 0);
+	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_MOTION_HISTORY(i));
+		GL_InitPostProcTexture(0, 0);
+	}
+	g_bloom_effect.resize(0, 0);
+	gl_static.dof.full_width = 0;
+	gl_static.dof.full_height = 0;
+	gl_static.dof.result_width = 0;
+	gl_static.dof.result_height = 0;
+	gl_static.dof.half_width = 0;
+	gl_static.dof.half_height = 0;
+	gl_static.dof.reduced_resolution = false;
+	glr.motion_history_textures_ready = false;
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 static void gl_partshape_changed(cvar_t *self)
