@@ -1069,11 +1069,15 @@ static void scr_font_changed(cvar_t* self)
 				resolvedPath += reportFont;
 			}
 			if (hasReason)
-				Com_WPrintf("%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d): %s. Attempting fallbacks.\n",
-						__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError), reason);
+				Com_WPrintf(
+					"%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d): %s. "
+					"Attempting fallbacks.\n",
+					__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError), reason);
 			else
-				Com_WPrintf("%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d). Attempting fallbacks.\n",
-						__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError));
+				Com_WPrintf(
+					"%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d). "
+					"Attempting fallbacks.\n",
+					__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError));
 		}
 		else
 #endif
@@ -1081,18 +1085,23 @@ static void scr_font_changed(cvar_t* self)
 			std::array<char, MAX_OSPATH> lookup_path{};
 			if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
 				if (hasReason)
-					Com_WPrintf("%s: failed to load font '%s' (looked for '%s'): %s. Attempting fallbacks.\n",
+					Com_WPrintf(
+						"%s: failed to load font '%s' (looked for '%s'): %s. Attempting fallbacks.\n",
 						__func__, reportFont, lookup_path.data(), reason);
 				else
-					Com_WPrintf("%s: failed to load font '%s' (looked for '%s'). Attempting fallbacks.\n",
+					Com_WPrintf(
+						"%s: failed to load font '%s' (looked for '%s'). Attempting fallbacks.\n",
 						__func__, reportFont, lookup_path.data());
 			}
 			else {
 				if (hasReason)
-					Com_WPrintf("%s: failed to load font '%s': %s. Attempting fallbacks.\n",
+					Com_WPrintf(
+						"%s: failed to load font '%s': %s. Attempting fallbacks.\n",
 						__func__, reportFont, reason);
 				else
-					Com_WPrintf("%s: failed to load font '%s'. Attempting fallbacks.\n", __func__, reportFont);
+					Com_WPrintf(
+						"%s: failed to load font '%s'. Attempting fallbacks.\n",
+						__func__, reportFont);
 			}
 		}
 #if USE_FREETYPE
