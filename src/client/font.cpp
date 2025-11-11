@@ -19,6 +19,7 @@ static cvar_t* scr_font = nullptr;
 static cvar_t* scr_font_size = nullptr;
 static cvar_t* scr_fontpath = nullptr;
 static cvar_t* scr_text_backend = nullptr;
+static FT_Error scr_lastFreeTypeError = 0;
 
 static void SCR_FreeFreeTypeFonts(void);
 static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle);
@@ -120,6 +121,8 @@ static bool SCR_EnsureFreeTypeLibrary()
 
 	FT_Error error = FT_Init_FreeType(&scr.freetype.library);
 	if (error) {
+		scr_lastFreeTypeError = error;
+		Com_SetLastError(va("Failed to initialize FreeType (%d)", error));
 		Com_Printf("SCR: failed to initialize FreeType (error %d)\n", error);
 		scr.freetype.library = nullptr;
 		return false;
@@ -147,13 +150,16 @@ static void SCR_FreeFreeTypeFonts(void)
 static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string& fontPath,
 	int pixelHeight, qhandle_t handle)
 {
+	scr_lastFreeTypeError = 0;
+	Com_SetLastError(nullptr);
 	if (!SCR_EnsureFreeTypeLibrary())
 		return false;
 
 	void* fileBuffer = nullptr;
 	int length = FS_LoadFile(fontPath.c_str(), &fileBuffer);
 	if (length <= 0) {
-		Com_Printf("SCR: failed to load font '%s'\n", fontPath.c_str());
+		Com_SetLastError(va("Failed to load font '%s': %s", fontPath.c_str(), Q_ErrorString(length)));
+		Com_Printf("SCR: failed to load font '%s' (%s)\n", fontPath.c_str(), Q_ErrorString(length));
 		return false;
 	}
 
@@ -165,12 +171,16 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	FT_Face face = nullptr;
 	FT_Error error = FT_New_Memory_Face(scr.freetype.library, entry.buffer.data(), length, 0, &face);
 	if (error) {
+		scr_lastFreeTypeError = error;
+		Com_SetLastError(va("FreeType failed to create font face (%d)", error));
 		Com_Printf("SCR: failed to create FreeType face for '%s' (error %d)\n", fontPath.c_str(), error);
 		return false;
 	}
 
 	error = FT_Set_Pixel_Sizes(face, 0, pixelHeight);
 	if (error) {
+		scr_lastFreeTypeError = error;
+		Com_SetLastError(va("FreeType failed to set pixel height %d (%d)", pixelHeight, error));
 		Com_Printf("SCR: failed to set pixel height %d for '%s' (error %d)\n", pixelHeight, fontPath.c_str(), error);
 		FT_Done_Face(face);
 		return false;
@@ -198,6 +208,7 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	scr.freetype.activeFontHandle = handle;
 	return true;
 }
+
 /*
 =============
 SCR_LoadDefaultFreeTypeFont
@@ -957,39 +968,61 @@ static void scr_font_changed(cvar_t* self)
 		attemptedLegacy = true;
 	}
 
-        if (!scr.font_pic) {
+	if (!scr.font_pic) {
 		const char* reason = Com_GetLastError();
-		std::array<char, MAX_OSPATH> lookup_path{};
+		const bool hasReason = reason && Q_stricmp(reason, "No error");
 		const char* reportFont = lastAttempt;
 		if (!reportFont || !*reportFont)
 			reportFont = self->string[0] ? self->string : SCR_LEGACY_FONT;
 
-		if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
-			if (reason && reason[0])
-				Com_WPrintf("%s: failed to load font '%s' (looked for '%s'): %s. Attempting fallbacks.\n",
-					__func__, reportFont, lookup_path.data(), reason);
-			else
-				Com_WPrintf("%s: failed to load font '%s' (looked for '%s'). Attempting fallbacks.\n",
-					__func__, reportFont, lookup_path.data());
-		} else {
-			if (reason && reason[0])
-				Com_WPrintf("%s: failed to load font '%s': %s. Attempting fallbacks.\n",
-					__func__, reportFont, reason);
-			else
-				Com_WPrintf("%s: failed to load font '%s'. Attempting fallbacks.\n", __func__, reportFont);
-		}
-
 #if USE_FREETYPE
-	const qhandle_t originalHandle = scr.font_pic;
-	qhandle_t fallbackHandle = freetypeHandle ? freetypeHandle : previousHandle;
-	if (fallbackHandle)
-		scr.font_pic = fallbackHandle;
-	if (fallbackHandle && SCR_LoadDefaultFreeTypeFont(fallbackHandle) && scr.freetype.activeFontHandle) {
-		scr.font_pic = scr.freetype.activeFontHandle;
-		scr_activeTextBackend = scr_text_backend_mode::TTF;
-		return;
-	}
-	scr.font_pic = originalHandle;
+		const bool attemptedTTF = reportFont && SCR_IsTrueTypeFontPath(reportFont);
+		if (attemptedTTF) {
+			std::string resolvedPath = reportFont;
+			if (scr_fontpath && scr_fontpath->string[0] && reportFont[0] != '/' && reportFont[0] != '\\') {
+				resolvedPath = scr_fontpath->string;
+				if (!resolvedPath.empty() && resolvedPath.back() != '/' && resolvedPath.back() != '\\')
+					resolvedPath.push_back('/');
+				resolvedPath += reportFont;
+			}
+			if (hasReason)
+				Com_WPrintf("%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d): %s. Attempting fallbacks.\n",
+						__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError), reason);
+			else
+				Com_WPrintf("%s: failed to load TrueType font '%s' (looked for '%s'; FreeType error %d). Attempting fallbacks.\n",
+						__func__, reportFont, resolvedPath.c_str(), static_cast<int>(scr_lastFreeTypeError));
+		}
+		else
+#endif
+		{
+			std::array<char, MAX_OSPATH> lookup_path{};
+			if (SCR_BuildFontLookupPath(reportFont, lookup_path.data(), lookup_path.size())) {
+				if (hasReason)
+					Com_WPrintf("%s: failed to load font '%s' (looked for '%s'): %s. Attempting fallbacks.\n",
+						__func__, reportFont, lookup_path.data(), reason);
+				else
+					Com_WPrintf("%s: failed to load font '%s' (looked for '%s'). Attempting fallbacks.\n",
+						__func__, reportFont, lookup_path.data());
+			}
+			else {
+				if (hasReason)
+					Com_WPrintf("%s: failed to load font '%s': %s. Attempting fallbacks.\n",
+						__func__, reportFont, reason);
+				else
+					Com_WPrintf("%s: failed to load font '%s'. Attempting fallbacks.\n", __func__, reportFont);
+			}
+		}
+#if USE_FREETYPE
+		const qhandle_t originalHandle = scr.font_pic;
+		qhandle_t fallbackHandle = freetypeHandle ? freetypeHandle : previousHandle;
+		if (fallbackHandle)
+			scr.font_pic = fallbackHandle;
+		if (fallbackHandle && SCR_LoadDefaultFreeTypeFont(fallbackHandle) && scr.freetype.activeFontHandle) {
+			scr.font_pic = scr.freetype.activeFontHandle;
+			scr_activeTextBackend = scr_text_backend_mode::TTF;
+			return;
+		}
+		scr.font_pic = originalHandle;
 #endif
 
 		if (scr.kfont.pic) {
@@ -1000,6 +1033,7 @@ static void scr_font_changed(cvar_t* self)
 		scr_activeTextBackend = scr_text_backend_mode::LEGACY;
 		scr.font_pic = SCR_RegisterFontPath(SCR_LEGACY_FONT);
 	}
+
 }
 /*
 =============
