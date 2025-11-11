@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include "postprocess/bloom.hpp"
 #include "postprocess/hdr_luminance.hpp"
+#include "postprocess/crt.hpp"
 #include "font_freetype.hpp"
 #include "common/prompt.hpp"
 #include <algorithm>
@@ -1268,13 +1269,18 @@ bool GL_InitFramebuffers(void)
 	const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 	const bool dof_reduced = dof_active && gl_dof_quality && gl_dof_quality->integer;
 	const bool motion_blur_active = glr.motion_blur_enabled;
+	const bool underwater_effect_active = !r_skipUnderWaterFX->integer;
+	const bool bloom_effect_active = r_bloom->integer;
+	const bool hdr_effect_active = gl_static.hdr.active;
+	const bool crt_effect_active = R_CRTEnabled();
+	const bool scene_required = underwater_effect_active || bloom_effect_active || dof_active || motion_blur_active || hdr_effect_active || crt_effect_active;
 
-	if (!r_skipUnderWaterFX->integer || r_bloom->integer || dof_active || motion_blur_active) {
+	if (scene_required && drawable_w > 0 && drawable_h > 0) {
 		scene_w = drawable_w;
 		scene_h = drawable_h;
 	}
 
-	if (r_bloom->integer) {
+	if (bloom_effect_active) {
 		bloom_w = drawable_w;
 		bloom_h = drawable_h;
 	}
@@ -1340,7 +1346,8 @@ bool GL_InitFramebuffers(void)
 
 	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_DEPTH : GL_NONE, 0);
 
-	CHECK_FB(scene_w, "FBO_SCENE");
+	const bool scene_expected = scene_required && scene_w > 0 && scene_h > 0;
+	CHECK_FB(scene_expected, "FBO_SCENE");
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
 	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dof_full_w ? TEXNUM_PP_DOF_COC : GL_NONE, 0);
