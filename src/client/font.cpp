@@ -32,6 +32,7 @@ namespace {
 }
 
 static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTypeBaseCreation);
+static void scr_font_changed(cvar_t* self);
 
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
@@ -230,7 +231,7 @@ static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle)
 	std::string fontPath;
 	if (scr_fontpath && scr_fontpath->string[0]) {
 		fontPath = scr_fontpath->string;
-		if (!fontPath.empty() && fontPath.back() != '/' && fontPath.back() != '\\')
+		if (!fontPath.empty() && fontPath.back() != '/' && fontPath.back() != '\')
 			fontPath.push_back('/');
 	}
 	fontPath += "RobotoMono-Regular.ttf";
@@ -368,12 +369,10 @@ static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTy
 		return R_RegisterFont(va("/%s", name));
 	return R_RegisterFont(name);
 }
-#if USE_FREETYPE
-
 enum class scr_text_backend_mode {
-        LEGACY,
-        TTF,
-        KFONT,
+	LEGACY,
+	TTF,
+	KFONT,
 };
 
 static scr_text_backend_mode scr_activeTextBackend = scr_text_backend_mode::LEGACY;
@@ -389,14 +388,14 @@ Ensures a renderer font handle exists for FreeType text rendering.
 */
 static qhandle_t SCR_CreateFreeTypeBaseHandle(void)
 {
-        if (scr.font_pic)
-                return scr.font_pic;
+	if (scr.font_pic)
+		return scr.font_pic;
 
-        const char* candidates[] = {
-                (scr_font && SCR_IsTrueTypeFontPath(scr_font->string)) ? scr_font->string : nullptr,
-                "/fonts/RobotoMono-Regular.ttf",
-                nullptr,
-        };
+	const char* candidates[] = {
+		(scr_font && SCR_IsTrueTypeFontPath(scr_font->string)) ? scr_font->string : nullptr,
+		"/fonts/RobotoMono-Regular.ttf",
+		nullptr,
+	};
 
 	for (const char* candidate : candidates) {
 		if (!candidate || !*candidate)
@@ -405,9 +404,9 @@ static qhandle_t SCR_CreateFreeTypeBaseHandle(void)
 		qhandle_t handle = SCR_RegisterFontPathInternal(candidate, true);
 		if (handle)
 			return handle;
-        }
+	}
 
-        return 0;
+	return 0;
 }
 #endif
 
@@ -454,7 +453,6 @@ static scr_text_backend_mode SCR_ParseTextBackend(const char* value)
 	return scr_text_backend_mode::LEGACY;
 }
 #endif
-
 static bool SCR_ShouldUseKFont()
 {
 	return scr_activeTextBackend == scr_text_backend_mode::KFONT && scr.kfont.pic;
@@ -886,7 +884,7 @@ static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t 
 		std::array<char, MAX_QPATH> quake_path{};
 		size_t len = 0;
 
-		if (font_name[0] == '/' || font_name[0] == '\\')
+		if (font_name[0] == '/' || font_name[0] == '\')
 			len = FS_NormalizePathBuffer(quake_path.data(), font_name + 1, quake_path.size());
 		else
 			len = Q_concat(quake_path.data(), quake_path.size(), "pics/", font_name);
@@ -1055,9 +1053,9 @@ static void scr_font_changed(cvar_t* self)
 		const bool attemptedTTF = reportFont && SCR_IsTrueTypeFontPath(reportFont);
 		if (attemptedTTF) {
 			std::string resolvedPath = reportFont;
-			if (scr_fontpath && scr_fontpath->string[0] && reportFont[0] != '/' && reportFont[0] != '\\') {
+			if (scr_fontpath && scr_fontpath->string[0] && reportFont[0] != '/' && reportFont[0] != '\') {
 				resolvedPath = scr_fontpath->string;
-				if (!resolvedPath.empty() && resolvedPath.back() != '/' && resolvedPath.back() != '\\')
+				if (!resolvedPath.empty() && resolvedPath.back() != '/' && resolvedPath.back() != '\')
 					resolvedPath.push_back('/');
 				resolvedPath += reportFont;
 			}
@@ -1249,6 +1247,13 @@ void SCR_InitFontSystem(void)
 	Cmd_AddCommand("scr_font_reload", SCR_FontReload_f);
 }
 
+/*
+=============
+SCR_ShutdownFontSystem
+
+Releases font-related resources and unregisters font system callbacks.
+=============
+*/
 void SCR_ShutdownFontSystem(void)
 {
 	Cmd_RemoveCommand("scr_font_reload");
