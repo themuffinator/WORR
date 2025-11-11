@@ -103,8 +103,16 @@ void R_QueueShadowLight(const shadow_light_submission_t &light)
 	g_shadowLights.push_back(sanitized);
 }
 
+/*
+=============
+R_CollectShadowLights
+
+Collects queued shadow-casting lights, applying fade and style weighting,
+and writes the results into the renderer's dynamic light array.
+=============
+*/
 size_t R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
-	dlight_t *dlights, size_t max_dlights)
+        dlight_t *dlights, size_t max_dlights)
 {
 	if (!dlights || max_dlights == 0)
 		return 0;
@@ -113,13 +121,15 @@ size_t R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
 		const shadow_light_submission_t *light;
 		float	intensity;
 		float	distance;
+		size_t	submission_index;
 	};
 
 	static std::vector<collected_light_t> collected;
 	collected.clear();
 	collected.reserve(g_shadowLights.size());
 
-	for (const shadow_light_submission_t &light : g_shadowLights) {
+	for (size_t light_index = 0; light_index < g_shadowLights.size(); ++light_index) {
+		const shadow_light_submission_t &light = g_shadowLights[light_index];
 		float distance = 0.0f;
 		const float fade = compute_fade_factor(light, vieworg, &distance);
 		if (fade <= 0.0f)
@@ -133,7 +143,7 @@ size_t R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
 		if (intensity <= 0.0f)
 			continue;
 
-		collected.push_back({ &light, intensity, distance });
+		collected.push_back({ &light, intensity, distance, light_index });
 	}
 
 	if (collected.empty())
@@ -156,6 +166,9 @@ size_t R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
 	for (const collected_light_t &entry : collected) {
 		dlight_t &out = dlights[count++];
 		const shadow_light_submission_t &light = *entry.light;
+		out.shadow_submission_index = static_cast<int>(entry.submission_index);
+		out.shadow_view_base = -1;
+		out.shadow_view_count = 0;
 		VectorCopy(light.origin, out.origin);
 		out.radius = light.radius;
 		out.intensity = entry.intensity;

@@ -56,6 +56,8 @@ struct shadow_render_view_t {
 };
 
 std::vector<shadow_render_view_t> g_render_views;
+std::vector<int> g_light_shadow_bases;
+std::vector<int> g_light_shadow_counts;
 int g_shadow_requested_quality = -1;
 
 bool has_required_gl_capabilities()
@@ -259,7 +261,14 @@ int compute_view_resolution(const shadow_light_submission_t &light)
 	return resolution;
 }
 
-bool append_shadow_view(const shadow_light_submission_t &light, const vec3_t axis[3], float fov,
+/*
+=============
+append_shadow_view
+
+Builds a shadow map view for the given light and face index.
+=============
+*/
+bool append_shadow_view(const shadow_light_submission_t &light, size_t light_index, const vec3_t axis[3], float fov,
 	float near_plane, float far_plane, int face)
 {
 	mat4_t view_matrix;
@@ -303,6 +312,11 @@ bool append_shadow_view(const shadow_light_submission_t &light, const vec3_t axi
 
 	g_render_views.push_back(view);
 	store_shadow_item(assignment);
+	if (light_index < g_light_shadow_bases.size() && assignment.atlas_index >= 0) {
+		if (g_light_shadow_bases[light_index] < 0)
+			g_light_shadow_bases[light_index] = assignment.atlas_index;
+		g_light_shadow_counts[light_index]++;
+	}
 	return true;
 }
 
@@ -612,6 +626,14 @@ const shadow_view_assignment_t *R_ShadowAtlasViews(void)
 	return gl_static.shadow.assignments.data();
 }
 
+/*
+=============
+R_RenderShadowViews
+
+Renders the queued shadow map views and records the atlas allocation
+information for each light.
+=============
+*/
 void R_RenderShadowViews(void)
 {
 	if (!gl_static.use_shaders)
@@ -626,10 +648,12 @@ void R_RenderShadowViews(void)
 
 	size_t light_count = 0;
 	const shadow_light_submission_t *lights = R_GetQueuedShadowLights(&light_count);
+	g_light_shadow_bases.assign(light_count, -1);
+	g_light_shadow_counts.assign(light_count, 0);
 	if (!lights || !light_count)
 		return;
 
-	for (size_t i = 0; i < light_count; ++i) {
+		for (size_t i = 0; i < light_count; ++i) {
 		const shadow_light_submission_t &light = lights[i];
 		if (!light.casts_shadow)
 			continue;
@@ -641,7 +665,7 @@ void R_RenderShadowViews(void)
 			for (size_t face_index = 0; face_index < kCubemapFaceOrientations.size(); ++face_index) {
 				vec3_t axis[3];
 				build_axis_from_orientation(kCubemapFaceOrientations[face_index], axis);
-				if (!append_shadow_view(light, axis, 90.0f, near_plane, far_plane, static_cast<int>(face_index)))
+				if (!append_shadow_view(light, i, axis, 90.0f, near_plane, far_plane, static_cast<int>(face_index)))
 					break;
 			}
 		} else if (light.lighttype == shadow_light_type_cone && light.coneangle > 0.0f) {
@@ -649,7 +673,49 @@ void R_RenderShadowViews(void)
 			vec3_t axis[3];
 			build_axis_from_direction(light.direction, up, axis);
 			const float fov = std::clamp(light.coneangle, 5.0f, 170.0f);
-			append_shadow_view(light, axis, fov, near_plane, far_plane, -1);
+			append_shadow_view(light, i, axis, fov, near_plane, far_plane, -1);
+		}
+	}
+
+	for (size_t i = 0; i < light_count; ++i) {
+		const shadow_light_submission_t &light = lights[i];
+		int expected_faces = 0;
+		if (light.casts_shadow) {
+			if (light.lighttype == shadow_light_type_point) {
+				expected_faces = static_cast<int>(kCubemapFaceOrientations.size());
+			} else if (light.lighttype == shadow_light_type_cone && light.coneangle > 0.0f) {
+				expected_faces = 1;
+			}
+		}
+		if (expected_faces <= 0 || g_light_shadow_counts[i] < expected_faces) {
+			g_light_shadow_bases[i] = -1;
+			g_light_shadow_counts[i] = 0;
+		}
+	}
+
+	const int atlas_view_count = static_cast<int>(gl_static.shadow.view_count);
+	if (glr.fd.dlights && glr.fd.num_dlights > 0) {
+		for (int dlight_index = 0; dlight_index < glr.fd.num_dlights; ++dlight_index) {
+			dlight_t &dl = glr.fd.dlights[dlight_index];
+			if (dl.shadow_submission_index < 0) {
+				dl.shadow_view_base = -1;
+				dl.shadow_view_count = 0;
+				continue;
+			}
+			size_t submission_index = static_cast<size_t>(dl.shadow_submission_index);
+			int base = -1;
+			int count = 0;
+			if (submission_index < g_light_shadow_bases.size()) {
+				base = g_light_shadow_bases[submission_index];
+				count = g_light_shadow_counts[submission_index];
+			}
+			if (count <= 0 || base < 0 || base >= atlas_view_count || base + count > atlas_view_count) {
+				dl.shadow_view_base = -1;
+				dl.shadow_view_count = 0;
+				continue;
+			}
+			dl.shadow_view_base = base;
+			dl.shadow_view_count = count;
 		}
 	}
 
