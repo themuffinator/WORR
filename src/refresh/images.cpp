@@ -1714,7 +1714,12 @@ static int try_image_format(imageformat_t fmt, image_t* image, byte** pic)
 
 static int try_replace_ext(imageformat_t fmt, image_t* image, byte** pic)
 {
+	// ensure there is enough room for ".ext"
+	if (image->baselen + 4 >= sizeof(image->name))
+		return Q_ERR(ENAMETOOLONG);
+
 	// replace the extension
+	image->name[image->baselen] = '.';
 	memcpy(image->name + image->baselen + 1, img_loaders[fmt].ext, 4);
 	return try_image_format(fmt, image, pic);
 }
@@ -1877,42 +1882,69 @@ static void print_error(const char* name, imageflags_t flags, int err)
 	Com_LPrintf(level, "Couldn't load %s: %s\n", Com_MakePrintable(name), msg);
 }
 
+/*
+=============
+load_image_data
+
+Loads image data, stripping the extension when an asset is missing so the
+priority list can iterate alternative formats while restoring the original
+name for non-lookup failures.
+=============
+*/
 static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensions, byte** pic)
 {
-	int ret;
+	const size_t baselen = image->baselen;
+	const bool had_extension = image->name[baselen] == '.';
+	char original_name[MAX_QPATH];
+	char base_name[MAX_QPATH];
+	int ret = Q_ERR(ENOENT);
+
+	Q_strlcpy(original_name, image->name, sizeof(original_name));
+	memcpy(base_name, image->name, baselen);
+	base_name[baselen] = '\0';
 
 #if USE_PNG || USE_JPG || USE_TGA
-	if (fmt == IM_MAX) {
-		// unknown extension, but give it a chance to load anyway
-		ret = try_other_formats(IM_MAX, image, pic);
-		if (ret == Q_ERR(ENOENT)) {
-			// not found, change error to invalid path
-			ret = Q_ERR_INVALID_PATH;
-		}
-	}
-	else if (need_override_image(image_get_type(image), fmt)) {
-		// forcibly replace the extension
-		ret = try_other_formats(IM_MAX, image, pic);
-	}
-	else {
-		// first try with original extension
+	const bool override_image = need_override_image(image_get_type(image), fmt);
+	imageformat_t search_orig = fmt;
+	bool tried_primary = false;
+
+	if (fmt != IM_MAX && !override_image) {
 		ret = try_image_format(fmt, image, pic);
-		if (ret == Q_ERR(ENOENT)) {
-			// retry with remaining extensions
-			ret = try_other_formats(fmt, image, pic);
-		}
+		tried_primary = true;
 	}
 
-	// if we are replacing 8-bit texture with a higher resolution 32-bit
-	// texture, we need to recover original image dimensions
-	if (need_dimensions && fmt <= IM_WAL && ret > IM_WAL)
-		get_image_dimensions(fmt, image);
+	if (!tried_primary || ret == Q_ERR(ENOENT)) {
+		if (fmt == IM_MAX || override_image) {
+			search_orig = IM_MAX;
+		}
+
+		if (!tried_primary || ret == Q_ERR(ENOENT)) {
+			memcpy(image->name, base_name, baselen + 1);
+			ret = try_other_formats(search_orig, image, pic);
+			if (ret == Q_ERR(ENOENT) && fmt == IM_MAX) {
+				ret = Q_ERR_INVALID_PATH;
+			}
+		}
+	}
 #else
-	if (fmt == IM_MAX)
+	if (fmt == IM_MAX) {
 		ret = Q_ERR_INVALID_PATH;
-	else
+	} else {
 		ret = try_image_format(fmt, image, pic);
+	}
 #endif
+
+	if (need_dimensions && fmt <= IM_WAL && ret > IM_WAL) {
+		get_image_dimensions(fmt, image);
+	}
+
+	if (ret < 0) {
+		if (ret == Q_ERR(ENOENT) || ret == Q_ERR_INVALID_PATH) {
+			memcpy(image->name, base_name, baselen + 1);
+		} else if (had_extension) {
+			Q_strlcpy(image->name, original_name, sizeof(image->name));
+		}
+	}
 
 	return ret;
 }
