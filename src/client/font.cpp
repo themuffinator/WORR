@@ -29,6 +29,40 @@ static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 
 namespace {
 	constexpr const char* SCR_LEGACY_FONT = "conchars";
+	constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
+	constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+}
+
+/*
+=============
+SCR_IsPathSeparator
+
+Returns whether the provided character is considered a path separator on supported platforms.
+=============
+*/
+static constexpr bool SCR_IsPathSeparator(char ch)
+{
+	return ch == SCR_PATH_SEPARATOR_UNIX || ch == SCR_PATH_SEPARATOR_WINDOWS;
+}
+
+/*
+=============
+SCR_HasPathSeparator
+
+Returns whether the provided string contains any supported path separators.
+=============
+*/
+static bool SCR_HasPathSeparator(const char* text)
+{
+	if (!text)
+		return false;
+
+	for (const char* cursor = text; *cursor; ++cursor) {
+		if (SCR_IsPathSeparator(*cursor))
+			return true;
+	}
+
+	return false;
 }
 
 static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTypeBaseCreation);
@@ -240,7 +274,7 @@ static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle)
 	std::string fontPath;
 	if (scr_fontpath && scr_fontpath->string[0]) {
 		fontPath = scr_fontpath->string;
-		if (!fontPath.empty() && fontPath.back() != '/' && fontPath.back() != '\')
+		if (!fontPath.empty() && !SCR_IsPathSeparator(fontPath.back()))
 			fontPath.push_back('/');
 	}
 	fontPath += "RobotoMono-Regular.ttf";
@@ -320,7 +354,7 @@ static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHa
 	std::array<char, MAX_QPATH> normalized{};
 	size_t normalizedLen = 0;
 
-	if (path[0] == '/' || path[0] == '\')
+	if (SCR_IsPathSeparator(path[0]))
 		normalizedLen = FS_NormalizePathBuffer(normalized.data(), path + 1, normalized.size());
 	else
 		normalizedLen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
@@ -372,9 +406,9 @@ static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTy
 		return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0);
 #endif
 
-	if (name[0] == '/' || name[0] == '\')
+	if (SCR_IsPathSeparator(name[0]))
 		return R_RegisterFont(name);
-	if (strpbrk(name, "/\\"))
+	if (SCR_HasPathSeparator(name))
 		return R_RegisterFont(va("/%s", name));
 	return R_RegisterFont(name);
 }
@@ -893,7 +927,7 @@ static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t 
 		std::array<char, MAX_QPATH> quake_path{};
 		size_t len = 0;
 
-		if (font_name[0] == '/' || font_name[0] == '\')
+		if (SCR_IsPathSeparator(font_name[0]))
 			len = FS_NormalizePathBuffer(quake_path.data(), font_name + 1, quake_path.size());
 		else
 			len = Q_concat(quake_path.data(), quake_path.size(), "pics/", font_name);
@@ -1062,9 +1096,9 @@ static void scr_font_changed(cvar_t* self)
 		const bool attemptedTTF = reportFont && SCR_IsTrueTypeFontPath(reportFont);
 		if (attemptedTTF) {
 			std::string resolvedPath = reportFont;
-			if (scr_fontpath && scr_fontpath->string[0] && reportFont[0] != '/' && reportFont[0] != '\') {
+			if (scr_fontpath && scr_fontpath->string[0] && !SCR_IsPathSeparator(reportFont[0])) {
 				resolvedPath = scr_fontpath->string;
-				if (!resolvedPath.empty() && resolvedPath.back() != '/' && resolvedPath.back() != '\')
+				if (!resolvedPath.empty() && !SCR_IsPathSeparator(resolvedPath.back()))
 					resolvedPath.push_back('/');
 				resolvedPath += reportFont;
 			}
