@@ -927,6 +927,9 @@ static void HDR_UpdateExposure(int width, int height)
 	if (!gl_static.hdr.active)
 		return;
 
+	if (!glr.framebuffer_ok)
+		return;
+
 	if (width <= 0 || height <= 0)
 		return;
 
@@ -1455,6 +1458,24 @@ static bool GL_UpdateBloomEffect(bool bloom_enabled, int target_width, int targe
 	g_bloom_effect.resize(0, 0);
 	return false;
 }
+
+/*
+=============
+HDR_DisableFramebufferResources
+
+Disables HDR state and releases reduction resources when the post-process framebuffer is unavailable.
+=============
+*/
+static void HDR_DisableFramebufferResources(void)
+{
+	gl_static.hdr.active = false;
+	g_hdr_luminance.shutdown();
+	HDR_ResetState();
+	glr.framebuffer_ok = false;
+	glr.framebuffer_bound = false;
+	glr.framebuffer_width = 0;
+	glr.framebuffer_height = 0;
+}
 /*
 =============
 GL_BindFramebuffer
@@ -1480,18 +1501,13 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
 
 	if (!post_processing_requested || !world_visible) {
-		const bool was_hdr_active = gl_static.hdr.active;
-		bool formats_changed = false;
-		gl_static.hdr.active = false;
-		if (was_hdr_active) {
-			HDR_UpdatePostprocessFormats();
-			formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
-				prev_format != gl_static.postprocess_format ||
-				prev_type != gl_static.postprocess_type;
-		}
+		HDR_DisableFramebufferResources();
+		HDR_UpdatePostprocessFormats();
+		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
+			prev_format != gl_static.postprocess_format ||
+			prev_type != gl_static.postprocess_type;
 		if (formats_changed)
 			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
-		glr.framebuffer_bound = false;
 		return PP_NONE;
 	}
 
@@ -1575,8 +1591,16 @@ static pp_flags_t GL_BindFramebuffer(void)
 			gl_backend->update_blur();
 	}
 
-	if (!flags || !glr.framebuffer_ok)
+	if (!flags || !glr.framebuffer_ok) {
+		HDR_DisableFramebufferResources();
+		HDR_UpdatePostprocessFormats();
+		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
+			prev_format != gl_static.postprocess_format ||
+			prev_type != gl_static.postprocess_type;
+		if (formats_changed)
+			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
 		return PP_NONE;
+	}
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
 	glr.framebuffer_bound = true;
