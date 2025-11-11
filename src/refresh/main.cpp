@@ -1088,22 +1088,49 @@ void R_HDRUpdateUniforms(void)
     gls.u_block_dirty = true;
 }
 
+/*
+=============
+GL_PostProcess
+
+Renders a screen-aligned quad for the active post-process stage using the
+provided rectangle.
+=============
+*/
 void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 {
-    GL_BindArrays(VA_POSTPROCESS);
-    GL_StateBits(GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_FALSE |
-                 GLS_CULL_DISABLE | GLS_TEXTURE_REPLACE | bits);
-    GL_ArrayBits(GLA_VERTEX | GLA_TC);
-    gl_backend->load_uniforms();
+	GL_BindArrays(VA_POSTPROCESS);
+	GL_StateBits(GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_FALSE |
+			GLS_CULL_DISABLE | GLS_TEXTURE_REPLACE | bits);
+	GL_ArrayBits(GLA_VERTEX | GLA_TC);
+	gl_backend->load_uniforms();
+	
+	Vector4Set(tess.vertices,      x,     y,     0, 1);
+	Vector4Set(tess.vertices +  4, x,     y + h, 0, 0);
+	Vector4Set(tess.vertices +  8, x + w, y,     1, 1);
+	Vector4Set(tess.vertices + 12, x + w, y + h, 1, 0);
+	
+	GL_LockArrays(4);
+	qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	GL_UnlockArrays();
+}
 
-    Vector4Set(tess.vertices,      x,     y,     0, 1);
-    Vector4Set(tess.vertices +  4, x,     y + h, 0, 0);
-    Vector4Set(tess.vertices +  8, x + w, y,     1, 1);
-    Vector4Set(tess.vertices + 12, x + w, y + h, 1, 0);
+/*
+=============
+R_GetFinalCompositeRect
 
-    GL_LockArrays(4);
-    qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    GL_UnlockArrays();
+Calculates the backbuffer-space rectangle for the final post-process
+composite.
+=============
+*/
+static void R_GetFinalCompositeRect(int *x, int *y, int *w, int *h)
+{
+	if (!x || !y || !w || !h)
+		return;
+	
+	*x = 0;
+	*y = 0;
+	*w = r_config.width;
+	*h = r_config.height;
 }
 
 static void GL_BokehViewport(int w, int h)
@@ -1339,32 +1366,37 @@ static void R_StoreMotionBlurHistory(void)
 
 static void GL_DrawDepthOfField(pp_flags_t flags)
 {
-    const bool waterwarp = (flags & PP_WATERWARP) != 0;
+	const bool waterwarp = (flags & PP_WATERWARP) != 0;
 
-    GL_RunDepthOfField();
+	GL_RunDepthOfField();
 
-    GL_Setup2D();
+	GL_Setup2D();
 
-    glStateBits_t bits = GLS_DEFAULT;
-    if (waterwarp)
-        bits |= GLS_WARP_ENABLE;
-    R_HDRUpdateUniforms();
-    if (flags & PP_HDR)
-        bits |= GLS_TONEMAP_ENABLE;
+	glStateBits_t bits = GLS_DEFAULT;
+	if (waterwarp)
+		bits |= GLS_WARP_ENABLE;
+	R_HDRUpdateUniforms();
+	if (flags & PP_HDR)
+		bits |= GLS_TONEMAP_ENABLE;
 
-    bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+	int composite_x = 0;
+	int composite_y = 0;
+	int composite_w = 0;
+	int composite_h = 0;
+	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
 
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
-    if (glr.motion_blur_ready) {
-        bits |= GLS_MOTION_BLUR;
-        GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
-        R_BindMotionHistoryTextures();
-    }
+	bits = R_CRTPrepare(bits, composite_w, composite_h);
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+	if (glr.motion_blur_ready) {
+		bits |= GLS_MOTION_BLUR;
+		GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+		R_BindMotionHistoryTextures();
+	}
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
 }
-
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
 static int32_t r_bloomScale_modified = 0;
@@ -1669,6 +1701,12 @@ void R_RenderFrame(const refdef_t *fd)
         gls.u_block_dirty = true;
     }
 
+	int composite_x = 0;
+	int composite_y = 0;
+	int composite_w = 0;
+	int composite_h = 0;
+	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
+
     if (pp_flags & PP_BLOOM) {
         GL_DrawBloom(pp_flags);
     } else if (pp_flags & PP_DEPTH_OF_FIELD) {
@@ -1683,7 +1721,7 @@ void R_RenderFrame(const refdef_t *fd)
         }
 
         if (pp_flags & PP_CRT)
-            bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
+            bits = R_CRTPrepare(bits, composite_w, composite_h);
 
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         if (glr.motion_blur_ready) {
@@ -1693,19 +1731,19 @@ void R_RenderFrame(const refdef_t *fd)
         }
 
         qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
     } else if (pp_flags & PP_HDR) {
         glStateBits_t bits = GLS_TONEMAP_ENABLE;
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
         R_HDRUpdateUniforms();
         if (pp_flags & PP_CRT)
-            bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
-        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+            bits = R_CRTPrepare(bits, composite_w, composite_h);
+        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
     } else if (pp_flags & PP_CRT) {
         glStateBits_t bits = GLS_DEFAULT;
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        bits = R_CRTPrepare(bits, glr.fd.width, glr.fd.height);
-        GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+        bits = R_CRTPrepare(bits, composite_w, composite_h);
+        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
     }
 
     if (glr.motion_blur_enabled)
