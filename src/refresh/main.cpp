@@ -1348,109 +1348,169 @@ static int32_t gl_dof_modified = 0;
 static int32_t gl_dof_quality_modified = 0;
 static int32_t r_motionBlur_modified = 0;
 
+/*
+=============
+GL_UpdateBloomEffect
+
+Ensures the bloom effect matches the requested enable state and framebuffer size.
+Returns true when bloom remains enabled after the resize attempt.
+=============
+*/
+static bool GL_UpdateBloomEffect(bool bloom_enabled)
+{
+	if (bloom_enabled) {
+		if (!g_bloom_effect.resize(glr.fd.width, glr.fd.height)) {
+			g_bloom_effect.resize(0, 0);
+			return false;
+		}
+		return true;
+	}
+
+	g_bloom_effect.resize(0, 0);
+	return false;
+}
+
+
+
+
+/*
+=============
+GL_BindFramebuffer
+
+Initializes or binds the appropriate framebuffer configuration for the current
+frame while updating dependent post-process resources.
+=============
+*/
 static pp_flags_t GL_BindFramebuffer(void)
 {
-    pp_flags_t flags = PP_NONE;
-    bool resized = false;
-    const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
-    const bool motion_blur_enabled = glr.motion_blur_enabled;
+	pp_flags_t flags = PP_NONE;
+	bool resized = false;
+	const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+	const bool motion_blur_enabled = glr.motion_blur_enabled;
+	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
+	const GLenum prev_format = gl_static.postprocess_format;
+	const GLenum prev_type = gl_static.postprocess_type;
 
-    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+	if (!gl_static.use_shaders || !post_processing_enabled) {
+		const bool was_hdr_active = gl_static.hdr.active;
+		bool formats_changed = false;
+		gl_static.hdr.active = false;
+		if (was_hdr_active) {
+			HDR_UpdatePostprocessFormats();
+			formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
+				prev_format != gl_static.postprocess_format ||
+				prev_type != gl_static.postprocess_type;
+		}
+		if (formats_changed)
+			GL_UpdateBloomEffect(false);
+		glr.framebuffer_bound = false;
+		return PP_NONE;
+	}
 
-    if (!gl_static.use_shaders || !post_processing_enabled) {
-        const bool was_hdr_active = gl_static.hdr.active;
-        gl_static.hdr.active = false;
-        if (was_hdr_active)
-            HDR_UpdatePostprocessFormats();
-        glr.framebuffer_bound = false;
-        return PP_NONE;
-    }
+	HDR_UpdateConfig();
 
-    HDR_UpdateConfig();
+	const bool hdr_prev = gl_static.hdr.active;
+	const bool hdr_requested = gl_static.hdr.supported && gl_static.use_shaders && r_hdr->integer;
 
-    const bool hdr_prev = gl_static.hdr.active;
-    const bool hdr_requested = gl_static.hdr.supported && gl_static.use_shaders && r_hdr->integer;
+	if (r_hdr->modified_count != r_hdr_modified) {
+		HDR_ResetState();
+		r_hdr_modified = r_hdr->modified_count;
+	}
 
-    if (r_hdr->modified_count != r_hdr_modified) {
-        HDR_ResetState();
-        r_hdr_modified = r_hdr->modified_count;
-    }
+	if (r_hdr_mode->modified_count != r_hdr_mode_modified)
+		r_hdr_mode_modified = r_hdr_mode->modified_count;
 
-    if (r_hdr_mode->modified_count != r_hdr_mode_modified)
-        r_hdr_mode_modified = r_hdr_mode->modified_count;
+	if (r_exposure_auto->modified_count != r_exposure_auto_modified) {
+		HDR_ResetState();
+		r_exposure_auto_modified = r_exposure_auto->modified_count;
+	}
 
-    if (r_exposure_auto->modified_count != r_exposure_auto_modified) {
-        HDR_ResetState();
-        r_exposure_auto_modified = r_exposure_auto->modified_count;
-    }
+	gl_static.hdr.active = hdr_requested;
 
-    gl_static.hdr.active = hdr_requested;
+	HDR_UpdatePostprocessFormats();
 
-    HDR_UpdatePostprocessFormats();
+	const bool postprocess_format_changed = prev_internal_format != gl_static.postprocess_internal_format ||
+		prev_format != gl_static.postprocess_format ||
+		prev_type != gl_static.postprocess_type;
 
-    if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
-        flags |= PP_WATERWARP;
+	if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
+		flags |= PP_WATERWARP;
 
-    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && r_bloom->integer)
-        flags |= PP_BLOOM;
+	if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && r_bloom->integer)
+		flags |= PP_BLOOM;
 
-    if (dof_active)
-        flags |= PP_DEPTH_OF_FIELD;
+	if (dof_active)
+		flags |= PP_DEPTH_OF_FIELD;
 
-    if (gl_static.hdr.active)
-        flags |= PP_HDR;
+	if (gl_static.hdr.active)
+		flags |= PP_HDR;
 
-    if (R_CRTEnabled())
-        flags |= PP_CRT;
-    if (motion_blur_enabled)
-        flags |= PP_MOTION_BLUR;
+	if (R_CRTEnabled())
+		flags |= PP_CRT;
+	if (motion_blur_enabled)
+		flags |= PP_MOTION_BLUR;
 
-    if (flags)
-        resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
+	if (postprocess_format_changed) {
+		const bool bloom_active = (flags & PP_BLOOM) && glr.fd.width > 0 && glr.fd.height > 0;
+		if (!GL_UpdateBloomEffect(bloom_active))
+			flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
+	}
 
-    if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
-        r_bloom->modified_count != r_bloom_modified ||
-        r_bloomScale->modified_count != r_bloomScale_modified ||
-        r_bloomKernel->modified_count != r_bloomKernel_modified ||
-        gl_dof->modified_count != gl_dof_modified ||
-        gl_dof_quality->modified_count != gl_dof_quality_modified ||
-        r_motionBlur->modified_count != r_motionBlur_modified ||
-        hdr_prev != gl_static.hdr.active) {
-        glr.framebuffer_ok     = GL_InitFramebuffers();
-        glr.framebuffer_width  = glr.fd.width;
-        glr.framebuffer_height = glr.fd.height;
-        r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
-        r_bloom_modified = r_bloom->modified_count;
-        r_bloomScale_modified = r_bloomScale->modified_count;
-        r_bloomKernel_modified = r_bloomKernel->modified_count;
-        gl_dof_modified = gl_dof->modified_count;
-        gl_dof_quality_modified = gl_dof_quality->modified_count;
-        r_motionBlur_modified = r_motionBlur->modified_count;
-        if (flags & PP_BLOOM)
-            gl_backend->update_blur();
-    }
+	if (flags)
+		resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
-    if (!flags || !glr.framebuffer_ok)
-        return PP_NONE;
+	if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
+		r_bloom->modified_count != r_bloom_modified ||
+		r_bloomScale->modified_count != r_bloomScale_modified ||
+		r_bloomKernel->modified_count != r_bloomKernel_modified ||
+		gl_dof->modified_count != gl_dof_modified ||
+		gl_dof_quality->modified_count != gl_dof_quality_modified ||
+		r_motionBlur->modified_count != r_motionBlur_modified ||
+		hdr_prev != gl_static.hdr.active) {
+		glr.framebuffer_ok     = GL_InitFramebuffers();
+		glr.framebuffer_width  = glr.fd.width;
+		glr.framebuffer_height = glr.fd.height;
+		r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
+		r_bloom_modified = r_bloom->modified_count;
+		r_bloomScale_modified = r_bloomScale->modified_count;
+		r_bloomKernel_modified = r_bloomKernel->modified_count;
+		gl_dof_modified = gl_dof->modified_count;
+		gl_dof_quality_modified = gl_dof_quality->modified_count;
+		r_motionBlur_modified = r_motionBlur->modified_count;
+		if (glr.framebuffer_ok && (flags & PP_BLOOM)) {
+			const bool bloom_ready = glr.fd.width > 0 && glr.fd.height > 0;
+			if (!GL_UpdateBloomEffect(bloom_ready))
+				flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
+		}
+		if (flags & PP_BLOOM)
+			gl_backend->update_blur();
+	}
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
-    glr.framebuffer_bound = true;
+	if (!flags || !glr.framebuffer_ok)
+		return PP_NONE;
 
-    if (gl_clear->integer) {
-        if (flags & PP_BLOOM) {
-            static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-            static const vec4_t black = { 0, 0, 0, 1 };
-            qglDrawBuffers(2, buffers);
-            qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
-            qglClearBufferfv(GL_COLOR, 1, black);
-            qglDrawBuffers(1, buffers);
-        } else {
-            qglClear(GL_COLOR_BUFFER_BIT);
-        }
-    }
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+	glr.framebuffer_bound = true;
 
-    return flags;
+	if (gl_clear->integer) {
+		if (flags & PP_BLOOM) {
+			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+			static const vec4_t black = { 0, 0, 0, 1 };
+			qglDrawBuffers(2, buffers);
+			qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
+			qglClearBufferfv(GL_COLOR, 1, black);
+			qglDrawBuffers(1, buffers);
+		} else {
+			qglClear(GL_COLOR_BUFFER_BIT);
+		}
+	}
+
+	return flags;
 }
+
+
+
 
 void R_RenderFrame(const refdef_t *fd)
 {
