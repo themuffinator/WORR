@@ -187,6 +187,7 @@ struct hdrStateLocal_t {
 };
 
 static hdrStateLocal_t hdr_state_local;
+static bool hdr_warned_auto_exposure_stall = false;
 static int32_t r_hdr_modified = 0;
 static int32_t r_hdr_mode_modified = 0;
 static int32_t r_exposure_auto_modified = 0;
@@ -914,70 +915,94 @@ static void HDR_ComputeHistogram(int width, int height)
         gl_static.hdr.histogram[i] = counts[i];
 }
 
+/*
+=============
+HDR_UpdateExposure
+
+Updates automatic HDR exposure state using GPU reduction or a legacy fallback.
+=============
+*/
 static void HDR_UpdateExposure(int width, int height)
 {
-    if (!gl_static.hdr.active)
-        return;
+	if (!gl_static.hdr.active)
+		return;
 
-    if (width <= 0 || height <= 0)
-        return;
+	if (width <= 0 || height <= 0)
+		return;
 
-    hdr_state_local.noise_seed = glr.fd.time;
+	hdr_state_local.noise_seed = glr.fd.time;
 
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 
-    const bool need_reduction = hdr_state_local.gpu_reduce_supported &&
-        (gl_static.hdr.auto_exposure || gl_static.hdr.debug_histogram || gl_static.hdr.debug_tonemap);
-    bool reduction_ok = false;
-    if (need_reduction)
-        reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, width, height);
+	const bool need_reduction = hdr_state_local.gpu_reduce_supported &&
+		(gl_static.hdr.auto_exposure || gl_static.hdr.debug_histogram || gl_static.hdr.debug_tonemap);
+	bool reduction_ok = false;
+	if (need_reduction)
+		reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, width, height);
 
-    if (need_reduction && !reduction_ok) {
-        hdr_state_local.gpu_reduce_supported = false;
-        if (gl_showerrors->integer)
-            Com_EPrintf("HDR exposure: GPU reduction failed for %dx%d, forcing fallback\n", width, height);
-    }
+	if (need_reduction && !reduction_ok) {
+		hdr_state_local.gpu_reduce_supported = false;
+		if (gl_showerrors->integer)
+			Com_EPrintf("HDR exposure: GPU reduction failed for %dx%d, forcing fallback\n", width, height);
+	}
 
-    const int max_dim = max(width, height);
-    const int fallback_mip = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
-    bool use_fallback = !reduction_ok;
-    int target_mip = use_fallback ? fallback_mip : 0;
+	const int max_dim = max(width, height);
+	const int fallback_mip = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
+	bool use_fallback = !reduction_ok;
+	int target_mip = use_fallback ? fallback_mip : 0;
 
-    if (use_fallback && qglGenerateMipmap)
-        qglGenerateMipmap(GL_TEXTURE_2D);
+	if (use_fallback && qglGenerateMipmap)
+		qglGenerateMipmap(GL_TEXTURE_2D);
 
-    float pixel[4] = { gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, 1.0f };
-    if (reduction_ok) {
-        if (!g_hdr_luminance.readbackAverage(pixel)) {
-            reduction_ok = false;
-            hdr_state_local.gpu_reduce_supported = false;
-            if (!use_fallback && qglGenerateMipmap)
-                qglGenerateMipmap(GL_TEXTURE_2D);
-            use_fallback = true;
-            target_mip = fallback_mip;
-        }
-    }
+	float pixel[4] = { gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, 1.0f };
+	bool have_samples = false;
+	if (reduction_ok) {
+		if (g_hdr_luminance.readbackAverage(pixel)) {
+			have_samples = true;
+		} else {
+			reduction_ok = false;
+			hdr_state_local.gpu_reduce_supported = false;
+			if (!use_fallback && qglGenerateMipmap)
+				qglGenerateMipmap(GL_TEXTURE_2D);
+			use_fallback = true;
+			target_mip = fallback_mip;
+		}
+	}
 
-    gl_static.hdr.max_mip_level = target_mip;
+	gl_static.hdr.max_mip_level = target_mip;
 
-    bool fallback_read_ok = true;
-    if (use_fallback && hdr_state_local.legacy_auto_supported && qglGetTexImage) {
-        GL_ClearErrors();
-        qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
-        fallback_read_ok = !GL_ShowErrors("HDR exposure fallback readback");
-        if (!fallback_read_ok) {
-            hdr_state_local.legacy_auto_supported = false;
-            hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
-            if (gl_showerrors->integer)
-                Com_EPrintf("HDR exposure: disabling legacy fallback after failed readback\n");
-        }
-    }
+	bool fallback_read_ok = !use_fallback;
+	if (use_fallback && hdr_state_local.legacy_auto_supported && qglGetTexImage) {
+		GL_ClearErrors();
+		qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
+		fallback_read_ok = !GL_ShowErrors("HDR exposure fallback readback");
+		if (!fallback_read_ok) {
+			hdr_state_local.legacy_auto_supported = false;
+			hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+			if (gl_showerrors->integer)
+				Com_EPrintf("HDR exposure: disabling legacy fallback after failed readback\n");
+		} else {
+			have_samples = true;
+		}
+	}
 
-    if (!use_fallback || fallback_read_ok)
-        hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+	if (!use_fallback || fallback_read_ok)
+		hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
 
-    const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
-    gl_static.hdr.average_luminance = luminance;
+	if (have_samples && hdr_warned_auto_exposure_stall)
+		hdr_warned_auto_exposure_stall = false;
+
+	if (!have_samples) {
+		hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+		if (!hdr_warned_auto_exposure_stall && gl_showerrors->integer) {
+			hdr_warned_auto_exposure_stall = true;
+			Com_EPrintf("HDR exposure: no valid samples available, auto-exposure frozen\n");
+		}
+		return;
+	}
+
+	const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
+	gl_static.hdr.average_luminance = luminance;
 
     float target_ev;
     if (gl_static.hdr.auto_exposure)
