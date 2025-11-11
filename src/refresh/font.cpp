@@ -2,6 +2,7 @@
 #include "font_freetype.hpp"
 #include "gl_draw_utils.hpp"
 #include "common/q3colors.hpp"
+#include "common/utf8.hpp"
 
 #include <algorithm>
 #include <array>
@@ -322,72 +323,18 @@ static FtFontSize *Ft_GetFontSize(FtFont &font, int pixel_height)
 	return res.first->second.get();
 }
 
-static uint32_t DecodeNextUTF8(const char *&p, size_t &remaining)
-{
-	if (!remaining || !*p)
-		return 0;
+/*
+=============
+Ft_DrawString
 
-	const char *start = p;
-	size_t rem = remaining;
-
-	unsigned char lead = static_cast<unsigned char>(*start++);
-	--rem;
-
-	if (lead < 0x80) {
-		p = start;
-		remaining = rem;
-		return lead;
-	}
-
-	size_t expected = 0;
-	uint32_t codepoint = 0;
-	uint32_t min_value = 0;
-
-	if ((lead & 0xE0) == 0xC0) {
-		expected = 1;
-		codepoint = lead & 0x1F;
-		min_value = 0x80;
-	} else if ((lead & 0xF0) == 0xE0) {
-		expected = 2;
-		codepoint = lead & 0x0F;
-		min_value = 0x800;
-	} else if ((lead & 0xF8) == 0xF0 && lead <= 0xF4) {
-		expected = 3;
-		codepoint = lead & 0x07;
-		min_value = 0x10000;
-	} else {
-		goto fail;
-	}
-
-	if (rem < expected)
-		goto fail;
-
-	for (size_t i = 0; i < expected; ++i) {
-		unsigned char c = static_cast<unsigned char>(*start++);
-		if ((c & 0xC0) != 0x80)
-			goto fail;
-		codepoint = (codepoint << 6) | (c & 0x3F);
-	}
-
-	if (codepoint < min_value || codepoint > 0x10FFFF ||
-	    (codepoint >= 0xD800 && codepoint <= 0xDFFF))
-		goto fail;
-
-	remaining = rem - expected;
-	p = start;
-	return codepoint;
-
-fail:
-	++p;
-	--remaining;
-	return '?';
-}
-
+Render a UTF-8 string through the FreeType backend, handling color escapes and optional shadows.
+=============
+*/
 static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int scale, int flags,
                          size_t maxlen, const char *s, color_t color)
 {
-	if (!s)
-		return x;
+        if (!s)
+                return x;
 
 	const int base_height = (std::max)(fontSize.pixel_height, 1);
 	const float target_height = CONCHAR_HEIGHT * (std::max)(scale, 1);
@@ -422,9 +369,9 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 			}
 		}
 
-		uint32_t codepoint = DecodeNextUTF8(p, remaining);
-		if (!codepoint)
-			break;
+                const uint32_t codepoint = utf8_next(p, remaining);
+                if (!codepoint)
+                        break;
 
 		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			pen_y += line_advance + (1.0f / draw.scale);
@@ -484,11 +431,18 @@ static int Ft_DrawString(FtFont &font, FtFontSize &fontSize, int x, int y, int s
 
 	return static_cast<int>(std::lround(pen_x));
 }
+/*
+=============
+Ft_MeasureString
+
+Measure a UTF-8 string using the FreeType backend while respecting Quake 3 color codes.
+=============
+*/
 static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int flags,
                          size_t maxlen, const char *s)
 {
-	if (!s)
-		return 0;
+        if (!s)
+                return 0;
 
 	const int base_height = (std::max)(fontSize.pixel_height, 1);
 	const float target_height = CONCHAR_HEIGHT * (std::max)(scale, 1);
@@ -512,9 +466,9 @@ static int Ft_MeasureString(FtFont &font, FtFontSize &fontSize, int scale, int f
 			}
 		}
 
-		uint32_t codepoint = DecodeNextUTF8(p, remaining);
-		if (!codepoint)
-			break;
+                const uint32_t codepoint = utf8_next(p, remaining);
+                if (!codepoint)
+                        break;
 
 		if ((flags & UI_MULTILINE) && codepoint == '\n') {
 			max_pen_x = (std::max)(max_pen_x, pen_x);
@@ -789,9 +743,16 @@ void R_FreeTypeInvalidateFontSize(qhandle_t font, int pixelHeight)
 	ft_font->sizes.erase(it);
 }
 
-int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
-				 const char *string, color_t color, qhandle_t font,
-				 const ftfont_t *ftFont)
+/*
+=============
+R_DrawFreeTypeString
+
+Draw a UTF-8 string using the FreeType renderer, falling back to bitmap text when unavailable.
+=============
+*/
+int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxBytes,
+                                 const char *string, color_t color, qhandle_t font,
+                                 const ftfont_t *ftFont)
 {
 	const image_t *image = IMG_ForHandle(font);
 
@@ -808,16 +769,23 @@ int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
 		if (fontSize) {
 			if (gl_fontshadow->integer > 0)
 				flags |= UI_DROPSHADOW;
-			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxChars, string, color);
+			return Ft_DrawString(*ft_font, *fontSize, x, y, scale, flags, maxBytes, string, color);
 		}
 	}
 
-	return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, nullptr);
+	return R_DrawStringStretch(x, y, scale, flags, maxBytes, string, color, font, nullptr);
 }
 
-int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
-				 const char *string, qhandle_t font,
-				 const ftfont_t *ftFont)
+/*
+=============
+R_MeasureFreeTypeString
+
+Measure a UTF-8 string using FreeType, falling back to bitmap metrics if needed.
+=============
+*/
+int R_MeasureFreeTypeString(int scale, int flags, size_t maxBytes,
+                                 const char *string, qhandle_t font,
+                                 const ftfont_t *ftFont)
 {
 	const image_t *image = IMG_ForHandle(font);
 
@@ -832,7 +800,7 @@ int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
 		int pixelHeight = (ftFont && ftFont->pixelHeight > 0) ? ftFont->pixelHeight : FT_BASE_PIXEL_HEIGHT;
 		FtFontSize *fontSize = Ft_GetFontSize(*ft_font, pixelHeight);
 		if (fontSize)
-			return Ft_MeasureString(*ft_font, *fontSize, scale, flags, maxChars, string);
+			return Ft_MeasureString(*ft_font, *fontSize, scale, flags, maxBytes, string);
 	}
 
 	int width = 0;
@@ -841,17 +809,21 @@ int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
 	if (!string)
 		return 0;
 
-	while (maxChars-- && *string) {
-		char ch = *string++;
+        size_t remaining = maxBytes;
 
-		if ((flags & UI_MULTILINE) && ch == '\n') {
-			maxWidth = (std::max)(maxWidth, width);
-			width = 0;
-			continue;
-		}
+        while (remaining && *string) {
+                const uint32_t codepoint = utf8_next(string, remaining);
+                if (!codepoint)
+                        break;
 
-		width += CONCHAR_WIDTH * scale;
-	}
+                if ((flags & UI_MULTILINE) && codepoint == '\n') {
+                        maxWidth = (std::max)(maxWidth, width);
+                        width = 0;
+                        continue;
+                }
+
+                width += CONCHAR_WIDTH * scale;
+        }
 
 	return (std::max)(maxWidth, width);
 }

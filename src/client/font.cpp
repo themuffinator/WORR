@@ -1,5 +1,6 @@
 #include "client.hpp"
 #include "common/q3colors.hpp"
+#include "common/utf8.hpp"
 
 #include <algorithm>
 #include <array>
@@ -585,13 +586,21 @@ UTILS
 namespace {
 
 	struct scr_text_metrics_t {
-		size_t  visibleChars{ 0 };
-		color_t finalColor;
+		size_t	visibleChars{ 0 };
+		size_t	processedBytes{ 0 };
+		color_t	finalColor;
 	};
 
+/*
+=============
+SCR_TextMetrics
+
+Measure visible codepoints, track processed bytes, and capture the final color state for a string.
+=============
+*/
 	static scr_text_metrics_t SCR_TextMetrics(const char* s, size_t maxlen, int flags, color_t color)
 	{
-		scr_text_metrics_t metrics{ 0, color };
+		scr_text_metrics_t metrics{ 0, 0, color };
 
 		const char* p = s;
 		size_t remaining = maxlen;
@@ -606,10 +615,14 @@ namespace {
 				}
 			}
 
+			const uint32_t codepoint = utf8_next(p, remaining);
+			if (!codepoint)
+				break;
+
 			++metrics.visibleChars;
-			++p;
-			--remaining;
 		}
+
+		metrics.processedBytes = maxlen - remaining;
 
 		return metrics;
 	}
@@ -710,13 +723,14 @@ int SCR_FontLineHeight(int scale, qhandle_t font)
 
 int SCR_MeasureString(int scale, int flags, size_t maxlen, const char* s, qhandle_t font)
 {
-	const auto metrics = SCR_TextMetrics(s, maxlen, flags, COLOR_WHITE);
-	const size_t visibleChars = metrics.visibleChars;
+        const auto metrics = SCR_TextMetrics(s, maxlen, flags, COLOR_WHITE);
+        const size_t visibleChars = metrics.visibleChars;
+        const size_t processedBytes = metrics.processedBytes;
 
 #if USE_FREETYPE
 	if (SCR_ShouldUseFreeType(font)) {
-		if (const ftfont_t* ftFont = SCR_FTFontForHandle(font))
-			return R_MeasureFreeTypeString(scale, flags, visibleChars, s, font, ftFont);
+                if (const ftfont_t* ftFont = SCR_FTFontForHandle(font))
+                        return R_MeasureFreeTypeString(scale, flags, processedBytes, s, font, ftFont);
 	}
 #endif
 
@@ -734,9 +748,10 @@ SCR_DrawStringStretch
 int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 	const char* s, color_t color, qhandle_t font)
 {
-	const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
-	const size_t visibleChars = metrics.visibleChars;
-	const int clampedScale = std::max(scale, 1);
+        const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
+        const size_t visibleChars = metrics.visibleChars;
+        const size_t processedBytes = metrics.processedBytes;
+        const int clampedScale = std::max(scale, 1);
 
 #if USE_FREETYPE
 	const bool useFreeType = SCR_ShouldUseFreeType(font);
@@ -749,8 +764,8 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 	if ((flags & UI_CENTER) == UI_CENTER) {
 		int width = 0;
 #if USE_FREETYPE
-		if (useFreeType && ftFont)
-			width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, visibleChars, s, font, ftFont);
+                if (useFreeType && ftFont)
+                        width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, processedBytes, s, font, ftFont);
 		else
 #endif
 			if (SCR_ShouldUseKFont())
@@ -762,8 +777,8 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 	else if (flags & UI_RIGHT) {
 		int width = 0;
 #if USE_FREETYPE
-		if (useFreeType && ftFont)
-			width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, visibleChars, s, font, ftFont);
+                if (useFreeType && ftFont)
+                        width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, processedBytes, s, font, ftFont);
 		else
 #endif
 			if (SCR_ShouldUseKFont())
@@ -777,8 +792,8 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 		return SCR_DrawKFontStringLine(x, y, clampedScale, flags, maxlen, s, color);
 
 #if USE_FREETYPE
-	if (useFreeType && ftFont)
-		return R_DrawFreeTypeString(x, y, scale, flags, maxlen, s, color, font, ftFont);
+        if (useFreeType && ftFont)
+                return R_DrawFreeTypeString(x, y, scale, flags, processedBytes, s, color, font, ftFont);
 #endif
 
 	return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font, nullptr);
