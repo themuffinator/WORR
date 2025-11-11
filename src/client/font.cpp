@@ -1111,6 +1111,83 @@ void SCR_RefreshFontCvar(void)
 
 /*
 =============
+SCR_ReportActiveFontStatus
+
+Outputs the currently active text backend, font identifier, and pixel height for diagnostics.
+=============
+*/
+static void SCR_ReportActiveFontStatus(void)
+{
+	std::string fontKey;
+	int pixelHeight = 0;
+	const char* backendName = "legacy";
+
+#if USE_FREETYPE
+	backendName = SCR_TextBackendToString(scr_activeTextBackend);
+
+	if (scr_activeTextBackend == scr_text_backend_mode::TTF) {
+		if (!scr.freetype.activeFontKey.empty())
+			fontKey = scr.freetype.activeFontKey;
+		else if (scr_font && scr_font->string && *scr_font->string)
+			fontKey = scr_font->string;
+
+		auto fontIt = scr.freetype.fonts.find(scr.freetype.activeFontKey);
+		if (fontIt != scr.freetype.fonts.end() && fontIt->second.renderInfo.pixelHeight > 0)
+			pixelHeight = fontIt->second.renderInfo.pixelHeight;
+		else
+			pixelHeight = SCR_CurrentFontPixelHeight();
+	}
+	else if (scr_activeTextBackend == scr_text_backend_mode::KFONT) {
+		fontKey = "/fonts/qconfont.kfont";
+		pixelHeight = scr.kfont.line_height ? scr.kfont.line_height : CONCHAR_HEIGHT;
+	}
+	else {
+		fontKey = SCR_LEGACY_FONT;
+		pixelHeight = CONCHAR_HEIGHT;
+	}
+#else
+	fontKey = SCR_LEGACY_FONT;
+	pixelHeight = CONCHAR_HEIGHT;
+#endif
+
+	if (fontKey.empty()) {
+		if (scr_font && scr_font->string && *scr_font->string)
+			fontKey = scr_font->string;
+		else
+			fontKey = SCR_LEGACY_FONT;
+	}
+
+	if (pixelHeight <= 0)
+		pixelHeight = CONCHAR_HEIGHT;
+
+	Com_Printf("scr_font_reload: backend=%s font=%s pixelHeight=%d\n", backendName, fontKey.c_str(), pixelHeight);
+}
+
+/*
+=============
+SCR_FontReload_f
+
+Re-applies font-related configuration cvars so changes take effect immediately.
+=============
+*/
+static void SCR_FontReload_f(void)
+{
+#if USE_FREETYPE
+	SCR_UpdateFontSizeDefault();
+	if (scr_font_size)
+		scr_font_size_changed(scr_font_size);
+	else
+		SCR_RefreshFontCvar();
+	SCR_ApplyTextBackend();
+#else
+	SCR_RefreshFontCvar();
+#endif
+
+	SCR_ReportActiveFontStatus();
+}
+
+/*
+=============
 SCR_ApplyTextBackend
 
 Ensures the active text backend matches the configured cvar value.
@@ -1154,10 +1231,12 @@ void SCR_InitFontSystem(void)
 	}
 	SCR_UpdateFontSizeDefault();
 #endif
+	Cmd_AddCommand("scr_font_reload", SCR_FontReload_f);
 }
 
 void SCR_ShutdownFontSystem(void)
 {
+	Cmd_RemoveCommand("scr_font_reload");
 #if USE_FREETYPE
 	SCR_FreeFreeTypeFonts();
 	if (scr.freetype.library) {
