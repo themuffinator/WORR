@@ -154,6 +154,13 @@ static void SCR_FreeFreeTypeFonts(void)
 	scr.freetype.activeFontHandle = 0;
 }
 
+/*
+=============
+SCR_LoadFreeTypeFont
+
+Loads a FreeType font from disk and updates the renderer-side cache entry for it.
+=============
+*/
 static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string& fontPath,
 	int pixelHeight, qhandle_t handle)
 {
@@ -196,11 +203,13 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 	entry.renderInfo.face = face;
 	entry.renderInfo.pixelHeight = pixelHeight;
 
-	auto existing = scr.freetype.fonts.find(cacheKey);
-	if (existing != scr.freetype.fonts.end()) {
-		if (existing->second.renderInfo.face)
+        auto existing = scr.freetype.fonts.find(cacheKey);
+        if (existing != scr.freetype.fonts.end()) {
+		if (existing->second.renderInfo.face) {
 			FT_Done_Face(existing->second.renderInfo.face);
-		R_ReleaseFreeTypeFont(&existing->second.renderInfo);
+			existing->second.renderInfo.face = nullptr;
+                }
+                R_ReleaseFreeTypeFont(&existing->second.renderInfo);
 		existing->second = std::move(entry);
 		R_AcquireFreeTypeFont(handle, &existing->second.renderInfo);
 	}
