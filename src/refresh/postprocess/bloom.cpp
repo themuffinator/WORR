@@ -254,23 +254,26 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 
         const float invW = 1.0f / downsampleWidth_;
         const float invH = 1.0f / downsampleHeight_;
-        const float blurScale = (std::max)(r_bloomBlurScale->value, 0.0f);
+		const float blurScale = (std::max)(r_bloomBlurScale->value, 0.0f);
+		const float bloomKnee = Cvar_ClampValue(r_bloomKnee, 0.0f, 5.0f);
         const bool useBlur = blurScale > 0.0f;
         const int passes = (std::max)(static_cast<int>(Cvar_ClampValue(r_bloomPasses, 1.0f, 8.0f)), 1);
         const int kernelMode = static_cast<int>(Cvar_ClampValue(r_bloomKernel, 0.0f, 1.0f));
         const glStateBits_t blurMode = kernelMode == 0 ? GLS_BLUR_GAUSS : GLS_BLUR_BOX;
 
-        gls.u_block.bbr_params[0] = invW;
-        gls.u_block.bbr_params[1] = invH;
-        gls.u_block.bbr_params[2] = 0.0f;
+		gls.u_block.bbr_params[0] = invW;
+		gls.u_block.bbr_params[1] = invH;
+		gls.u_block.bbr_params[2] = 0.0f;
+		gls.u_block.bbr_params[3] = 0.0f;
         gls.u_block_dirty = true;
         GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
         qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
         GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
 
-        gls.u_block.bbr_params[0] = invW;
-        gls.u_block.bbr_params[1] = invH;
-        gls.u_block.bbr_params[2] = (std::max)(r_bloomBrightThreshold->value, 0.0f);
+		gls.u_block.bbr_params[0] = invW;
+		gls.u_block.bbr_params[1] = invH;
+		gls.u_block.bbr_params[2] = (std::max)(r_bloomBrightThreshold->value, 0.0f);
+		gls.u_block.bbr_params[3] = bloomKnee;
         gls.u_block_dirty = true;
         GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
         GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
