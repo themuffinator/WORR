@@ -1626,6 +1626,9 @@ static pp_flags_t GL_BindFramebuffer(void)
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
 	glr.framebuffer_bound = true;
 
+	static const GLenum scene_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	qglDrawBuffers(1, scene_draw_buffers);
+
 	if (gl_clear->integer) {
 		if (flags & PP_BLOOM) {
 			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
