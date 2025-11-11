@@ -1626,6 +1626,12 @@ static pp_flags_t GL_BindFramebuffer(void)
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
 	glr.framebuffer_bound = true;
 
+	static const GLenum scene_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	const GLsizei scene_draw_buffer_count = (flags & PP_BLOOM) ? 2 : 1;
+	qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+	if (qglReadBuffer)
+		qglReadBuffer(GL_COLOR_ATTACHMENT0);
+
 	if (gl_clear->integer) {
 		if (flags & PP_BLOOM) {
 			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
@@ -1633,7 +1639,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 			qglDrawBuffers(2, buffers);
 			qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
 			qglClearBufferfv(GL_COLOR, 1, black);
-			qglDrawBuffers(1, buffers);
+			qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
 		} else {
 			qglClear(GL_COLOR_BUFFER_BIT);
 		}
