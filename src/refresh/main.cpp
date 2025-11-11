@@ -1467,9 +1467,11 @@ static pp_flags_t GL_BindFramebuffer(void)
 {
 	pp_flags_t flags = PP_NONE;
 	bool resized = false;
-	const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
+	const bool world_visible = !(glr.fd.rdflags & RDF_NOWORLDMODEL);
+	const bool dof_active = world_visible && gl_dof->integer && glr.fd.depth_of_field;
 	const bool motion_blur_enabled = glr.motion_blur_enabled;
 	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
@@ -1477,7 +1479,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
 
-	if (!gl_static.use_shaders || !post_processing_enabled) {
+	if (!post_processing_requested || !world_visible) {
 		const bool was_hdr_active = gl_static.hdr.active;
 		bool formats_changed = false;
 		gl_static.hdr.active = false;
@@ -1522,7 +1524,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
 		flags |= PP_WATERWARP;
 
-	if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && r_bloom->integer)
+	if (r_bloom->integer)
 		flags |= PP_BLOOM;
 
 	if (dof_active)
@@ -1533,6 +1535,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	if (R_CRTEnabled())
 		flags |= PP_CRT;
+
 	if (motion_blur_enabled)
 		flags |= PP_MOTION_BLUR;
 
@@ -1593,9 +1596,6 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	return flags;
 }
-
-
-
 
 void R_RenderFrame(const refdef_t *fd)
 {
@@ -1735,44 +1735,47 @@ void R_RenderFrame(const refdef_t *fd)
 	int composite_h = 0;
 	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
 
-    if (pp_flags & PP_BLOOM) {
-        GL_DrawBloom(pp_flags);
-    } else if (pp_flags & PP_DEPTH_OF_FIELD) {
-        GL_DrawDepthOfField(pp_flags);
-    } else if (pp_flags & (PP_WATERWARP | PP_HDR | PP_MOTION_BLUR)) {
-        glStateBits_t bits = GLS_DEFAULT;
-        if (pp_flags & PP_WATERWARP)
-            bits |= GLS_WARP_ENABLE;
-        if (pp_flags & PP_HDR) {
-            R_HDRUpdateUniforms();
-            bits |= GLS_TONEMAP_ENABLE;
-        }
+	const bool world_visible = !(glr.fd.rdflags & RDF_NOWORLDMODEL);
 
-        if (pp_flags & PP_CRT)
-            bits = R_CRTPrepare(bits, composite_w, composite_h);
+	if (world_visible && (pp_flags & PP_BLOOM)) {
+		GL_DrawBloom(pp_flags);
+	} else if (world_visible && (pp_flags & PP_DEPTH_OF_FIELD)) {
+		GL_DrawDepthOfField(pp_flags);
+	} else if (world_visible && (pp_flags & (PP_WATERWARP | PP_HDR | PP_MOTION_BLUR))) {
+		glStateBits_t bits = GLS_DEFAULT;
+		if (pp_flags & PP_WATERWARP)
+			bits |= GLS_WARP_ENABLE;
+		if (pp_flags & PP_HDR) {
+			R_HDRUpdateUniforms();
+			bits |= GLS_TONEMAP_ENABLE;
+		}
 
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        if (glr.motion_blur_ready) {
-            bits |= GLS_MOTION_BLUR;
-            GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
-            R_BindMotionHistoryTextures();
-        }
+		if (pp_flags & PP_CRT)
+			bits = R_CRTPrepare(bits, composite_w, composite_h);
 
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
-    } else if (pp_flags & PP_HDR) {
-        glStateBits_t bits = GLS_TONEMAP_ENABLE;
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        R_HDRUpdateUniforms();
-        if (pp_flags & PP_CRT)
-            bits = R_CRTPrepare(bits, composite_w, composite_h);
-        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
-    } else if (pp_flags & PP_CRT) {
-        glStateBits_t bits = GLS_DEFAULT;
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        bits = R_CRTPrepare(bits, composite_w, composite_h);
-        GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
-    }
+		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+		if (glr.motion_blur_ready) {
+			bits |= GLS_MOTION_BLUR;
+			GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+			R_BindMotionHistoryTextures();
+		}
+
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+	} else if (world_visible && (pp_flags & PP_HDR)) {
+		glStateBits_t bits = GLS_TONEMAP_ENABLE;
+		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+		R_HDRUpdateUniforms();
+		if (pp_flags & PP_CRT)
+			bits = R_CRTPrepare(bits, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+	} else if (world_visible && (pp_flags & PP_CRT)) {
+		glStateBits_t bits = GLS_DEFAULT;
+		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+		bits = R_CRTPrepare(bits, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+	}
+
 
     if (glr.motion_blur_enabled)
         R_StoreMotionBlurHistory();
