@@ -1192,20 +1192,103 @@ static void GL_InitDepthTexture(int w, int h)
 
 static bool GL_CheckFramebufferStatus(bool check, const char *name)
 {
-    GL_ShowErrors(__func__);
+	GL_ShowErrors(__func__);
 
-    if (!check)
-        return true;
+	if (!check)
+		return true;
 
-    GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status == GL_FRAMEBUFFER_COMPLETE)
-        return true;
+	GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status == GL_FRAMEBUFFER_COMPLETE)
+		return true;
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (gl_showerrors->integer)
-        Com_EPrintf("%s framebuffer status %#x\n", name, status);
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (gl_showerrors->integer)
+		Com_EPrintf("%s framebuffer status %#x\n", name, status);
 
-    return false;
+	return false;
+}
+
+/*
+=============
+GL_DisableFramebuffers
+
+Releases post-processing framebuffer resources and detaches all related attachments.
+=============
+*/
+void GL_DisableFramebuffers(void)
+{
+	glr.motion_history_textures_ready = false;
+	glr.motion_blur_ready = false;
+	glr.framebuffer_bound = false;
+	glr.framebuffer_ok = false;
+	glr.framebuffer_width = 0;
+	glr.framebuffer_height = 0;
+
+	gl_static.dof.full_width = 0;
+	gl_static.dof.full_height = 0;
+	gl_static.dof.result_width = 0;
+	gl_static.dof.result_height = 0;
+	gl_static.dof.half_width = 0;
+	gl_static.dof.half_height = 0;
+	gl_static.dof.reduced_resolution = false;
+
+	g_bloom_effect.resize(0, 0);
+	g_hdr_luminance.shutdown();
+
+	if (!gl_static.use_shaders)
+		return;
+
+	GL_ClearErrors();
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_COC);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_GATHER);
+	GL_InitPostProcTexture(0, 0);
+
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+	GL_InitDepthTexture(0, 0);
+
+	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_MOTION_HISTORY(i));
+		GL_InitPostProcTexture(0, 0);
+	}
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, GL_NONE, 0);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, GL_NONE, 0);
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+
+	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+		qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(i));
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GL_NONE, 0);
+	}
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 /*
@@ -1221,6 +1304,11 @@ drawable dimensions.
 
 bool GL_InitFramebuffers(void)
 {
+	if (!r_fbo || !r_fbo->integer) {
+		GL_DisableFramebuffers();
+		return false;
+	}
+
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
 	int scene_w = 0, scene_h = 0;

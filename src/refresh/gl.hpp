@@ -494,6 +494,7 @@ extern cvar_t *gl_md5_distance;
 extern cvar_t *gl_damageblend_frac;
 extern cvar_t *r_skipUnderWaterFX;
 extern cvar_t *r_shadows;
+extern cvar_t *r_fbo;
 extern cvar_t *r_postProcessing;
 extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
@@ -1248,6 +1249,7 @@ void GL_InitImages(void);
 void GL_ShutdownImages(void);
 
 bool GL_InitFramebuffers(void);
+void GL_DisableFramebuffers(void);
 
 extern cvar_t *gl_intensity;
 

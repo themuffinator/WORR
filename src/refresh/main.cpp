@@ -81,6 +81,7 @@ cvar_t *gl_damageblend_frac;
 cvar_t *r_skipUnderWaterFX;
 cvar_t *r_enablefog;
 cvar_t *r_shadows;
+cvar_t *r_fbo;
 cvar_t *r_staticshadows;
 cvar_t *r_postProcessing;
 cvar_t *r_bloom;
@@ -1327,27 +1328,34 @@ static void R_ClearMotionBlurHistory(void)
     }
 }
 
+/*
+=============
+R_BindMotionHistoryTextures
+
+Binds motion blur history textures or safe fallbacks when unavailable.
+=============
+*/
 static void R_BindMotionHistoryTextures(void)
 {
-    if (!glr.motion_history_textures_ready) {
-        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
-            glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
-            GL_ForceTexture(tmu, TEXNUM_BLACK);
-        }
-        return;
-    }
+	if (!r_fbo || !r_fbo->integer || !glr.motion_history_textures_ready) {
+		for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+			glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+			GL_ForceTexture(tmu, TEXNUM_BLACK);
+		}
+		return;
+	}
 
-    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
-        glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
-        GLuint tex = TEXNUM_BLACK;
-        if (i < glr.motion_blur_history_count) {
-            int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) %
-                R_MOTION_BLUR_HISTORY_FRAMES;
-            if (glr.motion_history_valid[slot])
-                tex = TEXNUM_PP_MOTION_HISTORY(slot);
-        }
-        GL_ForceTexture(tmu, tex);
-    }
+	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+		glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+		GLuint tex = TEXNUM_BLACK;
+		if (i < glr.motion_blur_history_count) {
+			int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) %
+				R_MOTION_BLUR_HISTORY_FRAMES;
+			if (glr.motion_history_valid[slot])
+				tex = TEXNUM_PP_MOTION_HISTORY(slot);
+		}
+		GL_ForceTexture(tmu, tex);
+	}
 }
 
 /*
@@ -1468,9 +1476,10 @@ static pp_flags_t GL_BindFramebuffer(void)
 	pp_flags_t flags = PP_NONE;
 	bool resized = false;
 	const bool world_visible = !(glr.fd.rdflags & RDF_NOWORLDMODEL);
-	const bool dof_active = world_visible && gl_dof->integer && glr.fd.depth_of_field;
-	const bool motion_blur_enabled = glr.motion_blur_enabled;
-	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+	const bool fbo_enabled = r_fbo && r_fbo->integer;
+	const bool dof_active = world_visible && fbo_enabled && gl_dof->integer && glr.fd.depth_of_field;
+	const bool motion_blur_enabled = glr.motion_blur_enabled && fbo_enabled;
+	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer && fbo_enabled;
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
@@ -1489,8 +1498,16 @@ static pp_flags_t GL_BindFramebuffer(void)
 				prev_format != gl_static.postprocess_format ||
 				prev_type != gl_static.postprocess_type;
 		}
-		if (formats_changed)
+		if (!post_processing_requested) {
 			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+			glr.framebuffer_ok = false;
+			glr.framebuffer_width = 0;
+			glr.framebuffer_height = 0;
+			glr.motion_history_textures_ready = false;
+			glr.motion_blur_ready = false;
+		} else if (formats_changed) {
+			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		}
 		glr.framebuffer_bound = false;
 		return PP_NONE;
 	}
@@ -1498,7 +1515,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	HDR_UpdateConfig();
 
 	const bool hdr_prev = gl_static.hdr.active;
-	const bool hdr_requested = gl_static.hdr.supported && gl_static.use_shaders && r_hdr->integer;
+	const bool hdr_requested = gl_static.hdr.supported && gl_static.use_shaders && r_hdr->integer && fbo_enabled;
 
 	if (r_hdr->modified_count != r_hdr_modified) {
 		HDR_ResetState();
@@ -1629,7 +1646,7 @@ void R_RenderFrame(const refdef_t *fd)
     glr.motion_blur_fov_y = glr.fd.fov_y;
     glr.ppl_bits  = 0;
 
-    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
+    const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer && r_fbo && r_fbo->integer;
 
     glr.motion_blur_enabled = gl_static.use_shaders && post_processing_enabled && r_motionBlur->integer &&
         !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
@@ -2005,6 +2022,32 @@ static void gl_clearcolor_changed(cvar_t *self)
         qglClearColor(Vector4Unpack(gl_static.clearcolor));
 }
 
+/*
+=============
+r_fbo_changed
+
+Handles runtime toggles of the r_fbo cvar by releasing dependent post-processing resources.
+=============
+*/
+static void r_fbo_changed(cvar_t *self)
+{
+	if (self->integer)
+		return;
+
+	GL_DisableFramebuffers();
+
+	glr.motion_blur_enabled = false;
+	glr.motion_blur_ready = false;
+	glr.motion_history_textures_ready = false;
+	glr.prev_view_proj_valid = false;
+	glr.view_proj_valid = false;
+	gl_static.hdr.active = false;
+
+	HDR_ResetState();
+	R_ClearMotionBlurHistory();
+	GL_UpdateBloomEffect(false, 0, 0);
+}
+
 static void GL_Register(void)
 {
     // regular variables
@@ -2045,6 +2088,8 @@ static void GL_Register(void)
     r_enablefog = Cvar_Get("r_enablefog", "1", 0);
     r_shadows = Cvar_Get("r_shadows", "1", CVAR_ARCHIVE);
     r_staticshadows = Cvar_Get("r_staticshadows", "1", CVAR_ARCHIVE);
+    r_fbo = Cvar_Get("r_fbo", "1", CVAR_ARCHIVE);
+    r_fbo->changed = r_fbo_changed;
     r_postProcessing = Cvar_Get("r_postProcessing", "1", CVAR_ARCHIVE);
     r_bloom = Cvar_Get("r_bloom", "1", CVAR_ARCHIVE);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", CVAR_ARCHIVE);
