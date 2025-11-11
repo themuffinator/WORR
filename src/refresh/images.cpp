@@ -1957,6 +1957,18 @@ static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensio
 		}
 	}
 
+	if (need_dimensions && fmt <= IM_WAL && ret > IM_WAL) {
+		get_image_dimensions(fmt, image);
+	}
+
+	if (ret < 0) {
+		if (ret == Q_ERR(ENOENT) || ret == Q_ERR_INVALID_PATH) {
+			memcpy(image->name, base_name, baselen + 1);
+		} else if (had_extension) {
+			Q_strlcpy(image->name, original_name, sizeof(image->name));
+		}
+	}
+
 	return ret;
 }
 
