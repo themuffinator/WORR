@@ -499,6 +499,7 @@ extern cvar_t *r_bloom;
 extern cvar_t *r_bloomBlurRadius;
 extern cvar_t *r_bloomBlurFalloff;
 extern cvar_t *r_bloomBrightThreshold;
+extern cvar_t *r_bloomKnee;
 extern cvar_t *r_bloomIntensity;
 extern cvar_t *r_bloomScale;
 extern cvar_t *r_bloomKernel;

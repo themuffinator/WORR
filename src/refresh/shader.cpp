@@ -1520,14 +1520,15 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
 
-        if (bits & GLS_BLOOM_BRIGHTPASS) {
-            GLSL(vec4 scene = texture(u_scene, tc);)
-            GLSL(float luminance = dot(scene.rgb, bloom_luminance);)
-            GLSL(float threshold = u_bbr_params.z;)
-            GLSL(luminance = max(0.0, luminance - threshold);)
-            GLSL(diffuse.rgb *= sign(luminance);)
-            GLSL(diffuse.a = 1.0;)
-        }
+		if (bits & GLS_BLOOM_BRIGHTPASS) {
+			GLSL(vec4 scene = texture(u_scene, tc);)
+			GLSL(float luminance = dot(scene.rgb, bloom_luminance);)
+			GLSL(float threshold = u_bbr_params.z;)
+			GLSL(float knee = max(u_bbr_params.w, 0.0001);)
+			GLSL(float weight = smoothstep(0.0, knee, luminance - threshold);)
+			GLSL(diffuse.rgb *= weight;)
+			GLSL(diffuse.a = weight;)
+		}
     }
 
     if (bits & GLS_ALPHATEST_ENABLE)

@@ -87,6 +87,7 @@ cvar_t *r_bloom;
 cvar_t *r_bloomBlurRadius;
 cvar_t *r_bloomBlurFalloff;
 cvar_t *r_bloomBrightThreshold;
+cvar_t *r_bloomKnee;
 cvar_t *r_bloomIntensity;
 cvar_t *r_bloomScale;
 cvar_t *r_bloomKernel;
@@ -1894,7 +1895,8 @@ static void GL_Register(void)
     r_bloom = Cvar_Get("r_bloom", "1", CVAR_ARCHIVE);
     r_bloomBlurRadius = Cvar_Get("r_bloomBlurRadius", "12", CVAR_ARCHIVE);
     r_bloomBlurFalloff = Cvar_Get("r_bloomBlurFalloff", "0.75", CVAR_ARCHIVE);
-    r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.75", CVAR_ARCHIVE);
+	r_bloomBrightThreshold = Cvar_Get("r_bloomBrightThreshold", "0.75", CVAR_ARCHIVE);
+	r_bloomKnee = Cvar_Get("r_bloomKnee", "0.25", CVAR_ARCHIVE);
     r_bloomIntensity = Cvar_Get("r_bloomIntensity", "0.05", CVAR_ARCHIVE);
     r_bloomScale = Cvar_Get("r_bloomScale", "4.0", CVAR_ARCHIVE);
     r_bloomKernel = Cvar_Get("r_bloomKernel", "0", CVAR_ARCHIVE);
