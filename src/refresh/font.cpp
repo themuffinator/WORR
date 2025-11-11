@@ -758,6 +758,37 @@ void R_ReleaseFreeTypeFont(ftfont_t *font)
 	font->lineHeight = 0;
 }
 
+/*
+=============
+R_FreeTypeInvalidateFontSize
+
+Releases cached glyph data for a specific FreeType font size.
+=============
+*/
+void R_FreeTypeInvalidateFontSize(qhandle_t font, int pixelHeight)
+{
+	if (!font)
+		return;
+
+	const image_t *image = IMG_ForHandle(font);
+	if (!image)
+		return;
+
+	FtFont *ft_font = Ft_FontForImage(image);
+	if (!ft_font)
+		return;
+
+	int targetHeight = pixelHeight > 0 ? pixelHeight : FT_BASE_PIXEL_HEIGHT;
+	auto it = ft_font->sizes.find(targetHeight);
+	if (it == ft_font->sizes.end())
+		return;
+
+	if (it->second)
+		Ft_DestroyFontSize(*it->second);
+
+	ft_font->sizes.erase(it);
+}
+
 int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
 				 const char *string, color_t color, qhandle_t font,
 				 const ftfont_t *ftFont)

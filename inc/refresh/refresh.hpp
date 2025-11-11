@@ -424,6 +424,7 @@ static inline int R_DrawString(int x, int y, int flags, size_t maxChars,
 #if USE_FREETYPE
 bool    R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont);
 void    R_ReleaseFreeTypeFont(ftfont_t *font);
+void    R_FreeTypeInvalidateFontSize(qhandle_t font, int pixelHeight);
 int     R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
                              const char *string, color_t color, qhandle_t font,
                              const ftfont_t *ftFont = nullptr);
@@ -438,6 +439,10 @@ inline bool R_AcquireFreeTypeFont(qhandle_t, ftfont_t *)
 }
 
 inline void R_ReleaseFreeTypeFont(ftfont_t *)
+{
+}
+
+inline void R_FreeTypeInvalidateFontSize(qhandle_t, int)
 {
 }
 

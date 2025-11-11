@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -15,6 +16,7 @@
 
 static cvar_t* scr_font = nullptr;
 #if USE_FREETYPE
+static cvar_t* scr_font_size = nullptr;
 static cvar_t* scr_fontpath = nullptr;
 static cvar_t* scr_text_backend = nullptr;
 
@@ -28,6 +30,89 @@ static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 
 
 #if USE_FREETYPE
+/*
+=============
+SCR_CalculateFontSizeDefault
+
+Determines the default pixel height for FreeType fonts based on the current screen scale.
+=============
+*/
+static int SCR_CalculateFontSizeDefault(void)
+{
+	const int baseSize = 16;
+	int scale = 1;
+
+	if (cvar_t* scaleVar = Cvar_FindVar("scr_scale")) {
+		if (scaleVar->value > 0.0f) {
+			const float clamped = std::clamp(scaleVar->value, 1.0f, 6.0f);
+			scale = static_cast<int>(std::lround(clamped));
+			if (scale < 1)
+				scale = 1;
+		}
+		else {
+			scale = get_auto_scale();
+			if (scale < 1)
+				scale = 1;
+		}
+	}
+
+	return baseSize * scale;
+}
+
+/*
+=============
+SCR_CurrentFontPixelHeight
+
+Returns the pixel height that should be used for the active FreeType font.
+=============
+*/
+static int SCR_CurrentFontPixelHeight(void)
+{
+	if (scr_font_size && scr_font_size->integer > 0)
+		return scr_font_size->integer;
+
+	return SCR_CalculateFontSizeDefault();
+}
+
+/*
+=============
+SCR_UpdateFontSizeDefault
+
+Synchronizes the scr_font_size default string with the current screen scale.
+=============
+*/
+static void SCR_UpdateFontSizeDefault(void)
+{
+	if (!scr_font_size)
+		return;
+
+	const int computedDefault = SCR_CalculateFontSizeDefault();
+	char buffer[16];
+	Q_snprintf(buffer, sizeof(buffer), "%d", computedDefault);
+
+	const char* defaultString = scr_font_size->default_string ? scr_font_size->default_string : "";
+	const bool valueMatchesDefault = (scr_font_size->string && !strcmp(scr_font_size->string, defaultString));
+
+	if (scr_font_size->default_string)
+		Z_Free(scr_font_size->default_string);
+	scr_font_size->default_string = Z_CvarCopyString(buffer);
+
+	if (valueMatchesDefault)
+		Cvar_SetByVar(scr_font_size, buffer, FROM_CODE);
+}
+
+/*
+=============
+SCR_RefreshFontSizeDefault
+
+Recomputes the default screen font size based on the current scale settings.
+=============
+*/
+void SCR_RefreshFontSizeDefault(void)
+{
+	SCR_UpdateFontSizeDefault();
+}
+
 static bool SCR_EnsureFreeTypeLibrary()
 {
 	if (scr.freetype.library)
@@ -122,7 +207,7 @@ Loads the default FreeType font into the provided renderer handle.
 */
 static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle)
 {
-	constexpr int defaultPixelHeight = 16;
+	const int defaultPixelHeight = SCR_CurrentFontPixelHeight();
 
 	std::string fontPath;
 	if (scr_fontpath && scr_fontpath->string[0]) {
@@ -157,6 +242,17 @@ static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle)
 }
 
 #endif // USE_FREETYPE
+
+#if !USE_FREETYPE
+/*
+=============
+SCR_RefreshFontSizeDefault
+=============
+*/
+void SCR_RefreshFontSizeDefault(void)
+{
+}
+#endif
 
 #if USE_FREETYPE
 /*
@@ -721,6 +817,60 @@ qhandle_t SCR_RegisterFontPath(const char* name)
 
 /*
 =============
+scr_font_size_changed
+
+Reloads the active FreeType font when the configured pixel height changes.
+=============
+*/
+static void scr_font_size_changed(cvar_t* self)
+{
+	if (!self)
+		return;
+
+	SCR_UpdateFontSizeDefault();
+
+	if (self->integer <= 0) {
+		const int fallback = SCR_CalculateFontSizeDefault();
+		char buffer[16];
+		Q_snprintf(buffer, sizeof(buffer), "%d", fallback);
+		Cvar_SetByVar(self, buffer, FROM_CODE);
+		return;
+	}
+
+	if (!cls.ref_initialized)
+		return;
+
+	const qhandle_t activeHandle = scr.freetype.activeFontHandle;
+	const std::string previousKey = scr.freetype.activeFontKey;
+	int previousPixelHeight = 0;
+
+	if (!previousKey.empty()) {
+		const auto it = scr.freetype.fonts.find(previousKey);
+		if (it != scr.freetype.fonts.end()) {
+			previousPixelHeight = it->second.renderInfo.pixelHeight;
+			if (it->second.renderInfo.face) {
+				FT_Done_Face(it->second.renderInfo.face);
+				it->second.renderInfo.face = nullptr;
+			}
+			R_ReleaseFreeTypeFont(&it->second.renderInfo);
+			scr.freetype.fonts.erase(it);
+		}
+	}
+
+	if (activeHandle && previousPixelHeight > 0)
+		R_FreeTypeInvalidateFontSize(activeHandle, previousPixelHeight);
+
+	if (activeHandle)
+		scr.freetype.handleLookup.erase(activeHandle);
+
+	scr.freetype.activeFontKey.clear();
+
+	if (scr_font)
+		scr_font_changed(scr_font);
+}
+
+/*
+=============
 scr_font_changed
 
 Handles updates to the screen font configuration and loads the requested asset.
@@ -769,11 +919,7 @@ static void scr_font_changed(cvar_t* self)
 			if (!normalizedLen || normalizedLen >= normalized.size())
 				continue;
 
-			int pixelHeight = 16;
-			if (cvar_t* fontSize = Cvar_FindVar("scr_font_size")) {
-				if (fontSize->integer > 0)
-					pixelHeight = fontSize->integer;
-			}
+			const int pixelHeight = SCR_CurrentFontPixelHeight();
 
 			std::string cacheKey = std::string(normalized.data());
 			cacheKey += "-";
@@ -894,18 +1040,24 @@ void SCR_InitFontSystem(void)
 {
 #if USE_FREETYPE
 	scr_font = Cvar_Get("scr_font", "/fonts/RobotoMono-Regular.ttf", 0);
+	char fontSizeDefault[16];
+	Q_snprintf(fontSizeDefault, sizeof(fontSizeDefault), "%d", SCR_CalculateFontSizeDefault());
+	scr_font_size = Cvar_Get("scr_font_size", fontSizeDefault, CVAR_ARCHIVE);
 #else
 	scr_font = Cvar_Get("scr_font", SCR_LEGACY_FONT, 0);
 #endif
 	if (scr_font)
 		scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
+	if (scr_font_size)
+		scr_font_size->changed = scr_font_size_changed;
 	scr_fontpath = Cvar_Get("scr_fontpath", "fonts", CVAR_ARCHIVE);
 	scr_text_backend = Cvar_Get("scr_text_backend", "ttf", CVAR_ARCHIVE);
 	if (scr_text_backend) {
 		scr_text_backend->changed = scr_text_backend_changed;
 		scr_text_backend->generator = scr_text_backend_g;
 	}
+	SCR_UpdateFontSizeDefault();
 #endif
 }
 

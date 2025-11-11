@@ -1220,6 +1220,7 @@ void SCR_RegisterMedia(void)
 static void scr_scale_changed(cvar_t* self)
 {
 	scr.hud_scale = R_ClampScale(self);
+	SCR_RefreshFontSizeDefault();
 }
 
 

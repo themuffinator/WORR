@@ -506,6 +506,10 @@ scr_alpha::
 scr_font::
     Font used for drawing HUD text. Default value is "conchars".
 
+scr_font_size::
+    Pixel height for FreeType screen fonts. Defaults to 16 and scales automatically with ``scr_scale`` when left at the
+    default value.
+
 scr_lag_draw::
     Toggles drawing of small (48x48 pixels) ping graph on the screen. Default
     value is 0.
