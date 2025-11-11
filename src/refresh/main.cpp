@@ -1273,34 +1273,47 @@ constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
     return lhs;
 }
 
+/*
+=============
+GL_DrawBloom
+
+Runs the bloom pipeline and composites the scene to the backbuffer.
+=============
+*/
 static void GL_DrawBloom(pp_flags_t flags)
 {
-    const bool waterwarp = (flags & PP_WATERWARP) != 0;
-    const bool depth_of_field = (flags & PP_DEPTH_OF_FIELD) != 0;
-    const bool show_bloom = q_unlikely(gl_showbloom->integer);
+	const bool waterwarp = (flags & PP_WATERWARP) != 0;
+	const bool depth_of_field = (flags & PP_DEPTH_OF_FIELD) != 0;
+	const bool show_bloom = q_unlikely(gl_showbloom->integer);
 
-    BloomRenderContext context{
-        .sceneTexture = TEXNUM_PP_SCENE,
-        .bloomTexture = TEXNUM_PP_BLOOM,
-        .dofTexture = TEXNUM_PP_DOF_RESULT,
-        .depthTexture = TEXNUM_PP_DEPTH,
-        .viewportX = glr.fd.x,
-        .viewportY = glr.fd.y,
-        .viewportWidth = glr.fd.width,
-        .viewportHeight = glr.fd.height,
-        .waterwarp = waterwarp,
-        .depthOfField = depth_of_field,
-        .showDebug = show_bloom,
-        .tonemap = (flags & PP_HDR) != 0,
-        .motionBlurReady = glr.motion_blur_ready,
-        .updateHdrUniforms = R_HDRUpdateUniforms,
-        .runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
-    };
+	int composite_x = 0;
+	int composite_y = 0;
+	int composite_w = 0;
+	int composite_h = 0;
+	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
 
-    if (context.motionBlurReady)
-        R_BindMotionHistoryTextures();
+	BloomRenderContext context{
+		.sceneTexture = TEXNUM_PP_SCENE,
+		.bloomTexture = TEXNUM_PP_BLOOM,
+		.dofTexture = TEXNUM_PP_DOF_RESULT,
+		.depthTexture = TEXNUM_PP_DEPTH,
+		.viewportX = composite_x,
+		.viewportY = composite_y,
+		.viewportWidth = composite_w,
+		.viewportHeight = composite_h,
+		.waterwarp = waterwarp,
+		.depthOfField = depth_of_field,
+		.showDebug = show_bloom,
+		.tonemap = (flags & PP_HDR) != 0,
+		.motionBlurReady = glr.motion_blur_ready,
+		.updateHdrUniforms = R_HDRUpdateUniforms,
+		.runDepthOfField = depth_of_field ? GL_RunDepthOfField : nullptr,
+	};
 
-    g_bloom_effect.render(context);
+	if (context.motionBlurReady)
+		R_BindMotionHistoryTextures();
+
+	g_bloom_effect.render(context);
 }
 
 static void R_ClearMotionBlurHistory(void)
@@ -1337,31 +1350,47 @@ static void R_BindMotionHistoryTextures(void)
     }
 }
 
+/*
+=============
+R_StoreMotionBlurHistory
+
+Copies the current scene into the motion blur history buffer at full window resolution.
+=============
+*/
 static void R_StoreMotionBlurHistory(void)
 {
-    if (!glr.motion_blur_enabled || !glr.view_proj_valid)
-        return;
-    if (!glr.motion_history_textures_ready)
-        return;
-    if (glr.fd.width <= 0 || glr.fd.height <= 0)
-        return;
+	if (!glr.motion_blur_enabled || !glr.view_proj_valid)
+		return;
+	if (!glr.motion_history_textures_ready)
+		return;
 
-    const int target_index = glr.motion_blur_history_index;
+	int composite_x = 0;
+	int composite_y = 0;
+	int composite_w = 0;
+	int composite_h = 0;
+	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
+	if (composite_w <= 0 || composite_h <= 0)
+		return;
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(target_index));
-    qglViewport(0, 0, glr.fd.width, glr.fd.height);
-    GL_Ortho(0, glr.fd.width, glr.fd.height, 0, -1, 1);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    GL_PostProcess(GLS_DEFAULT, 0, 0, glr.fd.width, glr.fd.height);
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    GL_Setup2D();
+	const int target_index = glr.motion_blur_history_index;
 
-    for (int i = 0; i < 16; ++i)
-        glr.motion_history_view_proj[target_index][i] = glr.view_proj_matrix[i];
-    glr.motion_history_valid[target_index] = true;
-    glr.motion_blur_history_index = (target_index + 1) % R_MOTION_BLUR_HISTORY_FRAMES;
-    if (glr.motion_blur_history_count < R_MOTION_BLUR_HISTORY_FRAMES)
-        glr.motion_blur_history_count++;
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(target_index));
+	qglViewport(0, 0, composite_w, composite_h);
+	GL_Ortho(0, composite_w, composite_h, 0, -1, 1);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h);
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	GL_Setup2D();
+
+	(void)composite_x;
+	(void)composite_y;
+
+	for (int i = 0; i < 16; ++i)
+		glr.motion_history_view_proj[target_index][i] = glr.view_proj_matrix[i];
+	glr.motion_history_valid[target_index] = true;
+	glr.motion_blur_history_index = (target_index + 1) % R_MOTION_BLUR_HISTORY_FRAMES;
+	if (glr.motion_blur_history_count < R_MOTION_BLUR_HISTORY_FRAMES)
+		glr.motion_blur_history_count++;
 }
 
 static void GL_DrawDepthOfField(pp_flags_t flags)
@@ -1413,10 +1442,10 @@ Ensures the bloom effect matches the requested enable state and framebuffer size
 Returns true when bloom remains enabled after the resize attempt.
 =============
 */
-static bool GL_UpdateBloomEffect(bool bloom_enabled)
+static bool GL_UpdateBloomEffect(bool bloom_enabled, int target_width, int target_height)
 {
 	if (bloom_enabled) {
-		if (!g_bloom_effect.resize(glr.fd.width, glr.fd.height)) {
+		if (!g_bloom_effect.resize(target_width, target_height)) {
 			g_bloom_effect.resize(0, 0);
 			return false;
 		}
@@ -1426,10 +1455,6 @@ static bool GL_UpdateBloomEffect(bool bloom_enabled)
 	g_bloom_effect.resize(0, 0);
 	return false;
 }
-
-
-
-
 /*
 =============
 GL_BindFramebuffer
@@ -1449,6 +1474,9 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
 
+	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
+	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
+
 	if (!gl_static.use_shaders || !post_processing_enabled) {
 		const bool was_hdr_active = gl_static.hdr.active;
 		bool formats_changed = false;
@@ -1460,7 +1488,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 				prev_type != gl_static.postprocess_type;
 		}
 		if (formats_changed)
-			GL_UpdateBloomEffect(false);
+			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
 		glr.framebuffer_bound = false;
 		return PP_NONE;
 	}
@@ -1509,13 +1537,13 @@ static pp_flags_t GL_BindFramebuffer(void)
 		flags |= PP_MOTION_BLUR;
 
 	if (postprocess_format_changed) {
-		const bool bloom_active = (flags & PP_BLOOM) && glr.fd.width > 0 && glr.fd.height > 0;
-		if (!GL_UpdateBloomEffect(bloom_active))
+		const bool bloom_active = (flags & PP_BLOOM) && drawable_w > 0 && drawable_h > 0;
+		if (!GL_UpdateBloomEffect(bloom_active, drawable_w, drawable_h))
 			flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 	}
 
 	if (flags)
-		resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
+		resized = drawable_w != glr.framebuffer_width || drawable_h != glr.framebuffer_height;
 
 	if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
 		r_bloom->modified_count != r_bloom_modified ||
@@ -1526,8 +1554,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 		r_motionBlur->modified_count != r_motionBlur_modified ||
 		hdr_prev != gl_static.hdr.active) {
 		glr.framebuffer_ok     = GL_InitFramebuffers();
-		glr.framebuffer_width  = glr.fd.width;
-		glr.framebuffer_height = glr.fd.height;
+		glr.framebuffer_width  = drawable_w;
+		glr.framebuffer_height = drawable_h;
 		r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
 		r_bloom_modified = r_bloom->modified_count;
 		r_bloomScale_modified = r_bloomScale->modified_count;
@@ -1536,8 +1564,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 		gl_dof_quality_modified = gl_dof_quality->modified_count;
 		r_motionBlur_modified = r_motionBlur->modified_count;
 		if (glr.framebuffer_ok && (flags & PP_BLOOM)) {
-			const bool bloom_ready = glr.fd.width > 0 && glr.fd.height > 0;
-			if (!GL_UpdateBloomEffect(bloom_ready))
+			const bool bloom_ready = drawable_w > 0 && drawable_h > 0;
+			if (!GL_UpdateBloomEffect(bloom_ready, drawable_w, drawable_h))
 				flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 		}
 		if (flags & PP_BLOOM)
@@ -1688,7 +1716,7 @@ void R_RenderFrame(const refdef_t *fd)
         glr.framebuffer_bound = false;
     }
 
-    HDR_UpdateExposure(glr.fd.width, glr.fd.height);
+	HDR_UpdateExposure(glr.framebuffer_width, glr.framebuffer_height);
 
     tess.dlight_bits = 0;
 
