@@ -1571,8 +1571,19 @@ static pp_flags_t GL_BindFramebuffer(void)
 			if (!GL_UpdateBloomEffect(bloom_ready, drawable_w, drawable_h))
 				flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 		}
-		if (flags & PP_BLOOM)
-			gl_backend->update_blur();
+		if (glr.framebuffer_ok) {
+			if (flags & PP_BLOOM)
+				gl_backend->update_blur();
+		} else {
+			if (flags & PP_HDR) {
+				const bool formats_changed = gl_static.hdr.active;
+				gl_static.hdr.active = false;
+				if (formats_changed)
+					HDR_UpdatePostprocessFormats();
+			}
+
+			flags = PP_NONE;
+		}
 	}
 
 	if (!flags || !glr.framebuffer_ok)

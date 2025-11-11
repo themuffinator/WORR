@@ -36,6 +36,8 @@ static int upload_height;
 static bool upload_alpha;
 static GLenum upload_target;
 
+static bool gl_framebuffer_generation_failed;
+
 static cvar_t *gl_noscrap;
 static cvar_t *gl_round_down;
 static cvar_t *gl_picmip;
@@ -589,7 +591,7 @@ static int GL_UpscaleLevel(int width, int height, imagetype_t type, imageflags_t
 
         // don't bother upscaling larger than max texture size
         if (width <= maxsize && height <= maxsize)
-            break;
+			break;
 
         maxlevel--;
     }
@@ -1221,6 +1223,38 @@ drawable dimensions.
 
 bool GL_InitFramebuffers(void)
 {
+	static const char *const fbo_names[] = {
+		"FBO_SCENE",
+		"FBO_BOKEH_COC",
+		"FBO_BOKEH_RESULT",
+		"FBO_BOKEH_HALF",
+		"FBO_BOKEH_GATHER"
+	};
+
+	if (gl_framebuffer_generation_failed) {
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_EPrintf("Framebuffer objects unavailable; post-processing path disabled\n");
+
+		return false;
+	}
+
+	for (int i = 0; i < FBO_COUNT; ++i) {
+		if (gl_static.framebuffers[i])
+			continue;
+
+		if (gl_showerrors && gl_showerrors->integer) {
+			if (i < static_cast<int>(q_countof(fbo_names))) {
+				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_names[i]);
+			} else {
+				char fbo_name[32];
+				Q_snprintf(fbo_name, sizeof(fbo_name), "FBO_MOTION_HISTORY(%d)", i - static_cast<int>(q_countof(fbo_names)));
+				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_name);
+			}
+		}
+
+		return false;
+	}
+
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
 	int scene_w = 0, scene_h = 0;
@@ -1438,8 +1472,25 @@ void GL_InitImages(void)
     qglGenTextures(NUM_AUTO_TEXTURES, gl_static.texnums);
     qglGenTextures(LM_MAX_LIGHTMAPS, lm.texnums);
 
-    if (gl_static.use_shaders)
-        qglGenFramebuffers(FBO_COUNT, gl_static.framebuffers);
+	if (gl_static.use_shaders) {
+		gl_framebuffer_generation_failed = false;
+		qglGenFramebuffers(FBO_COUNT, gl_static.framebuffers);
+
+		for (GLuint framebuffer : gl_static.framebuffers) {
+			if (framebuffer)
+				continue;
+
+			gl_framebuffer_generation_failed = true;
+			break;
+		}
+
+		if (gl_framebuffer_generation_failed) {
+			if (gl_showerrors && gl_showerrors->integer)
+				Com_EPrintf("Failed to generate framebuffer objects; disabling post-processing FBOs\n");
+
+			memset(gl_static.framebuffers, 0, sizeof(gl_static.framebuffers));
+		}
+	}
 
     Scrap_Init();
 
@@ -1484,10 +1535,11 @@ void GL_ShutdownImages(void)
     memset(lm.texnums, 0, sizeof(lm.texnums));
 
     // delete framebuffers
-    if (gl_static.use_shaders) {
+	if (gl_static.use_shaders) {
         qglDeleteFramebuffers(FBO_COUNT, gl_static.framebuffers);
         memset(gl_static.framebuffers, 0, sizeof(gl_static.framebuffers));
     }
+	gl_framebuffer_generation_failed = false;
 
 #if USE_DEBUG
     r_charset = 0;
