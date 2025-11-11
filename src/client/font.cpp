@@ -25,6 +25,12 @@ static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle);
 static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 #endif
 
+namespace {
+	constexpr const char* SCR_LEGACY_FONT = "conchars";
+}
+
+static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTypeBaseCreation);
+
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
 
@@ -264,19 +270,93 @@ Returns whether the provided path points to a TrueType/OpenType font.
 */
 static bool SCR_IsTrueTypeFontPath(const char* path)
 {
-        if (!path || !*path)
-                return false;
+	if (!path || !*path)
+		return false;
 
-        const char* extension = COM_FileExtension(path);
-        if (!*extension)
-                return false;
+	const char* extension = COM_FileExtension(path);
+	if (!*extension)
+		return false;
 
-        if (*extension == '.')
-                ++extension;
+	if (*extension == '.')
+		++extension;
 
-        return !Q_stricmp(extension, "ttf") || !Q_stricmp(extension, "otf");
+	return !Q_stricmp(extension, "ttf") || !Q_stricmp(extension, "otf");
 }
+
+/*
+=============
+SCR_RegisterTrueTypeFontPath
+
+Attempts to load a TrueType/OpenType font using FreeType and returns its renderer handle.
+=============
+*/
+static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHandleCreation, qhandle_t preferredHandle)
+{
+	if (!path || !*path)
+		return 0;
+
+	std::array<char, MAX_QPATH> normalized{};
+	size_t normalizedLen = 0;
+
+	if (path[0] == '/' || path[0] == '\')
+		normalizedLen = FS_NormalizePathBuffer(normalized.data(), path + 1, normalized.size());
+	else
+		normalizedLen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
+
+	if (!normalizedLen || normalizedLen >= normalized.size())
+		return 0;
+
+	const int pixelHeight = SCR_CurrentFontPixelHeight();
+	std::string cacheKey(normalized.data());
+	cacheKey.push_back('-');
+	cacheKey += std::to_string(pixelHeight);
+
+	qhandle_t targetHandle = preferredHandle;
+	if (!targetHandle) {
+		if (scr.freetype.activeFontHandle)
+			targetHandle = scr.freetype.activeFontHandle;
+		else if (scr.font_pic)
+			targetHandle = scr.font_pic;
+	}
+
+	if (!targetHandle && allowBaseHandleCreation)
+		targetHandle = SCR_RegisterFontPathInternal(SCR_LEGACY_FONT, false);
+
+	if (!targetHandle)
+		return 0;
+
+	if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), pixelHeight, targetHandle))
+		return targetHandle;
+
+	return 0;
+}
+
 #endif // USE_FREETYPE
+
+/*
+=============
+SCR_RegisterFontPathInternal
+
+Internal helper that registers a font path while optionally permitting FreeType handle creation.
+=============
+*/
+static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTypeBaseCreation)
+{
+	if (!name || !*name)
+		return 0;
+
+#if USE_FREETYPE
+	if (SCR_IsTrueTypeFontPath(name))
+		return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0);
+#endif
+
+	if (name[0] == '/' || name[0] == '\')
+		return R_RegisterFont(name);
+	if (strpbrk(name, "/\"))
+		return R_RegisterFont(va("/%s", name));
+	return R_RegisterFont(name);
+}
+#if USE_FREETYPE
 
 enum class scr_text_backend_mode {
         LEGACY,
@@ -297,25 +377,25 @@ Ensures a renderer font handle exists for FreeType text rendering.
 */
 static qhandle_t SCR_CreateFreeTypeBaseHandle(void)
 {
-	if (scr.font_pic)
-		return scr.font_pic;
+        if (scr.font_pic)
+                return scr.font_pic;
 
-	const char* candidates[] = {
-		(scr_font && SCR_IsTrueTypeFontPath(scr_font->string)) ? scr_font->string : nullptr,
-		"/fonts/RobotoMono-Regular.ttf",
-		nullptr,
-	};
+        const char* candidates[] = {
+                (scr_font && SCR_IsTrueTypeFontPath(scr_font->string)) ? scr_font->string : nullptr,
+                "/fonts/RobotoMono-Regular.ttf",
+                nullptr,
+        };
 
 	for (const char* candidate : candidates) {
 		if (!candidate || !*candidate)
 			continue;
 
-		qhandle_t handle = SCR_RegisterFontPath(candidate);
+		qhandle_t handle = SCR_RegisterFontPathInternal(candidate, true);
 		if (handle)
 			return handle;
-	}
+        }
 
-	return 0;
+        return 0;
 }
 #endif
 
@@ -774,9 +854,7 @@ void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, colo
 }
 
 namespace {
-	constexpr const char* SCR_LEGACY_FONT = "conchars";
-
-	static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
+static bool SCR_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
 	{
 		if (!font_name || !*font_name || !size)
 			return false;
@@ -804,15 +882,16 @@ namespace {
 	}
 } // namespace
 
+/*
+=============
+SCR_RegisterFontPath
+
+Registers a font by path, delegating to FreeType for TrueType/OpenType sources when available.
+=============
+*/
 qhandle_t SCR_RegisterFontPath(const char* name)
 {
-	if (!name || !*name)
-		return 0;
-	if (name[0] == '/' || name[0] == '\\')
-		return R_RegisterFont(name);
-	if (strpbrk(name, "/\\"))
-		return R_RegisterFont(va("/%s", name));
-	return R_RegisterFont(name);
+	return SCR_RegisterFontPathInternal(name, true);
 }
 
 /*
@@ -908,26 +987,10 @@ static void scr_font_changed(cvar_t* self)
 		if (SCR_IsTrueTypeFontPath(candidate)) {
 			lastAttempt = candidate;
 
-			std::array<char, MAX_QPATH> normalized{};
-			size_t normalizedLen = 0;
-
-			if (candidate[0] == '/' || candidate[0] == '\\')
-				normalizedLen = FS_NormalizePathBuffer(normalized.data(), candidate + 1, normalized.size());
-			else
-				normalizedLen = FS_NormalizePathBuffer(normalized.data(), candidate, normalized.size());
-
-			if (!normalizedLen || normalizedLen >= normalized.size())
-				continue;
-
-			const int pixelHeight = SCR_CurrentFontPixelHeight();
-
-			std::string cacheKey = std::string(normalized.data());
-			cacheKey += "-";
-			cacheKey += std::to_string(pixelHeight);
-
 			const qhandle_t targetHandle = freetypeHandle ? freetypeHandle : previousHandle;
-			if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), pixelHeight, targetHandle)) {
-				scr.font_pic = targetHandle;
+			qhandle_t handle = SCR_RegisterTrueTypeFontPath(candidate, true, targetHandle);
+			if (handle) {
+				scr.font_pic = handle;
 				loadedName = candidate;
 				scr_activeTextBackend = scr_text_backend_mode::TTF;
 				return;
