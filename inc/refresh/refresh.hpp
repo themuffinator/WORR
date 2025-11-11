@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "common/cvar.hpp"
 #include "common/error.hpp"
+#include "common/utf8.hpp"
 #include "shared/game.hpp"
 
 // Some client UI constants are required by inline helpers in this header. They
@@ -425,10 +426,10 @@ static inline int R_DrawString(int x, int y, int flags, size_t maxChars,
 bool    R_AcquireFreeTypeFont(qhandle_t font, ftfont_t *outFont);
 void    R_ReleaseFreeTypeFont(ftfont_t *font);
 void    R_FreeTypeInvalidateFontSize(qhandle_t font, int pixelHeight);
-int     R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
+int     R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxBytes,
                              const char *string, color_t color, qhandle_t font,
                              const ftfont_t *ftFont = nullptr);
-int     R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
+int     R_MeasureFreeTypeString(int scale, int flags, size_t maxBytes,
                                 const char *string, qhandle_t font,
                                 const ftfont_t *ftFont = nullptr);
 float   R_FreeTypeFontLineHeight(int scale, const ftfont_t *ftFont = nullptr);
@@ -446,14 +447,14 @@ inline void R_FreeTypeInvalidateFontSize(qhandle_t, int)
 {
 }
 
-inline int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxChars,
+inline int R_DrawFreeTypeString(int x, int y, int scale, int flags, size_t maxBytes,
                                 const char *string, color_t color, qhandle_t font,
                                 const ftfont_t *ftFont = nullptr)
 {
-    return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font, ftFont);
+    return R_DrawStringStretch(x, y, scale, flags, maxBytes, string, color, font, ftFont);
 }
 
-inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
+inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxBytes,
                                    const char *string, qhandle_t, const ftfont_t * = nullptr)
 {
     int width = 0;
@@ -462,10 +463,14 @@ inline int R_MeasureFreeTypeString(int scale, int flags, size_t maxChars,
     if (!string)
         return 0;
 
-    while (maxChars-- && *string) {
-        char ch = *string++;
+    size_t remaining = maxBytes;
 
-        if ((flags & UI_MULTILINE) && ch == '\n') {
+    while (remaining && *string) {
+        const uint32_t codepoint = utf8_next(string, remaining);
+        if (!codepoint)
+            break;
+
+        if ((flags & UI_MULTILINE) && codepoint == '\n') {
             maxWidth = (std::max)(maxWidth, width);
             width = 0;
             continue;
