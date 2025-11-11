@@ -1013,6 +1013,7 @@ struct alignas(16) glClusterParams_t {
     vec4_t          params0;
     vec4_t          params1;
     vec4_t          shadow_atlas;
+    vec4_t          params2;
 };
 
 typedef struct {

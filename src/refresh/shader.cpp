@@ -289,6 +289,7 @@ layout(std140) uniform ClusterParams
 vec4 uClusterParams0;
 vec4 uClusterParams1;
 vec4 uShadowAtlas;
+vec4 uClusterParams2;
 };
 
 layout(std140) uniform LightCluster
@@ -313,6 +314,7 @@ uniform sampler2D u_shadow_atlas;
 #define uShadowSampleRadius uClusterParams1.w
 #define uShadowAtlasSize uShadowAtlas.xy
 #define uShadowAtlasInv uShadowAtlas.zw
+#define uClusterLightCount int(uClusterParams2.x + 0.5)
 
 const int SHADOW_MAX_KERNEL_RADIUS = 4;
 const float SHADOW_EPSILON = 1e-6;
@@ -460,12 +462,63 @@ return length(legacy);
 
 vec3 ApplyClusteredLighting(vec3 worldPos, vec3 normal)
 {
-(void)worldPos;
-(void)normal;
-if (uClusterEnabled == 0)
-return calc_dynamic_lights();
+	if (uClusterEnabled == 0)
+		return calc_dynamic_lights();
 
-return calc_dynamic_lights();
+	int lightCount = uClusterLightCount;
+	if (lightCount <= 0)
+		return vec3(0.0);
+
+	vec3 lighting = vec3(0.0);
+	for (int i = 0; i < lightCount; ++i) {
+		quakeLightClusterInfo_s light = uClusterLights[i];
+		vec3 lightPos = light.position_range.xyz;
+		float lightRadius = light.position_range.w;
+		float coneCos = light.cone_dir_angle.w;
+		if (coneCos == 0.0)
+			lightPos += normal * 16.0;
+
+		vec3 lightVec = lightPos - worldPos;
+		float distance = length(lightVec);
+		float radiusWithCutoff = lightRadius + float(DLIGHT_CUTOFF);
+		float len = max(radiusWithCutoff - distance - float(DLIGHT_CUTOFF), 0.0) / max(radiusWithCutoff, 0.0001);
+		vec3 dir = (distance > 0.0) ? (lightVec / distance) : vec3(0.0);
+		float lambert = max(dot(normal, dir), 0.0);
+		vec3 contribution = ((light.color_intensity.rgb * light.color_intensity.w) * len) * lambert;
+
+		if (coneCos > 0.0) {
+			float mag = -dot(dir, light.cone_dir_angle.xyz);
+			float denom = max(1.0 - coneCos, 0.001);
+			contribution *= max(1.0 - (1.0 - mag) * (1.0 / denom), 0.0);
+		}
+
+		if (uShadowEnabled != 0 && light.world_origin_shadow.w >= 0.0) {
+			int packed = int(light.world_origin_shadow.w + 0.5);
+			int baseIndex = packed >> 3;
+			int faceCount = packed & 7;
+			if (faceCount > 0) {
+				int atlasIndex = baseIndex;
+				if (faceCount > 1) {
+					vec3 toWorld = normalize(worldPos - light.world_origin_shadow.xyz);
+					vec3 absToWorld = abs(toWorld);
+					vec3 select = step(absToWorld.yxx, absToWorld.xyz) * step(absToWorld.zzy, absToWorld.xyz);
+					vec3 faceBase = vec3(0.0, 2.0, 1.0);
+					vec3 signAdjust = step(sign(toWorld), vec3(0.0)) * 3.0;
+					int faceIndex = int(dot(select, faceBase + signAdjust) + 0.5);
+					faceIndex = clamp(faceIndex, 0, faceCount - 1);
+					atlasIndex = baseIndex + faceIndex;
+				}
+				atlasIndex = clamp(atlasIndex, 0, MAX_SHADOW_VIEWS - 1);
+				quakeUBShadowStruct_s shadowItem = sbShadowItems[atlasIndex];
+				float shadow = ComputeShadow(worldPos, shadowItem);
+				contribution *= shadow;
+			}
+		}
+
+		lighting += contribution;
+	}
+
+	return lighting;
 }
 );
 }
@@ -1970,6 +2023,69 @@ static void shader_load_uniforms(void)
 }
 
 
+/*
+=============
+shader_populate_cluster_lights
+
+Builds the per-frame cluster light buffer based on the current dynamic
+light data and shadow assignments.
+=============
+*/
+static void shader_populate_cluster_lights(void)
+{
+	const dlight_t *dlights = glr.fd.dlights;
+	const int num_dlights = glr.fd.num_dlights;
+	size_t count = (dlights && num_dlights > 0) ? static_cast<size_t>(num_dlights) : 0;
+	count = (std::min)(count, static_cast<size_t>(MAX_DLIGHTS));
+	const size_t upload_count = (count > 0) ? count : 1;
+	gls.cluster_lights.resize(upload_count);
+	std::memset(gls.cluster_lights.data(), 0, gls.cluster_lights.size() * sizeof(glClusterLight_t));
+	for (size_t i = 0; i < count; ++i) {
+		const dlight_t &src = dlights[i];
+		glClusterLight_t &dst = gls.cluster_lights[i];
+		for (int j = 0; j < 3; ++j) {
+			dst.position_range[j] = src.origin[j];
+			dst.color_intensity[j] = src.color[j];
+			dst.cone_dir_angle[j] = src.cone[j];
+			dst.world_origin_shadow[j] = src.origin[j];
+		}
+		dst.position_range[3] = src.radius;
+		dst.color_intensity[3] = src.intensity;
+		dst.cone_dir_angle[3] = src.conecos;
+		int base = src.shadow_view_base;
+		int face_count = src.shadow_view_count;
+		const int atlas_views = static_cast<int>(gl_static.shadow.view_count);
+		if (face_count > 7) {
+			face_count = 7;
+		}
+		if (base < 0 || face_count <= 0 || base >= atlas_views || base + face_count > atlas_views) {
+			dst.world_origin_shadow[3] = -1.0f;
+		} else {
+			const int max_base = (atlas_views > face_count) ? (atlas_views - face_count) : 0;
+			base = std::clamp(base, 0, max_base);
+			const int packed = (base << 3) | (face_count & 0x7);
+			dst.world_origin_shadow[3] = static_cast<float>(packed);
+		}
+	}
+	if (count < upload_count) {
+		/* ensure the unused slot is cleared when no lights are active */
+		glClusterLight_t &dst = gls.cluster_lights[upload_count - 1];
+		std::memset(&dst, 0, sizeof(glClusterLight_t));
+	}
+	gls.u_cluster_params.params2[0] = static_cast<float>(count);
+	gls.u_cluster_params.params2[1] = 0.0f;
+	gls.u_cluster_params.params2[2] = 0.0f;
+	gls.u_cluster_params.params2[3] = 0.0f;
+}
+
+/*
+=============
+shader_load_lights
+
+Uploads clustered lighting data, shadow parameters, and legacy dynamic lights
+into their respective uniform buffers.
+=============
+*/
 static void shader_load_lights(void)
 {
 	const float cluster_enabled = gl_clustered_shading ? static_cast<float>(gl_clustered_shading->integer) : 0.0f;
@@ -1985,6 +2101,7 @@ static void shader_load_lights(void)
 	if (!std::isfinite(sample_radius) || sample_radius < 0.0f)
 		sample_radius = 0.0f;
 	gls.u_cluster_params.params1[3] = sample_radius;
+	shader_populate_cluster_lights();
 	const float atlas_width = static_cast<float>(gl_static.shadow.width);
 	const float atlas_height = static_cast<float>(gl_static.shadow.height);
 	if (atlas_width > 0.0f && atlas_height > 0.0f) {
@@ -2140,6 +2257,10 @@ static void shader_setup_3d(void)
 
 gls.u_cluster_params.params0[0] = 1.0f;
 gls.u_cluster_params.params0[1] = 1.0f;
+gls.u_cluster_params.params2[0] = 0.0f;
+gls.u_cluster_params.params2[1] = 0.0f;
+gls.u_cluster_params.params2[2] = 0.0f;
+gls.u_cluster_params.params2[3] = 0.0f;
 }
 
 static void shader_disable_state(void)
@@ -2271,31 +2392,32 @@ static void shader_init(void)
 
     gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
-    gls.cluster_lights.clear();
-    gls.cluster_lights.resize(1);
-    std::memset(gls.cluster_lights.data(), 0, gls.cluster_lights.size() * sizeof(glClusterLight_t));
+	gls.cluster_lights.clear();
+	gls.cluster_lights.reserve(MAX_DLIGHTS);
+	gls.cluster_lights.resize(1);
+	std::memset(gls.cluster_lights.data(), 0, gls.cluster_lights.size() * sizeof(glClusterLight_t));
 
-    gls.shadow_items.clear();
-    gls.shadow_items.resize(MAX_SHADOW_VIEWS);
-    std::memset(gls.shadow_items.data(), 0, gls.shadow_items.size() * sizeof(glShadowItem_t));
+	gls.shadow_items.clear();
+	gls.shadow_items.resize(MAX_SHADOW_VIEWS);
+	std::memset(gls.shadow_items.data(), 0, gls.shadow_items.size() * sizeof(glShadowItem_t));
 
-    shader_update_blur();
+	shader_update_blur();
 
-    qglGenBuffers(1, &gl_static.uniform_buffer);
-    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
-    qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_block), NULL, GL_DYNAMIC_DRAW);
+	qglGenBuffers(1, &gl_static.uniform_buffer);
+	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
+	qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_block), NULL, GL_DYNAMIC_DRAW);
 
-    qglGenBuffers(1, &gl_static.cluster_params_buffer);
-    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_PARAMS, gl_static.cluster_params_buffer);
-    qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_cluster_params), NULL, GL_DYNAMIC_DRAW);
+	qglGenBuffers(1, &gl_static.cluster_params_buffer);
+	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_PARAMS, gl_static.cluster_params_buffer);
+	qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_cluster_params), NULL, GL_DYNAMIC_DRAW);
 
-    qglGenBuffers(1, &gl_static.cluster_light_buffer);
-    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_LIGHTS, gl_static.cluster_light_buffer);
-    qglBufferData(GL_UNIFORM_BUFFER, sizeof(glClusterLight_t), NULL, GL_DYNAMIC_DRAW);
+	qglGenBuffers(1, &gl_static.cluster_light_buffer);
+	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_LIGHTS, gl_static.cluster_light_buffer);
+	qglBufferData(GL_UNIFORM_BUFFER, sizeof(glClusterLight_t) * MAX_DLIGHTS, NULL, GL_DYNAMIC_DRAW);
 
-    qglGenBuffers(1, &gl_static.shadow_item_buffer);
-    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOW_ITEMS, gl_static.shadow_item_buffer);
-    qglBufferData(GL_UNIFORM_BUFFER, sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, NULL, GL_DYNAMIC_DRAW);
+	qglGenBuffers(1, &gl_static.shadow_item_buffer);
+	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOW_ITEMS, gl_static.shadow_item_buffer);
+	qglBufferData(GL_UNIFORM_BUFFER, sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, NULL, GL_DYNAMIC_DRAW);
 
     #if USE_MD5
     if (gl_config.caps & QGL_CAP_SKELETON_MASK) {

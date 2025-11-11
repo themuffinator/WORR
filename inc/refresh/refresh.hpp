@@ -122,6 +122,9 @@ typedef struct {
     // for culling, calculated at add time
     vec4_t  sphere;
     float   conecos;
+    int     shadow_submission_index;
+    int     shadow_view_base;
+    int     shadow_view_count;
 } dlight_t;
 
 typedef struct {

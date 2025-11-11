@@ -160,21 +160,24 @@ V_AddLight
 */
 void V_AddLight(const vec3_t org, float intensity, float r, float g, float b)
 {
-    dlight_t    *dl;
+	dlight_t	*dl;
 
-    if (r_numdlights >= MAX_DLIGHTS)
-        return;
-    dl = &r_dlights[r_numdlights++];
-    VectorCopy(org, dl->origin);
-    dl->radius = intensity;
-    dl->intensity = 1.0f;
-    dl->color[0] = r;
-    dl->color[1] = g;
-    dl->color[2] = b;
-    dl->conecos = 0;
-    dl->fade[0] = dl->fade[1] = 0.0f;
-    VectorCopy(dl->origin, dl->sphere);
-    dl->sphere[3] = dl->radius;
+	if (r_numdlights >= MAX_DLIGHTS)
+		return;
+	dl = &r_dlights[r_numdlights++];
+	VectorCopy(org, dl->origin);
+	dl->radius = intensity;
+	dl->intensity = 1.0f;
+	dl->color[0] = r;
+	dl->color[1] = g;
+	dl->color[2] = b;
+	dl->conecos = 0;
+	dl->fade[0] = dl->fade[1] = 0.0f;
+	VectorCopy(dl->origin, dl->sphere);
+	dl->sphere[3] = dl->radius;
+	dl->shadow_submission_index = -1;
+	dl->shadow_view_base = -1;
+	dl->shadow_view_count = 0;
 }
 
 /*
