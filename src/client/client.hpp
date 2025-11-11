@@ -1289,6 +1289,7 @@ void    SCR_Shutdown(void);
 void    SCR_InitFontSystem(void);
 void    SCR_ShutdownFontSystem(void);
 void    SCR_RefreshFontCvar(void);
+void    SCR_ApplyTextBackend(void);
 void    SCR_UpdateScreen(void);
 void    SCR_SizeUp(void);
 void    SCR_SizeDown(void);

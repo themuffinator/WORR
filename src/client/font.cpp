@@ -698,12 +698,41 @@ static void scr_font_changed(cvar_t* self)
 		return;
 	}
 }
+/*
+=============
+SCR_RefreshFontCvar
+
+Refreshes the currently configured screen font from the associated cvar.
+=============
+*/
 void SCR_RefreshFontCvar(void)
 {
 	if (scr_font)
 		scr_font_changed(scr_font);
 }
 
+/*
+=============
+SCR_ApplyTextBackend
+
+Ensures the active text backend matches the configured cvar value.
+=============
+*/
+void SCR_ApplyTextBackend(void)
+{
+#if USE_FREETYPE
+	if (scr_text_backend)
+		scr_text_backend_changed(scr_text_backend);
+#endif
+}
+
+/*
+=============
+SCR_InitFontSystem
+
+Initializes font-related configuration cvars and callbacks.
+=============
+*/
 void SCR_InitFontSystem(void)
 {
 #if USE_FREETYPE
@@ -719,7 +748,6 @@ void SCR_InitFontSystem(void)
 	if (scr_text_backend) {
 		scr_text_backend->changed = scr_text_backend_changed;
 		scr_text_backend->generator = scr_text_backend_g;
-		scr_text_backend_changed(scr_text_backend);
 	}
 #endif
 }
