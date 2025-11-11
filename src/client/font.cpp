@@ -363,7 +363,7 @@ static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTy
 
 	if (name[0] == '/' || name[0] == '\')
 		return R_RegisterFont(name);
-	if (strpbrk(name, "/\"))
+	if (strpbrk(name, "/\\"))
 		return R_RegisterFont(va("/%s", name));
 	return R_RegisterFont(name);
 }
@@ -527,11 +527,9 @@ static void scr_text_backend_changed(cvar_t* self)
 			const char* fallbackName = SCR_TextBackendToString(fallback);
 			if (!scr_reportedFreeTypeFailure) {
 				if (failureReason)
-					Com_WPrintf("SCR: %s; using %s text backend instead
-", failureReason, fallbackName);
+					Com_WPrintf("SCR: %s; using %s text backend instead\n", failureReason, fallbackName);
 				else
-					Com_WPrintf("SCR: FreeType font unavailable; using %s text backend instead
-", fallbackName);
+					Com_WPrintf("SCR: FreeType font unavailable; using %s text backend instead\n", fallbackName);
 				scr_reportedFreeTypeFailure = true;
 			}
 			if (scr.freetype.activeFontHandle)
