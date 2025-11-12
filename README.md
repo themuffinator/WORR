@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/art/logo.png" alt="Logo" width="300">
-  <h2>WORR! An extensive server mod under development for QUAKE II Rerelease</h2>
+  <h2>WORR! The new way to experience <b>QUAKE II Rerelease</b></h2>
 </div>
 <p align="center">
 <b>WORR</b> is an advanced gameplay expansion and engine under development for <b>QUAKE II Rerelease</b>.
