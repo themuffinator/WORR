@@ -1886,107 +1886,46 @@ static void print_error(const char* name, imageflags_t flags, int err)
 =============
 load_image_data
 
-Loads image data, stripping the extension when the source asset cannot be
-located so alternative formats can be tried according to the priority list.
+Loads image data for an image, optionally falling back to alternate formats.
 =============
 */
 static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensions, byte** pic)
 {
-	const size_t baselen = image->baselen;
-	const bool had_extension = image->name[baselen] == '.';
-	char original_ext[4] = { 0 };
-	char original_image_name[sizeof(image->name)] = { 0 };
-	char base_image_name[sizeof(image->name)] = { 0 };
-	bool have_base_image_name = false;
-	bool stripped = false;
 	int ret;
 
-	if (had_extension)
-		memcpy(original_ext, image->name + baselen + 1, sizeof(original_ext));
-
-	Q_strlcpy(original_image_name, image->name, sizeof(original_image_name));
-
-	if (baselen < sizeof(base_image_name)) {
-		memcpy(base_image_name, image->name, baselen);
-		base_image_name[baselen] = '\0';
-		have_base_image_name = true;
-	}
-
 #if USE_PNG || USE_JPG || USE_TGA
-	bool need_fallback = true;
-	imageformat_t search_orig = fmt;
-	const bool override_image = need_override_image(image_get_type(image), fmt);
-
-	ret = Q_ERR(ENOENT);
-
-	if (fmt != IM_MAX && !override_image) {
-		ret = try_image_format(fmt, image, pic);
-		if (ret != Q_ERR(ENOENT))
-			need_fallback = false;
-	} else {
-		search_orig = IM_MAX;
-	}
-
-	if (override_image)
-		search_orig = IM_MAX;
-
-	if (need_fallback) {
-		if (had_extension) {
-			image->name[baselen] = '\0';
-			stripped = true;
-		}
-
-		ret = try_other_formats(search_orig, image, pic);
-		if (ret == Q_ERR(ENOENT) && fmt == IM_MAX)
-			ret = Q_ERR_INVALID_PATH;
-	}
-#else
 	if (fmt == IM_MAX) {
-		ret = Q_ERR_INVALID_PATH;
-		if (had_extension) {
-			image->name[baselen] = '\0';
-			stripped = true;
+		// unknown extension, but give it a chance to load anyway
+		ret = try_other_formats(IM_MAX, image, pic);
+		if (ret == Q_ERR(ENOENT)) {
+			// not found, change error to invalid path
+			ret = Q_ERR_INVALID_PATH;
 		}
+	} else if (need_override_image(image_get_type(image), fmt)) {
+		// forcibly replace the extension
+		ret = try_other_formats(IM_MAX, image, pic);
 	} else {
+		// first try with original extension
 		ret = try_image_format(fmt, image, pic);
-		if (ret == Q_ERR(ENOENT) && had_extension) {
-			image->name[baselen] = '\0';
-			stripped = true;
+		if (ret == Q_ERR(ENOENT)) {
+			// retry with remaining extensions
+			ret = try_other_formats(fmt, image, pic);
 		}
 	}
-#endif
 
+	// if we are replacing 8-bit texture with a higher resolution 32-bit
+	// texture, we need to recover original image dimensions
 	if (need_dimensions && fmt <= IM_WAL && ret > IM_WAL)
 		get_image_dimensions(fmt, image);
-
-	if (ret < 0) {
-		if (stripped && (ret == Q_ERR(ENOENT) || ret == Q_ERR_INVALID_PATH)) {
-			image->name[baselen] = '\0';
-		} else if (had_extension) {
-			image->name[baselen] = '.';
-			memcpy(image->name + baselen + 1, original_ext, sizeof(original_ext));
-		}
-	}
-
-	if (need_dimensions && fmt <= IM_WAL && ret > IM_WAL) {
-		get_image_dimensions(fmt, image);
-	}
-
-	if (ret < 0) {
-		if (ret == Q_ERR(ENOENT) || ret == Q_ERR_INVALID_PATH) {
-			if (have_base_image_name) {
-				memcpy(image->name, base_image_name, baselen + 1);
-			} else {
-				Q_strlcpy(image->name, original_image_name, sizeof(image->name));
-			}
-		} else if (had_extension) {
-			Q_strlcpy(image->name, original_image_name, sizeof(image->name));
-		}
-	}
+#else
+	if (fmt == IM_MAX)
+		ret = Q_ERR_INVALID_PATH;
+	else
+		ret = try_image_format(fmt, image, pic);
+#endif
 
 	return ret;
 }
-
 static void check_for_glow_map(image_t* image)
 {
 	extern cvar_t* gl_shaders;
