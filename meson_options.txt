@@ -76,7 +76,7 @@ option('libjpeg',
 
 option('libpng',
   type: 'feature',
-  value: 'auto',
+  value: 'enabled',
   description: 'libpng support')
 
 option('md3',
