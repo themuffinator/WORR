@@ -574,17 +574,45 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
         out vec4 v_color;
     )
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
-        GLSL(out vec3 v_world_pos;)
-        GLSL(
-            Joint joint = u_joints[jointnum];
+	if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+		GLSL(out vec3 v_world_pos;)
+	if (bits & GLS_DYNAMIC_LIGHTS)
+		GLSL(out vec3 v_norm;)
 
-            vec3 wv = joint.pos.xyz + (weight.xyz * joint.axis) * joint.pos.w;
-            out_pos += wv * weight.w;
+	GLSF("void main() {\n");
 
-            out_norm += a_norm * joint.axis * weight.w;
-        )
-    GLSF("}\n");
+	GLSL(vec3 out_pos = vec3(0.0);)
+
+	const bool need_norm = (bits & (GLS_MESH_SHADE | GLS_MESH_SHELL | GLS_DYNAMIC_LIGHTS)) != 0;
+	if (need_norm)
+		GLSL(vec3 out_norm = vec3(0.0);)
+
+	GLSL(uint weight_index = a_vert.x;)
+	GLSL(uint weight_count = a_vert.y;)
+
+	if (gl_config.caps & QGL_CAP_SHADER_STORAGE) {
+		GLSL(for (uint i = 0u; i < weight_count; ++i) {)
+		GLSL(	uint index = weight_index + i;)
+		GLSL(	vec4 weight = b_weights[index];)
+		GLSL(	uint jointnum = b_jointnums[index];)
+		GLSL(	Joint joint = u_joints[jointnum];)
+		GLSL(	vec3 wv = joint.pos.xyz + (weight.xyz * joint.axis) * joint.pos.w;)
+		GLSL(	out_pos += wv * weight.w;)
+		if (need_norm)
+			GLSL(	out_norm += a_norm * joint.axis * weight.w;)
+		GLSL(})
+	} else {
+		GLSL(for (uint i = 0u; i < weight_count; ++i) {)
+		GLSL(	uint index = weight_index + i;)
+		GLSL(	vec4 weight = texelFetch(u_weights, int(u_weight_ofs + index));)
+		GLSL(	uint jointnum = texelFetch(u_jointnums, int(u_jointnum_ofs + index)).r;)
+		GLSL(	Joint joint = u_joints[jointnum];)
+		GLSL(	vec3 wv = joint.pos.xyz + (weight.xyz * joint.axis) * joint.pos.w;)
+		GLSL(	out_pos += wv * weight.w;)
+		if (need_norm)
+			GLSL(	out_norm += a_norm * joint.axis * weight.w;)
+		GLSL(})
+	}
 
     GLSL(v_tc = a_tc;)
 
