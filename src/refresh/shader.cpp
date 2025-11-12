@@ -1528,8 +1528,7 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         });
     }
 
-    if (bits & (GLS_BLOOM_BRIGHTPASS | GLS_BLOOM_OUTPUT))
-        GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
+	GLSL(const vec3 bloom_luminance = vec3(0.2125, 0.7154, 0.0721);)
 
     GLSF("void main() {\n");
     if (bits & GLS_CLASSIC_SKY) {
