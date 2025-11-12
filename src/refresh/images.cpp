@@ -1895,21 +1895,21 @@ static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensio
 	const size_t baselen = image->baselen;
 	const bool had_extension = image->name[baselen] == '.';
 	char original_ext[4] = { 0 };
-	char original_name[sizeof(image->name)] = { 0 };
-	char base_name[sizeof(image->name)] = { 0 };
-	bool have_base_name = false;
+	char original_image_name[sizeof(image->name)] = { 0 };
+	char base_image_name[sizeof(image->name)] = { 0 };
+	bool have_base_image_name = false;
 	bool stripped = false;
 	int ret;
 
 	if (had_extension)
 		memcpy(original_ext, image->name + baselen + 1, sizeof(original_ext));
 
-	Q_strlcpy(original_name, image->name, sizeof(original_name));
+	Q_strlcpy(original_image_name, image->name, sizeof(original_image_name));
 
-	if (baselen < sizeof(base_name)) {
-		memcpy(base_name, image->name, baselen);
-		base_name[baselen] = '\0';
-		have_base_name = true;
+	if (baselen < sizeof(base_image_name)) {
+		memcpy(base_image_name, image->name, baselen);
+		base_image_name[baselen] = '\0';
+		have_base_image_name = true;
 	}
 
 #if USE_PNG || USE_JPG || USE_TGA
@@ -1974,13 +1974,13 @@ static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensio
 
 	if (ret < 0) {
 		if (ret == Q_ERR(ENOENT) || ret == Q_ERR_INVALID_PATH) {
-			if (have_base_name) {
-				memcpy(image->name, base_name, baselen + 1);
+			if (have_base_image_name) {
+				memcpy(image->name, base_image_name, baselen + 1);
 			} else {
-				Q_strlcpy(image->name, original_name, sizeof(image->name));
+				Q_strlcpy(image->name, original_image_name, sizeof(image->name));
 			}
 		} else if (had_extension) {
-			Q_strlcpy(image->name, original_name, sizeof(image->name));
+			Q_strlcpy(image->name, original_image_name, sizeof(image->name));
 		}
 	}
 
