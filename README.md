@@ -1,5 +1,19 @@
-WORR
-====
+<div align="center">
+  <img src="assets/art/logo.png" alt="Logo" width="300">
+  <h2>WORR! An extensive server mod under development for QUAKE II Rerelease</h2>
+</div>
+<p align="center">
+<b>WORR</b> is an advanced gameplay expansion and engine under development for <b>QUAKE II Rerelease</b>.
+It is designed to be a drop-in code replacement offering a richer, more dynamic and refined single-player and multiplayer experience.
+</p>
+<p align="center">
+  The KEX-dependant server mod version can be found <a href="https://github.com/themuffinator/worr-kex" target="_blank">here</a>.
+</p>
+<p align="center">
+  It is a successor to my previous project, <a href="https://github.com/themuffinator/muffmode" target="_blank">Muff Mode</a>.
+</p>
+
+---
 
 **WORR** is a fork of [Q2REPRO](https://github.com/Paril/q2repro) which in turn
 is a fork of [Q2PRO](https://github.com/skullernet/q2pro) which in turn is a fork
