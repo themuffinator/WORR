@@ -11,44 +11,51 @@ BloomEffect g_bloom_effect;
 
 namespace {
 
-        constexpr GLenum kColorAttachment = GL_COLOR_ATTACHMENT0;
+	constexpr GLenum kColorAttachment = GL_COLOR_ATTACHMENT0;
 
-        void CompositeBloom(const BloomRenderContext& ctx, GLuint colorTexture, GLuint bloomTexture, bool applyBloom)
-        {
-                if (!ctx.viewportWidth || !ctx.viewportHeight || colorTexture == 0)
-                        return;
+	/*
+	=============
+	CompositeBloom
 
-                const bool showDebug = ctx.showDebug;
-                const bool combineBloom = applyBloom && !showDebug && bloomTexture != 0;
+	Composites the bloom result or debug view onto the backbuffer.
+	=============
+	*/
+	void CompositeBloom(const BloomRenderContext& ctx, GLuint colorTexture, GLuint bloomTexture, bool applyBloom)
+	{
+		if (!ctx.viewportWidth || !ctx.viewportHeight)
+			return;
 
-                GL_Setup2D();
+		const bool showDebug = ctx.showDebug;
+		const bool combineBloom = applyBloom && !showDebug && bloomTexture != 0;
 
-                glStateBits_t bits = showDebug ? GLS_DEFAULT : (combineBloom ? GLS_BLOOM_OUTPUT : GLS_DEFAULT);
+		GL_Setup2D();
 
-                if (showDebug) {
-                        const GLuint debugTexture = bloomTexture != 0 ? bloomTexture : colorTexture;
-                        GL_ForceTexture(TMU_TEXTURE, debugTexture);
-                }
-                else {
-                        GL_ForceTexture(TMU_TEXTURE, colorTexture);
-                        if (combineBloom)
-                                GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
-                        if (ctx.waterwarp)
-                                bits |= GLS_WARP_ENABLE;
-                        if (ctx.updateHdrUniforms)
-                                ctx.updateHdrUniforms();
-                        if (ctx.tonemap)
-                                bits |= GLS_TONEMAP_ENABLE;
-                        bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
-                        if (ctx.motionBlurReady) {
-                                bits |= GLS_MOTION_BLUR;
-                                GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
-                        }
-                }
+		glStateBits_t bits = showDebug ? GLS_DEFAULT : (combineBloom ? GLS_BLOOM_OUTPUT : GLS_DEFAULT);
 
-                qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-                GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
-        }
+		if (showDebug) {
+			const GLuint debugTexture = bloomTexture != 0 ? bloomTexture : TEXNUM_PP_BLOOM;
+			GL_ForceTexture(TMU_TEXTURE, debugTexture);
+		}
+		else {
+			GL_ForceTexture(TMU_TEXTURE, colorTexture);
+			if (combineBloom)
+				GL_ForceTexture(TMU_LIGHTMAP, bloomTexture);
+			if (ctx.waterwarp)
+				bits |= GLS_WARP_ENABLE;
+			if (ctx.updateHdrUniforms)
+				ctx.updateHdrUniforms();
+			if (ctx.tonemap)
+				bits |= GLS_TONEMAP_ENABLE;
+			bits = R_CRTPrepare(bits, ctx.viewportWidth, ctx.viewportHeight);
+			if (ctx.motionBlurReady) {
+				bits |= GLS_MOTION_BLUR;
+				GL_ForceTexture(TMU_GLOWMAP, ctx.depthTexture);
+			}
+		}
+
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
+	}
 
 }
 
