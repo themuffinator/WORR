@@ -145,9 +145,14 @@ Initializes a bloom texture while preserving the caller texture state.
 void BloomEffect::allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const
 {
 	const glTmu_t prevActiveTmu = gls.server_tmu;
-	const GLuint prevTexture = gls.texnums[TMU_TEXTURE];
+	GLint prevActiveBinding = 0;
+	qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prevActiveBinding);
 
 	GL_ActiveTexture(TMU_TEXTURE);
+
+	GLint prevTextureBinding = 0;
+	qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTextureBinding);
+	const GLuint prevTexture = static_cast<GLuint>(prevTextureBinding);
 
 	qglBindTexture(GL_TEXTURE_2D, tex);
 	gls.texnums[TMU_TEXTURE] = tex;
@@ -160,11 +165,27 @@ void BloomEffect::allocateTexture(GLuint tex, int width, int height, GLenum inte
 
 	qglBindTexture(GL_TEXTURE_2D, prevTexture);
 	gls.texnums[TMU_TEXTURE] = prevTexture;
+
 	GL_ActiveTexture(prevActiveTmu);
+	if (prevActiveTmu != TMU_TEXTURE) {
+		qglBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevActiveBinding));
+		gls.texnums[prevActiveTmu] = static_cast<GLuint>(prevActiveBinding);
+	}
 }
 
+/*
+=============
+BloomEffect::attachFramebuffer
+
+Attaches a bloom texture to the specified framebuffer while preserving the caller FBO state.
+=============
+*/
 bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const
 {
+	GLint prevFbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+	const GLuint restoreFbo = prevFbo >= 0 ? static_cast<GLuint>(prevFbo) : 0;
+
 	qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
 	if (width > 0 && height > 0)
@@ -173,7 +194,7 @@ bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int h
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, 0, 0);
 
 	if (width <= 0 || height <= 0) {
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		qglBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
 		return true;
 	}
 
@@ -181,11 +202,11 @@ bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int h
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		if (gl_showerrors->integer)
 			Com_EPrintf("%s framebuffer status %#x\n", name, status);
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		qglBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
 		return false;
 	}
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
 	return true;
 }
 
