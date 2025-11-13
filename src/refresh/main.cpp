@@ -997,6 +997,7 @@ static void HDR_UpdateExposure(int width, int height)
 
 	hdr_state_local.noise_seed = glr.fd.time;
 
+	const glTmu_t prevActiveTmu = gls.server_tmu;
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 
 	const bool need_reduction = hdr_state_local.gpu_reduce_supported &&
@@ -1063,46 +1064,49 @@ static void HDR_UpdateExposure(int width, int height)
 			hdr_warned_auto_exposure_stall = true;
 			Com_EPrintf("HDR exposure: no valid samples available, auto-exposure frozen\n");
 		}
+		GL_ActiveTexture(prevActiveTmu);
 		return;
 	}
 
 	const float luminance = max(1e-5f, pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f);
 	gl_static.hdr.average_luminance = luminance;
 
-    float target_ev;
-    if (gl_static.hdr.auto_exposure)
-        target_ev = std::log2(gl_static.hdr.exposure_key / luminance);
-    else
-        target_ev = gl_static.hdr.exposure_key;
+	float target_ev;
+	if (gl_static.hdr.auto_exposure)
+		target_ev = std::log2(gl_static.hdr.exposure_key / luminance);
+	else
+		target_ev = gl_static.hdr.exposure_key;
 
-    target_ev = Q_bound(gl_static.hdr.exposure_ev_min, target_ev, gl_static.hdr.exposure_ev_max);
-    const float target_exposure = powf(2.0f, target_ev);
-    gl_static.hdr.target_exposure = target_exposure;
+	target_ev = Q_bound(gl_static.hdr.exposure_ev_min, target_ev, gl_static.hdr.exposure_ev_max);
+	const float target_exposure = powf(2.0f, target_ev);
+	gl_static.hdr.target_exposure = target_exposure;
 
-    float exposure = gl_static.hdr.exposure;
-    const float delta = target_exposure - exposure;
-    const float speed = (delta > 0.0f) ? gl_static.hdr.exposure_speed_up : gl_static.hdr.exposure_speed_down;
+	float exposure = gl_static.hdr.exposure;
+	const float delta = target_exposure - exposure;
+	const float speed = (delta > 0.0f) ? gl_static.hdr.exposure_speed_up : gl_static.hdr.exposure_speed_down;
 
-    if (speed <= 0.0f) {
-        exposure = target_exposure;
-    } else {
-        const float step = speed * glr.fd.frametime;
-        if (fabsf(delta) <= step)
-            exposure = target_exposure;
-        else
-            exposure += (delta > 0.0f) ? step : -step;
-    }
+	if (speed <= 0.0f) {
+		exposure = target_exposure;
+	} else {
+		const float step = speed * glr.fd.frametime;
+		if (fabsf(delta) <= step)
+			exposure = target_exposure;
+		else
+			exposure += (delta > 0.0f) ? step : -step;
+	}
 
-    gl_static.hdr.exposure = exposure;
+	gl_static.hdr.exposure = exposure;
 
-    HDR_ComputeHistogram(width, height);
+	HDR_ComputeHistogram(width, height);
 
-    if (gl_showerrors->integer > 1) {
-        Com_DPrintf("HDR exposure: reduction_ok=%d fallback=%d mip=%d gpu_supported=%d legacy_supported=%d auto_supported=%d luminance=%g exposure=%g\n",
-            reduction_ok, use_fallback, gl_static.hdr.max_mip_level,
-            hdr_state_local.gpu_reduce_supported, hdr_state_local.legacy_auto_supported,
-            hdr_state_local.auto_supported, luminance, exposure);
-    }
+	GL_ActiveTexture(prevActiveTmu);
+
+	if (gl_showerrors->integer > 1) {
+		Com_DPrintf("HDR exposure: reduction_ok=%d fallback=%d mip=%d gpu_supported=%d legacy_supported=%d auto_supported=%d luminance=%g exposure=%g\n",
+			reduction_ok, use_fallback, gl_static.hdr.max_mip_level,
+			hdr_state_local.gpu_reduce_supported, hdr_state_local.legacy_auto_supported,
+			hdr_state_local.auto_supported, luminance, exposure);
+	}
 }
 
 void R_HDRUpdateUniforms(void)
