@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/tests.hpp"
 #include "common/utils.hpp"
 #include "refresh/refresh.hpp"
+#include "refresh/images.hpp"
 #include "system/system.hpp"
 #include "client/client.hpp"
 #include "client/sound/sound.hpp"
@@ -585,6 +586,7 @@ static void Com_TestImages_f(void)
     int i, count, errors;
     unsigned start, end;
     const char *filter = ".pcx;.wal;.png;.jpg;.tga";
+    bool flood_valid;
 
     if (Cmd_Argc() > 1)
         filter = Cmd_Argv(1);
@@ -595,11 +597,15 @@ static void Com_TestImages_f(void)
         return;
     }
 
+    flood_valid = IMG_ValidateFloodFill();
+
     start = Sys_Milliseconds();
 
     R_BeginRegistration(NULL);
 
-    errors = 0;
+    errors = flood_valid ? 0 : 1;
+    if (!flood_valid)
+        Com_EPrintf("IMG_FloodFill validation failed for palette index 0 backgrounds\n");
     for (i = 0; i < count; i++) {
         if (i > 0 && !(i & (MAX_IMAGES_OLD - 1))) {
             R_EndRegistration();

@@ -91,6 +91,7 @@ image_t* IMG_ForHandle(qhandle_t h);
 
 void IMG_Unload(image_t* image);
 void IMG_Load(image_t* image, byte* pic);
+bool IMG_ValidateFloodFill(void);
 
 typedef struct screenshot_s screenshot_t;
 
