@@ -558,47 +558,56 @@ static void setup_shadow(void)
     GL_MultMatrix(m_shadow_model, m_proj, m_rot);
 }
 
-static void draw_shadow(const uint16_t *indices, int num_indices)
+/*
+=============
+draw_shadow
+
+Render the projected shadow for the current alias model instance.
+=============
+*/
+static void draw_shadow(const uint16_t *indices, int num_indices, int num_verts)
 {
-    if (!drawshadow)
-        return;
+	(void)num_verts;
 
-    float alpha = color[3] * shadowalpha;
+	if (!drawshadow)
+		return;
 
-    // load shadow projection matrix
-    GL_LoadMatrix(m_shadow_model, glr.viewmatrix);
+	float alpha = color[3] * shadowalpha;
 
-    // eliminate z-fighting by utilizing stencil buffer, if available
-    if (gl_config.stencilbits) {
-        qglEnable(GL_STENCIL_TEST);
-        qglStencilFunc(GL_EQUAL, 0, 0xff);
-        qglStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
-    }
+	// load shadow projection matrix
+	GL_LoadMatrix(m_shadow_model, glr.viewmatrix);
 
-    GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
-    GL_StateBits(GLS_BLEND_BLEND | (meshbits & ~GLS_MESH_SHADE) | glr.fog_bits);
-    if (gls.currentva)
-        GL_ArrayBits(GLA_VERTEX);
+	// eliminate z-fighting by utilizing stencil buffer, if available
+	if (gl_config.stencilbits) {
+		qglEnable(GL_STENCIL_TEST);
+		qglStencilFunc(GL_EQUAL, 0, 0xff);
+		qglStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+	}
 
-    uniform_mesh_color(0, 0, 0, alpha);
-    GL_LoadUniforms();
+	GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+	GL_StateBits(GLS_BLEND_BLEND | (meshbits & ~GLS_MESH_SHADE) | glr.fog_bits);
+	if (gls.currentva)
+		GL_ArrayBits(GLA_VERTEX);
 
-    qglEnable(GL_POLYGON_OFFSET_FILL);
-    qglPolygonOffset(-1.0f, -2.0f);
-    qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
-    qglDisable(GL_POLYGON_OFFSET_FILL);
+	uniform_mesh_color(0, 0, 0, alpha);
+	GL_LoadUniforms();
 
-    // once we have drawn something to stencil buffer, continue to clear it for
-    // the lifetime of OpenGL context. leaving stencil buffer "dirty" and
-    // clearing just depth is slower (verified for Nvidia and ATI drivers).
-    if (gl_config.stencilbits) {
-        qglDisable(GL_STENCIL_TEST);
-        gl_static.stencil_buffer_bit |= GL_STENCIL_BUFFER_BIT;
-    }
+	qglEnable(GL_POLYGON_OFFSET_FILL);
+	qglPolygonOffset(-1.0f, -2.0f);
+	qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+	qglDisable(GL_POLYGON_OFFSET_FILL);
 
-    // fog hack
-    if (glr.fog_bits)
-        GL_RotationMatrix(gls.u_block.m_model);
+	// once we have drawn something to stencil buffer, continue to clear it for
+	// the lifetime of OpenGL context. leaving stencil buffer "dirty" and
+	// clearing just depth is slower (verified for Nvidia and ATI drivers).
+	if (gl_config.stencilbits) {
+		qglDisable(GL_STENCIL_TEST);
+		gl_static.stencil_buffer_bit |= GL_STENCIL_BUFFER_BIT;
+	}
+
+	// fog hack
+	if (glr.fog_bits)
+		GL_RotationMatrix(gls.u_block.m_model);
 }
 
 static const image_t *skin_for_mesh(image_t **skins, int num_skins)
@@ -642,99 +651,103 @@ static void bind_alias_arrays(const maliasmesh_t *mesh)
     }
 }
 
+/*
+=============
+draw_alias_mesh
+
+Render the alias mesh with appropriate shading, outlines, and projected shadows.
+=============
+*/
 static void draw_alias_mesh(const uint16_t *indices, int num_indices,
-                            const maliastc_t *tcoords, int num_verts,
-                            image_t **skins, int num_skins)
+			const maliastc_t *tcoords, int num_verts,
+			image_t **skins, int num_skins)
 {
-    glStateBits_t state;
-    const image_t *skin;
+	glStateBits_t state;
+	const image_t *skin;
 
-    c.trisDrawn += num_indices / 3;
+	c.trisDrawn += num_indices / 3;
 
-    // if the model was culled, just draw the shadow
-    if (drawshadow == SHADOW_ONLY) {
-        GL_LockArrays(num_verts);
-        draw_shadow(indices, num_indices);
-        GL_UnlockArrays();
-        return;
-    }
+	// if the model was culled, just draw the shadow
+	if (drawshadow == SHADOW_ONLY) {
+		draw_shadow(indices, num_indices, num_verts);
+		return;
+	}
 
-    // fall back to entity matrix
-    GL_LoadMatrix(glr.entmatrix, glr.viewmatrix);
+	// fall back to entity matrix
+	GL_LoadMatrix(glr.entmatrix, glr.viewmatrix);
 
-    uniform_mesh_color(color[0], color[1], color[2], color[3]);
-    GL_LoadUniforms();
-    GL_LoadLights();
+	uniform_mesh_color(color[0], color[1], color[2], color[3]);
+	GL_LoadUniforms();
+	GL_LoadLights();
 
-    // avoid drawing hidden faces by pre-filling depth buffer, but not for
-    // explosions and muzzleflashes
-    if ((glr.ent->flags & (RF_FULLBRIGHT | RF_TRANSLUCENT)) == RF_TRANSLUCENT) {
-        if (gls.currentva) {
-            GL_StateBits(GLS_DEFAULT);
-            GL_ArrayBits(GLA_VERTEX);
-        } else {
-            GL_StateBits(meshbits & ~GLS_MESH_SHADE);
-        }
-        GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
-        qglColorMask(0, 0, 0, 0);
+	// avoid drawing hidden faces by pre-filling depth buffer, but not for
+	// explosions and muzzleflashes
+	if ((glr.ent->flags & (RF_FULLBRIGHT | RF_TRANSLUCENT)) == RF_TRANSLUCENT) {
+		if (gls.currentva) {
+			GL_StateBits(GLS_DEFAULT);
+			GL_ArrayBits(GLA_VERTEX);
+		} else {
+			GL_StateBits(meshbits & ~GLS_MESH_SHADE);
+		}
+		GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+		qglColorMask(0, 0, 0, 0);
 
-        GL_LockArrays(num_verts);
-        qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
-        GL_UnlockArrays();
+		GL_LockArrays(num_verts);
+		qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+		GL_UnlockArrays();
 
-        qglColorMask(1, 1, 1, 1);
-    }
+		qglColorMask(1, 1, 1, 1);
+	}
 
-    state = GLS_INTENSITY_ENABLE | glr.fog_bits;
-    if (!gls.currentva)
-        state |= meshbits;
-    else if (dotshading)
-        state |= GLS_SHADE_SMOOTH;
+	state = GLS_INTENSITY_ENABLE | glr.fog_bits;
+	if (!gls.currentva)
+		state |= meshbits;
+	else if (dotshading)
+		state |= GLS_SHADE_SMOOTH;
 
-    if (glr.ent->flags & RF_TRANSLUCENT)
-        state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
+	if (glr.ent->flags & RF_TRANSLUCENT)
+		state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
 
-    skin = skin_for_mesh(skins, num_skins);
-    if (skin->texnum2)
-        state |= GLS_GLOWMAP_ENABLE;
+	skin = skin_for_mesh(skins, num_skins);
+	if (skin->texnum2)
+		state |= GLS_GLOWMAP_ENABLE;
 
 	if (glr.framebuffer_bound && r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers) {
-        state |= GLS_BLOOM_GENERATE;
-        if (glr.ent->flags & RF_SHELL_MASK)
-            state |= GLS_BLOOM_SHELL;
-    }
+		state |= GLS_BLOOM_GENERATE;
+		if (glr.ent->flags & RF_SHELL_MASK)
+			state |= GLS_BLOOM_SHELL;
+	}
 
-    if (!(state & GLS_MESH_SHELL) && glr.ppl_dlight_bits)
-        state |= glr.ppl_bits;
+	if (!(state & GLS_MESH_SHELL) && glr.ppl_dlight_bits)
+		state |= glr.ppl_bits;
 
-    GL_StateBits(state);
+	GL_StateBits(state);
 
-    GL_BindTexture(TMU_TEXTURE, skin->texnum);
+	GL_BindTexture(TMU_TEXTURE, skin->texnum);
 
-    if (skin->texnum2)
-        GL_BindTexture(TMU_GLOWMAP, skin->texnum2);
+	if (skin->texnum2)
+		GL_BindTexture(TMU_GLOWMAP, skin->texnum2);
 
-    if (gls.currentva) {
-        if (dotshading)
-            GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_COLOR);
-        else
-            GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_NORMAL);
-        gl_backend->tex_coord_pointer((const GLfloat *)tcoords);
-    }
+	if (gls.currentva) {
+		if (dotshading)
+			GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_COLOR);
+		else
+			GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_NORMAL);
+		gl_backend->tex_coord_pointer((const GLfloat *)tcoords);
+	}
 
-    GL_LockArrays(num_verts);
+	GL_LockArrays(num_verts);
 
-    qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+	qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
 
-    draw_celshading(indices, num_indices);
+	draw_celshading(indices, num_indices);
 
-    if (gl_showtris->integer & SHOWTRIS_MESH)
-        GL_DrawOutlines(num_indices, GL_UNSIGNED_SHORT, indices);
+	if (gl_showtris->integer & SHOWTRIS_MESH)
+		GL_DrawOutlines(num_indices, GL_UNSIGNED_SHORT, indices);
 
-    // FIXME: unlock arrays before changing matrix?
-    draw_shadow(indices, num_indices);
+	GL_UnlockArrays();
 
-    GL_UnlockArrays();
+	draw_shadow(indices, num_indices, num_verts);
 }
 
 #if USE_MD5
