@@ -146,10 +146,33 @@ preserving the caller's texture binding state.
 */
 void configure_texture_parameters(GLuint texture)
 {
-	const glTmu_t prev_tmu = gls.server_tmu;
-	const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
+	GLint prev_active_enum = GL_TEXTURE0;
+	GLint prev_active_binding = 0;
+	if (qglGetIntegerv) {
+		qglGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_enum);
+		qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_active_binding);
+	} else {
+		prev_active_enum = GL_TEXTURE0 + gls.server_tmu;
+		prev_active_binding = static_cast<GLint>(gls.texnums[gls.server_tmu]);
+	}
+
+	glTmu_t prev_active_tmu = gls.server_tmu;
+	if (prev_active_enum >= GL_TEXTURE0) {
+		const GLint computed_tmu = prev_active_enum - GL_TEXTURE0;
+		if (computed_tmu >= 0 && computed_tmu < MAX_TMUS)
+			prev_active_tmu = static_cast<glTmu_t>(computed_tmu);
+	}
+	const GLuint restore_active_binding = prev_active_binding >= 0 ? static_cast<GLuint>(prev_active_binding) : 0;
 
 	GL_ActiveTexture(TMU_TEXTURE);
+
+	GLint prev_texture_binding = 0;
+	if (qglGetIntegerv)
+		qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_texture_binding);
+	else
+		prev_texture_binding = static_cast<GLint>(gls.texnums[TMU_TEXTURE]);
+	const GLuint restore_texture_binding = prev_texture_binding >= 0 ? static_cast<GLuint>(prev_texture_binding) : 0;
+
 	qglBindTexture(GL_TEXTURE_2D, texture);
 	gls.texnums[TMU_TEXTURE] = texture;
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -159,9 +182,14 @@ void configure_texture_parameters(GLuint texture)
 #ifdef GL_TEXTURE_COMPARE_MODE
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
 #endif
-	qglBindTexture(GL_TEXTURE_2D, prev_texture);
-	gls.texnums[TMU_TEXTURE] = prev_texture;
-	GL_ActiveTexture(prev_tmu);
+	qglBindTexture(GL_TEXTURE_2D, restore_texture_binding);
+	gls.texnums[TMU_TEXTURE] = restore_texture_binding;
+
+	GL_ActiveTexture(prev_active_tmu);
+	if (prev_active_tmu != TMU_TEXTURE) {
+		qglBindTexture(GL_TEXTURE_2D, restore_active_binding);
+		gls.texnums[prev_active_tmu] = restore_active_binding;
+	}
 }
 
 float compute_light_bias(const shadow_light_submission_t &light)
@@ -520,9 +548,33 @@ bool R_ShadowAtlasInit(void)
 			}
 		}
 
-		const glTmu_t prev_tmu = gls.server_tmu;
-		const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
+		GLint prev_active_enum = GL_TEXTURE0;
+		GLint prev_active_binding = 0;
+		if (qglGetIntegerv) {
+			qglGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_enum);
+			qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_active_binding);
+		} else {
+			prev_active_enum = GL_TEXTURE0 + gls.server_tmu;
+			prev_active_binding = static_cast<GLint>(gls.texnums[gls.server_tmu]);
+		}
+
+		glTmu_t prev_active_tmu = gls.server_tmu;
+		if (prev_active_enum >= GL_TEXTURE0) {
+			const GLint computed_tmu = prev_active_enum - GL_TEXTURE0;
+			if (computed_tmu >= 0 && computed_tmu < MAX_TMUS)
+				prev_active_tmu = static_cast<glTmu_t>(computed_tmu);
+		}
+		const GLuint restore_active_binding = prev_active_binding >= 0 ? static_cast<GLuint>(prev_active_binding) : 0;
+
 		GL_ActiveTexture(TMU_TEXTURE);
+
+		GLint prev_texture_binding = 0;
+		if (qglGetIntegerv)
+			qglGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_texture_binding);
+		else
+			prev_texture_binding = static_cast<GLint>(gls.texnums[TMU_TEXTURE]);
+		const GLuint restore_texture_binding = prev_texture_binding >= 0 ? static_cast<GLuint>(prev_texture_binding) : 0;
+
 		qglBindTexture(GL_TEXTURE_2D, texture);
 		gls.texnums[TMU_TEXTURE] = texture;
 		qglTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
@@ -531,11 +583,16 @@ bool R_ShadowAtlasInit(void)
 
 		GLenum tex_error = GL_NO_ERROR;
 		if (qglGetError)
-		tex_error = qglGetError();
+			tex_error = qglGetError();
 
-		qglBindTexture(GL_TEXTURE_2D, prev_texture);
-		gls.texnums[TMU_TEXTURE] = prev_texture;
-		GL_ActiveTexture(prev_tmu);
+		qglBindTexture(GL_TEXTURE_2D, restore_texture_binding);
+		gls.texnums[TMU_TEXTURE] = restore_texture_binding;
+
+		GL_ActiveTexture(prev_active_tmu);
+		if (prev_active_tmu != TMU_TEXTURE) {
+			qglBindTexture(GL_TEXTURE_2D, restore_active_binding);
+			gls.texnums[prev_active_tmu] = restore_active_binding;
+		}
 
 		if (tex_error != GL_NO_ERROR) {
 			if (qglDeleteTextures)
