@@ -16,27 +16,29 @@ Configures texture parameters and storage for HDR luminance reduction levels.
 =============
 */
 static void setupTexture(GLuint texture, int width, int height)
-	{
-		const glTmu_t active_tmu = gls.server_tmu;
-		const GLuint previous_texture = gls.texnums[active_tmu];
+{
+	const glTmu_t prev_active_tmu = gls.server_tmu;
+	const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
 
-		qglBindTexture(GL_TEXTURE_2D, texture);
-		gls.texnums[active_tmu] = texture;
-		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GL_ActiveTexture(TMU_TEXTURE);
 
-		const GLenum internal = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA16F;
-		const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
-		const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_HALF_FLOAT;
+	qglBindTexture(GL_TEXTURE_2D, texture);
+	gls.texnums[TMU_TEXTURE] = texture;
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		qglTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, format, type, nullptr);
+	const GLenum internal = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA16F;
+	const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
+	const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_HALF_FLOAT;
 
-		qglBindTexture(GL_TEXTURE_2D, previous_texture);
-		gls.texnums[active_tmu] = previous_texture;
-		gls.server_tmu = active_tmu;
-	}
+	qglTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, format, type, nullptr);
+
+	qglBindTexture(GL_TEXTURE_2D, prev_texture);
+	gls.texnums[TMU_TEXTURE] = prev_texture;
+	GL_ActiveTexture(prev_active_tmu);
+}
 
 /*
 =============
@@ -46,20 +48,35 @@ Attaches the supplied texture to the framebuffer object and verifies completenes
 =============
 */
 static bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height)
-	{
-		qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, texture, 0);
+{
+	const glTmu_t prev_active_tmu = gls.server_tmu;
+	const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
 
-		GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			if (gl_showerrors->integer)
-				Com_EPrintf("HDR luminance framebuffer status %#x\n", status);
-			return false;
-		}
+	GL_ActiveTexture(TMU_TEXTURE);
 
-		return true;
+	qglBindTexture(GL_TEXTURE_2D, texture);
+	gls.texnums[TMU_TEXTURE] = texture;
+
+	qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, texture, 0);
+
+	GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+	qglBindTexture(GL_TEXTURE_2D, prev_texture);
+	gls.texnums[TMU_TEXTURE] = prev_texture;
+	GL_ActiveTexture(prev_active_tmu);
+	restoreFramebuffer(prev_fbo);
+
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		if (gl_showerrors->integer)
+			Com_EPrintf("HDR luminance framebuffer status %#x\n", status);
+		return false;
 	}
+
+	return true;
+}
 
 /*
 =============
