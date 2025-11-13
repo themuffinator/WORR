@@ -311,6 +311,7 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
 	qglGetIntegerv(GL_VIEWPORT, viewport);
 
+	const glTmu_t previous_tmu = gls.server_tmu;
 	GLuint current_texture = sceneTexture;
 	int current_w = width;
 	int current_h = height;
@@ -358,6 +359,7 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 
 	restoreFramebuffer(prev_fbo);
 	GL_ForceTexture(TMU_TEXTURE, sceneTexture);
+	GL_ActiveTexture(previous_tmu);
 	qglViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
 	has_result_ = success;
