@@ -47,12 +47,23 @@ void GL_SampleLightPoint(vec3_t color)
 
 	smax = surf->lm_width;
 	tmax = surf->lm_height;
+
+	Q_assert(smax > 0);
+	Q_assert(tmax > 0);
+	if (smax <= 0 || tmax <= 0) {
+		VectorClear(color);
+		return;
+	}
+
 	size = smax * tmax * 3;
-	max_s = std::max(0, smax - 2);
-	max_t = std::max(0, tmax - 2);
+	max_s = smax - 1;
+	max_t = tmax - 1;
 
 	s = std::clamp(s, 0, max_s);
 	t = std::clamp(t, 0, max_t);
+
+	const int s1 = std::clamp(s + 1, 0, max_s);
+	const int t1 = std::clamp(t + 1, 0, max_t);
 
 	fracu = std::clamp(sample_s - static_cast<float>(s), 0.0f, 1.0f);
 	fracv = std::clamp(sample_t - static_cast<float>(t), 0.0f, 1.0f);
@@ -68,10 +79,10 @@ void GL_SampleLightPoint(vec3_t color)
 	// add all the lightmaps with bilinear filtering
 	lightmap = surf->lightmap;
 	for (int i = 0; i < surf->numstyles; i++) {
-		b1 = &lightmap[3 * ((t + 0) * smax + (s + 0))];
-		b2 = &lightmap[3 * ((t + 0) * smax + (s + 1))];
-		b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
-		b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
+		b1 = &lightmap[3 * (t * smax + s)];
+		b2 = &lightmap[3 * (t * smax + s1)];
+		b3 = &lightmap[3 * (t1 * smax + s1)];
+		b4 = &lightmap[3 * (t1 * smax + s)];
 
 		temp[0] = w1 * b1[0] + w2 * b2[0] + w3 * b3[0] + w4 * b4[0];
 		temp[1] = w1 * b1[1] + w2 * b2[1] + w3 * b3[1] + w4 * b4[1];
