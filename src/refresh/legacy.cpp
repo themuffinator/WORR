@@ -159,33 +159,49 @@ static void legacy_load_matrix(GLenum mode, const GLfloat *matrix, const GLfloat
     qglMultMatrixf(matrix);
 }
 
+/*
+=============
+legacy_disable_state
+
+Resets legacy backend bindings and disables active client arrays.
+=============
+*/
 static void legacy_disable_state(void)
 {
-    if (qglActiveTexture && qglClientActiveTexture) {
-        qglActiveTexture(GL_TEXTURE1);
-        qglBindTexture(GL_TEXTURE_2D, 0);
-        qglDisable(GL_TEXTURE_2D);
-        qglClientActiveTexture(GL_TEXTURE1);
-        qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	if (qglActiveTexture && qglClientActiveTexture) {
+		qglActiveTexture(GL_TEXTURE1);
+		gls.server_tmu = TMU_LIGHTMAP;
+		qglBindTexture(GL_TEXTURE_2D, 0);
+		gls.texnums[TMU_LIGHTMAP] = 0;
+		qglDisable(GL_TEXTURE_2D);
+		qglClientActiveTexture(GL_TEXTURE1);
+		gls.client_tmu = TMU_LIGHTMAP;
+		qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-        qglActiveTexture(GL_TEXTURE0);
-        qglBindTexture(GL_TEXTURE_2D, 0);
-        qglEnable(GL_TEXTURE_2D);
-        qglClientActiveTexture(GL_TEXTURE0);
-        qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    } else {
-        qglBindTexture(GL_TEXTURE_2D, 0);
-        qglEnable(GL_TEXTURE_2D);
-        qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    }
+		qglActiveTexture(GL_TEXTURE0);
+		gls.server_tmu = TMU_TEXTURE;
+		qglBindTexture(GL_TEXTURE_2D, 0);
+		gls.texnums[TMU_TEXTURE] = 0;
+		qglEnable(GL_TEXTURE_2D);
+		qglClientActiveTexture(GL_TEXTURE0);
+		gls.client_tmu = TMU_TEXTURE;
+		qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	} else {
+		qglBindTexture(GL_TEXTURE_2D, 0);
+		gls.texnums[TMU_TEXTURE] = 0;
+		qglEnable(GL_TEXTURE_2D);
+		qglDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		gls.server_tmu = TMU_TEXTURE;
+		gls.client_tmu = TMU_TEXTURE;
+	}
 
-    qglDisableClientState(GL_VERTEX_ARRAY);
-    qglDisableClientState(GL_COLOR_ARRAY);
+	qglDisableClientState(GL_VERTEX_ARRAY);
+	qglDisableClientState(GL_COLOR_ARRAY);
 
-    if (gl_static.warp_program) {
-        qglBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, 0);
-        qglDisable(GL_FRAGMENT_PROGRAM_ARB);
-    }
+	if (gl_static.warp_program) {
+		qglBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, 0);
+		qglDisable(GL_FRAGMENT_PROGRAM_ARB);
+	}
 }
 
 static void legacy_clear_state(void)
