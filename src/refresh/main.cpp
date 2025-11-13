@@ -1331,27 +1331,39 @@ static void R_ClearMotionBlurHistory(void)
     }
 }
 
+/*
+=============
+R_BindMotionHistoryTextures
+
+Binds the motion history textures and restores the previously active texture unit.
+=============
+*/
 static void R_BindMotionHistoryTextures(void)
 {
-	if ((r_fbo && !r_fbo->integer) || !glr.motion_history_textures_ready) {
-        for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
-            glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
-            GL_ForceTexture(tmu, TEXNUM_BLACK);
-        }
-        return;
-    }
+	const glTmu_t prevActiveTmu = gls.server_tmu;
 
-    for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
-        glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
-        GLuint tex = TEXNUM_BLACK;
-        if (i < glr.motion_blur_history_count) {
-            int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) %
-                R_MOTION_BLUR_HISTORY_FRAMES;
-            if (glr.motion_history_valid[slot])
-                tex = TEXNUM_PP_MOTION_HISTORY(slot);
-        }
-        GL_ForceTexture(tmu, tex);
-    }
+	if ((r_fbo && !r_fbo->integer) || !glr.motion_history_textures_ready) {
+		for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+			glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+			GL_ForceTexture(tmu, TEXNUM_BLACK);
+		}
+		GL_ActiveTexture(prevActiveTmu);
+		return;
+	}
+
+	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+		glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
+		GLuint tex = TEXNUM_BLACK;
+		if (i < glr.motion_blur_history_count) {
+			int slot = (glr.motion_blur_history_index + R_MOTION_BLUR_HISTORY_FRAMES - glr.motion_blur_history_count + i) %
+				R_MOTION_BLUR_HISTORY_FRAMES;
+			if (glr.motion_history_valid[slot])
+				tex = TEXNUM_PP_MOTION_HISTORY(slot);
+		}
+		GL_ForceTexture(tmu, tex);
+	}
+
+	GL_ActiveTexture(prevActiveTmu);
 }
 
 /*
