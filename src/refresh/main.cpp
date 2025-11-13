@@ -1191,11 +1191,11 @@ static void R_GetFinalCompositeRect(int *x, int *y, int *w, int *h)
 {
 	if (!x || !y || !w || !h)
 		return;
-	
-	*x = 0;
-	*y = 0;
-	*w = r_config.width;
-	*h = r_config.height;
+
+	*x = glr.fd.x;
+	*y = glr.fd.y;
+	*w = glr.fd.width;
+	*h = glr.fd.height;
 }
 
 static void GL_BokehViewport(int w, int h)
