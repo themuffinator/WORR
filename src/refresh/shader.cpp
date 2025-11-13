@@ -71,6 +71,8 @@ static cvar_t *gl_cluster_show_normals;
 
 extern const glbackend_t backend_legacy;
 
+static void shader_shutdown(void);
+
 q_printf(2, 3)
 static void shader_printf(sizebuf_t *buf, const char *fmt, ...)
 {
