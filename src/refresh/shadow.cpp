@@ -359,7 +359,11 @@ void render_shadow_views()
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadow.framebuffer);
 	const GLenum no_buffers = GL_NONE;
-	qglDrawBuffers(1, &no_buffers);
+	if (qglDrawBuffers) {
+		qglDrawBuffers(1, &no_buffers);
+	} else if (qglDrawBuffer) {
+		qglDrawBuffer(GL_NONE);
+	}
 	if (has_read_buffer)
 		qglReadBuffer(GL_NONE);
 	qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -446,7 +450,11 @@ void render_shadow_views()
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
-	qglDrawBuffers(1, &prev_draw_buffer_enum);
+	if (qglDrawBuffers) {
+		qglDrawBuffers(1, &prev_draw_buffer_enum);
+	} else if (qglDrawBuffer) {
+		qglDrawBuffer(prev_draw_buffer_enum);
+	}
 	if (has_read_buffer)
 		qglReadBuffer(prev_read_buffer);
 	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);

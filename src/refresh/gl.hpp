@@ -292,6 +292,7 @@ typedef enum {
     QGL_CAP_LINE_SMOOTH                 = BIT(12),
     QGL_CAP_BUFFER_TEXTURE              = BIT(13),
     QGL_CAP_SHADER_STORAGE              = BIT(14),
+    QGL_CAP_DRAW_BUFFERS                = BIT(15),
     QGL_CAP_SKELETON_MASK               = QGL_CAP_BUFFER_TEXTURE | QGL_CAP_SHADER_STORAGE,
 } glcap_t;
 

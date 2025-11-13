@@ -334,7 +334,7 @@ void R_DrawSkyBox(void)
 
     glStateBits_t bits = GLS_TEXTURE_REPLACE | glr.fog_bits_sky;
 
-    if (glr.framebuffer_bound && r_bloom->integer)
+	if (glr.framebuffer_bound && r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
         bits |= GLS_BLOOM_GENERATE;
 
     GL_BindArrays(VA_SPRITE);

@@ -1995,14 +1995,18 @@ static void shader_state_bits(glStateBits_t bits)
         gls.u_block_dirty = true;
     }
 
-    if (diff & GLS_BLOOM_GENERATE && glr.framebuffer_bound) {
-        static constexpr GLenum bloom_targets[] = {
-            GL_COLOR_ATTACHMENT0,
-            GL_COLOR_ATTACHMENT1,
-        };
-        int n = (bits & GLS_BLOOM_GENERATE) ? 2 : 1;
-        qglDrawBuffers(n, bloom_targets);
-    }
+	if (diff & GLS_BLOOM_GENERATE && glr.framebuffer_bound) {
+		static constexpr GLenum bloom_targets[] = {
+			GL_COLOR_ATTACHMENT0,
+			GL_COLOR_ATTACHMENT1,
+		};
+		int n = (bits & GLS_BLOOM_GENERATE) ? 2 : 1;
+		if (qglDrawBuffers) {
+			qglDrawBuffers(n, bloom_targets);
+		} else if (qglDrawBuffer) {
+			qglDrawBuffer(GL_COLOR_ATTACHMENT0);
+		}
+	}
 }
 
 static void shader_array_bits(glArrayBits_t bits)

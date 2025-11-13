@@ -60,6 +60,7 @@ static constexpr glfunction_t kGl11Functions[] = {
     QGL_FN(DepthMask),
     QGL_FN(Disable),
     QGL_FN(DrawArrays),
+    QGL_FN(DrawBuffer),
     QGL_FN(DrawElements),
     QGL_FN(Enable),
     QGL_FN(Finish),
@@ -382,6 +383,7 @@ static const glsection_t sections[] = {
     {
         .ver_gl = QGL_VER(2, 0),
         .ver_es = QGL_VER(2, 0),
+        .caps = QGL_CAP_DRAW_BUFFERS,
         .functions = kGl20Functions
     },
 

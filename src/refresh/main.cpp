@@ -1562,7 +1562,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
 		flags |= PP_WATERWARP;
 
-	if (r_bloom->integer)
+	if (r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
 		flags |= PP_BLOOM;
 
 	if (dof_active)
@@ -1640,7 +1640,11 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	static const GLenum scene_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	const GLsizei scene_draw_buffer_count = (flags & PP_BLOOM) ? 2 : 1;
-	qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+	if (qglDrawBuffers) {
+		qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+	} else if (qglDrawBuffer) {
+		qglDrawBuffer(GL_COLOR_ATTACHMENT0);
+	}
 	if (qglReadBuffer)
 		qglReadBuffer(GL_COLOR_ATTACHMENT0);
 
@@ -1648,10 +1652,18 @@ static pp_flags_t GL_BindFramebuffer(void)
 		if (flags & PP_BLOOM) {
 			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 			static const vec4_t black = { 0, 0, 0, 1 };
-			qglDrawBuffers(2, buffers);
+			if (qglDrawBuffers) {
+				qglDrawBuffers(2, buffers);
+			} else if (qglDrawBuffer) {
+				qglDrawBuffer(GL_COLOR_ATTACHMENT0);
+			}
 			qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
 			qglClearBufferfv(GL_COLOR, 1, black);
-			qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+			if (qglDrawBuffers) {
+				qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+			} else if (qglDrawBuffer) {
+				qglDrawBuffer(GL_COLOR_ATTACHMENT0);
+			}
 		} else {
 			qglClear(GL_COLOR_BUFFER_BIT);
 		}
