@@ -192,6 +192,7 @@ static bool hdr_warned_auto_exposure_stall = false;
 static int32_t r_hdr_modified = 0;
 static int32_t r_hdr_mode_modified = 0;
 static int32_t r_exposure_auto_modified = 0;
+bool gl_flare_occlusion_disabled = false;
 
 // ==============================================================================
 
@@ -564,87 +565,116 @@ static void make_flare_quad(const vec3_t origin, float scale)
     VectorAdd3(origin, up,   right, tess.vertices + 9);
 }
 
+/*
+=============
+GL_OccludeFlares
+
+Submit occlusion queries for flare entities when supported.
+=============
+*/
 static void GL_OccludeFlares(void)
 {
-    const bsp_t *bsp = gl_static.world.cache;
-    const entity_t *ent;
-    glquery_t *q;
-    vec3_t dir, org;
-    float scale, dist;
-    bool set = false;
-    int i;
+	const bsp_t *bsp = gl_static.world.cache;
+	const entity_t *ent;
+	glquery_t *q;
+	vec3_t dir, org;
+	float scale, dist;
+	bool set = false;
+	int i;
 
-    for (ent = glr.ents.flares; ent; ent = ent->next) {
-        q = HashMap_Lookup(glquery_t, gl_static.queries, &ent->skinnum);
+	if (!gl_static.queries)
+		return;
 
-        for (i = 0; i < 4; i++)
-            if (PlaneDiff(ent->origin, &glr.frustumPlanes[i]) < -2.5f)
-                break;
-        if (i != 4) {
-            if (q)
-                q->pending = q->visible = false;
-            continue;   // not visible
-        }
+	if (gl_flare_occlusion_disabled)
+		return;
 
-        if (q) {
-            // reset visibility if entity disappeared
-            if (com_eventTime - q->timestamp >= 2500) {
-                q->pending = q->visible = false;
-                q->frac = 0;
-            } else {
-                if (q->pending)
-                    continue;
-                if (com_eventTime - q->timestamp <= 33)
-                    continue;
-            }
-        } else {
-            glquery_t new_query{};
-            uint32_t map_size = HashMap_Size(gl_static.queries);
-            Q_assert(map_size < MAX_EDICTS);
-            qglGenQueries(1, &new_query.query);
-            HashMap_Insert(gl_static.queries, &ent->skinnum, &new_query);
-            q = HashMap_GetValue(glquery_t, gl_static.queries, map_size);
-        }
+	for (ent = glr.ents.flares; ent; ent = ent->next) {
+		q = HashMap_Lookup(glquery_t, gl_static.queries, &ent->skinnum);
 
-        if (!set) {
-            GL_LoadMatrix(gl_identity, glr.viewmatrix);
-            GL_LoadUniforms();
-            GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
-            GL_BindArrays(VA_OCCLUDE);
-            GL_StateBits(GLS_DEPTHMASK_FALSE);
-            GL_ArrayBits(GLA_VERTEX);
-            qglColorMask(0, 0, 0, 0);
-            set = true;
-        }
+		for (i = 0; i < 4; i++)
+			if (PlaneDiff(ent->origin, &glr.frustumPlanes[i]) < -2.5f)
+				break;
+		if (i != 4) {
+			if (q)
+				q->pending = q->visible = false;
+			continue;   // not visible
+		}
 
-        VectorSubtract(ent->origin, glr.fd.vieworg, dir);
-        dist = DotProduct(dir, glr.viewaxis[0]);
+		if (q) {
+			// reset visibility if entity disappeared
+			if (com_eventTime - q->timestamp >= 2500) {
+				q->pending = q->visible = false;
+				q->frac = 0;
+			} else {
+				if (q->pending)
+					continue;
+				if (com_eventTime - q->timestamp <= 33)
+					continue;
+			}
+		} else {
+			glquery_t new_query{};
+			uint32_t map_size = HashMap_Size(gl_static.queries);
+			Q_assert(map_size < MAX_EDICTS);
+			qglGenQueries(1, &new_query.query);
+			if (!new_query.query) {
+				if (!gl_flare_occlusion_disabled)
+					Com_WPrintf("%s: failed to allocate occlusion query, disabling flare occlusion.\n", __func__);
+				gl_flare_occlusion_disabled = true;
+				if (set)
+					qglColorMask(1, 1, 1, 1);
+				return;
+			}
+			HashMap_Insert(gl_static.queries, &ent->skinnum, &new_query);
+			q = HashMap_GetValue(glquery_t, gl_static.queries, map_size);
+		}
 
-        scale = 2.5f;
-        if (dist > 20)
-            scale += dist * 0.004f;
+		if (!set) {
+			GL_LoadMatrix(gl_identity, glr.viewmatrix);
+			GL_LoadUniforms();
+			GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+			GL_BindArrays(VA_OCCLUDE);
+			GL_StateBits(GLS_DEPTHMASK_FALSE);
+			GL_ArrayBits(GLA_VERTEX);
+			qglColorMask(0, 0, 0, 0);
+			set = true;
+		}
 
-        if (bsp && BSP_PointLeaf(bsp->nodes, ent->origin)->contents[0] & CONTENTS_SOLID) {
-            VectorNormalize(dir);
-            VectorMA(ent->origin, -5.0f, dir, org);
-            make_flare_quad(org, scale);
-        } else
-            make_flare_quad(ent->origin, scale);
+		VectorSubtract(ent->origin, glr.fd.vieworg, dir);
+		dist = DotProduct(dir, glr.viewaxis[0]);
 
-        GL_LockArrays(4);
-        qglBeginQuery(gl_static.samples_passed, q->query);
-        qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        qglEndQuery(gl_static.samples_passed);
-        GL_UnlockArrays();
+		scale = 2.5f;
+		if (dist > 20)
+			scale += dist * 0.004f;
 
-        q->timestamp = com_eventTime;
-        q->pending = true;
+		if (bsp && BSP_PointLeaf(bsp->nodes, ent->origin)->contents[0] & CONTENTS_SOLID) {
+			VectorNormalize(dir);
+			VectorMA(ent->origin, -5.0f, dir, org);
+			make_flare_quad(org, scale);
+		} else
+			make_flare_quad(ent->origin, scale);
 
-        c.occlusionQueries++;
-    }
+		if (!q->query) {
+			q->visible = true;
+			q->pending = false;
+			q->frac = 1.0f;
+			q->timestamp = com_eventTime;
+			continue;
+		}
 
-    if (set)
-        qglColorMask(1, 1, 1, 1);
+		GL_LockArrays(4);
+		qglBeginQuery(gl_static.samples_passed, q->query);
+		qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		qglEndQuery(gl_static.samples_passed);
+		GL_UnlockArrays();
+
+		q->timestamp = com_eventTime;
+		q->pending = true;
+
+		c.occlusionQueries++;
+	}
+
+	if (set)
+		qglColorMask(1, 1, 1, 1);
 }
 
 void GL_ClassifyEntities(void)
@@ -2422,6 +2452,7 @@ void GL_InitQueries(void)
 
     Q_assert(!gl_static.queries);
     gl_static.queries = HashMap_TagCreate(int, glquery_t, HashInt32, NULL, TAG_RENDERER);
+	gl_flare_occlusion_disabled = false;
 }
 
 void GL_DeleteQueries(void)

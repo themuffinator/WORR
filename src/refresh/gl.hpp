@@ -431,6 +431,7 @@ typedef struct {
 extern glStatic_t gl_static;
 extern glConfig_t gl_config;
 extern glRefdef_t glr;
+extern bool gl_flare_occlusion_disabled;
 
 extern entity_t gl_world;
 

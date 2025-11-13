@@ -451,131 +451,147 @@ static void GL_FlushFlares(void)
     tess.flags = 0;
 }
 
+/*
+=============
+GL_DrawFlares
+
+Render lens flare sprites with optional occlusion visibility smoothing.
+=============
+*/
 void GL_DrawFlares(void)
 {
-    static const byte indices[12] = { 0, 2, 3, 0, 3, 4, 0, 4, 1, 0, 1, 2 };
-    static const float tcoords[10] = { 0.5f, 0.5f, 0, 1, 0, 0, 1, 0, 1, 1 };
-    vec3_t up, down, left, right;
-    color_t inner, outer;
-    vec_t *dst_vert;
-    glIndex_t *dst_indices;
-    GLuint result;
-    const entity_t *ent;
-    const image_t *image;
-    glquery_t *q;
-    float scale;
-    bool def;
-    int i;
+	static const byte indices[12] = { 0, 2, 3, 0, 3, 4, 0, 4, 1, 0, 1, 2 };
+	static const float tcoords[10] = { 0.5f, 0.5f, 0, 1, 0, 0, 1, 0, 1, 1 };
+	vec3_t up, down, left, right;
+	color_t inner, outer;
+	vec_t *dst_vert;
+	glIndex_t *dst_indices;
+	GLuint result;
+	const entity_t *ent;
+	const image_t *image;
+	glquery_t *q;
+	float scale;
+	float flare_frac;
+	bool def;
+	bool occlusion_enabled;
+	int i;
 
-    if (!glr.ents.flares)
-        return;
+	if (!glr.ents.flares)
+		return;
 
-    GL_LoadMatrix(gl_identity, glr.viewmatrix);
-    GL_BindArrays(VA_EFFECT);
+	occlusion_enabled = (gl_static.queries && !gl_flare_occlusion_disabled);
 
-    for (ent = glr.ents.flares; ent; ent = ent->next) {
-        q = HashMap_Lookup(glquery_t, gl_static.queries, &ent->skinnum);
-        if (!q)
-            continue;
+	GL_LoadMatrix(gl_identity, glr.viewmatrix);
+	GL_BindArrays(VA_EFFECT);
 
-        if (q->pending && q->timestamp != com_eventTime) {
-            if (gl_config.caps & QGL_CAP_QUERY_RESULT_NO_WAIT) {
-                result = -1;
-                qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT_NO_WAIT, &result);
-                if (result != -1) {
-                    q->visible = result;
-                    q->pending = false;
-                }
-            } else {
-                qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT_AVAILABLE, &result);
-                if (result) {
-                    qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT, &result);
-                    q->visible = result;
-                    q->pending = false;
-                }
-            }
-        }
+	for (ent = glr.ents.flares; ent; ent = ent->next) {
+		q = NULL;
+		flare_frac = 1.0f;
 
-        GL_AdvanceValue(&q->frac, q->visible, gl_flarespeed->value);
-        if (!q->frac)
-            continue;
+		if (occlusion_enabled) {
+			q = HashMap_Lookup(glquery_t, gl_static.queries, &ent->skinnum);
+			if (!q)
+				continue;
 
-        image = IMG_ForHandle(ent->skin);
+			if (q->pending && q->timestamp != com_eventTime) {
+				if (gl_config.caps & QGL_CAP_QUERY_RESULT_NO_WAIT) {
+					result = -1;
+					qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT_NO_WAIT, &result);
+					if (result != -1) {
+						q->visible = result;
+						q->pending = false;
+					}
+				} else {
+					qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT_AVAILABLE, &result);
+					if (result) {
+						qglGetQueryObjectuiv(q->query, GL_QUERY_RESULT, &result);
+						q->visible = result;
+						q->pending = false;
+					}
+				}
+			}
 
-        if (q_unlikely(tess.numverts + 5 > TESS_MAX_VERTICES ||
-                       tess.numindices + 12 > TESS_MAX_INDICES) ||
-            (tess.numindices && tess.texnum[TMU_TEXTURE] != image->texnum))
-            GL_FlushFlares();
+			GL_AdvanceValue(&q->frac, q->visible, gl_flarespeed->value);
+			flare_frac = q->frac;
+			if (!flare_frac)
+				continue;
+		}
 
-        tess.texnum[TMU_TEXTURE] = image->texnum;
+		image = IMG_ForHandle(ent->skin);
 
-        def = image->flags & IF_DEFAULT_FLARE;
-        if (def)
-            tess.flags |= GLS_DEFAULT_FLARE;
+		if (q_unlikely(tess.numverts + 5 > TESS_MAX_VERTICES ||
+				tess.numindices + 12 > TESS_MAX_INDICES) ||
+			(tess.numindices && tess.texnum[TMU_TEXTURE] != image->texnum))
+			GL_FlushFlares();
 
-        scale = (25 << static_cast<int>(def)) * (ent->scale[0] * q->frac);
+		tess.texnum[TMU_TEXTURE] = image->texnum;
 
-        if (ent->flags & RF_FLARE_LOCK_ANGLE) {
-            VectorScale(glr.viewaxis[1],  scale, left);
-            VectorScale(glr.viewaxis[1], -scale, right);
-            VectorScale(glr.viewaxis[2], -scale, down);
-            VectorScale(glr.viewaxis[2],  scale, up);
-        } else {
-            vec3_t dir, r, u;
-            VectorSubtract(ent->origin, glr.fd.vieworg, dir);
-            VectorNormalize(dir);
-            MakeNormalVectors(dir, r, u);
-            VectorScale(r, -scale, left);
-            VectorScale(r,  scale, right);
-            VectorScale(u, -scale, down);
-            VectorScale(u,  scale, up);
-        }
+		def = image->flags & IF_DEFAULT_FLARE;
+		if (def)
+			tess.flags |= GLS_DEFAULT_FLARE;
 
-        dst_vert = tess.vertices + tess.numverts * 6;
+		scale = (25 << static_cast<int>(def)) * (ent->scale[0] * flare_frac);
 
-        VectorCopy(ent->origin, dst_vert);
-        VectorAdd3(ent->origin, down, left,  dst_vert +  6);
-        VectorAdd3(ent->origin, up,   left,  dst_vert + 12);
-        VectorAdd3(ent->origin, up,   right, dst_vert + 18);
-        VectorAdd3(ent->origin, down, right, dst_vert + 24);
+		if (ent->flags & RF_FLARE_LOCK_ANGLE) {
+			VectorScale(glr.viewaxis[1],  scale, left);
+			VectorScale(glr.viewaxis[1], -scale, right);
+			VectorScale(glr.viewaxis[2], -scale, down);
+			VectorScale(glr.viewaxis[2],  scale, up);
+		} else {
+			vec3_t dir, r, u;
+			VectorSubtract(ent->origin, glr.fd.vieworg, dir);
+			VectorNormalize(dir);
+			MakeNormalVectors(dir, r, u);
+			VectorScale(r, -scale, left);
+			VectorScale(r,  scale, right);
+			VectorScale(u, -scale, down);
+			VectorScale(u,  scale, up);
+		}
 
-        for (i = 0; i < 5; i++) {
-            dst_vert[i * 6 + 3] = tcoords[i * 2 + 0];
-            dst_vert[i * 6 + 4] = tcoords[i * 2 + 1];
-        }
+		dst_vert = tess.vertices + tess.numverts * 6;
 
-        inner.u32 = ent->rgba.u32;
-        inner.a = (128 + def * 32) * (ent->alpha * q->frac);
-        outer.u32 = inner.u32;
+		VectorCopy(ent->origin, dst_vert);
+		VectorAdd3(ent->origin, down, left,  dst_vert +  6);
+		VectorAdd3(ent->origin, up,   left,  dst_vert + 12);
+		VectorAdd3(ent->origin, up,   right, dst_vert + 18);
+		VectorAdd3(ent->origin, down, right, dst_vert + 24);
 
-        if (ent->flags & (RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE)) {
-            VectorClear(outer.u8);
-            if (ent->flags & RF_SHELL_RED)
-                outer.r = 255;
-            if (ent->flags & RF_SHELL_GREEN)
-                outer.g = 255;
-            if (ent->flags & RF_SHELL_BLUE)
-                outer.b = 255;
-            tess.flags |= GLS_SHADE_SMOOTH;
-        }
+		for (i = 0; i < 5; i++) {
+			dst_vert[i * 6 + 3] = tcoords[i * 2 + 0];
+			dst_vert[i * 6 + 4] = tcoords[i * 2 + 1];
+		}
 
-        WN32(dst_vert +  5, inner.u32);
-        WN32(dst_vert + 11, outer.u32);
-        WN32(dst_vert + 17, outer.u32);
-        WN32(dst_vert + 23, outer.u32);
-        WN32(dst_vert + 29, outer.u32);
+		inner.u32 = ent->rgba.u32;
+		inner.a = (128 + def * 32) * (ent->alpha * flare_frac);
+		outer.u32 = inner.u32;
 
-        dst_indices = tess.indices + tess.numindices;
-        for (i = 0; i < 12; i++)
-            dst_indices[i] = tess.numverts + indices[i];
+		if (ent->flags & (RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE)) {
+			VectorClear(outer.u8);
+			if (ent->flags & RF_SHELL_RED)
+				outer.r = 255;
+			if (ent->flags & RF_SHELL_GREEN)
+				outer.g = 255;
+			if (ent->flags & RF_SHELL_BLUE)
+				outer.b = 255;
+			tess.flags |= GLS_SHADE_SMOOTH;
+		}
 
-        tess.numverts += 5;
-        tess.numindices += 12;
-    }
+		WN32(dst_vert +  5, inner.u32);
+		WN32(dst_vert + 11, outer.u32);
+		WN32(dst_vert + 17, outer.u32);
+		WN32(dst_vert + 23, outer.u32);
+		WN32(dst_vert + 29, outer.u32);
 
-    GL_FlushFlares();
+		dst_indices = tess.indices + tess.numindices;
+		for (i = 0; i < 12; i++)
+			dst_indices[i] = tess.numverts + indices[i];
+
+		tess.numverts += 5;
+		tess.numindices += 12;
+	}
+
+	GL_FlushFlares();
 }
-
 
 void GL_BindArrays(glVertexArray_t va)
 {
