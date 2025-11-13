@@ -239,6 +239,7 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	const GLuint prevTexture = gls.texnums[TMU_TEXTURE];
 	const GLuint prevLightmap = gls.texnums[TMU_LIGHTMAP];
 	const GLuint prevGlowmap = gls.texnums[TMU_GLOWMAP];
+	const glTmu_t prevActiveTmu = gls.server_tmu;
 
 	const auto restoreState = [&]() {
 		if (prevFbo >= 0)
@@ -247,6 +248,7 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 		GL_ForceTexture(TMU_TEXTURE, prevTexture);
 		GL_ForceTexture(TMU_LIGHTMAP, prevLightmap);
 		GL_ForceTexture(TMU_GLOWMAP, prevGlowmap);
+		GL_ActiveTexture(prevActiveTmu);
 	};
 
 	if (ctx.viewportWidth <= 0 || ctx.viewportHeight <= 0) {
