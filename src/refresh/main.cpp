@@ -1599,6 +1599,7 @@ static void HDR_DisableFramebufferResources(void)
 	HDR_ResetState();
 	glr.framebuffer_ok = false;
 	glr.framebuffer_bound = false;
+	glr.framebuffer_resources_resident = false;
 	glr.framebuffer_width = 0;
 	glr.framebuffer_height = 0;
 	glr.motion_history_textures_ready = false;
@@ -1623,8 +1624,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
 	const bool post_processing_disabled = !post_processing_requested;
 	const bool post_processing_paused = post_processing_requested && !world_visible;
-	const bool had_framebuffer = glr.framebuffer_ok;
-	const bool had_framebuffer_resources = had_framebuffer || glr.framebuffer_width > 0 || glr.framebuffer_height > 0 || glr.motion_history_textures_ready;
+	const bool had_framebuffer_resources = glr.framebuffer_resources_resident;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
@@ -1714,6 +1714,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		r_motionBlur->modified_count != r_motionBlur_modified ||
 		hdr_prev != gl_static.hdr.active) {
 		glr.framebuffer_ok = GL_InitFramebuffers();
+	glr.framebuffer_resources_resident = glr.framebuffer_ok;
 		if (glr.framebuffer_ok) {
 			glr.framebuffer_width  = scene_target_w;
 			glr.framebuffer_height = scene_target_h;
@@ -1753,16 +1754,19 @@ static pp_flags_t GL_BindFramebuffer(void)
 		return PP_NONE;
 	}
 
-	if (!flags || !glr.framebuffer_ok) {
+	if (!glr.framebuffer_ok) {
 		glr.motion_blur_enabled = false;
-		if (!post_processing_paused || !glr.framebuffer_ok) {
-			HDR_DisableFramebufferResources();
-			HDR_UpdatePostprocessFormats();
-			GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
-			GL_ClearBloomStateFlags();
-			if (had_framebuffer_resources)
-				GL_ReleaseFramebufferResources();
-		}
+		HDR_DisableFramebufferResources();
+		HDR_UpdatePostprocessFormats();
+		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
+		GL_ClearBloomStateFlags();
+		if (had_framebuffer_resources)
+			GL_ReleaseFramebufferResources();
+		return PP_NONE;
+	}
+
+	if (!flags) {
+		glr.framebuffer_bound = false;
 		return PP_NONE;
 	}
 

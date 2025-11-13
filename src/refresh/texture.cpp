@@ -1372,6 +1372,7 @@ bool GL_InitFramebuffers(void)
 	CHECK_FB(dof_half_w, "FBO_BOKEH_GATHER");
 
 	glr.motion_history_textures_ready = false;
+	glr.framebuffer_resources_resident = false;
 
 	const bool motion_history_expected = motion_blur_active && scene_w > 0 && scene_h > 0;
 
@@ -1470,6 +1471,7 @@ void GL_ReleaseFramebufferResources(void)
 	gl_static.dof.half_height = 0;
 	gl_static.dof.reduced_resolution = false;
 	glr.motion_history_textures_ready = false;
+	glr.framebuffer_resources_resident = false;
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
