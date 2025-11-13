@@ -1270,38 +1270,55 @@ static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int sou
     GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h);
 }
 
+/*
+=============
+GL_BokehCombinePass
+
+Combines the depth of field gather result with the scene at the result resolution.
+=============
+*/
 static void GL_BokehCombinePass(int target_w, int target_h, int source_w, int source_h)
 {
-    GL_BokehViewport(target_w, target_h);
-    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
-    GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, target_w, target_h);
+	const int viewport_w = (gl_static.dof.result_width > 0) ? (std::min)(target_w, gl_static.dof.result_width) : target_w;
+	const int viewport_h = (gl_static.dof.result_height > 0) ? (std::min)(target_h, gl_static.dof.result_height) : target_h;
+
+	GL_BokehViewport(viewport_w, viewport_h);
+	GL_BokehSetScreen(viewport_w, viewport_h, source_w, source_h);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
+	GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+	GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, viewport_w, viewport_h);
 }
 
+/*
+=============
+GL_RunDepthOfField
+
+Executes the depth of field pipeline for the current frame.
+=============
+*/
 static void GL_RunDepthOfField(void)
 {
-    const int full_w = gl_static.dof.full_width;
-    const int full_h = gl_static.dof.full_height;
-    const int result_w = gl_static.dof.result_width;
-    const int result_h = gl_static.dof.result_height;
-    const int half_w = gl_static.dof.half_width;
-    const int half_h = gl_static.dof.half_height;
+	const int full_w = gl_static.dof.full_width;
+	const int full_h = gl_static.dof.full_height;
+	const int result_w = gl_static.dof.result_width;
+	const int result_h = gl_static.dof.result_height;
+	const int half_w = gl_static.dof.half_width;
+	const int half_h = gl_static.dof.half_height;
 
-    if (full_w <= 0 || full_h <= 0 || result_w <= 0 || result_h <= 0 || half_w <= 0 || half_h <= 0)
-        return;
+	if (full_w <= 0 || full_h <= 0 || result_w <= 0 || result_h <= 0 || half_w <= 0 || half_h <= 0)
+		return;
 
-    GL_Setup2D();
+	GL_Setup2D();
 
-    GL_BokehCoCPass(full_w, full_h, full_w, full_h);
-    GL_BokehInitialBlurPass(result_w, result_h, full_w, full_h);
-    GL_BokehDownsamplePass(half_w, half_h, result_w, result_h);
-    GL_BokehGatherPass(half_w, half_h, half_w, half_h);
-    GL_BokehCombinePass(full_w, full_h, half_w, half_h);
+	GL_BokehCoCPass(full_w, full_h, full_w, full_h);
+	GL_BokehInitialBlurPass(result_w, result_h, full_w, full_h);
+	GL_BokehDownsamplePass(half_w, half_h, result_w, result_h);
+	GL_BokehGatherPass(half_w, half_h, half_w, half_h);
+	GL_BokehCombinePass(result_w, result_h, half_w, half_h);
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 typedef enum {
@@ -1729,6 +1746,11 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 			flags = PP_NONE;
 		}
+	}
+
+	if (!world_visible) {
+		glr.framebuffer_bound = false;
+		return PP_NONE;
 	}
 
 	if (!flags || !glr.framebuffer_ok) {
