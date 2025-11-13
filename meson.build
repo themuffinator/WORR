@@ -465,7 +465,7 @@ png = dependency('libpng',
   default_options: fallback_opt,
 )
 if png.found()
-  texture_formats.append('png')
+  texture_formats += ['png']
 endif
 
 config.set10('USE_ZLIB', zlib.found())
@@ -556,13 +556,13 @@ if jpeg.found()
   endif
   if has_rgba
     client_deps += jpeg
-    texture_formats.append('jpg')
+    texture_formats += ['jpg']
     config.set10('USE_JPG', true)
   endif
 endif
 
 if get_option('tga')
-  texture_formats.append('tga')
+  texture_formats += ['tga']
 endif
 
 openal = dependency('openal',
