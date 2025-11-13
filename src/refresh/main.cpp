@@ -2085,6 +2085,21 @@ static void gl_drawsky_changed(cvar_t *self)
         CL_SetSky();
 }
 
+/*
+=============
+gl_znear_changed
+
+Clamps the near clip plane cvar to a supported minimum.
+=============
+*/
+static void gl_znear_changed(cvar_t *self)
+{
+	const float clamped = (std::max)(self->value, GL_MINIMUM_ZNEAR);
+	if (clamped != self->value)
+		Cvar_SetValue(self, clamped, FROM_CODE);
+}
+
+
 static void gl_novis_changed(cvar_t *self)
 {
     glr.viewcluster1 = glr.viewcluster2 = -2;
@@ -2213,6 +2228,7 @@ static void GL_Register(void)
 
     // development variables
     gl_znear = Cvar_Get("gl_znear", "2", CVAR_CHEAT);
+    gl_znear->changed = gl_znear_changed;
     gl_drawworld = Cvar_Get("gl_drawworld", "1", CVAR_CHEAT);
     gl_drawentities = Cvar_Get("gl_drawentities", "1", CVAR_CHEAT);
     gl_drawsky = Cvar_Get("gl_drawsky", "1", 0);
