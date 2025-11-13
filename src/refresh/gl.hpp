@@ -62,6 +62,7 @@ typedef uint64_t glStateBits_t;
 
 inline constexpr int R_MOTION_BLUR_HISTORY_FRAMES = 3;
 inline constexpr int R_MOTION_BLUR_GRID_SIZE = 20;
+inline constexpr float GL_MINIMUM_ZNEAR = 0.001f;
 
 static_assert(R_MOTION_BLUR_HISTORY_FRAMES == 3, "Update motion blur history macros when changing frame count");
 

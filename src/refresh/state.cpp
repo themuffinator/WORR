@@ -233,24 +233,35 @@ void GL_Setup2D(void)
     gl_backend->load_matrix(GL_MODELVIEW, gl_identity, gl_identity);
 }
 
+/*
+=============
+GL_Frustum
+
+Builds the projection matrix for the current view frustum.
+=============
+*/
 void GL_Frustum(GLfloat fov_x, GLfloat fov_y, GLfloat reflect_x)
 {
-    mat4_t matrix;
+	mat4_t matrix;
 
-    float znear = gl_znear->value, zfar;
+	float znear = (std::max)(gl_znear->value, GL_MINIMUM_ZNEAR);
+	float zfar;
 
-    if (glr.fd.rdflags & RDF_NOWORLDMODEL)
-        zfar = 2048;
-    else
-        zfar = gl_static.world.size * 2;
+	if (glr.fd.rdflags & RDF_NOWORLDMODEL) {
+		zfar = 2048.0f;
+	} else {
+		zfar = gl_static.world.size * 2.0f;
+	}
 
-    glr.view_znear = znear;
-    glr.view_zfar = zfar;
+	zfar = (std::max)(zfar, znear + 1.0f);
 
-    Matrix_Frustum(fov_x, fov_y, reflect_x, znear, zfar, matrix);
-    for (int i = 0; i < 16; ++i)
-        glr.projmatrix[i] = matrix[i];
-    gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
+	glr.view_znear = znear;
+	glr.view_zfar = zfar;
+
+	Matrix_Frustum(fov_x, fov_y, reflect_x, znear, zfar, matrix);
+	for (int i = 0; i < 16; ++i)
+		glr.projmatrix[i] = matrix[i];
+	gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 
 static void GL_RotateForViewer(void)
