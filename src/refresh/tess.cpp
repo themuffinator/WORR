@@ -214,7 +214,7 @@ static void GL_FlushBeamSegments(void)
     else
         array |= GLA_TC;
 
-    if (glr.framebuffer_bound && r_bloom->integer)
+	if (glr.framebuffer_bound && r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
         state |= GLS_BLOOM_GENERATE | GLS_BLOOM_SHELL;
 
     GL_BindTexture(TMU_TEXTURE, texnum);
@@ -691,7 +691,7 @@ void GL_Flush3D(void)
         array |= GLA_NORMAL;
     }
 
-    if (glr.framebuffer_bound && r_bloom->integer)
+	if (glr.framebuffer_bound && r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
         state |= GLS_BLOOM_GENERATE;
 
     if (!(state & GLS_TEXTURE_REPLACE))

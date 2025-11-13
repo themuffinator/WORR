@@ -126,6 +126,7 @@ QGLAPI GLuint (APIENTRYP qglCreateProgram)(void);
 QGLAPI GLuint (APIENTRYP qglCreateShader)(GLenum type);
 QGLAPI void (APIENTRYP qglDeleteProgram)(GLuint program);
 QGLAPI void (APIENTRYP qglDeleteShader)(GLuint shader);
+QGLAPI void (APIENTRYP qglDrawBuffer)(GLenum buf);
 QGLAPI void (APIENTRYP qglDrawBuffers)(GLsizei n, const GLenum *bufs);
 QGLAPI void (APIENTRYP qglDisableVertexAttribArray)(GLuint index);
 QGLAPI void (APIENTRYP qglEnableVertexAttribArray)(GLuint index);

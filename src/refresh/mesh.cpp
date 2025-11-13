@@ -698,7 +698,7 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     if (skin->texnum2)
         state |= GLS_GLOWMAP_ENABLE;
 
-    if (glr.framebuffer_bound && r_bloom->integer) {
+	if (glr.framebuffer_bound && r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers) {
         state |= GLS_BLOOM_GENERATE;
         if (glr.ent->flags & RF_SHELL_MASK)
             state |= GLS_BLOOM_SHELL;
