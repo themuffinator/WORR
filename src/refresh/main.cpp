@@ -40,6 +40,35 @@ static void R_ClearMotionBlurHistory(void);
 static void R_BindMotionHistoryTextures(void);
 static void R_StoreMotionBlurHistory(void);
 
+/*
+=============
+GL_ApplyDrawBuffers
+
+Configures draw buffers for the current framebuffer. When glDrawBuffers is unavailable we
+fall back to single-target glDrawBuffer so features that depend on multiple attachments can
+detect the reduced count and degrade gracefully.
+=============
+*/
+static GLsizei GL_ApplyDrawBuffers(GLsizei count, const GLenum *buffers)
+{
+	if (qglDrawBuffers) {
+		qglDrawBuffers(count, buffers);
+		return count;
+	}
+
+	if (count > 0) {
+#if !USE_GLES
+		glDrawBuffer(buffers[0]);
+#endif
+		return 1;
+	}
+
+#if !USE_GLES
+	glDrawBuffer(GL_NONE);
+#endif
+	return 0;
+}
+
 glRefdef_t glr;
 glStatic_t gl_static;
 glConfig_t gl_config;
@@ -1628,18 +1657,20 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	static const GLenum scene_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	const GLsizei scene_draw_buffer_count = (flags & PP_BLOOM) ? 2 : 1;
-	qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+	const GLsizei scene_draw_buffers_active = GL_ApplyDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+	// When MRT support is unavailable the helper reduces the active count to keep later clears in bounds.
 	if (qglReadBuffer)
 		qglReadBuffer(GL_COLOR_ATTACHMENT0);
 
 	if (gl_clear->integer) {
-		if (flags & PP_BLOOM) {
+		if ((flags & PP_BLOOM) && scene_draw_buffers_active > 1) {
 			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 			static const vec4_t black = { 0, 0, 0, 1 };
-			qglDrawBuffers(2, buffers);
+			const GLsizei cleared_buffers = GL_ApplyDrawBuffers(2, buffers);
 			qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
-			qglClearBufferfv(GL_COLOR, 1, black);
-			qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
+			if (cleared_buffers > 1)
+				qglClearBufferfv(GL_COLOR, 1, black);
+			GL_ApplyDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
 		} else {
 			qglClear(GL_COLOR_BUFFER_BIT);
 		}
