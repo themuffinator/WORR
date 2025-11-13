@@ -136,9 +136,22 @@ void reset_frame_state()
 	}
 }
 
+/*
+=============
+configure_texture_parameters
+
+Configures the filtering and wrapping modes for the shadow atlas texture while
+preserving the caller's texture binding state.
+=============
+*/
 void configure_texture_parameters(GLuint texture)
 {
+	const glTmu_t prev_tmu = gls.server_tmu;
+	const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
+
+	GL_ActiveTexture(TMU_TEXTURE);
 	qglBindTexture(GL_TEXTURE_2D, texture);
+	gls.texnums[TMU_TEXTURE] = texture;
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -146,7 +159,9 @@ void configure_texture_parameters(GLuint texture)
 #ifdef GL_TEXTURE_COMPARE_MODE
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
 #endif
-	qglBindTexture(GL_TEXTURE_2D, 0);
+	qglBindTexture(GL_TEXTURE_2D, prev_texture);
+	gls.texnums[TMU_TEXTURE] = prev_texture;
+	GL_ActiveTexture(prev_tmu);
 }
 
 float compute_light_bias(const shadow_light_submission_t &light)
@@ -464,6 +479,14 @@ void render_shadow_views()
 
 } // namespace
 
+/*
+=============
+R_ShadowAtlasInit
+
+Initializes the shadow atlas resources and selects the best supported
+configuration.
+=============
+*/
 bool R_ShadowAtlasInit(void)
 {
 	if (!has_required_gl_capabilities()) {
@@ -485,30 +508,38 @@ bool R_ShadowAtlasInit(void)
 	for (int quality = requested_quality; quality >= 0; --quality) {
 		const auto &config = kShadowQualityLevels[quality];
 		if (config.width > max_texture_size || config.height > max_texture_size)
-			continue;
+		continue;
 
 		GLuint texture = 0;
 		qglGenTextures(1, &texture);
 		if (!texture)
-			continue;
+		continue;
 
 		if (qglGetError) {
 			while (qglGetError() != GL_NO_ERROR) {
 			}
 		}
 
+		const glTmu_t prev_tmu = gls.server_tmu;
+		const GLuint prev_texture = gls.texnums[TMU_TEXTURE];
+		GL_ActiveTexture(TMU_TEXTURE);
 		qglBindTexture(GL_TEXTURE_2D, texture);
+		gls.texnums[TMU_TEXTURE] = texture;
 		qglTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
-			config.width, config.height, 0, GL_DEPTH_COMPONENT,
-			GL_UNSIGNED_INT, nullptr);
+		config.width, config.height, 0, GL_DEPTH_COMPONENT,
+		GL_UNSIGNED_INT, nullptr);
 
 		GLenum tex_error = GL_NO_ERROR;
 		if (qglGetError)
-			tex_error = qglGetError();
+		tex_error = qglGetError();
+
+		qglBindTexture(GL_TEXTURE_2D, prev_texture);
+		gls.texnums[TMU_TEXTURE] = prev_texture;
+		GL_ActiveTexture(prev_tmu);
+
 		if (tex_error != GL_NO_ERROR) {
-			qglBindTexture(GL_TEXTURE_2D, 0);
 			if (qglDeleteTextures)
-				qglDeleteTextures(1, &texture);
+			qglDeleteTextures(1, &texture);
 			continue;
 		}
 
@@ -518,22 +549,22 @@ bool R_ShadowAtlasInit(void)
 		qglGenFramebuffers(1, &framebuffer);
 		if (!framebuffer) {
 			if (qglDeleteTextures)
-				qglDeleteTextures(1, &texture);
+			qglDeleteTextures(1, &texture);
 			continue;
 		}
 
 		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-			GL_TEXTURE_2D, texture, 0);
+		GL_TEXTURE_2D, texture, 0);
 
 		const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
 		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
 			if (qglDeleteFramebuffers)
-				qglDeleteFramebuffers(1, &framebuffer);
+			qglDeleteFramebuffers(1, &framebuffer);
 			if (qglDeleteTextures)
-				qglDeleteTextures(1, &texture);
+			qglDeleteTextures(1, &texture);
 			continue;
 		}
 
@@ -551,9 +582,9 @@ bool R_ShadowAtlasInit(void)
 	shadow.texture = new_texture;
 	shadow.framebuffer = new_framebuffer;
 	if (old_framebuffer && old_framebuffer != new_framebuffer && qglDeleteFramebuffers)
-		qglDeleteFramebuffers(1, &old_framebuffer);
+	qglDeleteFramebuffers(1, &old_framebuffer);
 	if (old_texture && old_texture != new_texture && qglDeleteTextures)
-		qglDeleteTextures(1, &old_texture);
+	qglDeleteTextures(1, &old_texture);
 
 	apply_quality_layout(selected_quality);
 	shadow.supported = true;
@@ -563,8 +594,8 @@ bool R_ShadowAtlasInit(void)
 	if (selected_quality < requested_quality) {
 		const auto &config = kShadowQualityLevels[selected_quality];
 		Com_Printf("Shadow atlas quality downgraded from %d to %d (%dx%d)\n",
-			requested_quality + 1, selected_quality + 1,
-			config.width, config.height);
+		requested_quality + 1, selected_quality + 1,
+		config.width, config.height);
 	}
 
 	return true;
