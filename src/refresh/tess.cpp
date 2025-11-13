@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <type_traits>
 
 namespace {
@@ -384,47 +385,57 @@ static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t c
     }
 }
 
+/*
+=============
+GL_DrawBeams
+
+Render all beam entities with safe width calculation.
+=============
+*/
 void GL_DrawBeams(void)
 {
-    std::array<vec3_t, 2> segs{};
-    color_t color;
-    float width, scale;
-    const entity_t *ent;
+	std::array<vec3_t, 2> segs{};
+	color_t color;
+	float width, scale;
+	const entity_t *ent;
+	constexpr int MAX_BEAM_RADIUS = 4096;
 
-    if (!glr.ents.beams)
-        return;
+	if (!glr.ents.beams)
+		return;
 
-    GL_LoadMatrix(gl_identity, glr.viewmatrix);
+	GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
-    if (gl_beamstyle->integer) {
-        GL_BindArrays(VA_NULLMODEL);
-        scale = 0.5f;
-    } else {
-        GL_BindArrays(VA_EFFECT);
-        scale = 1.2f;
-    }
+	if (gl_beamstyle->integer) {
+		GL_BindArrays(VA_NULLMODEL);
+		scale = 0.5f;
+	} else {
+		GL_BindArrays(VA_EFFECT);
+		scale = 1.2f;
+	}
 
-    for (ent = glr.ents.beams; ent; ent = ent->next) {
-        VectorCopy(ent->origin, segs[0]);
-        VectorCopy(ent->oldorigin, segs[1]);
+	for (ent = glr.ents.beams; ent; ent = ent->next) {
+		VectorCopy(ent->origin, segs[0]);
+		VectorCopy(ent->oldorigin, segs[1]);
 
-        if (ent->skinnum == -1)
-            color = ent->rgba;
-        else
-            color.u32 = d_8to24table[ent->skinnum & 0xff];
-        color.a *= ent->alpha;
+		if (ent->skinnum == -1)
+			color = ent->rgba;
+		else
+			color.u32 = d_8to24table[ent->skinnum & 0xff];
+		color.a *= ent->alpha;
 
-        width = abs((int16_t)ent->frame) * scale;
+		const int rawRadius = static_cast<int>(static_cast<int16_t>(ent->frame));
+		const int clampedRadius = std::clamp(std::abs(rawRadius), 0, MAX_BEAM_RADIUS);
+		width = static_cast<float>(clampedRadius) * scale;
 
-        if (ent->flags & RF_GLOW)
-            GL_DrawLightningBeam(segs[0], segs[1], color, width);
-        else if (gl_beamstyle->integer)
-            GL_DrawPolyBeam(segs.data(), 1, color, width);
-        else
-            GL_DrawSimpleBeam(segs[0], segs[1], color, width);
-    }
+		if (ent->flags & RF_GLOW)
+			GL_DrawLightningBeam(segs[0], segs[1], color, width);
+		else if (gl_beamstyle->integer)
+			GL_DrawPolyBeam(segs.data(), 1, color, width);
+		else
+			GL_DrawSimpleBeam(segs[0], segs[1], color, width);
+	}
 
-    GL_FlushBeamSegments();
+	GL_FlushBeamSegments();
 }
 
 static void GL_FlushFlares(void)
