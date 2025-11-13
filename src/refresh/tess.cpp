@@ -384,12 +384,19 @@ static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t c
     }
 }
 
+/*
+=============
+GL_DrawBeams
+
+Draws beam entities.
+=============
+*/
 void GL_DrawBeams(void)
 {
-    std::array<vec3_t, 2> segs{};
-    color_t color;
-    float width, scale;
-    const entity_t *ent;
+	std::array<vec3_t, 2> segs{};
+	color_t color;
+	float width, scale;
+	const entity_t *ent;
 
     if (!glr.ents.beams)
         return;
@@ -412,7 +419,9 @@ void GL_DrawBeams(void)
             color = ent->rgba;
         else
             color.u32 = d_8to24table[ent->skinnum & 0xff];
-        color.a *= ent->alpha;
+		float alpha = static_cast<float>(color.a) * ent->alpha;
+		alpha = std::clamp(alpha, 0.0f, 255.0f);
+		color.a = static_cast<uint8_t>(alpha);
 
         width = abs((int16_t)ent->frame) * scale;
 
