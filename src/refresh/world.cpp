@@ -18,7 +18,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include <array>
+#include <cmath>
 
+/*
+=============
+GL_SampleLightPoint
+
+Accumulates bilinearly filtered lightmap samples for the active lightpoint.
+=============
+*/
 void GL_SampleLightPoint(vec3_t color)
 {
     const mface_t       *surf = glr.lightpoint.surf;
@@ -67,87 +75,131 @@ void GL_SampleLightPoint(vec3_t color)
     }
 }
 
+/*
+=============
+GL_LightGridPoint
+
+Fetches nearby lightgrid samples and applies trilinear interpolation at the
+requested start position.
+=============
+*/
 static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_t color)
 {
-    vec3_t point, avg;
-    std::array<uint32_t, 3> point_i{};
-    std::array<vec3_t, 8> samples{};
-    int i, j, mask, numsamples;
+	vec3_t point, avg;
+	std::array<uint32_t, 3> point_i{};
+	std::array<vec3_t, 8> samples{};
+	int i, j, mask, numsamples;
 
-    if (!grid->numleafs || !gl_lightgrid->integer)
-        return false;
+	if (!grid->numleafs || !gl_lightgrid->integer)
+		return false;
 
-    point[0] = (start[0] - grid->mins[0]) * grid->scale[0];
-    point[1] = (start[1] - grid->mins[1]) * grid->scale[1];
-    point[2] = (start[2] - grid->mins[2]) * grid->scale[2];
+	point[0] = (start[0] - grid->mins[0]) * grid->scale[0];
+	point[1] = (start[1] - grid->mins[1]) * grid->scale[1];
+	point[2] = (start[2] - grid->mins[2]) * grid->scale[2];
 
-    VectorCopy(point, point_i);
-    VectorClear(avg);
+	bool out_of_bounds = false;
+	for (i = 0; i < 3; i++) {
+		Q_assert(grid->size[i] > 0);
+		if (!grid->size[i])
+			return false;
 
-    for (i = mask = numsamples = 0; i < 8; i++) {
-        std::array<uint32_t, 3> tmp{};
+		const float max_index = static_cast<float>(grid->size[i] - 1);
+		float floored = floorf(point[i]);
+		if (floored < 0.0f) {
+			floored = 0.0f;
+			out_of_bounds = true;
+		} else if (floored > max_index) {
+			floored = max_index;
+			out_of_bounds = true;
+		}
+		point_i[i] = static_cast<uint32_t>(floored);
+		if (point[i] < 0.0f) {
+			point[i] = 0.0f;
+			out_of_bounds = true;
+		} else if (point[i] > max_index) {
+			point[i] = max_index;
+			out_of_bounds = true;
+		}
+	}
 
-        tmp[0] = point_i[0] + ((i >> 0) & 1);
-        tmp[1] = point_i[1] + ((i >> 1) & 1);
-        tmp[2] = point_i[2] + ((i >> 2) & 1);
+	if (out_of_bounds) {
+		Com_DPrintf("%s: start outside lightgrid bounds at (%f, %f, %f)\n", __func__, start[0], start[1], start[2]);
+	}
+	VectorClear(avg);
 
-        const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp.data());
-        if (!s)
-            continue;
+	for (i = mask = numsamples = 0; i < 8; i++) {
+		std::array<uint32_t, 3> tmp{};
 
-        VectorClear(samples[i]);
+		for (int axis = 0; axis < 3; axis++) {
+			const uint32_t axis_size = grid->size[axis];
+			uint32_t coord = point_i[axis];
+			if ((i >> axis) & 1) {
+				if (coord < axis_size - 1) {
+					coord++;
+				} else {
+					coord = axis_size - 1;
+				}
+			}
+			tmp[axis] = coord;
+		}
 
-        for (j = 0; j < grid->numstyles && s->style != 255; j++, s++) {
-            const lightstyle_t *style = LIGHT_STYLE(s->style);
-            VectorMA(samples[i], style->white, s->rgb, samples[i]);
-        }
+		const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp.data());
+		if (!s)
+			continue;
 
-        // count non-occluded samples
-        if (j) {
-            mask |= BIT(i);
-            VectorAdd(avg, samples[i], avg);
-            numsamples++;
-        }
-    }
+		VectorClear(samples[i]);
 
-    if (!mask)
-        return false;
+		for (j = 0; j < grid->numstyles && s->style != 255; j++, s++) {
+			const lightstyle_t *style = LIGHT_STYLE(s->style);
+			VectorMA(samples[i], style->white, s->rgb, samples[i]);
+		}
 
-    // replace occluded samples with average
-    if (mask != 255) {
-        VectorScale(avg, 1.0f / numsamples, avg);
-        for (i = 0; i < 8; i++)
-            if (!(mask & BIT(i)))
-                VectorCopy(avg, samples[i]);
-    }
+		// count non-occluded samples
+		if (j) {
+			mask |= BIT(i);
+			VectorAdd(avg, samples[i], avg);
+			numsamples++;
+		}
+	}
 
-    // trilinear interpolation
-    float fx, fy, fz;
-    float bx, by, bz;
-    std::array<vec3_t, 4> lerp_x{};
-    std::array<vec3_t, 2> lerp_y{};
+	if (!mask)
+		return false;
 
-    fx = point[0] - point_i[0];
-    fy = point[1] - point_i[1];
-    fz = point[2] - point_i[2];
+	// replace occluded samples with average
+	if (mask != 255) {
+		VectorScale(avg, 1.0f / numsamples, avg);
+		for (i = 0; i < 8; i++)
+			if (!(mask & BIT(i)))
+				VectorCopy(avg, samples[i]);
+	}
 
-    bx = 1.0f - fx;
-    by = 1.0f - fy;
-    bz = 1.0f - fz;
+	// trilinear interpolation
+	float fx, fy, fz;
+	float bx, by, bz;
+	std::array<vec3_t, 4> lerp_x{};
+	std::array<vec3_t, 2> lerp_y{};
 
-    LerpVector2(samples[0], samples[1], bx, fx, lerp_x[0]);
-    LerpVector2(samples[2], samples[3], bx, fx, lerp_x[1]);
-    LerpVector2(samples[4], samples[5], bx, fx, lerp_x[2]);
-    LerpVector2(samples[6], samples[7], bx, fx, lerp_x[3]);
+	fx = point[0] - point_i[0];
+	fy = point[1] - point_i[1];
+	fz = point[2] - point_i[2];
 
-    LerpVector2(lerp_x[0], lerp_x[1], by, fy, lerp_y[0]);
-    LerpVector2(lerp_x[2], lerp_x[3], by, fy, lerp_y[1]);
+	bx = 1.0f - fx;
+	by = 1.0f - fy;
+	bz = 1.0f - fz;
 
-    LerpVector2(lerp_y[0], lerp_y[1], bz, fz, color);
+	LerpVector2(samples[0], samples[1], bx, fx, lerp_x[0]);
+	LerpVector2(samples[2], samples[3], bx, fx, lerp_x[1]);
+	LerpVector2(samples[4], samples[5], bx, fx, lerp_x[2]);
+	LerpVector2(samples[6], samples[7], bx, fx, lerp_x[3]);
 
-    GL_AdjustColor(color);
+	LerpVector2(lerp_x[0], lerp_x[1], by, fy, lerp_y[0]);
+	LerpVector2(lerp_x[2], lerp_x[3], by, fy, lerp_y[1]);
 
-    return true;
+	LerpVector2(lerp_y[0], lerp_y[1], bz, fz, color);
+
+	GL_AdjustColor(color);
+
+	return true;
 }
 
 static bool GL_LightPoint_(const vec3_t start, vec3_t color)
