@@ -15,30 +15,48 @@ constexpr float kQuarterPi = 0.78539816339744830962f;
 std::vector<shadow_light_submission_t> g_shadowLights;
 std::unordered_map<int, size_t> g_entityLookup;
 
+/*
+=============
+cone_to_bounding_sphere
+
+Converts a spotlight cone into a bounding sphere for culling.
+=============
+*/
 static void cone_to_bounding_sphere(const vec3_t origin, const vec3_t forward, float size,
 	float angle_radians, float c, float s, vec4_t out)
 {
 	if (angle_radians > kQuarterPi) {
-	    VectorMA(origin, c * size, forward, out);
-	    out[3] = s * size;
+		VectorMA(origin, c * size, forward, out);
+		out[3] = s * size;
 	} else {
-	    VectorMA(origin, size / (2.0f * c), forward, out);
-	    out[3] = size / (2.0f * c);
+		VectorMA(origin, size / (2.0f * c), forward, out);
+		out[3] = size / (2.0f * c);
 	}
 }
 
+/*
+=============
+compute_fade_factor
+
+Calculates the fade factor for a light based on viewer distance and fade range.
+=============
+*/
 static float compute_fade_factor(const shadow_light_submission_t &light, const vec3_t vieworg, float *distance_out = nullptr)
 {
-	if (light.fade_start <= 1.0f && light.fade_end <= 1.0f)
+	const float fade_end = (std::isfinite(light.fade_end) && light.fade_end > 0.0f) ? light.fade_end : 0.0f;
+	const float fade_start = std::isfinite(light.fade_start) ? light.fade_start : 0.0f;
+
+	if (fade_start <= 1.0f && fade_end <= 1.0f)
 		return 1.0f;
-	if (light.fade_end <= 0.0f)
+	if (fade_end <= 0.0f)
 		return 1.0f;
 
 	const float distance = VectorDistance(vieworg, light.origin);
 	if (distance_out)
 		*distance_out = distance;
-	const float frac_to_end = Q_clipf(distance / light.fade_end, 0.0f, 1.0f);
-	const float min_fraction = light.fade_start / light.fade_end;
+
+	const float frac_to_end = Q_clipf(distance / fade_end, 0.0f, 1.0f);
+	const float min_fraction = fade_start / fade_end;
 
 	if (min_fraction > 1.0f)
 		return 1.0f;
@@ -48,9 +66,37 @@ static float compute_fade_factor(const shadow_light_submission_t &light, const v
 	return 1.0f - smoothstep(min_fraction, 1.0f, frac_to_end);
 }
 
+/*
+=============
+sanitize_submission
+
+Clamps and validates shadow light submissions, replacing invalid values with safe defaults.
+=============
+*/
 static shadow_light_submission_t sanitize_submission(const shadow_light_submission_t &light)
 {
 	shadow_light_submission_t result = light;
+
+	if (!std::isfinite(result.radius))
+		result.radius = 0.0f;
+	if (!std::isfinite(static_cast<float>(result.resolution)))
+		result.resolution = 0;
+	if (!std::isfinite(result.fade_start))
+		result.fade_start = 0.0f;
+	if (!std::isfinite(result.fade_end))
+		result.fade_end = 0.0f;
+	if (!std::isfinite(result.coneangle))
+		result.coneangle = 0.0f;
+
+	bool direction_valid = true;
+	for (int i = 0; i < 3; ++i) {
+		if (!std::isfinite(result.direction[i])) {
+			direction_valid = false;
+			break;
+		}
+	}
+	if (!direction_valid)
+		VectorClear(result.direction);
 
 	result.radius = std::clamp(result.radius, 0.0f, kMaxShadowLightRadius);
 	if (result.resolution < 0)
@@ -77,12 +123,22 @@ static shadow_light_submission_t sanitize_submission(const shadow_light_submissi
 
 } // namespace
 
+/*
+=============
+R_ClearShadowLights
+=============
+*/
 void R_ClearShadowLights(void)
 {
 	g_shadowLights.clear();
 	g_entityLookup.clear();
 }
 
+/*
+=============
+R_QueueShadowLight
+=============
+*/
 void R_QueueShadowLight(const shadow_light_submission_t &light)
 {
 	if (light.radius <= 0.0f || light.intensity <= 0.0f)
@@ -196,9 +252,16 @@ size_t R_CollectShadowLights(const vec3_t vieworg, const lightstyle_t *styles,
 	return count;
 }
 
+/*
+=============
+R_GetQueuedShadowLights
+
+Provides read-only access to the queued shadow lights and returns their count.
+=============
+*/
 const shadow_light_submission_t *R_GetQueuedShadowLights(size_t *count)
 {
 	if (count)
-	    *count = g_shadowLights.size();
+		*count = g_shadowLights.size();
 	return g_shadowLights.data();
 }
