@@ -1470,6 +1470,7 @@ void GL_ReleaseFramebufferResources(void)
 	gl_static.dof.half_height = 0;
 	gl_static.dof.reduced_resolution = false;
 	glr.motion_history_textures_ready = false;
+	glr.framebuffer_resources_resident = false;
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

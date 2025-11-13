@@ -1584,6 +1584,7 @@ static void HDR_DisableFramebufferResources(void)
 	glr.framebuffer_bound = false;
 	glr.framebuffer_width = 0;
 	glr.framebuffer_height = 0;
+	glr.framebuffer_resources_resident = false;
 	glr.motion_history_textures_ready = false;
 }
 /*
@@ -1606,7 +1607,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
 	const bool post_processing_disabled = !post_processing_requested || !world_visible;
 	const bool had_framebuffer = glr.framebuffer_ok;
-	const bool had_framebuffer_resources = had_framebuffer || glr.framebuffer_width > 0 || glr.framebuffer_height > 0 || glr.motion_history_textures_ready;
+	const bool had_framebuffer_resources = glr.framebuffer_resources_resident;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
@@ -1682,26 +1683,32 @@ static pp_flags_t GL_BindFramebuffer(void)
 			flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 	}
 
-	if (flags)
+	const bool resources_in_use = flags != PP_NONE;
+
+	if (resources_in_use)
 		resized = scene_target_w != glr.framebuffer_width || scene_target_h != glr.framebuffer_height;
 
 	glr.motion_blur_enabled = motion_blur_enabled;
 
-	if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
+	const bool needs_rebuild_flags = r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
 		r_bloom->modified_count != r_bloom_modified ||
 		r_bloomScale->modified_count != r_bloomScale_modified ||
 		r_bloomKernel->modified_count != r_bloomKernel_modified ||
 		gl_dof->modified_count != gl_dof_modified ||
 		gl_dof_quality->modified_count != gl_dof_quality_modified ||
 		r_motionBlur->modified_count != r_motionBlur_modified ||
-		hdr_prev != gl_static.hdr.active) {
+		hdr_prev != gl_static.hdr.active;
+
+	if (resources_in_use && (resized || needs_rebuild_flags || !glr.framebuffer_resources_resident)) {
 		glr.framebuffer_ok = GL_InitFramebuffers();
 		if (glr.framebuffer_ok) {
-			glr.framebuffer_width  = scene_target_w;
+			glr.framebuffer_width = scene_target_w;
 			glr.framebuffer_height = scene_target_h;
+			glr.framebuffer_resources_resident = (glr.framebuffer_width > 0 && glr.framebuffer_height > 0);
 		} else {
-			glr.framebuffer_width  = 0;
+			glr.framebuffer_width = 0;
 			glr.framebuffer_height = 0;
+			glr.framebuffer_resources_resident = false;
 		}
 		r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
 		r_bloom_modified = r_bloom->modified_count;
@@ -1730,7 +1737,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		}
 	}
 
-	if (!flags || !glr.framebuffer_ok) {
+	if (!glr.framebuffer_ok) {
 		glr.motion_blur_enabled = false;
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
@@ -1739,6 +1746,10 @@ static pp_flags_t GL_BindFramebuffer(void)
 		return PP_NONE;
 	}
 
+	if (!resources_in_use) {
+		glr.framebuffer_bound = false;
+		return PP_NONE;
+	}
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
 	glr.framebuffer_bound = true;
 
