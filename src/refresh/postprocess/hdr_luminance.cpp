@@ -8,7 +8,14 @@ namespace {
 
 	constexpr GLenum kColorAttachment = GL_COLOR_ATTACHMENT0;
 
-	static void setupTexture(GLuint texture, int width, int height)
+/*
+=============
+setupTexture
+
+Configures texture parameters and storage for HDR luminance reduction levels.
+=============
+*/
+static void setupTexture(GLuint texture, int width, int height)
 	{
 		qglBindTexture(GL_TEXTURE_2D, texture);
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -23,7 +30,14 @@ namespace {
 		qglTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, format, type, nullptr);
 	}
 
-	static bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height)
+/*
+=============
+attachFramebuffer
+
+Attaches the supplied texture to the framebuffer object and verifies completeness.
+=============
+*/
+static bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height)
 	{
 		qglBindFramebuffer(GL_FRAMEBUFFER, fbo);
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, kColorAttachment, GL_TEXTURE_2D, texture, 0);
@@ -39,13 +53,27 @@ namespace {
 		return true;
 	}
 
-	static void restoreFramebuffer(GLint previous)
+/*
+=============
+restoreFramebuffer
+
+Restores the previous framebuffer binding if a valid value is provided.
+=============
+*/
+static void restoreFramebuffer(GLint previous)
 	{
 		if (previous >= 0)
 			qglBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
 	}
 
-	static void logReducerFailure(const char* reason, size_t levelIndex, int srcWidth, int srcHeight, int dstWidth, int dstHeight, GLenum status = GL_NO_ERROR)
+/*
+=============
+logReducerFailure
+
+Logs a detailed error message for HDR luminance reduction failures when enabled.
+=============
+*/
+static void logReducerFailure(const char* reason, size_t levelIndex, int srcWidth, int srcHeight, int dstWidth, int dstHeight, GLenum status = GL_NO_ERROR)
 	{
 		if (!gl_showerrors || !gl_showerrors->integer)
 			return;
@@ -62,6 +90,25 @@ namespace {
 
 HdrLuminanceReducer g_hdr_luminance;
 
+/*
+=============
+~HdrLuminanceReducer
+
+Releases all allocated HDR luminance reduction levels during destruction.
+=============
+*/
+HdrLuminanceReducer::~HdrLuminanceReducer() noexcept
+{
+	destroyLevels();
+}
+
+/*
+=============
+destroyLevels
+
+Deletes any allocated textures or framebuffers and resets reducer state.
+=============
+*/
 void HdrLuminanceReducer::destroyLevels() noexcept
 {
 	if (!levels_.empty()) {
@@ -89,20 +136,34 @@ void HdrLuminanceReducer::destroyLevels() noexcept
 	has_result_ = false;
 }
 
+/*
+=============
+shutdown
+
+Public entry point to release any resources owned by the reducer.
+=============
+*/
 void HdrLuminanceReducer::shutdown() noexcept
 {
 	destroyLevels();
 }
 
+/*
+=============
+resize
+
+Reallocates the reduction chain to match the supplied source dimensions.
+=============
+*/
 bool HdrLuminanceReducer::resize(int width, int height) noexcept
 {
 	if (width == source_width_ && height == source_height_)
-		return !levels_.empty();
+	return !levels_.empty();
 
 	destroyLevels();
 
 	if (width <= 0 || height <= 0)
-		return false;
+	return false;
 
 	source_width_ = width;
 	source_height_ = height;
@@ -126,10 +187,43 @@ bool HdrLuminanceReducer::resize(int width, int height) noexcept
 		levels_.push_back(level);
 	}
 
+	const auto cleanupHandles = [](const std::vector<GLuint>& handles, void (*deleter)(GLsizei, const GLuint*)) {
+		if (handles.empty() || !deleter)
+			return;
+
+		std::vector<GLuint> valid;
+		valid.reserve(handles.size());
+		for (GLuint handle : handles) {
+			if (handle)
+				valid.push_back(handle);
+		}
+
+		if (!valid.empty())
+			deleter(static_cast<GLsizei>(valid.size()), valid.data());
+	};
+
 	std::vector<GLuint> textures(levels_.size(), 0);
-	std::vector<GLuint> framebuffers(levels_.size(), 0);
 	qglGenTextures(static_cast<GLsizei>(textures.size()), textures.data());
+	const bool textures_valid = std::all_of(textures.begin(), textures.end(), [](GLuint handle) { return handle != 0; });
+	if (!textures_valid) {
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_EPrintf("HDR luminance resize failed: texture handle allocation returned zero\n");
+		cleanupHandles(textures, qglDeleteTextures);
+		destroyLevels();
+		return false;
+	}
+
+	std::vector<GLuint> framebuffers(levels_.size(), 0);
 	qglGenFramebuffers(static_cast<GLsizei>(framebuffers.size()), framebuffers.data());
+	const bool framebuffers_valid = std::all_of(framebuffers.begin(), framebuffers.end(), [](GLuint handle) { return handle != 0; });
+	if (!framebuffers_valid) {
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_EPrintf("HDR luminance resize failed: framebuffer handle allocation returned zero\n");
+		cleanupHandles(framebuffers, qglDeleteFramebuffers);
+		cleanupHandles(textures, qglDeleteTextures);
+		destroyLevels();
+		return false;
+	}
 
 	for (size_t i = 0; i < levels_.size(); ++i) {
 		Level& level = levels_[i];
@@ -146,31 +240,45 @@ bool HdrLuminanceReducer::resize(int width, int height) noexcept
 	return true;
 }
 
+/*
+=============
+ensureSize
+
+Verifies that reduction levels match the requested dimensions or resizes when needed.
+=============
+*/
 bool HdrLuminanceReducer::ensureSize(int width, int height) noexcept
 {
 	if (width <= 0 || height <= 0)
-		return false;
+	return false;
 
 	if (width == source_width_ && height == source_height_ && !levels_.empty())
-		return true;
+	return true;
 
 	return resize(width, height);
 }
 
+/*
+=============
+reduce
+
+Runs the reduction pass chain to compute HDR luminance metrics.
+=============
+*/
 bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noexcept
 {
 	has_result_ = false;
 
 	if (!ensureSize(width, height)) {
-		if (gl_showerrors && gl_showerrors->integer)
-			Com_EPrintf("HDR luminance reduce skipped: unable to ensure size for %dx%d\n", width, height);
-		return false;
+	if (gl_showerrors && gl_showerrors->integer)
+	Com_EPrintf("HDR luminance reduce skipped: unable to ensure size for %dx%d\n", width, height);
+	return false;
 	}
 
 	if (levels_.empty()) {
-		if (gl_showerrors && gl_showerrors->integer)
-			Com_EPrintf("HDR luminance reduce skipped: no reduction levels available\n");
-		return false;
+	if (gl_showerrors && gl_showerrors->integer)
+	Com_EPrintf("HDR luminance reduce skipped: no reduction levels available\n");
+	return false;
 	}
 
 	GLint prev_fbo = 0;
@@ -187,40 +295,40 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 	size_t level_index = 0;
 
 	for (Level& level : levels_) {
-		const float inv_w = current_w > 0 ? 0.5f / static_cast<float>(current_w) : 0.0f;
-		const float inv_h = current_h > 0 ? 0.5f / static_cast<float>(current_h) : 0.0f;
+	const float inv_w = current_w > 0 ? 0.5f / static_cast<float>(current_w) : 0.0f;
+	const float inv_h = current_h > 0 ? 0.5f / static_cast<float>(current_h) : 0.0f;
 
-		qglViewport(0, 0, level.width, level.height);
-		GL_Ortho(0, level.width, level.height, 0, -1, 1);
+	qglViewport(0, 0, level.width, level.height);
+	GL_Ortho(0, level.width, level.height, 0, -1, 1);
 
-		gls.u_block.hdr_reduce_params[0] = inv_w;
-		gls.u_block.hdr_reduce_params[1] = inv_h;
-		gls.u_block.hdr_reduce_params[2] = static_cast<float>(current_w);
-		gls.u_block.hdr_reduce_params[3] = static_cast<float>(current_h);
-		gls.u_block_dirty = true;
+	gls.u_block.hdr_reduce_params[0] = inv_w;
+	gls.u_block.hdr_reduce_params[1] = inv_h;
+	gls.u_block.hdr_reduce_params[2] = static_cast<float>(current_w);
+	gls.u_block.hdr_reduce_params[3] = static_cast<float>(current_h);
+	gls.u_block_dirty = true;
 
-		GL_ForceTexture(TMU_TEXTURE, current_texture);
-		qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
+	GL_ForceTexture(TMU_TEXTURE, current_texture);
+	qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
 
-		const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			logReducerFailure("framebuffer incomplete", level_index, current_w, current_h, level.width, level.height, status);
-			success = false;
-			break;
-		}
+	const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+	logReducerFailure("framebuffer incomplete", level_index, current_w, current_h, level.width, level.height, status);
+	success = false;
+	break;
+	}
 
-		GL_PostProcess(GLS_HDR_REDUCE, 0, 0, level.width, level.height);
+	GL_PostProcess(GLS_HDR_REDUCE, 0, 0, level.width, level.height);
 
-		if (GL_ShowErrors("HDR luminance reduce")) {
-			logReducerFailure("GL error after post-process", level_index, current_w, current_h, level.width, level.height);
-			success = false;
-			break;
-		}
+	if (GL_ShowErrors("HDR luminance reduce")) {
+	logReducerFailure("GL error after post-process", level_index, current_w, current_h, level.width, level.height);
+	success = false;
+	break;
+	}
 
-		current_texture = level.texture;
-		current_w = level.width;
-		current_h = level.height;
-		++level_index;
+	current_texture = level.texture;
+	current_w = level.width;
+	current_h = level.height;
+	++level_index;
 	}
 
 	restoreFramebuffer(prev_fbo);
@@ -231,73 +339,93 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 	return success;
 }
 
+/*
+=============
+resultTexture
+
+Returns the texture containing the latest reduction result, if available.
+=============
+*/
 GLuint HdrLuminanceReducer::resultTexture() const noexcept
 {
 	if (levels_.empty())
-		return 0;
+	return 0;
 	return levels_.back().texture;
 }
 
+/*
+=============
+readbackAverage
+
+Reads the average luminance result into the supplied buffer when available.
+=============
+*/
 bool HdrLuminanceReducer::readbackAverage(float* rgba) const noexcept
 {
 	if (!rgba || !has_result_ || levels_.empty())
-		return false;
+	return false;
 
 	const Level& level = levels_.back();
-        GLint prev_fbo = 0;
-        GLint prev_read_buffer = 0;
-        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-        if (qglReadBuffer)
-                qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+	GLint prev_fbo = 0;
+	GLint prev_read_buffer = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	if (qglReadBuffer)
+	qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 
-        qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
-        if (qglReadBuffer)
-                qglReadBuffer(kColorAttachment);
-        qglReadPixels(0, 0, level.width, level.height, GL_RGBA, GL_FLOAT, rgba);
-        restoreFramebuffer(prev_fbo);
-        if (qglReadBuffer)
-                qglReadBuffer(prev_read_buffer);
-        return true;
+	qglBindFramebuffer(GL_FRAMEBUFFER, level.fbo);
+	if (qglReadBuffer)
+	qglReadBuffer(kColorAttachment);
+	qglReadPixels(0, 0, level.width, level.height, GL_RGBA, GL_FLOAT, rgba);
+	restoreFramebuffer(prev_fbo);
+	if (qglReadBuffer)
+	qglReadBuffer(prev_read_buffer);
+	return true;
 }
 
+/*
+=============
+readbackHistogram
+
+Reads the histogram buffer into scratch storage along with dimensions.
+=============
+*/
 bool HdrLuminanceReducer::readbackHistogram(int maxSamples, std::vector<float>& scratch, int& outWidth, int& outHeight) const noexcept
 {
 	if (!has_result_ || levels_.empty())
-		return false;
+	return false;
 
 	const Level* target = nullptr;
 	for (const Level& level : levels_) {
-		if (level.width <= maxSamples && level.height <= maxSamples) {
-			target = &level;
-			break;
-		}
+	if (level.width <= maxSamples && level.height <= maxSamples) {
+	target = &level;
+	break;
+	}
 	}
 
 	if (!target)
-		target = &levels_[levels_.size() > 1 ? levels_.size() - 2 : 0];
+	target = &levels_[levels_.size() > 1 ? levels_.size() - 2 : 0];
 
 	if (!target)
-		return false;
+	return false;
 
 	const size_t total_pixels = static_cast<size_t>(target->width) * target->height;
 	scratch.resize(total_pixels * 4);
 
-        GLint prev_fbo = 0;
-        GLint prev_read_buffer = 0;
-        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-        if (qglReadBuffer)
-                qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+	GLint prev_fbo = 0;
+	GLint prev_read_buffer = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	if (qglReadBuffer)
+	qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 
-        qglBindFramebuffer(GL_FRAMEBUFFER, target->fbo);
-        if (qglReadBuffer)
-                qglReadBuffer(kColorAttachment);
-        qglReadPixels(0, 0, target->width, target->height, GL_RGBA, GL_FLOAT, scratch.data());
-        restoreFramebuffer(prev_fbo);
-        if (qglReadBuffer)
-                qglReadBuffer(prev_read_buffer);
+	qglBindFramebuffer(GL_FRAMEBUFFER, target->fbo);
+	if (qglReadBuffer)
+	qglReadBuffer(kColorAttachment);
+	qglReadPixels(0, 0, target->width, target->height, GL_RGBA, GL_FLOAT, scratch.data());
+	restoreFramebuffer(prev_fbo);
+	if (qglReadBuffer)
+	qglReadBuffer(prev_read_buffer);
 
-        outWidth = target->width;
-        outHeight = target->height;
+	outWidth = target->width;
+	outHeight = target->height;
 	return true;
 }
-
