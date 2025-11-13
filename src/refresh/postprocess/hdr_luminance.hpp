@@ -7,6 +7,7 @@
 class HdrLuminanceReducer {
 public:
 	HdrLuminanceReducer() noexcept = default;
+	~HdrLuminanceReducer() noexcept;
 
 	void shutdown() noexcept;
 	bool resize(int width, int height) noexcept;
