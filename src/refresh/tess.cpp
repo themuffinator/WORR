@@ -423,12 +423,17 @@ void GL_DrawBeams(void)
         else
             color.u32 = d_8to24table[ent->skinnum & 0xff];
 		float alpha = static_cast<float>(color.a) * ent->alpha;
-		alpha = std::clamp(alpha, 0.0f, 255.0f);
+		if (alpha < 0.0f)
+			alpha = 0.0f;
+		else if (alpha > 255.0f)
+			alpha = 255.0f;
 		color.a = static_cast<uint8_t>(alpha);
 
 		const int frameWidth = static_cast<int>(static_cast<int16_t>(ent->frame));
-		const int clampedWidth = std::min(std::abs(frameWidth), MAX_BEAM_WIDTH);
-		width = static_cast<float>(clampedWidth) * scale;
+		int absWidth = frameWidth >= 0 ? frameWidth : -frameWidth;
+		if (absWidth > MAX_BEAM_WIDTH)
+			absWidth = MAX_BEAM_WIDTH;
+		width = static_cast<float>(absWidth) * scale;
 
         if (ent->flags & RF_GLOW)
             GL_DrawLightningBeam(segs[0], segs[1], color, width);

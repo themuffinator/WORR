@@ -10,12 +10,12 @@ namespace {
 
 /*
 =============
-restoreFramebuffer
+restoreFramebufferBinding
 
 Restores the previous framebuffer binding if a valid value is provided.
 =============
 */
-static void restoreFramebuffer(GLint previous)
+static void restoreFramebufferBinding(GLint previous)
 {
 	if (previous >= 0)
 		qglBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
@@ -80,7 +80,7 @@ static bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height)
 	qglBindTexture(GL_TEXTURE_2D, prev_texture);
 	gls.texnums[TMU_TEXTURE] = prev_texture;
 	GL_ActiveTexture(prev_active_tmu);
-	restoreFramebuffer(prev_fbo);
+	restoreFramebufferBinding(prev_fbo);
 
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		if (gl_showerrors->integer)
@@ -357,7 +357,7 @@ bool HdrLuminanceReducer::reduce(GLuint sceneTexture, int width, int height) noe
 	++level_index;
 	}
 
-	restoreFramebuffer(prev_fbo);
+	restoreFramebufferBinding(prev_fbo);
 	GL_ForceTexture(TMU_TEXTURE, sceneTexture);
 	GL_ActiveTexture(previous_tmu);
 	qglViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
@@ -403,7 +403,7 @@ bool HdrLuminanceReducer::readbackAverage(float* rgba) const noexcept
 	if (qglReadBuffer)
 	qglReadBuffer(kColorAttachment);
 	qglReadPixels(0, 0, level.width, level.height, GL_RGBA, GL_FLOAT, rgba);
-	restoreFramebuffer(prev_fbo);
+	restoreFramebufferBinding(prev_fbo);
 	if (qglReadBuffer)
 	qglReadBuffer(prev_read_buffer);
 	return true;
@@ -448,7 +448,7 @@ bool HdrLuminanceReducer::readbackHistogram(int maxSamples, std::vector<float>& 
 	if (qglReadBuffer)
 	qglReadBuffer(kColorAttachment);
 	qglReadPixels(0, 0, target->width, target->height, GL_RGBA, GL_FLOAT, scratch.data());
-	restoreFramebuffer(prev_fbo);
+	restoreFramebufferBinding(prev_fbo);
 	if (qglReadBuffer)
 	qglReadBuffer(prev_read_buffer);
 
