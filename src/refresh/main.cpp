@@ -1604,7 +1604,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool fbo_enabled = !r_fbo || r_fbo->integer;
 	const bool fbo_disabled = r_fbo && !r_fbo->integer;
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
-	const bool post_processing_disabled = !post_processing_requested || !world_visible;
+	const bool post_processing_disabled = !post_processing_requested;
+	const bool post_processing_paused = post_processing_requested && !world_visible;
 	const bool had_framebuffer = glr.framebuffer_ok;
 	const bool had_framebuffer_resources = had_framebuffer || glr.framebuffer_width > 0 || glr.framebuffer_height > 0 || glr.motion_history_textures_ready;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
@@ -1627,7 +1628,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
 		GL_ClearBloomStateFlags();
-		if (fbo_disabled && had_framebuffer_resources)
+		if (had_framebuffer_resources)
 			GL_ReleaseFramebufferResources();
 		return PP_NONE;
 	}
@@ -1732,10 +1733,14 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	if (!flags || !glr.framebuffer_ok) {
 		glr.motion_blur_enabled = false;
-		HDR_DisableFramebufferResources();
-		HDR_UpdatePostprocessFormats();
-		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
-		GL_ClearBloomStateFlags();
+		if (!post_processing_paused || !glr.framebuffer_ok) {
+			HDR_DisableFramebufferResources();
+			HDR_UpdatePostprocessFormats();
+			GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
+			GL_ClearBloomStateFlags();
+			if (had_framebuffer_resources)
+				GL_ReleaseFramebufferResources();
+		}
 		return PP_NONE;
 	}
 
