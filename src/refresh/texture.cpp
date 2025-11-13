@@ -1261,6 +1261,8 @@ bool GL_InitFramebuffers(void)
 
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
+	const int viewport_w = (drawable_w > 0 && glr.fd.width > 0) ? (std::min)(glr.fd.width, drawable_w) : 0;
+	const int viewport_h = (drawable_h > 0 && glr.fd.height > 0) ? (std::min)(glr.fd.height, drawable_h) : 0;
 	int scene_w = 0, scene_h = 0;
 	int bloom_w = 0, bloom_h = 0;
 	int dof_full_w = 0, dof_full_h = 0;
@@ -1275,19 +1277,19 @@ bool GL_InitFramebuffers(void)
 	const bool crt_effect_active = R_CRTEnabled();
 	const bool scene_required = underwater_effect_active || bloom_effect_active || dof_active || motion_blur_active || hdr_effect_active || crt_effect_active;
 
-	if (scene_required && drawable_w > 0 && drawable_h > 0) {
-		scene_w = drawable_w;
-		scene_h = drawable_h;
+	if (scene_required && viewport_w > 0 && viewport_h > 0) {
+		scene_w = viewport_w;
+		scene_h = viewport_h;
 	}
 
 	if (bloom_effect_active) {
-		bloom_w = drawable_w;
-		bloom_h = drawable_h;
+		bloom_w = scene_w;
+		bloom_h = scene_h;
 	}
 
-	if (dof_active) {
-		dof_full_w = drawable_w;
-		dof_full_h = drawable_h;
+	if (dof_active && scene_w > 0 && scene_h > 0) {
+		dof_full_w = scene_w;
+		dof_full_h = scene_h;
 
 		if (dof_full_w > 0 && dof_full_h > 0) {
 			if (dof_reduced) {
