@@ -69,6 +69,8 @@ static cvar_t *gl_clustered_shading;
 static cvar_t *gl_cluster_show_overdraw;
 static cvar_t *gl_cluster_show_normals;
 
+extern const glbackend_t backend_legacy;
+
 q_printf(2, 3)
 static void shader_printf(sizebuf_t *buf, const char *fmt, ...)
 {
@@ -2042,11 +2044,21 @@ static void shader_color(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
     qglVertexAttrib4f(VERT_ATTR_COLOR, r, g, b, a);
 }
 
+/*
+=============
+shader_load_uniforms
+
+Uploads the main uniform block if the backing buffer was created.
+=============
+*/
 static void shader_load_uniforms(void)
 {
-    GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.uniform_buffer);
-    qglBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(gls.u_block), &gls.u_block);
-    c.uniformUploads++;
+	if (!gl_static.uniform_buffer)
+		return;
+
+	GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.uniform_buffer);
+	qglBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(gls.u_block), &gls.u_block);
+	c.uniformUploads++;
 }
 
 
@@ -2161,6 +2173,10 @@ static void shader_load_lights(void)
 		qglBufferSubData(GL_UNIFORM_BUFFER, 0,
 		gls.shadow_items.size() * sizeof(glShadowItem_t), gls.shadow_items.data());
 	}
+
+	if (!gl_static.dlight_buffer)
+		return;
+
 
     // dlight bits changed, set up the buffer.
     // if you didn't modify dlights just leave the bits
@@ -2406,18 +2422,75 @@ static void r_bloom_blur_falloff_changed(cvar_t *self)
     shader_update_blur();
 }
 
+/*
+=============
+shader_cleanup_cluster_buffers
+
+Releases clustered lighting buffers when initialization fails or during
+shutdown.
+=============
+*/
+static void shader_cleanup_cluster_buffers(void)
+{
+	if (gl_static.cluster_params_buffer) {
+		qglDeleteBuffers(1, &gl_static.cluster_params_buffer);
+		gl_static.cluster_params_buffer = 0;
+	}
+	if (gl_static.cluster_light_buffer) {
+		qglDeleteBuffers(1, &gl_static.cluster_light_buffer);
+		gl_static.cluster_light_buffer = 0;
+	}
+	if (gl_static.shadow_item_buffer) {
+		qglDeleteBuffers(1, &gl_static.shadow_item_buffer);
+		gl_static.shadow_item_buffer = 0;
+	}
+}
+
+#if USE_MD5
+/*
+=============
+shader_cleanup_skeleton_resources
+
+Releases GPU skeleton resources when initialization fails or during shutdown.
+=============
+*/
+static void shader_cleanup_skeleton_resources(void)
+{
+	if (gl_static.skeleton_buffer) {
+		qglDeleteBuffers(1, &gl_static.skeleton_buffer);
+		gl_static.skeleton_buffer = 0;
+	}
+	if (gl_static.skeleton_tex[0] || gl_static.skeleton_tex[1]) {
+		qglDeleteTextures(2, gl_static.skeleton_tex);
+		gl_static.skeleton_tex[0] = 0;
+		gl_static.skeleton_tex[1] = 0;
+	}
+}
+#endif
+
+/*
+=============
+shader_init
+
+Initializes the GLSL rendering backend and gracefully degrades if resource
+allocation fails.
+=============
+*/
 static void shader_init(void)
 {
-    if (r_bloomBlurRadius)
-        r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
-    if (r_bloomKernel)
-        r_bloomKernel->changed = r_bloom_kernel_changed;
-    if (r_bloomBlurScale)
-        r_bloomBlurScale->changed = r_bloom_blur_scale_changed;
-    if (r_bloomBlurFalloff)
-        r_bloomBlurFalloff->changed = r_bloom_blur_falloff_changed;
+	bool disable_clustered_shading = false;
+	bool disable_per_pixel_lighting = false;
+	bool fallback_to_legacy = false;
+	if (r_bloomBlurRadius)
+		r_bloomBlurRadius->changed = r_bloom_blur_radius_changed;
+	if (r_bloomKernel)
+		r_bloomKernel->changed = r_bloom_kernel_changed;
+	if (r_bloomBlurScale)
+		r_bloomBlurScale->changed = r_bloom_blur_scale_changed;
+	if (r_bloomBlurFalloff)
+		r_bloomBlurFalloff->changed = r_bloom_blur_falloff_changed;
 
-    gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
+	gl_static.programs = HashMap_TagCreate(glStateBits_t, GLuint, HashInt64, NULL, TAG_RENDERER);
 
 	gls.cluster_lights.clear();
 	gls.cluster_lights.reserve(MAX_DLIGHTS);
@@ -2431,106 +2504,160 @@ static void shader_init(void)
 	shader_update_blur();
 
 	qglGenBuffers(1, &gl_static.uniform_buffer);
-	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
-	qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_block), NULL, GL_DYNAMIC_DRAW);
+	if (!gl_static.uniform_buffer) {
+		Com_WPrintf("GLSL: failed to create uniform buffer; falling back to legacy renderer.\n");
+		fallback_to_legacy = true;
+	} else {
+		GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_UNIFORMS, gl_static.uniform_buffer);
+		qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_block), NULL, GL_DYNAMIC_DRAW);
+	}
 
-	qglGenBuffers(1, &gl_static.cluster_params_buffer);
-	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_PARAMS, gl_static.cluster_params_buffer);
-	qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_cluster_params), NULL, GL_DYNAMIC_DRAW);
+	if (!fallback_to_legacy) {
+		bool cluster_buffers_ok = true;
 
-	qglGenBuffers(1, &gl_static.cluster_light_buffer);
-	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_LIGHTS, gl_static.cluster_light_buffer);
-	qglBufferData(GL_UNIFORM_BUFFER, sizeof(glClusterLight_t) * MAX_DLIGHTS, NULL, GL_DYNAMIC_DRAW);
+		qglGenBuffers(1, &gl_static.cluster_params_buffer);
+		if (gl_static.cluster_params_buffer) {
+			GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_PARAMS, gl_static.cluster_params_buffer);
+			qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_cluster_params), NULL, GL_DYNAMIC_DRAW);
+		} else {
+			cluster_buffers_ok = false;
+		}
 
-	qglGenBuffers(1, &gl_static.shadow_item_buffer);
-	GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOW_ITEMS, gl_static.shadow_item_buffer);
-	qglBufferData(GL_UNIFORM_BUFFER, sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, NULL, GL_DYNAMIC_DRAW);
+		qglGenBuffers(1, &gl_static.cluster_light_buffer);
+		if (gl_static.cluster_light_buffer) {
+			GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_CLUSTER_LIGHTS, gl_static.cluster_light_buffer);
+			qglBufferData(GL_UNIFORM_BUFFER, sizeof(glClusterLight_t) * MAX_DLIGHTS, NULL, GL_DYNAMIC_DRAW);
+		} else {
+			cluster_buffers_ok = false;
+		}
 
-    #if USE_MD5
-    if (gl_config.caps & QGL_CAP_SKELETON_MASK) {
-        qglGenBuffers(1, &gl_static.skeleton_buffer);
-        GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SKELETON, gl_static.skeleton_buffer);
+		qglGenBuffers(1, &gl_static.shadow_item_buffer);
+		if (gl_static.shadow_item_buffer) {
+			GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOW_ITEMS, gl_static.shadow_item_buffer);
+			qglBufferData(GL_UNIFORM_BUFFER, sizeof(glShadowItem_t) * MAX_SHADOW_VIEWS, NULL, GL_DYNAMIC_DRAW);
+		} else {
+			cluster_buffers_ok = false;
+		}
 
-        if ((gl_config.caps & QGL_CAP_SKELETON_MASK) == QGL_CAP_BUFFER_TEXTURE)
-            qglGenTextures(2, gl_static.skeleton_tex);
-    }
+		if (!cluster_buffers_ok) {
+			Com_WPrintf("GLSL: failed to allocate cluster lighting buffers; clustered shading disabled.\n");
+			shader_cleanup_cluster_buffers();
+			disable_clustered_shading = true;
+		}
+	}
+
+#if USE_MD5
+	if (!fallback_to_legacy && (gl_config.caps & QGL_CAP_SKELETON_MASK)) {
+		bool skeleton_ok = true;
+
+		qglGenBuffers(1, &gl_static.skeleton_buffer);
+		if (gl_static.skeleton_buffer) {
+			GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SKELETON, gl_static.skeleton_buffer);
+		} else {
+			skeleton_ok = false;
+		}
+
+		if (skeleton_ok && (gl_config.caps & QGL_CAP_SKELETON_MASK) == QGL_CAP_BUFFER_TEXTURE) {
+			qglGenTextures(2, gl_static.skeleton_tex);
+			if (!gl_static.skeleton_tex[0] || !gl_static.skeleton_tex[1]) {
+				skeleton_ok = false;
+			}
+		}
+
+		if (!skeleton_ok) {
+			Com_WPrintf("GLSL: failed to allocate GPU skeleton resources; disabling GPU MD5 animation.\n");
+			shader_cleanup_skeleton_resources();
+			gl_config.caps &= ~QGL_CAP_SKELETON_MASK;
+		}
+	}
 #endif
 
-    if (gl_config.ver_gl >= QGL_VER(3, 2))
-        qglEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	if (fallback_to_legacy) {
+		shader_shutdown();
+		gl_static.use_shaders = false;
+		Cvar_Set("gl_shaders", "0");
+		gl_backend = &backend_legacy;
+		gl_backend->init();
+		return;
+	}
 
-    qglGenBuffers(1, &gl_static.dlight_buffer);
-    GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.dlight_buffer);
-    GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_DLIGHTS, gl_static.dlight_buffer);
-    qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_dlights), NULL, GL_DYNAMIC_DRAW);
+	if (gl_config.ver_gl >= QGL_VER(3, 2))
+		qglEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
+	qglGenBuffers(1, &gl_static.dlight_buffer);
+	if (!gl_static.dlight_buffer) {
+		Com_WPrintf("GLSL: failed to create dynamic light buffer; per-pixel lighting disabled.\n");
+		disable_per_pixel_lighting = true;
+	} else {
+		GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.dlight_buffer);
+		GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_DLIGHTS, gl_static.dlight_buffer);
+		qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_dlights), NULL, GL_DYNAMIC_DRAW);
+	}
 
     // precache common shader
     shader_use_program(GLS_DEFAULT);
 
-    gl_per_pixel_lighting = Cvar_Get("gl_per_pixel_lighting", "1", 0);
-    gl_clustered_shading = Cvar_Get("gl_clustered_shading", "0", 0);
-    gl_cluster_show_overdraw = Cvar_Get("gl_cluster_show_overdraw", "0", 0);
-    gl_cluster_show_normals = Cvar_Get("gl_cluster_show_normals", "0", 0);
+	gl_per_pixel_lighting = Cvar_Get("gl_per_pixel_lighting", "1", 0);
+	gl_clustered_shading = Cvar_Get("gl_clustered_shading", "0", 0);
+	gl_cluster_show_overdraw = Cvar_Get("gl_cluster_show_overdraw", "0", 0);
+	gl_cluster_show_normals = Cvar_Get("gl_cluster_show_normals", "0", 0);
+
+	if (disable_per_pixel_lighting)
+		Cvar_Set("gl_per_pixel_lighting", "0");
+	if (disable_clustered_shading)
+		Cvar_Set("gl_clustered_shading", "0");
 }
 
+/*
+=============
+shader_shutdown
+
+Releases GLSL backend resources safely even if initialization failed partway.
+=============
+*/
 static void shader_shutdown(void)
 {
-    shader_disable_state();
-    qglUseProgram(0);
+	shader_disable_state();
+	qglUseProgram(0);
 
-    if (r_bloomBlurRadius)
-        r_bloomBlurRadius->changed = NULL;
-    if (r_bloomKernel)
-        r_bloomKernel->changed = NULL;
-    if (r_bloomBlurScale)
-        r_bloomBlurScale->changed = NULL;
-    if (r_bloomBlurFalloff)
-        r_bloomBlurFalloff->changed = NULL;
+	if (r_bloomBlurRadius)
+		r_bloomBlurRadius->changed = NULL;
+	if (r_bloomKernel)
+		r_bloomKernel->changed = NULL;
+	if (r_bloomBlurScale)
+		r_bloomBlurScale->changed = NULL;
+	if (r_bloomBlurFalloff)
+		r_bloomBlurFalloff->changed = NULL;
 
-    if (gl_static.programs) {
-        uint32_t map_size = HashMap_Size(gl_static.programs);
-        for (int i = 0; i < map_size; i++) {
-            GLuint *prog = HashMap_GetValue(GLuint, gl_static.programs, i);
-            qglDeleteProgram(*prog);
-        }
-        HashMap_Destroy(gl_static.programs);
-        gl_static.programs = NULL;
-    }
+	if (gl_static.programs) {
+		uint32_t map_size = HashMap_Size(gl_static.programs);
+		for (uint32_t i = 0; i < map_size; i++) {
+			GLuint *prog = HashMap_GetValue(GLuint, gl_static.programs, i);
+			if (prog && *prog)
+				qglDeleteProgram(*prog);
+		}
+		HashMap_Destroy(gl_static.programs);
+		gl_static.programs = NULL;
+	}
 
-    if (gl_static.uniform_buffer) {
-        qglDeleteBuffers(1, &gl_static.uniform_buffer);
-        gl_static.uniform_buffer = 0;
-    }
-    if (gl_static.cluster_params_buffer) {
-        qglDeleteBuffers(1, &gl_static.cluster_params_buffer);
-        gl_static.cluster_params_buffer = 0;
-    }
-    if (gl_static.cluster_light_buffer) {
-        qglDeleteBuffers(1, &gl_static.cluster_light_buffer);
-        gl_static.cluster_light_buffer = 0;
-    }
-    if (gl_static.shadow_item_buffer) {
-        qglDeleteBuffers(1, &gl_static.shadow_item_buffer);
-        gl_static.shadow_item_buffer = 0;
-    }
-    if (gl_static.dlight_buffer) {
-        qglDeleteBuffers(1, &gl_static.dlight_buffer);
-        gl_static.dlight_buffer = 0;
-    }
+	if (gl_static.uniform_buffer) {
+		qglDeleteBuffers(1, &gl_static.uniform_buffer);
+		gl_static.uniform_buffer = 0;
+	}
+
+	shader_cleanup_cluster_buffers();
+
+	if (gl_static.dlight_buffer) {
+		qglDeleteBuffers(1, &gl_static.dlight_buffer);
+		gl_static.dlight_buffer = 0;
+	}
 
 #if USE_MD5
-    if (gl_static.skeleton_buffer) {
-        qglDeleteBuffers(1, &gl_static.skeleton_buffer);
-        gl_static.skeleton_buffer = 0;
-    }
-    if (gl_static.skeleton_tex[0] || gl_static.skeleton_tex[1]) {
-        qglDeleteTextures(2, gl_static.skeleton_tex);
-        gl_static.skeleton_tex[0] = gl_static.skeleton_tex[1] = 0;
-    }
+	shader_cleanup_skeleton_resources();
 #endif
 
-    if (gl_config.ver_gl >= QGL_VER(3, 2))
-        qglDisable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	if (gl_config.ver_gl >= QGL_VER(3, 2))
+		qglDisable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 }
 
 static bool shader_use_per_pixel_lighting(void)
