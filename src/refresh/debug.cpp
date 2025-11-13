@@ -363,54 +363,66 @@ void R_AddDebugCurveArrow(const vec3_t start, const vec3_t ctrl, const vec3_t en
     }
 }
 
+/*
+=============
+R_AddDebugTextInternal
+
+Safely acquires or recycles a debug text entry before populating it.
+=============
+*/
 static void R_AddDebugTextInternal(const vec3_t origin, const vec3_t angles, const char *text,
-                                   size_t len, float size, color_t color, uint32_t time,
-                                   bool depth_test)
+				   size_t len, float size, color_t color, uint32_t time,
+				   bool depth_test)
 {
-    if (!len)
-        return;
+	if (!len)
+		return;
 
-    debug_text_t *t = LIST_FIRST(debug_text_t, &debug_texts_free, entry);
+	debug_text_t *t = nullptr;
 
-    if (LIST_EMPTY(&debug_texts_free)) {
-        if (LIST_EMPTY(&debug_texts_active)) {
-            for (int i = 0; i < MAX_DEBUG_TEXTS; i++)
-                List_Append(&debug_texts_free, &debug_texts[i].entry);
-        } else {
-            debug_text_t *next;
-            LIST_FOR_EACH_SAFE(debug_text_t, t, next, &debug_texts_active, entry) {
-                if (R_DebugTimeExpired(t->time)) {
-                    List_Remove(&t->entry);
-                    List_Insert(&debug_texts_free, &t->entry);
-                    break;
-                }
-            }
-        }
+	if (LIST_EMPTY(&debug_texts_free)) {
+		if (LIST_EMPTY(&debug_texts_active)) {
+			for (int i = 0; i < MAX_DEBUG_TEXTS; i++)
+				List_Append(&debug_texts_free, &debug_texts[i].entry);
+		} else {
+			debug_text_t *next;
+			LIST_FOR_EACH_SAFE(debug_text_t, t, next, &debug_texts_active, entry) {
+				if (R_DebugTimeExpired(t->time)) {
+					List_Remove(&t->entry);
+					List_Insert(&debug_texts_free, &t->entry);
+					break;
+				}
+			}
+		}
 
-        if (LIST_EMPTY(&debug_texts_free))
-            t = LIST_FIRST(debug_text_t, &debug_texts_active, entry);
-        else
-            t = LIST_FIRST(debug_text_t, &debug_texts_free, entry);
-    }
+		if (LIST_EMPTY(&debug_texts_free) && !LIST_EMPTY(&debug_texts_active))
+			t = LIST_FIRST(debug_text_t, &debug_texts_active, entry);
+	}
 
-    // unlink from freelist
-    List_Remove(&t->entry);
-    List_Append(&debug_texts_active, &t->entry);
+	if (!t && !LIST_EMPTY(&debug_texts_free))
+		t = LIST_FIRST(debug_text_t, &debug_texts_free, entry);
 
-    VectorCopy(origin, t->origin);
-    if (angles)
-        VectorCopy(angles, t->angles);
-    t->size = size * 8.0f;
-    t->color = color;
-    t->time = time ? (R_DebugCurrentTime() + time) : 0;
-    t->bits = GLS_DEPTHMASK_FALSE | GLS_BLEND_BLEND;
-    if (!depth_test)
-        t->bits |= GLS_DEPTHTEST_DISABLE;
-    if (angles)
-        t->bits |= GLS_CULL_DISABLE;
-    len = min(len, sizeof(t->text) - 1);
-    memcpy(t->text, text, len);
-    t->text[len] = 0;
+	assert(t);
+	if (!t)
+		return;
+
+	// unlink from freelist
+	List_Remove(&t->entry);
+	List_Append(&debug_texts_active, &t->entry);
+
+	VectorCopy(origin, t->origin);
+	if (angles)
+		VectorCopy(angles, t->angles);
+	t->size = size * 8.0f;
+	t->color = color;
+	t->time = time ? (R_DebugCurrentTime() + time) : 0;
+	t->bits = GLS_DEPTHMASK_FALSE | GLS_BLEND_BLEND;
+	if (!depth_test)
+		t->bits |= GLS_DEPTHTEST_DISABLE;
+	if (angles)
+		t->bits |= GLS_CULL_DISABLE;
+	len = min(len, sizeof(t->text) - 1);
+	memcpy(t->text, text, len);
+	t->text[len] = 0;
 }
 
 static void R_AddDebugTextTexture(const vec3_t origin, const vec3_t angles, const char *text,
