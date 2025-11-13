@@ -17,7 +17,11 @@ Configures texture parameters and storage for HDR luminance reduction levels.
 */
 static void setupTexture(GLuint texture, int width, int height)
 	{
+		const glTmu_t active_tmu = gls.server_tmu;
+		const GLuint previous_texture = gls.texnums[active_tmu];
+
 		qglBindTexture(GL_TEXTURE_2D, texture);
+		gls.texnums[active_tmu] = texture;
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -28,6 +32,10 @@ static void setupTexture(GLuint texture, int width, int height)
 		const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_HALF_FLOAT;
 
 		qglTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, format, type, nullptr);
+
+		qglBindTexture(GL_TEXTURE_2D, previous_texture);
+		gls.texnums[active_tmu] = previous_texture;
+		gls.server_tmu = active_tmu;
 	}
 
 /*
