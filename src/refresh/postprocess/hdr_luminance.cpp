@@ -10,6 +10,19 @@ namespace {
 
 /*
 =============
+restoreFramebuffer
+
+Restores the previous framebuffer binding if a valid value is provided.
+=============
+*/
+static void restoreFramebuffer(GLint previous)
+{
+	if (previous >= 0)
+		qglBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
+}
+
+/*
+=============
 setupTexture
 
 Configures texture parameters and storage for HDR luminance reduction levels.
@@ -77,19 +90,6 @@ static bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height)
 
 	return true;
 }
-
-/*
-=============
-restoreFramebuffer
-
-Restores the previous framebuffer binding if a valid value is provided.
-=============
-*/
-static void restoreFramebuffer(GLint previous)
-	{
-		if (previous >= 0)
-			qglBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
-	}
 
 /*
 =============
