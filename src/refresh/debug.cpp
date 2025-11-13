@@ -81,42 +81,59 @@ static inline bool R_DebugTimeExpired(const uint32_t time)
     return time <= R_DebugCurrentTime();
 }
 
+/*
+=============
+R_AddDebugLine
+
+Adds a line to the debug draw queue, recycling existing entries as needed.
+=============
+*/
 void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, bool depth_test)
 {
-    debug_line_t *l = LIST_FIRST(debug_line_t, &debug_lines_free, entry);
+	debug_line_t *l = nullptr;
 
-    if (LIST_EMPTY(&debug_lines_free)) {
-        if (LIST_EMPTY(&debug_lines_active)) {
-            for (int i = 0; i < MAX_DEBUG_LINES; i++)
-                List_Append(&debug_lines_free, &debug_lines[i].entry);
-        } else {
-            debug_line_t *next;
-            LIST_FOR_EACH_SAFE(debug_line_t, l, next, &debug_lines_active, entry) {
-                if (R_DebugTimeExpired(l->time)) {
-                    List_Remove(&l->entry);
-                    List_Insert(&debug_lines_free, &l->entry);
-                    break;
-                }
-            }
-        }
+	if (LIST_EMPTY(&debug_lines_free)) {
+		if (LIST_EMPTY(&debug_lines_active)) {
+			for (int i = 0; i < MAX_DEBUG_LINES; i++) {
+				List_Append(&debug_lines_free, &debug_lines[i].entry);
+			}
+		} else {
+			debug_line_t *next;
+			LIST_FOR_EACH_SAFE(debug_line_t, l, next, &debug_lines_active, entry) {
+				if (R_DebugTimeExpired(l->time)) {
+					List_Remove(&l->entry);
+					List_Insert(&debug_lines_free, &l->entry);
+					break;
+				}
+			}
+		}
 
-        if (LIST_EMPTY(&debug_lines_free))
-            l = LIST_FIRST(debug_line_t, &debug_lines_active, entry);
-        else
-            l = LIST_FIRST(debug_line_t, &debug_lines_free, entry);
-    }
+		if (LIST_EMPTY(&debug_lines_free)) {
+			if (!LIST_EMPTY(&debug_lines_active)) {
+				l = LIST_FIRST(debug_line_t, &debug_lines_active, entry);
+			}
+		} else {
+			l = LIST_FIRST(debug_line_t, &debug_lines_free, entry);
+		}
+	} else {
+		l = LIST_FIRST(debug_line_t, &debug_lines_free, entry);
+	}
 
-    // unlink from freelist
-    List_Remove(&l->entry);
-    List_Append(&debug_lines_active, &l->entry);
+	if (!l) {
+		return;
+	}
 
-    VectorCopy(start, l->start);
-    VectorCopy(end, l->end);
-    l->color = color;
-    l->time = time ? (R_DebugCurrentTime() + time) : 0;
-    l->bits = GLS_DEPTHMASK_FALSE | GLS_BLEND_BLEND;
-    if (!depth_test)
-        l->bits |= GLS_DEPTHTEST_DISABLE;
+	// unlink from freelist
+	List_Remove(&l->entry);
+	List_Append(&debug_lines_active, &l->entry);
+
+	VectorCopy(start, l->start);
+	VectorCopy(end, l->end);
+	l->color = color;
+	l->time = time ? (R_DebugCurrentTime() + time) : 0;
+	l->bits = GLS_DEPTHMASK_FALSE | GLS_BLEND_BLEND;
+	if (!depth_test)
+		l->bits |= GLS_DEPTHTEST_DISABLE;
 }
 
 static inline void R_DebugDrawLine(float sx, float sy, float sz, float ex, float ey, float ez, color_t color, uint32_t time, bool depth_test)
