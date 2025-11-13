@@ -1603,6 +1603,13 @@ static bool MOD_UploadIndexBuffer(model_t *model, memhunk_t *hunk)
     return true;
 }
 
+/*
+=============
+R_RegisterModel
+
+Loads the specified model and returns its registration handle.
+=============
+*/
 qhandle_t R_RegisterModel(const char *name)
 {
     char normalized[MAX_QPATH];
@@ -1742,6 +1749,13 @@ model_t *MOD_ForHandle(qhandle_t h)
     return model;
 }
 
+/*
+=============
+MOD_Init
+
+Initializes the model subsystem and configures GPU interpolation support.
+=============
+*/
 void MOD_Init(void)
 {
     Q_assert(!r_numModels);
@@ -1763,6 +1777,11 @@ void MOD_Init(void)
         gl_static.use_gpu_lerp = gl_gpulerp->integer >= minval;
         gl_gpulerp->flags |= CVAR_FILES;
     }
+
+	if (gl_static.use_gpu_lerp && !qglGenBuffers) {
+		Com_WPrintf("GPU interpolation requires vertex buffer objects; falling back to CPU lerp.\n");
+		gl_static.use_gpu_lerp = false;
+	}
 
 #if USE_MD5
     // prefer shader storage, but support buffer textures as fallback.
