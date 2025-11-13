@@ -136,27 +136,47 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
     tess.numindices += 24;
 }
 
+/*
+=============
+GL_ClampColorComponent
+
+Clamps a color component to the [0, 1] range and converts it to 0-255.
+=============
+*/
+static inline uint8_t GL_ClampColorComponent(float value)
+{
+	value = std::clamp(value, 0.0f, 1.0f);
+	return static_cast<uint8_t>(value * 255.0f);
+}
+
+/*
+=============
+GL_Blend
+
+Applies screen and damage blend overlays.
+=============
+*/
 void GL_Blend(void)
 {
-    if (glr.fd.screen_blend[3]) {
-        color_t color;
+	if (glr.fd.screen_blend[3]) {
+		color_t color;
 
-        color.r = glr.fd.screen_blend[0] * 255;
-        color.g = glr.fd.screen_blend[1] * 255;
-        color.b = glr.fd.screen_blend[2] * 255;
-        color.a = glr.fd.screen_blend[3] * 255;
+		color.r = GL_ClampColorComponent(glr.fd.screen_blend[0]);
+		color.g = GL_ClampColorComponent(glr.fd.screen_blend[1]);
+		color.b = GL_ClampColorComponent(glr.fd.screen_blend[2]);
+		color.a = GL_ClampColorComponent(glr.fd.screen_blend[3]);
 
         GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
                        color, TEXNUM_WHITE, 0);
     }
 
-    if (glr.fd.damage_blend[3]) {
-        color_t outer, inner;
+	if (glr.fd.damage_blend[3]) {
+		color_t outer, inner;
 
-        outer.r = glr.fd.damage_blend[0] * 255;
-        outer.g = glr.fd.damage_blend[1] * 255;
-        outer.b = glr.fd.damage_blend[2] * 255;
-        outer.a = glr.fd.damage_blend[3] * 255;
+		outer.r = GL_ClampColorComponent(glr.fd.damage_blend[0]);
+		outer.g = GL_ClampColorComponent(glr.fd.damage_blend[1]);
+		outer.b = GL_ClampColorComponent(glr.fd.damage_blend[2]);
+		outer.a = GL_ClampColorComponent(glr.fd.damage_blend[3]);
 
         inner = ColorSetAlpha(outer, static_cast<uint8_t>(0));
 
