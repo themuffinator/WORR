@@ -195,6 +195,37 @@ static int32_t r_exposure_auto_modified = 0;
 
 // ==============================================================================
 
+/*
+=============
+GL_SetFramebufferDrawBuffers
+
+Sets the active draw buffers for the currently bound framebuffer, falling back to
+single-target glDrawBuffer when glDrawBuffers is unavailable. When the fallback is
+used only the first attachment is written to, so multi-render-target features must
+remain guarded on draw-buffer support.
+=============
+*/
+static void GL_SetFramebufferDrawBuffers(GLsizei count, const GLenum *buffers)
+{
+	if (!buffers || count <= 0) {
+		if (qglDrawBuffers) {
+			qglDrawBuffers(0, nullptr);
+		} else if (qglDrawBuffer) {
+			qglDrawBuffer(GL_NONE);
+		}
+		return;
+	}
+
+	if (qglDrawBuffers) {
+		qglDrawBuffers(count, buffers);
+		return;
+	}
+
+	if (qglDrawBuffer) {
+		qglDrawBuffer(buffers[0]);
+	}
+}
+
 static void GL_SetupFrustum(void)
 {
     vec_t angle, sf, cf;
@@ -1640,11 +1671,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	static const GLenum scene_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	const GLsizei scene_draw_buffer_count = (flags & PP_BLOOM) ? 2 : 1;
-	if (qglDrawBuffers) {
-		qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
-	} else if (qglDrawBuffer) {
-		qglDrawBuffer(GL_COLOR_ATTACHMENT0);
-	}
+	GL_SetFramebufferDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
 	if (qglReadBuffer)
 		qglReadBuffer(GL_COLOR_ATTACHMENT0);
 
@@ -1652,18 +1679,10 @@ static pp_flags_t GL_BindFramebuffer(void)
 		if (flags & PP_BLOOM) {
 			static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 			static const vec4_t black = { 0, 0, 0, 1 };
-			if (qglDrawBuffers) {
-				qglDrawBuffers(2, buffers);
-			} else if (qglDrawBuffer) {
-				qglDrawBuffer(GL_COLOR_ATTACHMENT0);
-			}
+			GL_SetFramebufferDrawBuffers(2, buffers);
 			qglClearBufferfv(GL_COLOR, 0, gl_static.clearcolor);
 			qglClearBufferfv(GL_COLOR, 1, black);
-			if (qglDrawBuffers) {
-				qglDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
-			} else if (qglDrawBuffer) {
-				qglDrawBuffer(GL_COLOR_ATTACHMENT0);
-			}
+			GL_SetFramebufferDrawBuffers(scene_draw_buffer_count, scene_draw_buffers);
 		} else {
 			qglClear(GL_COLOR_BUFFER_BIT);
 		}
