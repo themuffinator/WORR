@@ -125,16 +125,23 @@ void GL_Flush2D(void)
 #define PARTICLE_SIZE   (1 + M_SQRT1_2f)
 #define PARTICLE_SCALE  (1 / (2 * PARTICLE_SIZE))
 
+/*
+=============
+GL_DrawParticles
+
+Draws particle billboards.
+=============
+*/
 void GL_DrawParticles(void)
 {
-    const particle_t *p;
-    int total, count;
-    vec3_t transformed;
-    vec_t scale, scale2, dist;
-    color_t color;
-    int numverts;
-    vec_t *dst_vert;
-    glStateBits_t bits;
+	const particle_t *p;
+	int total, count;
+	vec3_t transformed;
+	vec_t scale, scale2, dist;
+	color_t color;
+	int numverts;
+	vec_t *dst_vert;
+	glStateBits_t bits;
 
     if (!glr.fd.num_particles)
         return;
@@ -176,11 +183,13 @@ void GL_DrawParticles(void)
             dst_vert[ 9] = 0;               dst_vert[10] = PARTICLE_SIZE;
             dst_vert[15] = PARTICLE_SIZE;   dst_vert[16] = 0;
 
-            if (p->color == -1)
-                color = p->rgba;
-            else
-                color.u32 = d_8to24table[p->color & 0xff];
-            color.a *= p->alpha;
+			if (p->color == -1)
+				color = p->rgba;
+			else
+				color.u32 = d_8to24table[p->color & 0xff];
+			float alpha = static_cast<float>(color.a) * p->alpha;
+			alpha = std::clamp(alpha, 0.0f, 255.0f);
+			color.a = static_cast<uint8_t>(alpha);
 
             WN32(dst_vert +  5, color.u32);
             WN32(dst_vert + 11, color.u32);
