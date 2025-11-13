@@ -1604,7 +1604,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool fbo_enabled = !r_fbo || r_fbo->integer;
 	const bool fbo_disabled = r_fbo && !r_fbo->integer;
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
-	const bool post_processing_disabled = !post_processing_requested || !world_visible;
+	const bool post_processing_disabled = !post_processing_requested;
 	const bool had_framebuffer = glr.framebuffer_ok;
 	const bool had_framebuffer_resources = had_framebuffer || glr.framebuffer_width > 0 || glr.framebuffer_height > 0 || glr.motion_history_textures_ready;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
@@ -1728,6 +1728,11 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 			flags = PP_NONE;
 		}
+	}
+
+	if (!world_visible) {
+		glr.framebuffer_bound = false;
+		return PP_NONE;
 	}
 
 	if (!flags || !glr.framebuffer_ok) {
