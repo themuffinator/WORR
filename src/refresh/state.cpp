@@ -183,36 +183,59 @@ void GL_ScrollPos(vec2_t scroll, glStateBits_t bits)
     }
 }
 
+/*
+=============
+GL_Ortho
+
+Constructs an orthographic projection matrix and uploads it to the backend.
+=============
+*/
 void GL_Ortho(GLfloat xmin, GLfloat xmax, GLfloat ymin, GLfloat ymax, GLfloat znear, GLfloat zfar)
 {
-    GLfloat width, height, depth;
-    mat4_t matrix;
+	GLfloat width, height, depth;
+	mat4_t matrix;
+	const GLfloat epsilon = 1.0e-6f;
 
-    width  = xmax - xmin;
-    height = ymax - ymin;
-    depth  = zfar - znear;
+	width = xmax - xmin;
+	height = ymax - ymin;
+	depth = zfar - znear;
 
-    matrix[ 0] = 2 / width;
-    matrix[ 4] = 0;
-    matrix[ 8] = 0;
-    matrix[12] = -(xmax + xmin) / width;
+	if (width == 0.0f) {
+		width = (xmax >= xmin) ? epsilon : -epsilon;
+		Com_DPrintf("GL_Ortho: width collapsed to zero, substituting epsilon.\n");
+	}
 
-    matrix[ 1] = 0;
-    matrix[ 5] = 2 / height;
-    matrix[ 9] = 0;
-    matrix[13] = -(ymax + ymin) / height;
+	if (height == 0.0f) {
+		height = (ymax >= ymin) ? epsilon : -epsilon;
+		Com_DPrintf("GL_Ortho: height collapsed to zero, substituting epsilon.\n");
+	}
 
-    matrix[ 2] = 0;
-    matrix[ 6] = 0;
-    matrix[10] = -2 / depth;
-    matrix[14] = -(zfar + znear) / depth;
+	if (depth == 0.0f) {
+		depth = (zfar >= znear) ? epsilon : -epsilon;
+		Com_DPrintf("GL_Ortho: depth collapsed to zero, substituting epsilon.\n");
+	}
 
-    matrix[ 3] = 0;
-    matrix[ 7] = 0;
-    matrix[11] = 0;
-    matrix[15] = 1;
+	matrix[ 0] = 2 / width;
+	matrix[ 4] = 0;
+	matrix[ 8] = 0;
+	matrix[12] = -(xmax + xmin) / width;
 
-    gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
+	matrix[ 1] = 0;
+	matrix[ 5] = 2 / height;
+	matrix[ 9] = 0;
+	matrix[13] = -(ymax + ymin) / height;
+
+	matrix[ 2] = 0;
+	matrix[ 6] = 0;
+	matrix[10] = -2 / depth;
+	matrix[14] = -(zfar + znear) / depth;
+
+	matrix[ 3] = 0;
+	matrix[ 7] = 0;
+	matrix[11] = 0;
+	matrix[15] = 1;
+
+	gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 
 void GL_Setup2D(void)
