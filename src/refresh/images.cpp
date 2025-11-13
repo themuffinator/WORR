@@ -1852,6 +1852,35 @@ static void add_texture_format(imageformat_t fmt)
 	img_search[img_total++] = fmt;
 }
 
+/*
+=============
+R_AddDefaultTextureFormats
+
+Appends the compiled-in 32-bit image formats when no explicit search
+order is provided.
+=============
+*/
+static void R_AddDefaultTextureFormats(void)
+{
+#if USE_PNG
+	add_texture_format(IM_PNG);
+#endif
+#if USE_JPG
+	add_texture_format(IM_JPG);
+#endif
+#if USE_TGA
+	add_texture_format(IM_TGA);
+#endif
+}
+
+/*
+=============
+r_texture_formats_changed
+
+Rebuilds the list of high-color texture formats that should be tried as
+replacements for legacy PCX/WAL assets.
+=============
+*/
 static void r_texture_formats_changed(cvar_t* self)
 {
 	const char* s;
@@ -1886,6 +1915,9 @@ static void r_texture_formats_changed(cvar_t* self)
 			tok++;
 		}
 	}
+
+	if (!img_total)
+		R_AddDefaultTextureFormats();
 }
 
 static bool need_override_image(imagetype_t type, imageformat_t fmt)
@@ -2225,11 +2257,22 @@ image_t* IMG_ForHandle(qhandle_t h)
 	return &r_images[h];
 }
 
+/*
+=============
+R_RegisterImage
+
+Normalizes the requested image name, applies a default extension when
+needed and registers or loads the image into the renderer.
+=============
+*/
 qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags)
 {
 	image_t* image;
-	char        fullname[MAX_QPATH];
-	size_t      len;
+	char		fullname[MAX_QPATH];
+	size_t	len;
+	const char* existing_ext;
+	const char* ext;
+	char		ext_buffer[5]{};
 
 	Q_assert(name);
 
@@ -2262,9 +2305,22 @@ qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags
 		return 0;
 	}
 
-	// Second, ensure a default extension is present.
-	const char* ext = (type == IT_SKIN) ? ".wal" : ".pcx";
-	len = COM_DefaultExtension(fullname, ext, sizeof(fullname));
+	ext = (type == IT_SKIN) ? ".wal" : ".pcx";
+	existing_ext = COM_FileExtension(fullname);
+	if (!*existing_ext) {
+#if USE_PNG || USE_JPG || USE_TGA
+		if (type != IT_SKIN && img_total > 0) {
+			const imageformat_t fmt = img_search[0];
+			ext_buffer[0] = '.';
+			memcpy(ext_buffer + 1, img_loaders[fmt].ext, 4);
+			ext = ext_buffer;
+		}
+#endif
+		len = COM_DefaultExtension(fullname, ext, sizeof(fullname));
+	}
+	else {
+		len = strlen(fullname);
+	}
 
 	if (len >= sizeof(fullname)) {
 		print_error(fullname, flags, Q_ERR(ENAMETOOLONG));
