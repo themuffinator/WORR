@@ -1485,6 +1485,21 @@ static int32_t r_motionBlur_modified = 0;
 
 /*
 =============
+GL_ClearBloomStateFlags
+
+Resets bloom tracking counters so a future enablement rebuilds required
+framebuffer attachments.
+=============
+*/
+static void GL_ClearBloomStateFlags(void)
+{
+	r_bloom_modified = -1;
+	r_bloomScale_modified = -1;
+	r_bloomKernel_modified = -1;
+}
+
+/*
+=============
 GL_UpdateBloomEffect
 
 Ensures the bloom effect matches the requested enable state and framebuffer size.
@@ -1554,11 +1569,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 	if (!post_processing_requested || !world_visible) {
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
-		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
-			prev_format != gl_static.postprocess_format ||
-			prev_type != gl_static.postprocess_type;
-		if (formats_changed)
-			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_ClearBloomStateFlags();
 		if (fbo_disabled && had_framebuffer_resources)
 			GL_ReleaseFramebufferResources();
 		return PP_NONE;
@@ -1658,11 +1670,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 	if (!flags || !glr.framebuffer_ok) {
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
-		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
-			prev_format != gl_static.postprocess_format ||
-			prev_type != gl_static.postprocess_type;
-		if (formats_changed)
-			GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_ClearBloomStateFlags();
 		return PP_NONE;
 	}
 
