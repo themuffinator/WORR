@@ -121,6 +121,27 @@ typedef struct {
     } while (0)
 
 /*
+=============
+IMG_PickFloodFillColor
+
+Select fallback color for flood fill from nearby opaque samples.
+=============
+*/
+static byte IMG_PickFloodFillColor(const byte* skin, int skinwidth, int skinheight, byte fillcolor)
+{
+	for (int y = 0; y < skinheight; y++) {
+		const byte* row = skin + y * skinwidth;
+		for (int x = 0; x < skinwidth; x++) {
+			const byte color = row[x];
+			if (color != fillcolor && color != 255)
+				return color;
+		}
+	}
+
+	return fillcolor;
+}
+
+/*
 =================
 IMG_FloodFill
 
@@ -132,12 +153,13 @@ static void IMG_FloodFill(byte* skin, int skinwidth, int skinheight)
 	byte                fillcolor = *skin; // assume this is the pixel to fill
 	floodfill_t         fifo[FLOODFILL_FIFO_SIZE];
 	int                 inpt = 0, outpt = 0;
-	int                 filledcolor = 0; // FIXME: fixed black
+	int                 filledcolor;
 
-	// can't fill to filled color or to transparent color
-	// (used as visited marker)
-	if (fillcolor == filledcolor || fillcolor == 255)
+	// can't fill to transparent color (used as visited marker)
+	if (fillcolor == 255)
 		return;
+
+	filledcolor = IMG_PickFloodFillColor(skin, skinwidth, skinheight, fillcolor);
 
 	fifo[inpt].x = 0, fifo[inpt].y = 0;
 	inpt = (inpt + 1) & FLOODFILL_FIFO_MASK;
@@ -155,7 +177,38 @@ static void IMG_FloodFill(byte* skin, int skinwidth, int skinheight)
 		if (y < skinheight - 1) FLOODFILL_STEP(skinwidth, 0, 1);
 
 		skin[x + skinwidth * y] = fdc;
+}
+}
+
+/*
+=============
+IMG_ValidateFloodFill
+
+Ensures flood fill handles palette index 0 backgrounds without halos.
+=============
+*/
+bool IMG_ValidateFloodFill(void)
+{
+	static constexpr int width = 4;
+	static constexpr int height = 4;
+	byte skin[width * height] = {
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 64, 64,
+		0, 0, 64, 64
+	};
+
+	IMG_FloodFill(skin, width, height);
+
+	if (skin[0] == 0)
+		return false;
+
+	for (int i = 0; i < width * height; i++) {
+		if (skin[i] == 255)
+			return false;
 	}
+
+	return true;
 }
 
 /*
