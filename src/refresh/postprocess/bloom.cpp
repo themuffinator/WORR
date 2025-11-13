@@ -128,15 +128,32 @@ void BloomEffect::shutdown()
         resizeErrorLogged_ = false;
 }
 
+/*
+=============
+BloomEffect::allocateTexture
+
+Initializes a bloom texture while preserving the caller texture state.
+=============
+*/
 void BloomEffect::allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const
 {
-        qglBindTexture(GL_TEXTURE_2D, tex);
-        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	const glTmu_t prevActiveTmu = gls.server_tmu;
+	const GLuint prevTexture = gls.texnums[TMU_TEXTURE];
 
-        qglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
+	GL_ActiveTexture(TMU_TEXTURE);
+
+	qglBindTexture(GL_TEXTURE_2D, tex);
+	gls.texnums[TMU_TEXTURE] = tex;
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	qglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
+
+	qglBindTexture(GL_TEXTURE_2D, prevTexture);
+	gls.texnums[TMU_TEXTURE] = prevTexture;
+	GL_ActiveTexture(prevActiveTmu);
 }
 
 bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const
