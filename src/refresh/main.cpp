@@ -1537,7 +1537,6 @@ static pp_flags_t GL_BindFramebuffer(void)
 	bool resized = false;
 	const bool world_visible = !(glr.fd.rdflags & RDF_NOWORLDMODEL);
 	const bool dof_active = world_visible && gl_dof->integer && glr.fd.depth_of_field;
-	const bool motion_blur_enabled = glr.motion_blur_enabled;
 	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer;
 	const bool fbo_enabled = !r_fbo || r_fbo->integer;
 	const bool fbo_disabled = r_fbo && !r_fbo->integer;
@@ -1550,8 +1549,12 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
+	const bool motion_blur_requested = post_processing_requested && r_motionBlur->integer && world_visible &&
+		glr.fd.width > 0 && glr.fd.height > 0 && drawable_w > 0 && drawable_h > 0;
+	const bool motion_blur_enabled = motion_blur_requested;
 
 	if (!post_processing_requested || !world_visible) {
+		glr.motion_blur_enabled = false;
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
 		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
@@ -1617,6 +1620,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 	if (flags)
 		resized = drawable_w != glr.framebuffer_width || drawable_h != glr.framebuffer_height;
 
+	glr.motion_blur_enabled = motion_blur_enabled;
+
 	if (resized || r_skipUnderWaterFX->modified_count != r_skipUnderWaterFX_modified ||
 		r_bloom->modified_count != r_bloom_modified ||
 		r_bloomScale->modified_count != r_bloomScale_modified ||
@@ -1656,6 +1661,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	}
 
 	if (!flags || !glr.framebuffer_ok) {
+		glr.motion_blur_enabled = false;
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
 		const bool formats_changed = prev_internal_format != gl_static.postprocess_internal_format ||
