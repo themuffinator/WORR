@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.hpp"
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -29,51 +30,60 @@ Accumulates bilinearly filtered lightmap samples for the active lightpoint.
 */
 void GL_SampleLightPoint(vec3_t color)
 {
-    const mface_t       *surf = glr.lightpoint.surf;
-    const byte          *lightmap;
-    const byte          *b1, *b2, *b3, *b4;
-    const lightstyle_t  *style;
-    float               fracu, fracv;
-    float               w1, w2, w3, w4;
-    vec3_t              temp;
-    int                 s, t, smax, tmax, size;
+	const mface_t *surf = glr.lightpoint.surf;
+	const byte *lightmap;
+	const byte *b1, *b2, *b3, *b4;
+	const lightstyle_t *style;
+	const float sample_s = glr.lightpoint.s;
+	const float sample_t = glr.lightpoint.t;
+	float fracu, fracv;
+	float w1, w2, w3, w4;
+	vec3_t temp;
+	int s, t, smax, tmax, size;
+	int max_s, max_t;
 
-    s = glr.lightpoint.s;
-    t = glr.lightpoint.t;
+	s = static_cast<int>(sample_s);
+	t = static_cast<int>(sample_t);
 
-    fracu = glr.lightpoint.s - s;
-    fracv = glr.lightpoint.t - t;
+	smax = surf->lm_width;
+	tmax = surf->lm_height;
+	size = smax * tmax * 3;
+	max_s = std::max(0, smax - 2);
+	max_t = std::max(0, tmax - 2);
 
-    // compute weights of lightmap blocks
-    w1 = (1.0f - fracu) * (1.0f - fracv);
-    w2 = fracu * (1.0f - fracv);
-    w3 = fracu * fracv;
-    w4 = (1.0f - fracu) * fracv;
+	s = std::clamp(s, 0, max_s);
+	t = std::clamp(t, 0, max_t);
 
-    smax = surf->lm_width;
-    tmax = surf->lm_height;
-    size = smax * tmax * 3;
+	fracu = std::clamp(sample_s - static_cast<float>(s), 0.0f, 1.0f);
+	fracv = std::clamp(sample_t - static_cast<float>(t), 0.0f, 1.0f);
 
-    VectorClear(color);
+	// compute weights of lightmap blocks
+	w1 = (1.0f - fracu) * (1.0f - fracv);
+	w2 = fracu * (1.0f - fracv);
+	w3 = fracu * fracv;
+	w4 = (1.0f - fracu) * fracv;
 
-    // add all the lightmaps with bilinear filtering
-    lightmap = surf->lightmap;
-    for (int i = 0; i < surf->numstyles; i++) {
-        b1 = &lightmap[3 * ((t + 0) * smax + (s + 0))];
-        b2 = &lightmap[3 * ((t + 0) * smax + (s + 1))];
-        b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
-        b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
+	VectorClear(color);
 
-        temp[0] = w1 * b1[0] + w2 * b2[0] + w3 * b3[0] + w4 * b4[0];
-        temp[1] = w1 * b1[1] + w2 * b2[1] + w3 * b3[1] + w4 * b4[1];
-        temp[2] = w1 * b1[2] + w2 * b2[2] + w3 * b3[2] + w4 * b4[2];
+	// add all the lightmaps with bilinear filtering
+	lightmap = surf->lightmap;
+	for (int i = 0; i < surf->numstyles; i++) {
+		b1 = &lightmap[3 * ((t + 0) * smax + (s + 0))];
+		b2 = &lightmap[3 * ((t + 0) * smax + (s + 1))];
+		b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
+		b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
 
-        style = LIGHT_STYLE(surf->styles[i]);
-        VectorMA(color, style->white, temp, color);
+		temp[0] = w1 * b1[0] + w2 * b2[0] + w3 * b3[0] + w4 * b4[0];
+		temp[1] = w1 * b1[1] + w2 * b2[1] + w3 * b3[1] + w4 * b4[1];
+		temp[2] = w1 * b1[2] + w2 * b2[2] + w3 * b3[2] + w4 * b4[2];
 
-        lightmap += size;
-    }
+		style = LIGHT_STYLE(surf->styles[i]);
+		VectorMA(color, style->white, temp, color);
+
+		lightmap += size;
+	}
 }
+
 
 /*
 =============
