@@ -1383,6 +1383,29 @@ bool GL_InitFramebuffers(void)
 			Com_DPrintf("FBO_MOTION_HISTORY(%d) complete (%dx%d)\n", i, scene_w, scene_h);
 	}
 
+	static bool prev_motion_history_expected = false;
+	static int prev_motion_history_width = 0;
+	static int prev_motion_history_height = 0;
+	bool clear_motion_history = false;
+	if (motion_history_expected) {
+		if (!prev_motion_history_expected || scene_w != prev_motion_history_width || scene_h != prev_motion_history_height)
+			clear_motion_history = true;
+		prev_motion_history_width = scene_w;
+		prev_motion_history_height = scene_h;
+	} else {
+		prev_motion_history_width = 0;
+		prev_motion_history_height = 0;
+	}
+	prev_motion_history_expected = motion_history_expected;
+	if (clear_motion_history) {
+		glr.motion_blur_history_count = 0;
+		glr.motion_blur_history_index = 0;
+		for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
+			glr.motion_history_valid[i] = false;
+			for (int j = 0; j < 16; ++j)
+				glr.motion_history_view_proj[i][j] = gl_identity[j];
+		}
+	}
 	glr.motion_history_textures_ready = motion_history_expected;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
