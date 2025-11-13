@@ -320,6 +320,14 @@ bool append_shadow_view(const shadow_light_submission_t &light, size_t light_ind
 	return true;
 }
 
+/*
+=============
+render_shadow_views
+
+Renders the shadow map views into the atlas while preserving the main view
+state so post-processing receives consistent matrices.
+=============
+*/
 void render_shadow_views()
 {
 	if (g_render_views.empty())
@@ -356,9 +364,16 @@ void render_shadow_views()
 	refdef_t saved_fd = glr.fd;
 	mat4_t saved_viewmatrix;
 	mat4_t saved_projmatrix;
+	mat4_t saved_view_proj_matrix;
+	mat4_t saved_inv_view_proj_matrix;
 	vec3_t saved_viewaxis[3];
+	bool saved_view_proj_valid = glr.view_proj_valid;
+	float saved_view_znear = glr.view_znear;
+	float saved_view_zfar = glr.view_zfar;
 	std::memcpy(saved_viewmatrix, glr.viewmatrix, sizeof(mat4_t));
 	std::memcpy(saved_projmatrix, glr.projmatrix, sizeof(mat4_t));
+	std::memcpy(saved_view_proj_matrix, glr.view_proj_matrix, sizeof(mat4_t));
+	std::memcpy(saved_inv_view_proj_matrix, glr.inv_view_proj_matrix, sizeof(mat4_t));
 	for (int i = 0; i < 3; ++i)
 		VectorCopy(glr.viewaxis[i], saved_viewaxis[i]);
 
@@ -411,17 +426,21 @@ void render_shadow_views()
 		GL_Flush3D();
 	}
 
-glr.fd = saved_fd;
-for (int i = 0; i < 3; ++i)
-VectorCopy(saved_viewaxis[i], glr.viewaxis[i]);
-std::memcpy(glr.viewmatrix, saved_viewmatrix, sizeof(mat4_t));
-std::memcpy(glr.projmatrix, saved_projmatrix, sizeof(mat4_t));
-glr.framebuffer_bound = prev_framebuffer_bound;
-glr.view_proj_valid = false;
-gl_backend->load_matrix(GL_PROJECTION, glr.projmatrix, gl_identity);
-GL_ForceMatrix(gl_identity, glr.viewmatrix);
+	glr.fd = saved_fd;
+	for (int i = 0; i < 3; ++i)
+		VectorCopy(saved_viewaxis[i], glr.viewaxis[i]);
+	std::memcpy(glr.viewmatrix, saved_viewmatrix, sizeof(mat4_t));
+	std::memcpy(glr.projmatrix, saved_projmatrix, sizeof(mat4_t));
+	glr.view_znear = saved_view_znear;
+	glr.view_zfar = saved_view_zfar;
+	std::memcpy(glr.view_proj_matrix, saved_view_proj_matrix, sizeof(mat4_t));
+	std::memcpy(glr.inv_view_proj_matrix, saved_inv_view_proj_matrix, sizeof(mat4_t));
+	glr.view_proj_valid = saved_view_proj_valid;
+	glr.framebuffer_bound = prev_framebuffer_bound;
+	gl_backend->load_matrix(GL_PROJECTION, glr.projmatrix, gl_identity);
+	GL_ForceMatrix(gl_identity, glr.viewmatrix);
 
-qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
 	qglDrawBuffers(1, &prev_draw_buffer_enum);
 	qglReadBuffer(prev_read_buffer);
