@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.hpp"
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <type_traits>
 
 namespace {
@@ -403,15 +404,17 @@ void GL_DrawBeams(void)
 
     GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
-    if (gl_beamstyle->integer) {
-        GL_BindArrays(VA_NULLMODEL);
-        scale = 0.5f;
-    } else {
-        GL_BindArrays(VA_EFFECT);
-        scale = 1.2f;
-    }
+	if (gl_beamstyle->integer) {
+		GL_BindArrays(VA_NULLMODEL);
+		scale = 0.5f;
+	} else {
+		GL_BindArrays(VA_EFFECT);
+		scale = 1.2f;
+	}
 
-    for (ent = glr.ents.beams; ent; ent = ent->next) {
+	constexpr int MAX_BEAM_WIDTH = 1024;
+
+	for (ent = glr.ents.beams; ent; ent = ent->next) {
         VectorCopy(ent->origin, segs[0]);
         VectorCopy(ent->oldorigin, segs[1]);
 
@@ -423,7 +426,9 @@ void GL_DrawBeams(void)
 		alpha = std::clamp(alpha, 0.0f, 255.0f);
 		color.a = static_cast<uint8_t>(alpha);
 
-        width = abs((int16_t)ent->frame) * scale;
+		const int frameWidth = static_cast<int>(static_cast<int16_t>(ent->frame));
+		const int clampedWidth = std::min(std::abs(frameWidth), MAX_BEAM_WIDTH);
+		width = static_cast<float>(clampedWidth) * scale;
 
         if (ent->flags & RF_GLOW)
             GL_DrawLightningBeam(segs[0], segs[1], color, width);
