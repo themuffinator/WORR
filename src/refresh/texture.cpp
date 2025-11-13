@@ -1259,10 +1259,8 @@ bool GL_InitFramebuffers(void)
 		return false;
 	}
 
-	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
-	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
-	const int viewport_w = (drawable_w > 0 && glr.fd.width > 0) ? (std::min)(glr.fd.width, drawable_w) : 0;
-	const int viewport_h = (drawable_h > 0 && glr.fd.height > 0) ? (std::min)(glr.fd.height, drawable_h) : 0;
+	const int viewport_w = glr.fd.width > 0 ? glr.fd.width : 0;
+	const int viewport_h = glr.fd.height > 0 ? glr.fd.height : 0;
 	int scene_w = 0, scene_h = 0;
 	int bloom_w = 0, bloom_h = 0;
 	int dof_full_w = 0, dof_full_h = 0;
@@ -1470,6 +1468,10 @@ void GL_ReleaseFramebufferResources(void)
 	gl_static.dof.half_height = 0;
 	gl_static.dof.reduced_resolution = false;
 	glr.motion_history_textures_ready = false;
+	glr.framebuffer_u_min = 0.0f;
+	glr.framebuffer_v_min = 0.0f;
+	glr.framebuffer_u_max = 1.0f;
+	glr.framebuffer_v_max = 1.0f;
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

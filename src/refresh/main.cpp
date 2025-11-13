@@ -1162,29 +1162,16 @@ void R_HDRUpdateUniforms(void)
 GL_PostProcess
 
 Renders a screen-aligned quad for the active post-process stage using the
-provided rectangle while clamping UVs to the populated scene region.
+provided rectangle and caller-supplied UV bounds.
 =============
 */
-void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
+void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h, float u_min, float v_min, float u_max, float v_max)
 {
 	GL_BindArrays(VA_POSTPROCESS);
 	GL_StateBits(GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_FALSE |
-			GLS_CULL_DISABLE | GLS_TEXTURE_REPLACE | bits);
+		GLS_CULL_DISABLE | GLS_TEXTURE_REPLACE | bits);
 	GL_ArrayBits(GLA_VERTEX | GLA_TC);
 	gl_backend->load_uniforms();
-
-	float u_min = 0.0f;
-	float v_min = 0.0f;
-	float u_max = 1.0f;
-	float v_max = 1.0f;
-	if (glr.framebuffer_width > 0 && glr.fd.width > 0) {
-		const float ratio_w = static_cast<float>(glr.fd.width) / static_cast<float>(glr.framebuffer_width);
-		u_max = (std::min)(ratio_w, 1.0f);
-	}
-	if (glr.framebuffer_height > 0 && glr.fd.height > 0) {
-		const float ratio_h = static_cast<float>(glr.fd.height) / static_cast<float>(glr.framebuffer_height);
-		v_max = (std::min)(ratio_h, 1.0f);
-	}
 
 	Vector4Set(tess.vertices,      x,     y,     u_min, v_max);
 	Vector4Set(tess.vertices +  4, x,     y + h, u_min, v_min);
@@ -1238,7 +1225,9 @@ static void GL_BokehCoCPass(int target_w, int target_h, int source_w, int source
     GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
-    GL_PostProcess(GLS_BOKEH_COC, 0, 0, target_w, target_h);
+	GL_PostProcess(GLS_BOKEH_COC, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 
 static void GL_BokehInitialBlurPass(int target_w, int target_h, int source_w, int source_h)
@@ -1248,7 +1237,9 @@ static void GL_BokehInitialBlurPass(int target_w, int target_h, int source_w, in
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, target_w, target_h);
+	GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 
 static void GL_BokehDownsamplePass(int target_w, int target_h, int source_w, int source_h)
@@ -1258,7 +1249,8 @@ static void GL_BokehDownsamplePass(int target_w, int target_h, int source_w, int
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
-    GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, target_w, target_h);
+	GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, target_w, target_h,
+		0.0f, 0.0f, 1.0f, 1.0f);
 }
 
 static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int source_h)
@@ -1267,7 +1259,8 @@ static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int sou
     GL_BokehSetScreen(target_w, target_h, source_w, source_h);
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
-    GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h);
+	GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h,
+		0.0f, 0.0f, 1.0f, 1.0f);
 }
 
 static void GL_BokehCombinePass(int target_w, int target_h, int source_w, int source_h)
@@ -1278,7 +1271,9 @@ static void GL_BokehCombinePass(int target_w, int target_h, int source_w, int so
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
     GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, target_w, target_h);
+	GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 
 static void GL_RunDepthOfField(void)
@@ -1384,6 +1379,10 @@ static void GL_DrawBloom(pp_flags_t flags)
 		.viewportY = composite_y,
 		.viewportWidth = composite_w,
 		.viewportHeight = composite_h,
+		.viewportUvMinU = glr.framebuffer_u_min,
+		.viewportUvMinV = glr.framebuffer_v_min,
+		.viewportUvMaxU = glr.framebuffer_u_max,
+		.viewportUvMaxV = glr.framebuffer_v_max,
 		.waterwarp = waterwarp,
 		.depthOfField = depth_of_field,
 		.showDebug = show_bloom,
@@ -1475,7 +1474,9 @@ static void R_StoreMotionBlurHistory(void)
 	qglViewport(0, 0, composite_w, composite_h);
 	GL_Ortho(0, composite_w, composite_h, 0, -1, 1);
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h);
+	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 	GL_Setup2D();
 
@@ -1521,7 +1522,9 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 	}
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-	GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+	GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
@@ -1584,6 +1587,10 @@ static void HDR_DisableFramebufferResources(void)
 	glr.framebuffer_bound = false;
 	glr.framebuffer_width = 0;
 	glr.framebuffer_height = 0;
+	glr.framebuffer_u_min = 0.0f;
+	glr.framebuffer_v_min = 0.0f;
+	glr.framebuffer_u_max = 1.0f;
+	glr.framebuffer_v_max = 1.0f;
 	glr.motion_history_textures_ready = false;
 }
 /*
@@ -1611,10 +1618,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const GLenum prev_format = gl_static.postprocess_format;
 	const GLenum prev_type = gl_static.postprocess_type;
 
-	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
-	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
-	const int viewport_w = (drawable_w > 0 && glr.fd.width > 0) ? (std::min)(glr.fd.width, drawable_w) : 0;
-	const int viewport_h = (drawable_h > 0 && glr.fd.height > 0) ? (std::min)(glr.fd.height, drawable_h) : 0;
+	const int viewport_w = glr.fd.width > 0 ? glr.fd.width : 0;
+	const int viewport_h = glr.fd.height > 0 ? glr.fd.height : 0;
 	const int scene_target_w = viewport_w;
 	const int scene_target_h = viewport_h;
 	const bool motion_blur_requested = post_processing_requested && r_motionBlur->integer && world_visible &&
@@ -1697,11 +1702,21 @@ static pp_flags_t GL_BindFramebuffer(void)
 		hdr_prev != gl_static.hdr.active) {
 		glr.framebuffer_ok = GL_InitFramebuffers();
 		if (glr.framebuffer_ok) {
-			glr.framebuffer_width  = scene_target_w;
+			glr.framebuffer_width = scene_target_w;
 			glr.framebuffer_height = scene_target_h;
+			const float u_max = (scene_target_w > 0 && viewport_w > 0) ? static_cast<float>(viewport_w) / static_cast<float>(scene_target_w) : 0.0f;
+			const float v_max = (scene_target_h > 0 && viewport_h > 0) ? static_cast<float>(viewport_h) / static_cast<float>(scene_target_h) : 0.0f;
+			glr.framebuffer_u_min = 0.0f;
+			glr.framebuffer_v_min = 0.0f;
+			glr.framebuffer_u_max = (scene_target_w > 0) ? Q_bound(0.0f, u_max, 1.0f) : 1.0f;
+			glr.framebuffer_v_max = (scene_target_h > 0) ? Q_bound(0.0f, v_max, 1.0f) : 1.0f;
 		} else {
-			glr.framebuffer_width  = 0;
+			glr.framebuffer_width = 0;
 			glr.framebuffer_height = 0;
+			glr.framebuffer_u_min = 0.0f;
+			glr.framebuffer_v_min = 0.0f;
+			glr.framebuffer_u_max = 1.0f;
+			glr.framebuffer_v_max = 1.0f;
 		}
 		r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
 		r_bloom_modified = r_bloom->modified_count;
@@ -1725,7 +1740,6 @@ static pp_flags_t GL_BindFramebuffer(void)
 				if (formats_changed)
 					HDR_UpdatePostprocessFormats();
 			}
-
 			flags = PP_NONE;
 		}
 	}
@@ -1886,7 +1900,7 @@ void R_RenderFrame(const refdef_t *fd)
         glr.framebuffer_bound = false;
     }
 
-	HDR_UpdateExposure(glr.framebuffer_width, glr.framebuffer_height);
+	HDR_UpdateExposure(glr.fd.width, glr.fd.height);
 
     tess.dlight_bits = 0;
 
@@ -1931,19 +1945,25 @@ void R_RenderFrame(const refdef_t *fd)
 		}
 
 		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	} else if (world_visible && (pp_flags & PP_HDR)) {
 		glStateBits_t bits = GLS_TONEMAP_ENABLE;
 		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 		R_HDRUpdateUniforms();
 		if (pp_flags & PP_CRT)
 			bits = R_CRTPrepare(bits, composite_w, composite_h);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	} else if (world_visible && (pp_flags & PP_CRT)) {
 		glStateBits_t bits = GLS_DEFAULT;
 		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 		bits = R_CRTPrepare(bits, composite_w, composite_h);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	}
 
 

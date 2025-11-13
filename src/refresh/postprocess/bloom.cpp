@@ -5,7 +5,7 @@
 #include "../qgl.hpp"
 #include "crt.hpp"
 
-extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
+extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h, float u_min, float v_min, float u_max, float v_max);
 
 BloomEffect g_bloom_effect;
 
@@ -32,7 +32,16 @@ namespace {
 
 		glStateBits_t bits = showDebug ? GLS_DEFAULT : (combineBloom ? GLS_BLOOM_OUTPUT : GLS_DEFAULT);
 
+		float u_min = ctx.viewportUvMinU;
+		float v_min = ctx.viewportUvMinV;
+		float u_max = ctx.viewportUvMaxU;
+		float v_max = ctx.viewportUvMaxV;
+
 		if (showDebug) {
+			u_min = 0.0f;
+			v_min = 0.0f;
+			u_max = 1.0f;
+			v_max = 1.0f;
 			const GLuint debugTexture = bloomTexture != 0 ? bloomTexture : TEXNUM_PP_BLOOM;
 			GL_ForceTexture(TMU_TEXTURE, debugTexture);
 		}
@@ -54,8 +63,9 @@ namespace {
 		}
 
 		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
-	}
+		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight,
+			u_min, v_min, u_max, v_max);
+}
 
 }
 
@@ -379,7 +389,9 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	gls.u_block_dirty = true;
 	GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
 	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
-	GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
+		GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_,
+			ctx.viewportUvMinU, ctx.viewportUvMinV,
+			ctx.viewportUvMaxU, ctx.viewportUvMaxV);
 	if (GL_ShowErrors("Bloom pass"))
 		bloomFailed = true;
 
@@ -392,7 +404,8 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 		GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
 		GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
 		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
-		GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
+		GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_,
+			0.0f, 0.0f, 1.0f, 1.0f);
 		if (GL_ShowErrors("Bloom pass"))
 			bloomFailed = true;
 	}
@@ -408,7 +421,8 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 				gls.u_block_dirty = true;
 				GL_ForceTexture(TMU_TEXTURE, currentTexture);
 				qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-				GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_);
+				GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_,
+			0.0f, 0.0f, 1.0f, 1.0f);
 				if (GL_ShowErrors("Bloom pass")) {
 					bloomFailed = true;
 					break;

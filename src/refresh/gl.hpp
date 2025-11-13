@@ -255,6 +255,10 @@ typedef struct {
     uint64_t        ppl_dlight_bits;
     int             framebuffer_width;
     int             framebuffer_height;
+    float           framebuffer_u_min;
+    float           framebuffer_v_min;
+    float           framebuffer_u_max;
+    float           framebuffer_v_max;
     float           view_znear;
     float           view_zfar;
     bool            framebuffer_ok;

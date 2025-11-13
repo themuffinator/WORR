@@ -11,6 +11,10 @@ struct BloomRenderContext {
 	int viewportY;
 	int viewportWidth;
 	int viewportHeight;
+	float viewportUvMinU;
+	float viewportUvMinV;
+	float viewportUvMaxU;
+	float viewportUvMaxV;
 	bool waterwarp;
 	bool depthOfField;
 	bool showDebug;
