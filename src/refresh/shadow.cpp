@@ -709,6 +709,8 @@ void R_RenderShadowViews(void)
 	g_render_views.clear();
 	g_render_views.reserve((std::min)(kMaxShadowViews, gls.shadow_items.size()));
 
+	auto &shadow = gl_static.shadow;
+
 	size_t light_count = 0;
 	const shadow_light_submission_t *lights = R_GetQueuedShadowLights(&light_count);
 	g_light_shadow_bases.assign(light_count, -1);
@@ -716,15 +718,23 @@ void R_RenderShadowViews(void)
 	if (!lights || !light_count)
 		return;
 
-		for (size_t i = 0; i < light_count; ++i) {
+	for (size_t i = 0; i < light_count; ++i) {
 		const shadow_light_submission_t &light = lights[i];
+		const int light_start_atlas_index = static_cast<int>(shadow.view_count);
+		const size_t light_start_view_index = g_render_views.size();
+
+		g_light_shadow_bases[i] = -1;
+		g_light_shadow_counts[i] = 0;
+
 		if (!light.casts_shadow)
 			continue;
 
+		int expected_faces = 0;
 		const float far_plane = compute_shadow_far_plane(light);
 		const float near_plane = compute_shadow_near_plane(far_plane);
 
 		if (light.lighttype == shadow_light_type_point) {
+			expected_faces = static_cast<int>(kCubemapFaceOrientations.size());
 			for (size_t face_index = 0; face_index < kCubemapFaceOrientations.size(); ++face_index) {
 				vec3_t axis[3];
 				build_axis_from_orientation(kCubemapFaceOrientations[face_index], axis);
@@ -732,30 +742,43 @@ void R_RenderShadowViews(void)
 					break;
 			}
 		} else if (light.lighttype == shadow_light_type_cone && light.coneangle > 0.0f) {
+			expected_faces = 1;
 			vec3_t up = { 0.0f, 0.0f, 1.0f };
 			vec3_t axis[3];
 			build_axis_from_direction(light.direction, up, axis);
 			const float fov = std::clamp(light.coneangle, 5.0f, 170.0f);
 			append_shadow_view(light, i, axis, fov, near_plane, far_plane, -1);
 		}
-	}
 
-	for (size_t i = 0; i < light_count; ++i) {
-		const shadow_light_submission_t &light = lights[i];
-		int expected_faces = 0;
-		if (light.casts_shadow) {
-			if (light.lighttype == shadow_light_type_point) {
-				expected_faces = static_cast<int>(kCubemapFaceOrientations.size());
-			} else if (light.lighttype == shadow_light_type_cone && light.coneangle > 0.0f) {
-				expected_faces = 1;
+		if (expected_faces <= 0)
+			continue;
+
+		if (g_light_shadow_counts[i] < expected_faces) {
+			const int appended_count = static_cast<int>(shadow.view_count) - light_start_atlas_index;
+			if (appended_count > 0) {
+				for (int atlas_index = light_start_atlas_index; atlas_index < light_start_atlas_index + appended_count; ++atlas_index) {
+					if (atlas_index >= 0 && static_cast<size_t>(atlas_index) < shadow.assignments.size()) {
+						shadow_view_assignment_t &assignment = shadow.assignments[static_cast<size_t>(atlas_index)];
+						assignment.valid = false;
+						assignment.atlas_index = -1;
+						assignment.face = -1;
+						assignment.resolution = 0;
+						for (int param_index = 0; param_index < 4; ++param_index) {
+							assignment.parameters.viewport_rect[param_index] = 0.0f;
+							assignment.parameters.source_position[param_index] = 0.0f;
+						}
+						for (int offset_index = 0; offset_index < 4; ++offset_index)
+							assignment.cube_face_offset[offset_index] = 0.0f;
+					}
+				}
+				shadow.view_count = light_start_atlas_index;
 			}
-		}
-		if (expected_faces <= 0 || g_light_shadow_counts[i] < expected_faces) {
+			if (light_start_view_index < g_render_views.size())
+				g_render_views.resize(light_start_view_index);
 			g_light_shadow_bases[i] = -1;
 			g_light_shadow_counts[i] = 0;
 		}
 	}
-
 	const int atlas_view_count = static_cast<int>(gl_static.shadow.view_count);
 	if (glr.fd.dlights && glr.fd.num_dlights > 0) {
 		for (int dlight_index = 0; dlight_index < glr.fd.num_dlights; ++dlight_index) {
