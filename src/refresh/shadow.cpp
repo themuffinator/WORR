@@ -320,6 +320,13 @@ bool append_shadow_view(const shadow_light_submission_t &light, size_t light_ind
 	return true;
 }
 
+/*
+=============
+render_shadow_views
+
+Render each queued shadow view into the shadow atlas, preserving prior GL state.
+=============
+*/
 void render_shadow_views()
 {
 	if (g_render_views.empty())
@@ -335,7 +342,9 @@ void render_shadow_views()
 	GLboolean prev_depth_mask = GL_TRUE;
 
 	qglGetIntegerv(GL_DRAW_BUFFER, &prev_draw_buffer);
-	qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+	const bool has_read_buffer = qglReadBuffer != nullptr;
+	if (has_read_buffer)
+		qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 	qglGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_fbo);
 	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
 	qglGetIntegerv(GL_COLOR_WRITEMASK, prev_color_mask_i);
@@ -349,7 +358,8 @@ void render_shadow_views()
 	qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadow.framebuffer);
 	const GLenum no_buffers = GL_NONE;
 	qglDrawBuffers(1, &no_buffers);
-	qglReadBuffer(GL_NONE);
+	if (has_read_buffer)
+		qglReadBuffer(GL_NONE);
 	qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 	qglDepthMask(GL_TRUE);
 
@@ -424,7 +434,8 @@ GL_ForceMatrix(gl_identity, glr.viewmatrix);
 qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
 	qglDrawBuffers(1, &prev_draw_buffer_enum);
-	qglReadBuffer(prev_read_buffer);
+	if (has_read_buffer)
+		qglReadBuffer(prev_read_buffer);
 	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	qglColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	qglDepthMask(prev_depth_mask);
