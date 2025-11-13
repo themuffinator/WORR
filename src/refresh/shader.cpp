@@ -2310,21 +2310,37 @@ gls.u_cluster_params.params2[2] = 0.0f;
 gls.u_cluster_params.params2[3] = 0.0f;
 }
 
+/*
+=============
+shader_disable_state
+
+Resets shader backend bindings and disables all vertex attribute arrays.
+=============
+*/
 static void shader_disable_state(void)
 {
-    qglActiveTexture(GL_TEXTURE2);
-    qglBindTexture(GL_TEXTURE_2D, 0);
+	qglActiveTexture(GL_TEXTURE2);
+	gls.server_tmu = TMU_GLOWMAP;
+	qglBindTexture(GL_TEXTURE_2D, 0);
+	gls.texnums[TMU_GLOWMAP] = 0;
 
-    qglActiveTexture(GL_TEXTURE1);
-    qglBindTexture(GL_TEXTURE_2D, 0);
+	qglActiveTexture(GL_TEXTURE1);
+	gls.server_tmu = TMU_LIGHTMAP;
+	qglBindTexture(GL_TEXTURE_2D, 0);
+	gls.texnums[TMU_LIGHTMAP] = 0;
 
-    qglActiveTexture(GL_TEXTURE0);
-    qglBindTexture(GL_TEXTURE_2D, 0);
+	qglActiveTexture(GL_TEXTURE0);
+	gls.server_tmu = TMU_TEXTURE;
+	qglBindTexture(GL_TEXTURE_2D, 0);
+	gls.texnums[TMU_TEXTURE] = 0;
 
-    qglBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	qglBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	gls.texnumcube = 0;
 
-    for (int i = 0; i < VERT_ATTR_COUNT; i++)
-        qglDisableVertexAttribArray(i);
+	for (int i = 0; i < VERT_ATTR_COUNT; i++)
+		qglDisableVertexAttribArray(i);
+
+	gls.client_tmu = TMU_TEXTURE;
 }
 
 static void shader_clear_state(void)
