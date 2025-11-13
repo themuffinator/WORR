@@ -1162,7 +1162,7 @@ void R_HDRUpdateUniforms(void)
 GL_PostProcess
 
 Renders a screen-aligned quad for the active post-process stage using the
-provided rectangle.
+provided rectangle while clamping UVs to the populated scene region.
 =============
 */
 void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
@@ -1172,16 +1172,30 @@ void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 			GLS_CULL_DISABLE | GLS_TEXTURE_REPLACE | bits);
 	GL_ArrayBits(GLA_VERTEX | GLA_TC);
 	gl_backend->load_uniforms();
-	
-	Vector4Set(tess.vertices,      x,     y,     0, 1);
-	Vector4Set(tess.vertices +  4, x,     y + h, 0, 0);
-	Vector4Set(tess.vertices +  8, x + w, y,     1, 1);
-	Vector4Set(tess.vertices + 12, x + w, y + h, 1, 0);
-	
+
+	float u_min = 0.0f;
+	float v_min = 0.0f;
+	float u_max = 1.0f;
+	float v_max = 1.0f;
+	if (glr.framebuffer_width > 0 && glr.fd.width > 0) {
+		const float ratio_w = static_cast<float>(glr.fd.width) / static_cast<float>(glr.framebuffer_width);
+		u_max = (std::min)(ratio_w, 1.0f);
+	}
+	if (glr.framebuffer_height > 0 && glr.fd.height > 0) {
+		const float ratio_h = static_cast<float>(glr.fd.height) / static_cast<float>(glr.framebuffer_height);
+		v_max = (std::min)(ratio_h, 1.0f);
+	}
+
+	Vector4Set(tess.vertices,      x,     y,     u_min, v_max);
+	Vector4Set(tess.vertices +  4, x,     y + h, u_min, v_min);
+	Vector4Set(tess.vertices +  8, x + w, y,     u_max, v_max);
+	Vector4Set(tess.vertices + 12, x + w, y + h, u_max, v_min);
+
 	GL_LockArrays(4);
 	qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	GL_UnlockArrays();
 }
+
 
 /*
 =============
@@ -1435,7 +1449,7 @@ static void R_BindMotionHistoryTextures(void)
 =============
 R_StoreMotionBlurHistory
 
-Copies the current scene into the motion blur history buffer at full window resolution.
+Copies the current scene into the motion blur history buffer using the active viewport resolution.
 =============
 */
 static void R_StoreMotionBlurHistory(void)
@@ -1599,13 +1613,17 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
 	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
+	const int viewport_w = (drawable_w > 0 && glr.fd.width > 0) ? (std::min)(glr.fd.width, drawable_w) : 0;
+	const int viewport_h = (drawable_h > 0 && glr.fd.height > 0) ? (std::min)(glr.fd.height, drawable_h) : 0;
+	const int scene_target_w = viewport_w;
+	const int scene_target_h = viewport_h;
 	const bool motion_blur_requested = post_processing_requested && r_motionBlur->integer && world_visible &&
-		glr.fd.width > 0 && glr.fd.height > 0 && drawable_w > 0 && drawable_h > 0;
+		scene_target_w > 0 && scene_target_h > 0;
 	const bool motion_blur_enabled = motion_blur_requested;
 
 	if (post_processing_disabled) {
 		glr.motion_blur_enabled = false;
-		GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
 		GL_ClearBloomStateFlags();
@@ -1659,13 +1677,13 @@ static pp_flags_t GL_BindFramebuffer(void)
 		flags |= PP_MOTION_BLUR;
 
 	if (postprocess_format_changed) {
-		const bool bloom_active = (flags & PP_BLOOM) && drawable_w > 0 && drawable_h > 0;
-		if (!GL_UpdateBloomEffect(bloom_active, drawable_w, drawable_h))
+		const bool bloom_active = (flags & PP_BLOOM) && scene_target_w > 0 && scene_target_h > 0;
+		if (!GL_UpdateBloomEffect(bloom_active, scene_target_w, scene_target_h))
 			flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 	}
 
 	if (flags)
-		resized = drawable_w != glr.framebuffer_width || drawable_h != glr.framebuffer_height;
+		resized = scene_target_w != glr.framebuffer_width || scene_target_h != glr.framebuffer_height;
 
 	glr.motion_blur_enabled = motion_blur_enabled;
 
@@ -1677,9 +1695,14 @@ static pp_flags_t GL_BindFramebuffer(void)
 		gl_dof_quality->modified_count != gl_dof_quality_modified ||
 		r_motionBlur->modified_count != r_motionBlur_modified ||
 		hdr_prev != gl_static.hdr.active) {
-		glr.framebuffer_ok     = GL_InitFramebuffers();
-		glr.framebuffer_width  = drawable_w;
-		glr.framebuffer_height = drawable_h;
+		glr.framebuffer_ok = GL_InitFramebuffers();
+		if (glr.framebuffer_ok) {
+			glr.framebuffer_width  = scene_target_w;
+			glr.framebuffer_height = scene_target_h;
+		} else {
+			glr.framebuffer_width  = 0;
+			glr.framebuffer_height = 0;
+		}
 		r_skipUnderWaterFX_modified = r_skipUnderWaterFX->modified_count;
 		r_bloom_modified = r_bloom->modified_count;
 		r_bloomScale_modified = r_bloomScale->modified_count;
@@ -1688,8 +1711,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 		gl_dof_quality_modified = gl_dof_quality->modified_count;
 		r_motionBlur_modified = r_motionBlur->modified_count;
 		if (glr.framebuffer_ok && (flags & PP_BLOOM)) {
-			const bool bloom_ready = drawable_w > 0 && drawable_h > 0;
-			if (!GL_UpdateBloomEffect(bloom_ready, drawable_w, drawable_h))
+			const bool bloom_ready = scene_target_w > 0 && scene_target_h > 0;
+			if (!GL_UpdateBloomEffect(bloom_ready, scene_target_w, scene_target_h))
 				flags = static_cast<pp_flags_t>(flags & ~PP_BLOOM);
 		}
 		if (glr.framebuffer_ok) {
@@ -1711,7 +1734,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		glr.motion_blur_enabled = false;
 		HDR_DisableFramebufferResources();
 		HDR_UpdatePostprocessFormats();
-		GL_UpdateBloomEffect(false, drawable_w, drawable_h);
+		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
 		GL_ClearBloomStateFlags();
 		return PP_NONE;
 	}
@@ -1740,6 +1763,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 
 	return flags;
 }
+
+
 
 void R_RenderFrame(const refdef_t *fd)
 {
