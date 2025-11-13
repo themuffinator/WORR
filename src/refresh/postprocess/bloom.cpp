@@ -99,6 +99,13 @@ void BloomEffect::destroyFramebuffers()
 	}
 }
 
+/*
+=============
+BloomEffect::initialize
+
+Generates the bloom textures and framebuffers if they have not been created yet.
+=============
+*/
 void BloomEffect::initialize()
 {
 	if (initialized_)
@@ -106,6 +113,30 @@ void BloomEffect::initialize()
 
 	qglGenTextures(TextureCount, textures_);
 	qglGenFramebuffers(FramebufferCount, framebuffers_);
+
+	bool texturesReady = true;
+	for (GLuint texture : textures_) {
+		if (texture == 0) {
+			texturesReady = false;
+			break;
+		}
+	}
+
+	bool framebuffersReady = true;
+	for (GLuint framebuffer : framebuffers_) {
+		if (framebuffer == 0) {
+			framebuffersReady = false;
+			break;
+		}
+	}
+
+	if (!texturesReady || !framebuffersReady) {
+		destroyTextures();
+		destroyFramebuffers();
+		if (gl_showerrors->integer)
+			Com_EPrintf("BloomEffect: failed to generate bloom resources\n");
+		return;
+	}
 
 	initialized_ = true;
 }
