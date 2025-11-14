@@ -11,6 +11,10 @@ struct BloomRenderContext {
 	int viewportY;
 	int viewportWidth;
 	int viewportHeight;
+	float sceneUMin;
+	float sceneVMin;
+	float sceneUMax;
+	float sceneVMax;
 	bool waterwarp;
 	bool depthOfField;
 	bool showDebug;
@@ -28,10 +32,10 @@ public:
 	void initialize();
 	void shutdown();
 
-        bool resize(int sceneWidth, int sceneHeight);
-        void render(const BloomRenderContext& ctx);
+	bool resize(int sceneWidth, int sceneHeight);
+	void render(const BloomRenderContext& ctx);
 
-        [[nodiscard]] bool isInitialized() const noexcept { return initialized_; }
+	[[nodiscard]] bool isInitialized() const noexcept { return initialized_; }
 
 private:
 	enum TextureSlot : size_t {
@@ -50,23 +54,23 @@ private:
 		FramebufferCount
 	};
 
-        void destroyTextures();
-        void destroyFramebuffers();
-        void ensureInitialized();
-        void allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const;
-        bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const;
+	void destroyTextures();
+	void destroyFramebuffers();
+	void ensureInitialized();
+	void allocateTexture(GLuint tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) const;
+	bool attachFramebuffer(GLuint fbo, GLuint texture, int width, int height, const char* name) const;
 
-        GLuint textures_[TextureCount];
-        GLuint framebuffers_[FramebufferCount];
-        int sceneWidth_;
-        int sceneHeight_;
-        int downsampleWidth_;
-        int downsampleHeight_;
-        GLenum postprocessInternalFormat_;
-        GLenum postprocessFormat_;
-        GLenum postprocessType_;
-        bool initialized_;
-        bool resizeErrorLogged_;
+	GLuint textures_[TextureCount];
+	GLuint framebuffers_[FramebufferCount];
+	int sceneWidth_;
+	int sceneHeight_;
+	int downsampleWidth_;
+	int downsampleHeight_;
+	GLenum postprocessInternalFormat_;
+	GLenum postprocessFormat_;
+	GLenum postprocessType_;
+	bool initialized_;
+	bool resizeErrorLogged_;
 };
 
 extern BloomEffect g_bloom_effect;

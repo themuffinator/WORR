@@ -891,100 +891,172 @@ static void HDR_UpdatePostprocessFormats(void)
     }
 }
 
-static void HDR_ComputeHistogram(int width, int height)
+/*
+=============
+HDR_ReadbackViewportAverage
+
+Samples a downscaled region of the scene framebuffer to estimate the average
+scene color for auto-exposure fallbacks.
+=============
+*/
+static bool HDR_ReadbackViewportAverage(int texture_width, int texture_height,
+	int viewport_width, int viewport_height, float *out_pixel)
 {
-    if (!gl_static.hdr.debug_histogram)
-        return;
+	if (!out_pixel)
+		return false;
 
-    if (!qglReadPixels)
-        return;
+	if (!qglReadPixels)
+		return false;
 
-    const int sample_limit = 128;
-    int sample_w = min(width, sample_limit);
-    int sample_h = min(height, sample_limit);
-    float *scratch = nullptr;
+	const int effective_w = Q_bound(0, viewport_width, texture_width);
+	const int effective_h = Q_bound(0, viewport_height, texture_height);
+	if (effective_w <= 0 || effective_h <= 0)
+		return false;
 
-    bool have_samples = false;
-    if (hdr_state_local.gpu_reduce_supported && g_hdr_luminance.available()) {
-        int reduce_w = 0;
-        int reduce_h = 0;
-        if (g_hdr_luminance.readbackHistogram(sample_limit, hdr_state_local.histogram_scratch, reduce_w, reduce_h)) {
-            sample_w = reduce_w;
-            sample_h = reduce_h;
-            scratch = hdr_state_local.histogram_scratch.data();
-            have_samples = true;
-        }
-    }
+	const int sample_limit = 128;
+	const int sample_w = (std::max)(1, (std::min)(effective_w, sample_limit));
+	const int sample_h = (std::max)(1, (std::min)(effective_h, sample_limit));
+	const size_t sample_count = static_cast<size_t>(sample_w) * sample_h;
+	if (!sample_count)
+		return false;
 
-    if (!have_samples) {
-        if (!qglReadPixels)
-            return;
+	hdr_state_local.histogram_scratch.resize(sample_count * 4);
+	float *scratch = hdr_state_local.histogram_scratch.data();
 
-        sample_w = min(width, sample_limit);
-        sample_h = min(height, sample_limit);
-        if (sample_w <= 0 || sample_h <= 0)
-            return;
+	GLint prev_fbo = 0;
+	GLint prev_read_buffer = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	if (qglReadBuffer)
+		qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
 
-        hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
-        scratch = hdr_state_local.histogram_scratch.data();
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+	if (qglReadBuffer)
+		qglReadBuffer(GL_COLOR_ATTACHMENT0);
+	qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+	if (qglReadBuffer)
+		qglReadBuffer(prev_read_buffer);
 
-        GLint prev_fbo = 0;
-        GLint prev_read_buffer = 0;
-        qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-        if (qglReadBuffer)
-            qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+	double accum_r = 0.0;
+	double accum_g = 0.0;
+	double accum_b = 0.0;
 
-        qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
-        if (qglReadBuffer)
-            qglReadBuffer(GL_COLOR_ATTACHMENT0);
-        qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
-        qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-        if (qglReadBuffer)
-            qglReadBuffer(prev_read_buffer);
-        have_samples = true;
-    }
+	for (size_t i = 0; i < sample_count; ++i) {
+		accum_r += scratch[i * 4 + 0];
+		accum_g += scratch[i * 4 + 1];
+		accum_b += scratch[i * 4 + 2];
+	}
 
-    if (!have_samples || !scratch)
-        return;
-
-    constexpr int bins = 64;
-    std::array<float, bins> counts{};
-    counts.fill(0.0f);
-
-    const float ev_min = gl_static.hdr.exposure_ev_min;
-    const float ev_max = max(gl_static.hdr.exposure_ev_max, ev_min + 0.0001f);
-    const float ev_span = ev_max - ev_min;
-
-    const size_t total_pixels = static_cast<size_t>(sample_w) * sample_h;
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const float r = scratch[i * 4 + 0];
-        const float g = scratch[i * 4 + 1];
-        const float b = scratch[i * 4 + 2];
-        const float luminance = max(0.0f, r * 0.2126f + g * 0.7152f + b * 0.0722f);
-        const float ev = std::log2(max(luminance, 1e-5f));
-        const float norm = (ev - ev_min) / ev_span;
-        int bin = static_cast<int>(norm * bins);
-        bin = Q_bound(0, bin, bins - 1);
-        counts[bin] += 1.0f;
-    }
-
-    float peak = 1.0f;
-    for (float value : counts)
-        peak = max(peak, value);
-
-    gl_static.hdr.histogram_scale = (peak > 0.0f) ? (1.0f / peak) : 1.0f;
-    for (int i = 0; i < bins; ++i)
-        gl_static.hdr.histogram[i] = counts[i];
+	const float inv_count = 1.0f / static_cast<float>(sample_count);
+	out_pixel[0] = static_cast<float>(accum_r * inv_count);
+	out_pixel[1] = static_cast<float>(accum_g * inv_count);
+	out_pixel[2] = static_cast<float>(accum_b * inv_count);
+	out_pixel[3] = 1.0f;
+	return true;
 }
 
 /*
 =============
-HDR_UpdateExposure
+HDR_ComputeHistogram
 
-Updates automatic HDR exposure state using GPU reduction or a legacy fallback.
+Builds a luminance histogram over the rendered viewport to support HDR debug
+visualizations.
 =============
 */
-static void HDR_UpdateExposure(int width, int height)
+static void HDR_ComputeHistogram(int texture_width, int texture_height, int viewport_width, int viewport_height)
+{
+	if (!gl_static.hdr.debug_histogram)
+		return;
+
+	if (!qglReadPixels)
+		return;
+
+	const int sample_limit = 128;
+	const int effective_w = Q_bound(0, viewport_width, texture_width);
+	const int effective_h = Q_bound(0, viewport_height, texture_height);
+	int sample_w = (std::min)(effective_w, sample_limit);
+	int sample_h = (std::min)(effective_h, sample_limit);
+	float *scratch = nullptr;
+
+	bool have_samples = false;
+	if (hdr_state_local.gpu_reduce_supported && g_hdr_luminance.available()) {
+		int reduce_w = 0;
+		int reduce_h = 0;
+		if (g_hdr_luminance.readbackHistogram(sample_limit, hdr_state_local.histogram_scratch, reduce_w, reduce_h)) {
+			sample_w = reduce_w;
+			sample_h = reduce_h;
+			scratch = hdr_state_local.histogram_scratch.data();
+			have_samples = true;
+		}
+	}
+
+	if (!have_samples) {
+		sample_w = (std::min)(effective_w, sample_limit);
+		sample_h = (std::min)(effective_h, sample_limit);
+		if (sample_w <= 0 || sample_h <= 0)
+			return;
+
+		hdr_state_local.histogram_scratch.resize(static_cast<size_t>(sample_w) * sample_h * 4);
+		scratch = hdr_state_local.histogram_scratch.data();
+
+		GLint prev_fbo = 0;
+		GLint prev_read_buffer = 0;
+		qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+		if (qglReadBuffer)
+			qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+
+		qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+		if (qglReadBuffer)
+			qglReadBuffer(GL_COLOR_ATTACHMENT0);
+		qglReadPixels(0, 0, sample_w, sample_h, GL_RGBA, GL_FLOAT, scratch);
+		qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+		if (qglReadBuffer)
+			qglReadBuffer(prev_read_buffer);
+		have_samples = true;
+	}
+
+	if (!have_samples || !scratch)
+		return;
+
+	constexpr int bins = 64;
+	std::array<float, bins> counts{};
+	counts.fill(0.0f);
+
+	const float ev_min = gl_static.hdr.exposure_ev_min;
+	const float ev_max = max(gl_static.hdr.exposure_ev_max, ev_min + 0.0001f);
+	const float ev_span = ev_max - ev_min;
+
+	const size_t total_pixels = static_cast<size_t>(sample_w) * sample_h;
+	for (size_t i = 0; i < total_pixels; ++i) {
+		const float r = scratch[i * 4 + 0];
+		const float g = scratch[i * 4 + 1];
+		const float b = scratch[i * 4 + 2];
+		const float luminance = max(0.0f, r * 0.2126f + g * 0.7152f + b * 0.0722f);
+		const float ev = std::log2(max(luminance, 1e-5f));
+		const float norm = (ev - ev_min) / ev_span;
+		int bin = static_cast<int>(norm * bins);
+		bin = Q_bound(0, bin, bins - 1);
+		counts[bin] += 1.0f;
+	}
+
+	float peak = 1.0f;
+	for (float value : counts)
+		peak = max(peak, value);
+
+	gl_static.hdr.histogram_scale = (peak > 0.0f) ? (1.0f / peak) : 1.0f;
+	for (int i = 0; i < bins; ++i)
+		gl_static.hdr.histogram[i] = counts[i];
+}
+}
+/*
+=============
+HDR_UpdateExposure
+
+Updates automatic HDR exposure state using GPU reduction or viewport-aware
+fallback sampling.
+=============
+*/
+static void HDR_UpdateExposure(int texture_width, int texture_height, int viewport_width, int viewport_height)
 {
 	if (!gl_static.hdr.active)
 		return;
@@ -992,7 +1064,9 @@ static void HDR_UpdateExposure(int width, int height)
 	if (!glr.framebuffer_ok)
 		return;
 
-	if (width <= 0 || height <= 0)
+	const int effective_w = Q_bound(0, viewport_width, texture_width);
+	const int effective_h = Q_bound(0, viewport_height, texture_height);
+	if (texture_width <= 0 || texture_height <= 0 || effective_w <= 0 || effective_h <= 0)
 		return;
 
 	hdr_state_local.noise_seed = glr.fd.time;
@@ -1004,22 +1078,18 @@ static void HDR_UpdateExposure(int width, int height)
 		(gl_static.hdr.auto_exposure || gl_static.hdr.debug_histogram || gl_static.hdr.debug_tonemap);
 	bool reduction_ok = false;
 	if (need_reduction)
-		reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, width, height);
+		reduction_ok = g_hdr_luminance.reduce(TEXNUM_PP_SCENE, texture_width, texture_height, effective_w, effective_h);
 
 	if (need_reduction && !reduction_ok) {
 		hdr_state_local.gpu_reduce_supported = false;
 		if (gl_showerrors->integer)
-			Com_EPrintf("HDR exposure: GPU reduction failed for %dx%d, forcing fallback\n", width, height);
+			Com_EPrintf("HDR exposure: GPU reduction failed for %dx%d viewport %dx%d, forcing fallback\n",
+				texture_width, texture_height, effective_w, effective_h);
 	}
 
-	const int max_dim = max(width, height);
+	const int max_dim = max(texture_width, texture_height);
 	const int fallback_mip = max(0, static_cast<int>(std::floor(std::log2(static_cast<float>(max_dim)))));
-	bool use_fallback = !reduction_ok;
-	int target_mip = use_fallback ? fallback_mip : 0;
-
-	if (use_fallback && qglGenerateMipmap)
-		qglGenerateMipmap(GL_TEXTURE_2D);
-
+	int target_mip = 0;
 	float pixel[4] = { gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, gl_static.hdr.exposure_key, 1.0f };
 	bool have_samples = false;
 	if (reduction_ok) {
@@ -1028,38 +1098,44 @@ static void HDR_UpdateExposure(int width, int height)
 		} else {
 			reduction_ok = false;
 			hdr_state_local.gpu_reduce_supported = false;
-			if (!use_fallback && qglGenerateMipmap)
-				qglGenerateMipmap(GL_TEXTURE_2D);
-			use_fallback = true;
-			target_mip = fallback_mip;
 		}
 	}
 
+	const bool can_use_legacy = !reduction_ok && hdr_state_local.legacy_auto_supported && qglGetTexImage &&
+		effective_w == texture_width && effective_h == texture_height;
+	if (can_use_legacy && qglGenerateMipmap) {
+		qglGenerateMipmap(GL_TEXTURE_2D);
+		target_mip = fallback_mip;
+	}
 	gl_static.hdr.max_mip_level = target_mip;
 
-	bool fallback_read_ok = !use_fallback;
-	if (use_fallback && hdr_state_local.legacy_auto_supported && qglGetTexImage) {
-		GL_ClearErrors();
-		qglGetTexImage(GL_TEXTURE_2D, gl_static.hdr.max_mip_level, GL_RGBA, GL_FLOAT, pixel);
-		fallback_read_ok = !GL_ShowErrors("HDR exposure fallback readback");
-		if (!fallback_read_ok) {
-			hdr_state_local.legacy_auto_supported = false;
-			hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
-			if (gl_showerrors->integer)
-				Com_EPrintf("HDR exposure: disabling legacy fallback after failed readback\n");
-		} else {
+	bool manual_fallback_supported = false;
+	if (!have_samples) {
+		if (HDR_ReadbackViewportAverage(texture_width, texture_height, effective_w, effective_h, pixel)) {
 			have_samples = true;
+			manual_fallback_supported = true;
 		}
 	}
 
-	if (!use_fallback || fallback_read_ok)
-		hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
+	if (!have_samples && can_use_legacy) {
+		GL_ClearErrors();
+		qglGetTexImage(GL_TEXTURE_2D, target_mip, GL_RGBA, GL_FLOAT, pixel);
+		if (!GL_ShowErrors("HDR exposure legacy readback")) {
+			have_samples = true;
+		} else {
+			hdr_state_local.legacy_auto_supported = false;
+			if (gl_showerrors->integer)
+				Com_EPrintf("HDR exposure: disabling legacy fallback after failed readback\n");
+		}
+	}
+
+	hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported ||
+		hdr_state_local.legacy_auto_supported || manual_fallback_supported;
 
 	if (have_samples && hdr_warned_auto_exposure_stall)
 		hdr_warned_auto_exposure_stall = false;
 
 	if (!have_samples) {
-		hdr_state_local.auto_supported = hdr_state_local.gpu_reduce_supported || hdr_state_local.legacy_auto_supported;
 		if (!hdr_warned_auto_exposure_stall && gl_showerrors->integer) {
 			hdr_warned_auto_exposure_stall = true;
 			Com_EPrintf("HDR exposure: no valid samples available, auto-exposure frozen\n");
@@ -1097,18 +1173,17 @@ static void HDR_UpdateExposure(int width, int height)
 
 	gl_static.hdr.exposure = exposure;
 
-	HDR_ComputeHistogram(width, height);
+	HDR_ComputeHistogram(texture_width, texture_height, viewport_width, viewport_height);
 
 	GL_ActiveTexture(prevActiveTmu);
 
 	if (gl_showerrors->integer > 1) {
 		Com_DPrintf("HDR exposure: reduction_ok=%d fallback=%d mip=%d gpu_supported=%d legacy_supported=%d auto_supported=%d luminance=%g exposure=%g\n",
-			reduction_ok, use_fallback, gl_static.hdr.max_mip_level,
+			reduction_ok, !reduction_ok, gl_static.hdr.max_mip_level,
 			hdr_state_local.gpu_reduce_supported, hdr_state_local.legacy_auto_supported,
 			hdr_state_local.auto_supported, luminance, exposure);
 	}
 }
-
 void R_HDRUpdateUniforms(void)
 {
     const float inv_width = glr.fd.width > 0 ? 1.0f / glr.fd.width : 0.0f;
@@ -1162,10 +1237,11 @@ void R_HDRUpdateUniforms(void)
 GL_PostProcess
 
 Renders a screen-aligned quad for the active post-process stage using the
-provided rectangle while clamping UVs to the populated scene region.
+provided rectangle and explicit texture coordinate limits.
 =============
 */
-void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
+void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h,
+	float u_min, float v_min, float u_max, float v_max)
 {
 	GL_BindArrays(VA_POSTPROCESS);
 	GL_StateBits(GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_FALSE |
@@ -1173,18 +1249,14 @@ void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 	GL_ArrayBits(GLA_VERTEX | GLA_TC);
 	gl_backend->load_uniforms();
 
-	float u_min = 0.0f;
-	float v_min = 0.0f;
-	float u_max = 1.0f;
-	float v_max = 1.0f;
-	if (glr.framebuffer_width > 0 && glr.fd.width > 0) {
-		const float ratio_w = static_cast<float>(glr.fd.width) / static_cast<float>(glr.framebuffer_width);
-		u_max = (std::min)(ratio_w, 1.0f);
-	}
-	if (glr.framebuffer_height > 0 && glr.fd.height > 0) {
-		const float ratio_h = static_cast<float>(glr.fd.height) / static_cast<float>(glr.framebuffer_height);
-		v_max = (std::min)(ratio_h, 1.0f);
-	}
+	u_min = std::clamp(u_min, 0.0f, 1.0f);
+	u_max = std::clamp(u_max, 0.0f, 1.0f);
+	v_min = std::clamp(v_min, 0.0f, 1.0f);
+	v_max = std::clamp(v_max, 0.0f, 1.0f);
+	if (u_min > u_max)
+		std::swap(u_min, u_max);
+	if (v_min > v_max)
+		std::swap(v_min, v_max);
 
 	Vector4Set(tess.vertices,      x,     y,     u_min, v_max);
 	Vector4Set(tess.vertices +  4, x,     y + h, u_min, v_min);
@@ -1194,80 +1266,6 @@ void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
 	GL_LockArrays(4);
 	qglDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	GL_UnlockArrays();
-}
-
-
-/*
-=============
-R_GetFinalCompositeRect
-
-Calculates the backbuffer-space rectangle for the final post-process
-composite.
-=============
-*/
-static void R_GetFinalCompositeRect(int *x, int *y, int *w, int *h)
-{
-	if (!x || !y || !w || !h)
-		return;
-
-	*x = glr.fd.x;
-	*y = glr.fd.y;
-	*w = glr.fd.width;
-	*h = glr.fd.height;
-}
-
-static void GL_BokehViewport(int w, int h)
-{
-    qglViewport(0, 0, w, h);
-    GL_Ortho(0, w, h, 0, -1, 1);
-}
-
-static void GL_BokehSetScreen(int target_w, int target_h, int source_w, int source_h)
-{
-    const float ratio_w = (target_w > 0 && source_w > 0) ? static_cast<float>(source_w) / static_cast<float>(target_w) : 0.0f;
-    const float ratio_h = (target_h > 0 && source_h > 0) ? static_cast<float>(source_h) / static_cast<float>(target_h) : 0.0f;
-    const float inv_source_w = source_w > 0 ? 1.0f / static_cast<float>(source_w) : 0.0f;
-    const float inv_source_h = source_h > 0 ? 1.0f / static_cast<float>(source_h) : 0.0f;
-    Vector4Set(gls.u_block.dof_screen, ratio_w, ratio_h, inv_source_w, inv_source_h);
-    gls.u_block_dirty = true;
-}
-
-static void GL_BokehCoCPass(int target_w, int target_h, int source_w, int source_h)
-{
-    GL_BokehViewport(target_w, target_h);
-    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
-    GL_PostProcess(GLS_BOKEH_COC, 0, 0, target_w, target_h);
-}
-
-static void GL_BokehInitialBlurPass(int target_w, int target_h, int source_w, int source_h)
-{
-    GL_BokehViewport(target_w, target_h);
-    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-    GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, target_w, target_h);
-}
-
-static void GL_BokehDownsamplePass(int target_w, int target_h, int source_w, int source_h)
-{
-    GL_BokehViewport(target_w, target_h);
-    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
-    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
-    GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, target_w, target_h);
-}
-
-static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int source_h)
-{
-    GL_BokehViewport(target_w, target_h);
-    GL_BokehSetScreen(target_w, target_h, source_w, source_h);
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
-    GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h);
 }
 
 /*
@@ -1288,7 +1286,9 @@ static void GL_BokehCombinePass(int target_w, int target_h, int source_w, int so
 	GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_HALF);
 	GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DOF_GATHER);
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
-	GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, viewport_w, viewport_h);
+	GL_PostProcess(GLS_BOKEH_COMBINE, 0, 0, viewport_w, viewport_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 
 /*
@@ -1392,7 +1392,7 @@ static void GL_DrawBloom(pp_flags_t flags)
 	int composite_h = 0;
 	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
 
-	BloomRenderContext context{
+BloomRenderContext context{
 		.sceneTexture = TEXNUM_PP_SCENE,
 		.bloomTexture = TEXNUM_PP_BLOOM,
 		.dofTexture = TEXNUM_PP_DOF_RESULT,
@@ -1401,6 +1401,10 @@ static void GL_DrawBloom(pp_flags_t flags)
 		.viewportY = composite_y,
 		.viewportWidth = composite_w,
 		.viewportHeight = composite_h,
+		.sceneUMin = glr.framebuffer_u_min,
+		.sceneVMin = glr.framebuffer_v_min,
+		.sceneUMax = glr.framebuffer_u_max,
+		.sceneVMax = glr.framebuffer_v_max,
 		.waterwarp = waterwarp,
 		.depthOfField = depth_of_field,
 		.showDebug = show_bloom,
@@ -1492,7 +1496,9 @@ static void R_StoreMotionBlurHistory(void)
 	qglViewport(0, 0, composite_w, composite_h);
 	GL_Ortho(0, composite_w, composite_h, 0, -1, 1);
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h);
+	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 	GL_Setup2D();
 
@@ -1538,7 +1544,9 @@ static void GL_DrawDepthOfField(pp_flags_t flags)
 	}
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-	GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+	GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
 }
 static int32_t r_skipUnderWaterFX_modified = 0;
 static int32_t r_bloom_modified = 0;
@@ -1602,6 +1610,12 @@ static void HDR_DisableFramebufferResources(void)
 	glr.framebuffer_resources_resident = false;
 	glr.framebuffer_width = 0;
 	glr.framebuffer_height = 0;
+	glr.framebuffer_viewport_width = 0;
+	glr.framebuffer_viewport_height = 0;
+	glr.framebuffer_u_min = 0.0f;
+	glr.framebuffer_v_min = 0.0f;
+	glr.framebuffer_u_max = 1.0f;
+	glr.framebuffer_v_max = 1.0f;
 	glr.motion_history_textures_ready = false;
 }
 /*
@@ -1917,7 +1931,8 @@ void R_RenderFrame(const refdef_t *fd)
         glr.framebuffer_bound = false;
     }
 
-	HDR_UpdateExposure(glr.framebuffer_width, glr.framebuffer_height);
+HDR_UpdateExposure(glr.framebuffer_width, glr.framebuffer_height,
+glr.framebuffer_viewport_width, glr.framebuffer_viewport_height);
 
     tess.dlight_bits = 0;
 
@@ -1962,19 +1977,25 @@ void R_RenderFrame(const refdef_t *fd)
 		}
 
 		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+			glr.framebuffer_u_min, glr.framebuffer_v_min,
+			glr.framebuffer_u_max, glr.framebuffer_v_max);
 	} else if (world_visible && (pp_flags & PP_HDR)) {
 		glStateBits_t bits = GLS_TONEMAP_ENABLE;
 		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 		R_HDRUpdateUniforms();
 		if (pp_flags & PP_CRT)
 			bits = R_CRTPrepare(bits, composite_w, composite_h);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+			glr.framebuffer_u_min, glr.framebuffer_v_min,
+			glr.framebuffer_u_max, glr.framebuffer_v_max);
 	} else if (world_visible && (pp_flags & PP_CRT)) {
 		glStateBits_t bits = GLS_DEFAULT;
 		GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 		bits = R_CRTPrepare(bits, composite_w, composite_h);
-		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h);
+		GL_PostProcess(bits, composite_x, composite_y, composite_w, composite_h,
+			glr.framebuffer_u_min, glr.framebuffer_v_min,
+			glr.framebuffer_u_max, glr.framebuffer_v_max);
 	}
 
 
