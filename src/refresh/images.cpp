@@ -2307,7 +2307,9 @@ qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags
 
 	existing_ext = COM_FileExtension(fullname);
 	if (!*existing_ext) {
-		if (type != IT_SKIN && type != IT_SPRITE)
+		if (type == IT_FONT)
+			len = COM_DefaultExtension(fullname, ".ttf", sizeof(fullname));
+		else if (type != IT_SKIN && type != IT_SPRITE)
 			len = COM_DefaultExtension(fullname, ".pcx", sizeof(fullname));
 		else
 			len = strlen(fullname);

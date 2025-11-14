@@ -607,7 +607,7 @@ void UI_Init(void)
 
     UI_ModeChanged();
 
-    uis.fontHandle = SCR_RegisterFontPath("conchars");
+    uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
     uis.cursorHandle = R_RegisterPic("ch1");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
 

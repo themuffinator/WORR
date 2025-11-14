@@ -412,7 +412,7 @@ con_scale::
     depending on current display resolution). Set to 1 to disable scaling.
 
 con_font::
-    Font used for drawing console text. Default value is "conchars".
+    Font used for drawing console text. Builds with FreeType default to "/fonts/RobotoMono-Regular.ttf"; legacy builds fall back to "conchars.pcx". When no extension is provided, the renderer assumes ".ttf" and attempts to load a TrueType font. Specify ".pcx" explicitly to use classic bitmap fonts.
 
 con_background::
     Image used as console background. Default value is "conback".
@@ -504,7 +504,7 @@ scr_alpha::
     value is 1.
 
 scr_font::
-    Font used for drawing HUD text. Default value is "conchars".
+    Font used for drawing HUD text. FreeType builds default to "/fonts/RobotoMono-Regular.ttf" while legacy builds use "conchars.pcx". Fonts without an extension are treated as TrueType files and automatically gain the ".ttf" suffix; append ".pcx" for the classic bitmap font.
 
 scr_font_size::
     Pixel height for FreeType screen fonts. Defaults to 16 and scales automatically with ``scr_scale`` when left at the

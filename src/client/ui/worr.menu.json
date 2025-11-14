@@ -1,6 +1,6 @@
 {
   "background": "black",
-  "font": "conchars",
+  "font": "conchars.pcx",
   "cursor": "ch1",
   "weapon": "w_railgun.md2",
   "colors": {
