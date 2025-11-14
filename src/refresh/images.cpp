@@ -1745,18 +1745,18 @@ static image_t *lookup_image(const char *name,
 
 /*
 =============
-try_image_format
+try_image_format_path
 
-Attempt to load an image using the given format.
+Attempt to load an image using the given format from the specified path.
 =============
 */
-static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
+static int try_image_format_path(imageformat_t fmt, image_t* image, byte** pic, const char* path)
 {
 	void	*data;
 	int	ret;
 
 	// load the file
-	ret = FS_LoadFile(image->name, &data);
+	ret = FS_LoadFile(path, &data);
 	if (!data)
 		return ret;
 
@@ -1768,13 +1768,44 @@ static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
 	return ret < 0 ? ret : fmt;
 }
 
+/*
+=============
+try_image_format
+
+Attempt to load an image using the given format and stored image path.
+=============
+*/
+static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
+{
+	return try_image_format_path(fmt, image, pic, image->name);
+}
+
 #if USE_PNG || USE_JPG || USE_TGA
 
+/*
+=============
+try_replace_ext
+
+Attempt to load an image using a replacement extension without altering the stored name.
+=============
+*/
 static int try_replace_ext(imageformat_t fmt, image_t *image, byte **pic)
 {
-    // replace the extension
-    memcpy(image->name + image->baselen + 1, img_loaders[fmt].ext, 4);
-    return try_image_format(fmt, image, pic);
+	char	override_path[MAX_QPATH];
+	char	original_ext[4];
+	char	*ext_pos;
+	int	ret;
+
+	ext_pos = image->name + image->baselen + 1;
+	memcpy(original_ext, ext_pos, sizeof(original_ext));
+	memcpy(override_path, image->name, image->baselen + 1);
+	memcpy(override_path + image->baselen + 1, img_loaders[fmt].ext, sizeof(original_ext));
+
+	ret = try_image_format_path(fmt, image, pic, override_path);
+
+	memcpy(ext_pos, original_ext, sizeof(original_ext));
+
+	return ret;
 }
 
 // tries to load the image with a different extension
@@ -1976,6 +2007,11 @@ Loads image data for an image, optionally falling back to alternate formats.
 static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensions, byte** pic)
 {
 	int ret;
+	char	original_name[MAX_QPATH];
+	uint8_t	original_baselen;
+
+	original_baselen = image->baselen;
+	Q_strlcpy(original_name, image->name, sizeof(original_name));
 
 #if USE_PNG || USE_JPG || USE_TGA
 	if (fmt == IM_MAX) {
@@ -2007,6 +2043,11 @@ static int load_image_data(image_t* image, imageformat_t fmt, bool need_dimensio
 	else
 		ret = try_image_format(fmt, image, pic);
 #endif
+
+	if (ret >= 0) {
+		Q_assert(!strcmp(image->name, original_name));
+		Q_assert(image->baselen == original_baselen);
+	}
 
 	return ret;
 }
