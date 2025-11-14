@@ -1743,22 +1743,29 @@ static image_t *lookup_image(const char *name,
     return NULL;
 }
 
+/*
+=============
+try_image_format
+
+Attempt to load an image using the given format.
+=============
+*/
 static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
 {
-    void    *data;
-    int     ret;
+	void	*data;
+	int	ret;
 
-    // load the file
-    ret = FS_LoadFile(image->name, &data);
-    if (!data)
-        return ret;
+	// load the file
+	ret = FS_LoadFile(image->name, &data);
+	if (!data)
+		return ret;
 
-    // decompress the image
-    ret = img_loaders[fmt].load(data, ret, image, pic);
+	// decompress the image
+	ret = img_loaders[fmt].load(static_cast<const byte *>(data), ret, image, pic);
 
-    FS_FreeFile(data);
+	FS_FreeFile(data);
 
-    return ret < 0 ? ret : fmt;
+	return ret < 0 ? ret : fmt;
 }
 
 #if USE_PNG || USE_JPG || USE_TGA
