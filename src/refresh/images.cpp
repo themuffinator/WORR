@@ -2270,8 +2270,6 @@ qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags
 	char		fullname[MAX_QPATH];
 	size_t	len;
 	const char* existing_ext;
-	const char* ext;
-	char		ext_buffer[5]{};
 
 	Q_assert(name);
 
@@ -2284,43 +2282,39 @@ qhandle_t R_RegisterImage(const char* name, imagetype_t type, imageflags_t flags
 		return 0;
 
 	// First, determine the base path (with or without "pics/")
-	if (type == IT_SKIN || type == IT_SPRITE) {
-		// Skins and sprites are always relative to the gamedir root.
-		// A leading slash is conceptually valid but is stripped by normalization.
-		len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
-	}
-	else if (*name == '/' || *name == '\\') {
-		// For other types, a leading slash also means relative to gamedir root.
-		// We strip the slash before continuing.
+	if (*name == '/' || *name == '\\') {
+		// A leading slash means the path is relative to the gamedir root.
+		// Strip the slash before normalizing the remainder.
 		len = FS_NormalizePathBuffer(fullname, name + 1, sizeof(fullname));
+	}
+	else if (type == IT_SKIN || type == IT_SPRITE) {
+		// Skins and sprites are always relative to the gamedir root.
+		len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
 	}
 	else {
 		// Standard pics are located in the "pics/" subdirectory.
 		len = Q_concat(fullname, sizeof(fullname), "pics/", name);
+		if (len >= sizeof(fullname)) {
+			print_error(name, flags, Q_ERR(ENAMETOOLONG));
+			return 0;
+		}
+		len = FS_NormalizePath(fullname);
 	}
-
 	if (len >= sizeof(fullname)) {
 		print_error(name, flags, Q_ERR(ENAMETOOLONG));
 		return 0;
 	}
 
-	ext = (type == IT_SKIN) ? ".wal" : ".pcx";
 	existing_ext = COM_FileExtension(fullname);
 	if (!*existing_ext) {
-#if USE_PNG || USE_JPG || USE_TGA
-		if (type != IT_SKIN && img_total > 0) {
-			const imageformat_t fmt = img_search[0];
-			ext_buffer[0] = '.';
-			memcpy(ext_buffer + 1, img_loaders[fmt].ext, 4);
-			ext = ext_buffer;
-		}
-#endif
-		len = COM_DefaultExtension(fullname, ext, sizeof(fullname));
+		if (type != IT_SKIN && type != IT_SPRITE)
+			len = COM_DefaultExtension(fullname, ".pcx", sizeof(fullname));
+		else
+			len = strlen(fullname);
 	}
 	else {
 		len = strlen(fullname);
 	}
-
 	if (len >= sizeof(fullname)) {
 		print_error(fullname, flags, Q_ERR(ENAMETOOLONG));
 		return 0;
