@@ -1725,82 +1725,74 @@ static image_t* alloc_image(void)
 
 // finds the given image of the given type.
 // case and extension insensitive.
-static image_t* lookup_image(const char* name,
-	imagetype_t type, unsigned hash, size_t baselen)
+static image_t *lookup_image(const char *name,
+                             imagetype_t type, unsigned hash, size_t baselen)
 {
-	image_t* image;
+    image_t *image;
 
-	// look for it
-	LIST_FOR_EACH(image_t, image, &r_imageHash[hash], entry) {
-		if (image_get_type(image) != type)
-			continue;
-		if (image->baselen != baselen)
-			continue;
-		if (!FS_pathcmpn(image->name, name, baselen))
-			return image;
-	}
+    // look for it
+    LIST_FOR_EACH(image_t, image, &r_imageHash[hash], entry) {
+        if (image->type != type)
+            continue;
+        if (image->baselen != baselen)
+            continue;
+        if (!FS_pathcmpn(image->name, name, baselen))
+            return image;
+    }
 
-	return NULL;
+    return NULL;
 }
 
-static int try_image_format(imageformat_t fmt, image_t* image, byte** pic)
+static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
 {
-	void* raw = nullptr;
-	int ret;
+    void    *data;
+    int     ret;
 
-	// load the file
-	ret = FS_LoadFile(image->name, &raw);
-	if (!raw)
-		return ret;
+    // load the file
+    ret = FS_LoadFile(image->name, &data);
+    if (!data)
+        return ret;
 
-	const auto* data = static_cast<const byte*>(raw);
+    // decompress the image
+    ret = img_loaders[fmt].load(data, ret, image, pic);
 
-	// decompress the image
-	ret = img_loaders[fmt].load(data, ret, image, pic);
+    FS_FreeFile(data);
 
-	FS_FreeFile(raw);
-
-	return ret < 0 ? ret : fmt;
+    return ret < 0 ? ret : fmt;
 }
 
 #if USE_PNG || USE_JPG || USE_TGA
 
-static int try_replace_ext(imageformat_t fmt, image_t* image, byte** pic)
+static int try_replace_ext(imageformat_t fmt, image_t *image, byte **pic)
 {
-	// ensure there is enough room for ".ext"
-	if (image->baselen + 4 >= sizeof(image->name))
-		return Q_ERR(ENAMETOOLONG);
-
-	// replace the extension
-	image->name[image->baselen] = '.';
-	memcpy(image->name + image->baselen + 1, img_loaders[fmt].ext, 4);
-	return try_image_format(fmt, image, pic);
+    // replace the extension
+    memcpy(image->name + image->baselen + 1, img_loaders[fmt].ext, 4);
+    return try_image_format(fmt, image, pic);
 }
 
 // tries to load the image with a different extension
-static int try_other_formats(imageformat_t orig, image_t* image, byte** pic)
+static int try_other_formats(imageformat_t orig, image_t *image, byte **pic)
 {
-	imageformat_t   fmt;
-	int             i, ret;
+    imageformat_t   fmt;
+    int             i, ret;
 
-	// search through all the 32-bit formats
-	for (i = 0; i < img_total; i++) {
-		fmt = img_search[i];
-		if (fmt == orig)
-			continue;   // don't retry twice
+    // search through all the 32-bit formats
+    for (i = 0; i < img_total; i++) {
+        fmt = img_search[i];
+        if (fmt == orig)
+            continue;   // don't retry twice
 
-		ret = try_replace_ext(fmt, image, pic);
-		if (ret != Q_ERR(ENOENT))
-			return ret; // found something
-	}
+        ret = try_replace_ext(fmt, image, pic);
+        if (ret != Q_ERR(ENOENT))
+            return ret; // found something
+    }
 
-	// fall back to 8-bit formats
-	const imagetype_t imageType = image_get_type(image);
-	fmt = (imageType == IT_WALL) ? IM_WAL : IM_PCX;
-	if (fmt == orig)
-		return Q_ERR(ENOENT); // don't retry twice
+    // fall back to 8-bit formats
+    fmt = (image->type == IT_WALL) ? IM_WAL : IM_PCX;
+    if (fmt == orig)
+        return Q_ERR(ENOENT); // don't retry twice
 
-	return try_replace_ext(fmt, image, pic);
+    return try_replace_ext(fmt, image, pic);
 }
 
 static void get_image_dimensions(imageformat_t fmt, image_t* image)
