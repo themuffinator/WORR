@@ -262,7 +262,7 @@ namespace {
 #if USE_FREETYPE
 		font_ = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
 #else
-		font_ = Cvar_Get("con_font", "conchars", 0);
+		font_ = Cvar_Get("con_font", "conchars.pcx", 0);
 #endif
 		font_->changed = [](cvar_t* self) {
 			if (cls.ref_initialized)
@@ -913,7 +913,7 @@ namespace {
 				registeredFont_ = SCR_RegisterFontPath(font_->default_string);
 			}
 			if (!registeredFont_)
-				registeredFont_ = SCR_RegisterFontPath("conchars");
+				registeredFont_ = SCR_RegisterFontPath("conchars.pcx");
 			if (!registeredFont_)
 				Com_Error(ERR_FATAL, "%s", Com_GetLastError());
 		}

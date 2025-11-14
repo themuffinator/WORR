@@ -28,7 +28,7 @@ static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 #endif
 
 namespace {
-	constexpr const char* SCR_LEGACY_FONT = "conchars";
+        constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
 	constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
 	constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
 }

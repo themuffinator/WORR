@@ -36,7 +36,7 @@ static cvar_t* scr_font;
 
 namespace {
 
-        constexpr const char* CG_LEGACY_FONT = "conchars";
+        constexpr const char* CG_LEGACY_FONT = "conchars.pcx";
 
         static bool CG_BuildFontLookupPath(const char* font_name, char* buffer, size_t size)
         {
@@ -54,7 +54,7 @@ namespace {
                 if (!len || len >= quake_path.size())
                         return false;
 
-                len = COM_DefaultExtension(quake_path.data(), ".pcx", quake_path.size());
+                len = COM_DefaultExtension(quake_path.data(), ".ttf", quake_path.size());
                 if (len >= quake_path.size())
                         return false;
 

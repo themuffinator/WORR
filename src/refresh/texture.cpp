@@ -1603,7 +1603,7 @@ void GL_InitImages(void)
     GL_InitCubemaps();
 
 #if USE_DEBUG
-    r_charset = R_RegisterFont("conchars");
+    r_charset = R_RegisterFont("conchars.pcx");
 #endif
 
     GL_ShowErrors(__func__);
