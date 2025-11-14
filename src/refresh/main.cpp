@@ -1047,7 +1047,6 @@ static void HDR_ComputeHistogram(int texture_width, int texture_height, int view
 	for (int i = 0; i < bins; ++i)
 		gl_static.hdr.histogram[i] = counts[i];
 }
-}
 /*
 =============
 HDR_UpdateExposure
@@ -1270,6 +1269,126 @@ void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h,
 
 /*
 =============
+GL_BokehViewport
+
+Configures the viewport and orthographic projection for depth of field passes.
+=============
+*/
+static void GL_BokehViewport(int viewport_w, int viewport_h)
+{
+	if (viewport_w <= 0 || viewport_h <= 0)
+		return;
+
+	qglViewport(0, 0, viewport_w, viewport_h);
+	GL_Ortho(0, viewport_w, viewport_h, 0, -1, 1);
+}
+
+/*
+=============
+GL_BokehSetScreen
+
+Updates depth of field screen scaling uniforms for the current pass.
+=============
+*/
+static void GL_BokehSetScreen(int viewport_w, int viewport_h, int source_w, int source_h)
+{
+	const float inv_source_w = (source_w > 0) ? (1.0f / static_cast<float>(source_w)) : 0.0f;
+	const float inv_source_h = (source_h > 0) ? (1.0f / static_cast<float>(source_h)) : 0.0f;
+	const float scale_x = (viewport_w > 0) ? static_cast<float>(source_w) / static_cast<float>(viewport_w) : 0.0f;
+	const float scale_y = (viewport_h > 0) ? static_cast<float>(source_h) / static_cast<float>(viewport_h) : 0.0f;
+
+	Vector4Set(gls.u_block.dof_screen, scale_x, scale_y, inv_source_w, inv_source_h);
+	gls.u_block_dirty = true;
+}
+
+/*
+=============
+GL_BokehCoCPass
+
+Generates the circle of confusion texture from the depth buffer.
+=============
+*/
+static void GL_BokehCoCPass(int target_w, int target_h, int source_w, int source_h)
+{
+	if (target_w <= 0 || target_h <= 0 || source_w <= 0 || source_h <= 0)
+		return;
+
+	GL_BokehViewport(target_w, target_h);
+	GL_BokehSetScreen(target_w, target_h, source_w, source_h);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
+	GL_PostProcess(GLS_BOKEH_COC, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
+}
+
+/*
+=============
+GL_BokehInitialBlurPass
+
+Performs the initial wide blur using the full resolution scene color and CoC textures.
+=============
+*/
+static void GL_BokehInitialBlurPass(int target_w, int target_h, int source_w, int source_h)
+{
+	if (target_w <= 0 || target_h <= 0 || source_w <= 0 || source_h <= 0)
+		return;
+
+	GL_BokehViewport(target_w, target_h);
+	GL_BokehSetScreen(target_w, target_h, source_w, source_h);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+	GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_RESULT);
+	GL_PostProcess(GLS_BOKEH_INITIAL, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
+}
+
+/*
+=============
+GL_BokehDownsamplePass
+
+Reduces the blurred result to a half-resolution buffer while tracking CoC extremes.
+=============
+*/
+static void GL_BokehDownsamplePass(int target_w, int target_h, int source_w, int source_h)
+{
+	if (target_w <= 0 || target_h <= 0 || source_w <= 0 || source_h <= 0)
+		return;
+
+	GL_BokehViewport(target_w, target_h);
+	GL_BokehSetScreen(target_w, target_h, source_w, source_h);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_RESULT);
+	GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_DOF_COC);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_HALF);
+	GL_PostProcess(GLS_BOKEH_DOWNSAMPLE, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
+}
+
+/*
+=============
+GL_BokehGatherPass
+
+Applies a tent filter to the half-resolution buffer to produce the gather texture.
+=============
+*/
+static void GL_BokehGatherPass(int target_w, int target_h, int source_w, int source_h)
+{
+	if (target_w <= 0 || target_h <= 0 || source_w <= 0 || source_h <= 0)
+		return;
+
+	GL_BokehViewport(target_w, target_h);
+	GL_BokehSetScreen(target_w, target_h, source_w, source_h);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DOF_HALF);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_GATHER);
+	GL_PostProcess(GLS_BOKEH_GATHER, 0, 0, target_w, target_h,
+		glr.framebuffer_u_min, glr.framebuffer_v_min,
+		glr.framebuffer_u_max, glr.framebuffer_v_max);
+}
+
+/*
+=============
 GL_BokehCombinePass
 
 Combines the depth of field gather result with the scene at the result resolution.
@@ -1371,6 +1490,60 @@ constexpr pp_flags_t &operator^=(pp_flags_t &lhs, pp_flags_t rhs) noexcept
 {
     lhs = lhs ^ rhs;
     return lhs;
+}
+
+/*
+=============
+R_GetFinalCompositeRect
+
+Calculates the destination rectangle for compositing the post-processed scene.
+=============
+*/
+static void R_GetFinalCompositeRect(int *out_x, int *out_y, int *out_w, int *out_h)
+{
+	if (!out_x || !out_y || !out_w || !out_h)
+		return;
+
+	int viewport_w = (glr.framebuffer_viewport_width > 0) ? glr.framebuffer_viewport_width : glr.fd.width;
+	int viewport_h = (glr.framebuffer_viewport_height > 0) ? glr.framebuffer_viewport_height : glr.fd.height;
+
+	if (viewport_w < 0)
+		viewport_w = 0;
+	if (viewport_h < 0)
+		viewport_h = 0;
+
+	int width = viewport_w;
+	int height = viewport_h;
+	if (glr.fd.width > 0 && (width <= 0 || width > glr.fd.width))
+		width = glr.fd.width;
+	if (glr.fd.height > 0 && (height <= 0 || height > glr.fd.height))
+		height = glr.fd.height;
+
+	int x = glr.fd.x;
+	int y = glr.fd.y;
+	if (r_config.width > 0) {
+		int max_x = r_config.width - width;
+		if (max_x < 0)
+			max_x = 0;
+		if (x < 0)
+			x = 0;
+		else if (x > max_x)
+			x = max_x;
+	}
+	if (r_config.height > 0) {
+		int max_y = r_config.height - height;
+		if (max_y < 0)
+			max_y = 0;
+		if (y < 0)
+			y = 0;
+		else if (y > max_y)
+			y = max_y;
+	}
+
+	*out_x = x;
+	*out_y = y;
+	*out_w = width;
+	*out_h = height;
 }
 
 /*
