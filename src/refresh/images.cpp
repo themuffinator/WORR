@@ -1962,11 +1962,18 @@ static bool need_override_image(imagetype_t type, imageformat_t fmt)
 
 #endif // USE_PNG || USE_JPG || USE_TGA
 
+/*
+=============
+print_error
+
+Logs image load failures, downgrading severity for known exceptions.
+=============
+*/
 static void print_error(const char* name, imageflags_t flags, int err)
 {
-	constexpr imageflags_t IGNORE_FLAGS = static_cast<imageflags_t>(-1);
-	const char* msg;
-	print_type_t level = PRINT_ERROR;
+        constexpr imageflags_t IGNORE_FLAGS = static_cast<imageflags_t>(-1);
+        const char* msg;
+        print_type_t level = PRINT_ERROR;
 
 	switch (err) {
 	case Q_ERR_INVALID_FORMAT:
@@ -1979,7 +1986,9 @@ static void print_error(const char* name, imageflags_t flags, int err)
 		}
 		else if (enum_has(flags, IF_PERMANENT) && !enum_has(flags, IF_OPTIONAL)) {
 			// ugly hack for console code
-			if (strcmp(name, "pics/conchars.pcx"))
+			char stripped[MAX_QPATH];
+			COM_StripExtension(stripped, name, sizeof(stripped));
+			if (!strcmp(stripped, "pics/conchars"))
 				level = PRINT_WARNING;
 		}
 		else if (COM_DEVELOPER >= 2) {
