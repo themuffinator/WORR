@@ -1249,7 +1249,7 @@ bool GL_InitFramebuffers(void)
 		if (gl_showerrors && gl_showerrors->integer) {
 			if (i < static_cast<int>(q_countof(fbo_names))) {
 				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_names[i]);
-			} else {
+		        } else {
 				char fbo_name[32];
 				Q_snprintf(fbo_name, sizeof(fbo_name), "FBO_MOTION_HISTORY(%d)", i - static_cast<int>(q_countof(fbo_names)));
 				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_name);
@@ -1259,11 +1259,10 @@ bool GL_InitFramebuffers(void)
 		return false;
 	}
 
-	const int drawable_w = (r_config.width > 0) ? r_config.width : 0;
-	const int drawable_h = (r_config.height > 0) ? r_config.height : 0;
-	const int viewport_w = (drawable_w > 0 && glr.fd.width > 0) ? (std::min)(glr.fd.width, drawable_w) : 0;
-	const int viewport_h = (drawable_h > 0 && glr.fd.height > 0) ? (std::min)(glr.fd.height, drawable_h) : 0;
-	int scene_w = 0, scene_h = 0;
+	const int viewport_w = glr.fd.width > 0 ? glr.fd.width : 0;
+	const int viewport_h = glr.fd.height > 0 ? glr.fd.height : 0;
+	int scene_w = 0;
+	int scene_h = 0;
 	int bloom_w = 0, bloom_h = 0;
 	int dof_full_w = 0, dof_full_h = 0;
 	int dof_result_w = 0, dof_result_h = 0;
@@ -1295,7 +1294,7 @@ bool GL_InitFramebuffers(void)
 			if (dof_reduced) {
 				dof_result_w = (std::max)(dof_full_w / 2, 1);
 				dof_result_h = (std::max)(dof_full_h / 2, 1);
-			} else {
+		        } else {
 				dof_result_w = dof_full_w;
 				dof_result_h = dof_full_h;
 			}
@@ -1430,6 +1429,22 @@ bool GL_InitFramebuffers(void)
 	if (!g_hdr_luminance.resize(scene_w, scene_h))
 		g_hdr_luminance.shutdown();
 
+	glr.framebuffer_viewport_width = viewport_w;
+	glr.framebuffer_viewport_height = viewport_h;
+	if (scene_w > 0 && scene_h > 0) {
+		const float inv_scene_w = 1.0f / static_cast<float>(scene_w);
+		const float inv_scene_h = 1.0f / static_cast<float>(scene_h);
+		glr.framebuffer_u_min = 0.0f;
+		glr.framebuffer_v_min = 0.0f;
+		glr.framebuffer_u_max = viewport_w > 0 ? static_cast<float>(viewport_w) * inv_scene_w : 1.0f;
+		glr.framebuffer_v_max = viewport_h > 0 ? static_cast<float>(viewport_h) * inv_scene_h : 1.0f;
+        } else {
+		glr.framebuffer_u_min = 0.0f;
+		glr.framebuffer_v_min = 0.0f;
+		glr.framebuffer_u_max = 1.0f;
+		glr.framebuffer_v_max = 1.0f;
+	}
+
 	return true;
 }
 
@@ -1472,6 +1487,14 @@ void GL_ReleaseFramebufferResources(void)
 	gl_static.dof.reduced_resolution = false;
 	glr.motion_history_textures_ready = false;
 	glr.framebuffer_resources_resident = false;
+	glr.framebuffer_width = 0;
+	glr.framebuffer_height = 0;
+	glr.framebuffer_viewport_width = 0;
+	glr.framebuffer_viewport_height = 0;
+	glr.framebuffer_u_min = 0.0f;
+	glr.framebuffer_v_min = 0.0f;
+	glr.framebuffer_u_max = 1.0f;
+	glr.framebuffer_v_max = 1.0f;
 	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

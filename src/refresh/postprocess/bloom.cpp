@@ -5,7 +5,8 @@
 #include "../qgl.hpp"
 #include "crt.hpp"
 
-extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h);
+extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h,
+	float u_min, float v_min, float u_max, float v_max);
 
 BloomEffect g_bloom_effect;
 
@@ -54,8 +55,9 @@ namespace {
 		}
 
 		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight);
-	}
+		GL_PostProcess(bits, ctx.viewportX, ctx.viewportY, ctx.viewportWidth, ctx.viewportHeight,
+			ctx.sceneUMin, ctx.sceneVMin, ctx.sceneUMax, ctx.sceneVMax);
+}
 
 }
 
@@ -379,7 +381,8 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 	gls.u_block_dirty = true;
 	GL_ForceTexture(TMU_TEXTURE, ctx.bloomTexture);
 	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[DownsampleFbo]);
-	GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_);
+	GL_PostProcess(GLS_BLUR_BOX, 0, 0, downsampleWidth_, downsampleHeight_,
+			ctx.sceneUMin, ctx.sceneVMin, ctx.sceneUMax, ctx.sceneVMax);
 	if (GL_ShowErrors("Bloom pass"))
 		bloomFailed = true;
 
@@ -392,7 +395,8 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 		GL_ForceTexture(TMU_TEXTURE, textures_[Downsample]);
 		GL_ForceTexture(TMU_LIGHTMAP, ctx.sceneTexture);
 		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BrightPassFbo]);
-		GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_);
+		GL_PostProcess(GLS_BLOOM_BRIGHTPASS, 0, 0, downsampleWidth_, downsampleHeight_,
+			ctx.sceneUMin, ctx.sceneVMin, ctx.sceneUMax, ctx.sceneVMax);
 		if (GL_ShowErrors("Bloom pass"))
 			bloomFailed = true;
 	}
@@ -408,7 +412,8 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 				gls.u_block_dirty = true;
 				GL_ForceTexture(TMU_TEXTURE, currentTexture);
 				qglBindFramebuffer(GL_FRAMEBUFFER, framebuffers_[BlurFbo0 + axis]);
-				GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_);
+			GL_PostProcess(blurMode, 0, 0, downsampleWidth_, downsampleHeight_,
+			ctx.sceneUMin, ctx.sceneVMin, ctx.sceneUMax, ctx.sceneVMax);
 				if (GL_ShowErrors("Bloom pass")) {
 					bloomFailed = true;
 					break;

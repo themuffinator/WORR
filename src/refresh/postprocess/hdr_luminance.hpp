@@ -13,7 +13,8 @@ public:
 	bool resize(int width, int height) noexcept;
 
 	bool available() const noexcept { return !levels_.empty(); }
-	bool reduce(GLuint sceneTexture, int width, int height) noexcept;
+	bool reduce(GLuint sceneTexture, int textureWidth, int textureHeight,
+	int viewportWidth, int viewportHeight) noexcept;
 
 	bool readbackAverage(float* rgba) const noexcept;
 	bool readbackHistogram(int maxSamples, std::vector<float>& scratch, int& outWidth, int& outHeight) const noexcept;
