@@ -1503,11 +1503,15 @@ cleanup:
 GL_ReleaseFramebufferResources
 
 Releases post-processing framebuffer textures and associated state so that the
-renderer no longer depends on framebuffer objects.
+renderer no longer depends on framebuffer objects while preserving the
+currently bound framebuffer.
 =============
 */
 void GL_ReleaseFramebufferResources(void)
 {
+	GLint framebuffer_binding = 0;
+
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer_binding);
 	GL_ClearErrors();
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 	GL_InitPostProcTexture(0, 0);
@@ -1545,7 +1549,7 @@ void GL_ReleaseFramebufferResources(void)
 	glr.framebuffer_v_min = 0.0f;
 	glr.framebuffer_u_max = 1.0f;
 	glr.framebuffer_v_max = 1.0f;
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer_binding);
 }
 
 static void gl_partshape_changed(cvar_t *self)
