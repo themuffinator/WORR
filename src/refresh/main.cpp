@@ -34,6 +34,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 namespace {
 constexpr float MOTION_BLUR_FOV_EPSILON = 0.01f;
 constexpr float MOTION_BLUR_MAX_FRAME_TIME = 0.25f;
+constexpr int MOTION_BLUR_REQUIRED_TEXTURE_UNITS = MAX_TMUS;
 }
 
 static void R_ClearMotionBlurHistory(void);
@@ -189,6 +190,7 @@ struct hdrStateLocal_t {
 
 static hdrStateLocal_t hdr_state_local;
 static bool hdr_warned_auto_exposure_stall = false;
+static bool motion_blur_tmu_warned = false;
 static int32_t r_hdr_modified = 0;
 static int32_t r_hdr_mode_modified = 0;
 static int32_t r_exposure_auto_modified = 0;
@@ -1618,6 +1620,11 @@ static void R_BindMotionHistoryTextures(void)
 {
 	const glTmu_t prevActiveTmu = gls.server_tmu;
 
+	if (!gl_config.motion_blur_supported) {
+		GL_ActiveTexture(prevActiveTmu);
+		return;
+	}
+
 	if ((r_fbo && !r_fbo->integer) || !glr.motion_history_textures_ready) {
 		for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
 			glTmu_t tmu = static_cast<glTmu_t>(TMU_HISTORY0 + i);
@@ -1652,6 +1659,8 @@ Copies the current scene into the motion blur history buffer using the active vi
 static void R_StoreMotionBlurHistory(void)
 {
 	if (r_fbo && !r_fbo->integer)
+		return;
+	if (!gl_config.motion_blur_supported)
 		return;
 	if (!glr.motion_blur_enabled || !glr.view_proj_valid)
 		return;
@@ -1831,7 +1840,14 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const int scene_target_h = viewport_h;
 	const bool motion_blur_requested = post_processing_requested && r_motionBlur->integer && world_visible &&
 		scene_target_w > 0 && scene_target_h > 0;
-	const bool motion_blur_enabled = motion_blur_requested;
+	const bool motion_blur_supported = gl_config.motion_blur_supported;
+	if (motion_blur_requested && !motion_blur_supported && !motion_blur_tmu_warned) {
+		Com_WPrintf("Motion blur requires %d texture image units (available %d).\n",
+			MOTION_BLUR_REQUIRED_TEXTURE_UNITS,
+			gl_config.max_combined_texture_image_units);
+		motion_blur_tmu_warned = true;
+	}
+	const bool motion_blur_enabled = motion_blur_requested && motion_blur_supported;
 
 	if (post_processing_disabled) {
 		glr.framebuffer_underwater_effect_active = false;
@@ -2039,7 +2055,8 @@ void R_RenderFrame(const refdef_t *fd)
 	const bool post_processing_enabled = r_postProcessing && r_postProcessing->integer && fbo_active;
 
 	glr.motion_blur_enabled = gl_static.use_shaders && post_processing_enabled && r_motionBlur->integer &&
-        !(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0;
+	!(glr.fd.rdflags & RDF_NOWORLDMODEL) && glr.fd.width > 0 && glr.fd.height > 0 &&
+	gl_config.motion_blur_supported;
 
     float motion_blur_scale = 0.0f;
     if (glr.motion_blur_enabled) {
@@ -2309,15 +2326,19 @@ static void GL_Strings_f(void)
         Com_Printf("\n");
     }
 
-    qglGetIntegerv(GL_MAX_TEXTURE_SIZE, &integer);
-    Com_Printf("GL_MAX_TEXTURE_SIZE: %d\n", integer);
+	qglGetIntegerv(GL_MAX_TEXTURE_SIZE, &integer);
+	Com_Printf("GL_MAX_TEXTURE_SIZE: %d\n", integer);
 
-    if (qglClientActiveTexture) {
-        qglGetIntegerv(GL_MAX_TEXTURE_UNITS, &integer);
-        Com_Printf("GL_MAX_TEXTURE_UNITS: %d\n", integer);
-    }
+	if (gl_config.max_combined_texture_image_units > 0) {
+		Com_Printf("GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: %d\n",
+			gl_config.max_combined_texture_image_units);
+	}
 
-    if (gl_config.caps & QGL_CAP_TEXTURE_ANISOTROPY) {
+	if (gl_config.max_texture_units > 0) {
+		Com_Printf("GL_MAX_TEXTURE_UNITS: %d\n", gl_config.max_texture_units);
+	}
+
+	if (gl_config.caps & QGL_CAP_TEXTURE_ANISOTROPY) {
         Com_Printf("GL_MAX_TEXTURE_MAX_ANISOTROPY: %.f\n", gl_config.max_anisotropy);
     }
 
@@ -2620,6 +2641,36 @@ static void GL_SetupConfig(void)
 	if (integer <= 0)
 		integer = gl_config.max_texture_size;
 	gl_config.max_renderbuffer_size = integer;
+
+	motion_blur_tmu_warned = false;
+	gl_config.max_texture_units = 1;
+	gl_config.max_combined_texture_image_units = 1;
+
+	if (qglClientActiveTexture) {
+		integer = 0;
+		qglGetIntegerv(GL_MAX_TEXTURE_UNITS, &integer);
+		if (integer > 0)
+			gl_config.max_texture_units = integer;
+	}
+
+	if (gl_config.ver_gl >= QGL_VER(2, 0) || gl_config.ver_es >= QGL_VER(2, 0)) {
+		integer = 0;
+		qglGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &integer);
+		if (integer > 0) {
+			gl_config.max_combined_texture_image_units = integer;
+		} else {
+			gl_config.max_combined_texture_image_units = gl_config.max_texture_units;
+		}
+	} else {
+		gl_config.max_combined_texture_image_units = gl_config.max_texture_units;
+	}
+
+	gl_config.motion_blur_supported = gl_config.max_combined_texture_image_units >= MOTION_BLUR_REQUIRED_TEXTURE_UNITS;
+	if (!gl_config.motion_blur_supported) {
+		Com_DPrintf("Motion blur unavailable: GPU exposes %d texture image units, requires %d.\n",
+			gl_config.max_combined_texture_image_units,
+			MOTION_BLUR_REQUIRED_TEXTURE_UNITS);
+	}
 
 	if (gl_config.caps & QGL_CAP_CLIENT_VA) {
 		qglGetIntegerv(GL_RED_BITS, &integer);

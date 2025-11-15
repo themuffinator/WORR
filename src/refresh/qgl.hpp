@@ -38,6 +38,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
 #endif
 
+#ifndef GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
+#define GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS 0x8B4D
+#endif
+
+#ifndef GL_MAX_TEXTURE_UNITS
+#define GL_MAX_TEXTURE_UNITS 0x84E2
+#endif
+
 // GL 1.1
 QGLAPI void (APIENTRYP qglBindTexture)(GLenum target, GLuint texture);
 QGLAPI void (APIENTRYP qglBlendFunc)(GLenum sfactor, GLenum dfactor);

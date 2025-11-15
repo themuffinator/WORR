@@ -1949,14 +1949,16 @@ static GLuint create_and_use_program(glStateBits_t bits)
     if (bits & GLS_GLOWMAP_ENABLE)
         bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
 
-    if (bits & GLS_MOTION_BLUR) {
-        bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
-        bind_texture_unit(program, "u_history0", TMU_HISTORY0);
-        bind_texture_unit(program, "u_history1", TMU_HISTORY1);
-        bind_texture_unit(program, "u_history2", TMU_HISTORY2);
-    }
-    
-    return program;
+	if (bits & GLS_MOTION_BLUR) {
+		bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
+		if (gl_config.motion_blur_supported) {
+			bind_texture_unit(program, "u_history0", TMU_HISTORY0);
+			bind_texture_unit(program, "u_history1", TMU_HISTORY1);
+			bind_texture_unit(program, "u_history2", TMU_HISTORY2);
+		}
+	}
+	
+	return program;
 
 fail:
     if (shader_v)

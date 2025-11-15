@@ -1314,7 +1314,7 @@ bool GL_InitFramebuffers(void)
 	int dof_half_w = 0, dof_half_h = 0;
 	const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 	const bool dof_reduced = dof_active && gl_dof_quality && gl_dof_quality->integer;
-	const bool motion_blur_active = glr.motion_blur_enabled;
+	const bool motion_blur_active = glr.motion_blur_enabled && gl_config.motion_blur_supported;
 	const bool underwater_effect_active = glr.framebuffer_underwater_effect_active;
 	const bool bloom_effect_active = r_bloom->integer;
 	const bool hdr_effect_active = gl_static.hdr.active;
