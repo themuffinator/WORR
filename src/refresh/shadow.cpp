@@ -639,16 +639,21 @@ bool R_ShadowAtlasInit(void)
 		qglGenFramebuffers(1, &framebuffer);
 		if (!framebuffer) {
 			if (qglDeleteTextures)
-			qglDeleteTextures(1, &texture);
+				qglDeleteTextures(1, &texture);
 			continue;
 		}
 
+		GLint prev_framebuffer_binding = 0;
+		if (qglGetIntegerv)
+			qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+		const GLuint restore_framebuffer_binding = prev_framebuffer_binding >= 0 ? static_cast<GLuint>(prev_framebuffer_binding) : 0;
+
 		qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		GL_TEXTURE_2D, texture, 0);
+			GL_TEXTURE_2D, texture, 0);
 
 		const GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer_binding);
 
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
 			if (qglDeleteFramebuffers)
@@ -696,6 +701,14 @@ void R_ShadowAtlasShutdown(void)
 	destroy_resources();
 }
 
+/*
+=============
+R_ShadowAtlasBeginFrame
+
+Ensures the shadow atlas is initialized for the current frame while
+preserving the caller's framebuffer binding.
+=============
+*/
 void R_ShadowAtlasBeginFrame(void)
 {
 	if (!has_required_gl_capabilities())
@@ -703,8 +716,23 @@ void R_ShadowAtlasBeginFrame(void)
 
 	const int desired_quality = choose_quality_level();
 	if (g_shadow_requested_quality != desired_quality) {
-		if (!R_ShadowAtlasInit())
+		GLint prev_framebuffer_binding = 0;
+		GLuint restore_framebuffer_binding = 0;
+		bool restore_framebuffer = false;
+		if (qglGetIntegerv) {
+			qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+			restore_framebuffer_binding = prev_framebuffer_binding >= 0 ? static_cast<GLuint>(prev_framebuffer_binding) : 0;
+			restore_framebuffer = true;
+		}
+
+		if (!R_ShadowAtlasInit()) {
+			if (restore_framebuffer)
+				qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer_binding);
 			return;
+		}
+
+		if (restore_framebuffer)
+			qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer_binding);
 	}
 
 	if (!gl_static.shadow.supported)
