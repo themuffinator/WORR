@@ -41,28 +41,35 @@ static inline void Json_Free(json_parse_t *parser)
     FS_FreeFile(parser->buffer);
 }
 
+/*
+=============
+Json_ErrorLocation
+
+Compute the line/column of the provided token for error reporting.
+=============
+*/
 static inline void Json_ErrorLocation(json_parse_t *parser, jsmntok_t *tok)
 {
-    if (!tok || tok < parser->tokens || tok >= parser->tokens + parser->num_tokens) {
-        Q_strlcpy(parser->error_loc, "unknown location", sizeof(parser->error_loc));
-        return;
-    }
+	if (!tok || tok < parser->tokens || tok >= parser->tokens + parser->num_tokens) {
+		Q_strlcpy(parser->error_loc, "unknown location", sizeof(parser->error_loc));
+		return;
+	}
 
-    int col = 1, row = 0;
+	int col = 1, row = 0;
 
-    for (intptr_t i = tok->start - 1; i >= 0; --i) {
-        if (parser->buffer[i] == '\r' || parser->buffer[i] == '\n') {
-            col++;
+	for (intptr_t i = tok->start - 1; i >= 0; --i) {
+		if (parser->buffer[i] == '\r' || parser->buffer[i] == '\n') {
+			col++;
 
-            if (parser->buffer[i - 1] == '\r') {
-                --i;
-            }
-        } else if (col == 1) {
-            row++;
-        }
-    }
+			if (i > 0 && parser->buffer[i - 1] == '\r') {
+				--i;
+			}
+		} else if (col == 1) {
+			row++;
+		}
+	}
 
-    Q_snprintf(parser->error_loc, sizeof(parser->error_loc), "%i:%i", col, row);
+	Q_snprintf(parser->error_loc, sizeof(parser->error_loc), "%i:%i", col, row);
 }
 
 q_noreturn static inline void Json_Error(json_parse_t *parser, jsmntok_t *tok, const char *err)
