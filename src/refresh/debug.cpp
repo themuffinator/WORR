@@ -699,10 +699,20 @@ static void GL_ExpireDebugTexts(void)
     }
 }
 
+/*
+=============
+GL_DrawDebugObjects
+
+Renders queued debug primitives unless shadow atlas rendering is active.
+=============
+*/
 void GL_DrawDebugObjects(void)
 {
-    GL_DrawDebugLines();
-    GL_DrawDebugTexts();
+	if (glr.drawing_shadow_atlas)
+		return;
+
+	GL_DrawDebugLines();
+	GL_DrawDebugTexts();
 }
 
 void GL_ExpireDebugObjects(void)

@@ -429,6 +429,8 @@ void render_shadow_views()
 		VectorCopy(glr.viewaxis[i], saved_viewaxis[i]);
 
 	glr.framebuffer_bound = true;
+	const bool prev_drawing_shadow_atlas = glr.drawing_shadow_atlas;
+	glr.drawing_shadow_atlas = true;
 
 	for (const auto &view : g_render_views) {
 		const float *rect = view.assignment.parameters.viewport_rect;
@@ -472,7 +474,6 @@ void render_shadow_views()
 		GL_DrawEntities(glr.ents.alpha_back);
 		GL_DrawAlphaFaces();
 		GL_DrawEntities(glr.ents.alpha_front);
-		GL_DrawDebugObjects();
 
 		GL_Flush3D();
 	}
@@ -490,6 +491,7 @@ void render_shadow_views()
 	glr.framebuffer_bound = prev_framebuffer_bound;
 	gl_backend->load_matrix(GL_PROJECTION, glr.projmatrix, gl_identity);
 	GL_ForceMatrix(gl_identity, glr.viewmatrix);
+	glr.drawing_shadow_atlas = prev_drawing_shadow_atlas;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
