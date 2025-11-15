@@ -1,65 +1,130 @@
 <div align="center">
-  <img src="assets/art/logo.png" alt="Logo" width="300">
-  <h2>WORR! The new way to experience <b>QUAKE II Rerelease</b></h2>
+  <img src="assets/art/logo.png" alt="WORR Logo" width="300">
+  <h2>WORR – The new way to experience <b>QUAKE II Rerelease</b></h2>
 </div>
+
 <p align="center">
-<b>WORR</b> is an advanced gameplay expansion and engine under development for <b>QUAKE II Rerelease</b>.
-It is designed to be a drop-in code replacement offering a richer, more dynamic and refined single-player and multiplayer experience.
+  <b>WORR</b> is an advanced gameplay expansion and standalone engine fork for <b>QUAKE II Rerelease</b>,  
+  designed as a drop-in replacement offering a richer, more dynamic and refined single-player and multiplayer experience.
 </p>
+
 <p align="center">
-  The KEX-dependant server mod version can be found <a href="https://github.com/themuffinator/worr-kex" target="_blank">here</a>.
+  The KEX-dependent server mod variant can be found here:  
+  <a href="https://github.com/themuffinator/worr-kex">themuffinator/worr-kex</a>
 </p>
+
 <p align="center">
-  It is a successor to my previous project, <a href="https://github.com/themuffinator/muffmode" target="_blank">Muff Mode</a>.
+  WORR is the spiritual successor to  
+  <a href="https://github.com/themuffinator/muffmode">Muff Mode</a>.
 </p>
 
 ---
 
-**WORR** is a fork of [Q2REPRO](https://github.com/Paril/q2repro) which in turn
-is a fork of [Q2PRO](https://github.com/skullernet/q2pro) which in turn is a fork
-of [Quake II](https://github.com/id-Software/Quake-2)... forktacular! It is designed to be a
-drop-in replacement of the Quake II re-release engine and intended for use
-with the upcoming and extensive [Muff Mode](https://github.com/themuffinator/muffmode)-based mod **WORR**.
-Future updates may break compatibility with non-**WORR** game modules.
+## About
 
-PROJECT GOALS
--------------
+**WORR** is a fork of [Q2REPRO](https://github.com/Paril/q2repro), which in turn is a fork of [Q2PRO](https://code.nephatrine.net/QuakeArchive/q2pro.git), which itself is a fork of the original [Quake II](https://github.com/id-Software/Quake-2).
 
-* Implement a bare-minimum C++ migration, buildable and bug-free (WIP)
-* Complete Vulkan renderer (covering GL feature set and compatibility), allow external binary build and renderer selector (WIP)
-* Implement a functional bot system - workable in campaigns and multiplayer alike
-* GUI:
-  - JSON menu scripting [DONE]
-  - Update GUI to allow for a full range of UI elements
-  - Integrate full FT2 support and Q3 color escape sequences
-  - Enhance aspect correction/screen positioning to be more robust and correct
-  - Extend/enhance menu selection
-  - Graphical obituaries, chatbox
-* Online:
-  - WEBSITE: Set up basic server browser, user environment, ladder, etc. 
-  - ENGINE: Engine bootstrapper with auto-updater, set up cdn server for transfer
-  - ALL: Discord OAuth integration for user management, integration into engine and game module too
-  - ALL: Discord server bot handling or alternative means of communication between game server, web server and Discord server
-  - Set up a game server (NL location for starters ideally)
-* Rendering:
-  - Depth of field/slowtime
-  - Player outlines (and maybe rim lighting?) with teams support
-  - Player bright skins with color selector
-  - Shadowmapping, Q2Re maps compatible
-  - Motion blur
-  - Revise bloom if need be, color correction
-  - HDR
-* Structure:
-  - Split game module into cgame/game for client/server
-  - Migrate majority of UI code from engine into cgame
-* Asset support:
-  - IQM model support
-  - Extended BSP support: IBSP29, BSP2, BSP2L, BSPX
- 
-BUILDING
---------
+The goals of WORR are:
 
-For building **WORR**, consult the `BUILDING.md` file.
+- To act as a **drop-in engine replacement** for the official Quake II Rerelease assets.
+- To provide a **modern C++ codebase** suitable for long-term development and experimentation.
+- To power the extensive **WORR gameplay module** (and future projects) with:
+  - Expanded entity and monster support (across Quake titles and mods),
+  - Competitive and casual multiplayer improvements,
+  - Modern rendering and UI systems.
 
-For information on using and configuring **WORR**, refer to client and server
-manuals available in doc/ subdirectory.
+> ⚠️ **Compatibility note:**  
+> Future engine updates may break compatibility with non-**WORR** game modules.
+
+---
+
+## Project Goals
+
+**Status key:** ✅ Complete · 🟡 In&nbsp;Progress · 🔴 Planned
+
+### Core Milestones
+
+- ✅ Implement a bare-minimum C++ migration, buildable and bug-free  
+- 🟡 Complete Vulkan renderer (covering GL feature set and compatibility), allow external binary build and renderer selector  
+- 🔴 Implement a functional bot system – workable in campaigns and multiplayer alike  
+
+### GUI
+
+- ✅ JSON menu scripting  
+- 🟡 Update GUI to allow for a full range of UI elements  
+- 🟡 Integrate full FreeType2 support and Quake III color escape sequences  
+- ✅ Enhance aspect correction / screen positioning to be more robust and correct  
+- 🟡 Extend / enhance menu selection  
+- 🔴 Graphical obituaries, chatbox  
+
+### Online
+
+- 🟡 **Website:** Basic server browser, user environment, ladder, etc.  
+- 🔴 **Engine:** Engine bootstrapper with auto-updater, CDN for asset and update delivery  
+- 🔴 **All:** Discord OAuth integration for user management, wired into engine and game module  
+- 🔴 **All:** Discord server bot (or alternative) to bridge game server, web backend and Discord  
+- 🔴 Set up a public game server (NL location to start, ideally)  
+
+### Rendering
+
+- 🟡 Depth of field / slow-time  
+- 🔴 Player outlines (and possibly rim lighting) with team support  
+- 🔴 Player bright skins with color selector  
+- 🟡 Shadowmapping, compatible with Quake II Rerelease maps  
+- 🟡 Motion blur  
+- 🟡 Revised bloom with modern tone/color correction  
+- 🟡 HDR pipeline  
+
+### Structure
+
+- 🔴 Split game module into `cgame` / `game` for client / server separation  
+- 🔴 Migrate the majority of UI code from the engine into `cgame`  
+
+### Asset Support
+
+- 🔴 IQM model support  
+- 🔴 Extended BSP support: `IBSP29`, `BSP2`, `BSP2L`, `BSPX`  
+
+---
+
+## Building
+
+For build instructions, see **[`BUILDING`](BUILDING.md)**.
+
+This covers:
+
+- Required toolchain and dependencies,
+- Configuration options,
+- Build targets for the engine and game module.
+
+---
+
+## Usage & Documentation
+
+For information on using and configuring **WORR**, refer to the manuals in the `doc/` subdirectory:
+
+- Client configuration and advanced options,
+- Server configuration, match presets and hosting details,
+- Notes on compatibility with Quake II Rerelease assets.
+
+---
+
+## Related Repositories
+
+- **WORR (KEX server mod):**  
+  <https://github.com/themuffinator/worr-kex>
+
+- **Muff Mode (legacy project):**  
+  <https://github.com/themuffinator/muffmode>
+
+- **Q2REPRO:**  
+  <https://github.com/Paril/q2repro>
+
+- **Q2PRO:**  
+  <https://code.nephatrine.net/QuakeArchive/q2pro.git>
+
+---
+
+## License
+
+See the [`LICENSE`](LICENSE) file in this repository for licensing details.
