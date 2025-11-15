@@ -418,6 +418,7 @@ void render_shadow_views()
 	mat4_t saved_view_proj_matrix;
 	mat4_t saved_inv_view_proj_matrix;
 	vec3_t saved_viewaxis[3];
+	cplane_t saved_frustum_planes[4];
 	bool saved_view_proj_valid = glr.view_proj_valid;
 	float saved_view_znear = glr.view_znear;
 	float saved_view_zfar = glr.view_zfar;
@@ -427,6 +428,7 @@ void render_shadow_views()
 	std::memcpy(saved_inv_view_proj_matrix, glr.inv_view_proj_matrix, sizeof(mat4_t));
 	for (int i = 0; i < 3; ++i)
 		VectorCopy(glr.viewaxis[i], saved_viewaxis[i]);
+	std::memcpy(saved_frustum_planes, glr.frustumPlanes, sizeof(saved_frustum_planes));
 
 	glr.framebuffer_bound = true;
 
@@ -458,6 +460,7 @@ void render_shadow_views()
 		glr.view_znear = view.near_plane;
 		glr.view_zfar = view.far_plane;
 		glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
+		GL_SetupFrustum();
 
 		gl_backend->load_matrix(GL_PROJECTION, view.proj_matrix, gl_identity);
 		GL_ForceMatrix(gl_identity, view.view_matrix);
@@ -480,6 +483,7 @@ void render_shadow_views()
 	glr.fd = saved_fd;
 	for (int i = 0; i < 3; ++i)
 		VectorCopy(saved_viewaxis[i], glr.viewaxis[i]);
+	std::memcpy(glr.frustumPlanes, saved_frustum_planes, sizeof(saved_frustum_planes));
 	std::memcpy(glr.viewmatrix, saved_viewmatrix, sizeof(mat4_t));
 	std::memcpy(glr.projmatrix, saved_projmatrix, sizeof(mat4_t));
 	glr.view_znear = saved_view_znear;
