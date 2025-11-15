@@ -377,6 +377,10 @@ void render_shadow_views()
 	if (g_render_views.empty())
 		return;
 
+	const bool rendering_shadows = true;
+	const bool prev_rendering_shadows = glr.rendering_shadows;
+	glr.rendering_shadows = rendering_shadows;
+
 	GLint prev_draw_buffer = GL_BACK;
 	GLint prev_read_buffer = GL_BACK;
 	GLint prev_fbo = 0;
@@ -474,7 +478,8 @@ void render_shadow_views()
 		GL_DrawEntities(glr.ents.opaque);
 		// Shadow atlas rendering is depth-only; skip the alpha entity lists so we
 		// don't reintroduce blended passes that produce incorrect shadows.
-		GL_DrawAlphaFaces();
+		if (!rendering_shadows)
+			GL_DrawAlphaFaces();
 		GL_DrawDebugObjects();
 
 		GL_Flush3D();
@@ -506,6 +511,7 @@ void render_shadow_views()
 	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	qglColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	qglDepthMask(prev_depth_mask);
+	glr.rendering_shadows = prev_rendering_shadows;
 }
 
 } // namespace
