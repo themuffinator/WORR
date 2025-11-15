@@ -525,6 +525,14 @@ const kfont_char_t* SCR_KFontLookup(const kfont_t* kfont, uint32_t codepoint)
 	return ch;
 }
 
+/*
+=============
+SCR_NormalizeKFontPath
+
+Normalizes a provided KFont filename so it resolves inside /fonts/ using
+forward slashes.
+=============
+*/
 static std::string SCR_NormalizeKFontPath(const char* filename)
 {
 	if (!filename || !*filename)
@@ -546,6 +554,13 @@ static std::string SCR_NormalizeKFontPath(const char* filename)
 	return normalized;
 }
 
+/*
+=============
+SCR_LoadKFont
+
+Loads a .kfont description and prepares its atlas metrics for rendering.
+=============
+*/
 void SCR_LoadKFont(kfont_t* font, const char* filename)
 {
 	memset(font, 0, sizeof(*font));
@@ -562,27 +577,7 @@ void SCR_LoadKFont(kfont_t* font, const char* filename)
 	}
 
 	fs_file_source_t source{};
-	if (!FS_GetFileSource(handle, &source)) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: failed to resolve source for KFont '%s'\n", normalized.c_str());
-		return;
-	}
-
-	if (!source.from_pack) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: KFont '%s' not loaded from a pack file\n", normalized.c_str());
-		return;
-	}
-
-	const char* packBaseName = COM_SkipPath(source.pack_path);
-	const bool isExpectedPack = packBaseName
-		&& (!Q_stricmp(packBaseName, "Q2Game.kpf"));
-	if (!isExpectedPack) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf (found '%s')\n",
-			normalized.c_str(), source.pack_path);
-		return;
-	}
+	const bool hasSource = FS_GetFileSource(handle, &source);
 
 	const auto maxSize = (std::numeric_limits<size_t>::max)();
 	if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
@@ -610,6 +605,7 @@ void SCR_LoadKFont(kfont_t* font, const char* filename)
 
 	fileContents.push_back('\0');
 	const char* data = fileContents.c_str();
+	const size_t asciiGlyphCount = q_countof(font->chars);
 
 	while (true) {
 		const char* token = COM_Parse(&data);
@@ -641,19 +637,23 @@ void SCR_LoadKFont(kfont_t* font, const char* filename)
 				h = strtoul(COM_Parse(&data), NULL, 10);
 				COM_Parse(&data);
 
-				codepoint -= KFONT_ASCII_MIN;
+				if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
+					continue;
 
-				if (codepoint < KFONT_ASCII_MAX) {
-					const uint32_t clamped_height = (std::min)(h, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()));
-					const uint16_t height = static_cast<uint16_t>(clamped_height);
+				const size_t glyphIndex = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
+				if (glyphIndex >= asciiGlyphCount)
+					continue;
 
-					font->chars[codepoint].x = static_cast<uint16_t>(x);
-					font->chars[codepoint].y = static_cast<uint16_t>(y);
-					font->chars[codepoint].w = static_cast<uint16_t>(w);
-					font->chars[codepoint].h = height;
+				const uint32_t clamped_height = (std::min)(h, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()));
+				const uint16_t height = static_cast<uint16_t>(clamped_height);
+				kfont_char_t& glyph = font->chars[glyphIndex];
 
-					font->line_height = (std::max)(font->line_height, height);
-				}
+				glyph.x = static_cast<uint16_t>(x);
+				glyph.y = static_cast<uint16_t>(y);
+				glyph.w = static_cast<uint16_t>(w);
+				glyph.h = height;
+
+				font->line_height = (std::max)(font->line_height, height);
 			}
 		}
 	}
@@ -666,9 +666,14 @@ void SCR_LoadKFont(kfont_t* font, const char* filename)
 	font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
 	font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
-	const char* entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
-	Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
-		normalized.c_str(), source.pack_path, entryName, font->line_height);
+	if (hasSource && source.from_pack) {
+		const char* entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
+		Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
+			normalized.c_str(), source.pack_path, entryName, font->line_height);
+	} else {
+		Com_Printf("SCR: loaded KFont '%s' from %s (line height %d)\n",
+			normalized.c_str(), normalized.c_str(), font->line_height);
+	}
 }
 
 qhandle_t r_charset;
