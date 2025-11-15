@@ -1900,8 +1900,17 @@ static pp_flags_t GL_BindFramebuffer(void)
 		gl_dof_quality->modified_count != gl_dof_quality_modified ||
 		r_motionBlur->modified_count != r_motionBlur_modified ||
 		hdr_prev != gl_static.hdr.active) {
+		const bool scene_fbo_was_bound = glr.framebuffer_bound;
+		GLint prev_framebuffer_binding = 0;
+		if (scene_fbo_was_bound && qglGetIntegerv)
+			qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+
 		glr.framebuffer_ok = GL_InitFramebuffers();
-	glr.framebuffer_resources_resident = glr.framebuffer_ok;
+		if (scene_fbo_was_bound) {
+			const GLuint restore_framebuffer = prev_framebuffer_binding > 0 ? static_cast<GLuint>(prev_framebuffer_binding) : FBO_SCENE;
+			qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer);
+		}
+		glr.framebuffer_resources_resident = glr.framebuffer_ok;
 		if (glr.framebuffer_ok) {
 			glr.framebuffer_width  = scene_target_w;
 			glr.framebuffer_height = scene_target_h;
