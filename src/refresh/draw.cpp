@@ -535,23 +535,191 @@ forward slashes.
 */
 static std::string SCR_NormalizeKFontPath(const char* filename)
 {
-	if (!filename || !*filename)
-		return std::string();
+if (!filename || !*filename)
+return std::string();
 
-	std::string normalized(filename);
-	std::replace(normalized.begin(), normalized.end(), '\\', '/');
+std::string normalized(filename);
+std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-	if (normalized.front() != '/')
-		normalized.insert(normalized.begin(), '/');
+if (normalized.front() != '/')
+normalized.insert(normalized.begin(), '/');
 
-	if (normalized.rfind("/fonts/", 0) != 0) {
-		const size_t slash = normalized.find_last_of('/');
-		const char* basename = normalized.c_str() + ((slash == std::string::npos) ? 0 : slash + 1);
-		normalized.assign("/fonts/");
-		normalized.append(basename);
-	}
+if (normalized.rfind("/fonts/", 0) != 0) {
+const size_t slash = normalized.find_last_of('/');
+const char* basename = normalized.c_str() + ((slash == std::string::npos) ? 0 : slash + 1);
+normalized.assign("/fonts/");
+normalized.append(basename);
+}
 
-	return normalized;
+return normalized;
+}
+
+/*
+=============
+SCR_LoadFallbackConcharsKFont
+
+Builds a minimal KFont definition using the legacy console font when the rerelease
+assets are unavailable.
+=============
+*/
+static bool SCR_LoadFallbackConcharsKFont(kfont_t* font)
+{
+constexpr int GLYPHS_PER_ROW = 16;
+constexpr const char* FALLBACK_TEXTURE = "/pics/conchars.pcx";
+
+font->pic = R_RegisterFont(FALLBACK_TEXTURE);
+if (!font->pic) {
+Com_WPrintf("SCR: fallback console font '%s' is missing\n", FALLBACK_TEXTURE);
+memset(font, 0, sizeof(*font));
+return false;
+}
+
+image_t* image = IMG_ForHandle(font->pic);
+if (!image || !image->width || !image->height) {
+Com_WPrintf("SCR: fallback console font '%s' texture info unavailable\n", FALLBACK_TEXTURE);
+memset(font, 0, sizeof(*font));
+return false;
+}
+
+const uint16_t cellWidth = static_cast<uint16_t>(image->width / GLYPHS_PER_ROW);
+const uint16_t cellHeight = static_cast<uint16_t>(image->height / GLYPHS_PER_ROW);
+font->line_height = cellHeight;
+font->sw = 1.0f / image->width;
+font->sh = 1.0f / image->height;
+
+for (uint32_t codepoint = KFONT_ASCII_MIN; codepoint <= KFONT_ASCII_MAX; ++codepoint) {
+const size_t glyphIndex = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
+kfont_char_t& glyph = font->chars[glyphIndex];
+const uint32_t cellIndex = codepoint;
+const uint32_t cellX = (cellIndex & (GLYPHS_PER_ROW - 1)) * cellWidth;
+const uint32_t cellY = (cellIndex / GLYPHS_PER_ROW) * cellHeight;
+
+glyph.x = static_cast<uint16_t>(cellX);
+glyph.y = static_cast<uint16_t>(cellY);
+glyph.w = cellWidth;
+glyph.h = cellHeight;
+}
+
+Com_WPrintf("SCR: using '%s' for fallback KFont metrics (line height %u)\n", FALLBACK_TEXTURE, font->line_height);
+return true;
+}
+
+/*
+=============
+SCR_LoadKFontFromFile
+
+Loads a .kfont description from the filesystem and prepares it for rendering.
+=============
+*/
+static bool SCR_LoadKFontFromFile(kfont_t* font, const std::string& normalized)
+{
+qhandle_t handle = 0;
+int64_t fileLength = FS_OpenFile(normalized.c_str(), &handle, FS_MODE_READ | FS_TYPE_PAK);
+if (fileLength < 0) {
+Com_Printf("SCR: failed to open KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(fileLength));
+return false;
+}
+
+fs_file_source_t source{};
+const bool hasSource = FS_GetFileSource(handle, &source);
+
+const auto maxSize = (std::numeric_limits<size_t>::max)();
+if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
+FS_CloseFile(handle);
+Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
+return false;
+}
+
+std::string fileContents;
+fileContents.resize(static_cast<size_t>(fileLength));
+int bytesRead = FS_Read(fileContents.data(), fileContents.size(), handle);
+if (bytesRead < 0) {
+FS_CloseFile(handle);
+Com_Printf("SCR: failed to read KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(bytesRead));
+return false;
+}
+
+if (static_cast<size_t>(bytesRead) != fileContents.size()) {
+FS_CloseFile(handle);
+Com_Printf("SCR: short read while loading KFont '%s'\n", normalized.c_str());
+return false;
+}
+
+FS_CloseFile(handle);
+
+fileContents.push_back('\0');
+const char* data = fileContents.c_str();
+const size_t asciiGlyphCount = q_countof(font->chars);
+
+while (true) {
+const char* token = COM_Parse(&data);
+
+if (!*token)
+break;
+
+if (!strcmp(token, "texture")) {
+token = COM_Parse(&data);
+font->pic = R_RegisterFont(va("/%s", token));
+}
+else if (!strcmp(token, "unicode")) {
+}
+else if (!strcmp(token, "mapchar")) {
+token = COM_Parse(&data);
+
+while (true) {
+token = COM_Parse(&data);
+
+if (!strcmp(token, "}"))
+break;
+
+uint32_t codepoint = strtoul(token, NULL, 10);
+uint32_t x, y, w, h;
+
+x = strtoul(COM_Parse(&data), NULL, 10);
+y = strtoul(COM_Parse(&data), NULL, 10);
+w = strtoul(COM_Parse(&data), NULL, 10);
+h = strtoul(COM_Parse(&data), NULL, 10);
+COM_Parse(&data);
+
+if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
+continue;
+
+const size_t glyphIndex = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
+if (glyphIndex >= asciiGlyphCount)
+continue;
+
+const uint32_t clamped_height = (std::min)(h, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()));
+const uint16_t height = static_cast<uint16_t>(clamped_height);
+kfont_char_t& glyph = font->chars[glyphIndex];
+
+glyph.x = static_cast<uint16_t>(x);
+glyph.y = static_cast<uint16_t>(y);
+glyph.w = static_cast<uint16_t>(w);
+glyph.h = height;
+
+font->line_height = (std::max)(font->line_height, height);
+}
+}
+}
+
+if (!font->pic) {
+Com_Printf("SCR: KFont '%s' did not specify a texture\n", normalized.c_str());
+return false;
+}
+
+font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
+font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
+
+if (hasSource && source.from_pack) {
+const char* entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
+Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
+normalized.c_str(), source.pack_path, entryName, font->line_height);
+} else {
+Com_Printf("SCR: loaded KFont '%s' from %s (line height %d)\n",
+normalized.c_str(), normalized.c_str(), font->line_height);
+}
+
+return true;
 }
 
 /*
@@ -563,117 +731,16 @@ Loads a .kfont description and prepares its atlas metrics for rendering.
 */
 void SCR_LoadKFont(kfont_t* font, const char* filename)
 {
-	memset(font, 0, sizeof(*font));
+memset(font, 0, sizeof(*font));
 
-	const std::string normalized = SCR_NormalizeKFontPath(filename);
-	if (normalized.empty())
-		return;
+const std::string normalized = SCR_NormalizeKFontPath(filename);
+if (normalized.empty())
+return;
 
-	qhandle_t handle = 0;
-	int64_t fileLength = FS_OpenFile(normalized.c_str(), &handle, FS_MODE_READ | FS_TYPE_PAK);
-	if (fileLength < 0) {
-		Com_Printf("SCR: failed to open KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(fileLength));
-		return;
-	}
+if (SCR_LoadKFontFromFile(font, normalized))
+return;
 
-	fs_file_source_t source{};
-	const bool hasSource = FS_GetFileSource(handle, &source);
-
-	const auto maxSize = (std::numeric_limits<size_t>::max)();
-	if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
-		return;
-	}
-
-	std::string fileContents;
-	fileContents.resize(static_cast<size_t>(fileLength));
-	int bytesRead = FS_Read(fileContents.data(), fileContents.size(), handle);
-	if (bytesRead < 0) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: failed to read KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(bytesRead));
-		return;
-	}
-
-	if (static_cast<size_t>(bytesRead) != fileContents.size()) {
-		FS_CloseFile(handle);
-		Com_Printf("SCR: short read while loading KFont '%s'\n", normalized.c_str());
-		return;
-	}
-
-	FS_CloseFile(handle);
-
-	fileContents.push_back('\0');
-	const char* data = fileContents.c_str();
-	const size_t asciiGlyphCount = q_countof(font->chars);
-
-	while (true) {
-		const char* token = COM_Parse(&data);
-
-		if (!*token)
-			break;
-
-		if (!strcmp(token, "texture")) {
-			token = COM_Parse(&data);
-			font->pic = R_RegisterFont(va("/%s", token));
-		}
-		else if (!strcmp(token, "unicode")) {
-		}
-		else if (!strcmp(token, "mapchar")) {
-			token = COM_Parse(&data);
-
-			while (true) {
-				token = COM_Parse(&data);
-
-				if (!strcmp(token, "}"))
-					break;
-
-				uint32_t codepoint = strtoul(token, NULL, 10);
-				uint32_t x, y, w, h;
-
-				x = strtoul(COM_Parse(&data), NULL, 10);
-				y = strtoul(COM_Parse(&data), NULL, 10);
-				w = strtoul(COM_Parse(&data), NULL, 10);
-				h = strtoul(COM_Parse(&data), NULL, 10);
-				COM_Parse(&data);
-
-				if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
-					continue;
-
-				const size_t glyphIndex = static_cast<size_t>(codepoint - KFONT_ASCII_MIN);
-				if (glyphIndex >= asciiGlyphCount)
-					continue;
-
-				const uint32_t clamped_height = (std::min)(h, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()));
-				const uint16_t height = static_cast<uint16_t>(clamped_height);
-				kfont_char_t& glyph = font->chars[glyphIndex];
-
-				glyph.x = static_cast<uint16_t>(x);
-				glyph.y = static_cast<uint16_t>(y);
-				glyph.w = static_cast<uint16_t>(w);
-				glyph.h = height;
-
-				font->line_height = (std::max)(font->line_height, height);
-			}
-		}
-	}
-
-	if (!font->pic) {
-		Com_Printf("SCR: KFont '%s' did not specify a texture\n", normalized.c_str());
-		return;
-	}
-
-	font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
-	font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
-
-	if (hasSource && source.from_pack) {
-		const char* entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
-		Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
-			normalized.c_str(), source.pack_path, entryName, font->line_height);
-	} else {
-		Com_Printf("SCR: loaded KFont '%s' from %s (line height %d)\n",
-			normalized.c_str(), normalized.c_str(), font->line_height);
-	}
+SCR_LoadFallbackConcharsKFont(font);
 }
 
 qhandle_t r_charset;

@@ -752,7 +752,7 @@ if get_option('client-ui')
       'worr.menu.cpp',
       output : 'worr.menu.cpp',
       input : 'src/client/ui/worr.menu.json',
-      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_q2pro_menu'],
+      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_worr_menu'],
   )
   client_src += q2pro_menu_c
 
