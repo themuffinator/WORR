@@ -430,7 +430,12 @@ void render_shadow_views()
 
 	glr.framebuffer_bound = true;
 
+	const auto saved_ents = glr.ents;
+	GL_ClassifyEntities();
+	const auto cached_ents = glr.ents;
+
 	for (const auto &view : g_render_views) {
+		glr.ents = cached_ents;
 		const float *rect = view.assignment.parameters.viewport_rect;
 		const GLint viewport_x = static_cast<GLint>(rect[0]);
 		const GLint viewport_y = static_cast<GLint>(rect[1]);
@@ -466,7 +471,6 @@ void render_shadow_views()
 		if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_drawworld->integer)
 			GL_DrawWorld();
 
-		GL_ClassifyEntities();
 		GL_DrawEntities(glr.ents.bmodels);
 		GL_DrawEntities(glr.ents.opaque);
 		GL_DrawEntities(glr.ents.alpha_back);
@@ -476,6 +480,8 @@ void render_shadow_views()
 
 		GL_Flush3D();
 	}
+
+	glr.ents = saved_ents;
 
 	glr.fd = saved_fd;
 	for (int i = 0; i < 3; ++i)
