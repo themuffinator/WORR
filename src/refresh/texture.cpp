@@ -1193,22 +1193,32 @@ static void GL_InitDepthTexture(int w, int h)
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+/*
+=============
+GL_CheckFramebufferStatus
+
+Validates the currently bound framebuffer and restores the previous binding.
+=============
+*/
 static bool GL_CheckFramebufferStatus(bool check, const char *name)
 {
-    GL_ShowErrors(__func__);
+	GL_ShowErrors(__func__);
 
-    if (!check)
-        return true;
+	GLint framebuffer = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
 
-    GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status == GL_FRAMEBUFFER_COMPLETE)
-        return true;
+	if (!check)
+		return true;
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (gl_showerrors->integer)
-        Com_EPrintf("%s framebuffer status %#x\n", name, status);
+	GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		if (gl_showerrors->integer)
+			Com_EPrintf("%s framebuffer status %#x\n", name, status);
+	}
 
-    return false;
+	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	return status == GL_FRAMEBUFFER_COMPLETE;
 }
 
 /*
