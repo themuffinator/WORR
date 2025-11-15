@@ -1215,13 +1215,13 @@ static void UI_ParseJsonBuffer(json_parse_t *parser, const char *buffer, size_t 
 jsmn_parser p;
 
 parser->buffer_len = length;
-parser->buffer = reinterpret_cast<char *>(Z_TagMalloc(length + 1, TAG_FILESYSTEM));
+parser->buffer = static_cast<char *>(Z_TagMalloc(length + 1, TAG_FILESYSTEM));
 memcpy(parser->buffer, buffer, length);
 parser->buffer[length] = '\0';
 
 jsmn_init(&p);
 parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
-parser->tokens = reinterpret_cast<jsmntok_t *>(Z_TagMalloc(sizeof(jsmntok_t) * parser->num_tokens, TAG_FILESYSTEM));
+parser->tokens = static_cast<jsmntok_t *>(Z_TagMalloc(sizeof(jsmntok_t) * parser->num_tokens, TAG_FILESYSTEM));
 if (!parser->tokens)
 Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
 
