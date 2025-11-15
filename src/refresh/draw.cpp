@@ -272,10 +272,10 @@ int get_auto_scale(void)
         scale = 1;
     }
 
-    if (vid && vid->get_dpi_scale) {
-        int min_scale = vid->get_dpi_scale();
-        return max(scale, min_scale);
-    }
+	if (vid && vid->get_dpi_scale) {
+		int min_scale = vid->get_dpi_scale();
+		return std::max(scale, min_scale);
+	}
 
     return scale;
 }
@@ -331,7 +331,7 @@ void R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pi
 
     float scale_w = w;
     float scale_h = h * image->aspect;
-    float scale = max(scale_w, scale_h);
+	float scale = std::max(scale_w, scale_h);
 
     float s = (1.0f - scale_w / scale) * 0.5f;
     float t = (1.0f - scale_h / scale) * 0.5f;
@@ -647,7 +647,7 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
                     font->chars[codepoint].w = w;
                     font->chars[codepoint].h = h;
 
-                    font->line_height = max(font->line_height, h);
+			font->line_height = std::max(font->line_height, h);
                 }
             }
         }
@@ -676,8 +676,8 @@ void Draw_Lightmaps(void)
     int rows = 0, cols = 0;
 
     while (block) {
-        rows = max(r_config.height / block, 1);
-        cols = max(lm.nummaps / rows, 1);
+		rows = std::max(r_config.height / block, 1);
+		cols = std::max(lm.nummaps / rows, 1);
         if (cols * block <= r_config.width)
             break;
         block >>= 1;
