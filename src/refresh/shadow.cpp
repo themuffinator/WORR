@@ -385,6 +385,8 @@ void render_shadow_views()
 	GLint prev_depth_mask_i = GL_TRUE;
 	GLboolean prev_color_mask[4];
 	GLboolean prev_depth_mask = GL_TRUE;
+	GLboolean prev_scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = { 0, 0, 0, 0 };
 
 	qglGetIntegerv(GL_DRAW_BUFFER, &prev_draw_buffer);
 	const bool has_read_buffer = qglReadBuffer != nullptr;
@@ -394,8 +396,9 @@ void render_shadow_views()
 	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
 	qglGetIntegerv(GL_COLOR_WRITEMASK, prev_color_mask_i);
 	qglGetIntegerv(GL_DEPTH_WRITEMASK, &prev_depth_mask_i);
+	qglGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
 	for (int i = 0; i < 4; ++i)
-	prev_color_mask[i] = prev_color_mask_i[i] ? GL_TRUE : GL_FALSE;
+		prev_color_mask[i] = prev_color_mask_i[i] ? GL_TRUE : GL_FALSE;
 	prev_depth_mask = prev_depth_mask_i ? GL_TRUE : GL_FALSE;
 
 	const bool prev_framebuffer_bound = glr.framebuffer_bound;
@@ -440,7 +443,13 @@ void render_shadow_views()
 			continue;
 
 		qglViewport(viewport_x, viewport_y, viewport_w, viewport_h);
+		const GLboolean scissor_enabled_before_clear = qglIsEnabled(GL_SCISSOR_TEST);
+		if (!scissor_enabled_before_clear)
+			qglEnable(GL_SCISSOR_TEST);
+		qglScissor(viewport_x, viewport_y, viewport_w, viewport_h);
 		qglClear(GL_DEPTH_BUFFER_BIT);
+		if (!scissor_enabled_before_clear)
+			qglDisable(GL_SCISSOR_TEST);
 
 		glr.fd = saved_fd;
 		VectorCopy(view.origin, glr.fd.vieworg);
@@ -504,6 +513,11 @@ void render_shadow_views()
 	if (has_read_buffer)
 		qglReadBuffer(prev_read_buffer);
 	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+	qglScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+	if (prev_scissor_enabled)
+		qglEnable(GL_SCISSOR_TEST);
+	else
+		qglDisable(GL_SCISSOR_TEST);
 	qglColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	qglDepthMask(prev_depth_mask);
 }
