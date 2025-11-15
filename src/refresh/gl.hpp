@@ -266,6 +266,7 @@ typedef struct {
     bool            framebuffer_ok;
 	bool		framebuffer_bound;
 	bool		framebuffer_resources_resident;
+	bool		drawing_shadow_atlas;
     bool            prev_view_proj_valid;
     bool            view_proj_valid;
     bool            motion_blur_enabled;

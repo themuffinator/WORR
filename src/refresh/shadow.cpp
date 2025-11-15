@@ -434,6 +434,8 @@ void render_shadow_views()
 	std::memcpy(saved_frustum_planes, glr.frustumPlanes, sizeof(saved_frustum_planes));
 
 	glr.framebuffer_bound = true;
+	const bool prev_drawing_shadow_atlas = glr.drawing_shadow_atlas;
+	glr.drawing_shadow_atlas = true;
 
 	const auto saved_ents = glr.ents;
 	GL_ClassifyEntities();
@@ -491,6 +493,7 @@ void render_shadow_views()
 		// Shadow atlas rendering is depth-only; skip the alpha entity lists so we
 		// don't reintroduce blended passes that produce incorrect shadows.
 		GL_DrawAlphaFaces();
+		GL_DrawEntities(glr.ents.alpha_front);
 		GL_DrawDebugObjects();
 
 		GL_Flush3D();
@@ -512,6 +515,7 @@ void render_shadow_views()
 	glr.framebuffer_bound = prev_framebuffer_bound;
 	gl_backend->load_matrix(GL_PROJECTION, glr.projmatrix, gl_identity);
 	GL_ForceMatrix(gl_identity, glr.viewmatrix);
+	glr.drawing_shadow_atlas = prev_drawing_shadow_atlas;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
