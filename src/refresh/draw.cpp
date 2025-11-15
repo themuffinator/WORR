@@ -644,12 +644,15 @@ void SCR_LoadKFont(kfont_t* font, const char* filename)
 				codepoint -= KFONT_ASCII_MIN;
 
 				if (codepoint < KFONT_ASCII_MAX) {
-					font->chars[codepoint].x = x;
-					font->chars[codepoint].y = y;
-					font->chars[codepoint].w = w;
-					font->chars[codepoint].h = h;
+					const uint32_t clamped_height = (std::min)(h, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()));
+					const uint16_t height = static_cast<uint16_t>(clamped_height);
 
-					font->line_height = (std::max)(font->line_height, h);
+					font->chars[codepoint].x = static_cast<uint16_t>(x);
+					font->chars[codepoint].y = static_cast<uint16_t>(y);
+					font->chars[codepoint].w = static_cast<uint16_t>(w);
+					font->chars[codepoint].h = height;
+
+					font->line_height = (std::max)(font->line_height, height);
 				}
 			}
 		}
