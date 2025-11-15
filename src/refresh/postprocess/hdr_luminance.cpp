@@ -1,10 +1,17 @@
 #include "hdr_luminance.hpp"
 
 extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h,
-	float u_min, float v_min, float u_max, float v_max);
+        float u_min, float v_min, float u_max, float v_max);
 
 #include <algorithm>
 #include <limits>
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 namespace {
 

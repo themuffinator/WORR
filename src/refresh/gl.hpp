@@ -563,6 +563,7 @@ typedef enum {
 glCullResult_t GL_CullBox(const vec3_t bounds[2]);
 glCullResult_t GL_CullSphere(const vec3_t origin, float radius);
 glCullResult_t GL_CullLocalBox(const vec3_t origin, const vec3_t bounds[2]);
+void GL_SetupFrustum(void);
 
 bool GL_AllocBlock(int width, int height, uint16_t *inuse,
                    int w, int h, int *s, int *t);

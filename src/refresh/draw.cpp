@@ -26,6 +26,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <limits>
 #include <string>
 
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
+
 
 drawStatic_t draw;
 

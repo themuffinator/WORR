@@ -229,40 +229,47 @@ static void GL_SetFramebufferDrawBuffers(GLsizei count, const GLenum *buffers)
 	}
 }
 
-static void GL_SetupFrustum(void)
+/*
+=============
+GL_SetupFrustum
+
+Builds the view frustum planes from the current view parameters.
+=============
+*/
+void GL_SetupFrustum(void)
 {
-    vec_t angle, sf, cf;
-    vec3_t forward, left, up;
-    cplane_t *p;
-    int i;
+	vec_t angle, sf, cf;
+	vec3_t forward, left, up;
+	cplane_t *p;
+	int i;
 
-    // right/left
-    angle = DEG2RAD(glr.fd.fov_x / 2);
-    sf = sinf(angle);
-    cf = cosf(angle);
+	// right/left
+	angle = DEG2RAD(glr.fd.fov_x / 2);
+	sf = sinf(angle);
+	cf = cosf(angle);
 
-    VectorScale(glr.viewaxis[0], sf, forward);
-    VectorScale(glr.viewaxis[1], cf, left);
+	VectorScale(glr.viewaxis[0], sf, forward);
+	VectorScale(glr.viewaxis[1], cf, left);
 
-    VectorAdd(forward, left, glr.frustumPlanes[0].normal);
-    VectorSubtract(forward, left, glr.frustumPlanes[1].normal);
+	VectorAdd(forward, left, glr.frustumPlanes[0].normal);
+	VectorSubtract(forward, left, glr.frustumPlanes[1].normal);
 
-    // top/bottom
-    angle = DEG2RAD(glr.fd.fov_y / 2);
-    sf = sinf(angle);
-    cf = cosf(angle);
+	// top/bottom
+	angle = DEG2RAD(glr.fd.fov_y / 2);
+	sf = sinf(angle);
+	cf = cosf(angle);
 
-    VectorScale(glr.viewaxis[0], sf, forward);
-    VectorScale(glr.viewaxis[2], cf, up);
+	VectorScale(glr.viewaxis[0], sf, forward);
+	VectorScale(glr.viewaxis[2], cf, up);
 
-    VectorAdd(forward, up, glr.frustumPlanes[2].normal);
-    VectorSubtract(forward, up, glr.frustumPlanes[3].normal);
+	VectorAdd(forward, up, glr.frustumPlanes[2].normal);
+	VectorSubtract(forward, up, glr.frustumPlanes[3].normal);
 
-    for (i = 0, p = glr.frustumPlanes; i < 4; i++, p++) {
-        p->dist = DotProduct(glr.fd.vieworg, p->normal);
-        p->type = PLANE_NON_AXIAL;
-        SetPlaneSignbits(p);
-    }
+	for (i = 0, p = glr.frustumPlanes; i < 4; i++, p++) {
+		p->dist = DotProduct(glr.fd.vieworg, p->normal);
+		p->type = PLANE_NON_AXIAL;
+		SetPlaneSignbits(p);
+	}
 }
 
 glCullResult_t GL_CullBox(const vec3_t bounds[2])

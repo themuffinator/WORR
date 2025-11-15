@@ -1236,74 +1236,44 @@ drawable dimensions.
 	} while (0)
 
 bool GL_InitFramebuffers(void)
-{
+	{
 	GLint prev_framebuffer_binding = 0;
 	if (qglGetIntegerv)
-		qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
 	const GLuint restore_framebuffer = prev_framebuffer_binding >= 0 ? static_cast<GLuint>(prev_framebuffer_binding) : 0;
 	bool success = false;
-
-	if (r_fbo && !r_fbo->integer)
-		goto cleanup;
-
 	static const char *const fbo_names[] = {
-		"FBO_SCENE",
-		"FBO_BOKEH_COC",
-		"FBO_BOKEH_RESULT",
-		"FBO_BOKEH_HALF",
-		"FBO_BOKEH_GATHER"
+	"FBO_SCENE",
+	"FBO_BOKEH_COC",
+	"FBO_BOKEH_RESULT",
+	"FBO_BOKEH_HALF",
+	"FBO_BOKEH_GATHER"
 	};
-
-	if (gl_framebuffer_generation_failed) {
-		if (gl_showerrors && gl_showerrors->integer)
-			Com_EPrintf("Framebuffer objects unavailable; post-processing path disabled\n");
-
-		goto cleanup;
-	}
-
-	for (int i = 0; i < FBO_COUNT; ++i) {
-		if (gl_static.framebuffers[i])
-			continue;
-
-		if (gl_showerrors && gl_showerrors->integer) {
-			if (i < static_cast<int>(q_countof(fbo_names))) {
-				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_names[i]);
-		        } else {
-				char fbo_name[32];
-				Q_snprintf(fbo_name, sizeof(fbo_name), "FBO_MOTION_HISTORY(%d)", i - static_cast<int>(q_countof(fbo_names)));
-				Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_name);
-			}
-		}
-
-		goto cleanup;
-	}
-
 	const int max_texture_size = gl_config.max_texture_size;
 	const int max_renderbuffer_size = gl_config.max_renderbuffer_size;
 	int hardware_limit = max_texture_size;
 	if (hardware_limit <= 0 && max_renderbuffer_size > 0) {
-		hardware_limit = max_renderbuffer_size;
+	hardware_limit = max_renderbuffer_size;
 	} else if (hardware_limit > 0 && max_renderbuffer_size > 0) {
-		hardware_limit = (std::min)(hardware_limit, max_renderbuffer_size);
+	hardware_limit = (std::min)(hardware_limit, max_renderbuffer_size);
 	}
 	const auto clamp_extent = [&](int value, const char *label) -> int {
-		if (value <= 0)
-			return value;
-		if (hardware_limit <= 0)
-			return value;
-		if (value > hardware_limit) {
-			if (gl_showerrors && gl_showerrors->integer) {
-				if (max_renderbuffer_size > 0) {
-					Com_DPrintf("Clamping %s from %d to %d (texture limit=%d, renderbuffer limit=%d)\n", label, value, hardware_limit, max_texture_size, max_renderbuffer_size);
-				} else {
-					Com_DPrintf("Clamping %s from %d to %d (texture limit=%d)\n", label, value, hardware_limit, max_texture_size);
-				}
-			}
-			return hardware_limit;
-		}
-		return value;
+	if (value <= 0)
+	return value;
+	if (hardware_limit <= 0)
+	return value;
+	if (value > hardware_limit) {
+	if (gl_showerrors && gl_showerrors->integer) {
+	if (max_renderbuffer_size > 0) {
+	Com_DPrintf("Clamping %s from %d to %d (texture limit=%d, renderbuffer limit=%d)\n", label, value, hardware_limit, max_texture_size, max_renderbuffer_size);
+	} else {
+	Com_DPrintf("Clamping %s from %d to %d (texture limit=%d)\n", label, value, hardware_limit, max_texture_size);
+	}
+	}
+	return hardware_limit;
+	}
+	return value;
 	};
-
 	const int viewport_w = glr.fd.width > 0 ? glr.fd.width : 0;
 	const int viewport_h = glr.fd.height > 0 ? glr.fd.height : 0;
 	int scene_w = 0;
@@ -1320,42 +1290,72 @@ bool GL_InitFramebuffers(void)
 	const bool hdr_effect_active = gl_static.hdr.active;
 	const bool crt_effect_active = R_CRTEnabled();
 	const bool scene_required = underwater_effect_active || bloom_effect_active || dof_active || motion_blur_active || hdr_effect_active || crt_effect_active;
+	bool scene_expected = false;
+	bool motion_history_expected = false;
+	bool clear_motion_history = false;
+
+	if (r_fbo && !r_fbo->integer)
+	goto cleanup;
+
+	if (gl_framebuffer_generation_failed) {
+	if (gl_showerrors && gl_showerrors->integer)
+	Com_EPrintf("Framebuffer objects unavailable; post-processing path disabled\n");
+
+	goto cleanup;
+	}
+
+	for (int i = 0; i < FBO_COUNT; ++i) {
+	if (gl_static.framebuffers[i])
+	continue;
+
+	if (gl_showerrors && gl_showerrors->integer) {
+	if (i < static_cast<int>(q_countof(fbo_names))) {
+	Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_names[i]);
+	} else {
+	char fbo_name[32];
+	Q_snprintf(fbo_name, sizeof(fbo_name), "FBO_MOTION_HISTORY(%d)", i - static_cast<int>(q_countof(fbo_names)));
+	Com_EPrintf("Missing framebuffer object %s; post-processing path disabled\n", fbo_name);
+	}
+	}
+
+	goto cleanup;
+	}
 
 	if (scene_required && viewport_w > 0 && viewport_h > 0) {
-		scene_w = clamp_extent(viewport_w, "scene width");
-		scene_h = clamp_extent(viewport_h, "scene height");
+	scene_w = clamp_extent(viewport_w, "scene width");
+	scene_h = clamp_extent(viewport_h, "scene height");
 	}
 
 	if (bloom_effect_active) {
-		bloom_w = clamp_extent(scene_w, "bloom width");
-		bloom_h = clamp_extent(scene_h, "bloom height");
+	bloom_w = clamp_extent(scene_w, "bloom width");
+	bloom_h = clamp_extent(scene_h, "bloom height");
 	}
 
 	if (dof_active && scene_w > 0 && scene_h > 0) {
-		dof_full_w = clamp_extent(scene_w, "dof full width");
-		dof_full_h = clamp_extent(scene_h, "dof full height");
+	dof_full_w = clamp_extent(scene_w, "dof full width");
+	dof_full_h = clamp_extent(scene_h, "dof full height");
 
-		if (dof_full_w > 0 && dof_full_h > 0) {
-			if (dof_reduced) {
-				dof_result_w = (std::max)(dof_full_w / 2, 1);
-				dof_result_h = (std::max)(dof_full_h / 2, 1);
-			} else {
-				dof_result_w = dof_full_w;
-				dof_result_h = dof_full_h;
-			}
+	if (dof_full_w > 0 && dof_full_h > 0) {
+	if (dof_reduced) {
+	dof_result_w = (std::max)(dof_full_w / 2, 1);
+	dof_result_h = (std::max)(dof_full_h / 2, 1);
+	} else {
+	dof_result_w = dof_full_w;
+	dof_result_h = dof_full_h;
+	}
 
-			dof_result_w = clamp_extent(dof_result_w, "dof result width");
-			dof_result_h = clamp_extent(dof_result_h, "dof result height");
-			dof_half_w = dof_result_w > 0 ? (std::max)(dof_result_w / 2, 1) : 0;
-			dof_half_h = dof_result_h > 0 ? (std::max)(dof_result_h / 2, 1) : 0;
-			dof_half_w = clamp_extent(dof_half_w, "dof half width");
-			dof_half_h = clamp_extent(dof_half_h, "dof half height");
-		}
+	dof_result_w = clamp_extent(dof_result_w, "dof result width");
+	dof_result_h = clamp_extent(dof_result_h, "dof result height");
+	dof_half_w = dof_result_w > 0 ? (std::max)(dof_result_w / 2, 1) : 0;
+	dof_half_h = dof_result_h > 0 ? (std::max)(dof_result_h / 2, 1) : 0;
+	dof_half_w = clamp_extent(dof_half_w, "dof half width");
+	dof_half_h = clamp_extent(dof_half_h, "dof half height");
+	}
 	}
 	if (!dof_active) {
-		dof_full_w = dof_full_h = 0;
-		dof_result_w = dof_result_h = 0;
-		dof_half_w = dof_half_h = 0;
+	dof_full_w = dof_full_h = 0;
+	dof_result_w = dof_result_h = 0;
+	dof_half_w = dof_half_h = 0;
 	}
 
 	GL_ClearErrors();
@@ -1395,7 +1395,7 @@ bool GL_InitFramebuffers(void)
 
 	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_DEPTH : GL_NONE, 0);
 
-	const bool scene_expected = scene_required && scene_w > 0 && scene_h > 0;
+	scene_expected = scene_required && scene_w > 0 && scene_h > 0;
 	CHECK_FB(scene_expected, "FBO_SCENE");
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BOKEH_COC);
@@ -1421,7 +1421,7 @@ bool GL_InitFramebuffers(void)
 	glr.motion_history_textures_ready = false;
 	glr.framebuffer_resources_resident = false;
 
-	const bool motion_history_expected = motion_blur_active && scene_w > 0 && scene_h > 0;
+	motion_history_expected = motion_blur_active && scene_w > 0 && scene_h > 0;
 
 	for (int i = 0; i < R_MOTION_BLUR_HISTORY_FRAMES; ++i) {
 		qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(i));
@@ -1436,7 +1436,7 @@ bool GL_InitFramebuffers(void)
 	static bool prev_motion_history_expected = false;
 	static int prev_motion_history_width = 0;
 	static int prev_motion_history_height = 0;
-	bool clear_motion_history = false;
+	clear_motion_history = false;
 	if (motion_history_expected) {
 		if (!prev_motion_history_expected || scene_w != prev_motion_history_width || scene_h != prev_motion_history_height)
 			clear_motion_history = true;
