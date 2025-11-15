@@ -381,7 +381,8 @@ void render_shadow_views()
 	const bool prev_rendering_shadows = glr.rendering_shadows;
 	glr.rendering_shadows = rendering_shadows;
 
-	GLint prev_draw_buffer = GL_BACK;
+	std::vector<GLenum> prev_draw_buffers;
+	GLsizei prev_draw_buffer_count = 0;
 	GLint prev_read_buffer = GL_BACK;
 	GLint prev_fbo = 0;
 	GLint prev_viewport[4] = { 0, 0, 0, 0 };
@@ -392,7 +393,29 @@ void render_shadow_views()
 	GLboolean prev_scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
 	GLint prev_scissor_box[4] = { 0, 0, 0, 0 };
 
-	qglGetIntegerv(GL_DRAW_BUFFER, &prev_draw_buffer);
+	if (qglDrawBuffers) {
+		GLint max_draw_buffers = 1;
+		qglGetIntegerv(GL_MAX_DRAW_BUFFERS, &max_draw_buffers);
+		if (max_draw_buffers < 1)
+			max_draw_buffers = 1;
+		prev_draw_buffers.resize(static_cast<size_t>(max_draw_buffers), GL_NONE);
+		for (GLint i = 0; i < max_draw_buffers; ++i) {
+			GLint buffer = GL_NONE;
+			qglGetIntegerv(GL_DRAW_BUFFER0 + i, &buffer);
+			prev_draw_buffers[static_cast<size_t>(i)] = static_cast<GLenum>(buffer);
+			if (buffer != GL_NONE)
+				prev_draw_buffer_count = static_cast<GLsizei>(i + 1);
+		}
+		if (prev_draw_buffer_count > 0)
+			prev_draw_buffers.resize(static_cast<size_t>(prev_draw_buffer_count));
+		else
+			prev_draw_buffers.clear();
+	} else if (qglDrawBuffer) {
+		GLint buffer = GL_BACK;
+		qglGetIntegerv(GL_DRAW_BUFFER, &buffer);
+		prev_draw_buffers.push_back(static_cast<GLenum>(buffer));
+		prev_draw_buffer_count = 1;
+	}
 	const bool has_read_buffer = qglReadBuffer != nullptr;
 	if (has_read_buffer)
 		qglGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
@@ -408,11 +431,14 @@ void render_shadow_views()
 	const bool prev_framebuffer_bound = glr.framebuffer_bound;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadow.framebuffer);
-	const GLenum no_buffers = GL_NONE;
 	if (qglDrawBuffers) {
-		qglDrawBuffers(1, &no_buffers);
+		qglDrawBuffers(0, nullptr);
 	} else if (qglDrawBuffer) {
 		qglDrawBuffer(GL_NONE);
+	}
+	if (qglGetError) {
+		while (qglGetError() != GL_NO_ERROR) {
+		}
 	}
 	if (has_read_buffer)
 		qglReadBuffer(GL_NONE);
@@ -519,11 +545,18 @@ void render_shadow_views()
 	GL_ForceMatrix(gl_identity, glr.viewmatrix);
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-	GLenum prev_draw_buffer_enum = static_cast<GLenum>(prev_draw_buffer);
 	if (qglDrawBuffers) {
-		qglDrawBuffers(1, &prev_draw_buffer_enum);
+		if (prev_draw_buffer_count > 0)
+			qglDrawBuffers(prev_draw_buffer_count, prev_draw_buffers.data());
+		else
+			qglDrawBuffers(0, nullptr);
 	} else if (qglDrawBuffer) {
-		qglDrawBuffer(prev_draw_buffer_enum);
+		const GLenum restore_buffer = prev_draw_buffers.empty() ? GL_NONE : prev_draw_buffers.front();
+		qglDrawBuffer(restore_buffer);
+	}
+	if (qglGetError) {
+		while (qglGetError() != GL_NO_ERROR) {
+		}
 	}
 	if (has_read_buffer)
 		qglReadBuffer(prev_read_buffer);
