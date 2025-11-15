@@ -459,6 +459,9 @@ void render_shadow_views()
 		glr.view_zfar = view.far_plane;
 		glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
 
+		if (gl_backend->setup_3d)
+			gl_backend->setup_3d();
+
 		gl_backend->load_matrix(GL_PROJECTION, view.proj_matrix, gl_identity);
 		GL_ForceMatrix(gl_identity, view.view_matrix);
 
