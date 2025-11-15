@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/q3colors.hpp"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <string>
 
@@ -70,13 +71,21 @@ static inline void GL_StretchRotatePic_(
 #define GL_StretchRotatePic(x,y,w,h,s1,t1,s2,t2,angle,px,py,color,image) \
     GL_StretchRotatePic_(x,y,w,h,s1,t1,s2,t2,angle,px,py,color,(image)->texnum,(image)->flags)
 
+/*
+=============
+GL_DrawVignette
+
+Draws the screen-space damage vignette with support for fractional
+blend extents.
+=============
+*/
 static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 {
-    static const byte indices[24] = {
-        0, 5, 4, 0, 1, 5, 1, 6, 5, 1, 2, 6, 6, 2, 3, 6, 3, 7, 0, 7, 3, 0, 4, 7
-    };
-    vec_t *dst_vert;
-    glIndex_t *dst_indices;
+	static const byte indices[24] = {
+		0, 5, 4, 0, 1, 5, 1, 6, 5, 1, 2, 6, 6, 2, 3, 6, 3, 7, 0, 7, 3, 0, 4, 7
+	};
+	vec_t *dst_vert;
+	glIndex_t *dst_indices;
 
     if (tess.numverts + 8 > TESS_MAX_VERTICES ||
         tess.numindices + 24 > TESS_MAX_INDICES ||
@@ -85,33 +94,39 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 
     tess.texnum[TMU_TEXTURE] = TEXNUM_WHITE;
 
-    int x = 0, y = 0;
-    int w = glr.fd.width, h = glr.fd.height;
-    int distance = min(w, h) * frac;
+	float x = 0.0f;
+	float y = 0.0f;
+	float w = static_cast<float>(glr.fd.width);
+	float h = static_cast<float>(glr.fd.height);
+	float distance = std::round(std::min(w, h) * frac);
 
-    // outer vertices
-    dst_vert = tess.vertices + tess.numverts * 5;
-    Vector4Set(dst_vert,      x,     y,     0, 0);
-    Vector4Set(dst_vert +  5, x + w, y,     0, 0);
-    Vector4Set(dst_vert + 10, x + w, y + h, 0, 0);
-    Vector4Set(dst_vert + 15, x,     y + h, 0, 0);
+	const auto writeVertex = [](vec_t *vertex, float vx, float vy) {
+		Vector4Set(vertex, static_cast<vec_t>(vx), static_cast<vec_t>(vy), 0.0f, 0.0f);
+	};
+
+	// outer vertices
+	dst_vert = tess.vertices + tess.numverts * 5;
+	writeVertex(dst_vert, x, y);
+	writeVertex(dst_vert + 5, x + w, y);
+	writeVertex(dst_vert + 10, x + w, y + h);
+	writeVertex(dst_vert + 15, x, y + h);
 
     WN32(dst_vert +  4, outer.u32);
     WN32(dst_vert +  9, outer.u32);
     WN32(dst_vert + 14, outer.u32);
     WN32(dst_vert + 19, outer.u32);
 
-    // inner vertices
-    x += distance;
-    y += distance;
-    w -= distance * 2;
-    h -= distance * 2;
+	// inner vertices
+	float inner_x = x + distance;
+	float inner_y = y + distance;
+	float inner_w = w - distance * 2.0f;
+	float inner_h = h - distance * 2.0f;
 
-    dst_vert += 20;
-    Vector4Set(dst_vert,      x,     y,     0, 0);
-    Vector4Set(dst_vert +  5, x + w, y,     0, 0);
-    Vector4Set(dst_vert + 10, x + w, y + h, 0, 0);
-    Vector4Set(dst_vert + 15, x,     y + h, 0, 0);
+	dst_vert += 20;
+	writeVertex(dst_vert, inner_x, inner_y);
+	writeVertex(dst_vert + 5, inner_x + inner_w, inner_y);
+	writeVertex(dst_vert + 10, inner_x + inner_w, inner_y + inner_h);
+	writeVertex(dst_vert + 15, inner_x, inner_y + inner_h);
 
     WN32(dst_vert +  4, inner.u32);
     WN32(dst_vert +  9, inner.u32);
