@@ -243,62 +243,85 @@ bool BloomEffect::attachFramebuffer(GLuint fbo, GLuint texture, int width, int h
 	return true;
 }
 
+/*
+=============
+BloomEffect::resize
+
+Ensures bloom textures match the current scene resolution, respecting driver limits.
+=============
+*/
 bool BloomEffect::resize(int sceneWidth, int sceneHeight)
 {
-        if (sceneWidth <= 0 || sceneHeight <= 0) {
-                shutdown();
-                return false;
-        }
+	if (sceneWidth <= 0 || sceneHeight <= 0) {
+		shutdown();
+		return false;
+	}
 
-        ensureInitialized();
-        if (!initialized_)
-                return false;
+	ensureInitialized();
+	if (!initialized_)
+		return false;
 
-        const float downscale = (std::max)(Cvar_ClampValue(r_bloomScale, 1.0f, 16.0f), 1.0f);
-        const int downW = (std::max)(static_cast<int>(sceneWidth / downscale), 1);
-        const int downH = (std::max)(static_cast<int>(sceneHeight / downscale), 1);
-        const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
-        const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
-        const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
+	const float downscale = (std::max)(Cvar_ClampValue(r_bloomScale, 1.0f, 16.0f), 1.0f);
+	const auto clampDimension = [&](int value, const char* label) -> int {
+		const int maxTextureSize = gl_config.max_texture_size;
+		if (value <= maxTextureSize)
+			return value;
 
-        if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
-                downsampleWidth_ == downW && downsampleHeight_ == downH &&
-                postprocessInternalFormat_ == internalFormat && postprocessFormat_ == format &&
-                postprocessType_ == type) {
-                resizeErrorLogged_ = false;
-                return true;
-        }
+		if (gl_showerrors && gl_showerrors->integer)
+			Com_DPrintf("BloomEffect: clamped %s from %d to %d (max texture size)\n", label, value, maxTextureSize);
+		return maxTextureSize;
+	};
 
-        sceneWidth_ = sceneWidth;
-        sceneHeight_ = sceneHeight;
-        downsampleWidth_ = downW;
-        downsampleHeight_ = downH;
-        postprocessInternalFormat_ = internalFormat;
-        postprocessFormat_ = format;
-        postprocessType_ = type;
+	sceneWidth = clampDimension(sceneWidth, "scene width");
+	sceneHeight = clampDimension(sceneHeight, "scene height");
 
-        allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
-        allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
-        allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
-        allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+	int downW = (std::max)(static_cast<int>(sceneWidth / downscale), 1);
+	int downH = (std::max)(static_cast<int>(sceneHeight / downscale), 1);
+	downW = clampDimension(downW, "downsample width");
+	downH = clampDimension(downH, "downsample height");
+	const GLenum internalFormat = gl_static.postprocess_internal_format ? gl_static.postprocess_internal_format : GL_RGBA;
+	const GLenum format = gl_static.postprocess_format ? gl_static.postprocess_format : GL_RGBA;
+	const GLenum type = gl_static.postprocess_type ? gl_static.postprocess_type : GL_UNSIGNED_BYTE;
 
-        bool ok = true;
-        ok &= attachFramebuffer(framebuffers_[DownsampleFbo], textures_[Downsample], downsampleWidth_, downsampleHeight_, "BLOOM_DOWNSAMPLE");
-        ok &= attachFramebuffer(framebuffers_[BrightPassFbo], textures_[BrightPass], downsampleWidth_, downsampleHeight_, "BLOOM_BRIGHTPASS");
-        ok &= attachFramebuffer(framebuffers_[BlurFbo0], textures_[Blur0], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR0");
-        ok &= attachFramebuffer(framebuffers_[BlurFbo1], textures_[Blur1], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR1");
+	if (sceneWidth_ == sceneWidth && sceneHeight_ == sceneHeight &&
+		downsampleWidth_ == downW && downsampleHeight_ == downH &&
+		postprocessInternalFormat_ == internalFormat && postprocessFormat_ == format &&
+		postprocessType_ == type) {
+		resizeErrorLogged_ = false;
+		return true;
+	}
 
-        if (!ok) {
-                if (!resizeErrorLogged_ && gl_showerrors->integer)
-                        Com_EPrintf("BloomEffect: failed to build framebuffers for %dx%d target\n", downsampleWidth_, downsampleHeight_);
-                resizeErrorLogged_ = true;
-                shutdown();
-                return false;
-        }
+	sceneWidth_ = sceneWidth;
+	sceneHeight_ = sceneHeight;
+	downsampleWidth_ = downW;
+	downsampleHeight_ = downH;
+	postprocessInternalFormat_ = internalFormat;
+	postprocessFormat_ = format;
+	postprocessType_ = type;
 
-        resizeErrorLogged_ = false;
-        return true;
+	allocateTexture(textures_[Downsample], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+	allocateTexture(textures_[BrightPass], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+	allocateTexture(textures_[Blur0], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+	allocateTexture(textures_[Blur1], downsampleWidth_, downsampleHeight_, internalFormat, format, type);
+
+	bool ok = true;
+	ok &= attachFramebuffer(framebuffers_[DownsampleFbo], textures_[Downsample], downsampleWidth_, downsampleHeight_, "BLOOM_DOWNSAMPLE");
+	ok &= attachFramebuffer(framebuffers_[BrightPassFbo], textures_[BrightPass], downsampleWidth_, downsampleHeight_, "BLOOM_BRIGHTPASS");
+	ok &= attachFramebuffer(framebuffers_[BlurFbo0], textures_[Blur0], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR0");
+	ok &= attachFramebuffer(framebuffers_[BlurFbo1], textures_[Blur1], downsampleWidth_, downsampleHeight_, "BLOOM_BLUR1");
+
+	if (!ok) {
+		if (!resizeErrorLogged_ && gl_showerrors->integer)
+			Com_EPrintf("BloomEffect: failed to build framebuffers for %dx%d target\n", downsampleWidth_, downsampleHeight_);
+		resizeErrorLogged_ = true;
+		shutdown();
+		return false;
+	}
+
+	resizeErrorLogged_ = false;
+	return true;
 }
+
 
 /*
 =============
