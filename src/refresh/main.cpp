@@ -1817,6 +1817,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
 	const bool post_processing_disabled = !post_processing_requested;
 	const bool post_processing_paused = post_processing_requested && !world_visible;
+	const bool underwater_effect_active = (glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer;
 	const bool had_framebuffer_resources = glr.framebuffer_resources_resident;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
@@ -1833,6 +1834,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool motion_blur_enabled = motion_blur_requested;
 
 	if (post_processing_disabled) {
+		glr.framebuffer_underwater_effect_active = false;
 		glr.motion_blur_enabled = false;
 		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
 		HDR_DisableFramebufferResources();
@@ -1842,6 +1844,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 			GL_ReleaseFramebufferResources();
 		return PP_NONE;
 	}
+
+	glr.framebuffer_underwater_effect_active = underwater_effect_active;
 
 	HDR_UpdateConfig();
 
@@ -1869,7 +1873,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		prev_format != gl_static.postprocess_format ||
 		prev_type != gl_static.postprocess_type;
 
-	if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
+	if (underwater_effect_active)
 		flags |= PP_WATERWARP;
 
 	if (r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
