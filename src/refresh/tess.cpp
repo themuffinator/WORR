@@ -919,8 +919,11 @@ void GL_AddSolidFace(mface_t *face)
 
 void GL_AddAlphaFace(mface_t *face)
 {
-    // draw back-to-front
-    face->entity = glr.ent;
-    face->next = faces_alpha;
-    faces_alpha = face;
+	if (glr.rendering_shadows)
+		return;
+
+	// draw back-to-front
+	face->entity = glr.ent;
+	face->next = faces_alpha;
+	faces_alpha = face;
 }

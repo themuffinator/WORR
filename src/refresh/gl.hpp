@@ -282,6 +282,7 @@ typedef struct {
     std::array<bool, R_MOTION_BLUR_HISTORY_FRAMES> motion_history_valid;
     int             motion_blur_history_index;
     int             motion_blur_history_count;
+	bool		rendering_shadows;
 } glRefdef_t;
 
 typedef enum {
