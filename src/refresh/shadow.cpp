@@ -472,9 +472,9 @@ void render_shadow_views()
 		GL_ClassifyEntities();
 		GL_DrawEntities(glr.ents.bmodels);
 		GL_DrawEntities(glr.ents.opaque);
-		GL_DrawEntities(glr.ents.alpha_back);
+		// Shadow atlas rendering is depth-only; skip the alpha entity lists so we
+		// don't reintroduce blended passes that produce incorrect shadows.
 		GL_DrawAlphaFaces();
-		GL_DrawEntities(glr.ents.alpha_front);
 		GL_DrawDebugObjects();
 
 		GL_Flush3D();
