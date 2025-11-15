@@ -461,6 +461,9 @@ void render_shadow_views()
 		glr.view_zfar = view.far_plane;
 		glr.view_proj_valid = Matrix_Invert(glr.view_proj_matrix, glr.inv_view_proj_matrix);
 
+		if (gl_backend->setup_3d)
+			gl_backend->setup_3d();
+
 		gl_backend->load_matrix(GL_PROJECTION, view.proj_matrix, gl_identity);
 		GL_ForceMatrix(gl_identity, view.view_matrix);
 
@@ -471,9 +474,11 @@ void render_shadow_views()
 		GL_ClassifyEntities();
 		GL_DrawEntities(glr.ents.bmodels);
 		GL_DrawEntities(glr.ents.opaque);
-		GL_DrawEntities(glr.ents.alpha_back);
+		// Shadow atlas rendering is depth-only; skip the alpha entity lists so we
+		// don't reintroduce blended passes that produce incorrect shadows.
 		GL_DrawAlphaFaces();
 		GL_DrawEntities(glr.ents.alpha_front);
+		GL_DrawDebugObjects();
 
 		GL_Flush3D();
 	}

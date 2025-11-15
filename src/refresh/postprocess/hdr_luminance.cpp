@@ -4,6 +4,7 @@ extern void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h,
 	float u_min, float v_min, float u_max, float v_max);
 
 #include <algorithm>
+#include <limits>
 
 namespace {
 
@@ -183,19 +184,29 @@ Reallocates the reduction chain to match the supplied source dimensions.
 */
 bool HdrLuminanceReducer::resize(int width, int height) noexcept
 {
-	if (width == source_width_ && height == source_height_)
-	return !levels_.empty();
+	if (width <= 0 || height <= 0) {
+		destroyLevels();
+		return false;
+	}
+
+	const int hardware_max = gl_config.max_texture_size > 0 ? gl_config.max_texture_size : std::numeric_limits<int>::max();
+	const int clamped_width = (std::max)(1, (std::min)(width, hardware_max));
+	const int clamped_height = (std::max)(1, (std::min)(height, hardware_max));
+	const bool was_clamped = clamped_width != width || clamped_height != height;
+
+	if (clamped_width == source_width_ && clamped_height == source_height_)
+		return !levels_.empty();
 
 	destroyLevels();
 
-	if (width <= 0 || height <= 0)
-	return false;
+	source_width_ = clamped_width;
+	source_height_ = clamped_height;
 
-	source_width_ = width;
-	source_height_ = height;
+	if (was_clamped && gl_showerrors && gl_showerrors->integer)
+		Com_EPrintf("HDR luminance resize clamped %dx%d to %dx%d (max=%d)\n", width, height, clamped_width, clamped_height, hardware_max);
 
-	int current_w = width;
-	int current_h = height;
+	int current_w = clamped_width;
+	int current_h = clamped_height;
 
 	while (current_w > 1 || current_h > 1) {
 		Level level;
