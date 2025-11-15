@@ -431,10 +431,13 @@ typedef struct {
     int     stencilbits;
     int     max_texture_size_log2;
     int     max_texture_size;
-    int     max_renderbuffer_size;
-    int     ssbo_align;
-    float   max_anisotropy;
-    bool    webgl;
+	int		max_renderbuffer_size;
+	int		ssbo_align;
+	int		max_texture_units;
+	int		max_combined_texture_image_units;
+	float	max_anisotropy;
+	bool	webgl;
+	bool	motion_blur_supported;
 } glConfig_t;
 
 extern glStatic_t gl_static;
