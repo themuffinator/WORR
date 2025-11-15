@@ -1220,12 +1220,21 @@ drawable dimensions.
 =============
 */
 #define CHECK_FB(check, name) \
-	if (!GL_CheckFramebufferStatus(check, name)) return false
+	do { \
+		if (!GL_CheckFramebufferStatus(check, name)) \
+			goto cleanup; \
+	} while (0)
 
 bool GL_InitFramebuffers(void)
 {
+	GLint prev_framebuffer_binding = 0;
+	if (qglGetIntegerv)
+		qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+	const GLuint restore_framebuffer = prev_framebuffer_binding >= 0 ? static_cast<GLuint>(prev_framebuffer_binding) : 0;
+	bool success = false;
+
 	if (r_fbo && !r_fbo->integer)
-		return false;
+		goto cleanup;
 
 	static const char *const fbo_names[] = {
 		"FBO_SCENE",
@@ -1239,7 +1248,7 @@ bool GL_InitFramebuffers(void)
 		if (gl_showerrors && gl_showerrors->integer)
 			Com_EPrintf("Framebuffer objects unavailable; post-processing path disabled\n");
 
-		return false;
+		goto cleanup;
 	}
 
 	for (int i = 0; i < FBO_COUNT; ++i) {
@@ -1256,7 +1265,7 @@ bool GL_InitFramebuffers(void)
 			}
 		}
 
-		return false;
+		goto cleanup;
 	}
 
 	const int max_texture_size = gl_config.max_texture_size;
@@ -1409,7 +1418,7 @@ bool GL_InitFramebuffers(void)
 		GLuint tex = (motion_blur_active && scene_w && scene_h) ? TEXNUM_PP_MOTION_HISTORY(i) : GL_NONE;
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
 		if (!GL_CheckFramebufferStatus(motion_history_expected, "FBO_MOTION_HISTORY"))
-			return false;
+			goto cleanup;
 		if (motion_history_expected && gl_showerrors->integer)
 			Com_DPrintf("FBO_MOTION_HISTORY(%d) complete (%dx%d)\n", i, scene_w, scene_h);
 	}
@@ -1438,8 +1447,6 @@ bool GL_InitFramebuffers(void)
 		}
 	}
 	glr.motion_history_textures_ready = motion_history_expected;
-
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	if (r_bloom->integer) {
 		if (!g_bloom_effect.resize(bloom_w, bloom_h))
@@ -1474,7 +1481,11 @@ bool GL_InitFramebuffers(void)
 		glr.framebuffer_v_max = 1.0f;
 	}
 
-	return true;
+	success = true;
+
+cleanup:
+	qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer);
+	return success;
 }
 
 /*
