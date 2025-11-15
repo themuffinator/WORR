@@ -377,6 +377,9 @@ void render_shadow_views()
 	if (g_render_views.empty())
 		return;
 
+	const bool rendering_shadows = true;
+	const bool prev_alpha_faces_enabled = GL_SetAlphaFaceRendering(!rendering_shadows);
+
 	GLint prev_draw_buffer = GL_BACK;
 	GLint prev_read_buffer = GL_BACK;
 	GLint prev_fbo = 0;
@@ -470,12 +473,15 @@ void render_shadow_views()
 		GL_DrawEntities(glr.ents.bmodels);
 		GL_DrawEntities(glr.ents.opaque);
 		GL_DrawEntities(glr.ents.alpha_back);
-		GL_DrawAlphaFaces();
+		if (!rendering_shadows)
+			GL_DrawAlphaFaces();
 		GL_DrawEntities(glr.ents.alpha_front);
 		GL_DrawDebugObjects();
 
 		GL_Flush3D();
 	}
+
+	GL_SetAlphaFaceRendering(prev_alpha_faces_enabled);
 
 	glr.fd = saved_fd;
 	for (int i = 0; i < 3; ++i)

@@ -1299,6 +1299,7 @@ void GL_Flush3D(void);
 void GL_AddAlphaFace(mface_t *face);
 void GL_AddSolidFace(mface_t *face);
 void GL_DrawAlphaFaces(void);
+bool GL_SetAlphaFaceRendering(bool enable);
 void GL_DrawSolidFaces(void);
 void GL_ClearSolidFaces(void);
 void GL_ClassifyEntities(void);

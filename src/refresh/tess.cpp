@@ -95,6 +95,7 @@ tesselator_t tess;
 static mface_t  *faces_head[FACE_HASH_SIZE];
 static mface_t  **faces_next[FACE_HASH_SIZE];
 static mface_t  *faces_alpha;
+static bool s_alpha_faces_enabled = true;
 
 void GL_Flush2D(void)
 {
@@ -919,8 +920,27 @@ void GL_AddSolidFace(mface_t *face)
 
 void GL_AddAlphaFace(mface_t *face)
 {
-    // draw back-to-front
-    face->entity = glr.ent;
-    face->next = faces_alpha;
-    faces_alpha = face;
+	if (!s_alpha_faces_enabled)
+		return;
+
+	// draw back-to-front
+	face->entity = glr.ent;
+	face->next = faces_alpha;
+	faces_alpha = face;
+}
+
+/*
+=============
+GL_SetAlphaFaceRendering
+
+Enables or disables queuing and drawing of alpha faces, returning the previous state.
+=============
+*/
+bool GL_SetAlphaFaceRendering(bool enable)
+{
+	bool previous = s_alpha_faces_enabled;
+	s_alpha_faces_enabled = enable;
+	if (!enable)
+		faces_alpha = NULL;
+	return previous;
 }
