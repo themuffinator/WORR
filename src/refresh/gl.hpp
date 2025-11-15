@@ -269,6 +269,7 @@ typedef struct {
     bool            prev_view_proj_valid;
     bool            view_proj_valid;
     bool            motion_blur_enabled;
+    bool            framebuffer_underwater_effect_active;
     bool            motion_blur_ready;
     bool            motion_history_textures_ready;
     float           motion_blur_scale;

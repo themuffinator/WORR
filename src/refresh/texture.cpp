@@ -1193,22 +1193,32 @@ static void GL_InitDepthTexture(int w, int h)
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+/*
+=============
+GL_CheckFramebufferStatus
+
+Validates the currently bound framebuffer and restores the previous binding.
+=============
+*/
 static bool GL_CheckFramebufferStatus(bool check, const char *name)
 {
-    GL_ShowErrors(__func__);
+	GL_ShowErrors(__func__);
 
-    if (!check)
-        return true;
+	GLint framebuffer = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
 
-    GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status == GL_FRAMEBUFFER_COMPLETE)
-        return true;
+	if (!check)
+		return true;
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (gl_showerrors->integer)
-        Com_EPrintf("%s framebuffer status %#x\n", name, status);
+	GLenum status = qglCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		if (gl_showerrors->integer)
+			Com_EPrintf("%s framebuffer status %#x\n", name, status);
+	}
 
-    return false;
+	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	return status == GL_FRAMEBUFFER_COMPLETE;
 }
 
 /*
@@ -1220,12 +1230,21 @@ drawable dimensions.
 =============
 */
 #define CHECK_FB(check, name) \
-	if (!GL_CheckFramebufferStatus(check, name)) return false
+	do { \
+		if (!GL_CheckFramebufferStatus(check, name)) \
+			goto cleanup; \
+	} while (0)
 
 bool GL_InitFramebuffers(void)
 {
+	GLint prev_framebuffer_binding = 0;
+	if (qglGetIntegerv)
+		qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+	const GLuint restore_framebuffer = prev_framebuffer_binding >= 0 ? static_cast<GLuint>(prev_framebuffer_binding) : 0;
+	bool success = false;
+
 	if (r_fbo && !r_fbo->integer)
-		return false;
+		goto cleanup;
 
 	static const char *const fbo_names[] = {
 		"FBO_SCENE",
@@ -1239,7 +1258,7 @@ bool GL_InitFramebuffers(void)
 		if (gl_showerrors && gl_showerrors->integer)
 			Com_EPrintf("Framebuffer objects unavailable; post-processing path disabled\n");
 
-		return false;
+		goto cleanup;
 	}
 
 	for (int i = 0; i < FBO_COUNT; ++i) {
@@ -1256,7 +1275,7 @@ bool GL_InitFramebuffers(void)
 			}
 		}
 
-		return false;
+		goto cleanup;
 	}
 
 	const int max_texture_size = gl_config.max_texture_size;
@@ -1296,7 +1315,7 @@ bool GL_InitFramebuffers(void)
 	const bool dof_active = gl_dof->integer && glr.fd.depth_of_field;
 	const bool dof_reduced = dof_active && gl_dof_quality && gl_dof_quality->integer;
 	const bool motion_blur_active = glr.motion_blur_enabled && gl_config.motion_blur_supported;
-	const bool underwater_effect_active = !r_skipUnderWaterFX->integer;
+	const bool underwater_effect_active = glr.framebuffer_underwater_effect_active;
 	const bool bloom_effect_active = r_bloom->integer;
 	const bool hdr_effect_active = gl_static.hdr.active;
 	const bool crt_effect_active = R_CRTEnabled();
@@ -1409,7 +1428,7 @@ bool GL_InitFramebuffers(void)
 		GLuint tex = (motion_blur_active && scene_w && scene_h) ? TEXNUM_PP_MOTION_HISTORY(i) : GL_NONE;
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
 		if (!GL_CheckFramebufferStatus(motion_history_expected, "FBO_MOTION_HISTORY"))
-			return false;
+			goto cleanup;
 		if (motion_history_expected && gl_showerrors->integer)
 			Com_DPrintf("FBO_MOTION_HISTORY(%d) complete (%dx%d)\n", i, scene_w, scene_h);
 	}
@@ -1438,8 +1457,6 @@ bool GL_InitFramebuffers(void)
 		}
 	}
 	glr.motion_history_textures_ready = motion_history_expected;
-
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	if (r_bloom->integer) {
 		if (!g_bloom_effect.resize(bloom_w, bloom_h))
@@ -1474,7 +1491,11 @@ bool GL_InitFramebuffers(void)
 		glr.framebuffer_v_max = 1.0f;
 	}
 
-	return true;
+	success = true;
+
+cleanup:
+	qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer);
+	return success;
 }
 
 /*
@@ -1482,11 +1503,15 @@ bool GL_InitFramebuffers(void)
 GL_ReleaseFramebufferResources
 
 Releases post-processing framebuffer textures and associated state so that the
-renderer no longer depends on framebuffer objects.
+renderer no longer depends on framebuffer objects while preserving the
+currently bound framebuffer.
 =============
 */
 void GL_ReleaseFramebufferResources(void)
 {
+	GLint framebuffer_binding = 0;
+
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer_binding);
 	GL_ClearErrors();
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
 	GL_InitPostProcTexture(0, 0);
@@ -1524,7 +1549,7 @@ void GL_ReleaseFramebufferResources(void)
 	glr.framebuffer_v_min = 0.0f;
 	glr.framebuffer_u_max = 1.0f;
 	glr.framebuffer_v_max = 1.0f;
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, framebuffer_binding);
 }
 
 static void gl_partshape_changed(cvar_t *self)

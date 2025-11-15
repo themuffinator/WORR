@@ -1431,6 +1431,9 @@ static void GL_RunDepthOfField(void)
 	if (full_w <= 0 || full_h <= 0 || result_w <= 0 || result_h <= 0 || half_w <= 0 || half_h <= 0)
 		return;
 
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+
 	GL_Setup2D();
 
 	GL_BokehCoCPass(full_w, full_h, full_w, full_h);
@@ -1439,7 +1442,7 @@ static void GL_RunDepthOfField(void)
 	GL_BokehGatherPass(half_w, half_h, half_w, half_h);
 	GL_BokehCombinePass(result_w, result_h, half_w, half_h);
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 }
 
 typedef enum {
@@ -1664,6 +1667,9 @@ static void R_StoreMotionBlurHistory(void)
 	if (!glr.motion_history_textures_ready)
 		return;
 
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+
 	int composite_x = 0;
 	int composite_y = 0;
 	int composite_w = 0;
@@ -1681,7 +1687,7 @@ static void R_StoreMotionBlurHistory(void)
 	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h,
 		glr.framebuffer_u_min, glr.framebuffer_v_min,
 		glr.framebuffer_u_max, glr.framebuffer_v_max);
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GL_Setup2D();
 
 	(void)composite_x;
@@ -1820,6 +1826,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool post_processing_requested = gl_static.use_shaders && post_processing_enabled && fbo_enabled;
 	const bool post_processing_disabled = !post_processing_requested;
 	const bool post_processing_paused = post_processing_requested && !world_visible;
+	const bool underwater_effect_active = (glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer;
 	const bool had_framebuffer_resources = glr.framebuffer_resources_resident;
 	const GLenum prev_internal_format = gl_static.postprocess_internal_format;
 	const GLenum prev_format = gl_static.postprocess_format;
@@ -1843,6 +1850,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 	const bool motion_blur_enabled = motion_blur_requested && motion_blur_supported;
 
 	if (post_processing_disabled) {
+		glr.framebuffer_underwater_effect_active = false;
 		glr.motion_blur_enabled = false;
 		GL_UpdateBloomEffect(false, scene_target_w, scene_target_h);
 		HDR_DisableFramebufferResources();
@@ -1852,6 +1860,8 @@ static pp_flags_t GL_BindFramebuffer(void)
 			GL_ReleaseFramebufferResources();
 		return PP_NONE;
 	}
+
+	glr.framebuffer_underwater_effect_active = underwater_effect_active;
 
 	HDR_UpdateConfig();
 
@@ -1879,7 +1889,7 @@ static pp_flags_t GL_BindFramebuffer(void)
 		prev_format != gl_static.postprocess_format ||
 		prev_type != gl_static.postprocess_type;
 
-	if ((glr.fd.rdflags & RDF_UNDERWATER) && !r_skipUnderWaterFX->integer)
+	if (underwater_effect_active)
 		flags |= PP_WATERWARP;
 
 	if (r_bloom->integer && (gl_config.caps & QGL_CAP_DRAW_BUFFERS) && qglDrawBuffers)
@@ -1916,8 +1926,17 @@ static pp_flags_t GL_BindFramebuffer(void)
 		gl_dof_quality->modified_count != gl_dof_quality_modified ||
 		r_motionBlur->modified_count != r_motionBlur_modified ||
 		hdr_prev != gl_static.hdr.active) {
+		const bool scene_fbo_was_bound = glr.framebuffer_bound;
+		GLint prev_framebuffer_binding = 0;
+		if (scene_fbo_was_bound && qglGetIntegerv)
+			qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_framebuffer_binding);
+
 		glr.framebuffer_ok = GL_InitFramebuffers();
-	glr.framebuffer_resources_resident = glr.framebuffer_ok;
+		if (scene_fbo_was_bound) {
+			const GLuint restore_framebuffer = prev_framebuffer_binding > 0 ? static_cast<GLuint>(prev_framebuffer_binding) : FBO_SCENE;
+			qglBindFramebuffer(GL_FRAMEBUFFER, restore_framebuffer);
+		}
+		glr.framebuffer_resources_resident = glr.framebuffer_ok;
 		if (glr.framebuffer_ok) {
 			glr.framebuffer_width  = scene_target_w;
 			glr.framebuffer_height = scene_target_h;
