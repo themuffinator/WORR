@@ -1429,6 +1429,9 @@ static void GL_RunDepthOfField(void)
 	if (full_w <= 0 || full_h <= 0 || result_w <= 0 || result_h <= 0 || half_w <= 0 || half_h <= 0)
 		return;
 
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+
 	GL_Setup2D();
 
 	GL_BokehCoCPass(full_w, full_h, full_w, full_h);
@@ -1437,7 +1440,7 @@ static void GL_RunDepthOfField(void)
 	GL_BokehGatherPass(half_w, half_h, half_w, half_h);
 	GL_BokehCombinePass(result_w, result_h, half_w, half_h);
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 }
 
 typedef enum {
