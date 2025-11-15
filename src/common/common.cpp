@@ -1050,8 +1050,8 @@ void Qcommon_Init(int argc, char **argv)
 
     Com_Printf("====== " PRODUCT " initialized ======\n\n");
     Com_NPrintf(APPLICATION " " VERSION ", " __DATE__ "\n");
-    Com_Printf("https://github.com/Paril/q2pro\n\n");
-    Com_Printf("forked from https://github.com/skullernet/q2pro\n\n");
+    Com_Printf("https://github.com/themuffinator/WORR\n\n");
+    Com_Printf("forked from https://github.com/Paril/q2repro\n\n");
     Com_DPrintf("Compiled features: %s\n", Com_GetFeatures());
 
     time(&com_startTime);
