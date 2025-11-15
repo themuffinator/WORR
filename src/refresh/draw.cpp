@@ -40,39 +40,39 @@ drawStatic_t draw;
     GL_StretchPic_(x,y,w,h,s1,t1,s2,t2,color,(image)->texnum,(image)->flags)
 
 static inline void GL_StretchRotatePic_(
-    float x, float y, float w, float h,
-    float s1, float t1, float s2, float t2,
-    float angle, float pivot_x, float pivot_y,
-    color_t color, int texnum, int flags)
+	float x, float y, float w, float h,
+	float s1, float t1, float s2, float t2,
+	float angle, float pivot_x, float pivot_y,
+	color_t color, int texnum, int flags)
 {
-    std::array<vec2_t, 4> vertices{};
-    std::array<vec2_t, 4> texcoords{};
+	std::array<vec2_t, 4> vertices{};
+	std::array<vec2_t, 4> texcoords{};
 
-    float hw = w / 2.0f;
-    float hh = h / 2.0f;
+	float hw = w / 2.0f;
+	float hh = h / 2.0f;
 
-    Vector2Set(vertices[0], -hw + pivot_x, -hh + pivot_y);
-    Vector2Set(vertices[1],  hw + pivot_x, -hh + pivot_y);
-    Vector2Set(vertices[2],  hw + pivot_x,  hh + pivot_y);
-    Vector2Set(vertices[3], -hw + pivot_x,  hh + pivot_y);
+	Vector2Set(vertices[0], -hw + pivot_x, -hh + pivot_y);
+	Vector2Set(vertices[1], hw + pivot_x, -hh + pivot_y);
+	Vector2Set(vertices[2], hw + pivot_x, hh + pivot_y);
+	Vector2Set(vertices[3], -hw + pivot_x, hh + pivot_y);
 
-    Vector2Set(texcoords[0], s1, t1);
-    Vector2Set(texcoords[1], s2, t1);
-    Vector2Set(texcoords[2], s2, t2);
-    Vector2Set(texcoords[3], s1, t2);
+	Vector2Set(texcoords[0], s1, t1);
+	Vector2Set(texcoords[1], s2, t1);
+	Vector2Set(texcoords[2], s2, t2);
+	Vector2Set(texcoords[3], s1, t2);
 
-    float s = sinf(angle);
-    float c = cosf(angle);
+	float s = sinf(angle);
+	float c = cosf(angle);
 
-    for (int i = 0; i < 4; i++) {
-        float vert_x = vertices[i][0];
-        float vert_y = vertices[i][1];
-        
-        vertices[i][0] = (vert_x * c - vert_y * s) + x;
-        vertices[i][1] = (vert_x * s + vert_y * c) + y;
-    }
+	for (int i = 0; i < 4; i++) {
+		float vert_x = vertices[i][0];
+		float vert_y = vertices[i][1];
 
-    GL_DrawPic(vertices.data(), texcoords.data(), color, texnum, flags);
+		vertices[i][0] = (vert_x * c - vert_y * s) + x;
+		vertices[i][1] = (vert_x * s + vert_y * c) + y;
+	}
+
+	GL_DrawPic(vertices.data(), texcoords.data(), color, texnum, flags);
 }
 
 #define GL_StretchRotatePic(x,y,w,h,s1,t1,s2,t2,angle,px,py,color,image) \
@@ -91,15 +91,15 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 	static const byte indices[24] = {
 		0, 5, 4, 0, 1, 5, 1, 6, 5, 1, 2, 6, 6, 2, 3, 6, 3, 7, 0, 7, 3, 0, 4, 7
 	};
-	vec_t *dst_vert;
-	glIndex_t *dst_indices;
+	vec_t* dst_vert;
+	glIndex_t* dst_indices;
 
-    if (tess.numverts + 8 > TESS_MAX_VERTICES ||
-        tess.numindices + 24 > TESS_MAX_INDICES ||
-        (tess.numverts && tess.texnum[TMU_TEXTURE] != TEXNUM_WHITE))
-        GL_Flush2D();
+	if (tess.numverts + 8 > TESS_MAX_VERTICES ||
+		tess.numindices + 24 > TESS_MAX_INDICES ||
+		(tess.numverts && tess.texnum[TMU_TEXTURE] != TEXNUM_WHITE))
+		GL_Flush2D();
 
-    tess.texnum[TMU_TEXTURE] = TEXNUM_WHITE;
+	tess.texnum[TMU_TEXTURE] = TEXNUM_WHITE;
 
 	float x = 0.0f;
 	float y = 0.0f;
@@ -107,9 +107,9 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 	float h = static_cast<float>(glr.fd.height);
 	float distance = std::round(std::min(w, h) * frac);
 
-	const auto writeVertex = [](vec_t *vertex, float vx, float vy) {
+	const auto writeVertex = [](vec_t* vertex, float vx, float vy) {
 		Vector4Set(vertex, static_cast<vec_t>(vx), static_cast<vec_t>(vy), 0.0f, 0.0f);
-	};
+		};
 
 	// outer vertices
 	dst_vert = tess.vertices + tess.numverts * 5;
@@ -118,10 +118,10 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 	writeVertex(dst_vert + 10, x + w, y + h);
 	writeVertex(dst_vert + 15, x, y + h);
 
-    WN32(dst_vert +  4, outer.u32);
-    WN32(dst_vert +  9, outer.u32);
-    WN32(dst_vert + 14, outer.u32);
-    WN32(dst_vert + 19, outer.u32);
+	WN32(dst_vert + 4, outer.u32);
+	WN32(dst_vert + 9, outer.u32);
+	WN32(dst_vert + 14, outer.u32);
+	WN32(dst_vert + 19, outer.u32);
 
 	// inner vertices
 	float inner_x = x + distance;
@@ -135,27 +135,27 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 	writeVertex(dst_vert + 10, inner_x + inner_w, inner_y + inner_h);
 	writeVertex(dst_vert + 15, inner_x, inner_y + inner_h);
 
-    WN32(dst_vert +  4, inner.u32);
-    WN32(dst_vert +  9, inner.u32);
-    WN32(dst_vert + 14, inner.u32);
-    WN32(dst_vert + 19, inner.u32);
+	WN32(dst_vert + 4, inner.u32);
+	WN32(dst_vert + 9, inner.u32);
+	WN32(dst_vert + 14, inner.u32);
+	WN32(dst_vert + 19, inner.u32);
 
-    /*
-    0             1
-        4     5
+	/*
+	0             1
+		4     5
 
-        7     6
-    3             2
-    */
+		7     6
+	3             2
+	*/
 
-    dst_indices = tess.indices + tess.numindices;
-    for (int i = 0; i < 24; i++)
-        dst_indices[i] = tess.numverts + indices[i];
+	dst_indices = tess.indices + tess.numindices;
+	for (int i = 0; i < 24; i++)
+		dst_indices[i] = tess.numverts + indices[i];
 
-    tess.flags |= GLS_BLEND_BLEND | GLS_SHADE_SMOOTH;
+	tess.flags |= GLS_BLEND_BLEND | GLS_SHADE_SMOOTH;
 
-    tess.numverts += 8;
-    tess.numindices += 24;
+	tess.numverts += 8;
+	tess.numindices += 24;
 }
 
 /*
@@ -188,9 +188,9 @@ void GL_Blend(void)
 		color.b = GL_ClampColorComponent(glr.fd.screen_blend[2]);
 		color.a = GL_ClampColorComponent(glr.fd.screen_blend[3]);
 
-        GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
-                       color, TEXNUM_WHITE, 0);
-    }
+		GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
+			color, TEXNUM_WHITE, 0);
+	}
 
 	if (glr.fd.damage_blend[3]) {
 		color_t outer, inner;
@@ -200,470 +200,472 @@ void GL_Blend(void)
 		outer.b = GL_ClampColorComponent(glr.fd.damage_blend[2]);
 		outer.a = GL_ClampColorComponent(glr.fd.damage_blend[3]);
 
-        inner = ColorSetAlpha(outer, static_cast<uint8_t>(0));
+		inner = ColorSetAlpha(outer, static_cast<uint8_t>(0));
 
-        if (gl_damageblend_frac->value > 0)
-            GL_DrawVignette(Cvar_ClampValue(gl_damageblend_frac, 0, 0.5f), outer, inner);
-        else
-            GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
-                           outer, TEXNUM_WHITE, 0);
-    }
+		if (gl_damageblend_frac->value > 0)
+			GL_DrawVignette(Cvar_ClampValue(gl_damageblend_frac, 0, 0.5f), outer, inner);
+		else
+			GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
+				outer, TEXNUM_WHITE, 0);
+	}
 }
 
-void R_SetClipRect(const clipRect_t *clip)
+void R_SetClipRect(const clipRect_t* clip)
 {
-    clipRect_t rc;
-    float scale;
+	clipRect_t rc;
+	float scale;
 
-    GL_Flush2D();
+	GL_Flush2D();
 
-    if (!clip) {
-clear:
-        if (draw.scissor) {
-            qglDisable(GL_SCISSOR_TEST);
-            draw.scissor = false;
-        }
-        return;
-    }
+	if (!clip) {
+	clear:
+		if (draw.scissor) {
+			qglDisable(GL_SCISSOR_TEST);
+			draw.scissor = false;
+		}
+		return;
+	}
 
-    scale = 1 / draw.scale;
+	scale = 1 / draw.scale;
 
-    rc.left = clip->left * scale;
-    rc.top = clip->top * scale;
-    rc.right = clip->right * scale;
-    rc.bottom = clip->bottom * scale;
+	rc.left = clip->left * scale;
+	rc.top = clip->top * scale;
+	rc.right = clip->right * scale;
+	rc.bottom = clip->bottom * scale;
 
-    if (rc.left < 0)
-        rc.left = 0;
-    if (rc.top < 0)
-        rc.top = 0;
-    if (rc.right > r_config.width)
-        rc.right = r_config.width;
-    if (rc.bottom > r_config.height)
-        rc.bottom = r_config.height;
-    if (rc.right < rc.left)
-        goto clear;
-    if (rc.bottom < rc.top)
-        goto clear;
+	if (rc.left < 0)
+		rc.left = 0;
+	if (rc.top < 0)
+		rc.top = 0;
+	if (rc.right > r_config.width)
+		rc.right = r_config.width;
+	if (rc.bottom > r_config.height)
+		rc.bottom = r_config.height;
+	if (rc.right < rc.left)
+		goto clear;
+	if (rc.bottom < rc.top)
+		goto clear;
 
-    qglEnable(GL_SCISSOR_TEST);
-    qglScissor(rc.left, r_config.height - rc.bottom,
-               rc.right - rc.left, rc.bottom - rc.top);
-    draw.scissor = true;
+	qglEnable(GL_SCISSOR_TEST);
+	qglScissor(rc.left, r_config.height - rc.bottom,
+		rc.right - rc.left, rc.bottom - rc.top);
+	draw.scissor = true;
 }
 
 int get_auto_scale(void)
 {
-    // Define the base vertical resolution the UI was designed for.
-    const int scale_base_height = SCREEN_HEIGHT;
-    int scale;
+	// Define the base vertical resolution the UI was designed for.
+	const int scale_base_height = SCREEN_HEIGHT;
+	int scale;
 
-    if (r_config.height < r_config.width) { // Landscape mode
-        scale = r_config.height / scale_base_height;
-    }
-    else { // Portrait mode
-        // For portrait, use a width that maintains the 4:3 aspect ratio.
-        const int scale_base_width = scale_base_height * 4 / 3; // SCREEN_HEIGHT * 4/3 = SCREEN_WIDTH
-        scale = r_config.width / scale_base_width;
-    }
+	if (r_config.height < r_config.width) { // Landscape mode
+		scale = r_config.height / scale_base_height;
+	}
+	else { // Portrait mode
+		// For portrait, use a width that maintains the 4:3 aspect ratio.
+		const int scale_base_width = scale_base_height * 4 / 3; // SCREEN_HEIGHT * 4/3 = SCREEN_WIDTH
+		scale = r_config.width / scale_base_width;
+	}
 
-    // Ensure the scale factor is at least 1.
-    if (scale < 1) {
-        scale = 1;
-    }
+	// Ensure the scale factor is at least 1.
+	if (scale < 1) {
+		scale = 1;
+	}
 
 	if (vid && vid->get_dpi_scale) {
 		int min_scale = vid->get_dpi_scale();
-		return std::max(scale, min_scale);
+		return (std::max)(scale, min_scale);
 	}
 
-    return scale;
+	return scale;
 }
 
-float R_ClampScale(cvar_t *var)
+float R_ClampScale(cvar_t* var)
 {
-    if (!var)
-        return 1.0f;
+	if (!var)
+		return 1.0f;
 
-    if (var->value)
-        return 1.0f / Cvar_ClampValue(var, 1.0f, 6.0f);
+	if (var->value)
+		return 1.0f / Cvar_ClampValue(var, 1.0f, 6.0f);
 
-    return 1.0f / get_auto_scale();
+	return 1.0f / get_auto_scale();
 }
 
 void R_SetScale(float scale)
 {
-    if (draw.scale == scale)
-        return;
+	if (draw.scale == scale)
+		return;
 
-    GL_Flush2D();
+	GL_Flush2D();
 
-    GL_Ortho(0, Q_rint(r_config.width * scale),
-             Q_rint(r_config.height * scale), 0, -1, 1);
+	GL_Ortho(0, Q_rint(r_config.width * scale),
+		Q_rint(r_config.height * scale), 0, -1, 1);
 
-    draw.scale = scale;
+	draw.scale = scale;
 }
 
 void R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
 {
-    const image_t *image = IMG_ForHandle(pic);
+	const image_t* image = IMG_ForHandle(pic);
 
-    GL_StretchPic(x, y, w, h, image->sl, image->tl, image->sh, image->th,
-                  color, image);
+	GL_StretchPic(x, y, w, h, image->sl, image->tl, image->sh, image->th,
+		color, image);
 }
 
 void R_DrawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle, int pivot_x, int pivot_y, qhandle_t pic)
 {
-    image_t *image = IMG_ForHandle(pic);
+	image_t* image = IMG_ForHandle(pic);
 
-    GL_StretchRotatePic(x, y, w, h, image->sl, image->tl, image->sh, image->th,
-                        angle, pivot_x, pivot_y, color, image);
+	GL_StretchRotatePic(x, y, w, h, image->sl, image->tl, image->sh, image->th,
+		angle, pivot_x, pivot_y, color, image);
 }
 
 void R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
 {
-    const image_t *image = IMG_ForHandle(pic);
+	const image_t* image = IMG_ForHandle(pic);
 
-    if (image->flags & IF_SCRAP) {
-        R_DrawStretchPic(x, y, w, h, color, pic);
-        return;
-    }
+	if (image->flags & IF_SCRAP) {
+		R_DrawStretchPic(x, y, w, h, color, pic);
+		return;
+	}
 
-    float scale_w = w;
-    float scale_h = h * image->aspect;
-	float scale = std::max(scale_w, scale_h);
+	float scale_w = w;
+	float scale_h = h * image->aspect;
+	float scale = (std::max)(scale_w, scale_h);
 
-    float s = (1.0f - scale_w / scale) * 0.5f;
-    float t = (1.0f - scale_h / scale) * 0.5f;
+	float s = (1.0f - scale_w / scale) * 0.5f;
+	float t = (1.0f - scale_h / scale) * 0.5f;
 
-    GL_StretchPic(x, y, w, h, s, t, 1.0f - s, 1.0f - t, color, image);
+	GL_StretchPic(x, y, w, h, s, t, 1.0f - s, 1.0f - t, color, image);
 }
 
 void R_DrawPic(int x, int y, color_t color, qhandle_t pic)
 {
-    const image_t *image = IMG_ForHandle(pic);
+	const image_t* image = IMG_ForHandle(pic);
 
-    GL_StretchPic(x, y, image->width, image->height,
-                  image->sl, image->tl, image->sh, image->th, color, image);
+	GL_StretchPic(x, y, image->width, image->height,
+		image->sl, image->tl, image->sh, image->th, color, image);
 }
 
 void R_DrawStretchRaw(int x, int y, int w, int h)
 {
-    GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, COLOR_WHITE, TEXNUM_RAW, 0);
+	GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, COLOR_WHITE, TEXNUM_RAW, 0);
 }
 
-void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic)
+void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t* pic)
 {
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_RAW);
-    qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pic_w, pic_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pic);
+	GL_ForceTexture(TMU_TEXTURE, TEXNUM_RAW);
+	qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pic_w, pic_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pic);
 }
 
 #define DIV64 (1.0f / 64.0f)
 
 void R_TileClear(int x, int y, int w, int h, qhandle_t pic)
 {
-    GL_StretchPic(x, y, w, h, x * DIV64, y * DIV64,
-                  (x + w) * DIV64, (y + h) * DIV64, COLOR_WHITE, IMG_ForHandle(pic));
+	GL_StretchPic(x, y, w, h, x * DIV64, y * DIV64,
+		(x + w) * DIV64, (y + h) * DIV64, COLOR_WHITE, IMG_ForHandle(pic));
 }
 
 void R_DrawFill8(int x, int y, int w, int h, int c)
 {
-    if (!w || !h)
-        return;
-    GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, ColorU32(d_8to24table[c & 0xff]), TEXNUM_WHITE, 0);
+	if (!w || !h)
+		return;
+	GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, ColorU32(d_8to24table[c & 0xff]), TEXNUM_WHITE, 0);
 }
 
 void R_DrawFill32(int x, int y, int w, int h, color_t color)
 {
-    if (!w || !h)
-        return;
-    GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, color, TEXNUM_WHITE, 0);
+	if (!w || !h)
+		return;
+	GL_StretchPic_(x, y, w, h, 0, 0, 1, 1, color, TEXNUM_WHITE, 0);
 }
 
-static inline void draw_char(int x, int y, int w, int h, int flags, int c, color_t color, const image_t *image)
+static inline void draw_char(int x, int y, int w, int h, int flags, int c, color_t color, const image_t* image)
 {
-    float s, t;
+	float s, t;
 
-    if ((c & 127) == 32)
-        return;
+	if ((c & 127) == 32)
+		return;
 
-    if (flags & UI_ALTCOLOR)
-        c |= 0x80;
+	if (flags & UI_ALTCOLOR)
+		c |= 0x80;
 
-    if (flags & UI_XORCOLOR)
-        c ^= 0x80;
+	if (flags & UI_XORCOLOR)
+		c ^= 0x80;
 
-    s = (c & 15) * 0.0625f;
-    t = (c >> 4) * 0.0625f;
+	s = (c & 15) * 0.0625f;
+	t = (c >> 4) * 0.0625f;
 
-    if (flags & UI_DROPSHADOW && c != 0x83) {
-        color_t black = ColorA(color.a);
+	if (flags & UI_DROPSHADOW && c != 0x83) {
+		color_t black = ColorA(color.a);
 
-        GL_StretchPic(x + 1, y + 1, w, h, s, t,
-                      s + 0.0625f, t + 0.0625f, black, image);
+		GL_StretchPic(x + 1, y + 1, w, h, s, t,
+			s + 0.0625f, t + 0.0625f, black, image);
 
-        if (gl_fontshadow->integer > 1)
-            GL_StretchPic(x + 2, y + 2, w, h, s, t,
-                          s + 0.0625f, t + 0.0625f, black, image);
-    }
+		if (gl_fontshadow->integer > 1)
+			GL_StretchPic(x + 2, y + 2, w, h, s, t,
+				s + 0.0625f, t + 0.0625f, black, image);
+	}
 
-    if (c >> 7)
-        color = ColorSetAlpha(COLOR_WHITE, color.a);
+	if (c >> 7)
+		color = ColorSetAlpha(COLOR_WHITE, color.a);
 
-    GL_StretchPic(x, y, w, h, s, t,
-                  s + 0.0625f, t + 0.0625f, color, image);
+	GL_StretchPic(x, y, w, h, s, t,
+		s + 0.0625f, t + 0.0625f, color, image);
 }
 
 void R_DrawChar(int x, int y, int flags, int c, color_t color, qhandle_t font)
 {
-    if (gl_fontshadow->integer > 0)
-        flags |= UI_DROPSHADOW;
+	if (gl_fontshadow->integer > 0)
+		flags |= UI_DROPSHADOW;
 
-    draw_char(x, y, CONCHAR_WIDTH, CONCHAR_HEIGHT, flags, c & 255, color, IMG_ForHandle(font));
+	draw_char(x, y, CONCHAR_WIDTH, CONCHAR_HEIGHT, flags, c & 255, color, IMG_ForHandle(font));
 }
 
 void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t color, qhandle_t font)
 {
-    draw_char(x, y, w, h, flags, c & 255, color, IMG_ForHandle(font));
+	draw_char(x, y, w, h, flags, c & 255, color, IMG_ForHandle(font));
 }
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
-                        const char *s, color_t color, qhandle_t font,
-                        const ftfont_t *ftFont)
+	const char* s, color_t color, qhandle_t font,
+	const ftfont_t* ftFont)
 {
-    (void)ftFont;
-    const image_t *image = IMG_ForHandle(font);
+	(void)ftFont;
+	const image_t* image = IMG_ForHandle(font);
 
-    if (gl_fontshadow->integer > 0)
-        flags |= UI_DROPSHADOW;
+	if (gl_fontshadow->integer > 0)
+		flags |= UI_DROPSHADOW;
 
-    int sx = x;
-    color_t currentColor = color;
-    const char *p = s;
-    size_t remaining = maxlen;
+	int sx = x;
+	color_t currentColor = color;
+	const char* p = s;
+	size_t remaining = maxlen;
 
-    while (remaining && *p) {
-        if (!(flags & UI_IGNORECOLOR)) {
-            size_t consumed = 0;
-            if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
-                p += consumed;
-                remaining -= consumed;
-                continue;
-            }
-        }
+	while (remaining && *p) {
+		if (!(flags & UI_IGNORECOLOR)) {
+			size_t consumed = 0;
+			if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
+				p += consumed;
+				remaining -= consumed;
+				continue;
+			}
+		}
 
-        byte c = static_cast<byte>(*p++);
-        --remaining;
+		byte c = static_cast<byte>(*p++);
+		--remaining;
 
-        if ((flags & UI_MULTILINE) && c == '\n') {
-            y += CONCHAR_HEIGHT * scale + (1.0 / draw.scale);
-            x = sx;
-            continue;
-        }
+		if ((flags & UI_MULTILINE) && c == '\n') {
+			y += CONCHAR_HEIGHT * scale + (1.0 / draw.scale);
+			x = sx;
+			continue;
+		}
 
-        draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, currentColor, image);
-        x += CONCHAR_WIDTH * scale;
-    }
+		draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, currentColor, image);
+		x += CONCHAR_WIDTH * scale;
+	}
 
-    return x;
+	return x;
 }
 
-static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t *kfont)
+static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t* kfont)
 {
-    const kfont_char_t *ch = SCR_KFontLookup(kfont, codepoint);
+	const kfont_char_t* ch = SCR_KFontLookup(kfont, codepoint);
 
-    if (!ch)
-        return 0;
-    
-    image_t *image = IMG_ForHandle(kfont->pic);
+	if (!ch)
+		return 0;
 
-    float s = ch->x * kfont->sw;
-    float t = ch->y * kfont->sh;
-    
-    float sw = ch->w * kfont->sw;
-    float sh = ch->h * kfont->sh;
+	image_t* image = IMG_ForHandle(kfont->pic);
 
-    int w = ch->w * scale;
-    int h = ch->h * scale;
+	float s = ch->x * kfont->sw;
+	float t = ch->y * kfont->sh;
 
-    int shadow_offset = 0;
+	float sw = ch->w * kfont->sw;
+	float sh = ch->h * kfont->sh;
 
-    if ((flags & UI_DROPSHADOW) || gl_fontshadow->integer > 0) {
-        shadow_offset = (1 * scale);
-        
-        color_t black = ColorA(color.a);
+	int w = ch->w * scale;
+	int h = ch->h * scale;
 
-        GL_StretchPic(x + shadow_offset, y + shadow_offset, w, h, s, t,
-                      s + sw, t + sh, black, image);
+	int shadow_offset = 0;
 
-        if (gl_fontshadow->integer > 1)
-            GL_StretchPic(x + (shadow_offset * 2), y + (shadow_offset * 2), w, h, s, t,
-                          s + sw, t + sh, black, image);
-    }
+	if ((flags & UI_DROPSHADOW) || gl_fontshadow->integer > 0) {
+		shadow_offset = (1 * scale);
 
-    GL_StretchPic(x, y, w, h, s, t,
-                  s + sw, t + sh, color, image);
+		color_t black = ColorA(color.a);
 
-    return ch->w * scale;
+		GL_StretchPic(x + shadow_offset, y + shadow_offset, w, h, s, t,
+			s + sw, t + sh, black, image);
+
+		if (gl_fontshadow->integer > 1)
+			GL_StretchPic(x + (shadow_offset * 2), y + (shadow_offset * 2), w, h, s, t,
+				s + sw, t + sh, black, image);
+	}
+
+	GL_StretchPic(x, y, w, h, s, t,
+		s + sw, t + sh, color, image);
+
+	return ch->w * scale;
 }
 
-int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t *kfont)
+int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t* kfont)
 {
-    return draw_kfont_char(x, y, scale, flags, codepoint, color, kfont);
+	return draw_kfont_char(x, y, scale, flags, codepoint, color, kfont);
 }
 
-const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
+const kfont_char_t* SCR_KFontLookup(const kfont_t* kfont, uint32_t codepoint)
 {
-    if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
-        return NULL;
+	if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
+		return NULL;
 
-    const kfont_char_t *ch = &kfont->chars[codepoint - KFONT_ASCII_MIN];
+	const kfont_char_t* ch = &kfont->chars[codepoint - KFONT_ASCII_MIN];
 
-    if (!ch->w)
-        return NULL;
+	if (!ch->w)
+		return NULL;
 
-    return ch;
+	return ch;
 }
 
-static std::string SCR_NormalizeKFontPath(const char *filename)
+static std::string SCR_NormalizeKFontPath(const char* filename)
 {
-    if (!filename || !*filename)
-        return std::string();
+	if (!filename || !*filename)
+		return std::string();
 
-    std::string normalized(filename);
-    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+	std::string normalized(filename);
+	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-    if (normalized.front() != '/')
-        normalized.insert(normalized.begin(), '/');
+	if (normalized.front() != '/')
+		normalized.insert(normalized.begin(), '/');
 
-    if (normalized.rfind("/fonts/", 0) != 0) {
-        const size_t slash = normalized.find_last_of('/');
-        const char *basename = normalized.c_str() + ((slash == std::string::npos) ? 0 : slash + 1);
-        normalized.assign("/fonts/");
-        normalized.append(basename);
-    }
+	if (normalized.rfind("/fonts/", 0) != 0) {
+		const size_t slash = normalized.find_last_of('/');
+		const char* basename = normalized.c_str() + ((slash == std::string::npos) ? 0 : slash + 1);
+		normalized.assign("/fonts/");
+		normalized.append(basename);
+	}
 
-    return normalized;
+	return normalized;
 }
 
-void SCR_LoadKFont(kfont_t *font, const char *filename)
+void SCR_LoadKFont(kfont_t* font, const char* filename)
 {
-    memset(font, 0, sizeof(*font));
+	memset(font, 0, sizeof(*font));
 
-    const std::string normalized = SCR_NormalizeKFontPath(filename);
-    if (normalized.empty())
-        return;
+	const std::string normalized = SCR_NormalizeKFontPath(filename);
+	if (normalized.empty())
+		return;
 
-    qhandle_t handle = 0;
-    int64_t fileLength = FS_OpenFile(normalized.c_str(), &handle, FS_MODE_READ | FS_TYPE_PAK);
-    if (fileLength < 0) {
-        Com_Printf("SCR: failed to open KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(fileLength));
-        return;
-    }
+	qhandle_t handle = 0;
+	int64_t fileLength = FS_OpenFile(normalized.c_str(), &handle, FS_MODE_READ | FS_TYPE_PAK);
+	if (fileLength < 0) {
+		Com_Printf("SCR: failed to open KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(fileLength));
+		return;
+	}
 
-    fs_file_source_t source{};
-    if (!FS_GetFileSource(handle, &source)) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: failed to resolve source for KFont '%s'\n", normalized.c_str());
-        return;
-    }
+	fs_file_source_t source{};
+	if (!FS_GetFileSource(handle, &source)) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: failed to resolve source for KFont '%s'\n", normalized.c_str());
+		return;
+	}
 
-    if (!source.from_pack) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: KFont '%s' not loaded from a pack file\n", normalized.c_str());
-        return;
-    }
+	if (!source.from_pack) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: KFont '%s' not loaded from a pack file\n", normalized.c_str());
+		return;
+	}
 
-    const char *packBaseName = COM_SkipPath(source.pack_path);
-    const bool isExpectedPack = packBaseName
-            && (!Q_stricmp(packBaseName, "Q2Game.kpf"));
-    if (!isExpectedPack) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf (found '%s')\n",
-                normalized.c_str(), source.pack_path);
-        return;
-    }
+	const char* packBaseName = COM_SkipPath(source.pack_path);
+	const bool isExpectedPack = packBaseName
+		&& (!Q_stricmp(packBaseName, "Q2Game.kpf"));
+	if (!isExpectedPack) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: KFont '%s' must be provided by Q2Game.kpf (found '%s')\n",
+			normalized.c_str(), source.pack_path);
+		return;
+	}
 
-    const auto maxSize = (std::numeric_limits<size_t>::max)();
-    if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
-        return;
-    }
+	const auto maxSize = (std::numeric_limits<size_t>::max)();
+	if (fileLength <= 0 || fileLength > static_cast<int64_t>(maxSize)) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: invalid length for KFont '%s'\n", normalized.c_str());
+		return;
+	}
 
-    std::string fileContents;
-    fileContents.resize(static_cast<size_t>(fileLength));
-    int bytesRead = FS_Read(fileContents.data(), fileContents.size(), handle);
-    if (bytesRead < 0) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: failed to read KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(bytesRead));
-        return;
-    }
+	std::string fileContents;
+	fileContents.resize(static_cast<size_t>(fileLength));
+	int bytesRead = FS_Read(fileContents.data(), fileContents.size(), handle);
+	if (bytesRead < 0) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: failed to read KFont '%s' (%s)\n", normalized.c_str(), Q_ErrorString(bytesRead));
+		return;
+	}
 
-    if (static_cast<size_t>(bytesRead) != fileContents.size()) {
-        FS_CloseFile(handle);
-        Com_Printf("SCR: short read while loading KFont '%s'\n", normalized.c_str());
-        return;
-    }
+	if (static_cast<size_t>(bytesRead) != fileContents.size()) {
+		FS_CloseFile(handle);
+		Com_Printf("SCR: short read while loading KFont '%s'\n", normalized.c_str());
+		return;
+	}
 
-    FS_CloseFile(handle);
+	FS_CloseFile(handle);
 
-    fileContents.push_back('\0');
-    const char *data = fileContents.c_str();
+	fileContents.push_back('\0');
+	const char* data = fileContents.c_str();
 
-    while (true) {
-        const char *token = COM_Parse(&data);
+	while (true) {
+		const char* token = COM_Parse(&data);
 
-        if (!*token)
-            break;
+		if (!*token)
+			break;
 
-        if (!strcmp(token, "texture")) {
-            token = COM_Parse(&data);
-            font->pic = R_RegisterFont(va("/%s", token));
-        } else if (!strcmp(token, "unicode")) {
-        } else if (!strcmp(token, "mapchar")) {
-            token = COM_Parse(&data);
+		if (!strcmp(token, "texture")) {
+			token = COM_Parse(&data);
+			font->pic = R_RegisterFont(va("/%s", token));
+		}
+		else if (!strcmp(token, "unicode")) {
+		}
+		else if (!strcmp(token, "mapchar")) {
+			token = COM_Parse(&data);
 
-            while (true) {
-                token = COM_Parse(&data);
+			while (true) {
+				token = COM_Parse(&data);
 
-                if (!strcmp(token, "}"))
-                    break;
+				if (!strcmp(token, "}"))
+					break;
 
-                uint32_t codepoint = strtoul(token, NULL, 10);
-                uint32_t x, y, w, h;
+				uint32_t codepoint = strtoul(token, NULL, 10);
+				uint32_t x, y, w, h;
 
-                x = strtoul(COM_Parse(&data), NULL, 10);
-                y = strtoul(COM_Parse(&data), NULL, 10);
-                w = strtoul(COM_Parse(&data), NULL, 10);
-                h = strtoul(COM_Parse(&data), NULL, 10);
-                COM_Parse(&data);
+				x = strtoul(COM_Parse(&data), NULL, 10);
+				y = strtoul(COM_Parse(&data), NULL, 10);
+				w = strtoul(COM_Parse(&data), NULL, 10);
+				h = strtoul(COM_Parse(&data), NULL, 10);
+				COM_Parse(&data);
 
-                codepoint -= KFONT_ASCII_MIN;
+				codepoint -= KFONT_ASCII_MIN;
 
-                if (codepoint < KFONT_ASCII_MAX) {
-                    font->chars[codepoint].x = x;
-                    font->chars[codepoint].y = y;
-                    font->chars[codepoint].w = w;
-                    font->chars[codepoint].h = h;
+				if (codepoint < KFONT_ASCII_MAX) {
+					font->chars[codepoint].x = x;
+					font->chars[codepoint].y = y;
+					font->chars[codepoint].w = w;
+					font->chars[codepoint].h = h;
 
-			font->line_height = std::max(font->line_height, h);
-                }
-            }
-        }
-    }
+					font->line_height = (std::max)(font->line_height, h);
+				}
+			}
+		}
+	}
 
-    if (!font->pic) {
-        Com_Printf("SCR: KFont '%s' did not specify a texture\n", normalized.c_str());
-        return;
-    }
+	if (!font->pic) {
+		Com_Printf("SCR: KFont '%s' did not specify a texture\n", normalized.c_str());
+		return;
+	}
 
-    font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
-    font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
+	font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
+	font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
-    const char *entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
-    Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
-            normalized.c_str(), source.pack_path, entryName, font->line_height);
+	const char* entryName = source.entry_path[0] ? source.entry_path : normalized.c_str();
+	Com_Printf("SCR: loaded KFont '%s' from %s:%s (line height %d)\n",
+		normalized.c_str(), source.pack_path, entryName, font->line_height);
 }
 
 qhandle_t r_charset;
@@ -672,31 +674,31 @@ qhandle_t r_charset;
 
 void Draw_Lightmaps(void)
 {
-    int block = lm.block_size;
-    int rows = 0, cols = 0;
+	int block = lm.block_size;
+	int rows = 0, cols = 0;
 
-    while (block) {
-		rows = std::max(r_config.height / block, 1);
-		cols = std::max(lm.nummaps / rows, 1);
-        if (cols * block <= r_config.width)
-            break;
-        block >>= 1;
-    }
+	while (block) {
+		rows = (std::max)(r_config.height / block, 1);
+		cols = (std::max)(lm.nummaps / rows, 1);
+		if (cols * block <= r_config.width)
+			break;
+		block >>= 1;
+	}
 
-    for (int i = 0; i < cols; i++) {
-        for (int j = 0; j < rows; j++) {
-            int k = j * cols + i;
-            if (k < lm.nummaps)
-                GL_StretchPic_(block * i, block * j, block, block,
-                               0, 0, 1, 1, COLOR_WHITE, lm.texnums[k], 0);
-        }
-    }
+	for (int i = 0; i < cols; i++) {
+		for (int j = 0; j < rows; j++) {
+			int k = j * cols + i;
+			if (k < lm.nummaps)
+				GL_StretchPic_(block * i, block * j, block, block,
+					0, 0, 1, 1, COLOR_WHITE, lm.texnums[k], 0);
+		}
+	}
 }
 
 void Draw_Scrap(void)
 {
-    GL_StretchPic_(0, 0, 256, 256,
-                   0, 0, 1, 1, COLOR_WHITE, TEXNUM_SCRAP, IF_PALETTED | IF_TRANSPARENT);
+	GL_StretchPic_(0, 0, 256, 256,
+		0, 0, 1, 1, COLOR_WHITE, TEXNUM_SCRAP, IF_PALETTED | IF_TRANSPARENT);
 }
 
 #endif
