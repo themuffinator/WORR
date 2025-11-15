@@ -1658,6 +1658,9 @@ static void R_StoreMotionBlurHistory(void)
 	if (!glr.motion_history_textures_ready)
 		return;
 
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+
 	int composite_x = 0;
 	int composite_y = 0;
 	int composite_w = 0;
@@ -1675,7 +1678,7 @@ static void R_StoreMotionBlurHistory(void)
 	GL_PostProcess(GLS_DEFAULT, 0, 0, composite_w, composite_h,
 		glr.framebuffer_u_min, glr.framebuffer_v_min,
 		glr.framebuffer_u_max, glr.framebuffer_v_max);
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GL_Setup2D();
 
 	(void)composite_x;
