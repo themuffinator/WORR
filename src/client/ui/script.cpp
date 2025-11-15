@@ -22,6 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <limits.h>
 #include <string.h>
 
+extern const char res_worr_menu[];
+extern const size_t res_worr_menu_size;
+
 static menuSound_t Activate(menuCommon_t *self)
 {
     switch (self->type) {
@@ -1194,25 +1197,95 @@ static void ParseCursor(json_parse_t *parser)
 
 static void ParseMenus(json_parse_t *parser)
 {
-    jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
+jsmntok_t *array = Json_EnsureNext(parser, JSMN_ARRAY);
 
-    for (int i = 0; i < array->size; i++)
-        ParseMenu(parser);
+for (int i = 0; i < array->size; i++)
+ParseMenu(parser);
 }
 
+/*
+=============
+UI_ParseJsonBuffer
+
+Initializes a JSON parser from an in-memory buffer.
+=============
+*/
+static void UI_ParseJsonBuffer(json_parse_t *parser, const char *buffer, size_t length)
+{
+jsmn_parser p;
+
+parser->buffer_len = length;
+parser->buffer = reinterpret_cast<char *>(Z_TagMalloc(length + 1, TAG_FILESYSTEM));
+memcpy(parser->buffer, buffer, length);
+parser->buffer[length] = '\0';
+
+jsmn_init(&p);
+parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
+parser->tokens = reinterpret_cast<jsmntok_t *>(Z_TagMalloc(sizeof(jsmntok_t) * parser->num_tokens, TAG_FILESYSTEM));
+if (!parser->tokens)
+Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
+
+jsmn_init(&p);
+jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
+parser->pos = parser->tokens;
+}
+
+/*
+=============
+UI_TryLoadMenuFromFile
+
+Attempts to load the UI definition from the filesystem.
+=============
+*/
+static bool UI_TryLoadMenuFromFile(json_parse_t *parser)
+{
+if (setjmp(parser->exception)) {
+Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
+Json_Free(parser);
+return false;
+}
+
+Json_Load(UI_DEFAULT_FILE, parser);
+return true;
+}
+
+/*
+=============
+UI_LoadEmbeddedMenu
+
+Loads the embedded fallback UI definition when the filesystem copy is unavailable.
+=============
+*/
+static bool UI_LoadEmbeddedMenu(json_parse_t *parser)
+{
+if (setjmp(parser->exception)) {
+Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
+Json_Free(parser);
+return false;
+}
+
+UI_ParseJsonBuffer(parser, res_worr_menu, res_worr_menu_size);
+return true;
+}
+
+/*
+=============
+UI_LoadScript
+=============
+*/
 void UI_LoadScript(void)
 {
-    json_parse_t parser = {};
+json_parse_t parser = {};
 
-    if (Json_ErrorHandler(parser)) {
-        Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser.error_loc, parser.error);
-        Json_Free(&parser);
-        return;
-    }
+if (!UI_TryLoadMenuFromFile(&parser)) {
+parser = {};
+Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
+if (!UI_LoadEmbeddedMenu(&parser)) {
+return;
+}
+}
 
-    Json_Load(UI_DEFAULT_FILE, &parser);
-
-    jsmntok_t *object = Json_EnsureNext(&parser, JSMN_OBJECT);
+jsmntok_t *object = Json_EnsureNext(&parser, JSMN_OBJECT);
 
     for (int i = 0; i < object->size; i++) {
         if (!Json_Strcmp(&parser, "background")) {
