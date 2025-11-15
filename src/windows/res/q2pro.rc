@@ -13,11 +13,11 @@
 #endif
 
 #ifdef _WIN64
-#define VER_FILEDESCRIPTION_STR     "Q2PRO client (64-bit)"
-#define VER_ORIGINALFILENAME_STR    "q2pro64.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR client (64-bit)"
+#define VER_ORIGINALFILENAME_STR    "worr64.exe"
 #else
-#define VER_FILEDESCRIPTION_STR     "Q2PRO client"
-#define VER_ORIGINALFILENAME_STR    "q2pro.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR client"
+#define VER_ORIGINALFILENAME_STR    "worr.exe"
 #endif
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
@@ -35,14 +35,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments", "https://github.com/skullernet/q2pro"
-            VALUE "CompanyName", "skuller.net"
+            VALUE "Comments", "https://github.com/themuffinator/WORR"
+            VALUE "CompanyName", "darkmatter-quake.com"
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR
             VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
             VALUE "FileVersion", VERSION
-            VALUE "InternalName", "q2pro"
-            VALUE "LegalCopyright", "Copyright © 2023 skuller.net"
-            VALUE "ProductName", "Q2PRO"
+            VALUE "InternalName", "worr"
+            VALUE "LegalCopyright", "Copyright © 2025 darkmatter-quake.com"
+            VALUE "ProductName", "WORR"
             VALUE "ProductVersion", VERSION
         END
     END

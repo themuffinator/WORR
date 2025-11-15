@@ -13,11 +13,11 @@
 #endif
 
 #ifdef _WIN64
-#define VER_FILEDESCRIPTION_STR     "Q2PRO dedicated server (64-bit)"
-#define VER_ORIGINALFILENAME_STR    "q2proded64.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR dedicated server (64-bit)"
+#define VER_ORIGINALFILENAME_STR    "worrded64.exe"
 #else
-#define VER_FILEDESCRIPTION_STR     "Q2PRO dedicated server"
-#define VER_ORIGINALFILENAME_STR    "q2proded.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR dedicated server"
+#define VER_ORIGINALFILENAME_STR    "worrded.exe"
 #endif
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
@@ -35,14 +35,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments", "https://github.com/skullernet/q2pro"
-            VALUE "CompanyName", "skuller.net"
+            VALUE "Comments", "https://github.com/themuffinator/WORR"
+            VALUE "CompanyName", "darkmatter-quake.com"
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR
             VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
             VALUE "FileVersion", VERSION
-            VALUE "InternalName", "q2proded"
-            VALUE "LegalCopyright", "Copyright © 2023 skuller.net"
-            VALUE "ProductName", "Q2PRO"
+            VALUE "InternalName", "worrded"
+            VALUE "LegalCopyright", "Copyright © 2025 darkmatter-quake.com"
+            VALUE "ProductName", "WORR"
             VALUE "ProductVersion", VERSION
         END
     END
