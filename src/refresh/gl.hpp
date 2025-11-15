@@ -430,6 +430,7 @@ typedef struct {
     int     stencilbits;
     int     max_texture_size_log2;
     int     max_texture_size;
+    int     max_renderbuffer_size;
     int     ssbo_align;
     float   max_anisotropy;
     bool    webgl;

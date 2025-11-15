@@ -1259,6 +1259,32 @@ bool GL_InitFramebuffers(void)
 		return false;
 	}
 
+	const int max_texture_size = gl_config.max_texture_size;
+	const int max_renderbuffer_size = gl_config.max_renderbuffer_size;
+	int hardware_limit = max_texture_size;
+	if (hardware_limit <= 0 && max_renderbuffer_size > 0) {
+		hardware_limit = max_renderbuffer_size;
+	} else if (hardware_limit > 0 && max_renderbuffer_size > 0) {
+		hardware_limit = (std::min)(hardware_limit, max_renderbuffer_size);
+	}
+	const auto clamp_extent = [&](int value, const char *label) -> int {
+		if (value <= 0)
+			return value;
+		if (hardware_limit <= 0)
+			return value;
+		if (value > hardware_limit) {
+			if (gl_showerrors && gl_showerrors->integer) {
+				if (max_renderbuffer_size > 0) {
+					Com_DPrintf("Clamping %s from %d to %d (texture limit=%d, renderbuffer limit=%d)\n", label, value, hardware_limit, max_texture_size, max_renderbuffer_size);
+				} else {
+					Com_DPrintf("Clamping %s from %d to %d (texture limit=%d)\n", label, value, hardware_limit, max_texture_size);
+				}
+			}
+			return hardware_limit;
+		}
+		return value;
+	};
+
 	const int viewport_w = glr.fd.width > 0 ? glr.fd.width : 0;
 	const int viewport_h = glr.fd.height > 0 ? glr.fd.height : 0;
 	int scene_w = 0;
@@ -1277,33 +1303,36 @@ bool GL_InitFramebuffers(void)
 	const bool scene_required = underwater_effect_active || bloom_effect_active || dof_active || motion_blur_active || hdr_effect_active || crt_effect_active;
 
 	if (scene_required && viewport_w > 0 && viewport_h > 0) {
-		scene_w = viewport_w;
-		scene_h = viewport_h;
+		scene_w = clamp_extent(viewport_w, "scene width");
+		scene_h = clamp_extent(viewport_h, "scene height");
 	}
 
 	if (bloom_effect_active) {
-		bloom_w = scene_w;
-		bloom_h = scene_h;
+		bloom_w = clamp_extent(scene_w, "bloom width");
+		bloom_h = clamp_extent(scene_h, "bloom height");
 	}
 
 	if (dof_active && scene_w > 0 && scene_h > 0) {
-		dof_full_w = scene_w;
-		dof_full_h = scene_h;
+		dof_full_w = clamp_extent(scene_w, "dof full width");
+		dof_full_h = clamp_extent(scene_h, "dof full height");
 
 		if (dof_full_w > 0 && dof_full_h > 0) {
 			if (dof_reduced) {
 				dof_result_w = (std::max)(dof_full_w / 2, 1);
 				dof_result_h = (std::max)(dof_full_h / 2, 1);
-		        } else {
+			} else {
 				dof_result_w = dof_full_w;
 				dof_result_h = dof_full_h;
 			}
 
+			dof_result_w = clamp_extent(dof_result_w, "dof result width");
+			dof_result_h = clamp_extent(dof_result_h, "dof result height");
 			dof_half_w = dof_result_w > 0 ? (std::max)(dof_result_w / 2, 1) : 0;
 			dof_half_h = dof_result_h > 0 ? (std::max)(dof_result_h / 2, 1) : 0;
+			dof_half_w = clamp_extent(dof_half_w, "dof half width");
+			dof_half_h = clamp_extent(dof_half_h, "dof half height");
 		}
 	}
-
 	if (!dof_active) {
 		dof_full_w = dof_full_h = 0;
 		dof_result_w = dof_result_h = 0;

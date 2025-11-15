@@ -2589,15 +2589,22 @@ static void APIENTRY myDebugProc(GLenum source, GLenum type, GLuint id, GLenum s
 
 static void GL_SetupConfig(void)
 {
-    GLint integer = 0;
+	GLint integer = 0;
 
-    qglGetIntegerv(GL_MAX_TEXTURE_SIZE, &integer);
-    gl_config.max_texture_size_log2 = Q_log2(min(integer, MAX_TEXTURE_SIZE));
-    gl_config.max_texture_size = 1U << gl_config.max_texture_size_log2;
+	qglGetIntegerv(GL_MAX_TEXTURE_SIZE, &integer);
+	gl_config.max_texture_size_log2 = Q_log2(min(integer, MAX_TEXTURE_SIZE));
+	gl_config.max_texture_size = 1U << gl_config.max_texture_size_log2;
+	integer = 0;
+	if (qglGenFramebuffers) {
+		qglGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &integer);
+	}
+	if (integer <= 0)
+		integer = gl_config.max_texture_size;
+	gl_config.max_renderbuffer_size = integer;
 
-    if (gl_config.caps & QGL_CAP_CLIENT_VA) {
-        qglGetIntegerv(GL_RED_BITS, &integer);
-        gl_config.colorbits = integer;
+	if (gl_config.caps & QGL_CAP_CLIENT_VA) {
+		qglGetIntegerv(GL_RED_BITS, &integer);
+		gl_config.colorbits = integer;
         qglGetIntegerv(GL_GREEN_BITS, &integer);
         gl_config.colorbits += integer;
         qglGetIntegerv(GL_BLUE_BITS, &integer);
