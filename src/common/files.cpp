@@ -1729,40 +1729,56 @@ int FS_Read(void *buf, size_t len, qhandle_t f)
     }
 }
 
+/*
+=============
+FS_ReadLine
+
+Reads a single line from the given file handle.
+=============
+*/
 int FS_ReadLine(qhandle_t f, char *buffer, size_t size)
 {
-    file_t *file = file_for_handle(f);
-    char *s;
+	file_t *file = file_for_handle(f);
+	char *s;
 
-    if (!file)
-        return Q_ERR(EBADF);
+	if (!file)
+		return Q_ERR(EBADF);
 
-    if ((file->mode & FS_MODE_MASK) != FS_MODE_READ)
-        return Q_ERR(EBADF);
+	if ((file->mode & FS_MODE_MASK) != FS_MODE_READ)
+		return Q_ERR(EBADF);
 
-    if (size < 1 || size > INT_MAX)
-        return Q_ERR(EINVAL);
+	if (size < 1 || size > INT_MAX)
+		return Q_ERR(EINVAL);
 
-    *buffer = 0;
+	*buffer = 0;
 
-    switch (file->type) {
-    case FS_REAL:
-        s = fgets(buffer, size, file->fp);
-        if (!s)
-            return ferror(file->fp) ? Q_ERR_FAILURE : 0;
-        break;
+	switch (file->type) {
+	case FS_REAL:
+		s = fgets(buffer, size, file->fp);
+		if (!s)
+			return ferror(file->fp) ? Q_ERR_FAILURE : 0;
+		break;
 #if USE_ZLIB
-    case FS_GZ:
-        s = gzgets(static_cast<gzFile>(file->zfp), buffer, static_cast<int>(size));
-        if (!s)
-            return 0;
-        break;
+	case FS_GZ:
+	{
+		gzFile gz = static_cast<gzFile>(file->zfp);
+		s = gzgets(gz, buffer, static_cast<int>(size));
+		if (!s) {
+			if (gzeof(gz)) {
+				return 0;
+			}
+			int gzerrnum = 0;
+			gzerror(gz, &gzerrnum);
+			return gzerrnum == Z_ERRNO ? Q_ERR_FAILURE : Q_ERR_LIBRARY_ERROR;
+		}
+		break;
+	}
 #endif
-    default:
-        return Q_ERR(ENOSYS);
-    }
+	default:
+		return Q_ERR(ENOSYS);
+	}
 
-    return strlen(s);
+	return strlen(s);
 }
 
 int FS_Flush(qhandle_t f)

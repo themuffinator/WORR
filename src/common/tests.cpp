@@ -21,6 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <cstdio>
 #include "common/cmd.hpp"
 #include "common/common.hpp"
 #include "common/files.hpp"
@@ -161,6 +163,101 @@ static void Com_PrintJunk_f(void)
     for (i = 0; i < count; i++)
         Com_Printf("%s", buf);
     Com_Printf("\n");
+}
+
+/*
+=============
+Com_GzCfgErrorTest_f
+
+Creates and corrupts a gzipped cfg file to ensure FS_ReadLine reports errors.
+=============
+*/
+static void Com_GzCfgErrorTest_f(void)
+{
+	const char *quake_path = "tests/fs_readline_error.cfg.gz";
+	std::array<char, MAX_QPATH> normalized{};
+	std::array<char, MAX_QPATH> line_buffer{};
+	std::array<char, MAX_OSPATH> fullpath{};
+	qhandle_t f;
+	int64_t ret;
+	bool wrote = true;
+	bool saw_error = false;
+
+	if (FS_NormalizePathBuffer(normalized.data(), quake_path, normalized.size()) >= normalized.size()) {
+		Com_EPrintf("Couldn't build absolute path for %s\n", quake_path);
+		return;
+	}
+
+	if (Q_concat(fullpath.data(), fullpath.size(), fs_gamedir, "/", normalized.data()) >= fullpath.size()) {
+		Com_EPrintf("Couldn't build absolute path for %s\n", quake_path);
+		return;
+	}
+
+	ret = FS_OpenFile(quake_path, &f, FS_MODE_WRITE | FS_FLAG_GZIP | FS_TYPE_REAL | FS_PATH_GAME);
+	if (!f) {
+		Com_EPrintf("Couldn't create %s: %s\n", quake_path, Q_ErrorString(ret));
+		return;
+	}
+
+	wrote &= FS_FPrintf(f, "set foo 1\n") >= 0;
+	wrote &= FS_FPrintf(f, "set bar 2\n") >= 0;
+	int close_ret = FS_CloseFile(f);
+	if (!wrote || close_ret < 0) {
+		Com_EPrintf("Couldn't finalize %s: %s\n", quake_path,
+				wrote ? Q_ErrorString(close_ret) : Q_ErrorString(Q_ERR_FAILURE));
+		remove(fullpath.data());
+		return;
+	}
+
+	FILE *fp = fopen(fullpath.data(), "r+b");
+	if (!fp) {
+		Com_EPrintf("Couldn't corrupt %s: %s\n", quake_path, Q_ErrorString(Q_ERRNO));
+		remove(fullpath.data());
+		return;
+	}
+
+	if (fseek(fp, 12, SEEK_SET) || fgetc(fp) == EOF || fseek(fp, -1, SEEK_CUR) ||
+			fputc(0xff, fp) == EOF) {
+		Com_EPrintf("Failed to corrupt %s: %s\n", quake_path, Q_ErrorString(Q_ERRNO));
+		fclose(fp);
+		remove(fullpath.data());
+		return;
+	}
+
+	fclose(fp);
+
+	ret = FS_OpenFile(quake_path, &f, FS_MODE_READ | FS_FLAG_GZIP | FS_TYPE_REAL | FS_PATH_GAME);
+	if (!f) {
+		Com_EPrintf("Couldn't reopen %s: %s\n", quake_path, Q_ErrorString(ret));
+		remove(fullpath.data());
+		return;
+	}
+
+	while (1) {
+		int len = FS_ReadLine(f, line_buffer.data(), line_buffer.size());
+		if (len > 0)
+			continue;
+		if (len == 0) {
+			Com_EPrintf("Unexpected EOF while reading %s\n", quake_path);
+			break;
+		}
+		if (len == Q_ERR_LIBRARY_ERROR || len == Q_ERR_FAILURE) {
+			Com_Printf("Corrupted gz cfg triggered error: %s\n", Q_ErrorString(len));
+			saw_error = true;
+		} else {
+			Com_EPrintf("Unexpected error reading %s: %s\n", quake_path, Q_ErrorString(len));
+		}
+		break;
+	}
+
+	FS_CloseFile(f);
+	if (remove(fullpath.data()) && errno != ENOENT)
+		Com_WPrintf("Couldn't remove %s: %s\n", quake_path, Q_ErrorString(Q_ERRNO));
+
+	if (saw_error)
+		Com_Printf("gz cfg corruption test passed\n");
+	else
+		Com_EPrintf("gz cfg corruption test failed\n");
 }
 
 static void BSP_Test_f(void)
@@ -955,35 +1052,36 @@ static void Com_TimespecTest_f(void)
 #endif
 
 static const cmdreg_t c_test[] = {
-    { "error", Com_Error_f },
-    { "errordrop", Com_ErrorDrop_f },
-    { "freeze", Com_Freeze_f },
-    { "crash", Com_Crash_f },
-    { "doublefree", Com_DoubleFree_f },
-    { "printjunk", Com_PrintJunk_f },
-    { "bsptest", BSP_Test_f },
-    { "wildtest", Com_TestWild_f },
-    { "normtest", Com_TestNorm_f },
-    { "infotest", Com_TestInfo_f },
-    { "snprintftest", Com_TestSnprintf_f },
+	{ "error", Com_Error_f },
+	{ "errordrop", Com_ErrorDrop_f },
+	{ "freeze", Com_Freeze_f },
+	{ "crash", Com_Crash_f },
+	{ "doublefree", Com_DoubleFree_f },
+	{ "printjunk", Com_PrintJunk_f },
+	{ "gzcfgtest", Com_GzCfgErrorTest_f },
+	{ "bsptest", BSP_Test_f },
+	{ "wildtest", Com_TestWild_f },
+	{ "normtest", Com_TestNorm_f },
+	{ "infotest", Com_TestInfo_f },
+	{ "snprintftest", Com_TestSnprintf_f },
 #if USE_REF
-    { "modeltest", Com_TestModels_f },
-    { "imagetest", Com_TestImages_f },
+	{ "modeltest", Com_TestModels_f },
+	{ "imagetest", Com_TestImages_f },
 #endif
 #if USE_CLIENT
-    { "soundtest", Com_TestSounds_f },
-    { "activate", Com_Activate_f },
-    { "utf8test", UTF8_Test_f },
+	{ "soundtest", Com_TestSounds_f },
+	{ "activate", Com_Activate_f },
+	{ "utf8test", UTF8_Test_f },
 #endif
 #if USE_CLIENT || USE_MVD_CLIENT
 	{ "timespectest", Com_TimespecTest_f },
 #endif
-    { "mdfourtest", Com_MdfourTest_f },
-    { "mdfoursum", Com_MdfourSum_f },
-    { "extcmptest", Com_ExtCmpTest_f },
-    { "nextpathtest", Com_NextPathTest_f },
-    { "extract", Com_Extract_f },
-    { NULL }
+	{ "mdfourtest", Com_MdfourTest_f },
+	{ "mdfoursum", Com_MdfourSum_f },
+	{ "extcmptest", Com_ExtCmpTest_f },
+	{ "nextpathtest", Com_NextPathTest_f },
+	{ "extract", Com_Extract_f },
+	{ NULL }
 };
 
 void TST_Init(void)
