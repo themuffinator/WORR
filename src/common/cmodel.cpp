@@ -489,16 +489,20 @@ static void CM_ClipBoxToBrush(const vec3_t p1, const vec3_t p2, trace_t *trace, 
     for (i = 0; i < brush->numsides; i++, side++) {
         plane = side->plane;
 
-        // FIXME: special case for axial
-        if (!trace_ispoint) {
-            // general box case
-            // push the plane out appropriately for mins/maxs
-            dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
-            dist = plane->dist - dist;
-        } else {
-            // special point case
-            dist = plane->dist;
-        }
+		// FIXME: special case for axial
+		if (!trace_ispoint) {
+			// general box case
+			// push the plane out appropriately for mins/maxs
+			if (plane->type < 3) {
+				dist = plane->dist - trace_offsets[plane->signbits][plane->type] * plane->normal[plane->type];
+			} else {
+				dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
+				dist = plane->dist - dist;
+			}
+		} else {
+			// special point case
+			dist = plane->dist;
+		}
 
         d1 = DotProduct(p1, plane->normal) - dist;
         d2 = DotProduct(p2, plane->normal) - dist;
@@ -594,11 +598,15 @@ static void CM_TestBoxInBrush(const vec3_t p1, trace_t *trace, const mbrush_t *b
     for (i = 0; i < brush->numsides; i++, side++) {
         plane = side->plane;
 
-        // FIXME: special case for axial
-        // general box case
-        // push the plane out appropriately for mins/maxs
-        dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
-        dist = plane->dist - dist;
+		// FIXME: special case for axial
+		// general box case
+		// push the plane out appropriately for mins/maxs
+		if (plane->type < 3) {
+			dist = plane->dist - trace_offsets[plane->signbits][plane->type] * plane->normal[plane->type];
+		} else {
+			dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
+			dist = plane->dist - dist;
+		}
 
         d1 = DotProduct(p1, plane->normal) - dist;
 
