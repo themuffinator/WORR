@@ -2825,8 +2825,66 @@ alphacmp:
     return Q_stricmp(s1, s2);
 }
 
-// sets fs_gamedir, adds the directory to the head of the path,
-// then loads and adds pak*.pak, then anything else in alphabethical order.
+typedef enum pack_file_type_e {
+	PACK_FILE_UNKNOWN = 0,
+	PACK_FILE_PAK,
+#if USE_ZLIB
+	PACK_FILE_ZIP,
+#endif
+} pack_file_type_t;
+
+/*
+=============
+DetectPackType
+
+Determines which loader to use for a pack candidate by checking its magic.
+=============
+*/
+static pack_file_type_t DetectPackType(const char *path)
+{
+	uint32_t ident;
+	FILE *fp;
+
+	fp = fopen(path, "rb");
+	if (!fp) {
+		Com_SetLastError(strerror(errno));
+		return PACK_FILE_UNKNOWN;
+	}
+
+	if (!fread(&ident, sizeof(ident), 1, fp)) {
+		if (ferror(fp)) {
+			Com_SetLastError(strerror(errno));
+		} else {
+			Com_SetLastError("Pack header is too short");
+		}
+		fclose(fp);
+		return PACK_FILE_UNKNOWN;
+	}
+
+	fclose(fp);
+	ident = LittleLong(ident);
+
+	if (ident == IDPAKHEADER) {
+		return PACK_FILE_PAK;
+	}
+
+#if USE_ZLIB
+	if (ident == ZIP_LOCALHEADERMAGIC) {
+		return PACK_FILE_ZIP;
+	}
+#endif
+
+	Com_SetLastError("Pack header did not match PAK or ZIP signatures");
+	return PACK_FILE_UNKNOWN;
+}
+
+/*
+=============
+add_game_dir
+
+Sets fs_gamedir, registers the directory search path and loads pack files.
+=============
+*/
 static void add_game_dir(unsigned mode, const char *base, const char *game, bool skip_if_not_exist)
 {
     searchpath_t    *search;
@@ -2835,6 +2893,7 @@ static void add_game_dir(unsigned mode, const char *base, const char *game, bool
     int             i;
     std::array<char, MAX_OSPATH> path;
     size_t          len;
+	pack_file_type_t pack_type;
 
     len = Q_concat(fs_gamedir, sizeof(fs_gamedir), base, "/", game);
     if (len >= sizeof(fs_gamedir)) {
@@ -2880,13 +2939,26 @@ static void add_game_dir(unsigned mode, const char *base, const char *game, bool
             Com_EPrintf("%s: refusing oversize path\n", __func__);
             continue;
         }
+		pack_type = DetectPackType(path.data());
+		if (pack_type == PACK_FILE_UNKNOWN) {
+			const char *reason = Com_GetLastError();
+			Com_EPrintf("Skipping %s: %s\n", path.data(), reason ? reason : "Unknown pack format");
+			continue;
+		}
+
+		switch (pack_type) {
+		case PACK_FILE_PAK:
+			pack = load_pak_file(path.data());
+			break;
 #if USE_ZLIB
-        // FIXME: guess packfile type by contents instead?
-        if (len > 4 && !Q_stricmp(path.data() + len - 4, ".pkz"))
-            pack = load_zip_file(path.data());
-        else
+		case PACK_FILE_ZIP:
+			pack = load_zip_file(path.data());
+			break;
 #endif
-            pack = load_pak_file(path.data());
+		default:
+			pack = NULL;
+			break;
+		}
         if (!pack) {
             Com_EPrintf("Couldn't load %s: %s\n", path.data(), Com_GetLastError());
             continue;
