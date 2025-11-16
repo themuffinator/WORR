@@ -266,58 +266,80 @@ all generated files (savegames, screenshots, demos, config files) will be saved 
 */
 
 #ifdef _WIN32
+/*
+=============
+FS_ReplaceSeparators
+
+Normalizes path separators in-place for Windows builds.
+=============
+*/
 char *FS_ReplaceSeparators(char *s, int separator)
 {
-    char *p;
+	char *p;
 
-    p = s;
-    while (*p) {
-        if (*p == '/' || *p == '\\') {
-            *p = separator;
-        }
-        p++;
-    }
+	p = s;
+	while (*p) {
+		if (*p == '/' || *p == '\\') {
+			*p = separator;
+		}
+		p++;
+	}
 
-    return s;
+	return s;
 }
 #endif
 
+/*
+=============
+validate_char
+
+Checks whether a character is allowed in filesystem paths. ASCII control
+characters and reserved Windows symbols are rejected, while bytes >= 0x80 are
+accepted so multi-byte UTF-8 sequences pass validation.
+=============
+*/
 static inline bool validate_char(int c)
 {
-    if (!Q_isprint(c))
-        return false;
+	const unsigned char uc = static_cast<unsigned char>(c);
+
+	if (uc >= 0x80)
+		return true;
+
+	if (uc < 0x20 || uc == 0x7f)
+		return false;
 
 #ifdef _WIN32
-    if (strchr("<>:\"|?*", c))
-        return false;
+	if (strchr("<>:\"|?*", uc))
+		return false;
 #endif
 
-    return true;
+	return true;
 }
 
 /*
-================
+=============
 FS_ValidatePath
 
-Checks for bad (OS specific) and mixed case characters in path.
-================
+Checks for bad (OS specific) characters in path strings while allowing UTF-8
+bytes and flags mixed-case ASCII names when encountered.
+=============
 */
 path_valid_t FS_ValidatePath(const char *s)
 {
-    path_valid_t res = PATH_VALID;
+	path_valid_t res = PATH_VALID;
 
-    if (!*s)
-        return PATH_INVALID;
+	if (!*s)
+		return PATH_INVALID;
 
-    do {
-        if (!validate_char(*s))
-            return PATH_INVALID;
+	do {
+		if (!validate_char(*s))
+			return PATH_INVALID;
 
-        if (Q_isupper(*s))
-            res = PATH_MIXED_CASE;
-    } while (*++s);
+		if (Q_isupper(*s))
+			res = PATH_MIXED_CASE;
+	} while (*++s);
 
-    return res;
+	return res;
 }
 
 void FS_CleanupPath(char *s)

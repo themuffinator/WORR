@@ -843,11 +843,19 @@ worr_ded = executable('worr.ded', common_src, server_src,
   install_dir:           bindir,
 )
 
-if get_option('tests') and zlib.found()
+if get_option('tests')
   python_mod = import('python')
   python3 = python_mod.find_installation('python3')
-  test('fs_sfx_pkz', python3,
-    args: [files('tests/test_sfx_pkz.py'), worr_ded.full_path()],
+
+  if zlib.found()
+    test('fs_sfx_pkz', python3,
+      args: [files('tests/test_sfx_pkz.py'), worr_ded.full_path()],
+      depends: worr_ded,
+    )
+  endif
+
+  test('fs_unicode_filename', python3,
+    args: [files('tests/test_unicode_filename.py'), worr_ded.full_path()],
     depends: worr_ded,
   )
 endif
