@@ -39,6 +39,10 @@ struct q2protoio_deflate_args_s
     /// Currently active stream
     z_streamp z_current;
 };
+
+void Q2Proto_IO_Init(void);
+void Q2Proto_IO_ResetInflate(void);
+void Q2Proto_IO_Shutdown(void);
 #endif // USE_ZLIB
 
 typedef struct q2protoio_ioarg_s {

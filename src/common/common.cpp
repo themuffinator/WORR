@@ -37,6 +37,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/msg.hpp"
 #include "common/net/chan.hpp"
 #include "common/net/net.hpp"
+#include "common/q2proto_shared.hpp"
 #include "common/pmove.hpp"
 #include "common/prompt.hpp"
 #include "common/protocol.hpp"
@@ -617,26 +618,29 @@ void Com_Error(error_type_t code, const char *fmt, ...)
         goto abort;
     }
 
-    if (com_logFile) {
-        FS_FPrintf(com_logFile, "FATAL: %s\n", com_errorMsg);
-    }
+	if (com_logFile) {
+		FS_FPrintf(com_logFile, "FATAL: %s\n", com_errorMsg);
+	}
 
-    SV_Shutdown(va("Server fatal crashed: %s\n", com_errorMsg), ERR_FATAL);
-    CL_Shutdown();
-    NET_Shutdown();
-    Sys_SaveHistory();
-    logfile_close();
-    FS_Shutdown();
+	SV_Shutdown(va("Server fatal crashed: %s\n", com_errorMsg), ERR_FATAL);
+	CL_Shutdown();
+	#if USE_ZLIB
+	Q2Proto_IO_Shutdown();
+	#endif
+	NET_Shutdown();
+	Sys_SaveHistory();
+	logfile_close();
+	FS_Shutdown();
 
-    Sys_Error("%s", com_errorMsg);
-    // doesn't get there
+	Sys_Error("%s", com_errorMsg);
+	// doesn't get there
 
 abort:
-    if (com_logFile) {
-        FS_Flush(com_logFile);
-    }
-    com_errorEntered = false;
-    longjmp(com_abortframe, -1);
+	if (com_logFile) {
+		FS_Flush(com_logFile);
+	}
+	com_errorEntered = false;
+	longjmp(com_abortframe, -1);
 }
 
 void Com_AbortFunc(void (*func)(void *), void *arg)
@@ -655,27 +659,30 @@ do the appropriate things. This function never returns.
 */
 void Com_Quit(const char *reason, error_type_t type)
 {
-    char buffer[MAX_STRING_CHARS];
-    const char *what = type == ERR_RECONNECT ? "restarted" : "quit";
+	char buffer[MAX_STRING_CHARS];
+	const char *what = type == ERR_RECONNECT ? "restarted" : "quit";
 
-    if (reason && *reason) {
-        Q_snprintf(buffer, sizeof(buffer),
-                   "Server %s: %s\n", what, reason);
-    } else {
-        Q_snprintf(buffer, sizeof(buffer),
-                   "Server %s\n", what);
-    }
+	if (reason && *reason) {
+		Q_snprintf(buffer, sizeof(buffer),
+		"Server %s: %s\n", what, reason);
+	} else {
+		Q_snprintf(buffer, sizeof(buffer),
+		"Server %s\n", what);
+	}
 
-    SV_Shutdown(buffer, type);
-    CL_Shutdown();
-    NET_Shutdown();
-    Sys_SaveHistory();
-    logfile_close();
-    FS_Shutdown();
-    Com_ShutdownAsyncWork();
+	SV_Shutdown(buffer, type);
+	CL_Shutdown();
+	#if USE_ZLIB
+	Q2Proto_IO_Shutdown();
+	#endif
+	NET_Shutdown();
+	Sys_SaveHistory();
+	logfile_close();
+	FS_Shutdown();
+	Com_ShutdownAsyncWork();
 
-    Sys_Quit();
-    // doesn't get there
+	Sys_Quit();
+	// doesn't get there
 }
 
 static void Com_Quit_f(void)
