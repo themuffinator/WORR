@@ -220,144 +220,188 @@ void SV_LinkEdict(const cm_t *cm, edict_t *ent, server_entity_t* sv_ent)
     }
 }
 
+/*
+=============
+unlink_sent
+
+Removes a server entity from area lists.
+=============
+*/
 static void unlink_sent(server_entity_t *sent)
 {
-    if (!sent->area.prev)
-        return;        // not linked in anywhere
-    List_Remove(&sent->area);
-    sent->area.prev = sent->area.next = NULL;
+	if (!sent->area.prev)
+		return;	// not linked in anywhere
+	List_Remove(&sent->area);
+	sent->area.prev = sent->area.next = NULL;
 }
 
+/*
+=============
+PF_UnlinkEdict
+
+Unlinks an edict from spatial partitioning.
+=============
+*/
 void PF_UnlinkEdict(edict_t *ent)
 {
-    if (!ent)
-        Com_Error(ERR_DROP, "%s: NULL", __func__);
-    int entnum = NUM_FOR_EDICT(ent);
-    server_entity_t *sent = &sv.entities[entnum];
-    unlink_sent(sent);
+	if (!ent)
+		Com_Error(ERR_DROP, "%s: NULL", __func__);
+	int entnum = NUM_FOR_EDICT(ent);
+	server_entity_t *sent = &sv.entities[entnum];
+	unlink_sent(sent);
 
-    ent->linked = sent->area.prev != NULL;
+	ent->linked = sent->area.prev != NULL;
 }
 
-static uint32_t SV_PackSolid32(const edict_t *ent)
+/*
+=============
+SV_PackSolid32
+
+Pack entity bounds using protocol-appropriate encoding.
+=============
+*/
+static uint32_t SV_PackSolid32(const edict_t *ent, q2proto_game_api_t game_api, int protocol_version)
 {
-    uint32_t solid32;
+	uint32_t solid32;
 
-    solid32 = q2proto_pack_solid_32_q2pro_v2(ent->mins, ent->maxs); // FIXME: game-dependent
+	if (game_api == Q2PROTO_GAME_VANILLA) {
+		if (protocol_version < PROTOCOL_VERSION_R1Q2_LONG_SOLID)
+			solid32 = q2proto_pack_solid_16(ent->mins, ent->maxs);
+		else
+			solid32 = q2proto_pack_solid_32_r1q2(ent->mins, ent->maxs);
+	} else {
+		solid32 = q2proto_pack_solid_32_q2pro_v2(ent->mins, ent->maxs);
+	}
 
-    if (solid32 == PACKED_BSP)
-        solid32 = 0;  // can happen in pathological case if z mins > maxs
+	if (solid32 == PACKED_BSP)
+		solid32 = 0;  // can happen in pathological case if z mins > maxs
 
 #if USE_DEBUG
-    if (developer->integer) {
-        vec3_t mins, maxs;
+	if (developer->integer) {
+		vec3_t mins, maxs;
 
-        q2proto_unpack_solid_32_q2pro_v2(solid32, mins, maxs); // FIXME: game-dependent
+		if (game_api == Q2PROTO_GAME_VANILLA) {
+			if (protocol_version < PROTOCOL_VERSION_R1Q2_LONG_SOLID)
+				q2proto_unpack_solid_16(solid32, mins, maxs);
+			else
+				q2proto_unpack_solid_32_r1q2(solid32, mins, maxs);
+		} else {
+			q2proto_unpack_solid_32_q2pro_v2(solid32, mins, maxs);
+		}
 
-        if (!VectorCompare(ent->mins, mins) || !VectorCompare(ent->maxs, maxs))
-            Com_LPrintf(PRINT_DEVELOPER, "Bad mins/maxs on entity %d: %s %s\n",
-                        NUM_FOR_EDICT(ent), vtos(ent->mins), vtos(ent->maxs));
-    }
+		if (!VectorCompare(ent->mins, mins) || !VectorCompare(ent->maxs, maxs))
+			Com_LPrintf(PRINT_DEVELOPER, "Bad mins/maxs on entity %d: %s %s\n",
+			            NUM_FOR_EDICT(ent), vtos(ent->mins), vtos(ent->maxs));
+	}
 #endif
 
-    return solid32;
+	return solid32;
 }
 
+/*
+=============
+PF_LinkEdict
+
+Links an entity and updates cached collision encoding.
+=============
+*/
 void PF_LinkEdict(edict_t *ent)
 {
-    areanode_t *node;
-    server_entity_t *sent;
-    int entnum;
+	areanode_t *node;
+	server_entity_t *sent;
+	int entnum;
 #if USE_FPS
-    int i;
+	int i;
+#endif
+	const q2proto_game_api_t game_api = svs.server_info.game_api;
+	const int solid_protocol_version = game_api == Q2PROTO_GAME_VANILLA ? PROTOCOL_VERSION_R1Q2_CURRENT : PROTOCOL_VERSION_Q2PRO_CURRENT;
+
+	if (!ent)
+		Com_Error(ERR_DROP, "%s: NULL", __func__);
+
+	entnum = NUM_FOR_EDICT(ent);
+	sent = &sv.entities[entnum];
+
+	if (ent->linked)
+		unlink_sent(sent);	// unlink from old position
+
+	if (ent == ge->edicts)
+		return;	// don't add the world
+
+	if (!ent->inuse) {
+		Com_DPrintf("%s: entity %d is not in use\n", __func__, NUM_FOR_EDICT(ent));
+		return;
+	}
+
+	if (!sv.cm.cache)
+		return;
+
+	// encode the size into the entity_state for client prediction
+	switch (ent->solid) {
+	case SOLID_BBOX:
+		if ((ent->svflags & SVF_DEADMONSTER) || VectorCompare(ent->mins, ent->maxs)) {
+			ent->s.solid = 0;
+			sent->solid32 = 0;
+		} else if (svs.csr.extended) {
+			sent->solid32 = ent->s.solid = SV_PackSolid32(ent, game_api, solid_protocol_version);
+		} else {
+			ent->s.solid = q2proto_pack_solid_16(ent->mins, ent->maxs);
+			sent->solid32 = SV_PackSolid32(ent, game_api, solid_protocol_version);
+		}
+		break;
+	case SOLID_BSP:
+		ent->s.solid = PACKED_BSP;		// a SOLID_BBOX will never create this value
+		sent->solid32 = PACKED_BSP;		// FIXME: use 255?
+		break;
+	default:
+		ent->s.solid = 0;
+		sent->solid32 = 0;
+		break;
+	}
+
+	SV_LinkEdict(&sv.cm, ent, sent);
+
+	// if first time, make sure old_origin is valid
+	if (!ent->linkcount) {
+		if (!(ent->s.renderfx & RF_BEAM))
+			VectorCopy(ent->s.origin, ent->s.old_origin);
+#if USE_FPS
+		VectorCopy(ent->s.origin, sent->create_origin);
+		sent->create_framenum = sv.framenum;
+#endif
+	}
+	ent->linkcount++;
+
+#if USE_FPS
+	// save origin for later recovery
+	i = sv.framenum & ENT_HISTORY_MASK;
+	VectorCopy(ent->s.origin, sent->history[i].origin);
+	sent->history[i].framenum = sv.framenum;
 #endif
 
-    if (!ent)
-        Com_Error(ERR_DROP, "%s: NULL", __func__);
+	if (ent->solid == SOLID_NOT)
+		return;
 
-    entnum = NUM_FOR_EDICT(ent);
-    sent = &sv.entities[entnum];
+	// find the first node that the ent's box crosses
+	node = sv_areanodes;
+	while (1) {
+		if (node->axis == -1)
+			break;
+		if (ent->absmin[node->axis] > node->dist)
+			node = node->children[0];
+		else if (ent->absmax[node->axis] < node->dist)
+			node = node->children[1];
+		else
+			break;	// crosses the node
+	}
 
-    if (ent->linked)
-        unlink_sent(sent);     // unlink from old position
+	// link it in
+	if (ent->solid == SOLID_TRIGGER)
+		List_Append(&node->trigger_edicts, &sent->area);
+	else
+		List_Append(&node->solid_edicts, &sent->area);
 
-    if (ent == ge->edicts)
-        return;        // don't add the world
-
-    if (!ent->inuse) {
-        Com_DPrintf("%s: entity %d is not in use\n", __func__, NUM_FOR_EDICT(ent));
-        return;
-    }
-
-    if (!sv.cm.cache)
-        return;
-
-    // encode the size into the entity_state for client prediction
-    switch (ent->solid) {
-    case SOLID_BBOX:
-        if ((ent->svflags & SVF_DEADMONSTER) || VectorCompare(ent->mins, ent->maxs)) {
-            ent->s.solid = 0;
-            sent->solid32 = 0;
-        } else if (svs.csr.extended) {
-            sent->solid32 = ent->s.solid = SV_PackSolid32(ent);
-        } else {
-            ent->s.solid = q2proto_pack_solid_16(ent->mins, ent->maxs);
-            sent->solid32 = SV_PackSolid32(ent);
-        }
-        break;
-    case SOLID_BSP:
-        ent->s.solid = PACKED_BSP;      // a SOLID_BBOX will never create this value
-        sent->solid32 = PACKED_BSP;     // FIXME: use 255?
-        break;
-    default:
-        ent->s.solid = 0;
-        sent->solid32 = 0;
-        break;
-    }
-
-    SV_LinkEdict(&sv.cm, ent, sent);
-
-    // if first time, make sure old_origin is valid
-    if (!ent->linkcount) {
-        if (!(ent->s.renderfx & RF_BEAM))
-            VectorCopy(ent->s.origin, ent->s.old_origin);
-#if USE_FPS
-        VectorCopy(ent->s.origin, sent->create_origin);
-        sent->create_framenum = sv.framenum;
-#endif
-    }
-    ent->linkcount++;
-
-#if USE_FPS
-    // save origin for later recovery
-    i = sv.framenum & ENT_HISTORY_MASK;
-    VectorCopy(ent->s.origin, sent->history[i].origin);
-    sent->history[i].framenum = sv.framenum;
-#endif
-
-    if (ent->solid == SOLID_NOT)
-        return;
-
-// find the first node that the ent's box crosses
-    node = sv_areanodes;
-    while (1) {
-        if (node->axis == -1)
-            break;
-        if (ent->absmin[node->axis] > node->dist)
-            node = node->children[0];
-        else if (ent->absmax[node->axis] < node->dist)
-            node = node->children[1];
-        else
-            break;        // crosses the node
-    }
-
-    // link it in
-    if (ent->solid == SOLID_TRIGGER)
-        List_Append(&node->trigger_edicts, &sent->area);
-    else
-        List_Append(&node->solid_edicts, &sent->area);
-
-    ent->linked = sent->area.prev != NULL;
+	ent->linked = sent->area.prev != NULL;
 }
 
 
