@@ -2513,55 +2513,46 @@ static int64_t search_central_header(FILE *fp)
     return 0;
 }
 
+/*
+=============
+search_central_header64
+
+Locate the Zip64 end-of-central-directory record, translating the
+relative locator offset into an absolute file position even when the
+archive has a prepended (SFX-style) stub.
+=============
+*/
 static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 {
-    byte header[ZIP_SIZECENTRALLOCATOR64];
-    uint32_t magic;
-    int64_t pos;
+	byte header[ZIP_SIZECENTRALLOCATOR64];
+	uint32_t magic;
+	int64_t pos, prefix, seek_pos;
 
-    if (header_pos < sizeof(header))
-        return 0;
-    if (os_fseek(fp, header_pos - sizeof(header), SEEK_SET))
-        return 0;
-    if (!fread(header, sizeof(header), 1, fp))
-        return 0;
-    if (RL32(&header[0]) != ZIP_LOCATOR64MAGIC)
-        return 0;
-    if (RL32(&header[4]) != 0)
-        return 0;
-    if (RL32(&header[16]) != 1)
-        return 0;
-    // FIXME: this won't work if there is prepended data
-    pos = RL64(&header[8]);
-    if (os_fseek(fp, pos, SEEK_SET))
-        return 0;
-    if (!fread(&magic, sizeof(magic), 1, fp))
-        return 0;
-    if (LittleLong(magic) != ZIP_ENDHEADER64MAGIC)
-        return 0;
-    return pos;
+	if (header_pos < ZIP_SIZECENTRALHEADER64 + sizeof(header))
+		return 0;
+	if (os_fseek(fp, header_pos - sizeof(header), SEEK_SET))
+		return 0;
+	if (!fread(header, sizeof(header), 1, fp))
+		return 0;
+	if (RL32(&header[0]) != ZIP_LOCATOR64MAGIC)
+		return 0;
+	if (RL32(&header[4]) != 0)
+		return 0;
+	if (RL32(&header[16]) != 1)
+		return 0;
+	pos = RL64(&header[8]);
+	prefix = header_pos - (ZIP_SIZECENTRALHEADER64 + sizeof(header)) - pos;
+	if (prefix < 0)
+		prefix = 0;
+	seek_pos = pos + prefix;
+	if (os_fseek(fp, seek_pos, SEEK_SET))
+		return 0;
+	if (!fread(&magic, sizeof(magic), 1, fp))
+		return 0;
+	if (LittleLong(magic) != ZIP_ENDHEADER64MAGIC)
+		return 0;
+	return seek_pos;
 }
-
-static bool parse_zip64_extra_data(packfile_t *file, const byte *buf, int size)
-{
-    int need =
-        (file->filelen == UINT32_MAX) +
-        (file->complen == UINT32_MAX) +
-        (file->filepos == UINT32_MAX);
-
-    if (size < need * 8)
-        return false;
-
-    if (file->filelen == UINT32_MAX)
-        file->filelen = RL64(buf), buf += 8;
-
-    if (file->complen == UINT32_MAX)
-        file->complen = RL64(buf), buf += 8;
-
-    if (file->filepos == UINT32_MAX)
-        file->filepos = RL64(buf), buf += 8;
-
-    return true;
 }
 
 static bool parse_extra_data(const pack_t *pack, packfile_t *file, int xtra_size)

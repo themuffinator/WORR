@@ -819,7 +819,7 @@ if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_a
   engine_args += '-mstackrealign'
 endif
 
-executable('worr', common_src, client_src, refresh_src,
+worr = executable('worr', common_src, client_src, refresh_src,
   dependencies:          common_deps + client_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
@@ -831,7 +831,7 @@ executable('worr', common_src, client_src, refresh_src,
   install_dir:           bindir,
 )
 
-executable('worr.ded', common_src, server_src,
+worr_ded = executable('worr.ded', common_src, server_src,
   dependencies:          common_deps + server_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
@@ -842,6 +842,15 @@ executable('worr.ded', common_src, server_src,
   install:               true,
   install_dir:           bindir,
 )
+
+if get_option('tests') and zlib.found()
+  python_mod = import('python')
+  python3 = python_mod.find_installation('python3')
+  test('fs_sfx_pkz', python3,
+    args: [files('tests/test_sfx_pkz.py'), worr_ded.full_path()],
+    depends: worr_ded,
+  )
+endif
 
 shared_library('game' + cpu, game_src,
   name_prefix:           '',
