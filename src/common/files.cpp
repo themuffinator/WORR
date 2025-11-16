@@ -1488,22 +1488,32 @@ static bool is_q2game_pack(const pack_t *pack)
 	return base && !Q_stricmp(base, "Q2Game.kpf");
 }
 
-static int64_t open_file_read_q2game(file_t *file, const char *normalized, size_t namelen)
+/*
+=============
+visit_q2game_entries
+
+Invokes a callback for each matching entry inside Q2Game.kpf packs.
+=============
+*/
+static bool visit_q2game_entries(const char *normalized, size_t namelen, unsigned mode,
+bool count_stats, bool (*callback)(pack_t *, packfile_t *, void *), void *data)
 {
 	searchpath_t *search;
 	unsigned hash;
 	packfile_t *entry;
 
-	if (!namelen)
-		return Q_ERR_INVALID_PATH;
+	if (!callback)
+		return false;
 
-	if ((file->mode & FS_TYPE_MASK) == FS_TYPE_REAL)
-		return Q_ERR(ENOENT);
+	if (!namelen || namelen >= MAX_QPATH)
+		return false;
 
-	if (namelen >= MAX_QPATH)
-		return Q_ERR(ENOENT);
+	if ((mode & FS_TYPE_MASK) == FS_TYPE_REAL)
+		return false;
 
-	FS_COUNT_READ;
+	if (count_stats)
+		FS_COUNT_READ;
+
 	hash = FS_HashPath(normalized, 0);
 
 	for (search = fs_searchpaths; search; search = search->next) {
@@ -1513,8 +1523,8 @@ static int64_t open_file_read_q2game(file_t *file, const char *normalized, size_
 			continue;
 		if (!is_q2game_pack(pak))
 			continue;
-		if ((file->mode & search->mode & FS_PATH_MASK) == 0 ||
-		    (file->mode & search->mode & FS_DIR_MASK) == 0) {
+		if ((mode & search->mode & FS_PATH_MASK) == 0 ||
+				(mode & search->mode & FS_DIR_MASK) == 0) {
 			continue;
 		}
 
@@ -1522,11 +1532,50 @@ static int64_t open_file_read_q2game(file_t *file, const char *normalized, size_
 		for (; entry; entry = entry->hash_next) {
 			if (entry->namelen != namelen)
 				continue;
-			FS_COUNT_STRCMP;
-			if (!FS_pathcmp(pak->names + entry->nameofs, normalized))
-				return open_from_pack(file, pak, entry);
-		}
-	}
+			if (count_stats)
+				FS_COUNT_STRCMP;
+			if (!FS_pathcmp(pak->names + entry->nameofs, normalized)) {
+				if (callback(pak, entry, data)) {
+					return true;
+				}
+			}
+}
+}
+
+return false;
+}
+
+struct q2game_open_ctx {
+	file_t *file;
+	int64_t ret;
+};
+
+/*
+=============
+open_q2game_callback
+=============
+*/
+static bool open_q2game_callback(pack_t *pak, packfile_t *entry, void *data)
+{
+	q2game_open_ctx *ctx = static_cast<q2game_open_ctx *>(data);
+	ctx->ret = open_from_pack(ctx->file, pak, entry);
+	return true;
+}
+
+static int64_t open_file_read_q2game(file_t *file, const char *normalized, size_t namelen)
+{
+	if (!namelen)
+		return Q_ERR_INVALID_PATH;
+
+	if ((file->mode & FS_TYPE_MASK) == FS_TYPE_REAL)
+		return Q_ERR(ENOENT);
+
+	if (namelen >= MAX_QPATH)
+		return Q_ERR(ENOENT);
+
+	q2game_open_ctx ctx{ file, Q_ERR(ENOENT) };
+	if (visit_q2game_entries(normalized, namelen, file->mode, true, open_q2game_callback, &ctx))
+		return ctx.ret;
 
 	return Q_ERR(ENOENT);
 }
@@ -3537,179 +3586,228 @@ static void FS_Dir_f(void)
 
 static void append_whereis_line(std::vector<std::string>& out, const char* fmt, ...)
 {
-    std::array<char, MAX_OSPATH * 2> buffer{};
+	std::array<char, MAX_OSPATH * 2> buffer{};
 
-    va_list argptr;
-    va_start(argptr, fmt);
-    size_t len = Q_vsnprintf(buffer.data(), buffer.size(), fmt, argptr);
-    va_end(argptr);
+	va_list argptr;
+	va_start(argptr, fmt);
+	size_t len = Q_vsnprintf(buffer.data(), buffer.size(), fmt, argptr);
+	va_end(argptr);
 
-    if (len >= buffer.size()) {
-        len = buffer.size() - 1;
-    }
+	if (len >= buffer.size()) {
+		len = buffer.size() - 1;
+	}
 
-    out.emplace_back(buffer.data(), len);
+	out.emplace_back(buffer.data(), len);
 }
 
+struct q2game_gather_ctx {
+	std::vector<std::string> *lines;
+	const char *normalized;
+	int *total;
+	bool report_all;
+	bool found;
+};
+
+/*
+=============
+gather_q2game_callback
+=============
+*/
+static bool gather_q2game_callback(pack_t *pak, packfile_t *entry, void *data)
+{
+	q2game_gather_ctx *ctx = static_cast<q2game_gather_ctx *>(data);
+	append_whereis_line(*ctx->lines, "%s/%s (%" PRId64 " bytes)", pak->filename,
+			ctx->normalized, static_cast<int64_t>(entry->filelen));
+	(*ctx->total)++;
+	ctx->found = true;
+	return !ctx->report_all;
+}
+
+/*
+=============
+gather_file_lookup
+
+Collects detailed information about the lookup process for FS_WhereIs_f.
+=============
+*/
 static void gather_file_lookup(const char* path, unsigned mode, bool report_all, std::vector<std::string>& out)
 {
-    if (!path) {
-        append_whereis_line(out, "Refusing to lookup empty path.");
-        return;
-    }
+	if (!path) {
+		append_whereis_line(out, "Refusing to lookup empty path.");
+		return;
+	}
 
-    if (!fs_searchpaths) {
-        append_whereis_line(out, "Filesystem not initialized.");
-        return;
-    }
+	if (!fs_searchpaths) {
+		append_whereis_line(out, "Filesystem not initialized.");
+		return;
+	}
 
-    std::array<char, MAX_OSPATH> normalized{};
-    std::array<char, MAX_OSPATH> fullpath{};
+	std::array<char, MAX_OSPATH> normalized{};
+	std::array<char, MAX_OSPATH> fullpath{};
 
-    size_t namelen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
-    if (namelen >= normalized.size()) {
-        append_whereis_line(out, "Refusing to lookup oversize path.");
-        return;
-    }
+	size_t namelen = FS_NormalizePathBuffer(normalized.data(), path, normalized.size());
+	if (namelen >= normalized.size()) {
+		append_whereis_line(out, "Refusing to lookup oversize path.");
+		return;
+	}
 
-    symlink_t* link = expand_links(&fs_hard_links, normalized.data(), &namelen);
-    if (link) {
-        if (namelen >= normalized.size()) {
-            append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
-            return;
-        }
+	symlink_t* link = expand_links(&fs_hard_links, normalized.data(), &namelen);
+	if (link) {
+		if (namelen >= normalized.size()) {
+			append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
+			return;
+		}
 
-        append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
-    }
+		append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
+	}
 
-    if (namelen == 0) {
-        append_whereis_line(out, "Refusing to lookup empty path.");
-        return;
-    }
+	if (namelen == 0) {
+		append_whereis_line(out, "Refusing to lookup empty path.");
+		return;
+	}
 
-    const unsigned lookup_mode = default_lookup_flags(mode);
+	const unsigned lookup_mode = default_lookup_flags(mode);
+	const bool prefer_q2game = path[0] == '/' && ((lookup_mode & FS_TYPE_MASK) != FS_TYPE_REAL);
+	bool q2game_checked = !prefer_q2game;
 
-    int total = 0;
-    link = NULL;
+	int total = 0;
+	link = NULL;
 
-    while (true) {
-        if (namelen >= MAX_QPATH) {
-            append_whereis_line(out,
-                    "Not searching for '%s' in pack files since path length exceedes %d characters.",
-                    normalized.data(), MAX_QPATH - 1);
-        }
+	while (true) {
+		bool q2game_reported = false;
+		if (prefer_q2game && !q2game_checked) {
+			q2game_checked = true;
+			q2game_gather_ctx ctx{ &out, normalized.data(), &total, report_all, false };
+			visit_q2game_entries(normalized.data(), namelen, lookup_mode, false, gather_q2game_callback, &ctx);
+			q2game_reported = ctx.found;
+			if (q2game_reported && !report_all) {
+				return;
+			}
+		}
 
-        const unsigned hash = FS_HashPath(normalized.data(), 0);
-        path_valid_t valid = PATH_NOT_CHECKED;
+		if (namelen >= MAX_QPATH) {
+			append_whereis_line(out,
+				"Not searching for '%s' in pack files since path length exceedes %d characters.",
+				normalized.data(), MAX_QPATH - 1);
+		}
 
-        for (searchpath_t* search = fs_searchpaths; search; search = search->next) {
-            if ((lookup_mode & search->mode & FS_PATH_MASK) == 0 ||
-                    (lookup_mode & search->mode & FS_DIR_MASK) == 0) {
-                continue;
-            }
+		const unsigned hash = FS_HashPath(normalized.data(), 0);
+		path_valid_t valid = PATH_NOT_CHECKED;
 
-            if (search->pack) {
-                if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_REAL) {
-                    continue;
-                }
-                if (namelen >= MAX_QPATH) {
-                    continue;
-                }
+		for (searchpath_t* search = fs_searchpaths; search; search = search->next) {
+			if ((lookup_mode & search->mode & FS_PATH_MASK) == 0 ||
+					(lookup_mode & search->mode & FS_DIR_MASK) == 0) {
+				continue;
+			}
 
-                pack_t* pak = search->pack;
-                packfile_t* entry = pak->file_hash[hash & (pak->hash_size - 1)];
-                for (; entry; entry = entry->hash_next) {
-                    if (entry->namelen != namelen) {
-                        continue;
-                    }
-                    if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
-                        append_whereis_line(out, "%s/%s (%" PRId64 " bytes)", pak->filename,
-                                normalized.data(), static_cast<int64_t>(entry->filelen));
-                        total++;
-                        if (!report_all) {
-                            return;
-                        }
-                    }
-                }
-            } else {
-                if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_PAK) {
-                    continue;
-                }
+			if (search->pack) {
+				if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_REAL) {
+					continue;
+				}
+				if (namelen >= MAX_QPATH) {
+					continue;
+				}
+				if (prefer_q2game && q2game_reported && is_q2game_pack(search->pack)) {
+					continue;
+				}
 
-                if (valid == PATH_NOT_CHECKED) {
-                    valid = FS_ValidatePath(normalized.data());
-                    if (valid == PATH_INVALID) {
-                        append_whereis_line(out,
-                                "Not searching for '%s' in physical file system since path contains invalid characters.",
-                                normalized.data());
-                        if (!report_all) {
-                            return;
-                        }
-                    }
-                }
-                if (valid == PATH_INVALID) {
-                    continue;
-                }
+				pack_t* pak = search->pack;
+				packfile_t* entry = pak->file_hash[hash & (pak->hash_size - 1)];
+				for (; entry; entry = entry->hash_next) {
+					if (entry->namelen != namelen) {
+						continue;
+					}
+					if (!FS_pathcmp(pak->names + entry->nameofs, normalized.data())) {
+						append_whereis_line(out, "%s/%s (%" PRId64 " bytes)", pak->filename,
+								normalized.data(), static_cast<int64_t>(entry->filelen));
+						total++;
+						if (!report_all) {
+							return;
+						}
+					}
+				}
+			} else {
+				if ((lookup_mode & FS_TYPE_MASK) == FS_TYPE_PAK) {
+					continue;
+				}
 
-                size_t len = Q_concat(fullpath.data(), fullpath.size(), search->filename, "/", normalized.data());
-                if (len >= fullpath.size()) {
-                    append_whereis_line(out, "Full path length '%s/%s' exceeded %d characters.",
-                            search->filename, normalized.data(), MAX_OSPATH - 1);
-                    if (!report_all) {
-                        return;
-                    }
-                    continue;
-                }
+				if (valid == PATH_NOT_CHECKED) {
+					valid = FS_ValidatePath(normalized.data());
+					if (valid == PATH_INVALID) {
+						append_whereis_line(out,
+							"Not searching for '%s' in physical file system since path contains invalid characters.",
+							normalized.data());
+						if (!report_all) {
+							return;
+						}
+					}
+				}
+				if (valid == PATH_INVALID) {
+					continue;
+				}
 
-                file_info_t info{};
-                int ret = get_path_info(fullpath.data(), &info);
+				size_t len = Q_concat(fullpath.data(), fullpath.size(), search->filename, "/", normalized.data());
+				if (len >= fullpath.size()) {
+					append_whereis_line(out, "Full path length '%s/%s' exceeded %d characters.",
+						search->filename, normalized.data(), MAX_OSPATH - 1);
+					if (!report_all) {
+						return;
+					}
+					continue;
+				}
+
+				file_info_t info{};
+				int ret = get_path_info(fullpath.data(), &info);
 
 #ifndef _WIN32
-                if (ret == Q_ERR(ENOENT) && valid == PATH_MIXED_CASE) {
-                    Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
-                    ret = get_path_info(fullpath.data(), &info);
-                    if (ret == Q_ERR_SUCCESS) {
-                        append_whereis_line(out, "Physical path found after converting to lower case.");
-                    }
-                }
+				if (ret == Q_ERR(ENOENT) && valid == PATH_MIXED_CASE) {
+					Q_strlwr(fullpath.data() + strlen(search->filename) + 1);
+					ret = get_path_info(fullpath.data(), &info);
+					if (ret == Q_ERR_SUCCESS) {
+						append_whereis_line(out, "Physical path found after converting to lower case.");
+					}
+				}
 #endif
 
-                if (ret == Q_ERR_SUCCESS) {
-                    append_whereis_line(out, "%s (%" PRId64 " bytes)", fullpath.data(), info.size);
-                    total++;
-                    if (!report_all) {
-                        return;
-                    }
-                } else if (ret != Q_ERR(ENOENT)) {
-                    append_whereis_line(out, "Couldn't get info on '%s': %s", fullpath.data(), Q_ErrorString(ret));
-                    if (!report_all) {
-                        return;
-                    }
-                }
-            }
-        }
+				if (ret == Q_ERR_SUCCESS) {
+					append_whereis_line(out, "%s (%" PRId64 " bytes)", fullpath.data(), info.size);
+					total++;
+					if (!report_all) {
+						return;
+					}
+				} else if (ret != Q_ERR(ENOENT)) {
+					append_whereis_line(out, "Couldn't get info on '%s': %s", fullpath.data(), Q_ErrorString(ret));
+					if (!report_all) {
+						return;
+					}
+				}
+			}
+		}
 
-        if ((total == 0 || report_all) && link == NULL) {
-            link = expand_links(&fs_soft_links, normalized.data(), &namelen);
-            if (link) {
-                if (namelen >= normalized.size()) {
-                    append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
-                    return;
-                }
+		if ((total == 0 || report_all) && link == NULL) {
+			link = expand_links(&fs_soft_links, normalized.data(), &namelen);
+			if (link) {
+				if (namelen >= normalized.size()) {
+					append_whereis_line(out, "Oversize symbolic link ('%s --> '%s').", link->name, link->target);
+					return;
+				}
 
-                append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
-                continue;
-            }
-        }
+				append_whereis_line(out, "Symbolic link ('%s' --> '%s') in effect.", link->name, link->target);
+				if (prefer_q2game) {
+					q2game_checked = false;
+				}
+				continue;
+			}
+		}
 
-        break;
-    }
+		break;
+	}
 
-    if (total) {
-        append_whereis_line(out, "%d instances of %s", total, normalized.data());
-    } else {
-        append_whereis_line(out, "%s was not found", normalized.data());
-    }
+	if (total) {
+		append_whereis_line(out, "%d instances of %s", total, normalized.data());
+	} else {
+		append_whereis_line(out, "%s was not found", normalized.data());
+	}
 }
 
 /*
