@@ -69,14 +69,34 @@ int     FS_CloseFile(qhandle_t f);
 qhandle_t FS_EasyOpenFile(char *buf, size_t size, unsigned mode,
                           const char *dir, const char *name, const char *ext);
 
-#define FS_FileExistsEx(path, flags) \
-    (FS_LoadFileEx(path, NULL, flags, TAG_FREE) != Q_ERR(ENOENT))
-#define FS_FileExists(path) \
-    FS_FileExistsEx(path, 0)
-
 int FS_LoadFileEx(const char *path, void **buffer, unsigned flags, memtag_t tag);
 // a NULL buffer will just return the file length without loading
 // length < 0 indicates error
+
+/*
+=============
+FS_FileExistsEx
+
+Returns true only when FS_LoadFileEx reports a non-negative length.
+=============
+*/
+static inline bool FS_FileExistsEx(const char *path, unsigned flags)
+{
+	int len;
+
+	len = FS_LoadFileEx(path, NULL, flags, TAG_FREE);
+	return len >= 0;
+}
+
+/*
+=============
+FS_FileExists
+=============
+*/
+static inline bool FS_FileExists(const char *path)
+{
+	return FS_FileExistsEx(path, 0);
+}
 
 int FS_WriteFile(const char *path, const void *data, size_t len);
 

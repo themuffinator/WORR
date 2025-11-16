@@ -121,6 +121,40 @@ cvar_t  *allow_download_textures;
 cvar_t  *allow_download_pics;
 cvar_t  *allow_download_others;
 
+#if USE_TESTS
+/*
+=============
+Com_FSFileExistsPreInitCheck
+
+Ensures FS_FileExists returns false when the filesystem is not yet initialized.
+=============
+*/
+static void Com_FSFileExistsPreInitCheck(void)
+{
+	if (FS_FileExists("__fs_preinit_check__")) {
+		Com_WPrintf("FS_FileExists returned true before FS initialization\n");
+	} else {
+		Com_DPrintf("FS_FileExists pre-init check passed\n");
+	}
+}
+
+/*
+=============
+Com_FSFileExistsInvalidPathCheck
+
+Ensures FS_FileExists rejects invalid paths even after initialization.
+=============
+*/
+static void Com_FSFileExistsInvalidPathCheck(void)
+{
+	if (FS_FileExists("")) {
+		Com_WPrintf("FS_FileExists accepted an invalid path\n");
+	} else {
+		Com_DPrintf("FS_FileExists invalid-path check passed\n");
+	}
+}
+#endif
+
 cvar_t  *rcon_password;
 
 cvar_t  *sys_forcegamelib;
@@ -989,7 +1023,15 @@ void Qcommon_Init(int argc, char **argv)
 
     Sys_RunConsole();
 
+#if USE_TESTS
+	Com_FSFileExistsPreInitCheck();
+#endif
+
     FS_Init();
+
+#if USE_TESTS
+	Com_FSFileExistsInvalidPathCheck();
+#endif
 
     Sys_RunConsole();
 
