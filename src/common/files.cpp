@@ -4116,24 +4116,23 @@ FS_AddConfigFiles
 */
 void FS_AddConfigFiles(bool init)
 {
-    int flag = init ? FS_PATH_ANY : FS_PATH_GAME;
+	int flag = init ? FS_PATH_ANY : FS_PATH_GAME;
 
-    if (!init && !fs_autoexec->integer)
-        return;
+	// default.cfg may come from packfile, but config.cfg and autoexec.cfg
+	// must be real files within the game directory.
+	Com_AddConfigFile(COM_DEFAULT_CFG, flag);
+	Com_AddConfigFile(COM_CONFIG_CFG, FS_TYPE_REAL | flag);
 
-    // default.cfg may come from packfile, but config.cfg and autoexec.cfg
-    // must be real files within the game directory.
-    Com_AddConfigFile(COM_DEFAULT_CFG, flag);
-    Com_AddConfigFile(COM_CONFIG_CFG, FS_TYPE_REAL | flag);
+	if (fs_autoexec->integer) {
+		// autoexec.cfg is executed twice, first from basedir and then from
+		// gamedir. This ensures user settings configured in baseq2/autoexec.cfg
+		// override those in default.cfg and config.cfg.
+		if (*fs_game->string)
+			Com_AddConfigFile(COM_AUTOEXEC_CFG, FS_TYPE_REAL | FS_PATH_BASE);
+		Com_AddConfigFile(COM_AUTOEXEC_CFG, FS_TYPE_REAL | FS_PATH_GAME);
+	}
 
-    // autoexec.cfg is executed twice, first from basedir and then from
-    // gamedir. This ensures user settings configured in baseq2/autoexec.cfg
-    // override those in default.cfg and config.cfg.
-    if (*fs_game->string)
-        Com_AddConfigFile(COM_AUTOEXEC_CFG, FS_TYPE_REAL | FS_PATH_BASE);
-    Com_AddConfigFile(COM_AUTOEXEC_CFG, FS_TYPE_REAL | FS_PATH_GAME);
-
-    Com_AddConfigFile(COM_POSTEXEC_CFG, FS_TYPE_REAL);
+	Com_AddConfigFile(COM_POSTEXEC_CFG, FS_TYPE_REAL);
 }
 
 // this is called when local server starts up and gets it's latched variables,
