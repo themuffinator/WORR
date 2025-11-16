@@ -850,6 +850,10 @@ if get_option('tests') and zlib.found()
     args: [files('tests/test_sfx_pkz.py'), worr_ded.full_path()],
     depends: worr_ded,
   )
+  test('fs_whereis_q2game', python3,
+    args: [files('tests/test_whereis_q2game.py'), worr_ded.full_path()],
+    depends: worr_ded,
+  )
 endif
 
 shared_library('game' + cpu, game_src,
