@@ -574,16 +574,21 @@ static void CL_Record_f(void)
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     // configstrings
-    for (int i = 0; i < cl.csr.end; i++) {
-        char* string = cl.configstrings[i];
-        if (!string[0]) {
-            continue;
-        }
-        q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
-        cfgstr->index = i;
-        cfgstr->value.str = string;
-        cfgstr->value.len = Q_strnlen(string, CS_MAX_STRING_LENGTH);
-    }
+for (int i = 0; i < cl.csr.end; i++) {
+char* string = cl.configstrings[i];
+if (!string[0]) {
+continue;
+}
+q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
+cfgstr->index = i;
+cfgstr->value.str = string;
+cfgstr->value.len = Com_ConfigstringLength(&cl.csr, i, string);
+
+size_t span = Com_ConfigstringSpan(cfgstr->value.len);
+if (span) {
+i += static_cast<int>(span) - 1;
+}
+}
 
     // baselines
     for (i = 1; i < cl.csr.max_edicts; i++) {
@@ -1003,19 +1008,24 @@ void CL_EmitDemoSnapshot(void)
     memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
     // configstrings
-    for (i = 0; i < cl.csr.end; i++) {
-        from = cl.baseconfigstrings[i];
-        to = cl.configstrings[i];
+for (i = 0; i < cl.csr.end; i++) {
+from = cl.baseconfigstrings[i];
+to = cl.configstrings[i];
 
-        if (!strcmp(from, to))
-            continue;
+if (!strcmp(from, to))
+continue;
 
-        char* string = cl.configstrings[i];
-        q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
-        cfgstr->index = i;
-        cfgstr->value.str = string;
-        cfgstr->value.len = Q_strnlen(string, CS_MAX_STRING_LENGTH);
-    }
+char* string = cl.configstrings[i];
+q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
+cfgstr->index = i;
+cfgstr->value.str = string;
+cfgstr->value.len = Com_ConfigstringLength(&cl.csr, i, string);
+
+size_t span = Com_ConfigstringSpan(cfgstr->value.len);
+if (span) {
+i += static_cast<int>(span) - 1;
+}
+}
 
     /* baselines, for more robustness
      * Mainly for when the 2022 protocol is used, as "solid" values affect encoding,

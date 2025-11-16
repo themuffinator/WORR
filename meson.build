@@ -868,6 +868,15 @@ if get_option('tests')
     depends: worr_ded,
   )
 
+gamestate_test = executable('test_gamestate_configstrings',
+  'tests/test_gamestate_configstrings.cpp',
+  include_directories: ['inc', 'q2proto/inc'],
+  cpp_args: ['-DUSE_SERVER=1'],
+)
+
+test('gamestate_configstrings', gamestate_test,
+  is_parallel: false,
+)
   pmove_waterjump_test = executable('test_pmove_waterjump',
     ['tests/test_pmove_waterjump.cpp', 'src/common/game3_pmove/waterjump.cpp'],
     include_directories: 'inc',

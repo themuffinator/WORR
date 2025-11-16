@@ -104,58 +104,64 @@ static void SV_CreateBaselines(void)
 static q2proto_svc_configstring_t configstrings[MAX_CONFIGSTRINGS];
 static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
+/*
+=============
+write_gamestate
+
+Builds and transmits the gamestate to the current client, merging multi-slot configstrings.
+=============
+*/
 static void write_gamestate(void)
 {
-    msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : static_cast<msgEsFlags_t>(0);
-    q2proto_gamestate_t gamestate{};
-    gamestate.configstrings = configstrings;
-    gamestate.spawnbaselines = spawnbaselines;
-    gamestate.num_configstrings = 0;
-    gamestate.num_spawnbaselines = 0;
-    memset(spawnbaselines, 0, sizeof(spawnbaselines));
+	msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : static_cast<msgEsFlags_t>(0);
+	q2proto_gamestate_t gamestate{};
+	gamestate.configstrings = configstrings;
+	gamestate.spawnbaselines = spawnbaselines;
+	gamestate.num_configstrings = 0;
+	gamestate.num_spawnbaselines = 0;
+	memset(spawnbaselines, 0, sizeof(spawnbaselines));
 
-    for (int i = 0; i < sv_client->csr->end; i++) {
-        const char* string = sv_client->configstrings[i];
-        if (!string[0]) {
-            continue;
-        }
-        q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
-        cfgstr->index = i;
-        cfgstr->value.str = string;
-        // FIXME: this is not very intelligent, and would probably benefit from
-        // checking Com_ConfigstringSize and increasing as appropriate to save
-        // on some bytes. for instance CS_STATUSBAR can span up to around 5 kb
-        // so there's no sense in writing `5 <96 chars> 6 <96 chars>` etc when
-        // you can just write `5 <4900>` chars and skip to the next string.
-        cfgstr->value.len = Q_strnlen(string, CS_MAX_STRING_LENGTH);
-    }
+	for (int i = 0; i < sv_client->csr->end; i++) {
+		const char* string = sv_client->configstrings[i];
+		if (!string[0]) {
+			continue;
+		}
+		q2proto_svc_configstring_t *cfgstr = &configstrings[gamestate.num_configstrings++];
+		cfgstr->index = i;
+		cfgstr->value.str = string;
+		cfgstr->value.len = Com_ConfigstringLength(sv_client->csr, i, string);
 
-    for (int i = 0; i < SV_BASELINES_CHUNKS; i++) {
-        server_entity_packed_t *base = sv_client->baselines[i];
-        if (!base) {
-            continue;
-        }
-        for (int j = 0; j < SV_BASELINES_PER_CHUNK; j++) {
-            if (base->number) {
-                q2proto_svc_spawnbaseline_t *baseline = &spawnbaselines[gamestate.num_spawnbaselines++];
-                baseline->entnum = base->number;
-                Q2PROTO_MakeEntityDelta(&sv_client->q2proto_ctx, &baseline->delta_state, NULL, &base->e, baseline_flags);
-            }
-            base++;
-        }
-    }
+		size_t span = Com_ConfigstringSpan(cfgstr->value.len);
+		if (span) {
+			i += static_cast<int>(span) - 1;
+		}
+	}
 
-    q2protoio_deflate_args_t *deflate_args = NULL;
+	for (int i = 0; i < SV_BASELINES_CHUNKS; i++) {
+		server_entity_packed_t *base = sv_client->baselines[i];
+		if (!base) {
+			continue;
+		}
+		for (int j = 0; j < SV_BASELINES_PER_CHUNK; j++) {
+			if (base->number) {
+				q2proto_svc_spawnbaseline_t *baseline = &spawnbaselines[gamestate.num_spawnbaselines++];
+				baseline->entnum = base->number;
+				Q2PROTO_MakeEntityDelta(&sv_client->q2proto_ctx, &baseline->delta_state, NULL, &base->e, baseline_flags);
+			}
+			base++;
+		}
+	}
+
+	q2protoio_deflate_args_t *deflate_args = NULL;
 #if USE_ZLIB
-    deflate_args = &sv_client->q2proto_deflate;
+	deflate_args = &sv_client->q2proto_deflate;
 #endif
-    int write_result;
-    do {
-        write_result = q2proto_server_write_gamestate(&sv_client->q2proto_ctx, deflate_args, (uintptr_t)&sv_client->io_data, &gamestate);
-        SV_ClientAddMessage(sv_client, MSG_GAMESTATE);
-    } while (write_result == Q2P_ERR_NOT_ENOUGH_PACKET_SPACE);
+	int write_result;
+	do {
+		write_result = q2proto_server_write_gamestate(&sv_client->q2proto_ctx, deflate_args, (uintptr_t)&sv_client->io_data, &gamestate);
+		SV_ClientAddMessage(sv_client, MSG_GAMESTATE);
+	} while (write_result == Q2P_ERR_NOT_ENOUGH_PACKET_SPACE);
 }
-
 static void stuff_cmds(const list_t *list)
 {
     stuffcmd_t *stuff;

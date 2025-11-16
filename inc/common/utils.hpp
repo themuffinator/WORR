@@ -113,13 +113,41 @@ char *UTF8_TranslitString(const char *src);
 // Some mods actually exploit CS_STATUSBAR to take space up to CS_AIRACCEL
 static inline size_t Com_ConfigstringSize(const cs_remap_t *csr, int cs)
 {
-    if (cs >= CS_STATUSBAR && cs < csr->airaccel)
-        return CS_MAX_STRING_LENGTH * (csr->airaccel - cs);
+	if (cs >= CS_STATUSBAR && cs < csr->airaccel)
+	return CS_MAX_STRING_LENGTH * (csr->airaccel - cs);
 
-    if (cs >= csr->general && cs < csr->end)
-        return CS_MAX_STRING_LENGTH * (csr->end - cs);
+	if (cs >= csr->general && cs < csr->end)
+	return CS_MAX_STRING_LENGTH * (csr->end - cs);
 
-    return CS_MAX_STRING_LENGTH;
+	return CS_MAX_STRING_LENGTH;
+}
+
+/*
+=============
+Com_ConfigstringLength
+
+Return the length of a configstring, constrained by the available span for the index.
+=============
+*/
+static inline size_t Com_ConfigstringLength(const cs_remap_t *csr, int cs, const char *string)
+{
+	size_t maxlen = Com_ConfigstringSize(csr, cs);
+	return Q_strnlen(string, maxlen);
+}
+
+/*
+=============
+Com_ConfigstringSpan
+
+Return the number of configstring slots required to store a configstring of the given length.
+=============
+*/
+static inline size_t Com_ConfigstringSpan(size_t length)
+{
+	if (!length)
+	return 0;
+
+	return (length + CS_MAX_STRING_LENGTH - 1) / CS_MAX_STRING_LENGTH;
 }
 
 typedef struct {
