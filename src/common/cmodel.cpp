@@ -581,36 +581,43 @@ CM_TestBoxInBrush
 */
 static void CM_TestBoxInBrush(const vec3_t p1, trace_t *trace, const mbrush_t *brush)
 {
-    int         i;
-    const cplane_t  *plane;
-    float       dist;
-    float       d1;
-    const mbrushside_t  *side;
+	int         i;
+	const cplane_t  *plane;
+	float       dist;
+	float       d1;
+	const mbrushside_t  *side;
 
-    if (!brush->numsides)
-        return;
+	if (!brush->numsides)
+		return;
 
-    side = brush->firstbrushside;
-    for (i = 0; i < brush->numsides; i++, side++) {
-        plane = side->plane;
+	side = brush->firstbrushside;
+	for (i = 0; i < brush->numsides; i++, side++) {
+		plane = side->plane;
 
-        // FIXME: special case for axial
-        // general box case
-        // push the plane out appropriately for mins/maxs
-        dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
-        dist = plane->dist - dist;
+		if (plane->type < 3 && plane->normal[plane->type]) {
+			dist = plane->dist;
+			if (!trace_ispoint)
+				dist -= plane->normal[plane->type] * trace_extents[plane->type];
 
-        d1 = DotProduct(p1, plane->normal) - dist;
+			d1 = plane->normal[plane->type] * p1[plane->type] - dist;
+		} else {
+			// general box case
+			// push the plane out appropriately for mins/maxs
+			dist = DotProduct(trace_offsets[plane->signbits], plane->normal);
+			dist = plane->dist - dist;
 
-        // if completely in front of face, no intersection
-        if (d1 > 0)
-            return;
-    }
+			d1 = DotProduct(p1, plane->normal) - dist;
+		}
 
-    // inside this brush
-    trace->startsolid = trace->allsolid = true;
-    trace->fraction = 0;
-    trace->contents = brush->contents;
+		// if completely in front of face, no intersection
+		if (d1 > 0)
+			return;
+	}
+
+	// inside this brush
+	trace->startsolid = trace->allsolid = true;
+	trace->fraction = 0;
+	trace->contents = brush->contents;
 }
 
 /*
@@ -766,78 +773,78 @@ CM_BoxTrace
 ==================
 */
 void CM_BoxTrace(trace_t *trace,
-                 const vec3_t start, const vec3_t end,
-                 const vec3_t mins, const vec3_t maxs,
-                 const mnode_t *headnode, int brushmask,
-                 bool extended)
+				const vec3_t start, const vec3_t end,
+				const vec3_t mins, const vec3_t maxs,
+				const mnode_t *headnode, int brushmask,
+				bool extended)
 {
-    const vec_t *bounds[2] = { mins, maxs };
-    int i, j;
+	const vec_t *bounds[2] = { mins, maxs };
+	int i, j;
 
-    checkcount++;       // for multi-check avoidance
+	checkcount++;       // for multi-check avoidance
 
-    // fill in a default trace
-    trace_trace = trace;
-    memset(trace_trace, 0, sizeof(*trace_trace));
-    trace_trace->fraction = 1;
-    trace_trace->surface = &(nulltexinfo.c);
+	// fill in a default trace
+	trace_trace = trace;
+	memset(trace_trace, 0, sizeof(*trace_trace));
+	trace_trace->fraction = 1;
+	trace_trace->surface = &(nulltexinfo.c);
 
-    if (!headnode)
-        return;
+	if (!headnode)
+		return;
 
-    trace_contents = brushmask;
-    trace_extended = extended;
-    VectorCopy(start, trace_start);
-    VectorCopy(end, trace_end);
-    for (i = 0; i < 8; i++)
-        for (j = 0; j < 3; j++)
-            trace_offsets[i][j] = bounds[(i >> j) & 1][j];
+	trace_contents = brushmask;
+	trace_extended = extended;
+	VectorCopy(start, trace_start);
+	VectorCopy(end, trace_end);
+	for (i = 0; i < 8; i++)
+		for (j = 0; j < 3; j++)
+			trace_offsets[i][j] = bounds[(i >> j) & 1][j];
 
-    //
-    // check for position test special case
-    //
-    if (VectorCompare(start, end)) {
-        const mleaf_t   *leafs[1024];
-        int             numleafs;
-        vec3_t          c1, c2;
+	//
+	// check for point special case
+	//
+	if (VectorEmpty(mins) && VectorEmpty(maxs)) {
+		trace_ispoint = true;
+		VectorClear(trace_extents);
+	} else {
+		trace_ispoint = false;
+		trace_extents[0] = max(-mins[0], maxs[0]);
+		trace_extents[1] = max(-mins[1], maxs[1]);
+		trace_extents[2] = max(-mins[2], maxs[2]);
+	}
 
-        for (i = 0; i < 3; i++) {
-            c1[i] = start[i] + mins[i] - 1;
-            c2[i] = start[i] + maxs[i] + 1;
-        }
+	//
+	// check for position test special case
+	//
+	if (VectorCompare(start, end)) {
+		const mleaf_t   *leafs[1024];
+		int             numleafs;
+		vec3_t          c1, c2;
 
-        numleafs = CM_BoxLeafs_headnode(c1, c2, leafs, q_countof(leafs), headnode, NULL);
-        for (i = 0; i < numleafs; i++) {
-            CM_TestInLeaf(leafs[i]);
-            if (trace_trace->allsolid)
-                break;
-        }
-        VectorCopy(start, trace_trace->endpos);
-        return;
-    }
+		for (i = 0; i < 3; i++) {
+			c1[i] = start[i] + mins[i] - 1;
+			c2[i] = start[i] + maxs[i] + 1;
+		}
 
-    //
-    // check for point special case
-    //
-    if (VectorEmpty(mins) && VectorEmpty(maxs)) {
-        trace_ispoint = true;
-        VectorClear(trace_extents);
-    } else {
-        trace_ispoint = false;
-        trace_extents[0] = max(-mins[0], maxs[0]);
-        trace_extents[1] = max(-mins[1], maxs[1]);
-        trace_extents[2] = max(-mins[2], maxs[2]);
-    }
+		numleafs = CM_BoxLeafs_headnode(c1, c2, leafs, q_countof(leafs), headnode, NULL);
+		for (i = 0; i < numleafs; i++) {
+			CM_TestInLeaf(leafs[i]);
+			if (trace_trace->allsolid)
+				break;
+		}
+		VectorCopy(start, trace_trace->endpos);
+		return;
+	}
 
-    //
-    // general sweeping through world
-    //
-    CM_RecursiveHullCheck(headnode, 0, 1, start, end);
+	//
+	// general sweeping through world
+	//
+	CM_RecursiveHullCheck(headnode, 0, 1, start, end);
 
-    if (trace_trace->fraction == 1)
-        VectorCopy(end, trace_trace->endpos);
-    else
-        LerpVector(start, end, trace_trace->fraction, trace_trace->endpos);
+	if (trace_trace->fraction == 1)
+		VectorCopy(end, trace_trace->endpos);
+	else
+		LerpVector(start, end, trace_trace->fraction, trace_trace->endpos);
 }
 
 /*
