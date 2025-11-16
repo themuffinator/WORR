@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "sound.hpp"
 #include "qal.hpp"
 #include "common/json.hpp"
+#include "common/hash_map.hpp"
 
 // translates from AL coordinate system to quake
 #define AL_UnpackVector(v)  -v[1],v[2],-v[0]
@@ -448,24 +449,28 @@ static void AL_FreeReverbEnvironments(al_reverb_environment_t *environments, siz
     Z_Free(environments);
 }
 
+/*
+=============
+AL_FindStepID
+
+Looks up the footstep ID for the given material using the BSP material cache.
+=============
+*/
 static int16_t AL_FindStepID(const char *material)
 {
-    if (!strcmp(material, "") || !strcmp(material, "default"))
-        return FOOTSTEP_ID_DEFAULT;
-    else if (!strcmp(material, "ladder"))
-        return FOOTSTEP_ID_LADDER;
+	if (!strcmp(material, "") || !strcmp(material, "default"))
+		return FOOTSTEP_ID_DEFAULT;
+	else if (!strcmp(material, "ladder"))
+		return FOOTSTEP_ID_LADDER;
 
-    mtexinfo_t *out;
-    int i;
+	if (!cl.bsp || !cl.bsp->material_step_ids)
+		return FOOTSTEP_ID_DEFAULT;
 
-    // FIXME: can speed this up later with a hash map of some sort
-    for (i = 0, out = cl.bsp->texinfo; i < cl.bsp->numtexinfo; i++, out++) {
-        if (!strcmp(out->c.material, material)) {
-            return out->step_id;
-        }
-    }
+	int *step_id = HashMap_Lookup(int, cl.bsp->material_step_ids, &material);
+	if (step_id)
+		return *step_id;
 
-    return FOOTSTEP_ID_DEFAULT;
+	return FOOTSTEP_ID_DEFAULT;
 }
 
 static void AL_SetReverbStepIDs(void)

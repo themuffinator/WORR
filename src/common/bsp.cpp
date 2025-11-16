@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.hpp"
 #include "common/cvar.hpp"
 #include "common/files.hpp"
+#include "common/hash_map.hpp"
 #include "common/intreadwrite.hpp"
 #include "common/math.hpp"
 #include "common/mdfour.hpp"
@@ -329,84 +330,121 @@ static int BSP_ValidateAreaPortals(bsp_t *bsp)
     return Q_ERR_SUCCESS;
 }
 
+/*
+=============
+BSP_Free
+
+Releases BSP resources when their reference count reaches zero.
+=============
+*/
 void BSP_Free(bsp_t *bsp)
 {
-    if (!bsp) {
-        return;
-    }
-    Q_assert(bsp->refcount > 0);
-    if (--bsp->refcount == 0) {
-        Hunk_Free(&bsp->hunk);
-        List_Remove(&bsp->entry);
-#if USE_REF
-        Z_Free(bsp->normals.normals);
-        Z_Free(bsp->normals.normal_indices);
+	if (!bsp) {
+		return;
+	}
+
+	Q_assert(bsp->refcount > 0);
+	if (--bsp->refcount == 0) {
+#if USE_CLIENT
+		HashMap_Destroy(bsp->material_step_ids);
 #endif
-        Z_Free(bsp);
-    }
+		Hunk_Free(&bsp->hunk);
+		List_Remove(&bsp->entry);
+#if USE_REF
+		Z_Free(bsp->normals.normals);
+		Z_Free(bsp->normals.normal_indices);
+#endif
+		Z_Free(bsp);
+	}
 }
 
 #if USE_CLIENT
 
+/*
+=============
+BSP_LoadMaterials
+
+Loads BSP material definitions, assigns footstep IDs, and builds a material lookup cache.
+=============
+*/
 int BSP_LoadMaterials(bsp_t *bsp)
 {
-    char path[MAX_QPATH];
-    mtexinfo_t *out, *tex;
-    int i, j, step_id = FOOTSTEP_RESERVED_COUNT;
-    qhandle_t f;
+	char path[MAX_QPATH];
+	mtexinfo_t *out, *tex;
+	int i, j, step_id = FOOTSTEP_RESERVED_COUNT;
+	qhandle_t f;
 
-    for (i = 0, out = bsp->texinfo; i < bsp->numtexinfo; i++, out++) {
-        // see if already loaded material for this texinfo
-        for (j = i - 1; j >= 0; j--) {
-            tex = &bsp->texinfo[j];
-            if (!Q_stricmp(tex->name, out->name)) {
-                strcpy(out->c.material, tex->c.material);
-                out->step_id = tex->step_id;
-                break;
-            }
-        }
-        if (j != -1)
-            continue;
+	HashMap_Destroy(bsp->material_step_ids);
+	bsp->material_step_ids = HashMap_TagCreate(const char *, int, HashCaseStr, HashCaseStrCmp, TAG_SOUND);
+	if (!bsp->material_step_ids)
+		return step_id;
 
-        // load material file
-        Q_concat(path, sizeof(path), "textures/", out->name, ".mat");
-        FS_OpenFile(path, &f, FS_MODE_READ | FS_FLAG_LOADFILE);
-        if (f) {
-            FS_Read(out->c.material, sizeof(out->c.material) - 1, f);
-            FS_CloseFile(f);
-        }
+	HashMap_Reserve(bsp->material_step_ids, bsp->numtexinfo);
 
-        if (out->c.material[0] && !COM_IsPath(out->c.material)) {
-            Com_WPrintf("Bad material \"%s\" in %s\n", Com_MakePrintable(out->c.material), path);
-            out->c.material[0] = 0;
-        }
+	const char *default_material = "default";
+	int default_step_id = FOOTSTEP_ID_DEFAULT;
+	HashMap_Insert(bsp->material_step_ids, &default_material, &default_step_id);
 
-        if (!out->c.material[0] || !Q_stricmp(out->c.material, "default")) {
-            out->step_id = FOOTSTEP_ID_DEFAULT;
-            continue;
-        }
+	const char *ladder_material = "ladder";
+	int ladder_step_id = FOOTSTEP_ID_LADDER;
+	HashMap_Insert(bsp->material_step_ids, &ladder_material, &ladder_step_id);
 
-        if (!Q_stricmp(out->c.material, "ladder")) {
-            out->step_id = FOOTSTEP_ID_LADDER;
-            continue;
-        }
+	for (i = 0, out = bsp->texinfo; i < bsp->numtexinfo; i++, out++) {
+		// see if already loaded material for this texinfo
+		for (j = i - 1; j >= 0; j--) {
+			tex = &bsp->texinfo[j];
+			if (!Q_stricmp(tex->name, out->name)) {
+				strcpy(out->c.material, tex->c.material);
+				out->step_id = tex->step_id;
+				break;
+			}
+		}
+		if (j != -1)
+			continue;
 
-        // see if already allocated step_id for this material
-        for (j = i - 1; j >= 0; j--) {
-            tex = &bsp->texinfo[j];
-            if (!Q_stricmp(tex->c.material, out->c.material)) {
-                out->step_id = tex->step_id;
-                break;
-            }
-        }
+		// load material file
+		Q_concat(path, sizeof(path), "textures/", out->name, ".mat");
+		FS_OpenFile(path, &f, FS_MODE_READ | FS_FLAG_LOADFILE);
+		if (f) {
+			FS_Read(out->c.material, sizeof(out->c.material) - 1, f);
+			FS_CloseFile(f);
+		}
 
-        // allocate new step_id
-        if (j == -1)
-            out->step_id = step_id++;
-    }
+		if (out->c.material[0] && !COM_IsPath(out->c.material)) {
+			Com_WPrintf("Bad material \"%s\" in %s\n", Com_MakePrintable(out->c.material), path);
+			out->c.material[0] = 0;
+		}
 
-    Com_DPrintf("%s: %d materials loaded\n", __func__, step_id);
-    return step_id;
+		if (!out->c.material[0] || !Q_stricmp(out->c.material, "default")) {
+			out->step_id = FOOTSTEP_ID_DEFAULT;
+			continue;
+		}
+
+		if (!Q_stricmp(out->c.material, "ladder")) {
+			out->step_id = FOOTSTEP_ID_LADDER;
+			continue;
+		}
+
+		// see if already allocated step_id for this material
+		for (j = i - 1; j >= 0; j--) {
+			tex = &bsp->texinfo[j];
+			if (!Q_stricmp(tex->c.material, out->c.material)) {
+				out->step_id = tex->step_id;
+				break;
+			}
+		}
+
+		// allocate new step_id
+		if (j == -1)
+			out->step_id = step_id++;
+
+		if (!HashMap_Lookup(int, bsp->material_step_ids, &out->c.material))
+			HashMap_Insert(bsp->material_step_ids, &out->c.material, &out->step_id);
+	}
+
+	Com_DPrintf("%s: %d materials loaded
+", __func__, step_id);
+	return step_id;
 }
 
 #endif

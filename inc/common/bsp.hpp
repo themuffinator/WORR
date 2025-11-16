@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/list.hpp"
 #include "common/error.hpp"
+#include "common/hash_map.hpp"
 #include "system/hunk.hpp"
 #include "format/bsp.hpp"
 
@@ -313,6 +314,10 @@ typedef struct {
 #endif
     bool            extended;   // QBSP extended format
     bool            has_bspx;   // has BSPX header
+
+#if USE_CLIENT
+    hash_map_t      *material_step_ids;
+#endif
 
     char            name[1];
 } bsp_t;
