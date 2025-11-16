@@ -70,9 +70,11 @@ typedef struct {
     // unreliable data, may be discarded
     sizebuf_t       datagram;
 
-    // delta compressor buffers
-    player_packed_t  *players;  // [maxclients]
-    entity_packed_t  *entities; // [MAX_EDICTS]
+// delta compressor buffers
+player_packed_t  *players;  // [maxclients]
+entity_packed_t  *entities; // [MAX_EDICTS]
+entity_packed_t  *baselines; // [MAX_EDICTS]
+entity_packed_t  *sound_states; // [MAX_EDICTS]
 
     // local recorder
     qhandle_t       recording;
@@ -485,24 +487,24 @@ static bool player_is_active(const edict_t *ent)
     float fov;
 
     if ((g_features->integer & GMF_PROPERINUSE) && !ent->inuse) {
-        return false;
+	return false;
     }
 
     // not a client at all?
     if (!ent->client) {
-        return false;
+	return false;
     }
 
     num = NUM_FOR_EDICT(ent) - 1;
     if (num < 0 || num >= svs.maxclients) {
-        return false;
+	return false;
     }
 
     // by default, check if client is actually connected
     // it may not be the case for bots!
     if (sv_mvd_capture_flags->integer & 1) {
         if (svs.client_pool[num].state != cs_spawned) {
-            return false;
+    	return false;
         }
     }
 
@@ -513,7 +515,7 @@ static bool player_is_active(const edict_t *ent)
 
     // first of all, make sure player_state_t is valid
     if (!fov) {
-        return false;
+	return false;
     }
 
     // always capture dummy MVD client
@@ -523,14 +525,14 @@ static bool player_is_active(const edict_t *ent)
 
     // never capture spectators
     if (pm_type == PM_SPECTATOR) {
-        return false;
+	return false;
     }
 
     // check entity visibility
     if ((ent->svflags & SVF_NOCLIENT) || !HAS_EFFECTS(ent)) {
         // never capture invisible entities
         if (sv_mvd_capture_flags->integer & 2) {
-            return false;
+    	return false;
         }
     } else {
         // always capture visible entities (default)
@@ -541,12 +543,12 @@ static bool player_is_active(const edict_t *ent)
 
     // they are likely following someone in case of PM_FREEZE
     if (pm_type == PM_FREEZE) {
-        return false;
+	return false;
     }
 
     // they are likely following someone if PMF_NO_PREDICTION is set
     if (pm_flags & PMF_NO_PREDICTION) {
-        return false;
+	return false;
     }
 
     return true;
@@ -555,11 +557,11 @@ static bool player_is_active(const edict_t *ent)
 static bool entity_is_active(const edict_t *ent)
 {
     if ((g_features->integer & GMF_PROPERINUSE) && !ent->inuse) {
-        return false;
+	return false;
     }
 
     if (ent->svflags & SVF_NOCLIENT) {
-        return false;
+	return false;
     }
 
     return HAS_EFFECTS(ent);
@@ -573,6 +575,8 @@ static void build_gamestate(void)
 
     memset(mvd.players, 0, sizeof(mvd.players[0]) * svs.maxclients);
     memset(mvd.entities, 0, sizeof(mvd.entities[0]) * svs.csr.max_edicts);
+	memset(mvd.baselines, 0, sizeof(mvd.baselines[0]) * svs.csr.max_edicts);
+	memset(mvd.sound_states, 0, sizeof(mvd.sound_states[0]) * svs.csr.max_edicts);
 
     // set base player states
     for (i = 0; i < svs.maxclients; i++) {
@@ -596,6 +600,8 @@ static void build_gamestate(void)
 
         SV_CheckEntityNumber(ent, i);
         MSG_PackEntity(&mvd.entities[i], &ent->s, svs.csr.extended);
+		mvd.baselines[i] = mvd.entities[i];
+		mvd.sound_states[i] = mvd.entities[i];
     }
 }
 
@@ -684,7 +690,7 @@ static void emit_gamestate(void)
                 ps = &mvd.players[i - 1];
                 if (PPS_INUSE(ps) && ps->pmove.pm_type == PM_NORMAL) {
                     entityFlags = enum_bit_or(entityFlags, MSG_ES_FIRSTPERSON);
-                }
+		}
             }
         } else {
             entityFlags = enum_bit_or(entityFlags, MSG_ES_REMOVE);
@@ -765,6 +771,7 @@ static void emit_frame(void)
         if (!entity_is_active(ent)) {
             if (oldes->number) {
                 // the old entity isn't present in the new message
+			mvd.sound_states[i] = *oldes;
                 MSG_WriteDeltaEntity(oldes, NULL, MSG_ES_FORCE);
                 oldes->number = 0;
             }
@@ -798,6 +805,10 @@ static void emit_frame(void)
 
         // shuffle current state to previous
         *oldes = newes;
+		mvd.sound_states[i] = newes;
+		if (!mvd.baselines[i].number) {
+			mvd.baselines[i] = newes;
+        }
 
         // fixup origin for next delta
         if (enum_has(entityFlags, MSG_ES_FIRSTPERSON))
@@ -914,7 +925,7 @@ static bool mvd_enable(void)
     // create and spawn MVD dummy
     ret = dummy_create();
     if (ret < 0)
-        return false;
+	return false;
 
     if (ret > 0)
         dummy_spawn();
@@ -1174,13 +1185,13 @@ static bool filter_unicast_data(const edict_t *ent)
     if (cmd == svc_layout) {
         if (ent != mvd.dummy->edict) {
             // discard any layout updates to players
-            return false;
+    	return false;
         }
         mvd.layout_time = svs.realtime;
     } else if (cmd == svc_print) {
         if (ent != mvd.dummy->edict && sv_mvd_nomsgs->integer) {
             // optionally discard text messages to players
-            return false;
+    	return false;
         }
     }
 
@@ -1266,6 +1277,58 @@ void SV_MvdBroadcastPrint(int level, const char *string)
 }
 
 /*
+=============
+SV_MvdResolveSoundOrigin
+
+Selects the best available origin for MVD sound events, preferring
+captured snapshots and falling back to baseline or live entity data.
+=============
+*/
+static bool SV_MvdResolveSoundOrigin(int entnum, vec3_t origin)
+{
+	const entity_packed_t *state;
+	edict_t *ent;
+
+	if (!mvd.entities || entnum <= 0 || entnum >= svs.csr.max_edicts) {
+		return false;
+	}
+
+	state = NULL;
+	if (mvd.entities[entnum].number) {
+		state = &mvd.entities[entnum];
+	} else if (mvd.sound_states && mvd.sound_states[entnum].number) {
+		state = &mvd.sound_states[entnum];
+	} else if (mvd.baselines && mvd.baselines[entnum].number) {
+		state = &mvd.baselines[entnum];
+	}
+
+	if (state) {
+		VectorCopy(state->origin, origin);
+		if (state->solid == PACKED_BSP) {
+			ent = EDICT_NUM(entnum);
+			if (ent && ent->solid == SOLID_BSP) {
+				vec3_t center;
+				VectorAvg(ent->mins, ent->maxs, center);
+				VectorAdd(ent->s.origin, center, origin);
+			}
+		}
+		return true;
+	}
+
+	ent = EDICT_NUM(entnum);
+	if (ent && ent->inuse) {
+		if (ent->solid == SOLID_BSP) {
+			VectorAvg(ent->mins, ent->maxs, origin);
+			VectorAdd(ent->s.origin, origin, origin);
+		} else {
+			VectorCopy(ent->s.origin, origin);
+		}
+		return true;
+	}
+
+	return false;
+}
+/*
 ==============
 SV_MvdStartSound
 
@@ -1277,6 +1340,9 @@ void SV_MvdStartSound(int entnum, int channel, int flags,
                       int attenuation, int timeofs)
 {
     int extrabits, sendchan;
+	int sound_flags;
+	bool has_origin;
+	vec3_t origin;
 
     // do nothing if not active
     if (!mvd.active) {
@@ -1292,22 +1358,34 @@ void SV_MvdStartSound(int entnum, int channel, int flags,
         extrabits |= 2;
     }
 
-    SZ_WriteByte(&mvd.datagram, mvd_sound | extrabits);
-    SZ_WriteByte(&mvd.datagram, flags);
-    if (flags & SND_INDEX16)
-        SZ_WriteShort(&mvd.datagram, soundindex);
-    else
-        SZ_WriteByte(&mvd.datagram, soundindex);
+	sound_flags = flags & ~SND_POS;
+	has_origin = SV_MvdResolveSoundOrigin(entnum, origin);
+	if (has_origin) {
+		sound_flags |= SND_POS;
+	} else if (mvd.recording) {
+		Com_DWPrintf("%s: missing origin for ent %d in demo capture
+", __func__, entnum);
+    }
 
-    if (flags & SND_VOLUME)
-        SZ_WriteByte(&mvd.datagram, volume);
-    if (flags & SND_ATTENUATION)
-        SZ_WriteByte(&mvd.datagram, attenuation);
-    if (flags & SND_OFFSET)
-        SZ_WriteByte(&mvd.datagram, timeofs);
+	SZ_WriteByte(&mvd.datagram, mvd_sound | extrabits);
+	SZ_WriteByte(&mvd.datagram, sound_flags);
+	if (sound_flags & SND_INDEX16)
+    	SZ_WriteShort(&mvd.datagram, soundindex);
+    else
+    	SZ_WriteByte(&mvd.datagram, soundindex);
+
+	if (sound_flags & SND_VOLUME)
+    	SZ_WriteByte(&mvd.datagram, volume);
+	if (sound_flags & SND_ATTENUATION)
+    	SZ_WriteByte(&mvd.datagram, attenuation);
+	if (sound_flags & SND_OFFSET)
+    	SZ_WriteByte(&mvd.datagram, timeofs);
 
     sendchan = (entnum << 3) | (channel & 7);
-    SZ_WriteShort(&mvd.datagram, sendchan);
+	SZ_WriteShort(&mvd.datagram, sendchan);
+	if (has_origin) {
+		SZ_Write(&mvd.datagram, origin, sizeof(origin));
+    }
 }
 
 
@@ -1458,7 +1536,7 @@ static bool auth_client(const gtv_client_t *client, const char *password)
         return true; // ALLOW whitelisted hosts without password
 
     if (SV_MatchAddress(&gtv_black_list, &client->stream.address))
-        return false; // DENY blacklisted hosts
+	return false; // DENY blacklisted hosts
 
     if (*sv_mvd_password->string == 0)
         return true; // ALLOW neutral hosts if password IS NOT set
@@ -1652,45 +1730,45 @@ static bool parse_message(gtv_client_t *client)
     gtv_clientop_t cmd;
 
     if (client->state <= cs_zombie) {
-        return false;
+	return false;
     }
 
     // check magic
     if (client->state < cs_connected) {
         if (!FIFO_TryRead(&client->stream.recv, &magic, 4)) {
-            return false;
+    	return false;
         }
         if (magic != MVD_MAGIC) {
             drop_client(client, "not a MVD/GTV stream");
-            return false;
+    	return false;
         }
         client->state = cs_connected;
 
         // send it back
         write_stream(client, &magic, 4);
-        return false;
+	return false;
     }
 
     // parse msglen
     if (!client->msglen) {
         if (!FIFO_TryRead(&client->stream.recv, &msglen, 2)) {
-            return false;
+    	return false;
         }
         msglen = LittleShort(msglen);
         if (!msglen) {
             drop_client(client, "end of stream");
-            return false;
+    	return false;
         }
         if (msglen > MAX_GTC_MSGLEN) {
             drop_client(client, "oversize message");
-            return false;
+    	return false;
         }
         client->msglen = msglen;
     }
 
     // read this message
     if (!FIFO_ReadMessage(&client->stream.recv, client->msglen)) {
-        return false;
+	return false;
     }
 
     client->msglen = 0;
@@ -1714,12 +1792,12 @@ static bool parse_message(gtv_client_t *client)
         break;
     default:
         drop_client(client, va("unknown command byte %d", static_cast<int>(cmd)));
-        return false;
+	return false;
     }
 
     if (msg_read.readcount > msg_read.cursize) {
         drop_client(client, "read past end of message");
-        return false;
+	return false;
     }
 
     client->lastmessage = svs.realtime; // don't timeout
@@ -2132,10 +2210,12 @@ void SV_MvdPostInit(void)
     }
 
     // allocate buffers
-    SZ_InitWrite(&mvd.message, SV_Malloc(MAX_MSGLEN), MAX_MSGLEN);
-    SZ_InitWrite(&mvd.datagram, SV_Malloc(MAX_MSGLEN), MAX_MSGLEN);
-    mvd.players = SV_Malloc(sizeof(mvd.players[0]) * svs.maxclients);
-    mvd.entities = SV_Malloc(sizeof(mvd.entities[0]) * svs.csr.max_edicts);
+SZ_InitWrite(&mvd.message, SV_Malloc(MAX_MSGLEN), MAX_MSGLEN);
+SZ_InitWrite(&mvd.datagram, SV_Malloc(MAX_MSGLEN), MAX_MSGLEN);
+mvd.players = SV_Malloc(sizeof(mvd.players[0]) * svs.maxclients);
+mvd.entities = SV_Malloc(sizeof(mvd.entities[0]) * svs.csr.max_edicts);
+mvd.baselines = SV_Malloc(sizeof(mvd.baselines[0]) * svs.csr.max_edicts);
+mvd.sound_states = SV_Malloc(sizeof(mvd.sound_states[0]) * svs.csr.max_edicts);
 
     // setup protocol flags
     mvd.esFlags = enum_bit_or(MSG_ES_UMASK, MSG_ES_BEAMORIGIN);
@@ -2196,11 +2276,13 @@ void SV_MvdShutdown(error_type_t type)
     mvd_drop(type == ERR_RECONNECT ? GTS_RECONNECT : GTS_DISCONNECT);
 
     // free static data
-    Z_Free(mvd.message.data);
-    Z_Free(mvd.datagram.data);
-    Z_Free(mvd.players);
-    Z_Free(mvd.entities);
-    Z_Free(mvd.clients);
+Z_Free(mvd.message.data);
+Z_Free(mvd.datagram.data);
+Z_Free(mvd.players);
+Z_Free(mvd.entities);
+Z_Free(mvd.baselines);
+Z_Free(mvd.sound_states);
+Z_Free(mvd.clients);
 
     // close server TCP socket
     NET_Listen(false);
@@ -2259,12 +2341,12 @@ static bool rec_allowed(void)
 {
     if (!mvd.entities) {
         Com_Printf("MVD recording is disabled on this server.\n");
-        return false;
+	return false;
     }
 
     if (mvd.recording) {
         Com_Printf("Already recording a local MVD.\n");
-        return false;
+	return false;
     }
 
     return true;

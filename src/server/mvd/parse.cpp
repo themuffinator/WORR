@@ -422,6 +422,7 @@ static void MVD_ParseSound(mvd_t *mvd, int extrabits)
     int         flags, index;
     int         volume, attenuation, offset, sendchan;
     int         entnum;
+    bool        has_pos;
     vec3_t      origin, org;
     mvd_client_t        *client;
     client_t    *cl;
@@ -437,6 +438,7 @@ static void MVD_ParseSound(mvd_t *mvd, int extrabits)
         index = MSG_ReadByte();
 
     volume = attenuation = offset = 0;
+    has_pos = false;
     if (flags & SND_VOLUME)
         volume = MSG_ReadByte();
     if (flags & SND_ATTENUATION)
@@ -451,8 +453,15 @@ static void MVD_ParseSound(mvd_t *mvd, int extrabits)
         MVD_Destroyf(mvd, "%s: bad entnum: %d", __func__, entnum);
     }
 
+    if (flags & SND_POS) {
+        origin[0] = MSG_ReadFloat();
+        origin[1] = MSG_ReadFloat();
+        origin[2] = MSG_ReadFloat();
+        has_pos = true;
+    }
+
     entity = &mvd->edicts[entnum];
-    if (!entity->inuse) {
+    if (!entity->inuse && !has_pos) {
         Com_DPrintf("%s: entnum not in use: %d\n", __func__, entnum);
         return;
     }
@@ -460,12 +469,14 @@ static void MVD_ParseSound(mvd_t *mvd, int extrabits)
     if (mvd->demoseeking)
         return;
 
-    // use the entity origin unless it is a bmodel
-    if (entity->solid == SOLID_BSP) {
-        VectorAvg(entity->mins, entity->maxs, origin);
-        VectorAdd(entity->s.origin, origin, origin);
-    } else {
-        VectorCopy(entity->s.origin, origin);
+    if (!has_pos) {
+        // use the entity origin unless it is a bmodel
+        if (entity->solid == SOLID_BSP) {
+            VectorAvg(entity->mins, entity->maxs, origin);
+            VectorAdd(entity->s.origin, origin, origin);
+        } else {
+            VectorCopy(entity->s.origin, origin);
+        }
     }
 
     // prepare multicast message
