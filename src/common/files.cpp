@@ -690,61 +690,76 @@ int FS_Seek(qhandle_t f, int64_t offset, int whence)
 }
 
 /*
+=============
+FS_IsPathSeparator
+=============
+*/
+static inline bool FS_IsPathSeparator(char ch)
+{
+	return ch == '/' || ch == '\\';
+}
+
+/*
 ============
 FS_CreatePath
 
 Creates any directories needed to store the given filename.
-Expects a fully qualified, normalized system path (i.e. with / separators).
+Expects a fully qualified system path (tolerates both / and \\ separators).
 ============
 */
 int FS_CreatePath(char *path)
 {
-    char *ofs;
-    int ret;
+	char *ofs;
+	int ret;
 
-    ofs = path;
+	ofs = path;
 
 #ifdef _WIN32
-    // check for UNC path and skip "//computer/share/" part
-    if (*path == '/' && path[1] == '/') {
-        char *p;
+	// check for UNC path and skip "//computer/share/" part
+	if (FS_IsPathSeparator(*path) && FS_IsPathSeparator(path[1])) {
+		char *p = path + 2;
+		int segments = 0;
 
-        p = strchr(path + 2, '/');
-        if (p) {
-            p = strchr(p + 1, '/');
-            if (p) {
-                ofs = p + 1;
-            }
-        }
-    } else if (Q_isalpha(*path) && path[1] == ':') {
-        ofs = path + 2; // skip drive part
-    }
-    
-    // check for drive path and skip N: part
-    if (Q_isalpha(*path) && path[1] == ':') {
-        ofs = path + 2;
-    }
+		while (*p && segments < 2) {
+			if (FS_IsPathSeparator(*p)) {
+				segments++;
+				if (segments == 2) {
+					ofs = p + 1;
+					break;
+				}
+			}
+			p++;
+		}
+	} else if (Q_isalpha(*path) && path[1] == ':') {
+		ofs = path + 2; // skip drive part
+	}
+
+	// check for drive path and skip N: part
+	if (Q_isalpha(*path) && path[1] == ':') {
+		ofs = path + 2;
+	}
 #endif
 
-    // skip leading slash(es)
-    for (; *ofs == '/'; ofs++)
-        ;
+	// skip leading slash(es)
+	for (; FS_IsPathSeparator(*ofs); ofs++)
+		;
 
-    for (; *ofs; ofs++) {
-        if (*ofs == '/') {
-            // create the directory
-            *ofs = 0;
-            ret = os_mkdir(path);
-            *ofs = '/';
-            if (ret == -1) {
-                int err = Q_ERRNO;
-                if (err != Q_ERR(EEXIST))
-                    return err;
-            }
-        }
-    }
+	for (; *ofs; ofs++) {
+		if (FS_IsPathSeparator(*ofs)) {
+			char sep = *ofs;
+			// create the directory
+			*ofs = 0;
+			ret = os_mkdir(path);
+			*ofs = sep;
+			if (ret == -1) {
+				int err = Q_ERRNO;
+				if (err != Q_ERR(EEXIST))
+					return err;
+			}
+		}
+	}
 
-    return Q_ERR_SUCCESS;
+	return Q_ERR_SUCCESS;
 }
 
 /*
