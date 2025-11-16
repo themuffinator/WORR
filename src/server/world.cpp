@@ -22,9 +22,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 /*
 ===============================================================================
 
-ENTITY AREA CHECKING
+ENTITY LINK AREA TREE
 
-FIXME: this use of "area" is different from the bsp file use
+These nodes form a server-side spatial subdivision used when linking and
+querying entities. They are unrelated to the BSP portal areas (areanum/areabits)
+stored in map data.
 ===============================================================================
 */
 
@@ -42,19 +44,20 @@ typedef struct areanode_s {
 static areanode_t   sv_areanodes[AREA_NODES];
 static int          sv_numareanodes;
 
-static const vec_t  *area_mins, *area_maxs;
-static edict_t      **area_list;
-static size_t       area_count, area_maxcount;
-static int          area_type;
-static BoxEdictsFilter_t area_filter;
-static void         *area_filter_data;
-static bool         area_bail;
+static const vec_t  *query_mins, *query_maxs;
+static edict_t      **query_list;
+static size_t       query_count, query_maxcount;
+static int          query_area_type;
+static BoxEdictsFilter_t query_filter;
+static void         *query_filter_data;
+static bool         query_bail;
 
 /*
 ===============
 SV_CreateAreaNode
 
-Builds a uniformly subdivided tree for the given world size
+Builds a uniformly subdivided tree for the given world size that is used for
+server entity linking (distinct from BSP portal areas)
 ===============
 */
 static areanode_t *SV_CreateAreaNode(int depth, const vec3_t mins, const vec3_t maxs)
@@ -99,6 +102,8 @@ static areanode_t *SV_CreateAreaNode(int depth, const vec3_t mins, const vec3_t 
 ===============
 SV_ClearWorld
 
+Rebuilds the server area-node tree from the current collision model bounds and
+clears all entity area links.
 ===============
 */
 void SV_ClearWorld(void)
@@ -123,14 +128,15 @@ void SV_ClearWorld(void)
 SV_LinkEdict
 
 General purpose routine shared between game DLL and MVD code.
-Links entity to PVS leafs.
+Links entity to PVS leafs and records BSP portal areas before spatial
+area-tree linking.
 ===============
 */
 void SV_LinkEdict(const cm_t *cm, edict_t *ent, server_entity_t* sv_ent)
 {
     const mleaf_t   *leafs[MAX_TOTAL_ENT_LEAFS];
     int             clusters[MAX_TOTAL_ENT_LEAFS];
-    int             i, j, area, num_leafs;
+    int             i, j, leaf_area, num_leafs;
     const mnode_t   *topnode;
 
     // set the size
@@ -181,16 +187,16 @@ void SV_LinkEdict(const cm_t *cm, edict_t *ent, server_entity_t* sv_ent)
     // set areas
     for (i = 0; i < num_leafs; i++) {
         clusters[i] = leafs[i]->cluster;
-        area = leafs[i]->area;
-        if (area) {
+        leaf_area = leafs[i]->area;
+        if (leaf_area) {
             // doors may legally straggle two areas,
             // but nothing should evern need more than that
-            if (ent->areanum && ent->areanum != area) {
-                if (ent->areanum2 && ent->areanum2 != area && sv.state == ss_loading)
+            if (ent->areanum && ent->areanum != leaf_area) {
+                if (ent->areanum2 && ent->areanum2 != leaf_area && sv.state == ss_loading)
                     Com_DPrintf("Object touching 3 areas at %s\n", vtos(ent->absmin));
-                ent->areanum2 = area;
+                ent->areanum2 = leaf_area;
             } else
-                ent->areanum = area;
+                ent->areanum = leaf_area;
         }
     }
 
@@ -416,11 +422,11 @@ static void SV_AreaEdicts_r(areanode_t *node)
     list_t      *start;
     server_entity_t *sent;
 
-    if (area_bail)
+    if (query_bail)
         return;
 
     // touch linked edicts
-    if (area_type == AREA_SOLID)
+    if (query_area_type == AREA_SOLID)
         start = &node->solid_edicts;
     else
         start = &node->trigger_edicts;
@@ -429,28 +435,28 @@ static void SV_AreaEdicts_r(areanode_t *node)
         edict_t *check = EDICT_NUM(sent - sv.entities);
         if (check->solid == SOLID_NOT)
             continue;        // deactivated
-        if (check->absmin[0] > area_maxs[0]
-            || check->absmin[1] > area_maxs[1]
-            || check->absmin[2] > area_maxs[2]
-            || check->absmax[0] < area_mins[0]
-            || check->absmax[1] < area_mins[1]
-            || check->absmax[2] < area_mins[2])
+        if (check->absmin[0] > query_maxs[0]
+            || check->absmin[1] > query_maxs[1]
+            || check->absmin[2] > query_maxs[2]
+            || check->absmax[0] < query_mins[0]
+            || check->absmax[1] < query_mins[1]
+            || check->absmax[2] < query_mins[2])
             continue;        // not touching
 
-        if (area_maxcount > 0 && area_count == area_maxcount) {
+        if (query_maxcount > 0 && query_count == query_maxcount) {
             Com_WPrintf("SV_AreaEdicts: MAXCOUNT\n");
             return;
         }
 
-        BoxEdictsResult_t filter_result = area_filter ? area_filter(check, area_filter_data) : BoxEdictsResult_Keep;
+        BoxEdictsResult_t filter_result = query_filter ? query_filter(check, query_filter_data) : BoxEdictsResult_Keep;
 
         if ((filter_result & ~BoxEdictsResult_End) == BoxEdictsResult_Keep) {
-            if (area_list)
-                area_list[area_count] = check;
-            area_count++;
+            if (query_list)
+                query_list[query_count] = check;
+            query_count++;
         }
         if ((filter_result & BoxEdictsResult_End) != 0) {
-            area_bail = true;
+            query_bail = true;
             return;
         }
     }
@@ -459,34 +465,37 @@ static void SV_AreaEdicts_r(areanode_t *node)
         return;        // terminal node
 
     // recurse down both sides
-    if (area_maxs[node->axis] > node->dist)
+    if (query_maxs[node->axis] > node->dist)
         SV_AreaEdicts_r(node->children[0]);
-    if (area_mins[node->axis] < node->dist)
+    if (query_mins[node->axis] < node->dist)
         SV_AreaEdicts_r(node->children[1]);
 }
 
 /*
 ================
 SV_AreaEdicts
+
+Bounding-box query against the server area-node tree (distinct from BSP portal
+areas).
 ================
 */
 size_t SV_AreaEdicts(const vec3_t mins, const vec3_t maxs,
                      edict_t **list, size_t maxcount, int areatype,
                      BoxEdictsFilter_t filter, void *filter_data)
 {
-    area_mins = mins;
-    area_maxs = maxs;
-    area_list = list;
-    area_count = 0;
-    area_maxcount = maxcount;
-    area_type = areatype;
-    area_filter = filter;
-    area_filter_data = filter_data;
-    area_bail = false;
+    query_mins = mins;
+    query_maxs = maxs;
+    query_list = list;
+    query_count = 0;
+    query_maxcount = maxcount;
+    query_area_type = areatype;
+    query_filter = filter;
+    query_filter_data = filter_data;
+    query_bail = false;
 
     SV_AreaEdicts_r(sv_areanodes);
 
-    return area_count;
+    return query_count;
 }
 
 

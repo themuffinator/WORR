@@ -139,7 +139,7 @@ typedef struct {
 typedef struct {
     int         solid32;
 
-    list_t area; // linked to a division node or leaf
+    list_t area; // linked to spatial area node (not a BSP portal area)
 
     int num_clusters; // if -1, use headnode instead
     int clusternums[MAX_ENT_CLUSTERS];
