@@ -1128,8 +1128,8 @@ typedef uint32_t surfflags_t;
 #define MASK_SHOT               (CONTENTS_SOLID|CONTENTS_MONSTER|CONTENTS_WINDOW|CONTENTS_DEADMONSTER)
 #define MASK_CURRENT            (CONTENTS_CURRENT_0|CONTENTS_CURRENT_90|CONTENTS_CURRENT_180|CONTENTS_CURRENT_270|CONTENTS_CURRENT_UP|CONTENTS_CURRENT_DOWN)
 
-// gi.BoxEdicts() can return a list of either solid or trigger entities
-// FIXME: eliminate AREA_ distinction?
+// gi.BoxEdicts() can return a list of either solid or trigger entities.
+// These flags select which server area-node list to query (not BSP portal areas).
 #define AREA_SOLID      1
 #define AREA_TRIGGERS   2
 
