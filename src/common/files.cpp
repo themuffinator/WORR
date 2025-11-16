@@ -197,6 +197,8 @@ typedef struct {
     char        name[1];
 } symlink_t;
 
+static const unsigned FS_MAX_LINK_HOPS = 16;
+
 // these point to user home directory
 extern "C" {
 char                fs_gamedir[MAX_OSPATH];
@@ -522,28 +524,58 @@ bool FS_GetFileSource(qhandle_t f, fs_file_source_t *out)
 // expects a buffer of at least MAX_OSPATH bytes!
 static symlink_t *expand_links(const list_t *list, char *buffer, size_t *len_p)
 {
-    symlink_t   *link;
-    size_t      namelen = *len_p;
+	symlink_t	*link;
+	size_t		namelen = *len_p;
 
-    FOR_EACH_SYMLINK(link, list) {
-        if (link->namelen > namelen) {
-            continue;
-        }
-        if (!FS_pathcmpn(buffer, link->name, link->namelen)) {
-            size_t newlen = namelen - link->namelen + link->targlen;
+	FOR_EACH_SYMLINK(link, list) {
+		if (link->namelen > namelen) {
+			continue;
+		}
+		if (!FS_pathcmpn(buffer, link->name, link->namelen)) {
+			size_t newlen = namelen - link->namelen + link->targlen;
 
-            if (newlen < MAX_OSPATH) {
-                memmove(buffer + link->targlen, buffer + link->namelen,
-                        namelen - link->namelen + 1);
-                memcpy(buffer, link->target, link->targlen);
-            }
+			if (newlen < MAX_OSPATH) {
+				memmove(buffer + link->targlen, buffer + link->namelen,
+				        namelen - link->namelen + 1);
+				memcpy(buffer, link->target, link->targlen);
+			}
 
-            *len_p = newlen;
-            return link;
-        }
-    }
+			*len_p = newlen;
+			return link;
+		}
+	}
 
-    return NULL;
+	return NULL;
+}
+
+/*
+=============
+FS_ExpandLinksIteratively
+
+Expands symbolic links repeatedly up to FS_MAX_LINK_HOPS and
+returns true if any substitution occurred.
+=============
+*/
+static bool FS_ExpandLinksIteratively(const list_t *list, char *buffer, size_t *len_p)
+{
+	size_t	hops = 0;
+	bool		expanded = false;
+
+	while (hops < FS_MAX_LINK_HOPS) {
+		symlink_t *link = expand_links(list, buffer, len_p);
+		if (!link) {
+			break;
+		}
+
+		expanded = true;
+		hops++;
+
+		if (*len_p >= MAX_OSPATH) {
+			break;
+		}
+	}
+
+	return expanded;
 }
 
 /*
@@ -1596,70 +1628,68 @@ fail:
     return ret;
 }
 
-// Normalizes quake path, expands symlinks
+/*
+=============
+expand_open_file_read
+
+Normalizes quake path, expands symlinks and attempts to open the file for reading.
+=============
+*/
 static int64_t expand_open_file_read(file_t *file, const char *name)
 {
-	std::array<char, MAX_OSPATH> normalized;
-	int64_t	ret;
-	size_t		namelen;
-	bool		prefer_q2game = false;
+	std::array<char, MAX_OSPATH> normalized{};
+	int64_t ret;
+	size_t		  namelen;
+	bool		  prefer_q2game = false;
 
 	if (name && name[0] == '/' && (file->mode & FS_TYPE_MASK) != FS_TYPE_REAL)
 		prefer_q2game = true;
 
-	// normalize path
 	namelen = FS_NormalizePathBuffer(normalized.data(), name, normalized.size());
 	if (namelen >= normalized.size()) {
 		return Q_ERR(ENAMETOOLONG);
 	}
 
-	// expand hard symlinks
-	if (expand_links(&fs_hard_links, normalized.data(), &namelen) && namelen >= normalized.size()) {
+	if (FS_ExpandLinksIteratively(&fs_hard_links, normalized.data(), &namelen) && namelen >= normalized.size()) {
 		return Q_ERR(ENAMETOOLONG);
 	}
 
-	if (prefer_q2game) {
-		ret = open_file_read_q2game(file, normalized.data(), namelen);
-		if (ret != Q_ERR(ENOENT))
-			return ret;
-	}
-
-	ret = open_file_read(file, normalized.data(), namelen);
-	if (ret == Q_ERR(ENOENT) && prefer_q2game) {
-		std::array<char, MAX_QPATH> q2game_path{};
-		size_t pref_len = Q_concat(q2game_path.data(), q2game_path.size(), "Q2Game/", normalized.data());
-		if (pref_len < q2game_path.size()) {
-			int64_t alt = open_file_read(file, q2game_path.data(), pref_len);
-			if (alt != Q_ERR(ENOENT))
-				return alt;
+	auto try_open = [&](const char *path, size_t path_len) -> int64_t {
+		if (prefer_q2game) {
+			int64_t preferred = open_file_read_q2game(file, path, path_len);
+			if (preferred != Q_ERR(ENOENT)) {
+				return preferred;
+			}
 		}
-	}
+
+		int64_t base = open_file_read(file, path, path_len);
+		if (base == Q_ERR(ENOENT) && prefer_q2game) {
+			std::array<char, MAX_QPATH> q2game_path{};
+			size_t pref_len = Q_concat(q2game_path.data(), q2game_path.size(), "Q2Game/", path);
+			if (pref_len < q2game_path.size()) {
+				int64_t alt = open_file_read(file, q2game_path.data(), pref_len);
+				if (alt != Q_ERR(ENOENT)) {
+					return alt;
+				}
+			}
+		}
+
+		return base;
+	};
+
+	ret = try_open(normalized.data(), namelen);
 	if (ret == Q_ERR(ENOENT)) {
-		// expand soft symlinks
-		if (expand_links(&fs_soft_links, normalized.data(), &namelen)) {
+		if (FS_ExpandLinksIteratively(&fs_soft_links, normalized.data(), &namelen)) {
 			if (namelen >= normalized.size()) {
 				return Q_ERR(ENAMETOOLONG);
 			}
-			if (prefer_q2game) {
-				ret = open_file_read_q2game(file, normalized.data(), namelen);
-				if (ret != Q_ERR(ENOENT))
-					return ret;
-			}
-			ret = open_file_read(file, normalized.data(), namelen);
-			if (ret == Q_ERR(ENOENT) && prefer_q2game) {
-				std::array<char, MAX_QPATH> q2game_path{};
-				size_t pref_len = Q_concat(q2game_path.data(), q2game_path.size(), "Q2Game/", normalized.data());
-				if (pref_len < q2game_path.size()) {
-					int64_t alt = open_file_read(file, q2game_path.data(), pref_len);
-					if (alt != Q_ERR(ENOENT))
-						return alt;
-				}
-			}
+			ret = try_open(normalized.data(), namelen);
 		}
 	}
 
 	return ret;
 }
+
 
 static int read_pak_file(file_t *file, void *buf, size_t len)
 {

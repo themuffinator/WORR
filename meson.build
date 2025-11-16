@@ -858,6 +858,10 @@ if get_option('tests')
     args: [files('tests/test_unicode_filename.py'), worr_ded.full_path()],
     depends: worr_ded,
   )
+  test('fs_link_chain', python3,
+    args: [files('tests/test_link_chain.py'), worr_ded.full_path()],
+    depends: worr_ded,
+  )
 endif
 
 shared_library('game' + cpu, game_src,
