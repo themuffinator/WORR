@@ -51,7 +51,7 @@ typedef struct {
 
     char        name[MAX_CLIENT_NAME];
     char        version[MAX_QPATH];
-} gtv_client_t;
+	} gtv_client_t;
 
 typedef struct {
     bool            enabled;
@@ -82,7 +82,7 @@ typedef struct {
     // TCP client pool
     int             maxclients;
     gtv_client_t    *clients; // [sv_mvd_maxclients]
-} mvd_server_t;
+	} mvd_server_t;
 
 static mvd_server_t     mvd;
 
@@ -147,7 +147,7 @@ static void dummy_wait_f(void)
 {
     int count = Q_atoi(Cmd_Argv(1));
     dummy_buffer.waitCount += max(count, 1);
-}
+	}
 
 static void dummy_command(void)
 {
@@ -156,7 +156,7 @@ static void dummy_command(void)
     ge->ClientCommand(sv_player);
     sv_client = NULL;
     sv_player = NULL;
-}
+	}
 
 static void dummy_forward_f(void)
 {
@@ -165,7 +165,7 @@ static void dummy_forward_f(void)
         Com_DPrintf("dummy cmd: %s\n", Cmd_ArgsFrom(0));
         dummy_command();
     }
-}
+	}
 
 static void dummy_record_f(void)
 {
@@ -199,7 +199,7 @@ static void dummy_record_f(void)
     Com_Printf("Auto-recording local MVD to %s\n", buffer);
 
     rec_start(f);
-}
+	}
 
 static void dummy_stop_f(void)
 {
@@ -214,7 +214,7 @@ static void dummy_stop_f(void)
 
     Com_Printf("Stopped local MVD auto-recording.\n");
     rec_stop();
-}
+	}
 
 static const ucmd_t dummy_cmds[] = {
     { "cmd", dummy_forward_f },
@@ -228,7 +228,7 @@ static const ucmd_t dummy_cmds[] = {
     { "record", dummy_record_f },
     { "stop", dummy_stop_f },
     { NULL, NULL }
-};
+	};
 
 static void dummy_exec_string(cmdbuf_t *buf, const char *line)
 {
@@ -271,7 +271,7 @@ static void dummy_exec_string(cmdbuf_t *buf, const char *line)
 
     Com_DPrintf("dummy forward: %s\n", line);
     dummy_command();
-}
+	}
 
 static void dummy_add_message(client_t *client, const byte *data,
                               size_t length, bool reliable)
@@ -293,7 +293,7 @@ static void dummy_add_message(client_t *client, const byte *data,
 
     Com_DPrintf("dummy stufftext: %s\n", Com_MakePrintable(text));
     Cbuf_AddText(&dummy_buffer, text);
-}
+	}
 
 static void dummy_spawn(void)
 {
@@ -314,7 +314,7 @@ static void dummy_spawn(void)
     mvd.layout_time = svs.realtime;
 
     mvd.dummy->state = cs_spawned;
-}
+	}
 
 static client_t *dummy_find_slot(void)
 {
@@ -338,7 +338,7 @@ static client_t *dummy_find_slot(void)
     }
 
     return NULL;
-}
+	}
 
 #define MVD_USERINFO1 \
     "\\name\\[MVDSPEC]\\skin\\male/grunt\\spectator\\1"
@@ -417,7 +417,7 @@ static int dummy_create(void)
     SV_UserinfoChanged(newcl);
 
     return 1;
-}
+	}
 
 static void dummy_run(void)
 {
@@ -447,7 +447,7 @@ static void dummy_run(void)
             mvd.layout_time = svs.realtime;
         }
     }
-}
+	}
 
 /*
 ==============================================================================
@@ -550,7 +550,7 @@ static bool player_is_active(const edict_t *ent)
     }
 
     return true;
-}
+	}
 
 static bool entity_is_active(const edict_t *ent)
 {
@@ -563,7 +563,7 @@ static bool entity_is_active(const edict_t *ent)
     }
 
     return HAS_EFFECTS(ent);
-}
+	}
 
 // Initializes MVD delta compressor for the first time on this map.
 static void build_gamestate(void)
@@ -597,7 +597,7 @@ static void build_gamestate(void)
         SV_CheckEntityNumber(ent, i);
         MSG_PackEntity(&mvd.entities[i], &ent->s, svs.csr.extended);
     }
-}
+	}
 
 // Writes a single giant message with all the startup info,
 // followed by an uncompressed (baseline) frame.
@@ -648,20 +648,25 @@ static void emit_gamestate(void)
     else
         MSG_WriteShort(-1);
 
-    // send configstrings
-    for (i = 0; i < svs.csr.end; i++) {
-        string = sv.configstrings[i];
-        if (!string[0]) {
-            continue;
-        }
-        length = Q_strnlen(string, CS_MAX_STRING_LENGTH);
-        MSG_WriteShort(i);
-        MSG_WriteData(string, length);
-        MSG_WriteByte(0);
-    }
-    MSG_WriteShort(i);
+	// send configstrings
+	for (i = 0; i < svs.csr.end; i++) {
+		string = sv.configstrings[i];
+		if (!string[0]) {
+			continue;
+		}
+		length = Com_ConfigstringLength(&svs.csr, i, string);
+		MSG_WriteShort(i);
+		MSG_WriteData(string, length);
+		MSG_WriteByte(0);
 
-    // send baseline frame
+		size_t span = Com_ConfigstringSpan(length);
+	if (span) {
+	i += static_cast<int>(span) - 1;
+	}
+	}
+		MSG_WriteShort(i);
+
+// send baseline frame
     portalbytes = CM_WritePortalBits(&sv.cm, portalbits);
     MSG_WriteByte(portalbytes);
     MSG_WriteData(portalbits, portalbytes);
@@ -694,7 +699,7 @@ static void emit_gamestate(void)
         es->number = j;
     }
     MSG_WriteShort(0);
-}
+	}
 
 /*
 Builds a new delta compressed MVD frame by capturing all entity and player
@@ -805,7 +810,7 @@ static void emit_frame(void)
     }
 
     MSG_WriteShort(0);      // end of packetentities
-}
+	}
 
 static void suspend_streams(void)
 {
@@ -822,7 +827,7 @@ static void suspend_streams(void)
 
     Com_DPrintf("Suspending MVD streams.\n");
     mvd.active = false;
-}
+	}
 
 static void resume_streams(void)
 {
@@ -861,7 +866,7 @@ static void resume_streams(void)
 
     Com_DPrintf("Resuming MVD streams.\n");
     mvd.active = true;
-}
+	}
 
 static bool players_active(void)
 {
@@ -877,7 +882,7 @@ static bool players_active(void)
     }
 
     return false;
-}
+	}
 
 // disconnects MVD dummy if no MVD clients are active for some time
 static void check_clients_activity(void)
@@ -887,7 +892,7 @@ static void check_clients_activity(void)
     } else if (svs.realtime - mvd.clients_active > sv_mvd_disconnect_time->integer) {
         mvd_disable();
     }
-}
+	}
 
 // suspends or resumes MVD streams depending on players activity
 static void check_players_activity(void)
@@ -902,7 +907,7 @@ static void check_players_activity(void)
             suspend_streams();
         }
     }
-}
+	}
 
 static bool mvd_enable(void)
 {
@@ -926,7 +931,7 @@ static bool mvd_enable(void)
     mvd.clients_active = svs.realtime;
 
     return true;
-}
+	}
 
 static void mvd_disable(void)
 {
@@ -947,7 +952,7 @@ static void mvd_disable(void)
 
     mvd.enabled = false;
     mvd.active = false;
-}
+	}
 
 static void rec_frame(size_t total)
 {
@@ -988,7 +993,7 @@ static void rec_frame(size_t total)
 fail:
     Com_EPrintf("Couldn't write local MVD: %s\n", Q_ErrorString(ret));
     rec_stop();
-}
+	}
 
 /*
 ==================
@@ -1002,7 +1007,7 @@ void SV_MvdBeginFrame(void)
 
     if (mvd.enabled)
         check_players_activity();
-}
+	}
 
 /*
 ==================
@@ -1087,7 +1092,7 @@ void SV_MvdEndFrame(void)
     // clear datagrams
     SZ_Clear(&mvd.datagram);
     SZ_Clear(&mvd.message);
-}
+	}
 
 
 
@@ -1153,7 +1158,7 @@ void SV_MvdMulticast(const mleaf_t *leaf, multicast_t to, bool reliable)
     }
 
     SZ_Write(buf, msg_write.data, msg_write.cursize);
-}
+	}
 
 // Performs some basic filtering of the unicast data that would be
 // otherwise discarded by the MVD client.
@@ -1185,7 +1190,7 @@ static bool filter_unicast_data(const edict_t *ent)
     }
 
     return true;
-}
+	}
 
 /*
 ==============
@@ -1234,7 +1239,7 @@ void SV_MvdUnicast(const edict_t *ent, int clientNum, bool reliable)
     SZ_WriteByte(buf, msg_write.cursize & 255);
     SZ_WriteByte(buf, clientNum);
     SZ_Write(buf, msg_write.data, msg_write.cursize);
-}
+	}
 
 /*
 ==============
@@ -1249,7 +1254,7 @@ void SV_MvdConfigstring(int index, const char *string, size_t len)
         SZ_Write(&mvd.message, string, len);
         SZ_WriteByte(&mvd.message, 0);
     }
-}
+	}
 
 /*
 ==============
@@ -1263,7 +1268,7 @@ void SV_MvdBroadcastPrint(int level, const char *string)
         SZ_WriteByte(&mvd.message, level);
         SZ_WriteString(&mvd.message, string);
     }
-}
+	}
 
 /*
 ==============
@@ -1308,7 +1313,7 @@ void SV_MvdStartSound(int entnum, int channel, int flags,
 
     sendchan = (entnum << 3) | (channel & 7);
     SZ_WriteShort(&mvd.datagram, sendchan);
-}
+	}
 
 
 /*
@@ -1326,7 +1331,7 @@ static void remove_client(gtv_client_t *client)
     List_Remove(&client->entry);
     Z_Freep(&client->data);
     client->state = cs_free;
-}
+	}
 
 #if USE_ZLIB
 static void flush_stream(gtv_client_t *client, int flush)
@@ -1365,7 +1370,7 @@ static void flush_stream(gtv_client_t *client, int flush)
             client->bufcount = 0;
         }
     } while (ret == Z_OK);
-}
+	}
 #endif
 
 static void drop_client(gtv_client_t *client, const char *error)
@@ -1391,7 +1396,7 @@ static void drop_client(gtv_client_t *client, const char *error)
     List_Remove(&client->active);
     client->state = cs_zombie;
     client->lastmessage = svs.realtime;
-}
+	}
 
 
 static void write_stream(gtv_client_t *client, void *data, size_t len)
@@ -1439,7 +1444,7 @@ static void write_stream(gtv_client_t *client, void *data, size_t len)
     if (FIFO_Write(fifo, data, len) != len) {
         drop_client(client, "overflowed");
     }
-}
+	}
 
 static void write_message(gtv_client_t *client, gtv_serverop_t op)
 {
@@ -1450,7 +1455,7 @@ static void write_message(gtv_client_t *client, gtv_serverop_t op)
     write_stream(client, header.data(), header.size());
 
     write_stream(client, msg_write.data, msg_write.cursize);
-}
+	}
 
 static bool auth_client(const gtv_client_t *client, const char *password)
 {
@@ -1465,7 +1470,7 @@ static bool auth_client(const gtv_client_t *client, const char *password)
 
     // ALLOW neutral hosts if password matches, DENY otherwise
     return !strcmp(sv_mvd_password->string, password);
-}
+	}
 
 static void parse_hello(gtv_client_t *client)
 {
@@ -1543,7 +1548,7 @@ static void parse_hello(gtv_client_t *client)
 
     Com_Printf("Accepted MVD client %s[%s]\n", client->name,
                NET_AdrToString(&client->stream.address));
-}
+	}
 
 static void parse_ping(gtv_client_t *client)
 {
@@ -1557,7 +1562,7 @@ static void parse_ping(gtv_client_t *client)
 #if USE_ZLIB
     flush_stream(client, Z_SYNC_FLUSH);
 #endif
-}
+	}
 
 static void parse_stream_start(gtv_client_t *client)
 {
@@ -1601,7 +1606,7 @@ static void parse_stream_start(gtv_client_t *client)
 #if USE_ZLIB
     flush_stream(client, Z_SYNC_FLUSH);
 #endif
-}
+	}
 
 static void parse_stream_stop(gtv_client_t *client)
 {
@@ -1619,7 +1624,7 @@ static void parse_stream_stop(gtv_client_t *client)
 #if USE_ZLIB
     flush_stream(client, Z_SYNC_FLUSH);
 #endif
-}
+	}
 
 static void parse_stringcmd(gtv_client_t *client)
 {
@@ -1643,7 +1648,7 @@ static void parse_stringcmd(gtv_client_t *client)
     Com_DPrintf("dummy stringcmd from %s[%s]: %s\n", client->name,
                 NET_AdrToString(&client->stream.address), Com_MakePrintable(string));
     dummy_command();
-}
+	}
 
 static bool parse_message(gtv_client_t *client)
 {
@@ -1724,7 +1729,7 @@ static bool parse_message(gtv_client_t *client)
 
     client->lastmessage = svs.realtime; // don't timeout
     return true;
-}
+	}
 
 static gtv_client_t *find_slot(void)
 {
@@ -1739,7 +1744,7 @@ static gtv_client_t *find_slot(void)
     }
 
     return NULL;
-}
+	}
 
 static void accept_client(netstream_t *stream)
 {
@@ -1794,7 +1799,7 @@ static void accept_client(netstream_t *stream)
 
     Com_DPrintf("TCP client [%s] accepted\n",
                 NET_AdrToString(&stream->address));
-}
+	}
 
 void SV_MvdRunClients(void)
 {
@@ -1865,7 +1870,7 @@ void SV_MvdRunClients(void)
             break;
         }
     }
-}
+	}
 
 static void dump_clients(void)
 {
@@ -1903,7 +1908,7 @@ static void dump_clients(void)
 
         count++;
     }
-}
+	}
 
 static void dump_versions(void)
 {
@@ -1920,7 +1925,7 @@ static void dump_versions(void)
                    count, client->name, client->version);
         count++;
     }
-}
+	}
 
 void SV_MvdStatus_f(void)
 {
@@ -1934,7 +1939,7 @@ void SV_MvdStatus_f(void)
         }
     }
     Com_Printf("\n");
-}
+	}
 
 static void mvd_drop(gtv_serverop_t op)
 {
@@ -1968,7 +1973,7 @@ static void mvd_drop(gtv_serverop_t op)
 
     List_Init(&gtv_client_list);
     List_Init(&gtv_active_list);
-}
+	}
 
 // something bad happened, remove all clients
 static void mvd_error(const char *reason)
@@ -1981,7 +1986,7 @@ static void mvd_error(const char *reason)
     mvd_drop(GTS_ERROR);
 
     mvd_disable();
-}
+	}
 
 /*
 ==============================================================================
@@ -2061,7 +2066,7 @@ void SV_MvdMapChanged(void)
 
     SZ_Clear(&mvd.datagram);
     SZ_Clear(&mvd.message);
-}
+	}
 
 /*
 ==================
@@ -2076,7 +2081,7 @@ void SV_MvdClientDropped(client_t *client)
     if (client == mvd.dummy) {
         mvd_error("dummy client was dropped");
     }
-}
+	}
 
 /*
 ==================
@@ -2118,7 +2123,7 @@ void SV_MvdPreInit(void)
     dummy_buffer.text = dummy_buffer_text;
     dummy_buffer.maxsize = sizeof(dummy_buffer_text);
     dummy_buffer.exec = dummy_exec_string;
-}
+	}
 
 /*
 ==================
@@ -2170,7 +2175,7 @@ void SV_MvdPostInit(void)
         mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_EXTENSIONS);
         mvd.psFlags = enum_bit_or(mvd.psFlags, MSG_PS_RERELEASE);
     }
-}
+	}
 
 /*
 ==================
@@ -2206,7 +2211,7 @@ void SV_MvdShutdown(error_type_t type)
     NET_Listen(false);
 
     memset(&mvd, 0, sizeof(mvd));
-}
+	}
 
 
 /*
@@ -2236,7 +2241,7 @@ static void rec_write(void)
 fail:
     Com_EPrintf("Couldn't write local MVD: %s\n", Q_ErrorString(ret));
     rec_stop();
-}
+	}
 
 // Stops server local MVD recording.
 static void rec_stop(void)
@@ -2253,7 +2258,7 @@ static void rec_stop(void)
 
     FS_CloseFile(mvd.recording);
     mvd.recording = 0;
-}
+	}
 
 static bool rec_allowed(void)
 {
@@ -2268,7 +2273,7 @@ static bool rec_allowed(void)
     }
 
     return true;
-}
+	}
 
 static void rec_start(qhandle_t demofile)
 {
@@ -2296,7 +2301,7 @@ static void rec_start(qhandle_t demofile)
 
     rec_write();
     SZ_Clear(&msg_write);
-}
+	}
 
 /*
 ==============
@@ -2360,7 +2365,7 @@ void SV_MvdRecord_f(void)
     Com_Printf("Recording local MVD to %s\n", buffer);
 
     rec_start(f);
-}
+	}
 
 
 /*
@@ -2379,7 +2384,7 @@ void SV_MvdStop_f(void)
 
     Com_Printf("Stopped local MVD recording.\n");
     rec_stop();
-}
+	}
 
 /*
 ==============================================================================
@@ -2397,33 +2402,33 @@ static void SV_MvdStuff_f(void)
     } else {
         Com_Printf("Can't '%s', dummy MVD client is not active\n", Cmd_Argv(0));
     }
-}
+	}
 
 static void SV_AddGtvHost_f(void)
 {
     SV_AddMatch_f(&gtv_white_list);
-}
+	}
 static void SV_DelGtvHost_f(void)
 {
     SV_DelMatch_f(&gtv_white_list);
-}
+	}
 static void SV_ListGtvHosts_f(void)
 {
     SV_ListMatches_f(&gtv_white_list);
-}
+	}
 
 static void SV_AddGtvBan_f(void)
 {
     SV_AddMatch_f(&gtv_black_list);
-}
+	}
 static void SV_DelGtvBan_f(void)
 {
     SV_DelMatch_f(&gtv_black_list);
-}
+	}
 static void SV_ListGtvBans_f(void)
 {
     SV_ListMatches_f(&gtv_black_list);
-}
+	}
 
 static const cmdreg_t c_svmvd[] = {
     { "mvdstuff", SV_MvdStuff_f },
@@ -2435,17 +2440,17 @@ static const cmdreg_t c_svmvd[] = {
     { "listgtvbans", SV_ListGtvBans_f },
 
     { NULL }
-};
+	};
 
 static void sv_mvd_maxsize_changed(cvar_t *self)
 {
     self->integer = 1000 * Cvar_ClampValue(self, 0, 2000000);
-}
+	}
 
 static void sv_mvd_maxtime_changed(cvar_t *self)
 {
     self->integer = 60 * BASE_FRAMERATE * Cvar_ClampValue(self, 0, 24 * 24 * 60 * BASE_FRAMETIME);
-}
+	}
 
 void SV_MvdRegister(void)
 {
@@ -2479,4 +2484,4 @@ void SV_MvdRegister(void)
     sv_mvd_spawn_dummy = Cvar_Get("sv_mvd_spawn_dummy", "1", 0);
 
     Cmd_Register(c_svmvd);
-}
+	}

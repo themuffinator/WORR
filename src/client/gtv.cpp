@@ -98,18 +98,23 @@ static void emit_gamestate(void)
     MSG_WriteString(cl.gamedir);
     MSG_WriteShort(-1);
 
-    // send configstrings
-    for (i = 0; i < cl.csr.end; i++) {
-        string = cl.configstrings[i];
-        if (!string[0]) {
-            continue;
-        }
-        length = Q_strnlen(string, MAX_QPATH);
-        MSG_WriteShort(i);
-        MSG_WriteData(string, length);
-        MSG_WriteByte(0);
-    }
-    MSG_WriteShort(i);
+// send configstrings
+for (i = 0; i < cl.csr.end; i++) {
+string = cl.configstrings[i];
+if (!string[0]) {
+continue;
+}
+length = Com_ConfigstringLength(&cl.csr, i, string);
+MSG_WriteShort(i);
+MSG_WriteData(string, length);
+MSG_WriteByte(0);
+
+size_t span = Com_ConfigstringSpan(length);
+if (span) {
+i += static_cast<int>(span) - 1;
+}
+}
+MSG_WriteShort(i);
 
     // send portal bits
     MSG_WriteByte(0);

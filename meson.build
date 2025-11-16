@@ -866,6 +866,16 @@ if get_option('tests')
     args: [files('tests/test_whereis_q2game.py'), worr_ded.full_path()],
     depends: worr_ded,
   )
+
+gamestate_test = executable('test_gamestate_configstrings',
+  'tests/test_gamestate_configstrings.cpp',
+  include_directories: ['inc', 'q2proto/inc'],
+  cpp_args: ['-DUSE_SERVER=1'],
+)
+
+test('gamestate_configstrings', gamestate_test,
+  is_parallel: false,
+)
 endif
 
 shared_library('game' + cpu, game_src,
