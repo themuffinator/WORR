@@ -1506,26 +1506,83 @@ static void CL_FinishViewValues(void)
 
 static inline float lerp_client_fov(float ofov, float nfov, float lerp)
 {
-    if (cls.demo.playback && !cls.demo.compat) {
-        int fov = info_fov->integer;
+	if (cls.demo.playback && !cls.demo.compat) {
+		int fov = info_fov->integer;
 
-        if (fov < 1)
-            fov = 90;
-        else if (fov > 160)
-            fov = 160;
+		if (fov < 1)
+			fov = 90;
+		else if (fov > 160)
+			fov = 160;
 
-        if (info_uf->integer & UF_LOCALFOV)
-            return fov;
+		if (info_uf->integer & UF_LOCALFOV)
+			return fov;
 
-        if (!(info_uf->integer & UF_PLAYERFOV)) {
-            if (ofov >= 90)
-                ofov = fov;
-            if (nfov >= 90)
-                nfov = fov;
-        }
-    }
+		if (!(info_uf->integer & UF_PLAYERFOV)) {
+			if (ofov >= 90)
+				ofov = fov;
+			if (nfov >= 90)
+				nfov = fov;
+		}
+	}
 
-    return ofov + lerp * (nfov - ofov);
+	return ofov + lerp * (nfov - ofov);
+}
+
+
+/*
+=============
+CL_MixPredictedScreenBlend
+
+Blend predicted screen blend into the refdef blend over time while clamping
+color and alpha values to avoid over-saturation or alpha drift.
+=============
+*/
+static void CL_MixPredictedScreenBlend(const vec4_t predicted, float lerpfrac, vec4_t refdef_blend)
+{
+	vec4_t predicted_clamped;
+	vec4_t target_blend;
+	vec4_t current_blend;
+	float base_alpha;
+	float target_alpha;
+	float blend_lerp;
+
+	Vector4Copy(predicted, predicted_clamped);
+
+	for (int i = 0; i < 3; i++) {
+		predicted_clamped[i] = Q_clipf(predicted_clamped[i], 0.0f, 1.0f);
+	}
+
+	predicted_clamped[3] = Q_clipf(predicted_clamped[3], 0.0f, 1.0f);
+
+	if (predicted_clamped[3] <= 0.0f) {
+		return;
+	}
+
+	base_alpha = Q_clipf(refdef_blend[3], 0.0f, 1.0f);
+	target_alpha = base_alpha + (1.0f - base_alpha) * predicted_clamped[3];
+
+	if (target_alpha <= 0.0f) {
+		return;
+	}
+
+	float existing_fraction = base_alpha / target_alpha;
+
+	LerpVector(predicted_clamped, refdef_blend, existing_fraction, target_blend);
+	target_blend[3] = target_alpha;
+
+	for (int i = 0; i < 3; i++) {
+		target_blend[i] = Q_clipf(target_blend[i], 0.0f, 1.0f);
+	}
+
+	Vector4Copy(refdef_blend, current_blend);
+
+	// Smooth toward the target blend alongside other refdef interpolation.
+	const float minBlendLerp = 0.25f;
+	const float maxBlendLerp = 0.75f;
+	blend_lerp = Q_clipf(minBlendLerp + (maxBlendLerp - minBlendLerp) * Q_clipf(lerpfrac, 0.0f, 1.0f), minBlendLerp, maxBlendLerp);
+
+	Vector4Lerp(current_blend, target_blend, blend_lerp, refdef_blend);
+	refdef_blend[3] = Q_clipf(refdef_blend[3], 0.0f, 1.0f);
 }
 
 /*
@@ -1607,27 +1664,20 @@ void CL_CalcViewValues(void)
         LerpAngles(ops->viewangles, ps->viewangles, lerp, cl.refdef.viewangles);
     }
 
-    if (cl.csr.extended) {
-        // interpolate blend colors if the last frame wasn't clear
-        float blendfrac = ops->screen_blend[3] ? cl.lerpfrac : 1;
-        float damageblendfrac = ops->damage_blend[3] ? cl.lerpfrac : 1;
+	if (cl.csr.extended) {
+		// interpolate blend colors if the last frame wasn't clear
+		float blendfrac = ops->screen_blend[3] ? cl.lerpfrac : 1;
+		float damageblendfrac = ops->damage_blend[3] ? cl.lerpfrac : 1;
 
-        Vector4Lerp(ops->screen_blend, ps->screen_blend, blendfrac, cl.refdef.screen_blend);
-        Vector4Lerp(ops->damage_blend, ps->damage_blend, damageblendfrac, cl.refdef.damage_blend);
-    }
-    else {
-        Vector4Copy(ps->screen_blend, cl.refdef.screen_blend);
-        Vector4Copy(ps->damage_blend, cl.refdef.damage_blend);
-    }
-    // Mix in screen_blend from cgame pmove
-    // FIXME: Should also be interpolated?...
-    if (cl.predicted_screen_blend[3] > 0) {
-        float a2 = cl.refdef.screen_blend[3] + (1 - cl.refdef.screen_blend[3]) * cl.predicted_screen_blend[3]; // new total alpha
-        float a3 = cl.refdef.screen_blend[3] / a2;                      // fraction of color from old
-
-        LerpVector(cl.predicted_screen_blend, cl.refdef.screen_blend, a3, cl.refdef.screen_blend);
-        cl.refdef.screen_blend[3] = a2;
-    }
+		Vector4Lerp(ops->screen_blend, ps->screen_blend, blendfrac, cl.refdef.screen_blend);
+		Vector4Lerp(ops->damage_blend, ps->damage_blend, damageblendfrac, cl.refdef.damage_blend);
+	}
+	else {
+		Vector4Copy(ps->screen_blend, cl.refdef.screen_blend);
+		Vector4Copy(ps->damage_blend, cl.refdef.damage_blend);
+	}
+	// Mix in screen_blend from cgame pmove with smoothing to avoid sudden changes.
+	CL_MixPredictedScreenBlend(cl.predicted_screen_blend, cl.lerpfrac, cl.refdef.screen_blend);
 
 
 #if USE_FPS
