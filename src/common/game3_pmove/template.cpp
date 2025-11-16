@@ -16,6 +16,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "common/game3_pmove/waterjump.hpp"
+
 #define STEPSIZE    18
 
 // all of the locals will be zeroed before each
@@ -640,55 +642,48 @@ PM_CheckJump
 */
 static void PM_CheckJump(void)
 {
-    if (pm->s.pm_flags & G3PMF_TIME_LAND) {
-        // hasn't been long enough since landing to jump again
-        return;
-    }
+	if (pm->s.pm_flags & G3PMF_TIME_LAND) {
+		// hasn't been long enough since landing to jump again
+		return;
+	}
 
-    if (pm->cmd.upmove < 10) {
-        // not holding jump
-        pm->s.pm_flags &= ~G3PMF_JUMP_HELD;
-        return;
-    }
+	if (pm->cmd.upmove < 10) {
+		// not holding jump
+		pm->s.pm_flags &= ~G3PMF_JUMP_HELD;
+		return;
+	}
 
-    // must wait for jump to be released
-    if (pm->s.pm_flags & G3PMF_JUMP_HELD)
-        return;
+	// must wait for jump to be released
+	if (pm->s.pm_flags & G3PMF_JUMP_HELD)
+		return;
 
-    if (pm->s.pm_type == G3PM_DEAD)
-        return;
+	if (pm->s.pm_type == G3PM_DEAD)
+		return;
 
-    if (pm->waterlevel >= 2) {
-        // swimming, not jumping
-        pm->groundentity = NULL;
+	if (pm->waterlevel >= 2) {
+		// swimming, not jumping
+		pm->groundentity = NULL;
 
-        if (pmp->waterhack)
-            return;
+		if (pmp->waterhack)
+			return;
 
-        if (pml.velocity[2] <= -300)
-            return;
+		if (pml.velocity[2] <= -300)
+			return;
 
-        // FIXME: makes velocity dependent on client FPS,
-        // even causes prediction misses
-        if (pm->watertype == CONTENTS_WATER)
-            pml.velocity[2] = 100;
-        else if (pm->watertype == CONTENTS_SLIME)
-            pml.velocity[2] = 80;
-        else
-            pml.velocity[2] = 50;
-        return;
-    }
+		pml.velocity[2] += PM_CalcWaterJumpImpulse(pml.frametime, pm->watertype);
+		return;
+	}
 
-    if (pm->groundentity == NULL)
-        return;     // in air, so no effect
+	if (pm->groundentity == NULL)
+		return;	// in air, so no effect
 
-    pm->s.pm_flags |= G3PMF_JUMP_HELD;
+	pm->s.pm_flags |= G3PMF_JUMP_HELD;
 
-    pm->groundentity = NULL;
-    pm->s.pm_flags &= ~G3PMF_ON_GROUND;
-    pml.velocity[2] += 270;
-    if (pml.velocity[2] < 270)
-        pml.velocity[2] = 270;
+	pm->groundentity = NULL;
+	pm->s.pm_flags &= ~G3PMF_ON_GROUND;
+	pml.velocity[2] += 270;
+	if (pml.velocity[2] < 270)
+		pml.velocity[2] = 270;
 }
 
 /*

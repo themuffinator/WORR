@@ -43,6 +43,7 @@ common_src = [
   'src/common/game3_convert.cpp',
   'src/common/game3_pmove/new.cpp',
   'src/common/game3_pmove/old.cpp',
+  'src/common/game3_pmove/waterjump.cpp',
   'src/common/natsort.cpp',
   'src/common/hash_map.cpp',
   'src/common/loc.cpp',
@@ -876,6 +877,15 @@ gamestate_test = executable('test_gamestate_configstrings',
 test('gamestate_configstrings', gamestate_test,
   is_parallel: false,
 )
+  pmove_waterjump_test = executable('test_pmove_waterjump',
+    ['tests/test_pmove_waterjump.cpp', 'src/common/game3_pmove/waterjump.cpp'],
+    include_directories: 'inc',
+    dependencies:          common_deps,
+    gnu_symbol_visibility: 'hidden',
+    cpp_args:              ['-DUSE_TESTS=1'],
+  )
+
+  test('pmove_waterjump', pmove_waterjump_test)
 endif
 
 shared_library('game' + cpu, game_src,
