@@ -3221,40 +3221,59 @@ void **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *c
     return list.files;
 }
 
+/*
+=============
+FS_FinalizeList
+
+Sorts collected search results, removes duplicates and appends the terminal NULL.
+=============
+*/
 void **FS_FinalizeList(listfiles_t *list)
 {
-    int total;
+	int total;
 
-    if (!list->count) {
-        Q_assert(!list->files);
-        return NULL;
-    }
+	if (!list->count) {
+		Q_assert(!list->files);
+		return NULL;
+	}
 
-    if (list->flags & FS_SEARCH_EXTRAINFO) {
-        // TODO
-        qsort(list->files, list->count, sizeof(list->files[0]), infocmp);
-        total = list->count;
-    } else {
-        // sort alphabetically
-        qsort(list->files, list->count, sizeof(list->files[0]), alphacmp);
-        total = 0;
+	if (list->flags & FS_SEARCH_EXTRAINFO) {
+		qsort(list->files, list->count, sizeof(list->files[0]), infocmp);
+		total = 0;
 
-        // remove duplicates
-        for (int i = 0; i < list->count; i++) {
-            char *info = static_cast<char *>(list->files[i]);
-            while (i + 1 < list->count && !FS_pathcmp(static_cast<const char *>(list->files[i + 1]), info)) {
-                Z_Free(list->files[++i]);
-            }
-            list->files[total++] = info;
-        }
-        list->count = total;
-    }
+		for (int i = 0; i < list->count; i++) {
+			file_info_t *info = static_cast<file_info_t *>(list->files[i]);
+			while (i + 1 < list->count) {
+				file_info_t *next = static_cast<file_info_t *>(list->files[i + 1]);
+				if (FS_pathcmp(next->name, info->name)) {
+					break;
+				}
+				Z_Free(list->files[++i]);
+			}
+			list->files[total++] = info;
+		}
+	} else {
+		// sort alphabetically
+		qsort(list->files, list->count, sizeof(list->files[0]), alphacmp);
+		total = 0;
 
-    // NULL terminate
-    list->files = FS_ReallocList(list->files, total + 1);
-    list->files[total] = NULL;
+		// remove duplicates
+		for (int i = 0; i < list->count; i++) {
+			char *info = static_cast<char *>(list->files[i]);
+			while (i + 1 < list->count && !FS_pathcmp(static_cast<const char *>(list->files[i + 1]), info)) {
+				Z_Free(list->files[++i]);
+			}
+			list->files[total++] = info;
+		}
+	}
 
-    return list->files;
+	list->count = total;
+
+	// NULL terminate
+	list->files = FS_ReallocList(list->files, total + 1);
+	list->files[total] = NULL;
+
+	return list->files;
 }
 
 /*
@@ -3312,6 +3331,39 @@ static void print_file_list(const char *path, const char *ext, unsigned flags)
     }
     Com_Printf("%i files listed\n", total);
     FS_FreeList(list);
+}
+
+/*
+=============
+FS_ListInfo_f
+
+Lists files with FS_SEARCH_EXTRAINFO to expose duplicate handling for regression scripts.
+=============
+*/
+static void FS_ListInfo_f(void)
+{
+	if (Cmd_Argc() < 2) {
+		Com_Printf("Usage: %s <directory> [.extension]\n", Cmd_Argv(0));
+		return;
+	}
+
+	const char *path = Cmd_Argv(1);
+	const char *ext = Cmd_Argc() > 2 ? Cmd_Argv(2) : NULL;
+
+	int total = 0;
+	void **list = FS_ListFiles(path, ext, FS_SEARCH_EXTRAINFO, &total);
+	if (!list) {
+		Com_Printf("No files found.\n");
+		return;
+	}
+
+	for (int i = 0; i < total; i++) {
+		file_info_t *info = static_cast<file_info_t *>(list[i]);
+		Com_Printf("%s (%" PRId64 " bytes)\n", info->name, static_cast<int64_t>(info->size));
+	}
+
+	Com_Printf("%i files listed with extra info\n", total);
+	FS_FreeList(list);
 }
 
 /*
@@ -4057,6 +4109,7 @@ static const cmdreg_t c_fs[] = {
     { "path", FS_Path_f },
     { "fdir", FS_FDir_f },
     { "dir", FS_Dir_f },
+    { "fs_listinfo", FS_ListInfo_f },
 #if USE_DEBUG
     { "fs_stats", FS_Stats_f },
 #endif
