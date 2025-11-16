@@ -562,8 +562,12 @@ void Prompt_LoadHistory(commandPrompt_t *prompt, const char *filename)
     i = 0;
     while (1) {
         int len = FS_ReadLine(f, buffer, sizeof(buffer));
-        if (len <= 0)
+        if (len == 0)
             break;
+        if (len < 0) {
+            Com_WPrintf("Couldn't read %s: %s\n", filename, Q_ErrorString(len));
+            break;
+        }
         while (len > 0 && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r'))
             len--;
         if (!len)
