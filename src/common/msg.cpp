@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/sizebuf.hpp"
 #include "common/math.hpp"
 #include "common/intreadwrite.hpp"
+#include "common/q2proto_shared.hpp"
 
 #include "q2proto/q2proto_sound.h"
 
@@ -55,10 +56,13 @@ This is the only place where writing buffer is initialized.
 */
 void MSG_Init(void)
 {
-    SZ_Init(&msg_read, msg_read_buffer, MAX_MSGLEN, "msg_read");
-    SZ_Init(&msg_write, msg_write_buffer, MAX_MSGLEN, "msg_write");
-    msg_read.allowunderflow = true;
-    msg_write.allowoverflow = true;
+	SZ_Init(&msg_read, msg_read_buffer, MAX_MSGLEN, "msg_read");
+	SZ_Init(&msg_write, msg_write_buffer, MAX_MSGLEN, "msg_write");
+	msg_read.allowunderflow = true;
+	msg_write.allowoverflow = true;
+	#if USE_ZLIB
+		Q2Proto_IO_Init();
+	#endif
 }
 
 
@@ -94,7 +98,7 @@ void MSG_WriteChar(int c)
 
 #ifdef PARANOID
     Q_assert(c >= -128 && c <= 127);
-#endif
+	#endif
 
     buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 1));
     buf[0] = c;
@@ -111,7 +115,7 @@ void MSG_WriteByte(int c)
 
 #ifdef PARANOID
     Q_assert(c >= 0 && c <= 255);
-#endif
+	#endif
 
     buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 1));
     buf[0] = c;
@@ -128,7 +132,7 @@ void MSG_WriteShort(int c)
 
 #ifdef PARANOID
     Q_assert(c >= -0x8000 && c <= 0x7fff);
-#endif
+	#endif
 
     buf = static_cast<byte *>(SZ_GetSpace(&msg_write, 2));
     WL16(buf, c);
@@ -1933,11 +1937,11 @@ static void MSG_ReadCoordE(float *to, msgEsFlags_t flags)
         *to = SHORT2COORD(MSG_ReadShort());
 }
 
-#endif
+	#endif
 
 #if USE_SERVER
 static inline
-#endif
+	#endif
 void MSG_ReadPos(vec3_t pos, msgEsFlags_t flags)
 {
     if (flags & MSG_ES_RERELEASE) {
@@ -1983,7 +1987,7 @@ void MSG_ReadDir(vec3_t dir)
         Com_Error(ERR_DROP, "MSG_ReadDir: out of range");
     VectorCopy(bytedirs[b], dir);
 }
-#endif
+	#endif
 
 void MSG_ReadDeltaUsercmd(const usercmd_t *from, usercmd_t *to)
 {

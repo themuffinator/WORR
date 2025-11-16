@@ -34,13 +34,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // FIXME: need a mechanism to clean up the stream(s)?
 static struct {
-    /// Buffer to receive inflated data
-    byte buffer[MAX_DEFLATED_SIZE];
-    /// zlib stream
-    z_stream z;
-    /// Whether the deflate stream ended
-    bool stream_end;
+/// Buffer to receive inflated data
+byte buffer[MAX_DEFLATED_SIZE];
+/// zlib stream
+z_stream z;
+/// Whether the deflate stream ended
+bool stream_end;
 } io_inflate;
+
+static bool io_inflate_initialized;
 
 // Sizebuf with inflated data
 static sizebuf_t msg_inflate;
@@ -61,6 +63,73 @@ static q2protoio_ioarg_t deflate_q2protoio_ioarg{nullptr, &msg_deflate, 0, nullp
 // I/O arg: write w/ deflate
 #define IOARG_DEFLATE      ((uintptr_t)&deflate_q2protoio_ioarg)
 #endif // USE_ZLIB
+
+/*
+=============
+Q2Proto_IO_Init
+
+Initialize inflate buffers and stream tracking.
+=============
+*/
+void Q2Proto_IO_Init(void)
+{
+	Q_memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+	io_inflate.stream_end = false;
+	SZ_Init(&msg_inflate, io_inflate.buffer, sizeof(io_inflate.buffer), "msg_inflate");
+	SZ_Clear(&msg_inflate);
+	io_inflate_initialized = true;
+}
+
+/*
+=============
+Q2Proto_IO_ResetInflate
+
+Reset inflate state and release any active zlib stream.
+=============
+*/
+void Q2Proto_IO_ResetInflate(void)
+{
+	if (!io_inflate_initialized)
+		return;
+
+	if (io_inflate.z.state)
+	{
+		int ret = inflateEnd(&io_inflate.z);
+		if (ret != Z_OK && ret != Z_STREAM_ERROR)
+	{
+			Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
+	}
+	Q_memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+	}
+	io_inflate.stream_end = false;
+	SZ_Clear(&msg_inflate);
+}
+
+/*
+=============
+Q2Proto_IO_Shutdown
+
+Tear down inflate buffers and prevent reuse of stale state.
+=============
+*/
+void Q2Proto_IO_Shutdown(void)
+{
+	if (!io_inflate_initialized)
+		return;
+
+	if (io_inflate.z.state)
+	{
+		int ret = inflateEnd(&io_inflate.z);
+		if (ret != Z_OK && ret != Z_STREAM_ERROR)
+	{
+			Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
+	}
+	Q_memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+	}
+	io_inflate.stream_end = false;
+	SZ_Clear(&msg_inflate);
+	io_inflate_initialized = false;
+}
 
 static byte* io_read_data(uintptr_t io_arg, size_t len, size_t *readcount)
 {
@@ -132,68 +201,73 @@ size_t q2protoio_read_available(uintptr_t io_arg)
 #if USE_ZLIB
 q2proto_error_t q2protoio_inflate_begin(uintptr_t io_arg, q2proto_inflate_deflate_header_mode_t header_mode, uintptr_t* inflate_io_arg)
 {
-    if (io_arg != _Q2PROTO_IOARG_DEFAULT) {
-        Com_Error(ERR_DROP, "%s: recursively entered", __func__);
-    }
+	if (io_arg != _Q2PROTO_IOARG_DEFAULT) {
+		Com_Error(ERR_DROP, "%s: recursively entered", __func__);
+}
 
-    int window_bits = header_mode == Q2P_INFL_DEFL_RAW ? -MAX_WBITS : MAX_WBITS;
-    int ret;
-    if (io_inflate.z.state)
-        ret = inflateReset2(&io_inflate.z, window_bits);
-    else
-        ret = inflateInit2(&io_inflate.z, window_bits);
-    if (ret != Z_OK) {
-        Com_Error(ERR_DROP, "%s: inflate initialization failed with error %d", __func__, ret);
-    }
-    io_inflate.stream_end = false;
+	if (!io_inflate_initialized)
+		Q2Proto_IO_Init();
+	else
+		Q2Proto_IO_ResetInflate();
 
-    *inflate_io_arg = IOARG_INFLATE;
-    return Q2P_ERR_SUCCESS;
+	int window_bits = header_mode == Q2P_INFL_DEFL_RAW ? -MAX_WBITS : MAX_WBITS;
+	int ret = inflateInit2(&io_inflate.z, window_bits);
+	if (ret != Z_OK) {
+		Com_Error(ERR_DROP, "%s: inflate initialization failed with error %d", __func__, ret);
+	}
+	io_inflate.stream_end = false;
+
+	*inflate_io_arg = IOARG_INFLATE;
+	return Q2P_ERR_SUCCESS;
 }
 
 q2proto_error_t q2protoio_inflate_data(uintptr_t io_arg, uintptr_t inflate_io_arg, size_t compressed_size)
 {
-    Q_assert(io_arg == _Q2PROTO_IOARG_DEFAULT);
-    Q_assert(inflate_io_arg == IOARG_INFLATE);
+	Q_assert(io_arg == _Q2PROTO_IOARG_DEFAULT);
+	Q_assert(inflate_io_arg == IOARG_INFLATE);
 
-    byte *in_data;
-    if (compressed_size == (size_t)-1)
-        in_data = io_read_data(io_arg, SIZE_MAX, &compressed_size);
-    else
-        in_data = io_read_data(io_arg, compressed_size, NULL);
-    io_inflate.z.next_in = in_data;
-    io_inflate.z.avail_in = compressed_size;
-    io_inflate.z.next_out = io_inflate.buffer;
-    io_inflate.z.avail_out = sizeof(io_inflate.buffer);
-    int ret = inflate(&io_inflate.z, Z_SYNC_FLUSH);
-    if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR) {
-        inflateEnd(&io_inflate.z);
-        Com_Error(ERR_DROP, "%s: inflate() failed with error %d", __func__, ret);
-    }
+	byte *in_data;
+	if (compressed_size == (size_t)-1)
+		in_data = io_read_data(io_arg, SIZE_MAX, &compressed_size);
+	else
+		in_data = io_read_data(io_arg, compressed_size, NULL);
+	io_inflate.z.next_in = in_data;
+	io_inflate.z.avail_in = compressed_size;
+	io_inflate.z.next_out = io_inflate.buffer;
+	io_inflate.z.avail_out = sizeof(io_inflate.buffer);
+	int ret = inflate(&io_inflate.z, Z_SYNC_FLUSH);
+	if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR) {
+		inflateEnd(&io_inflate.z);
+		Q_memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+			Com_Error(ERR_DROP, "%s: inflate() failed with error %d", __func__, ret);
+	}
 
-    io_inflate.stream_end = ret == Z_STREAM_END;
+	io_inflate.stream_end = ret == Z_STREAM_END;
 
-    SZ_InitRead(&msg_inflate, io_inflate.buffer, sizeof(io_inflate.buffer));
-    msg_inflate.cursize = sizeof(io_inflate.buffer) - io_inflate.z.avail_out;
+	SZ_InitRead(&msg_inflate, io_inflate.buffer, sizeof(io_inflate.buffer));
+	msg_inflate.cursize = sizeof(io_inflate.buffer) - io_inflate.z.avail_out;
 
-    return Q2P_ERR_SUCCESS;
+	return Q2P_ERR_SUCCESS;
 }
 
 q2proto_error_t q2protoio_inflate_stream_ended(uintptr_t inflate_io_arg, bool *stream_end)
 {
-    Q_assert(inflate_io_arg == IOARG_INFLATE);
-    *stream_end = io_inflate.stream_end;
-    return Q2P_ERR_SUCCESS;
+	Q_assert(inflate_io_arg == IOARG_INFLATE);
+	*stream_end = io_inflate.stream_end;
+	return Q2P_ERR_SUCCESS;
 }
 
 q2proto_error_t q2protoio_inflate_end(uintptr_t inflate_io_arg)
 {
-    Q_assert(inflate_io_arg == IOARG_INFLATE);
-    int ret = inflateEnd(&io_inflate.z);
-    if (ret != Z_OK && ret != Z_STREAM_END) {
-        Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
-    }
-    return msg_inflate.readcount < msg_inflate.cursize ? Q2P_ERR_MORE_DATA_DEFLATED : Q2P_ERR_SUCCESS;
+	Q_assert(inflate_io_arg == IOARG_INFLATE);
+	int ret = inflateEnd(&io_inflate.z);
+	if (ret != Z_OK && ret != Z_STREAM_END) {
+		Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
+	}
+	Q_memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+	q2proto_error_t result = msg_inflate.readcount < msg_inflate.cursize ? Q2P_ERR_MORE_DATA_DEFLATED : Q2P_ERR_SUCCESS;
+	Q2Proto_IO_ResetInflate();
+	return result;
 }
 
 static void reset_deflate_input(q2protoio_deflate_args_t* deflate_args)
@@ -231,7 +305,7 @@ q2proto_error_t q2protoio_deflate_begin(q2protoio_deflate_args_t* deflate_args, 
     deflate_q2protoio_ioarg.deflate = deflate_args;
     *deflate_io_arg = IOARG_DEFLATE;
 
-    return Q2P_ERR_SUCCESS;
+	return Q2P_ERR_SUCCESS;
 }
 
 #define DEFLATE_OUTPUT_MARGIN   16
@@ -255,7 +329,7 @@ q2proto_error_t q2protoio_deflate_get_data(uintptr_t deflate_io_arg, size_t* in_
     SZ_Clear(&msg_deflate);
     reset_deflate_input(deflate_args);
 
-    return Q2P_ERR_SUCCESS;
+	return Q2P_ERR_SUCCESS;
 }
 
 q2proto_error_t q2protoio_deflate_end(uintptr_t deflate_io_arg)
@@ -264,7 +338,7 @@ q2proto_error_t q2protoio_deflate_end(uintptr_t deflate_io_arg)
 
     io_data->deflate = NULL;
 
-    return Q2P_ERR_SUCCESS;
+	return Q2P_ERR_SUCCESS;
 }
 #endif // USE_ZLIB
 
