@@ -513,7 +513,7 @@ void CL_Wheel_Update(void)
                 cl.wheel.deselect_time = 0;
             }
         }
-    } else if (cl.wheel.selected) {
+} else if (cl.wheel.selected != -1) {
         if (!cl.wheel.deselect_time)
             cl.wheel.deselect_time = com_localTime3 + 200;
     }
