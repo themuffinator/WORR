@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/proc_address.hpp"
 #include "cgame_classic.hpp"
 #include "common/loc.hpp"
+#include "common/utf8.hpp"
 #include "common/gamedll.hpp"
 
 #include <algorithm>
@@ -347,50 +348,64 @@ static float CG_SCR_FontLineHeight(int scale)
 	return static_cast<float>(SCR_FontLineHeight(scale, SCR_DefaultFontHandle()));
 }
 
+/*
+=============
+CG_SCR_MeasureFontString
+
+Measure the pixel width and height of a potentially multi-line UTF-8 string.
+=============
+*/
 static cg_vec2_t CG_SCR_MeasureFontString(const char* str, int scale)
 {
-	// TODO: 'str' may contain UTF-8, handle that.
 	size_t remaining = strlen(str);
 	int num_lines = 1;
 	int max_width = 0;
 	const qhandle_t fontHandle = SCR_DefaultFontHandle();
-	const char* line = str;
+	const char* cursor = str;
+	const char* line_start = str;
 
-	while (true) {
-		const char* newline = strchr(line, '\n');
-		if (!newline) {
-			int line_width = SCR_MeasureString(scale, 0, remaining, line, fontHandle);
+	while (remaining && cursor && *cursor) {
+		const char* previous = cursor;
+		const uint32_t codepoint = utf8_next(cursor, remaining);
+		if (!codepoint)
+			break;
+
+		if (codepoint == '\n') {
+			const size_t line_length = static_cast<size_t>(previous - line_start);
+			const int line_width = SCR_MeasureString(scale, 0, line_length, line_start, fontHandle);
 			max_width = (std::max)(max_width, line_width);
-			break;
-		}
 
-		size_t len = min(static_cast<size_t>(newline - line), remaining);
-		int line_width = SCR_MeasureString(scale, 0, len, line, fontHandle);
-		max_width = (std::max)(max_width, line_width);
+			line_start = cursor;
+			++num_lines;
 
-		if (remaining <= len)
-			break;
-
-		remaining -= (len + 1);
-		line = newline + 1;
-		++num_lines;
-
-		if (remaining == 0) {
-			int empty_width = SCR_MeasureString(scale, 0, 0, line, fontHandle);
-			max_width = (std::max)(max_width, empty_width);
-			break;
+			if (!remaining) {
+				const int empty_width = SCR_MeasureString(scale, 0, 0, line_start, fontHandle);
+				max_width = (std::max)(max_width, empty_width);
+				break;
+			}
 		}
 	}
+
+	const size_t trailing_length = static_cast<size_t>(cursor - line_start);
+	const int trailing_width = SCR_MeasureString(scale, 0, trailing_length, line_start, fontHandle);
+	max_width = (std::max)(max_width, trailing_width);
 
 	const float line_height = CG_SCR_FontLineHeight(scale);
 	return cg_vec2_t{ static_cast<float>(max_width), line_height * num_lines };
 }
 
+/*
+=============
+CG_SCR_DrawFontString
+
+Draw a UTF-8 string with optional shadowing and alignment adjustments.
+=============
+*/
 static void CG_SCR_DrawFontString(const char* str, int x, int y, int scale, const rgba_t* color, bool shadow, text_align_t align)
 {
 	int draw_x = x;
 	if (align != LEFT) {
-		int text_width = CG_SCR_MeasureFontString(str, scale).x;
+		const int text_width = CG_SCR_MeasureFontString(str, scale).x;
 		if (align == CENTER)
 			draw_x -= text_width / 2;
 		else if (align == RIGHT)
@@ -400,8 +415,14 @@ static void CG_SCR_DrawFontString(const char* str, int x, int y, int scale, cons
 	int draw_flags = shadow ? UI_DROPSHADOW : 0;
 	color_t draw_color = apply_scr_alpha(*color);
 
-	// TODO: 'str' may contain UTF-8, handle that.
-	SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, strlen(str), str, draw_color, SCR_DefaultFontHandle());
+	const char* cursor = str;
+	size_t visible_bytes = strlen(str);
+	while (cursor && *cursor && visible_bytes) {
+		if (!utf8_next(cursor, visible_bytes))
+			break;
+	}
+
+	SCR_DrawStringMultiStretch(draw_x, y, scale, draw_flags, static_cast<size_t>(cursor - str), str, draw_color, SCR_DefaultFontHandle());
 }
 
 static const vrect_t* CG_SCR_GetVirtualScreen(text_align_t align)
