@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_ents.c -- entity parsing and management
 
 #include "client.hpp"
+#include "refresh/gl.hpp"
 
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
@@ -176,6 +177,37 @@ static inline bool entity_is_new(const centity_t *ent)
 
     return false;
 }
+
+
+
+/*
+=============
+is_alias_model
+
+Returns true if the model referenced by the entity state is an alias model.
+=============
+*/
+static bool is_alias_model(const entity_state_t *state)
+{
+	if (!state)
+		return false;
+
+	qhandle_t model = 0;
+
+	if (state->modelindex == MODELINDEX_PLAYER) {
+		const clientinfo_t *ci = &cl.clientinfo[state->skinnum & 0xff];
+		model = ci->model ? ci->model : cl.baseclientinfo.model;
+	} else {
+		model = cl.model_draw[state->modelindex];
+	}
+
+	if (!model || model & BIT(31))
+		return false;
+
+	const model_t *mod = MOD_ForHandle(model);
+	return mod && mod->type == MOD_ALIAS;
+}
+
 
 static void parse_entity_update(const entity_state_t *state)
 {
@@ -625,19 +657,19 @@ static void CL_AddPacketEntities(void)
         if (cl_noglow->integer && !(renderfx & RF_BEAM))
             renderfx &= ~RF_GLOW;
 
-        ent.oldframe = cent->prev.frame;
-        ent.backlerp = 1.0f - cl.lerpfrac;
+		ent.oldframe = cent->prev.frame;
+		ent.backlerp = 1.0f - cl.lerpfrac;
 
-// KEX
-        if (cl.csr.extended) {
-            // TODO: must only do this on alias models
-            if (cent->last_frame != cent->current_frame) {
-                ent.backlerp = Q_clipf(1.0f - ((cl.time - ((float) cent->frame_servertime - cl.frametime.time)) / 100.f), 0.0f, 1.0f);
-                ent.frame = cent->current_frame;
-                ent.oldframe = cent->last_frame;
-            }
-        }
-// KEX
+		// KEX
+		if (cl.csr.extended && is_alias_model(s1)) {
+			if (cent->last_frame != cent->current_frame) {
+				ent.backlerp = Q_clipf(1.0f - ((cl.time - ((float) cent->frame_servertime - cl.frametime.time)) / 100.f), 0.0f, 1.0f);
+				ent.frame = cent->current_frame;
+				ent.oldframe = cent->last_frame;
+			}
+		}
+		// KEX
+
 
         if (renderfx & RF_BEAM) {
             // interpolate start and end points for beams
