@@ -522,65 +522,80 @@ void CL_Wheel_Input(int x, int y)
     }
 }
 
+/*
+=============
+CL_Wheel_Update
+
+Update the wheel state and timing values each frame.
+=============
+*/
 void CL_Wheel_Update(void)
 {
-    CL_SlowTime_Update();
+	CL_SlowTime_Update();
 
-    static unsigned int lastWheelTime;
-    unsigned int t = Sys_Milliseconds();
-    float frac = (t - lastWheelTime) * 0.001f;
-    lastWheelTime = t;
+	static unsigned int lastWheelTime;
+	static bool lastWheelTimeInitialized;
+	unsigned int t = Sys_Milliseconds();
+	float frac = 0.0f;
 
-    if (cl.wheel.state != WHEEL_OPEN)
-    {
-        if (cl.wheel.timer > 0.0f) {
-            cl.wheel.timer = max(0.0f, cl.wheel.timer - (frac * ww_timer_speed->value));
-        }
+	if (lastWheelTimeInitialized) {
+		frac = (t - lastWheelTime) * 0.001f;
+	}
 
-        cl.wheel.timescale = max(0.1f, 1.0f - cl.wheel.timer);
-        return;
-    }
-    
-    if (cl.wheel.timer < 1.0f) {
-        cl.wheel.timer = min(1.0f, cl.wheel.timer + (frac * ww_timer_speed->value));
-    }
+	lastWheelTimeInitialized = true;
+	lastWheelTime = t;
 
-    cl.wheel.timescale = max(0.1f, 1.0f - cl.wheel.timer);
+	if (cl.wheel.state != WHEEL_OPEN)
+	{
+		if (cl.wheel.timer > 0.0f) {
+			cl.wheel.timer = max(0.0f, cl.wheel.timer - (frac * ww_timer_speed->value));
+		}
 
-    // update cached slice parameters
-    for (int i = 0; i < cl.wheel.num_slots; i++) {
-        if (!cl.wheel.slots[i].has_item)
-            continue;
+		cl.wheel.timescale = max(0.1f, 1.0f - cl.wheel.timer);
+		return;
+	}
+	
+	if (cl.wheel.timer < 1.0f) {
+		cl.wheel.timer = min(1.0f, cl.wheel.timer + (frac * ww_timer_speed->value));
+	}
 
-        cl.wheel.slots[i].angle = cl.wheel.slice_deg * i;
-        Vector2Set(cl.wheel.slots[i].dir, sinf(cl.wheel.slots[i].angle), -cosf(cl.wheel.slots[i].angle));
+	cl.wheel.timescale = max(0.1f, 1.0f - cl.wheel.timer);
 
-        cl.wheel.slots[i].dot = Dot2Product(cl.wheel.dir, cl.wheel.slots[i].dir);
-    }
+	// update cached slice parameters
+	for (int i = 0; i < cl.wheel.num_slots; i++) {
+		if (!cl.wheel.slots[i].has_item)
+			continue;
 
-    // check selection stuff
-    bool can_select = (cl.wheel.distance > 140);
+		cl.wheel.slots[i].angle = cl.wheel.slice_deg * i;
+		Vector2Set(cl.wheel.slots[i].dir, sinf(cl.wheel.slots[i].angle), -cosf(cl.wheel.slots[i].angle));
 
-    if (can_select) {
-        for (int i = 0; i < cl.wheel.num_slots; i++) {
-            if (!cl.wheel.slots[i].has_item)
-                continue;
+		cl.wheel.slots[i].dot = Dot2Product(cl.wheel.dir, cl.wheel.slots[i].dir);
+	}
 
-            if (cl.wheel.slots[i].dot > cl.wheel.slice_sin) {
-                cl.wheel.selected = i;
-                cl.wheel.deselect_time = 0;
-            }
-        }
-} else if (cl.wheel.selected != -1) {
-        if (!cl.wheel.deselect_time)
-            cl.wheel.deselect_time = com_localTime3 + 200;
-    }
+	// check selection stuff
+	bool can_select = (cl.wheel.distance > 140);
 
-    if (cl.wheel.deselect_time && cl.wheel.deselect_time < com_localTime3) {
-        cl.wheel.selected = -1;
-        cl.wheel.deselect_time = 0;
-    }
+	if (can_select) {
+		for (int i = 0; i < cl.wheel.num_slots; i++) {
+			if (!cl.wheel.slots[i].has_item)
+				continue;
+
+			if (cl.wheel.slots[i].dot > cl.wheel.slice_sin) {
+				cl.wheel.selected = i;
+				cl.wheel.deselect_time = 0;
+			}
+		}
+	} else if (cl.wheel.selected != -1) {
+		if (!cl.wheel.deselect_time)
+			cl.wheel.deselect_time = com_localTime3 + 200;
+	}
+
+	if (cl.wheel.deselect_time && cl.wheel.deselect_time < com_localTime3) {
+		cl.wheel.selected = -1;
+		cl.wheel.deselect_time = 0;
+	}
 }
+
 
 static color_t slot_count_color(bool selected, bool warn_low)
 {
