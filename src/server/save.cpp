@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.hpp"
 #include "common/mapdb.hpp"
+#include <unordered_map>
 
 #define SAVE_MAGIC1     MakeLittleLong('S','S','V','2')
 #define SAVE_MAGIC2     MakeLittleLong('S','A','V','2')
@@ -42,6 +43,37 @@ typedef enum {
 } loadtype_t;
 
 static cvar_t   *sv_noreload;
+
+static std::unordered_map<std::string, const mapdb_map_t *> mapdb_bsp_lookup;
+static std::unordered_map<std::string, const mapdb_map_t *> mapdb_unit_lookup;
+static bool mapdb_lookup_initialized = false;
+
+/*
+=============
+SV_BuildMapDBCache
+
+Populate BSP name lookup caches for map and unit entries.
+=============
+*/
+static void SV_BuildMapDBCache(void)
+{
+	if (mapdb_lookup_initialized)
+		return;
+
+	const mapdb_t *mapdb = MapDB_Get();
+
+	for (int i = 0; i < mapdb->num_maps; i++) {
+
+		const mapdb_map_t *entry = &mapdb->maps[i];
+
+		if (entry->sp)
+			mapdb_unit_lookup[entry->bsp] = entry;
+		else
+			mapdb_bsp_lookup[entry->bsp] = entry;
+	}
+
+	mapdb_lookup_initialized = true;
+}
 
 static bool have_enhanced_savegames(void);
 
@@ -294,51 +326,56 @@ fail:
 // - for strings with EOUs, check if there's a matching unit
 //   that we can pull the unit name from.
 // - if no EOU, check if the BSP exists at all stand-alone.
+/*
+=============
+SV_GetFriendlyMapDBTitle
+
+Build a friendly savegame title using cached mapdb entries when available.
+=============
+*/
 static void SV_GetFriendlyMapDBTitle(char *name, size_t name_len)
 {
-    int i = 0;
-    const mapdb_t *mapdb = MapDB_Get();
-    const char *bsp_name = strrchr(name, '+');
+	SV_BuildMapDBCache();
+	const char *bsp_name = strrchr(name, '+');
 
-    if (!bsp_name)
-        bsp_name = name;
-    else
-        bsp_name++;
+	if (!bsp_name)
+		bsp_name = name;
+	else
+		bsp_name++;
 
-    if (*bsp_name == '*')
-        bsp_name++;
+	if (*bsp_name == '*')
+		bsp_name++;
 
-    mapcmd_t cmd = { 0 };
-    Q_strlcpy(cmd.buffer, bsp_name, sizeof(cmd.buffer));
+	mapcmd_t cmd = { 0 };
+	Q_strlcpy(cmd.buffer, bsp_name, sizeof(cmd.buffer));
 
-    if (!SV_ParseMapCmd(&cmd))
-        return;
+	if (!SV_ParseMapCmd(&cmd))
+		return;
 
-    // the BSP needs to exist for short episode listing
-    // TODO: hash mapping for names
-    const mapdb_map_t *mapdb_map = NULL;
+	// the BSP needs to exist for short episode listing
+	const mapdb_map_t *mapdb_map = nullptr;
 
-    for (mapdb_map = mapdb->maps, i = 0; i < mapdb->num_maps; mapdb_map++, i++)
-        if (!mapdb_map->sp && !strcmp(mapdb_map->bsp, cmd.server))
-            break;
+	auto map_iter = mapdb_bsp_lookup.find(cmd.server);
+	if (map_iter != mapdb_bsp_lookup.end())
+		mapdb_map = map_iter->second;
 
-    // no idea what map this came from
-    if (i == mapdb->num_maps)
-        return;
+	// no idea what map this came from
+	if (!mapdb_map)
+		return;
 
-    // find a matching unit
-    const mapdb_map_t *mapdb_unit = NULL;
-    
-    for (mapdb_unit = mapdb->maps, i = 0; i < mapdb->num_maps; mapdb_unit++, i++)
-        if (mapdb_unit->sp && !strcmp(mapdb_unit->bsp, name))
-            break;
+	// find a matching unit
+	const mapdb_map_t *mapdb_unit = nullptr;
 
-    if (i != mapdb->num_maps) {
-        Q_snprintf(name, name_len, "[%s] %s", mapdb_map->short_name, mapdb_unit->title);
-        return;
-    }
-    
-    Q_snprintf(name, name_len, "[%s] %s", mapdb_map->short_name, mapdb_map->title);
+	auto unit_iter = mapdb_unit_lookup.find(name);
+	if (unit_iter != mapdb_unit_lookup.end())
+		mapdb_unit = unit_iter->second;
+
+	if (mapdb_unit) {
+		Q_snprintf(name, name_len, "[%s] %s", mapdb_map->short_name, mapdb_unit->title);
+		return;
+	}
+
+	Q_snprintf(name, name_len, "[%s] %s", mapdb_map->short_name, mapdb_map->title);
 }
 
 char *SV_GetSaveInfo(const char *dir)
