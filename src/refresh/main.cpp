@@ -1666,40 +1666,32 @@ Copies the current scene into the motion blur history buffer using the active vi
 static void R_StoreMotionBlurHistory(void)
 {
 	if (r_fbo && !r_fbo->integer)
-		return;
+	return;
 	if (!gl_config.motion_blur_supported)
-		return;
+	return;
 	if (!glr.motion_blur_enabled || !glr.view_proj_valid)
-		return;
+	return;
 	if (!glr.motion_history_textures_ready)
-		return;
-
-	GLint prev_fbo = 0;
-	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-
-	GLint prev_viewport[4] = { 0, 0, 0, 0 };
-	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
-
-	GLboolean scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
-	GLint prev_scissor_box[4] = { 0, 0, 0, 0 };
-	if (scissor_enabled)
-		qglGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
-
+	return;
+	
 	int composite_x = 0;
 	int composite_y = 0;
 	int composite_w = 0;
 	int composite_h = 0;
 	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
-	if (composite_w <= 0 || composite_h <= 0) {
-		qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
-		if (scissor_enabled) {
-			qglScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
-			qglEnable(GL_SCISSOR_TEST);
-		} else {
-			qglDisable(GL_SCISSOR_TEST);
-		}
-		return;
-	}
+	if (composite_w <= 0 || composite_h <= 0)
+	return;
+	
+	GLint prev_fbo = 0;
+	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	
+	GLint prev_viewport[4] = { 0, 0, 0, 0 };
+	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
+	
+	GLboolean scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = { 0, 0, 0, 0 };
+	if (scissor_enabled)
+	qglGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
 
 	const int target_index = glr.motion_blur_history_index;
 
