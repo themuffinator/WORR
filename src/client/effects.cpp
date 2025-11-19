@@ -38,16 +38,18 @@ LIGHT STYLE MANAGEMENT
 */
 
 typedef struct {
-    int     length;
-    float   map[CS_MAX_STRING_LENGTH];
+	int		length;
+	float	map[CS_MAX_STRING_LENGTH];
 
-    // Paril: interpolation
-    float   from, to;
-    int     endtime;
+	// Paril: interpolation
+	float	from, to;
+	int		starttime;
+	int		endtime;
+	int		last_update_time;
 } clightstyle_t;
 
 static clightstyle_t    cl_lightstyles[MAX_LIGHTSTYLES];
-// Paril: interpolation
+	// Paril: interpolation
 static int              cl_lastlightstyleoffset = -1;
 
 static void CL_ClearLightStyles(void)
@@ -75,58 +77,82 @@ void CL_SetLightStyle(int index, const char *s)
 }
 
 /*
-================
+=============
 CL_AddLightStyles
-================
+
+Adds light styles to the scene, interpolating between samples using the
+actual elapsed time since the last style change.
+=============
 */
 void CL_AddLightStyles(void)
 {
-    int     i, ofs = cl.time / 100;
-    clightstyle_t   *ls;
-    bool update_from = ofs != cl_lastlightstyleoffset;
+	int		i, ofs = cl.time / 100;
+	clightstyle_t	*ls;
+	bool update_from = ofs != cl_lastlightstyleoffset;
+	int		update_time = cl.time;
 
-    if (cl_lerp_lightstyles->integer) {
-        for (i = 0, ls = cl_lightstyles; i < MAX_LIGHTSTYLES; i++, ls++) {
-            float value = 1.0f;
+	if (cl_lerp_lightstyles->integer) {
+		for (i = 0, ls = cl_lightstyles; i < MAX_LIGHTSTYLES; i++, ls++) {
+			float value = 1.0f;
 
-            if (ls->length > 1) {
-                // Paril: lightstyle lerping - a bit uglier than I'd like
-                // but this should allow styles to change at 100 ms intervals
-                // like vanilla.
-                // TODO: check what happens if styles are changed on non-100ms
-                // intervals.. my intuition tells me that that will cause a jump.
-                if (update_from)
-                {
-                    if (cl_lastlightstyleoffset != -1)
-                        ls->from = ls->to;
+			if (ls->length > 1) {
+				// Paril: lightstyle lerping - a bit uglier than I'd like
+				// but this should allow styles to change at 100 ms intervals
+				// like vanilla.
+				if (update_from) {
+					if (cl_lastlightstyleoffset != -1)
+						ls->from = ls->to;
 
-                    ls->to = ls->length ? ls->map[ofs % ls->length] : 1.0f;
+					ls->to = ls->length ? ls->map[ofs % ls->length] : 1.0f;
 
-                    if (cl_lastlightstyleoffset == -1)
-                        ls->from = ls->to;
+					if (cl_lastlightstyleoffset == -1)
+						ls->from = ls->to;
 
-                    if (ls->from != ls->to)
-                        ls->endtime = cl.time + 100;
-                }
+					if (ls->from != ls->to) {
+						int duration = 100;
 
-                if (ls->endtime > cl.time) {
-                    float frac = 1.0f - ((float) (ls->endtime - cl.time) / 100.f);
-                    value = LERP(ls->from, ls->to, frac);
-                }
-            } else if (ls->length)
-                value = ls->map[0];
+						if (ls->last_update_time)
+							duration = update_time - ls->last_update_time;
 
-            V_AddLightStyle(i, value);
-        }
-    } else {
-        for (i = 0, ls = cl_lightstyles; i < MAX_LIGHTSTYLES; i++, ls++) {
-            float value = ls->length ? ls->map[ofs % ls->length] : 1.0f;
-            V_AddLightStyle(i, value);
-        }
-    }
+						if (duration <= 0)
+							duration = 1;
 
-    if (update_from)
-        cl_lastlightstyleoffset = ofs;
+						ls->starttime = update_time;
+						ls->endtime = update_time + duration;
+					} else {
+						ls->starttime = ls->endtime = update_time;
+					}
+
+					ls->last_update_time = update_time;
+				}
+
+				if (ls->from != ls->to && ls->endtime > ls->starttime && ls->endtime > cl.time) {
+					float frac = (float)(cl.time - ls->starttime) / (float)(ls->endtime - ls->starttime);
+
+					if (frac < 0.0f)
+						frac = 0.0f;
+					else if (frac > 1.0f)
+						frac = 1.0f;
+
+					value = LERP(ls->from, ls->to, frac);
+				} else if (ls->length) {
+					value = ls->to;
+				}
+			} else if (ls->length) {
+				value = ls->map[0];
+			}
+
+			V_AddLightStyle(i, value);
+		}
+	} else {
+		for (i = 0, ls = cl_lightstyles; i < MAX_LIGHTSTYLES; i++, ls++) {
+			float value = ls->length ? ls->map[ofs % ls->length] : 1.0f;
+			V_AddLightStyle(i, value);
+		}
+	}
+
+	if (update_from)
+		cl_lastlightstyleoffset = ofs;
 }
 
 /*
