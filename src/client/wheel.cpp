@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <string>
 
 #include "client.hpp"
 #include "common/loc.hpp"
@@ -46,6 +47,7 @@ static cvar_t *wc_screen_frac_y;
 static cvar_t *wc_timeout;
 static cvar_t *wc_lock_time;
 static cvar_t *wc_ammo_scale;
+static cvar_t *wc_loc_file;
 
 namespace {
 using namespace std::chrono_literals;
@@ -56,93 +58,153 @@ constexpr float kSlowTimeActiveScale = 0.1f;
 
 void CL_SlowTime_Update()
 {
-    using std::chrono::duration;
-    using std::chrono::steady_clock;
+	using std::chrono::duration;
+	using std::chrono::steady_clock;
 
-    auto &slow = cl.slow_time;
-    const auto now = steady_clock::now();
+	auto &slow = cl.slow_time;
+	const auto now = steady_clock::now();
 
-    if (!slow.initialized) {
-        slow.initialized = true;
-        slow.factor = kSlowTimeInactiveScale;
-        slow.from = kSlowTimeInactiveScale;
-        slow.to = kSlowTimeInactiveScale;
-        slow.start = now;
-    }
+	if (!slow.initialized) {
+		slow.initialized = true;
+		slow.factor = kSlowTimeInactiveScale;
+		slow.from = kSlowTimeInactiveScale;
+		slow.to = kSlowTimeInactiveScale;
+		slow.start = now;
+}
 
-    const bool desired = cl.maxclients == 1 && cl.frame.ps.stats[STAT_SLOW_TIME];
-    if (desired != slow.desired) {
-        slow.desired = desired;
-        slow.from = slow.factor;
-        slow.to = desired ? kSlowTimeActiveScale : kSlowTimeInactiveScale;
-        slow.start = now;
-    }
+	const bool desired = cl.maxclients == 1 && cl.frame.ps.stats[STAT_SLOW_TIME];
+	if (desired != slow.desired) {
+		slow.desired = desired;
+		slow.from = slow.factor;
+		slow.to = desired ? kSlowTimeActiveScale : kSlowTimeInactiveScale;
+		slow.start = now;
+}
 
-    const auto elapsed = now - slow.start;
-    const float duration_seconds = duration<float>(kSlowTimeBlendDuration).count();
-    float progress = 1.0f;
-    if (duration_seconds > 0.0f) {
-        const float elapsed_seconds = duration<float>(elapsed).count();
-        progress = std::clamp(elapsed_seconds / duration_seconds, 0.0f, 1.0f);
-    }
+	const auto elapsed = now - slow.start;
+	const float duration_seconds = duration<float>(kSlowTimeBlendDuration).count();
+	float progress = 1.0f;
+	if (duration_seconds > 0.0f) {
+		const float elapsed_seconds = duration<float>(elapsed).count();
+		progress = std::clamp(elapsed_seconds / duration_seconds, 0.0f, 1.0f);
+}
 
-    slow.factor = std::lerp(slow.from, slow.to, progress);
-    slow.active = desired;
+	slow.factor = std::lerp(slow.from, slow.to, progress);
+	slow.active = desired;
 
-    if (progress >= 1.0f) {
-        slow.from = slow.to = slow.factor;
-        slow.start = now;
-    }
+	if (progress >= 1.0f) {
+		slow.from = slow.to = slow.factor;
+		slow.start = now;
+}
 }
 } // namespace
 
+/*
+=============
+CL_Wheel_ClearNameCache
+=============
+*/
+void CL_Wheel_ClearNameCache(void)
+{
+	cl.wheel.name_cache.strings.clear();
+	cl.wheel.name_cache.language_token.clear();
+}
+
+/*
+=============
+CL_Wheel_EnsureLanguageToken
+
+Make sure the cached language token matches the current language source.
+=============
+*/
+static void CL_Wheel_EnsureLanguageToken(void)
+{
+	if (!wc_loc_file)
+		wc_loc_file = Cvar_Get("loc_file", "localization/loc_english.txt", 0);
+	const char *language_token = wc_loc_file ? wc_loc_file->string : "";
+
+	if (cl.wheel.name_cache.language_token != language_token)
+		CL_Wheel_ClearNameCache();
+
+	cl.wheel.name_cache.language_token = language_token;
+}
+
+/*
+=============
+CL_Wheel_CacheLocalizedName
+
+Populate the localized cache entry for the given item index if missing.
+=============
+*/
+static void CL_Wheel_CacheLocalizedName(int item_index)
+{
+	CL_Wheel_EnsureLanguageToken();
+
+	if (cl.wheel.name_cache.strings.contains(item_index))
+		return;
+
+	char localized[CS_MAX_STRING_LENGTH];
+	Loc_Localize(cl.configstrings[cl.csr.items + item_index], false, NULL, 0, localized, sizeof(localized));
+	cl.wheel.name_cache.strings.emplace(item_index, localized);
+}
+
+/*
+=============
+CL_Wheel_GetCachedName
+=============
+*/
+static const char *CL_Wheel_GetCachedName(int item_index)
+{
+	CL_Wheel_CacheLocalizedName(item_index);
+	return cl.wheel.name_cache.strings.at(item_index).c_str();
+}
 static void CL_Carousel_Close(void)
 {
-    cl.carousel.state = WHEEL_CLOSED;
+	cl.carousel.state = WHEEL_CLOSED;
 }
 
 // populate slot list with stuff we own.
 // runs every frame and when we open the carousel.
 static bool CL_Carousel_Populate(void)
 {
-    int i;
+	int i;
 
-    cl.carousel.num_slots = 0;
+	cl.carousel.num_slots = 0;
 
-    int owned = cgame->GetOwnedWeaponWheelWeapons(&cl.frame.ps);
+	int owned = cgame->GetOwnedWeaponWheelWeapons(&cl.frame.ps);
 
-    for (i = 0; i < cl.wheel_data.num_weapons; i++) {
-        if (!(owned & BIT(i)))
-            continue;
+	for (i = 0; i < cl.wheel_data.num_weapons; i++) {
+		if (!(owned & BIT(i)))
+			continue;
 
-        cl.carousel.slots[cl.carousel.num_slots].data_id = i;
-        cl.carousel.slots[cl.carousel.num_slots].has_ammo = cl.wheel_data.weapons[i].ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, cl.wheel_data.weapons[i].ammo_index);
-        cl.carousel.slots[cl.carousel.num_slots].item_index = cl.wheel_data.weapons[i].item_index;
-        cl.carousel.num_slots++;
-    }
+		cl.carousel.slots[cl.carousel.num_slots].data_id = i;
+		cl.carousel.slots[cl.carousel.num_slots].has_ammo = cl.wheel_data.weapons[i].ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, cl.wheel_data.weapons[i].ammo_index);
+		cl.carousel.slots[cl.carousel.num_slots].item_index = cl.wheel_data.weapons[i].item_index;
+		CL_Wheel_CacheLocalizedName(cl.carousel.slots[cl.carousel.num_slots].item_index);
+		cl.carousel.num_slots++;
+	}
 
-    // todo: sort by sort_id
+	// todo: sort by sort_id
 
-    // todo: cl.wheel.powerups
+	// todo: cl.wheel.powerups
 
-    if (!cl.carousel.num_slots)
-        return false;
+	if (!cl.carousel.num_slots)
+		return false;
 
-    // check that we still have the item being selected
-    if (cl.carousel.selected == -1) {
-        cl.carousel.selected = cl.carousel.slots[0].item_index;
-    } else {
-        for (i = 0; i < cl.carousel.num_slots; i++)
-            if (cl.carousel.slots[i].item_index == cl.carousel.selected)
-                break;
-    }
+	// check that we still have the item being selected
+	if (cl.carousel.selected == -1) {
+		cl.carousel.selected = cl.carousel.slots[0].item_index;
+	} else {
+		for (i = 0; i < cl.carousel.num_slots; i++)
+		if (cl.carousel.slots[i].item_index == cl.carousel.selected)
+		break;
+	}
 
-    if (i == cl.carousel.num_slots) {
-        // TODO: maybe something smarter?
-        return false;
-    }
+	if (i == cl.carousel.num_slots) {
+		// TODO: maybe something smarter?
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 static void CL_Carousel_Open(void)
@@ -190,17 +252,11 @@ void CL_Carousel_Draw(void)
 
         R_DrawPicShadow(carousel_x, carousel_y, selected ? icons->selected : icons->wheel, 2);
         
-        if (selected) {
-            R_DrawPic(carousel_x - 1, carousel_y - 1, COLOR_WHITE, scr.carousel_selected);
-            
-            char localized[CS_MAX_STRING_LENGTH];
+if (selected) {
+R_DrawPic(carousel_x - 1, carousel_y - 1, COLOR_WHITE, scr.carousel_selected);
 
-            // TODO: cache localized item names in cl somewhere.
-            // make sure they get reset of language is changed.
-            Loc_Localize(cl.configstrings[cl.csr.items + cl.carousel.slots[i].item_index], false, NULL, 0, localized, sizeof(localized));
-
-            SCR_DrawString(center_x, carousel_y - 16, UI_CENTER | UI_DROPSHADOW, COLOR_WHITE, localized);
-        }
+SCR_DrawString(center_x, carousel_y - 16, UI_CENTER | UI_DROPSHADOW, COLOR_WHITE, CL_Wheel_GetCachedName(cl.carousel.slots[i].item_index));
+}
 
         if (weap->ammo_index >= 0) {
             int count = cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, weap->ammo_index);
@@ -316,31 +372,33 @@ static bool CL_Wheel_Populate(void)
     int owned = cgame->GetOwnedWeaponWheelWeapons(&cl.frame.ps);
     cl_wheel_slot_t *slot = cl.wheel.slots;
 
-    if (cl.wheel.is_powerup_wheel) {
-        const cl_wheel_powerup_t *powerup = cl.wheel_data.powerups;
+if (cl.wheel.is_powerup_wheel) {
+const cl_wheel_powerup_t *powerup = cl.wheel_data.powerups;
 
-        for (i = 0; i < cl.wheel_data.num_powerups; i++, slot++, cl.wheel.num_slots++, powerup++) {
-            slot->data_id = i;
-            slot->is_powerup = true;
-            slot->has_ammo = powerup->ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, powerup->ammo_index);
-            slot->item_index = powerup->item_index;
-            slot->has_item = cgame->GetPowerupWheelCount(&cl.frame.ps, i);
-            slot->sort_id = powerup->sort_id;
-            slot->icons = &powerup->icons;
-        }
-    } else {
-        const cl_wheel_weapon_t *weapon = cl.wheel_data.weapons;
+for (i = 0; i < cl.wheel_data.num_powerups; i++, slot++, cl.wheel.num_slots++, powerup++) {
+slot->data_id = i;
+slot->is_powerup = true;
+slot->has_ammo = powerup->ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, powerup->ammo_index);
+slot->item_index = powerup->item_index;
+slot->has_item = cgame->GetPowerupWheelCount(&cl.frame.ps, i);
+slot->sort_id = powerup->sort_id;
+slot->icons = &powerup->icons;
+CL_Wheel_CacheLocalizedName(slot->item_index);
+}
+} else {
+const cl_wheel_weapon_t *weapon = cl.wheel_data.weapons;
 
-        for (i = 0; i < cl.wheel_data.num_weapons; i++, slot++, cl.wheel.num_slots++, weapon++) {
-            slot->data_id = i;
-            slot->has_ammo = weapon->ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, weapon->ammo_index);
-            slot->item_index = weapon->item_index;
-            slot->has_item = (owned & BIT(i));
-            slot->is_powerup = false;
-            slot->sort_id = weapon->sort_id;
-            slot->icons = &weapon->icons;
-        }
-    }
+for (i = 0; i < cl.wheel_data.num_weapons; i++, slot++, cl.wheel.num_slots++, weapon++) {
+slot->data_id = i;
+slot->has_ammo = weapon->ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, weapon->ammo_index);
+slot->item_index = weapon->item_index;
+slot->has_item = (owned & BIT(i));
+slot->is_powerup = false;
+slot->sort_id = weapon->sort_id;
+slot->icons = &weapon->icons;
+CL_Wheel_CacheLocalizedName(slot->item_index);
+}
+}
 
     cl.wheel.slice_deg = ((M_PI * 2) / cl.wheel.num_slots);
     cl.wheel.slice_sin = cosf(cl.wheel.slice_deg / 2);
@@ -637,16 +695,11 @@ void CL_Wheel_Draw(void)
         bool warn_low = false;
         draw_wheel_slot(cl.wheel.selected, center_x, center_y, wheel_draw_size, wheel_alpha, &count, &warn_low);
 
-        const cl_wheel_slot_t *slot = &cl.wheel.slots[cl.wheel.selected];
-        char localized[CS_MAX_STRING_LENGTH];
+		const cl_wheel_slot_t *slot = &cl.wheel.slots[cl.wheel.selected];
 
-        // TODO: cache localized item names in cl somewhere.
-        // make sure they get reset of language is changed.
-        Loc_Localize(cl.configstrings[cl.csr.items + slot->item_index], false, NULL, 0, localized, sizeof(localized));
+		SCR_DrawString(center_x, center_y - (wheel_draw_size / 8), UI_CENTER | UI_DROPSHADOW, base_color, CL_Wheel_GetCachedName(slot->item_index));
 
-        SCR_DrawString(center_x, center_y - (wheel_draw_size / 8), UI_CENTER | UI_DROPSHADOW, base_color, localized);
-
-        int ammo_index;
+		int ammo_index;
 
         if (slot->is_powerup) {
             ammo_index = cl.wheel_data.powerups[slot->data_id].ammo_index;
@@ -690,13 +743,16 @@ void CL_Wheel_Precache(void)
 
 void CL_Wheel_Init(void)
 {
-    wc_screen_frac_y = Cvar_Get("wc_screen_frac_y", "0.72", 0);
-    wc_timeout = Cvar_Get("wc_timeout", "400", 0);
-    wc_lock_time = Cvar_Get("wc_lock_time", "300", 0);
-    wc_ammo_scale = Cvar_Get("wc_ammo_scale", "0.66", 0);
+	wc_screen_frac_y = Cvar_Get("wc_screen_frac_y", "0.72", 0);
+	wc_timeout = Cvar_Get("wc_timeout", "400", 0);
+	wc_lock_time = Cvar_Get("wc_lock_time", "300", 0);
+	wc_ammo_scale = Cvar_Get("wc_ammo_scale", "0.66", 0);
 
-    ww_timer_speed = Cvar_Get("ww_timer_speed", "3", 0);
-    ww_ammo_scale = Cvar_Get("ww_ammo_scale", "0.66", 0);
+	ww_timer_speed = Cvar_Get("ww_timer_speed", "3", 0);
+	ww_ammo_scale = Cvar_Get("ww_ammo_scale", "0.66", 0);
 
-    cl.wheel.timescale = 1.0f;
+	cl.wheel.timescale = 1.0f;
+
+	CL_Wheel_ClearNameCache();
+	CL_Wheel_EnsureLanguageToken();
 }
