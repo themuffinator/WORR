@@ -165,103 +165,115 @@ CL_LoadClientinfo
 */
 void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
 {
-    int         i;
-    char        model_name[MAX_QPATH];
-    char        skin_name[MAX_QPATH];
-    char        dogtag_name[MAX_QPATH];
-    char        model_filename[MAX_QPATH];
-    char        skin_filename[MAX_QPATH];
-    char        weapon_filename[MAX_QPATH];
-    char        icon_filename[MAX_QPATH];
-    char        dogtag_filename[MAX_QPATH];
-    bool        parse_dogtag = cls.serverProtocol == PROTOCOL_VERSION_RERELEASE;
+	int		i;
+	char		model_name[MAX_QPATH];
+	char		skin_name[MAX_QPATH];
+	char		dogtag_name[MAX_QPATH];
+	char		model_filename[MAX_QPATH];
+	char		skin_filename[MAX_QPATH];
+	char		weapon_filename[MAX_QPATH];
+	char		icon_filename[MAX_QPATH];
+	char		dogtag_filename[MAX_QPATH];
+	bool		parse_dogtag = cls.serverProtocol == PROTOCOL_VERSION_RERELEASE;
 
-    CL_ParsePlayerSkin(ci->name, model_name, skin_name, dogtag_name, parse_dogtag, s);
+	CL_ParsePlayerSkin(ci->name, model_name, skin_name, dogtag_name, parse_dogtag, s);
 
-    // model file
-    Q_concat(model_filename, sizeof(model_filename),
-             "players/", model_name, "/tris.md2");
-    ci->model = R_RegisterModel(model_filename);
-    if (!ci->model && Q_stricmp(model_name, "male")) {
-        strcpy(model_name, "male");
-        strcpy(model_filename, "players/male/tris.md2");
-        ci->model = R_RegisterModel(model_filename);
-    }
+	// model file
+	Q_concat(model_filename, sizeof(model_filename),
+		"players/", model_name, "/tris.md2");
+	if (COM_IsPath(model_filename))
+		ci->model = R_RegisterModel(model_filename);
+	else
+		ci->model = 0;
+	if (!ci->model && Q_stricmp(model_name, "male")) {
+		Q_strlcpy(model_name, "male", sizeof(model_name));
+		Q_strlcpy(model_filename, "players/male/tris.md2", sizeof(model_filename));
+		if (COM_IsPath(model_filename))
+			ci->model = R_RegisterModel(model_filename);
+	}
 
-    // skin file
-    Q_concat(skin_filename, sizeof(skin_filename),
-             "players/", model_name, "/", skin_name, ".pcx");
-    ci->skin = R_RegisterSkin(skin_filename);
+	// skin file
+	Q_concat(skin_filename, sizeof(skin_filename),
+		"players/", model_name, "/", skin_name, ".pcx");
+	if (COM_IsPath(skin_filename))
+		ci->skin = R_RegisterSkin(skin_filename);
+	else
+		ci->skin = 0;
 
-    // if we don't have the skin and the model was female,
-    // see if athena skin exists
-    if (!ci->skin && !Q_stricmp(model_name, "female")) {
-        strcpy(skin_name, "athena");
-        strcpy(skin_filename, "players/female/athena.pcx");
-        ci->skin = R_RegisterSkin(skin_filename);
-    }
+	// if we don't have the skin and the model was female,
+	// see if athena skin exists
+	if (!ci->skin && !Q_stricmp(model_name, "female")) {
+		Q_strlcpy(skin_name, "athena", sizeof(skin_name));
+		Q_strlcpy(skin_filename, "players/female/athena.pcx", sizeof(skin_filename));
+		if (COM_IsPath(skin_filename))
+			ci->skin = R_RegisterSkin(skin_filename);
+	}
 
-    // if we don't have the skin and the model wasn't male,
-    // see if the male has it (this is for CTF's skins)
-    if (!ci->skin && Q_stricmp(model_name, "male")) {
-        // change model to male
-        strcpy(model_name, "male");
-        strcpy(model_filename, "players/male/tris.md2");
-        ci->model = R_RegisterModel(model_filename);
+	// if we don't have the skin and the model wasn't male,
+	// see if the male has it (this is for CTF's skins)
+	if (!ci->skin && Q_stricmp(model_name, "male")) {
+		// change model to male
+		Q_strlcpy(model_name, "male", sizeof(model_name));
+		Q_strlcpy(model_filename, "players/male/tris.md2", sizeof(model_filename));
+		if (COM_IsPath(model_filename))
+			ci->model = R_RegisterModel(model_filename);
 
-        // see if the skin exists for the male model
-        Q_concat(skin_filename, sizeof(skin_filename),
-                 "players/male/", skin_name, ".pcx");
-        ci->skin = R_RegisterSkin(skin_filename);
-    }
+		// see if the skin exists for the male model
+		Q_concat(skin_filename, sizeof(skin_filename),
+			"players/male/", skin_name, ".pcx");
+		if (COM_IsPath(skin_filename))
+			ci->skin = R_RegisterSkin(skin_filename);
+	}
 
-    // if we still don't have a skin, it means that the male model
-    // didn't have it, so default to grunt
-    if (!ci->skin) {
-        // see if the skin exists for the male model
-        strcpy(skin_name, "grunt");
-        strcpy(skin_filename, "players/male/grunt.pcx");
-        ci->skin = R_RegisterSkin(skin_filename);
-    }
+	// if we still don't have a skin, it means that the male model
+	// didn't have it, so default to grunt
+	if (!ci->skin) {
+		// see if the skin exists for the male model
+		Q_strlcpy(skin_name, "grunt", sizeof(skin_name));
+		Q_strlcpy(skin_filename, "players/male/grunt.pcx", sizeof(skin_filename));
+		if (COM_IsPath(skin_filename))
+			ci->skin = R_RegisterSkin(skin_filename);
+	}
 
-    // weapon file
-    for (i = 0; i < cl.numWeaponModels; i++) {
-        Q_concat(weapon_filename, sizeof(weapon_filename),
-                 "players/", model_name, "/", cl.weaponModels[i]);
-        ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
-        if (!ci->weaponmodel[i] && !Q_stricmp(model_name, "cyborg")) {
-            // try male
-            Q_concat(weapon_filename, sizeof(weapon_filename),
-                     "players/male/", cl.weaponModels[i]);
-            ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
-        }
-    }
+	// weapon file
+	for (i = 0; i < cl.numWeaponModels; i++) {
+		Q_concat(weapon_filename, sizeof(weapon_filename),
+			"players/", model_name, "/", cl.weaponModels[i]);
+		ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
+		if (!ci->weaponmodel[i] && !Q_stricmp(model_name, "cyborg")) {
+			// try male
+			Q_concat(weapon_filename, sizeof(weapon_filename),
+				"players/male/", cl.weaponModels[i]);
+			ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
+		}
+	}
 
-    // icon file
-    Q_concat(icon_filename, sizeof(icon_filename),
-             "/players/", model_name, "/", skin_name, "_i.pcx");
-    Q_strlcpy(ci->icon_name, icon_filename, sizeof(ci->icon_name));
+	// icon file
+	Q_concat(icon_filename, sizeof(icon_filename),
+		"/players/", model_name, "/", skin_name, "_i.pcx");
+	Q_strlcpy(ci->icon_name, icon_filename, sizeof(ci->icon_name));
 
-    strcpy(ci->model_name, model_name);
-    strcpy(ci->skin_name, skin_name);
-    Q_concat(dogtag_filename, sizeof(dogtag_filename), dogtag_name, ".pcx");
-    Q_strlcpy(ci->dogtag_name, dogtag_filename, sizeof(ci->dogtag_name));
+	Q_strlcpy(ci->model_name, model_name, sizeof(ci->model_name));
+	Q_strlcpy(ci->skin_name, skin_name, sizeof(ci->skin_name));
+	Q_concat(dogtag_filename, sizeof(dogtag_filename), dogtag_name, ".pcx");
+	Q_strlcpy(ci->dogtag_name, dogtag_filename, sizeof(ci->dogtag_name));
 
-    // base info should be at least partially valid
-    if (ci == &cl.baseclientinfo)
-        return;
+	// base info should be at least partially valid
+	if (ci == &cl.baseclientinfo)
+		return;
 
-    // must have loaded all data types to be valid
-    if (!ci->skin || !ci->model || !ci->weaponmodel[0]) {
-        ci->skin = 0;
-        ci->icon_name[0] = 0;
-        ci->model = 0;
-        ci->weaponmodel[0] = 0;
-        ci->model_name[0] = 0;
-        ci->skin_name[0] = 0;
-        ci->dogtag_name[0] = 0;
-    }
+	// must have loaded all data types to be valid
+	if (!ci->skin || !ci->model || !ci->weaponmodel[0]) {
+		ci->skin = 0;
+		ci->icon_name[0] = 0;
+		ci->model = 0;
+		ci->weaponmodel[0] = 0;
+		ci->model_name[0] = 0;
+		ci->skin_name[0] = 0;
+		ci->dogtag_name[0] = 0;
+	}
 }
+
 
 /*
 =================
