@@ -901,46 +901,59 @@ void CL_BerserkSlamParticles(const vec3_t org, const vec3_t dir)
 ===============
 CL_PowerSplash
 
-TODO: differentiate screen/shield
+Power shield evaporation effect with distinct visuals for screen vs armor.
 ===============
 */
 void CL_PowerSplash(void)
 {
-    static const byte   colortable[4] = {208, 209, 210, 211};
-    int         i;
-    cparticle_t *p;
-    vec3_t      org, dir, mid;
-    centity_t   *ent;
+	static const byte	screen_colortable[4] = {0xb0, 0xb2, 0xb4, 0xb6};
+	static const byte	shield_colortable[4] = {208, 209, 210, 211};
+	int			i;
+	int			particle_count;
+	float			splash_radius;
+	cparticle_t		*p;
+	const byte		*colortable;
+	vec3_t			org, dir, mid;
+	centity_t		*ent;
 
-    if ((unsigned)te.entity1 >= cl.csr.max_edicts)
-        Com_Error(ERR_DROP, "%s: bad entity", __func__);
+	if ((unsigned)te.entity1 >= cl.csr.max_edicts)
+		Com_Error(ERR_DROP, "%s: bad entity", __func__);
 
-    ent = &cl_entities[te.entity1];
-    if (ent->serverframe != cl.frame.number)
-        return;
+	ent = &cl_entities[te.entity1];
+	if (ent->serverframe != cl.frame.number)
+		return;
 
-    VectorAvg(ent->mins, ent->maxs, mid);
-    VectorAdd(ent->current.origin, mid, org);
+	if (te.count == 1) {
+		colortable = screen_colortable;
+		particle_count = 192;
+		splash_radius = ent->radius * 0.75f;
+	} else {
+		colortable = shield_colortable;
+		particle_count = 256;
+		splash_radius = ent->radius * 1.25f;
+	}
 
-    for (i = 0; i < 256; i++) {
-        p = CL_AllocParticle();
-        if (!p)
-            return;
+	VectorAvg(ent->mins, ent->maxs, mid);
+	VectorAdd(ent->current.origin, mid, org);
 
-        p->time = cl.time;
-        p->color = colortable[Q_rand() & 3];
+	for (i = 0; i < particle_count; i++) {
+		p = CL_AllocParticle();
+		if (!p)
+			return;
 
-        RandomDir(dir);
-        VectorMA(org, ent->radius, dir, p->org);
-        VectorScale(dir, 40.0f, p->vel);
+		p->time = cl.time;
+		p->color = colortable[Q_rand() & 3];
 
-        VectorClear(p->accel);
-        p->alpha = 1.0f;
+		RandomDir(dir);
+		VectorMA(org, splash_radius, dir, p->org);
+		VectorScale(dir, 40.0f, p->vel);
 
-        p->alphavel = -1.0f / (0.5f + frand() * 0.3f);
-    }
+		VectorClear(p->accel);
+		p->alpha = 1.0f;
+
+		p->alphavel = -1.0f / (0.5f + frand() * 0.3f);
+	}
 }
-
 /*
 ===============
 CL_TeleporterParticles
