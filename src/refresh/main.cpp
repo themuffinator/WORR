@@ -1677,17 +1677,35 @@ static void R_StoreMotionBlurHistory(void)
 	GLint prev_fbo = 0;
 	qglGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
 
+	GLint prev_viewport[4] = { 0, 0, 0, 0 };
+	qglGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+	GLboolean scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = { 0, 0, 0, 0 };
+	if (scissor_enabled)
+		qglGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
+
 	int composite_x = 0;
 	int composite_y = 0;
 	int composite_w = 0;
 	int composite_h = 0;
 	R_GetFinalCompositeRect(&composite_x, &composite_y, &composite_w, &composite_h);
-	if (composite_w <= 0 || composite_h <= 0)
+	if (composite_w <= 0 || composite_h <= 0) {
+		qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+		if (scissor_enabled) {
+			qglScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+			qglEnable(GL_SCISSOR_TEST);
+		} else {
+			qglDisable(GL_SCISSOR_TEST);
+		}
 		return;
+	}
 
 	const int target_index = glr.motion_blur_history_index;
 
 	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_MOTION_HISTORY(target_index));
+	if (scissor_enabled)
+		qglDisable(GL_SCISSOR_TEST);
 	qglViewport(0, 0, composite_w, composite_h);
 	GL_Ortho(0, composite_w, composite_h, 0, -1, 1);
 	GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
@@ -1696,6 +1714,14 @@ static void R_StoreMotionBlurHistory(void)
 		glr.framebuffer_u_max, glr.framebuffer_v_max);
 	qglBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
 	GL_Setup2D();
+
+	qglViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+	if (scissor_enabled) {
+		qglScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+		qglEnable(GL_SCISSOR_TEST);
+	} else {
+		qglDisable(GL_SCISSOR_TEST);
+	}
 
 	(void)composite_x;
 	(void)composite_y;
