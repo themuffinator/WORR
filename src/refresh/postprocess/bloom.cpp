@@ -352,20 +352,22 @@ void BloomEffect::render(const BloomRenderContext& ctx)
 		GL_ActiveTexture(prevActiveTmu);
 	};
 
+	static bool missingSceneTextureLogged = false;
+	if (ctx.sceneTexture == 0) {
+		if (!missingSceneTextureLogged && gl_showerrors->integer) {
+			Com_EPrintf("BloomEffect: scene texture unavailable; skipping bloom pass\n");
+			missingSceneTextureLogged = true;
+		}
+		restoreState();
+		return;
+	}
+
 	if (ctx.viewportWidth <= 0 || ctx.viewportHeight <= 0) {
 		restoreState();
 		return;
 	}
 
 	const bool canRunDepthOfField = ctx.depthOfField && !ctx.showDebug && ctx.runDepthOfField;
-	if (ctx.sceneTexture == 0) {
-		if (canRunDepthOfField)
-			ctx.runDepthOfField();
-		CompositeBloom(ctx, ctx.sceneTexture, ctx.showDebug ? ctx.bloomTexture : 0, false);
-		GL_ShowErrors("Bloom pass");
-		restoreState();
-		return;
-	}
 
 	const bool bloomReady = initialized_ && downsampleWidth_ > 0 && downsampleHeight_ > 0 && ctx.bloomTexture != 0;
 	const auto runDepthOfField = [&]() {
