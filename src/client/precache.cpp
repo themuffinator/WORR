@@ -771,7 +771,9 @@ A configstring update has been parsed.
 */
 void CL_UpdateConfigstring(int index)
 {
-    update_configstring(index);
+	update_configstring(index);
 
-    cgame->ParseConfigString(index, cl.configstrings[index]);
+	cgame->ParseConfigString(index, cl.configstrings[index]);
+
+	CL_Wheel_ClearNameCache();
 }

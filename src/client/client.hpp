@@ -452,6 +452,11 @@ typedef struct client_state_s {
 
 		int         selected; // -1 = no selection
 		int         deselect_time; // if non-zero, deselect after < com_localTime
+
+		struct {
+			std::unordered_map<int, std::string> strings;
+			std::string language_token;
+		} name_cache;
 	} wheel;
 
 	int weapon_lock_time; // don't allow BUTTON_ATTACK within this time
@@ -959,6 +964,7 @@ void CL_Wheel_Draw(void);
 void CL_Wheel_Update(void);
 void CL_Wheel_ClearInput(void);
 float CL_Wheel_TimeScale(void);
+void CL_Wheel_ClearNameCache(void);
 
 //
 // tent.c
