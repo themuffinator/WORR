@@ -595,7 +595,12 @@ endif
 openal = dependency('openal',
   version:         '>= 1.23.1',
   required:        get_option('openal'),
-  default_options: fallback_opt,
+  default_options: fallback_opt + [
+    'c_args=/wd4244',
+    'cpp_args=/wd4244',
+    'c_link_args=/IGNORE:4044',
+    'cpp_link_args=/IGNORE:4044',
+  ],
 )
 if openal.found()
   client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.hpp' ]
@@ -670,6 +675,15 @@ ffmpeg_defaults = [
   'encoders=disabled',
   'muxers=disabled',
 ]
+
+if cc.get_id() == 'msvc'
+  ffmpeg_defaults += [
+    'c_args=/wd4113 /wd4244',
+    'cpp_args=/wd4244',
+    'c_link_args=/IGNORE:4044',
+    'cpp_link_args=/IGNORE:4044',
+  ]
+endif
 avcodec_opt = get_option('avcodec')
 avcodec = dependency('libavcodec', version: '>= 59.37.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 avformat = dependency('libavformat', version: '>= 59.27.100', default_options: ffmpeg_defaults, required: avcodec_opt)
