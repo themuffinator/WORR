@@ -2683,7 +2683,40 @@ static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 		return 0;
 	if (LittleLong(magic) != ZIP_ENDHEADER64MAGIC)
 		return 0;
-	return seek_pos;
+return seek_pos;
+}
+
+/*
+=============
+parse_zip64_extra_data
+
+Parse the Zip64 extended information extra field to populate file metadata.
+=============
+*/
+static bool parse_zip64_extra_data(packfile_t *file, const byte *extra, int size)
+{
+	int offset = 0;
+
+	if (file->filelen == UINT32_MAX) {
+		if (offset + 8 > size)
+			return false;
+		file->filelen = RL64(&extra[offset]);
+		offset += 8;
+	}
+	if (file->complen == UINT32_MAX) {
+		if (offset + 8 > size)
+			return false;
+		file->complen = RL64(&extra[offset]);
+		offset += 8;
+	}
+	if (file->filepos == UINT32_MAX) {
+		if (offset + 8 > size)
+			return false;
+		file->filepos = RL64(&extra[offset]);
+		offset += 8;
+	}
+
+	return true;
 }
 
 /*
