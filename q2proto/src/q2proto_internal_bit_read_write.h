@@ -33,6 +33,10 @@ typedef struct bitwriter_s {
 	uint32_t left;
 } bitwriter_t;
 
+#define BITWRITER_MAX_BITS 31
+
+_Static_assert(BITWRITER_MAX_BITS > 0 && BITWRITER_MAX_BITS < 32, "bitwriter max bits must be within word size");
+
 /*
 =============
 bitwriter_init
@@ -56,7 +60,11 @@ Write a value encoded in the specified number of bits to the buffer.
 */
 static inline q2proto_error_t bitwriter_write(bitwriter_t *bitwriter, int value, int bits)
 {
-	assert(bits != 0 && bits >= -31 && bits <= 31);
+	assert(bits != 0 && bits >= -BITWRITER_MAX_BITS && bits <= BITWRITER_MAX_BITS);
+
+	if (bits == 0 || bits < -BITWRITER_MAX_BITS || bits > BITWRITER_MAX_BITS) {
+		return Q2P_ERR_BAD_DATA;
+	}
 
 	if (bits < 0) {
 		bits = -bits;
