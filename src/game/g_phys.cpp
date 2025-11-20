@@ -356,9 +356,11 @@ retry:
 }
 
 typedef struct {
-    edict_t *ent;
-    vec3_t  origin;
-    vec3_t  angles;
+	edict_t *ent;
+	vec3_t	origin;
+	vec3_t	angles;
+	vec3_t	delta_origin;
+	vec3_t	delta_angles;
 } pushed_t;
 
 static pushed_t     pushed[MAX_EDICTS], *pushed_p;
@@ -401,6 +403,8 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
     pushed_p->ent = pusher;
     VectorCopy(pusher->s.origin, pushed_p->origin);
     VectorCopy(pusher->s.angles, pushed_p->angles);
+	VectorCopy(move, pushed_p->delta_origin);
+	VectorCopy(amove, pushed_p->delta_angles);
     pushed_p++;
 
 // move the pusher to it's final position
@@ -443,6 +447,8 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
             pushed_p->ent = check;
             VectorCopy(check->s.origin, pushed_p->origin);
             VectorCopy(check->s.angles, pushed_p->angles);
+	VectorClear(pushed_p->delta_origin);
+	VectorClear(pushed_p->delta_angles);
             pushed_p++;
 
             // try moving the contacted entity
@@ -455,6 +461,9 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
             org2[2] = DotProduct(org, up);
             VectorSubtract(org2, org, move2);
             VectorAdd(check->s.origin, move2, check->s.origin);
+
+	VectorAdd(move, move2, (pushed_p - 1)->delta_origin);
+	VectorClear((pushed_p - 1)->delta_angles);
 
             // may have pushed them off an edge
             if (check->groundentity != pusher)
@@ -470,8 +479,8 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
 
             // if it is ok to leave in the old position, do it
             // this is only relevant for riding entities, not pushed
-            // FIXME: this doesn't account for rotation
-            VectorSubtract(check->s.origin, move, check->s.origin);
+	VectorSubtract(check->s.origin, (pushed_p - 1)->delta_origin, check->s.origin);
+	VectorSubtract(check->s.angles, (pushed_p - 1)->delta_angles, check->s.angles);
             block = SV_TestEntityPosition(check);
             if (!block) {
                 pushed_p--;
