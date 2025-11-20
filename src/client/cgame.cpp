@@ -481,10 +481,19 @@ static int32_t CG_SCR_DrawBind(int32_t isplit, const char* binding, const char* 
 	return CONCHAR_HEIGHT;
 }
 
+/*
+=============
+CG_CL_InAutoDemoLoop
+
+Returns true when the client is currently running a demo with a pending
+`nextserver` command, indicating it is in an auto-demo playback loop.
+=============
+*/
 static bool CG_CL_InAutoDemoLoop(void)
 {
-	// FIXME: implement
-	return false;
+	const char* nextserver = Cvar_VariableString("nextserver");
+
+	return cls.demo.playback && nextserver[0] != '\0';
 }
 
 const cgame_export_t* cgame = NULL;
