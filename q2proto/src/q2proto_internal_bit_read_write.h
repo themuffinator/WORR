@@ -25,108 +25,153 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef Q2PROTO_INTERNAL_BIT_READ_WRITE_H_
 #define Q2PROTO_INTERNAL_BIT_READ_WRITE_H_
 
+#include <assert.h>
+
 typedef struct bitwriter_s {
-    uintptr_t io_arg;
-    uint32_t buf;
-    uint32_t left;
+	uintptr_t io_arg;
+	uint32_t buf;
+	uint32_t left;
 } bitwriter_t;
 
+/*
+=============
+bitwriter_init
+
+Initialize a bitwriter with the provided IO argument.
+=============
+*/
 static inline void bitwriter_init(bitwriter_t *bitwriter, uintptr_t io_arg)
 {
-    bitwriter->io_arg = io_arg;
-    bitwriter->buf = 0;
-    bitwriter->left = 32;
+	bitwriter->io_arg = io_arg;
+	bitwriter->buf = 0;
+	bitwriter->left = 32;
 }
 
+/*
+=============
+bitwriter_write
+
+Write a value encoded in the specified number of bits to the buffer.
+=============
+*/
 static inline q2proto_error_t bitwriter_write(bitwriter_t *bitwriter, int value, int bits)
 {
-    if (bits == 0 || bits < -31 || bits > 31) // FIXME?: assert
-        return Q2P_ERR_BAD_DATA;
+	assert(bits != 0 && bits >= -31 && bits <= 31);
 
-    if (bits < 0) {
-        bits = -bits;
-    }
+	if (bits < 0) {
+		bits = -bits;
+	}
 
-    uint32_t bits_buf = bitwriter->buf;
-    uint32_t bits_left = bitwriter->left;
-    uint32_t v = value & ((1U << bits) - 1);
+	uint32_t bits_buf = bitwriter->buf;
+	uint32_t bits_left = bitwriter->left;
+	uint32_t v = value & ((1U << bits) - 1);
 
-    bits_buf |= v << (32 - bits_left);
-    if (bits >= bits_left) {
-        WRITE_CHECKED(client_write, bitwriter->io_arg, u32, bits_buf);
-        bits_buf = v >> bits_left;
-        bits_left += 32;
-    }
-    bits_left -= bits;
+	bits_buf |= v << (32 - bits_left);
+	if (bits >= bits_left) {
+		WRITE_CHECKED(client_write, bitwriter->io_arg, u32, bits_buf);
+		bits_buf = v >> bits_left;
+		bits_left += 32;
+	}
+	bits_left -= bits;
 
-    bitwriter->buf = bits_buf;
-    bitwriter->left = bits_left;
-    return Q2P_ERR_SUCCESS;
+	bitwriter->buf = bits_buf;
+	bitwriter->left = bits_left;
+	return Q2P_ERR_SUCCESS;
 }
 
+/*
+=============
+bitwriter_flush
+
+Flush any pending bits to the output.
+=============
+*/
 static inline q2proto_error_t bitwriter_flush(bitwriter_t *bitwriter)
 {
-    uint32_t bits_buf = bitwriter->buf;
-    uint32_t bits_left = bitwriter->left;
+	uint32_t bits_buf = bitwriter->buf;
+	uint32_t bits_left = bitwriter->left;
 
-    while (bits_left < 32) {
-        WRITE_CHECKED(client_write, bitwriter->io_arg, u8, bits_buf & 255);
-        bits_buf >>= 8;
-        bits_left += 8;
-    }
+	while (bits_left < 32) {
+		WRITE_CHECKED(client_write, bitwriter->io_arg, u8, bits_buf & 255);
+		bits_buf >>= 8;
+		bits_left += 8;
+	}
 
-    bitwriter->buf = 0;
-    bitwriter->left = 32;
-    return Q2P_ERR_SUCCESS;
+	bitwriter->buf = 0;
+	bitwriter->left = 32;
+	return Q2P_ERR_SUCCESS;
 }
 
 typedef struct bitreader_s {
-    uintptr_t io_arg;
-    uint32_t buf;
-    uint32_t left;
+	uintptr_t io_arg;
+	uint32_t buf;
+	uint32_t left;
 } bitreader_t;
 
+/*
+=============
+bitreader_init
+
+Initialize a bitreader with the provided IO argument.
+=============
+*/
 static inline void bitreader_init(bitreader_t *bitreader, uintptr_t io_arg)
 {
-    bitreader->io_arg = io_arg;
-    bitreader->buf = 0;
-    bitreader->left = 0;
+	bitreader->io_arg = io_arg;
+	bitreader->buf = 0;
+	bitreader->left = 0;
 }
 
-static inline int32_t sign_extend(uint32_t v, int bits) { return (int32_t)(v << (32 - bits)) >> (32 - bits); }
+/*
+=============
+sign_extend
 
+Sign-extend a value using the provided bit width.
+=============
+*/
+static inline int32_t sign_extend(uint32_t v, int bits)
+{
+	return (int32_t)(v << (32 - bits)) >> (32 - bits);
+}
+
+/*
+=============
+bitreader_read
+
+Read a value encoded in the specified number of bits from the buffer.
+=============
+*/
 // positive bits: read unsigned. negative bits: read signed.
 static inline q2proto_error_t bitreader_read(bitreader_t *bitreader, int bits, int *value)
 {
-    bool sgn = false;
+	bool sgn = false;
 
-    if (bits == 0 || bits < -25 || bits > 25) // FIXME?: assert
-        return Q2P_ERR_BAD_DATA;
+	assert(bits != 0 && bits >= -25 && bits <= 25);
 
-    if (bits < 0) {
-        bits = -bits;
-        sgn = true;
-    }
+	if (bits < 0) {
+		bits = -bits;
+		sgn = true;
+	}
 
-    uint32_t bits_buf = bitreader->buf;
-    uint32_t bits_left = bitreader->left;
+	uint32_t bits_buf = bitreader->buf;
+	uint32_t bits_left = bitreader->left;
 
-    while (bits > bits_left) {
-        uint8_t new_byte;
-        READ_CHECKED(server_read, bitreader->io_arg, new_byte, u8);
-        bits_buf |= new_byte << bits_left;
-        bits_left += 8;
-    }
+	while (bits > bits_left) {
+		uint8_t new_byte;
+		READ_CHECKED(server_read, bitreader->io_arg, new_byte, u8);
+		bits_buf |= new_byte << bits_left;
+		bits_left += 8;
+	}
 
-    *value = bits_buf & ((1U << bits) - 1);
+	*value = bits_buf & ((1U << bits) - 1);
 
-    bitreader->buf = bits_buf >> bits;
-    bitreader->left = bits_left - bits;
+	bitreader->buf = bits_buf >> bits;
+	bitreader->left = bits_left - bits;
 
-    if (sgn)
-        *value = sign_extend(*value, bits);
+	if (sgn)
+		*value = sign_extend(*value, bits);
 
-    return Q2P_ERR_SUCCESS;
+	return Q2P_ERR_SUCCESS;
 }
 
 #endif // Q2PROTO_INTERNAL_BIT_READ_WRITE_H_
