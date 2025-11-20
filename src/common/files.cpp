@@ -2075,51 +2075,75 @@ fail:
 }
 
 // writing to outside of destination directory is disallowed, extension is forced
-static qhandle_t easy_open_write(char *buf, size_t size, unsigned mode,
-                                 const char *dir, const char *name, const char *ext)
+/*
+============
+easy_build_write_path
+
+Build the destination path for easy write helpers.
+============
+*/
+static int easy_build_write_path(char *buf, size_t size, unsigned mode,
+				 const char *dir, const char *name, const char *ext)
 {
-    std::array<char, MAX_OSPATH> normalized;
-    int64_t ret = Q_ERR(ENAMETOOLONG);
-    qhandle_t f;
+	std::array<char, MAX_OSPATH> normalized;
+	int ret = Q_ERR(ENAMETOOLONG);
+	const char *error_name = name;
 
-    // make it impossible to escape the destination directory when writing files
-    if (FS_NormalizePathBuffer(normalized.data(), name, normalized.size()) >= normalized.size()) {
-        goto fail;
-    }
+	// make it impossible to escape the destination directory when writing files
+	if (FS_NormalizePathBuffer(normalized.data(), name, normalized.size()) >= normalized.size()) {
+		goto fail;
+	}
 
-    // reject empty filenames
-    if (normalized[0] == 0) {
-        ret = Q_ERR_INVALID_PATH;
-        goto fail;
-    }
+	// reject empty filenames
+	if (normalized[0] == 0) {
+		ret = Q_ERR_INVALID_PATH;
+		goto fail;
+	}
 
-    // in case of error, print full path from this point
-    name = buf;
+	// in case of error, print full path from this point
+	error_name = buf;
 
-    // replace any bad characters with underscores to make automatic commands happy
-    FS_CleanupPath(normalized.data());
+	// replace any bad characters with underscores to make automatic commands happy
+	FS_CleanupPath(normalized.data());
 
-    if (Q_concat(buf, size, dir, normalized.data()) >= size) {
-        goto fail;
-    }
+	if (Q_concat(buf, size, dir, normalized.data()) >= size) {
+		goto fail;
+	}
 
-    // append the extension unless name already has it
-    if (COM_CompareExtension(normalized.data(), ext) && Q_strlcat(buf, ext, size) >= size) {
-        goto fail;
-    }
+	// append the extension unless name already has it
+	if (COM_CompareExtension(normalized.data(), ext) && Q_strlcat(buf, ext, size) >= size) {
+		goto fail;
+	}
 
-    if ((mode & FS_FLAG_GZIP) && Q_strlcat(buf, ".gz", size) >= size) {
-        goto fail;
-    }
+	if ((mode & FS_FLAG_GZIP) && Q_strlcat(buf, ".gz", size) >= size) {
+		goto fail;
+	}
 
-    ret = FS_OpenFile(buf, &f, mode);
-    if (f) {
-        return f;
-    }
+	return Q_ERR_SUCCESS;
 
 fail:
-    Com_EPrintf("Couldn't open %s: %s\n", name, Q_ErrorString(ret));
-    return 0;
+	Com_EPrintf("Couldn't open %s: %s\n", error_name, Q_ErrorString(ret));
+	return ret;
+}
+
+static qhandle_t easy_open_write(char *buf, size_t size, unsigned mode,
+				 const char *dir, const char *name, const char *ext)
+{
+	qhandle_t f;
+	int ret;
+
+	ret = easy_build_write_path(buf, size, mode, dir, name, ext);
+	if (ret) {
+		return 0;
+	}
+
+	ret = FS_OpenFile(buf, &f, mode);
+	if (f) {
+		return f;
+	}
+
+	Com_EPrintf("Couldn't open %s: %s\n", buf, Q_ErrorString(ret));
+	return 0;
 }
 
 /*
@@ -2242,9 +2266,87 @@ done:
 
 static int write_and_close(const void *data, size_t len, qhandle_t f)
 {
-    int ret1 = FS_Write(data, len, f);
-    int ret2 = FS_CloseFile(f);
-    return ret1 < 0 ? ret1 : ret2;
+	int ret1 = FS_Write(data, len, f);
+	int ret2 = FS_CloseFile(f);
+	return ret1 < 0 ? ret1 : ret2;
+}
+
+/*
+================
+build_absolute_path
+
+Normalize quake path and build absolute filesystem path.
+================
+*/
+static int build_absolute_path(char *buffer, const char *path)
+{
+	std::array<char, MAX_OSPATH> normalized;
+
+	if (FS_NormalizePathBuffer(normalized.data(), path, normalized.size()) >= normalized.size())
+		return Q_ERR(ENAMETOOLONG);
+
+	if (!FS_ValidatePath(normalized.data()))
+		return Q_ERR_INVALID_PATH;
+
+	if (Q_concat(buffer, MAX_OSPATH, fs_gamedir, "/", normalized.data()) >= MAX_OSPATH)
+		return Q_ERR(ENAMETOOLONG);
+
+	return Q_ERR_SUCCESS;
+}
+
+/*
+================
+write_temp_file
+
+Write data to a temporary file in the same directory and atomically rename
+it into place.
+================
+*/
+static int write_temp_file(const char *path, const void *data, size_t len, unsigned mode)
+{
+	std::array<char, MAX_QPATH> tempquake;
+	std::array<char, MAX_OSPATH> temppath;
+	std::array<char, MAX_OSPATH> finalpath;
+	qhandle_t f;
+	int ret;
+
+	ret = build_absolute_path(finalpath.data(), path);
+	if (ret)
+		return ret;
+
+	for (int attempt = 0; attempt < 16; attempt++) {
+		uint32_t suffix = Q_rand_uniform(0x10000000u);
+
+		if (Q_snprintf(tempquake.data(), tempquake.size(), "%s.tmp-%08x", path, suffix) >= tempquake.size())
+			return Q_ERR(ENAMETOOLONG);
+
+		ret = build_absolute_path(temppath.data(), tempquake.data());
+		if (ret)
+			return ret;
+
+		ret = FS_OpenFile(tempquake.data(), &f, mode | FS_FLAG_EXCL);
+		if (!f) {
+			if (ret == Q_ERR(EEXIST))
+				continue;
+			return ret;
+		}
+
+		ret = write_and_close(data, len, f);
+		if (ret < 0) {
+			remove(temppath.data());
+			return ret;
+		}
+
+		if (rename(temppath.data(), finalpath.data())) {
+			ret = Q_ERRNO;
+			remove(temppath.data());
+			return ret;
+		}
+
+		return ret;
+	}
+
+	return Q_ERR(EEXIST);
 }
 
 /*
@@ -2254,15 +2356,7 @@ FS_WriteFile
 */
 int FS_WriteFile(const char *path, const void *data, size_t len)
 {
-    qhandle_t f;
-    int ret;
-
-    // TODO: write to temp file perhaps?
-    ret = FS_OpenFile(path, &f, FS_MODE_WRITE);
-    if (f) {
-        ret = write_and_close(data, len, f);
-    }
-    return ret;
+	return write_temp_file(path, data, len, FS_MODE_WRITE);
 }
 
 /*
@@ -2275,44 +2369,26 @@ to write the file, printing an error message in case of failure.
 ============
 */
 bool FS_EasyWriteFile(char *buf, size_t size, unsigned mode,
-                      const char *dir, const char *name, const char *ext,
-                      const void *data, size_t len)
+				 const char *dir, const char *name, const char *ext,
+				 const void *data, size_t len)
 {
-    qhandle_t f;
-    int ret;
+	int ret;
 
-    // TODO: write to temp file perhaps?
-    f = easy_open_write(buf, size, mode, dir, name, ext);
-    if (!f) {
-        return false;
-    }
+	ret = easy_build_write_path(buf, size, mode, dir, name, ext);
+	if (ret) {
+		return false;
+	}
 
-    ret = write_and_close(data, len, f);
-    if (ret < 0) {
-        Com_EPrintf("Couldn't write %s: %s\n", buf, Q_ErrorString(ret));
-        return false;
-    }
+	ret = write_temp_file(buf, data, len, mode);
+	if (ret < 0) {
+		Com_EPrintf("Couldn't write %s: %s\n", buf, Q_ErrorString(ret));
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 #if USE_CLIENT
-
-static int build_absolute_path(char *buffer, const char *path)
-{
-    std::array<char, MAX_OSPATH> normalized;
-
-    if (FS_NormalizePathBuffer(normalized.data(), path, normalized.size()) >= normalized.size())
-        return Q_ERR(ENAMETOOLONG);
-
-    if (!FS_ValidatePath(normalized.data()))
-        return Q_ERR_INVALID_PATH;
-
-    if (Q_concat(buffer, MAX_OSPATH, fs_gamedir, "/", normalized.data()) >= MAX_OSPATH)
-        return Q_ERR(ENAMETOOLONG);
-
-    return Q_ERR_SUCCESS;
-}
 
 /*
 ================
