@@ -296,7 +296,7 @@ typedef struct client_state_s {
 	int             keyservertime;
 #endif
 
-	size_t          dcs[BC_COUNT(MAX_CONFIGSTRINGS)];
+	size_t          dcs[BC_COUNT(MAX_MAX_CONFIGSTRINGS)];
 
 	// the client maintains its own idea of view angles, which are
 	// sent to the server each frame.  It is cleared to 0 upon entering each level.
@@ -355,8 +355,8 @@ typedef struct client_state_s {
 	frametime_t frametime;
 	float       frametime_inv;  // 1/frametime
 
-	configstring_t  baseconfigstrings[MAX_CONFIGSTRINGS];
-	configstring_t  configstrings[MAX_CONFIGSTRINGS];
+	configstring_t  baseconfigstrings[MAX_MAX_CONFIGSTRINGS];
+	configstring_t  configstrings[MAX_MAX_CONFIGSTRINGS];
 	cs_remap_t      csr;
 	q2proto_game_api_t game_api;
 
@@ -376,7 +376,7 @@ typedef struct client_state_s {
 	const mmodel_t* model_clip[MAX_MODELS];
 
 	qhandle_t sound_precache[MAX_SOUNDS];
-	qhandle_t image_precache[MAX_IMAGES];
+	qhandle_t image_precache[MAX_IMAGES_EX];
 	qhandle_t sfx_hit_marker;
 
 	clientinfo_t    clientinfo[MAX_CLIENTS];

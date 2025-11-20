@@ -163,9 +163,9 @@ typedef struct mvd_s {
     vec3_t          spawnOrigin;
     vec3_t          spawnAngles;
     pmtype_t        pm_type;
-    size_t          dcs[BC_COUNT(MAX_CONFIGSTRINGS)];
-    configstring_t  baseconfigstrings[MAX_CONFIGSTRINGS];
-    configstring_t  configstrings[MAX_CONFIGSTRINGS];
+    size_t          dcs[BC_COUNT(MAX_MAX_CONFIGSTRINGS)];
+    configstring_t  baseconfigstrings[MAX_MAX_CONFIGSTRINGS];
+    configstring_t  configstrings[MAX_MAX_CONFIGSTRINGS];
     const cs_remap_t *csr;
     msgEsFlags_t    esFlags;
     msgPsFlags_t    psFlags;

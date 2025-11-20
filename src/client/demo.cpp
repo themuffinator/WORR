@@ -447,7 +447,7 @@ static const cmd_option_t o_record[] = {
 };
 
 // Data needed for write_gamestate in CL_Record_f. Too large for stack, so store statically.
-static q2proto_svc_configstring_t configstrings[MAX_CONFIGSTRINGS];
+static q2proto_svc_configstring_t configstrings[MAX_MAX_CONFIGSTRINGS];
 static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
 /*

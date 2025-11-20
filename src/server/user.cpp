@@ -101,7 +101,7 @@ static void SV_CreateBaselines(void)
 }
 
 // Data needed for write_gamestate. Too large for stack, so store statically.
-static q2proto_svc_configstring_t configstrings[MAX_CONFIGSTRINGS];
+static q2proto_svc_configstring_t configstrings[MAX_MAX_CONFIGSTRINGS];
 static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
 /*
