@@ -356,9 +356,10 @@ retry:
 }
 
 typedef struct {
-    edict_t *ent;
-    vec3_t  origin;
-    vec3_t  angles;
+	edict_t *ent;
+	vec3_t	origin;
+	vec3_t	angles;
+	bool	moved;
 } pushed_t;
 
 static pushed_t     pushed[MAX_EDICTS], *pushed_p;
@@ -398,15 +399,18 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
     AngleVectors(org, forward, right, up);
 
 // save the pusher's original position
-    pushed_p->ent = pusher;
-    VectorCopy(pusher->s.origin, pushed_p->origin);
-    VectorCopy(pusher->s.angles, pushed_p->angles);
-    pushed_p++;
+	pushed_p->ent = pusher;
+	VectorCopy(pusher->s.origin, pushed_p->origin);
+	VectorCopy(pusher->s.angles, pushed_p->angles);
+	pushed_p->moved = false;
+	pushed_p++;
 
 // move the pusher to it's final position
-    VectorAdd(pusher->s.origin, move, pusher->s.origin);
-    VectorAdd(pusher->s.angles, amove, pusher->s.angles);
-    gi.linkentity(pusher);
+	VectorAdd(pusher->s.origin, move, pusher->s.origin);
+	VectorAdd(pusher->s.angles, amove, pusher->s.angles);
+	(pushed_p - 1)->moved = (!VectorCompare(pusher->s.origin, (pushed_p - 1)->origin)
+		|| !VectorCompare(pusher->s.angles, (pushed_p - 1)->angles));
+	gi.linkentity(pusher);
 
 // see if any solid entities are inside the final position
     check = g_edicts + 1;
@@ -443,6 +447,7 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
             pushed_p->ent = check;
             VectorCopy(check->s.origin, pushed_p->origin);
             VectorCopy(check->s.angles, pushed_p->angles);
+			pushed_p->moved = false;
             pushed_p++;
 
             // try moving the contacted entity
@@ -455,6 +460,8 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
             org2[2] = DotProduct(org, up);
             VectorSubtract(org2, org, move2);
             VectorAdd(check->s.origin, move2, check->s.origin);
+			(pushed_p - 1)->moved = (!VectorCompare(check->s.origin, (pushed_p - 1)->origin)
+				|| !VectorCompare(check->s.angles, (pushed_p - 1)->angles));
 
             // may have pushed them off an edge
             if (check->groundentity != pusher)
@@ -496,8 +503,11 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
 
 //FIXME: is there a better way to handle this?
     // see if anything we moved has touched a trigger
-    for (i = (pushed_p - pushed) - 1; i >= 0; i--)
-        G_TouchTriggers(pushed[i].ent);
+	for (i = (pushed_p - pushed) - 1; i >= 0; i--) {
+		p = &pushed[i];
+		if (p->moved && p->ent->inuse)
+			G_TouchTriggers(p->ent);
+	}
 
     return true;
 }
