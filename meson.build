@@ -447,6 +447,32 @@ texture_formats = []
 
 fallback_opt = ['default_library=static']
 
+msvc_c_suppressions = []
+msvc_cpp_suppressions = []
+msvc_link_suppressions = []
+
+if c_compiler.get_id() == 'msvc'
+  msvc_c_suppressions += ['/wd4113', '/wd4244']
+endif
+
+if cpp_compiler.get_id() == 'msvc'
+  msvc_cpp_suppressions += ['/wd4244']
+  msvc_link_suppressions += ['/IGNORE:4044']
+endif
+
+if msvc_c_suppressions.length() > 0
+  fallback_opt += ['c_args=' + ' '.join(msvc_c_suppressions)]
+endif
+
+if msvc_cpp_suppressions.length() > 0
+  fallback_opt += ['cpp_args=' + ' '.join(msvc_cpp_suppressions)]
+endif
+
+if msvc_link_suppressions.length() > 0
+  fallback_opt += ['c_link_args=' + ' '.join(msvc_link_suppressions),
+    'cpp_link_args=' + ' '.join(msvc_link_suppressions)]
+endif
+
 zlib = dependency('zlib', required: get_option('zlib'))
 if not zlib.found()
   zlib = dependency('zlib-ng',
