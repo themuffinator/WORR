@@ -2658,11 +2658,18 @@ static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 {
 	byte header[ZIP_SIZECENTRALLOCATOR64];
 	uint32_t magic;
-	int64_t pos, prefix, seek_pos;
-
-	if (header_pos < ZIP_SIZECENTRALHEADER64 + sizeof(header))
+	int64_t end_header_pos, file_size, locator_pos, prefix, pos;
+	
+	if (os_fseek(fp, 0, SEEK_END))
 		return 0;
-	if (os_fseek(fp, header_pos - sizeof(header), SEEK_SET))
+	file_size = os_ftell(fp);
+	if (file_size <= 0 || header_pos > file_size)
+		return 0;
+	locator_pos = header_pos - ZIP_SIZECENTRALLOCATOR64;
+	end_header_pos = locator_pos - ZIP_SIZECENTRALHEADER64;
+	if (end_header_pos < 0 || locator_pos < (int64_t)sizeof(header))
+		return 0;
+	if (os_fseek(fp, locator_pos, SEEK_SET))
 		return 0;
 	if (!fread(header, sizeof(header), 1, fp))
 		return 0;
@@ -2673,17 +2680,20 @@ static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 	if (RL32(&header[16]) != 1)
 		return 0;
 	pos = RL64(&header[8]);
-	prefix = header_pos - (ZIP_SIZECENTRALHEADER64 + sizeof(header)) - pos;
-	if (prefix < 0)
-	prefix = 0;
-	seek_pos = pos + prefix;
-	if (os_fseek(fp, seek_pos, SEEK_SET))
+	prefix = locator_pos - (ZIP_SIZECENTRALHEADER64 + pos);
+	if (prefix < 0 || pos > file_size)
+		return 0;
+	end_header_pos = pos + prefix;
+	if (end_header_pos < 0 || end_header_pos > file_size - ZIP_SIZECENTRALHEADER64)
+		return 0;
+	if (os_fseek(fp, end_header_pos, SEEK_SET))
 		return 0;
 	if (!fread(&magic, sizeof(magic), 1, fp))
 		return 0;
 	if (LittleLong(magic) != ZIP_ENDHEADER64MAGIC)
 		return 0;
-return seek_pos;
+	
+	return end_header_pos;
 }
 
 /*
