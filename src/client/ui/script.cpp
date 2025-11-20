@@ -375,6 +375,13 @@ static void AttachCondition(menuCommon_t* common, uiItemCondition_t* conditions,
 	}
 }
 
+/*
+=============
+FinalizeSpinItems
+
+Ensures spin control item arrays are properly terminated after parsing.
+=============
+*/
 static void FinalizeSpinItems(menuSpinControl_t* s)
 {
 	if (!s->itemnames)
@@ -384,32 +391,50 @@ static void FinalizeSpinItems(menuSpinControl_t* s)
 	s->itemnames[s->numItems] = NULL;
 }
 
+/*
+=============
+ParseSpinOptions
+
+Parses spin control options from JSON arrays, supporting string and primitive entries.
+=============
+*/
 static void ParseSpinOptions(json_parse_t* parser, menuSpinControl_t* s)
 {
 	jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
 
 	for (int i = 0; i < array->size; i++) {
-		Json_Ensure(parser, JSMN_STRING);
-		const char* start = parser->buffer + parser->pos->start;
-		size_t len = parser->pos->end - parser->pos->start;
+		jsmntok_t* tok = parser->pos;
 
-		if (len && start[0] == '$') {
-			if (len > 1 && start[1] == '$') {
-				add_string_len(s, start + 1, len - 1);
-			}
-			else if (len > 1) {
-				char* expand = UI_Malloc(len);
-				memcpy(expand, start + 1, len - 1);
-				expand[len - 1] = '\0';
-				add_expand(s, expand);
-				Z_Free(expand);
-			}
-		}
-		else if (len) {
-			add_string_len(s, start, len);
-		}
+		if (tok->type == JSMN_STRING) {
+			const char* start = parser->buffer + tok->start;
+			size_t len = tok->end - tok->start;
 
-		Json_Next(parser);
+			if (len && start[0] == '$') {
+				if (len > 1 && start[1] == '$') {
+					add_string_len(s, start + 1, len - 1);
+				}
+				else if (len > 1) {
+					char* expand = UI_Malloc(len);
+					memcpy(expand, start + 1, len - 1);
+					expand[len - 1] = '\0';
+					add_expand(s, expand);
+					Z_Free(expand);
+				}
+			}
+			else if (len) {
+				add_string_len(s, start, len);
+			}
+
+			Json_Next(parser);
+		}
+		else if (tok->type == JSMN_PRIMITIVE) {
+			char* value = Json_CopyValueStringUI(parser);
+			add_string_len(s, value, strlen(value));
+			Z_Free(value);
+		}
+		else {
+			Json_Error(parser, tok, "options entries must be string or primitive");
+		}
 	}
 
 	FinalizeSpinItems(s);
