@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <climits>
 #include <string>
 
 #include "client.hpp"
@@ -157,6 +158,14 @@ static const char *CL_Wheel_GetCachedName(int item_index)
 	CL_Wheel_CacheLocalizedName(item_index);
 	return cl.wheel.name_cache.strings.at(item_index).c_str();
 }
+
+/*
+=============
+CL_Carousel_Close
+
+Close the carousel and reset its state.
+=============
+*/
 static void CL_Carousel_Close(void)
 {
 	cl.carousel.state = WHEEL_CLOSED;
@@ -164,6 +173,13 @@ static void CL_Carousel_Close(void)
 
 // populate slot list with stuff we own.
 // runs every frame and when we open the carousel.
+/*
+=============
+CL_Carousel_Populate
+
+Populate the carousel with currently owned items and choose an appropriate selection.
+=============
+*/
 static bool CL_Carousel_Populate(void)
 {
 	int i;
@@ -194,30 +210,62 @@ static bool CL_Carousel_Populate(void)
 	if (cl.carousel.selected == -1) {
 		cl.carousel.selected = cl.carousel.slots[0].item_index;
 	} else {
-		for (i = 0; i < cl.carousel.num_slots; i++)
-		if (cl.carousel.slots[i].item_index == cl.carousel.selected)
-		break;
-	}
+		int found_index = -1;
 
-	if (i == cl.carousel.num_slots) {
-		// TODO: maybe something smarter?
-		return false;
+		for (i = 0; i < cl.carousel.num_slots; i++) {
+			if (cl.carousel.slots[i].item_index == cl.carousel.selected) {
+				found_index = i;
+				break;
+			}
+		}
+
+		if (found_index == -1) {
+			int target_data_index = -1;
+
+			for (i = 0; i < cl.wheel_data.num_weapons; i++) {
+				if (cl.wheel_data.weapons[i].item_index == cl.carousel.selected) {
+					target_data_index = i;
+					break;
+				}
+			}
+
+			int closest_index = 0;
+			int closest_distance = INT_MAX;
+
+			for (i = 0; i < cl.carousel.num_slots; i++) {
+				int distance = target_data_index == -1 ? i : std::abs(cl.carousel.slots[i].data_id - target_data_index);
+				if (distance < closest_distance) {
+					closest_distance = distance;
+					closest_index = i;
+				}
+			}
+
+			cl.carousel.selected = cl.carousel.slots[closest_index].item_index;
+		}
 	}
 
 	return true;
 }
 
+
+/*
+=============
+CL_Carousel_Open
+
+Open the carousel and initialize the selected entry.
+=============
+*/
 static void CL_Carousel_Open(void)
 {
-    if (cl.carousel.state == WHEEL_CLOSED) {
-        cl.carousel.selected = (cl.frame.ps.stats[STAT_ACTIVE_WEAPON] == -1) ? -1 : cl.wheel_data.weapons[cl.frame.ps.stats[STAT_ACTIVE_WEAPON]].item_index;
-    }
+	if (cl.carousel.state == WHEEL_CLOSED) {
+		cl.carousel.selected = (cl.frame.ps.stats[STAT_ACTIVE_WEAPON] == -1) ? -1 : cl.wheel_data.weapons[cl.frame.ps.stats[STAT_ACTIVE_WEAPON]].item_index;
+	}
 
-    cl.carousel.state = WHEEL_OPEN;
+	cl.carousel.state = WHEEL_OPEN;
 
-    if (!CL_Carousel_Populate()) {
-        CL_Carousel_Close();
-    }
+	if (!CL_Carousel_Populate()) {
+		CL_Carousel_Close();
+	}
 }
 
 #define CAROUSEL_ICON_SIZE (24 + 2)
