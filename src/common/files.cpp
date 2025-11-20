@@ -3013,37 +3013,56 @@ static pack_file_type_t DetectPackType(const char *path)
 {
 	uint32_t ident;
 	FILE *fp;
+	const char *ext;
 
 	fp = fopen(path, "rb");
-	if (!fp) {
-		Com_SetLastError(strerror(errno));
-		return PACK_FILE_UNKNOWN;
-	}
-
-	if (!fread(&ident, sizeof(ident), 1, fp)) {
-		if (ferror(fp)) {
-			Com_SetLastError(strerror(errno));
+	if (fp) {
+		if (!fread(&ident, sizeof(ident), 1, fp)) {
+			if (ferror(fp)) {
+				Com_SetLastError(strerror(errno));
+			} else {
+				Com_SetLastError("Pack header is too short");
+			}
 		} else {
-			Com_SetLastError("Pack header is too short");
+			ident = LittleLong(ident);
+
+			if (ident == IDPAKHEADER) {
+				fclose(fp);
+				return PACK_FILE_PAK;
+			}
+
+#if USE_ZLIB
+			if (ident == ZIP_LOCALHEADERMAGIC) {
+				fclose(fp);
+				return PACK_FILE_ZIP;
+			}
+#endif
+
+			Com_SetLastError("Pack header did not match PAK or ZIP signatures");
 		}
+
 		fclose(fp);
+	} else {
+		Com_SetLastError(strerror(errno));
+	}
+
+	ext = COM_FileExtension(path);
+	if (!ext || !*ext) {
 		return PACK_FILE_UNKNOWN;
 	}
 
-	fclose(fp);
-	ident = LittleLong(ident);
-
-	if (ident == IDPAKHEADER) {
+	if (!Q_stricmp(ext, "pak")) {
+		Com_SetLastError(NULL);
 		return PACK_FILE_PAK;
 	}
 
 #if USE_ZLIB
-	if (ident == ZIP_LOCALHEADERMAGIC) {
+	if (!Q_stricmp(ext, "pkz")) {
+		Com_SetLastError(NULL);
 		return PACK_FILE_ZIP;
 	}
 #endif
 
-	Com_SetLastError("Pack header did not match PAK or ZIP signatures");
 	return PACK_FILE_UNKNOWN;
 }
 
