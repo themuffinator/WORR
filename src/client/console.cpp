@@ -99,11 +99,12 @@ namespace {
 		void loadState(load_state_t state);
 
 		void print(std::string_view text);
-		void draw();
-		void run();
-		void registerMedia();
-		void checkResize();
-		void clearNotify();
+void draw();
+void run();
+void registerMedia();
+void checkResize();
+void clearNotify();
+bool getTextInput(const char** msg, bool* is_team) const;
 
 		void keyEvent(int key);
 		void charEvent(int key);
@@ -833,6 +834,27 @@ namespace {
 		R_SetScale(1.0f);
 	}
 
+/*
+=============
+Console::getTextInput
+
+Return the current chat input text and whether it is a team message.
+=============
+*/
+	bool Console::getTextInput(const char** msg, bool* is_team) const
+	{
+		if (!msg || !is_team)
+			return false;
+
+		if (!(cls.key_dest & KEY_MESSAGE) || chatMode_ == ChatMode::None)
+			return false;
+
+		*msg = chatPrompt_.inputLine.text;
+		*is_team = chatMode_ == ChatMode::Team;
+
+		return true;
+	}
+
 	void Console::run()
 	{
 		if (cls.disable_screen) {
@@ -1469,6 +1491,18 @@ void Con_RegisterMedia(void)
 void Con_CheckResize(void)
 {
 	Console::instance().checkResize();
+}
+
+/*
+=============
+Con_GetTextInput
+
+Provide the current chat input text and whether the chat is team-only.
+=============
+*/
+bool Con_GetTextInput(const char** msg, bool* is_team)
+{
+	return Console::instance().getTextInput(msg, is_team);
 }
 
 void Con_ClearNotify_f(void)
