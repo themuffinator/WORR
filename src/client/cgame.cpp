@@ -438,10 +438,19 @@ static float CG_SCR_GetVirtualScale(void)
 	return scr.virtual_scale > 0.0f ? scr.virtual_scale : 1.0f;
 }
 
+/*
+=============
+CG_CL_GetTextInput
+
+Return any pending chat input text and whether it is for team chat.
+=============
+*/
 static bool CG_CL_GetTextInput(const char** msg, bool* is_team)
 {
-	// FIXME: Hook up with chat prompt
-	return false;
+	if (!msg || !is_team)
+		return false;
+
+	return Con_GetTextInput(msg, is_team);
 }
 
 static int32_t CG_CL_GetWarnAmmoCount(int32_t weapon_id)

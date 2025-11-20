@@ -1177,6 +1177,7 @@ void Con_Popup(bool force);
 void Con_SkipNotify(bool skip);
 void Con_RegisterMedia(void);
 void Con_CheckResize(void);
+bool Con_GetTextInput(const char** msg, bool* is_team);
 
 void Key_Console(int key);
 void Key_Message(int key);
