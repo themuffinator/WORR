@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.hpp"
 #include "common/mapdb.hpp"
+#include <string>
 #include <unordered_map>
 
 #define SAVE_MAGIC1     MakeLittleLong('S','S','V','2')
