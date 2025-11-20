@@ -875,32 +875,68 @@ static q2proto_error_t q2pro_client_read_frame(q2proto_clientcontext_t *context,
     return Q2P_ERR_SUCCESS;
 }
 
+/*
+=============
+q2pro_client_read_zdownload
+
+Handle compressed download data and reset inflate state on failure.
+=============
+*/
 static q2proto_error_t q2pro_client_read_zdownload(q2proto_clientcontext_t *context, uintptr_t io_arg,
-                                                   q2proto_svc_download_t *download)
+	                                               q2proto_svc_download_t *download)
 {
 #if Q2PROTO_COMPRESSION_DEFLATE
-    READ_CHECKED(client_read, io_arg, download->size, i16);
-    READ_CHECKED(client_read, io_arg, download->percent, u8);
+	q2proto_error_t inflate_err = Q2P_ERR_SUCCESS;
+	size_t uncompressed_len = 0;
+	bool stream_end = false;
 
-    // FIXME: should end inflate in case of an error...
-    if (!context->has_zdownload_inflate_io_arg) {
-        CHECKED(client_read, io_arg,
-                q2protoio_inflate_begin(io_arg, Q2P_INFL_DEFL_RAW, &context->zdownload_inflate_io_arg));
-        context->has_zdownload_inflate_io_arg = true;
-    }
-    CHECKED(client_read, io_arg, q2protoio_inflate_data(io_arg, context->zdownload_inflate_io_arg, download->size));
-    size_t uncompressed_len = 0;
-    READ_CHECKED(client_read, context->zdownload_inflate_io_arg, download->data, raw, SIZE_MAX, &uncompressed_len);
-    bool stream_end = false;
-    CHECKED(client_read, io_arg, q2protoio_inflate_stream_ended(context->zdownload_inflate_io_arg, &stream_end));
-    if (stream_end) {
-        CHECKED_IO(client_read, io_arg, q2protoio_inflate_end(context->zdownload_inflate_io_arg), "finishing inflate");
-        context->has_zdownload_inflate_io_arg = false;
-    }
-    download->size = uncompressed_len;
-    return Q2P_ERR_SUCCESS;
+	download->size = q2protoio_read_i16(io_arg);
+	inflate_err = GET_IO_ERROR(io_arg);
+	if (inflate_err != Q2P_ERR_SUCCESS)
+		goto fail_terminate_inflate;
+
+	download->percent = q2protoio_read_u8(io_arg);
+	inflate_err = GET_IO_ERROR(io_arg);
+	if (inflate_err != Q2P_ERR_SUCCESS)
+		goto fail_terminate_inflate;
+
+	if (!context->has_zdownload_inflate_io_arg) {
+		inflate_err = q2protoio_inflate_begin(io_arg, Q2P_INFL_DEFL_RAW, &context->zdownload_inflate_io_arg);
+		if (inflate_err != Q2P_ERR_SUCCESS)
+			goto fail_terminate_inflate;
+		context->has_zdownload_inflate_io_arg = true;
+	}
+
+	inflate_err = q2protoio_inflate_data(io_arg, context->zdownload_inflate_io_arg, download->size);
+	if (inflate_err != Q2P_ERR_SUCCESS)
+		goto fail_terminate_inflate;
+
+	download->data = q2protoio_read_raw(context->zdownload_inflate_io_arg, SIZE_MAX, &uncompressed_len);
+	inflate_err = GET_IO_ERROR(context->zdownload_inflate_io_arg);
+	if (inflate_err != Q2P_ERR_SUCCESS)
+		goto fail_terminate_inflate;
+
+	inflate_err = q2protoio_inflate_stream_ended(context->zdownload_inflate_io_arg, &stream_end);
+	if (inflate_err != Q2P_ERR_SUCCESS)
+		goto fail_terminate_inflate;
+	if (stream_end) {
+		CHECKED_IO(client_read, io_arg, q2protoio_inflate_end(context->zdownload_inflate_io_arg), "finishing inflate");
+		context->has_zdownload_inflate_io_arg = false;
+	}
+
+	download->size = uncompressed_len;
+	return Q2P_ERR_SUCCESS;
+
+fail_terminate_inflate:
+	if (context->has_zdownload_inflate_io_arg) {
+		q2proto_error_t end_err = q2protoio_inflate_end(context->zdownload_inflate_io_arg);
+		context->has_zdownload_inflate_io_arg = false;
+		if (end_err != Q2P_ERR_SUCCESS)
+			inflate_err = end_err;
+	}
+	return HANDLE_ERROR(client_read, io_arg, inflate_err, "%s: zdownload inflation failed", __func__);
 #else
-    return Q2P_ERR_DEFLATE_NOT_SUPPORTED;
+	return Q2P_ERR_DEFLATE_NOT_SUPPORTED;
 #endif
 }
 
