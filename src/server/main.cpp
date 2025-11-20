@@ -87,6 +87,8 @@ cvar_t  *sv_max_download_size;
 cvar_t  *sv_max_packet_entities;
 cvar_t  *sv_trunc_packet_entities;
 cvar_t  *sv_prioritize_entities;
+cvar_t  *sv_effect_cull_distance;
+cvar_t  *sv_effect_cull_mask;
 
 cvar_t  *sv_strafejump_hack;
 cvar_t  *sv_waterjump_hack;
@@ -2172,6 +2174,8 @@ void SV_Init(void)
     sv_max_packet_entities = Cvar_Get("sv_max_packet_entities", "0", 0);
     sv_trunc_packet_entities = Cvar_Get("sv_trunc_packet_entities", "1", 0);
     sv_prioritize_entities = Cvar_Get("sv_prioritize_entities", "0", 0);
+    sv_effect_cull_distance = Cvar_Get("sv_effect_cull_distance", "400", 0);
+    sv_effect_cull_mask = Cvar_Get("sv_effect_cull_mask", "0", 0);
 
     sv_strafejump_hack = Cvar_Get("sv_strafejump_hack", "1", CVAR_LATCH);
     sv_waterjump_hack = Cvar_Get("sv_waterjump_hack", "1", CVAR_LATCH);

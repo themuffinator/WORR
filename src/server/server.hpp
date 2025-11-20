@@ -562,6 +562,8 @@ extern cvar_t       *sv_max_download_size;
 extern cvar_t       *sv_max_packet_entities;
 extern cvar_t       *sv_trunc_packet_entities;
 extern cvar_t       *sv_prioritize_entities;
+extern cvar_t       *sv_effect_cull_distance;
+extern cvar_t       *sv_effect_cull_mask;
 
 extern cvar_t       *sv_strafejump_hack;
 #if USE_PACKETDUP
@@ -789,6 +791,7 @@ static inline void SV_CheckEntityNumber(edict_t *ent, int e, const char *func)
 
 void SV_BuildClientFrame(client_t *client);
 bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize);
+bool SV_ShouldDistanceCullEffect(const edict_t *ent);
 
 //
 // sv_game.c

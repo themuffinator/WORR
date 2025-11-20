@@ -576,219 +576,224 @@ copies off the playerstat and areabits.
 */
 void SV_BuildClientFrame(client_t *client)
 {
-    int         i, e;
-    vec3_t      org;
-    edict_t     *ent;
-    server_entity_t *svent;
-    edict_t     *clent;
-    client_frame_t  *frame;
-    server_entity_packed_t *state;
-    const mleaf_t   *leaf;
-    int         clientarea, clientcluster;
-    visrow_t    clientphs;
-    visrow_t    clientpvs;
-    int         max_packet_entities;
-    edict_t     *edicts[MAX_EDICTS];
-    int         num_edicts;
-    bool (*visible)(edict_t *, edict_t *) = NULL;
-    bool (*customize)(edict_t *, edict_t *, customize_entity_t *) = NULL;
-    customize_entity_t temp;
+	int         i, e;
+	vec3_t      org;
+	edict_t     *ent;
+	server_entity_t *svent;
+	edict_t     *clent;
+	client_frame_t  *frame;
+	server_entity_packed_t *state;
+	const mleaf_t   *leaf;
+	int         clientarea, clientcluster;
+	visrow_t    clientphs;
+	visrow_t    clientpvs;
+	int         max_packet_entities;
+	edict_t     *edicts[MAX_EDICTS];
+	int         num_edicts;
+	bool (*visible)(edict_t *, edict_t *) = NULL;
+	bool (*customize)(edict_t *, edict_t *, customize_entity_t *) = NULL;
+	customize_entity_t temp;
+	float effect_cull_distance;
+	float effect_cull_distance_sq;
 
-    clent = client->edict;
-    if (!clent->client)
-        return;        // not in game yet
+	clent = client->edict;
+	if (!clent->client)
+		return;		// not in game yet
 
-    Q_assert(client->entities);
+	Q_assert(client->entities);
 
-    // this is the frame we are creating
-    frame = &client->frames[client->framenum & UPDATE_MASK];
-    frame->number = client->framenum;
-    frame->sentTime = com_eventTime; // save it for ping calc later
-    frame->latency = -1; // not yet acked
+	// this is the frame we are creating
+	frame = &client->frames[client->framenum & UPDATE_MASK];
+	frame->number = client->framenum;
+	frame->sentTime = com_eventTime; // save it for ping calc later
+	frame->latency = -1; // not yet acked
 
-    client->frames_sent++;
+	client->frames_sent++;
 
-    // find the client's PVS
-    SV_GetClient_ViewOrg(client, org);
-    // Rerelease game doesn't include viewheight in viewoffset, vanilla does
-    if (svs.game_api == Q2PROTO_GAME_RERELEASE)
-        org[2] += clent->client->ps.pmove.viewheight;
+	// find the client's PVS
+	SV_GetClient_ViewOrg(client, org);
+	// Rerelease game doesn't include viewheight in viewoffset, vanilla does
+	if (svs.game_api == Q2PROTO_GAME_RERELEASE)
+		org[2] += clent->client->ps.pmove.viewheight;
 
-    leaf = CM_PointLeaf(client->cm, org);
-    clientarea = leaf->area;
-    clientcluster = leaf->cluster;
+	effect_cull_distance = sv_effect_cull_distance ? sv_effect_cull_distance->value : 0.0f;
+	if (effect_cull_distance > 0.0f)
+		effect_cull_distance_sq = effect_cull_distance * effect_cull_distance;
+	else
+		effect_cull_distance_sq = 0.0f;
 
-    // calculate the visible areas
-    frame->areabytes = CM_WriteAreaBits(client->cm, frame->areabits, clientarea);
-    if (!frame->areabytes) {
-        frame->areabits[0] = 255;
-        frame->areabytes = 1;
-    }
+	leaf = CM_PointLeaf(client->cm, org);
+	clientarea = leaf->area;
+	clientcluster = leaf->cluster;
 
-    // grab the current player_state_t
-    PackPlayerstate(&client->q2proto_ctx, (const player_state_t*)clent->client, &frame->ps);
+	// calculate the visible areas
+	frame->areabytes = CM_WriteAreaBits(client->cm, frame->areabits, clientarea);
+	if (!frame->areabytes) {
+		frame->areabits[0] = 255;
+		frame->areabytes = 1;
+	}
 
-    // grab the current clientNum
-    if (g_features->integer & GMF_CLIENTNUM) {
-        frame->clientNum = SV_GetClient_ClientNum(client);
-        if (!VALIDATE_CLIENTNUM(client->csr, frame->clientNum)) {
-            Com_DWPrintf("%s: bad clientNum %d for client %d\n",
-                         __func__, frame->clientNum, client->number);
-            frame->clientNum = client->number;
-        }
-    } else {
-        frame->clientNum = client->number;
-    }
+	// grab the current player_state_t
+	PackPlayerstate(&client->q2proto_ctx, (const player_state_t*)clent->client, &frame->ps);
 
-    // limit maximum number of entities in client frame
-    max_packet_entities =
-        sv_max_packet_entities->integer > 0 ? sv_max_packet_entities->integer :
-        MAX_PACKET_ENTITIES;
+	// grab the current clientNum
+	if (g_features->integer & GMF_CLIENTNUM) {
+		frame->clientNum = SV_GetClient_ClientNum(client);
+		if (!VALIDATE_CLIENTNUM(client->csr, frame->clientNum)) {
+			Com_DWPrintf("%s: bad clientNum %d for client %d\n",
+						 __func__, frame->clientNum, client->number);
+			frame->clientNum = client->number;
+		}
+	} else {
+		frame->clientNum = client->number;
+	}
 
-    if (g_customize_entity) {
-        visible = g_customize_entity->EntityVisibleToClient;
-        customize = g_customize_entity->CustomizeEntityToClient;
-    }
+	// limit maximum number of entities in client frame
+	max_packet_entities =
+		sv_max_packet_entities->integer > 0 ? sv_max_packet_entities->integer :
+		MAX_PACKET_ENTITIES;
 
-    CM_FatPVS(client->cm, &clientpvs, org);
-    BSP_ClusterVis(client->cm->cache, &clientphs, clientcluster, DVIS_PHS);
+	if (g_customize_entity) {
+		visible = g_customize_entity->EntityVisibleToClient;
+		customize = g_customize_entity->CustomizeEntityToClient;
+	}
 
-    // build up the list of visible entities
-    frame->num_entities = 0;
-    frame->first_entity = client->next_entity;
+	CM_FatPVS(client->cm, &clientpvs, org);
+	BSP_ClusterVis(client->cm->cache, &clientphs, clientcluster, DVIS_PHS);
 
-    num_edicts = 0;
-    for (e = 1; e < client->ge->num_edicts; e++) {
-        ent = EDICT_NUM2(client->ge, e);
-        svent = &sv.entities[e];
+	// build up the list of visible entities
+	frame->num_entities = 0;
+	frame->first_entity = client->next_entity;
 
-        // ignore entities not in use
-        if (!ent->inuse && (g_features->integer & GMF_PROPERINUSE))
-            continue;
+	num_edicts = 0;
+	for (e = 1; e < client->ge->num_edicts; e++) {
+		ent = EDICT_NUM2(client->ge, e);
+		svent = &sv.entities[e];
 
-        // ignore ents without visible models
-        if (ent->svflags & SVF_NOCLIENT)
-            continue;
+		// ignore entities not in use
+		if (!ent->inuse && (g_features->integer & GMF_PROPERINUSE))
+			continue;
 
-        // ignore ents without visible models unless they have an effect
-        if (!HAS_EFFECTS(ent))
-            continue;
+		// ignore ents without visible models
+		if (ent->svflags & SVF_NOCLIENT)
+			continue;
 
-        // ignore gibs if client says so
-        if (client->settings[CLS_NOGIBS]) {
-            if (ent->s.effects & EF_GIB && !(client->csr->extended && ent->s.effects & EF_ROCKET))
-                continue;
-            if (ent->s.effects & EF_GREENGIB)
-                continue;
-        }
+		// ignore ents without visible models unless they have an effect
+		if (!HAS_EFFECTS(ent))
+			continue;
 
-        // ignore flares if client says so
-        if (client->csr->extended && ent->s.renderfx & RF_FLARE && client->settings[CLS_NOFLARES])
-            continue;
+		// ignore gibs if client says so
+		if (client->settings[CLS_NOGIBS]) {
+			if (ent->s.effects & EF_GIB && !(client->csr->extended && ent->s.effects & EF_ROCKET))
+				continue;
+			if (ent->s.effects & EF_GREENGIB)
+				continue;
+		}
 
-        // ignore if not touching a PV leaf
-        if (ent != clent && !sv_novis->integer && !(ent->svflags & SVF_NOCULL)) {
-            // check area
-            if (!CM_AreasConnected(client->cm, clientarea, ent->areanum)) {
-                // doors can legally straddle two areas, so
-                // we may need to check another one
-                if (!CM_AreasConnected(client->cm, clientarea, ent->areanum2)) {
-                    continue;        // blocked by a door
-                }
-            }
+		// ignore flares if client says so
+		if (client->csr->extended && ent->s.renderfx & RF_FLARE && client->settings[CLS_NOFLARES])
+			continue;
 
-            // beams just check one point for PHS
-            bool beam_cull = ent->s.renderfx & RF_BEAM;
-            // remaster uses different sound culling rules
-            bool sound_cull = ent->s.sound;
+		// ignore if not touching a PV leaf
+		if (ent != clent && !sv_novis->integer && !(ent->svflags & SVF_NOCULL)) {
+			// check area
+			if (!CM_AreasConnected(client->cm, clientarea, ent->areanum)) {
+				// doors can legally straddle two areas, so
+				// we may need to check another one
+				if (!CM_AreasConnected(client->cm, clientarea, ent->areanum2)) {
+					continue;        // blocked by a door
+				}
+			}
 
-            if (!SV_EntityVisible(client, svent, (beam_cull || sound_cull || (ent->s.renderfx & RF_CASTSHADOW)) ? &clientphs : &clientpvs))
-                continue;
+			// beams just check one point for PHS
+			bool beam_cull = ent->s.renderfx & RF_BEAM;
+			// remaster uses different sound culling rules
+			bool sound_cull = ent->s.sound;
 
-            // don't send sounds if they will be attenuated away
-            if (sound_cull) {
-                if (SV_EntityAttenuatedAway(org, ent)) {
-                    if (!ent->s.modelindex)
-                        continue;
-                    if (!beam_cull && !SV_EntityVisible(client, svent, &clientpvs))
-                        continue;
-                }
-            } else if (!ent->s.modelindex && !(ent->s.renderfx & RF_CASTSHADOW)) {
-                // Paril TODO: is this a good idea? seems weird to remove
-                // visual effects based on distance if there's no model and
-                // no sound...
-                if (DistanceSquared(org, ent->s.origin) > 400 * 400)
-                    continue;
-            }
-        }
+			if (!SV_EntityVisible(client, svent, (beam_cull || sound_cull || (ent->s.renderfx & RF_CASTSHADOW)) ? &clientphs : &clientpvs))
+				continue;
 
-        SV_CheckEntityNumber(ent, e);
+			// don't send sounds if they will be attenuated away
+			if (sound_cull) {
+				if (SV_EntityAttenuatedAway(org, ent)) {
+					if (!ent->s.modelindex)
+						continue;
+					if (!beam_cull && !SV_EntityVisible(client, svent, &clientpvs))
+						continue;
+				}
+			} else if (SV_ShouldDistanceCullEffect(ent)) {
+				if (DistanceSquared(org, ent->s.origin) > effect_cull_distance_sq)
+					continue;
+			}
+		}
 
-        // optionally skip it
-        if (visible && !visible(clent, ent))
-            continue;
+		SV_CheckEntityNumber(ent, e);
 
-        edicts[num_edicts++] = ent;
+		// optionally skip it
+		if (visible && !visible(clent, ent))
+			continue;
 
-        if (num_edicts == max_packet_entities && !sv_prioritize_entities->integer)
-            break;
-    }
+		edicts[num_edicts++] = ent;
 
-    // prioritize entities on overflow
-    if (num_edicts > max_packet_entities) {
-        VectorCopy(org, clientorg);
-        sv_client = client;
-        sv_player = client->edict;
-        qsort(edicts, num_edicts, sizeof(edicts[0]), entpriocmp);
-        sv_client = NULL;
-        sv_player = NULL;
-        num_edicts = max_packet_entities;
-        qsort(edicts, num_edicts, sizeof(edicts[0]), entnumcmp);
-    }
+		if (num_edicts == max_packet_entities && !sv_prioritize_entities->integer)
+			break;
+	}
 
-    for (i = 0; i < num_edicts; i++) {
-        ent = edicts[i];
-        e = ent->s.number;
+	// prioritize entities on overflow
+	if (num_edicts > max_packet_entities) {
+		VectorCopy(org, clientorg);
+		sv_client = client;
+		sv_player = client->edict;
+		qsort(edicts, num_edicts, sizeof(edicts[0]), entpriocmp);
+		sv_client = NULL;
+		sv_player = NULL;
+		num_edicts = max_packet_entities;
+		qsort(edicts, num_edicts, sizeof(edicts[0]), entnumcmp);
+	}
 
-        // add it to the circular client_entities array
-        state = &client->entities[client->next_entity & (client->num_entities - 1)];
+	for (i = 0; i < num_edicts; i++) {
+		ent = edicts[i];
+		e = ent->s.number;
 
-        // optionally customize it
-        if (customize && customize(clent, ent, &temp)) {
-            Q_assert(temp.s.number == e);
-            PackEntity(&client->q2proto_ctx, &temp.s, &state->e);
-        } else {
-            PackEntity(&client->q2proto_ctx, &ent->s, &state->e);
-        }
-        state->number = e;
+		// add it to the circular client_entities array
+		state = &client->entities[client->next_entity & (client->num_entities - 1)];
+
+		// optionally customize it
+		if (customize && customize(clent, ent, &temp)) {
+			Q_assert(temp.s.number == e);
+			PackEntity(&client->q2proto_ctx, &temp.s, &state->e);
+		} else {
+			PackEntity(&client->q2proto_ctx, &ent->s, &state->e);
+		}
+		state->number = e;
 
 #if USE_FPS
-        // fix old entity origins for clients not running at
-        // full server frame rate
-        if (client->framediv != 1)
-            fix_old_origin(client, state, ent, e);
+		// fix old entity origins for clients not running at
+		// full server frame rate
+		if (client->framediv != 1)
+			fix_old_origin(client, state, ent, e);
 #endif
 
-        // clear footsteps
-        if (client->settings[CLS_NOFOOTSTEPS] && (state->e.event == EV_FOOTSTEP
-            || (state->e.event == EV_OTHER_FOOTSTEP || state->e.event == EV_LADDER_STEP))) {
-            state->e.event = 0;
-        }
+		// clear footsteps
+		if (client->settings[CLS_NOFOOTSTEPS] && (state->e.event == EV_FOOTSTEP
+			|| (state->e.event == EV_OTHER_FOOTSTEP || state->e.event == EV_LADDER_STEP))) {
+			state->e.event = 0;
+		}
 
-        // hide POV entity from renderer, unless this is player's own entity
-        if (e == frame->clientNum + 1 && ent != clent &&
-            (!Q2PRO_OPTIMIZE(client))) {
-            state->e.modelindex = 0;
-        }
+		// hide POV entity from renderer, unless this is player's own entity
+		if (e == frame->clientNum + 1 && ent != clent &&
+			(!Q2PRO_OPTIMIZE(client))) {
+			state->e.modelindex = 0;
+		}
 
-        if ((!USE_MVD_CLIENT || sv.state != ss_broadcast) && (ent->owner == clent)) {
-            // don't mark players missiles as solid
-            state->e.solid = 0;
-        } else if (client->esFlags & MSG_ES_LONGSOLID && !client->csr->extended) {
-            state->e.solid = sv.entities[e].solid32;
-        }
+		if ((!USE_MVD_CLIENT || sv.state != ss_broadcast) && (ent->owner == clent)) {
+			// don't mark players missiles as solid
+			state->e.solid = 0;
+		} else if (client->esFlags & MSG_ES_LONGSOLID && !client->csr->extended) {
+			state->e.solid = sv.entities[e].solid32;
+		}
 
-        frame->num_entities++;
-        client->next_entity++;
-    }
+		frame->num_entities++;
+		client->next_entity++;
+	}
 }

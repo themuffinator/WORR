@@ -257,6 +257,7 @@ server_src = [
   'src/client/null.cpp',
   'src/common/gamedll.cpp',
   'src/server/commands.cpp',
+  'src/server/effect_cull.cpp',
   'src/server/entities.cpp',
   'src/server/game.cpp',
   'src/server/game3_proxy/game3_proxy.cpp',
@@ -874,9 +875,20 @@ gamestate_test = executable('test_gamestate_configstrings',
   cpp_args: ['-DUSE_SERVER=1'],
 )
 
-test('gamestate_configstrings', gamestate_test,
-  is_parallel: false,
-)
+  test('gamestate_configstrings', gamestate_test,
+    is_parallel: false,
+  )
+  effect_cull_test = executable('test_effect_cull',
+    ['tests/test_effect_cull.cpp', 'src/server/effect_cull.cpp'],
+    include_directories: ['inc', 'src', 'q2proto/inc'],
+    dependencies:          common_deps,
+    gnu_symbol_visibility: 'hidden',
+    cpp_args:              ['-DUSE_SERVER=1'],
+  )
+
+  test('effect_cull_visibility', effect_cull_test,
+    is_parallel: false,
+  )
   pmove_waterjump_test = executable('test_pmove_waterjump',
     ['tests/test_pmove_waterjump.cpp', 'src/common/game3_pmove/waterjump.cpp'],
     include_directories: 'inc',
