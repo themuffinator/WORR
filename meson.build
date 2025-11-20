@@ -473,7 +473,7 @@ if msvc_link_suppressions.length() > 0
     'cpp_link_args=' + ' '.join(msvc_link_suppressions)]
 endif
 
-zlib = dependency('zlib', required: get_option('zlib'))
+zlib = dependency('zlib', required: get_option('zlib'), static: true)
 if not zlib.found()
   zlib = dependency('zlib-ng',
     fallback:        ['zlib-ng', 'zlib_ng_dep'],
