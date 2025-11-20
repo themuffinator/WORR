@@ -1163,18 +1163,18 @@ void WinConsole::setTitle(const char *title)
 
 void WinConsole::loadHistory()
 {
-    if (ready_ && sys_history && sys_history->integer > 0) {
-        Prompt_LoadHistory(&sys_con, SYS_HISTORYFILE_NAME);
-        markInputDirty();
-        showInput();
-    }
+	if (ready_ && sys_history && sys_history->integer > 0) {
+		Prompt_LoadHistory(&sys_con, SYS_CON_HISTORY_FILE);
+		markInputDirty();
+		showInput();
+	}
 }
 
 void WinConsole::saveHistory()
 {
-    if (ready_ && sys_history && sys_history->integer > 0) {
-        Prompt_SaveHistory(&sys_con, SYS_HISTORYFILE_NAME, sys_history->integer);
-    }
+	if (ready_ && sys_history && sys_history->integer > 0) {
+		Prompt_SaveHistory(&sys_con, SYS_CON_HISTORY_FILE, sys_history->integer);
+	}
 }
 
 } // namespace

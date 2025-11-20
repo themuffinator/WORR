@@ -313,7 +313,7 @@ namespace {
 	void Console::postInit()
 	{
 		if (history_->integer > 0) {
-			Prompt_LoadHistory(&prompt_, COM_HISTORYFILE_NAME);
+			Prompt_LoadHistory(&prompt_, COM_CON_HISTORY_FILE);
 		}
 	}
 
@@ -323,7 +323,7 @@ namespace {
 			return;
 
 		if (history_->integer > 0) {
-			Prompt_SaveHistory(&prompt_, COM_HISTORYFILE_NAME, history_->integer);
+			Prompt_SaveHistory(&prompt_, COM_CON_HISTORY_FILE, history_->integer);
 		}
 
 		Prompt_Clear(&prompt_);

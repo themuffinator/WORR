@@ -40,10 +40,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #define COM_CONFIG_CFG      "worr-config.cfg"
 
-// FIXME: rename these
-#define COM_HISTORYFILE_NAME    ".conhistory"
-#define COM_DEMOCACHE_NAME      ".democache"
-#define SYS_HISTORYFILE_NAME    ".syshistory"
+#define COM_CON_HISTORY_FILE    ".conhistory"
+#define COM_DEMO_CACHE_FILE     ".democache"
+#define SYS_CON_HISTORY_FILE    ".syshistory"
+
+#define COM_HISTORYFILE_NAME    COM_CON_HISTORY_FILE
+#define COM_DEMOCACHE_NAME      COM_DEMO_CACHE_FILE
+#define SYS_HISTORYFILE_NAME    SYS_CON_HISTORY_FILE
 
 #define MAXPRINTMSG     4096
 #define MAXERRORMSG     1024

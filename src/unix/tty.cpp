@@ -617,16 +617,16 @@ void tty_shutdown_input(void)
 
 void Sys_LoadHistory(void)
 {
-    if (tty_enabled && sys_history && sys_history->integer > 0) {
-        Prompt_LoadHistory(&tty_prompt, SYS_HISTORYFILE_NAME);
-    }
+	if (tty_enabled && sys_history && sys_history->integer > 0) {
+		Prompt_LoadHistory(&tty_prompt, SYS_CON_HISTORY_FILE);
+	}
 }
 
 void Sys_SaveHistory(void)
 {
-    if (tty_enabled && sys_history && sys_history->integer > 0) {
-        Prompt_SaveHistory(&tty_prompt, SYS_HISTORYFILE_NAME, sys_history->integer);
-    }
+	if (tty_enabled && sys_history && sys_history->integer > 0) {
+		Prompt_SaveHistory(&tty_prompt, SYS_CON_HISTORY_FILE, sys_history->integer);
+	}
 }
 
 void Sys_RunConsole(void)
