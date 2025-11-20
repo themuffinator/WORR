@@ -1520,9 +1520,12 @@ void CL_CleanupDemos(void)
             Cbuf_Clear(&cl_cmdbuf);
     }
 
-    CL_FreeDemoSnapshots();
+	CL_FreeDemoSnapshots();
+	#if USE_ZLIB
+		Q2Proto_IO_ShutdownDeflate(&cls.demo.q2proto_deflate);
+	#endif
 
-    memset(&cls.demo, 0, sizeof(cls.demo));
+	memset(&cls.demo, 0, sizeof(cls.demo));
 }
 
 /*

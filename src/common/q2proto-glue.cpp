@@ -64,6 +64,60 @@ static q2protoio_ioarg_t deflate_q2protoio_ioarg{nullptr, &msg_deflate, 0, nullp
 #define IOARG_DEFLATE      ((uintptr_t)&deflate_q2protoio_ioarg)
 #endif // USE_ZLIB
 
+#if USE_ZLIB
+/*
+=============
+clear_inflate_state
+
+Release inflate stream resources and optionally clear the initialization flag.
+=============
+*/
+static void clear_inflate_state(bool reset_initialized)
+{
+	if (!io_inflate_initialized)
+		return;
+
+	if (io_inflate.z.state)
+	{
+		int ret = inflateEnd(&io_inflate.z);
+		if (ret != Z_OK && ret != Z_STREAM_ERROR)
+		{
+			Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
+		}
+		memset(&io_inflate.z, 0, sizeof(io_inflate.z));
+	}
+	io_inflate.stream_end = false;
+	SZ_Clear(&msg_inflate);
+	if (reset_initialized)
+		io_inflate_initialized = false;
+}
+
+/*
+=============
+clear_deflate_state
+
+Release headered deflate stream resources.
+=============
+*/
+static void clear_deflate_state(q2protoio_deflate_args_t *deflate_args)
+{
+	if (!deflate_args)
+		return;
+
+	if (deflate_args->z_header.state)
+	{
+		int ret = deflateEnd(&deflate_args->z_header);
+		if (ret != Z_OK && ret != Z_STREAM_ERROR)
+		{
+			Com_Error(ERR_DROP, "%s: deflateEnd() failed with error %d", __func__, ret);
+		}
+		memset(&deflate_args->z_header, 0, sizeof(deflate_args->z_header));
+	}
+	if (deflate_args->z_current == &deflate_args->z_header)
+		deflate_args->z_current = NULL;
+}
+#endif // USE_ZLIB
+
 /*
 =============
 Q2Proto_IO_Init
@@ -89,20 +143,7 @@ Reset inflate state and release any active zlib stream.
 */
 void Q2Proto_IO_ResetInflate(void)
 {
-	if (!io_inflate_initialized)
-		return;
-
-	if (io_inflate.z.state)
-	{
-		int ret = inflateEnd(&io_inflate.z);
-		if (ret != Z_OK && ret != Z_STREAM_ERROR)
-	{
-			Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
-	}
-	memset(&io_inflate.z, 0, sizeof(io_inflate.z));
-	}
-	io_inflate.stream_end = false;
-	SZ_Clear(&msg_inflate);
+	clear_inflate_state(false);
 }
 
 /*
@@ -114,21 +155,19 @@ Tear down inflate buffers and prevent reuse of stale state.
 */
 void Q2Proto_IO_Shutdown(void)
 {
-	if (!io_inflate_initialized)
-		return;
+	clear_inflate_state(true);
+}
 
-	if (io_inflate.z.state)
-	{
-		int ret = inflateEnd(&io_inflate.z);
-		if (ret != Z_OK && ret != Z_STREAM_ERROR)
-	{
-			Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
-	}
-	memset(&io_inflate.z, 0, sizeof(io_inflate.z));
-	}
-	io_inflate.stream_end = false;
-	SZ_Clear(&msg_inflate);
-	io_inflate_initialized = false;
+/*
+=============
+Q2Proto_IO_ShutdownDeflate
+
+Release any initialized deflate streams bound to the provided arguments.
+=============
+*/
+void Q2Proto_IO_ShutdownDeflate(q2protoio_deflate_args_t *deflate_args)
+{
+	clear_deflate_state(deflate_args);
 }
 
 /*
@@ -307,9 +346,8 @@ q2proto_error_t q2protoio_inflate_data(uintptr_t io_arg, uintptr_t inflate_io_ar
 	io_inflate.z.avail_out = sizeof(io_inflate.buffer);
 	int ret = inflate(&io_inflate.z, Z_SYNC_FLUSH);
 	if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR) {
-		inflateEnd(&io_inflate.z);
-		memset(&io_inflate.z, 0, sizeof(io_inflate.z));
-			Com_Error(ERR_DROP, "%s: inflate() failed with error %d", __func__, ret);
+	clear_inflate_state(true);
+		Com_Error(ERR_DROP, "%s: inflate() failed with error %d", __func__, ret);
 	}
 
 	io_inflate.stream_end = ret == Z_STREAM_END;
@@ -348,9 +386,8 @@ q2proto_error_t q2protoio_inflate_end(uintptr_t inflate_io_arg)
 	if (ret != Z_OK && ret != Z_STREAM_END) {
 		Com_Error(ERR_DROP, "%s: inflateEnd() failed with error %d", __func__, ret);
 	}
-	memset(&io_inflate.z, 0, sizeof(io_inflate.z));
 	q2proto_error_t result = msg_inflate.readcount < msg_inflate.cursize ? Q2P_ERR_MORE_DATA_DEFLATED : Q2P_ERR_SUCCESS;
-	Q2Proto_IO_ResetInflate();
+	clear_inflate_state(true);
 	return result;
 }
 
@@ -448,6 +485,7 @@ q2proto_error_t q2protoio_deflate_end(uintptr_t deflate_io_arg)
 {
 	q2protoio_ioarg_t *io_data = (q2protoio_ioarg_t *)deflate_io_arg;
 
+	clear_deflate_state(io_data->deflate);
 	io_data->deflate = NULL;
 
 	return Q2P_ERR_SUCCESS;

@@ -692,40 +692,44 @@ CL_ClearState
 */
 void CL_ClearState(void)
 {
-    S_GetSoundSystem().StopAllSounds();
-    SCR_StopCinematic();
-    CL_ClearEffects();
-    CL_ClearTEnts();
-    LOC_FreeLocations();
-    CL_FreeDemoSnapshots();
-    SCR_Clear();
+	S_GetSoundSystem().StopAllSounds();
+	SCR_StopCinematic();
+	CL_ClearEffects();
+	CL_ClearTEnts();
+	LOC_FreeLocations();
+	CL_FreeDemoSnapshots();
+	SCR_Clear();
+#if USE_ZLIB
+	Q2Proto_IO_Shutdown();
+#endif
 
-    // wipe the entire cl structure
-    BSP_Free(cl.bsp);
-    memset(&cl, 0, sizeof(cl));
-    memset(&cl_entities, 0, sizeof(cl_entities));
+	// wipe the entire cl structure
+	BSP_Free(cl.bsp);
+	memset(&cl, 0, sizeof(cl));
+	memset(&cl_entities, 0, sizeof(cl_entities));
 
-    cl.slow_time.factor = 1.0f;
-    cl.slow_time.from = 1.0f;
-    cl.slow_time.to = 1.0f;
-    cl.slow_time.start = {};
+	cl.slow_time.factor = 1.0f;
+	cl.slow_time.from = 1.0f;
+	cl.slow_time.to = 1.0f;
+	cl.slow_time.start = {};
 
-    if (cls.state > ca_connected) {
-        cls.state = ca_connected;
-        CL_CheckForPause();
-        CL_UpdateFrameTimes();
-    }
+	if (cls.state > ca_connected) {
+		cls.state = ca_connected;
+		CL_CheckForPause();
+		CL_UpdateFrameTimes();
+	}
 
-    // unprotect game cvar
-    fs_game->flags &= ~CVAR_ROM;
+	// unprotect game cvar
+	fs_game->flags &= ~CVAR_ROM;
 
 #if USE_REF
-    // unprotect our custom modulate cvars
-    gl_modulate_world->flags &= ~CVAR_CHEAT;
-    gl_modulate_entities->flags &= ~CVAR_CHEAT;
-    gl_brightness->flags &= ~CVAR_CHEAT;
+	// unprotect our custom modulate cvars
+	gl_modulate_world->flags &= ~CVAR_CHEAT;
+	gl_modulate_entities->flags &= ~CVAR_CHEAT;
+	gl_brightness->flags &= ~CVAR_CHEAT;
 #endif
 }
+
 
 /*
 =====================
