@@ -314,7 +314,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 	void Console::postInit()
 	{
 		if (history_->integer > 0) {
-			Prompt_LoadHistory(&prompt_, COM_HISTORYFILE_NAME);
+			Prompt_LoadHistory(&prompt_, COM_CON_HISTORY_FILE);
 		}
 	}
 
@@ -324,7 +324,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			return;
 
 		if (history_->integer > 0) {
-			Prompt_SaveHistory(&prompt_, COM_HISTORYFILE_NAME, history_->integer);
+			Prompt_SaveHistory(&prompt_, COM_CON_HISTORY_FILE, history_->integer);
 		}
 
 		Prompt_Clear(&prompt_);
