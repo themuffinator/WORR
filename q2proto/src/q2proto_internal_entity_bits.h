@@ -25,19 +25,39 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "q2proto/q2proto_entity_bits.h"
 #include "q2proto_internal_defs.h"
 
+#include <assert.h>
+
+/*
+=============
+q2proto_get_entity_bit
+
+Validate the entity number range before reading from the bitset.
+=============
+*/
 static inline bool q2proto_get_entity_bit(const q2proto_entity_bits bits, unsigned entnum)
 {
-    // FIXME assert entnum range?
-    return bits[entnum >> 5] & BIT(entnum & 0x1f);
+	assert(entnum < Q2PROTO_MAX_ENTITIES);
+	if (entnum >= Q2PROTO_MAX_ENTITIES)
+		return false;
+	return bits[entnum >> 5] & BIT(entnum & 0x1f);
 }
 
+/*
+=============
+q2proto_set_entity_bit
+
+Validate the entity number range before writing to the bitset.
+=============
+*/
 static inline void q2proto_set_entity_bit(q2proto_entity_bits bits, unsigned entnum, bool flag)
 {
-    // FIXME assert entnum range?
-    if (flag)
-        bits[entnum >> 5] |= BIT(entnum & 0x1f);
-    else
-        bits[entnum >> 5] &= ~BIT(entnum & 0x1f);
+	assert(entnum < Q2PROTO_MAX_ENTITIES);
+	if (entnum >= Q2PROTO_MAX_ENTITIES)
+		return;
+	if (flag)
+		bits[entnum >> 5] |= BIT(entnum & 0x1f);
+	else
+		bits[entnum >> 5] &= ~BIT(entnum & 0x1f);
 }
 
 #endif // Q2PROTO_INTERNAL_ENTITY_BITS_H_
