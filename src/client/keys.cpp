@@ -169,6 +169,8 @@ static const keyname_t keynames[] = {
 	K(PAD_MISC6),
 	K(PAD_MISC7),
 	K(PAD_MISC8),
+	{ "APOSTROPHE", '\'' },
+	{ "QUOTE", '"' },
 	{ "a_button", K_PAD_A },
 	{ "b_button", K_PAD_B },
 	{ "x_button", K_PAD_X },
@@ -309,29 +311,34 @@ Key_KeynumToString
 
 Returns a string (either a single ascii char, or a K_* name) for the
 given keynum.
-FIXME: handle quote special (general escape sequence?)
 ===================
 */
 const char *Key_KeynumToString(int keynum)
 {
-    const keyname_t *kn;
-    static char tinystr[2];
+	const keyname_t *kn;
+	static char tinystr[2];
 
-    if (keynum == -1)
-        return "<KEY NOT FOUND>";
+	if (keynum == -1)
+		return "<KEY NOT FOUND>";
 
-    if (keynum > 32 && keynum < 127 && keynum != ';' && keynum != '"') {
-        // printable ascii
-        tinystr[0] = keynum;
-        tinystr[1] = 0;
-        return tinystr;
-    }
+	if (keynum == '\'')
+		return "APOSTROPHE";
 
-    for (kn = keynames; kn->name; kn++)
-        if (keynum == kn->keynum)
-            return kn->name;
+	if (keynum == '"')
+		return "QUOTE";
 
-    return "<UNKNOWN KEYNUM>";
+	if (keynum > 32 && keynum < 127 && keynum != ';' && keynum != '\'' && keynum != '"') {
+		// printable ascii
+		tinystr[0] = keynum;
+		tinystr[1] = 0;
+		return tinystr;
+	}
+
+	for (kn = keynames; kn->name; kn++)
+		if (keynum == kn->keynum)
+			return kn->name;
+
+	return "<UNKNOWN KEYNUM>";
 }
 
 /*
