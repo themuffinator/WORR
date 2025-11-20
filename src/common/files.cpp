@@ -2264,11 +2264,33 @@ done:
     return len;
 }
 
+/*
+=============
+write_and_close
+
+Write data to a file handle, flush it, and close it, returning the first
+encountered error.
+=============
+*/
 static int write_and_close(const void *data, size_t len, qhandle_t f)
 {
-	int ret1 = FS_Write(data, len, f);
-	int ret2 = FS_CloseFile(f);
-	return ret1 < 0 ? ret1 : ret2;
+	int write_ret;
+	int flush_ret = Q_ERR_SUCCESS;
+	int close_ret;
+
+	write_ret = FS_Write(data, len, f);
+	if (write_ret >= 0)
+		flush_ret = FS_Flush(f);
+
+	close_ret = FS_CloseFile(f);
+
+	if (write_ret < 0)
+		return write_ret;
+
+	if (flush_ret < 0)
+		return flush_ret;
+
+	return close_ret;
 }
 
 /*
