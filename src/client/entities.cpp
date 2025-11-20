@@ -18,7 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_ents.c -- entity parsing and management
 
 #include "client.hpp"
-#include "refresh/gl.hpp"
+#include "../refresh/gl.hpp"
 
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
