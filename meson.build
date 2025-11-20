@@ -938,6 +938,7 @@ gamestate_test = executable('test_gamestate_configstrings',
   )
 
   test('pmove_waterjump', pmove_waterjump_test)
+
 endif
 
 shared_library('game' + cpu, game_src,
