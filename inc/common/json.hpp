@@ -35,6 +35,27 @@ typedef struct {
     int         num_tokens;
 } json_parse_t;
 
+/*
+=============
+Json_JsmnErrorString
+
+Return a human-readable error description for jsmn_parse failures.
+=============
+*/
+static inline const char *Json_JsmnErrorString(int err)
+{
+	switch (err) {
+	case JSMN_ERROR_NOMEM:
+		return "Ran out of JSON tokens while parsing";
+	case JSMN_ERROR_INVAL:
+		return "Invalid character encountered while parsing JSON";
+	case JSMN_ERROR_PART:
+		return "Unexpected end of JSON data";
+	default:
+		return "Unknown JSON parse error";
+}
+}
+
 static inline void Json_Free(json_parse_t *parser)
 {
     Z_Free(parser->tokens);
@@ -43,7 +64,7 @@ static inline void Json_Free(json_parse_t *parser)
 
 /*
 =============
-Json_ErrorLocation
+	Json_ErrorLocation
 
 Compute the line/column of the provided token for error reporting.
 =============
@@ -110,7 +131,10 @@ static inline void Json_Load(const char *filename, json_parse_t *parser)
     // calculate the total token size so we can grok all of them.
     jsmn_init(&p);
 
-    parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
+	parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
+	if (parser->num_tokens < 0)
+	Json_Error(parser, parser->pos, Json_JsmnErrorString(parser->num_tokens));
+
     parser->tokens = Z_Malloc(sizeof(jsmntok_t) * (parser->num_tokens));
 
     if (!parser->tokens)
@@ -118,7 +142,9 @@ static inline void Json_Load(const char *filename, json_parse_t *parser)
 
     // decode all tokens
     jsmn_init(&p);
-    jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
+	int parse_result = jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
+	if (parse_result < 0)
+	Json_Error(parser, parser->pos, Json_JsmnErrorString(parse_result));
 
     parser->pos = parser->tokens;
 }
