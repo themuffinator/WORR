@@ -45,6 +45,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 char            cmd_buffer_text[CMD_BUFFER_SIZE];
 cmdbuf_t        cmd_buffer;
 
+static char     cmd_exec_text[CMD_BUFFER_SIZE];
+static cmdbuf_t cmd_exec_buffer;
+static int      cmd_exec_depth;
+
 // points to the buffer current command is executed from
 cmdbuf_t        *cmd_current;
 
@@ -76,11 +80,17 @@ Cbuf_Init
 */
 void Cbuf_Init(void)
 {
-    memset(&cmd_buffer, 0, sizeof(cmd_buffer));
-    cmd_buffer.from = FROM_CONSOLE;
-    cmd_buffer.text = cmd_buffer_text;
-    cmd_buffer.maxsize = sizeof(cmd_buffer_text);
-    cmd_buffer.exec = Cmd_ExecuteString;
+	memset(&cmd_buffer, 0, sizeof(cmd_buffer));
+	cmd_buffer.from = FROM_CONSOLE;
+	cmd_buffer.text = cmd_buffer_text;
+	cmd_buffer.maxsize = sizeof(cmd_buffer_text);
+	cmd_buffer.exec = Cmd_ExecuteString;
+
+	memset(&cmd_exec_buffer, 0, sizeof(cmd_exec_buffer));
+	cmd_exec_buffer.from = FROM_CODE;
+	cmd_exec_buffer.text = cmd_exec_text;
+	cmd_exec_buffer.maxsize = sizeof(cmd_exec_text);
+	cmd_exec_buffer.exec = Cmd_ExecuteString;
 }
 
 /*
@@ -1644,61 +1654,91 @@ A complete command line has been parsed, so try to execute it
 */
 void Cmd_ExecuteString(cmdbuf_t *buf, const char *text)
 {
-    Cmd_TokenizeString(text, true);
-    Cmd_ExecuteCommand(buf);
+	Cmd_TokenizeString(text, true);
+	Cmd_ExecuteCommand(buf);
 }
 
+/*
+=============
+Cmd_ExecuteFile
+
+Loads commands from a file and queues them into the active command buffer. Uses
+the calling buffer when available to preserve ordering; otherwise falls back to
+an isolated exec buffer that is executed immediately. Guards against runaway
+recursion and buffer overflows while documenting the buffering policy.
+=============
+*/
 int Cmd_ExecuteFile(const char *path, unsigned flags)
 {
-    char *f;
-    int len, ret;
-    cmdbuf_t *buf;
+	char *f;
+	int len, ret;
+	cmdbuf_t *buf;
+	bool immediate = false;
 
-    len = FS_LoadFileEx(path, reinterpret_cast<void **>(&f), flags, TAG_FILESYSTEM);
-    if (!f) {
-        return len;
-    }
+	len = FS_LoadFileEx(path, reinterpret_cast<void **>(&f), flags, TAG_FILESYSTEM);
+	if (!f) {
+		return len;
+	}
 
-    // check for binary file
-    if (memchr(f, 0, len)) {
-        ret = Q_ERR_INVALID_FORMAT;
-        goto finish;
-    }
+	// recursion/loop guard shared with the exec buffer
+	if (cmd_exec_depth >= ALIAS_LOOP_COUNT) {
+		ret = Q_ERR_INFINITE_LOOP;
+		goto finish;
+	}
+	cmd_exec_depth++;
 
-    // sanity check file size after stripping off comments
-    len = COM_Compress(f);
-    if (len >= CMD_BUFFER_SIZE) {
-        ret = Q_ERR(EFBIG);
-        goto finish;
-    }
+	buf = cmd_current ? cmd_current : &cmd_exec_buffer;
+	if (buf == &cmd_exec_buffer) {
+		immediate = true;
+		Cbuf_Clear(buf);
+		buf->aliasCount = 0;
+		buf->waitCount = 0;
+	}
 
-    // FIXME: always insert into main command buffer,
-    // no matter where command came from?
-    buf = &cmd_buffer;
+	// check for binary file
+	if (memchr(f, 0, len)) {
+		ret = Q_ERR_INVALID_FORMAT;
+		goto finish;
+	}
 
-    // check for exec loop
-    if (buf->aliasCount >= ALIAS_LOOP_COUNT) {
-        ret = Q_ERR_INFINITE_LOOP;
-        goto finish;
-    }
+	// sanity check file size after stripping off comments
+	len = COM_Compress(f);
+	if (len >= CMD_BUFFER_SIZE) {
+		ret = Q_ERR(EFBIG);
+		goto finish;
+	}
 
-    // check for overflow
-    if (len >= buf->maxsize - buf->cursize) {
-        ret = Q_ERR_STRING_TRUNCATED;
-        goto finish;
-    }
+	// check for exec loop
+	if (buf->aliasCount >= ALIAS_LOOP_COUNT) {
+		ret = Q_ERR_INFINITE_LOOP;
+		goto finish;
+	}
 
-    // everything ok, execute it
-    Com_Printf("Execing %s\n", path);
+	// check for overflow
+	if (len >= buf->maxsize - buf->cursize) {
+		ret = Q_ERR_STRING_TRUNCATED;
+		goto finish;
+	}
 
-    buf->aliasCount++;
-    Cbuf_InsertText(buf, f);
+	// everything ok, execute it
+	Com_Printf("Execing %s\n", path);
 
-    ret = Q_ERR_SUCCESS;
+	buf->aliasCount++;
+	Cbuf_InsertText(buf, f);
+	if (immediate) {
+		Cbuf_Execute(buf);
+		buf->aliasCount = 0;
+		buf->waitCount = 0;
+	}
+
+	ret = Q_ERR_SUCCESS;
 
 finish:
-    FS_FreeFile(f);
-    return ret;
+	if (cmd_exec_depth > 0) {
+		cmd_exec_depth--;
+	}
+	FS_FreeFile(f);
+	return ret;
 }
 
 /*
