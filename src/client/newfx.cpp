@@ -53,76 +53,85 @@ CL_DebugTrail
 */
 void CL_DebugTrail(const vec3_t start, const vec3_t end)
 {
-    vec3_t      move;
-    vec3_t      vec;
-    float       len;
-    cparticle_t *p;
-    float       dec;
+	vec3_t		move;
+	vec3_t		vec;
+	float		len;
+	cparticle_t	*p;
+	float		dec;
+	int		segments;
 
-    VectorCopy(start, move);
-    VectorSubtract(end, start, vec);
-    len = VectorNormalize(vec);
+	VectorCopy(start, move);
+	VectorSubtract(end, start, vec);
+	len = VectorNormalize(vec);
 
-    dec = 3;
-    VectorScale(vec, dec, vec);
-    VectorCopy(start, move);
+	dec = 3;
+	segments = (int)ceilf(len / dec);
+	VectorScale(vec, dec, vec);
+	VectorCopy(start, move);
 
-    while (len > 0) {
-        len -= dec;
+	for (int i = 0; i < segments; i++) {
+		p = CL_AllocParticle();
+		if (!p)
+			return;
 
-        p = CL_AllocParticle();
-        if (!p)
-            return;
-
-        p->time = cl.time;
-        VectorClear(p->accel);
-        VectorClear(p->vel);
-        p->alpha = 1.0f;
-        p->alphavel = -0.1f;
-        p->color = 0x74 + (Q_rand() & 7);
-        VectorCopy(move, p->org);
-        VectorAdd(move, vec, move);
-    }
+		p->time = cl.time;
+		VectorClear(p->accel);
+		VectorClear(p->vel);
+		p->alpha = 1.0f;
+		p->alphavel = -0.1f;
+		p->color = 0x74 + (Q_rand() & 7);
+		VectorCopy(move, p->org);
+		VectorAdd(move, vec, move);
+	}
 }
 
+
+/*
+=============
+CL_ForceWall
+
+Creates force wall particles along a line.
+=============
+*/
 void CL_ForceWall(const vec3_t start, const vec3_t end, int color)
 {
-    vec3_t      move;
-    vec3_t      vec;
-    float       len;
-    int         j;
-    cparticle_t *p;
+	vec3_t		move;
+	vec3_t		vec;
+	float		len;
+	int		j;
+	cparticle_t	*p;
+	float		dec;
+	int		segments;
 
-    VectorCopy(start, move);
-    VectorSubtract(end, start, vec);
-    len = VectorNormalize(vec);
+	VectorCopy(start, move);
+	VectorSubtract(end, start, vec);
+	len = VectorNormalize(vec);
 
-    VectorScale(vec, 4, vec);
+	dec = 4.0f;
+	segments = (int)ceilf(len / dec);
+	VectorScale(vec, dec, vec);
 
-    // FIXME: this is a really silly way to have a loop
-    while (len > 0) {
-        len -= 4;
+	for (int i = 0; i < segments; i++) {
+		if (frand() > 0.3f) {
+			p = CL_AllocParticle();
+			if (!p)
+				return;
+			VectorClear(p->accel);
 
-        if (frand() > 0.3f) {
-            p = CL_AllocParticle();
-            if (!p)
-                return;
-            VectorClear(p->accel);
+			p->time = cl.time;
 
-            p->time = cl.time;
+			p->alpha = 1.0f;
+			p->alphavel =  -1.0f / (3.0f + frand() * 0.5f);
+			p->color = color;
+			for (j = 0; j < 3; j++)
+				p->org[j] = move[j] + crand() * 3;
+			p->vel[0] = 0;
+			p->vel[1] = 0;
+			p->vel[2] = -40 - (crand() * 10);
+		}
 
-            p->alpha = 1.0f;
-            p->alphavel =  -1.0f / (3.0f + frand() * 0.5f);
-            p->color = color;
-            for (j = 0; j < 3; j++)
-                p->org[j] = move[j] + crand() * 3;
-            p->vel[0] = 0;
-            p->vel[1] = 0;
-            p->vel[2] = -40 - (crand() * 10);
-        }
-
-        VectorAdd(move, vec, move);
-    }
+		VectorAdd(move, vec, move);
+	}
 }
 
 
@@ -738,92 +747,92 @@ CL_TrapParticles
 */
 void CL_TrapParticles(centity_t *ent, const vec3_t origin)
 {
-    vec3_t      move;
-    vec3_t      vec;
-    vec3_t      start, end;
-    float       len;
-    int         j;
-    cparticle_t *p;
-    int         dec;
+	vec3_t		move;
+	vec3_t		vec;
+	vec3_t		start, end;
+	float		len;
+	int		j;
+	cparticle_t	*p;
+	int		dec;
+	int		segments;
 
-    if (cl.time - ent->fly_stoptime < 10)
-        return;
-    ent->fly_stoptime = cl.time;
+	if (cl.time - ent->fly_stoptime < 10)
+		return;
+	ent->fly_stoptime = cl.time;
 
-    VectorCopy(origin, start);
-    VectorCopy(origin, end);
-    start[2] -= 14;
-    end[2] += 50;
+	VectorCopy(origin, start);
+	VectorCopy(origin, end);
+	start[2] -= 14;
+	end[2] += 50;
 
-    VectorCopy(start, move);
-    VectorSubtract(end, start, vec);
-    len = VectorNormalize(vec);
+	VectorCopy(start, move);
+	VectorSubtract(end, start, vec);
+	len = VectorNormalize(vec);
 
-    dec = 5;
-    VectorScale(vec, 5, vec);
+	dec = 5;
+	segments = (int)ceilf(len / dec);
+	VectorScale(vec, 5, vec);
 
-    // FIXME: this is a really silly way to have a loop
-    while (len > 0) {
-        len -= dec;
+	for (int i = 0; i < segments; i++) {
+		p = CL_AllocParticle();
+		if (!p)
+			return;
+		VectorClear(p->accel);
 
-        p = CL_AllocParticle();
-        if (!p)
-            return;
-        VectorClear(p->accel);
+		p->time = cl.time;
 
-        p->time = cl.time;
+		p->alpha = 1.0f;
+		p->alphavel = -1.0f / (0.3f + frand() * 0.2f);
+		p->color = 0xe0;
+		for (j = 0; j < 3; j++) {
+			p->org[j] = move[j] + crand();
+			p->vel[j] = crand() * 15;
+		}
+		p->accel[2] = PARTICLE_GRAVITY;
 
-        p->alpha = 1.0f;
-        p->alphavel = -1.0f / (0.3f + frand() * 0.2f);
-        p->color = 0xe0;
-        for (j = 0; j < 3; j++) {
-            p->org[j] = move[j] + crand();
-            p->vel[j] = crand() * 15;
-        }
-        p->accel[2] = PARTICLE_GRAVITY;
+		VectorAdd(move, vec, move);
+	}
 
-        VectorAdd(move, vec, move);
-    }
+	{
+		int		i, j, k;
+		cparticle_t	*p;
+		float		vel;
+		vec3_t		dir;
+		vec3_t		org;
 
-    {
-        int         i, j, k;
-        cparticle_t *p;
-        float       vel;
-        vec3_t      dir;
-        vec3_t      org;
+		VectorCopy(origin, org);
 
-        VectorCopy(origin, org);
+		for (i = -2; i <= 2; i += 4)
+			for (j = -2; j <= 2; j += 4)
+				for (k = -2; k <= 4; k += 4) {
+				p = CL_AllocParticle();
+				if (!p)
+					return;
 
-        for (i = -2; i <= 2; i += 4)
-            for (j = -2; j <= 2; j += 4)
-                for (k = -2; k <= 4; k += 4) {
-                    p = CL_AllocParticle();
-                    if (!p)
-                        return;
+				p->time = cl.time;
+				p->color = 0xe0 + (Q_rand() & 3);
 
-                    p->time = cl.time;
-                    p->color = 0xe0 + (Q_rand() & 3);
+				p->alpha = 1.0f;
+				p->alphavel = -1.0f / (0.3f + (Q_rand() & 7) * 0.02f);
 
-                    p->alpha = 1.0f;
-                    p->alphavel = -1.0f / (0.3f + (Q_rand() & 7) * 0.02f);
+				p->org[0] = org[0] + i + ((Q_rand() & 23) * crand());
+				p->org[1] = org[1] + j + ((Q_rand() & 23) * crand());
+				p->org[2] = org[2] + k + ((Q_rand() & 23) * crand());
 
-                    p->org[0] = org[0] + i + ((Q_rand() & 23) * crand());
-                    p->org[1] = org[1] + j + ((Q_rand() & 23) * crand());
-                    p->org[2] = org[2] + k + ((Q_rand() & 23) * crand());
+				dir[0] = j * 8;
+				dir[1] = i * 8;
+				dir[2] = k * 8;
 
-                    dir[0] = j * 8;
-                    dir[1] = i * 8;
-                    dir[2] = k * 8;
+				VectorNormalize(dir);
+				vel = 50 + (Q_rand() & 63);
+				VectorScale(dir, vel, p->vel);
 
-                    VectorNormalize(dir);
-                    vel = 50 + (Q_rand() & 63);
-                    VectorScale(dir, vel, p->vel);
-
-                    p->accel[0] = p->accel[1] = 0;
-                    p->accel[2] = -PARTICLE_GRAVITY;
-                }
-    }
+				p->accel[0] = p->accel[1] = 0;
+				p->accel[2] = -PARTICLE_GRAVITY;
+			}
+	}
 }
+
 
 /*
 ===============
