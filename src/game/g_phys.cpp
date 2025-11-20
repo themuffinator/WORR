@@ -359,6 +359,8 @@ typedef struct {
 	edict_t *ent;
 	vec3_t	origin;
 	vec3_t	angles;
+	vec3_t	deltamove;
+	vec3_t	deltaangles;
 	bool	moved;
 } pushed_t;
 
@@ -394,22 +396,24 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
         maxs[i] = pusher->absmax[i] + move[i];
     }
 
-// we need this for pushing things later
-    VectorNegate(amove, org);
-    AngleVectors(org, forward, right, up);
+	// we need this for pushing things later
+	VectorNegate(amove, org);
+	AngleVectors(org, forward, right, up);
 
-// save the pusher's original position
+	// save the pusher's original position
 	pushed_p->ent = pusher;
 	VectorCopy(pusher->s.origin, pushed_p->origin);
 	VectorCopy(pusher->s.angles, pushed_p->angles);
+	VectorClear(pushed_p->deltamove);
+	VectorClear(pushed_p->deltaangles);
 	pushed_p->moved = false;
 	pushed_p++;
 
-// move the pusher to it's final position
+	// move the pusher to it's final position
 	VectorAdd(pusher->s.origin, move, pusher->s.origin);
 	VectorAdd(pusher->s.angles, amove, pusher->s.angles);
 	(pushed_p - 1)->moved = (!VectorCompare(pusher->s.origin, (pushed_p - 1)->origin)
-		|| !VectorCompare(pusher->s.angles, (pushed_p - 1)->angles));
+			|| !VectorCompare(pusher->s.angles, (pushed_p - 1)->angles));
 	gi.linkentity(pusher);
 
 // see if any solid entities are inside the final position
@@ -442,49 +446,53 @@ static bool SV_Push(edict_t *pusher, vec3_t move, vec3_t amove)
                 continue;
         }
 
-        if ((pusher->movetype == MOVETYPE_PUSH) || (check->groundentity == pusher)) {
-            // move this entity
-            pushed_p->ent = check;
-            VectorCopy(check->s.origin, pushed_p->origin);
-            VectorCopy(check->s.angles, pushed_p->angles);
+		if ((pusher->movetype == MOVETYPE_PUSH) || (check->groundentity == pusher)) {
+			// move this entity
+			pushed_p->ent = check;
+			VectorCopy(check->s.origin, pushed_p->origin);
+			VectorCopy(check->s.angles, pushed_p->angles);
+			VectorCopy(vec3_origin, pushed_p->deltamove);
+			VectorCopy(vec3_origin, pushed_p->deltaangles);
 			pushed_p->moved = false;
-            pushed_p++;
+			pushed_p++;
 
-            // try moving the contacted entity
-            VectorAdd(check->s.origin, move, check->s.origin);
+			// try moving the contacted entity
+			VectorAdd(check->s.origin, move, check->s.origin);
+			VectorAdd((pushed_p - 1)->deltamove, move, (pushed_p - 1)->deltamove);
 
-            // figure movement due to the pusher's amove
-            VectorSubtract(check->s.origin, pusher->s.origin, org);
-            org2[0] = DotProduct(org, forward);
-            org2[1] = -DotProduct(org, right);
-            org2[2] = DotProduct(org, up);
-            VectorSubtract(org2, org, move2);
-            VectorAdd(check->s.origin, move2, check->s.origin);
+			// figure movement due to the pusher's amove
+			VectorSubtract(check->s.origin, pusher->s.origin, org);
+			org2[0] = DotProduct(org, forward);
+			org2[1] = -DotProduct(org, right);
+			org2[2] = DotProduct(org, up);
+			VectorSubtract(org2, org, move2);
+			VectorAdd(check->s.origin, move2, check->s.origin);
+			VectorAdd((pushed_p - 1)->deltamove, move2, (pushed_p - 1)->deltamove);
 			(pushed_p - 1)->moved = (!VectorCompare(check->s.origin, (pushed_p - 1)->origin)
-				|| !VectorCompare(check->s.angles, (pushed_p - 1)->angles));
+					|| !VectorCompare(check->s.angles, (pushed_p - 1)->angles));
 
-            // may have pushed them off an edge
-            if (check->groundentity != pusher)
-                check->groundentity = NULL;
+			// may have pushed them off an edge
+			if (check->groundentity != pusher)
+				check->groundentity = NULL;
 
-            block = SV_TestEntityPosition(check);
-            if (!block) {
-                // pushed ok
-                gi.linkentity(check);
-                // impact?
-                continue;
-            }
+			block = SV_TestEntityPosition(check);
+			if (!block) {
+				// pushed ok
+				gi.linkentity(check);
+				// impact?
+				continue;
+			}
 
-            // if it is ok to leave in the old position, do it
-            // this is only relevant for riding entities, not pushed
-            // FIXME: this doesn't account for rotation
-            VectorSubtract(check->s.origin, move, check->s.origin);
-            block = SV_TestEntityPosition(check);
-            if (!block) {
-                pushed_p--;
-                continue;
-            }
-        }
+			// if it is ok to leave in the old position, do it
+			// this is only relevant for riding entities, not pushed
+			VectorSubtract(check->s.origin, (pushed_p - 1)->deltamove, check->s.origin);
+			VectorSubtract(check->s.angles, (pushed_p - 1)->deltaangles, check->s.angles);
+			block = SV_TestEntityPosition(check);
+			if (!block) {
+				pushed_p--;
+				continue;
+			}
+		}
 
         // save off the obstacle so we can call the block function
         obstacle = check;
