@@ -51,7 +51,8 @@ static cvar_t *gl_upscale_pcx;
 static cvar_t *gl_texturemode;
 static cvar_t *gl_texturebits;
 static cvar_t *gl_anisotropy;
-static cvar_t *gl_saturation;
+static cvar_t *gl_color_scale;
+static cvar_t *gl_saturation_legacy;
 static cvar_t *gl_gamma;
 static cvar_t *gl_invert;
 static cvar_t *gl_partshape;
@@ -1558,6 +1559,22 @@ static void gl_partshape_changed(cvar_t *self)
 }
 
 /*
+=============
+GL_LegacySaturationChanged
+
+Propagates legacy gl_saturation values to gl_color_scale and informs users.
+=============
+*/
+static void GL_LegacySaturationChanged(cvar_t *self)
+{
+	if (!gl_color_scale)
+	return;
+
+	Cvar_SetByVar(gl_color_scale, self->string, FROM_CODE);
+	Com_Printf("'gl_saturation' is deprecated; use 'gl_color_scale' instead.\n");
+}
+
+/*
 ===============
 GL_InitImages
 ===============
@@ -1581,9 +1598,15 @@ void GL_InitImages(void)
     gl_picmip = Cvar_Get("gl_picmip", "0", CVAR_FILES);
     gl_downsample_skins = Cvar_Get("gl_downsample_skins", "1", CVAR_FILES);
     gl_gamma_scale_pics = Cvar_Get("gl_gamma_scale_pics", "0", CVAR_FILES);
-    gl_upscale_pcx = Cvar_Get("gl_upscale_pcx", "0", CVAR_FILES);
-    gl_saturation = Cvar_Get("gl_saturation", "1", CVAR_FILES);
-    gl_intensity = Cvar_Get("intensity", "1", 0);
+	gl_upscale_pcx = Cvar_Get("gl_upscale_pcx", "0", CVAR_FILES);
+	gl_color_scale = Cvar_Get("gl_color_scale", "1", CVAR_FILES);
+	gl_saturation_legacy = Cvar_Get("gl_saturation", "1", CVAR_FILES);
+	gl_saturation_legacy->changed = GL_LegacySaturationChanged;
+	if (gl_saturation_legacy->modified_count && !gl_color_scale->modified_count) {
+		Cvar_SetByVar(gl_color_scale, gl_saturation_legacy->string, FROM_CODE);
+		Com_Printf("Applied legacy 'gl_saturation' value to 'gl_color_scale'.\n");
+	}
+	gl_intensity = Cvar_Get("intensity", "1", 0);
     gl_invert = Cvar_Get("gl_invert", "0", CVAR_FILES);
     gl_gamma = Cvar_Get("vid_gamma", "1", CVAR_ARCHIVE);
     gl_partshape = Cvar_Get("gl_partshape", "0", 0);
@@ -1620,8 +1643,7 @@ void GL_InitImages(void)
     else
         GL_BuildGammaTables();
 
-    // FIXME: the name 'saturation' is misleading in this context
-    colorscale = Cvar_ClampValue(gl_saturation, 0, 1);
+	colorscale = Cvar_ClampValue(gl_color_scale, 0, 1);
     lightscale = !(gl_gamma->value == 1.0f && (gl_static.use_shaders || gl_intensity->value == 1.0f));
 
     qglGenTextures(NUM_AUTO_TEXTURES, gl_static.texnums);

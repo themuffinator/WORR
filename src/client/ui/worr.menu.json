@@ -127,8 +127,8 @@
         },
         {
           "type": "range",
-          "label": "texture saturation",
-          "cvar": "gl_saturation",
+          "label": "texture color scale",
+          "cvar": "gl_color_scale",
           "group": "display",
           "min": 0,
           "max": 1,

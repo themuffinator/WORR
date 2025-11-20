@@ -920,17 +920,19 @@ gl_shadows::
       - 1 — enabled, constant alpha
       - 2 — enabled, alpha fade with distance
 
-gl_saturation::
-    Enables grayscaling of world textures. 1 keeps original colors, 0 converts
-    textures to grayscale format (this may save some video memory and speed up
-    rendering a bit since textures are uploaded at 8 bit per pixel instead of
-    24), any value in between reduces colorfulness. Default value is 1 (keep
-    original colors).
+gl_color_scale::
+    Controls a color scaling factor for world textures. 1 keeps original
+    colors, 0 converts textures to grayscale format (this may save some video
+    memory and speed up rendering a bit since textures are uploaded at 8 bit
+    per pixel instead of 24), any value in between reduces colorfulness.
+    Default value is 1 (keep original colors). The legacy ‘gl_saturation’
+    alias is still accepted for compatibility and will forward values to
+    ‘gl_color_scale’.
 
 gl_invert::
-    Inverts colors of world textures. In combination with ‘gl_saturation 0’
-    effectively makes textures look like black and white photo negative.
-    Default value is 0 (do not invert colors).
+    Inverts colors of world textures. In combination with ‘gl_color_scale 0’
+    (or legacy ‘gl_saturation 0’) effectively makes textures look like black
+    and white photo negative. Default value is 0 (do not invert colors).
 
 gl_anisotropy::
     When set to 2 and higher, enables anisotropic filtering of world textures,
