@@ -586,15 +586,33 @@ static void P_WorldEffects(void)
         if (breather || envirosuit) {
             current_player->air_finished_framenum = level.framenum + 10 * BASE_FRAMERATE;
 
-            if (((int)(current_client->breather_framenum - level.framenum) % 25) == 0) {
-                if (!current_client->breather_sound)
-                    gi.sound(current_player, CHAN_AUTO, gi.soundindex("player/u_breath1.wav"), 1, ATTN_NORM, 0);
-                else
-                    gi.sound(current_player, CHAN_AUTO, gi.soundindex("player/u_breath2.wav"), 1, ATTN_NORM, 0);
-                current_client->breather_sound ^= 1;
-                PlayerNoise(current_player, current_player->s.origin, PNOISE_SELF);
-                //FIXME: release a bubble?
-            }
+			if (((int)(current_client->breather_framenum - level.framenum) % 25) == 0) {
+				if (!current_client->breather_sound)
+					gi.sound(current_player, CHAN_AUTO, gi.soundindex("player/u_breath1.wav"), 1, ATTN_NORM, 0);
+				else
+					gi.sound(current_player, CHAN_AUTO, gi.soundindex("player/u_breath2.wav"), 1, ATTN_NORM, 0);
+				current_client->breather_sound ^= 1;
+				PlayerNoise(current_player, current_player->s.origin, PNOISE_SELF);
+
+				vec3_t	forward;
+				vec3_t	bubble_start;
+				vec3_t	bubble_end;
+
+				VectorCopy(current_player->s.origin, bubble_start);
+				bubble_start[2] += current_player->viewheight;
+				bubble_start[0] += crandom();
+				bubble_start[1] += crandom();
+
+				AngleVectors(current_client->v_angle, forward, NULL, NULL);
+				VectorMA(bubble_start, 16.0f, forward, bubble_end);
+				bubble_end[2] += 16.0f;
+
+				gi.WriteByte(svc_temp_entity);
+				gi.WriteByte(TE_BUBBLETRAIL);
+				gi.WritePosition(bubble_start);
+				gi.WritePosition(bubble_end);
+				gi.multicast(bubble_start, MULTICAST_PVS);
+			}
         }
 
         // if out of air, start drowning
