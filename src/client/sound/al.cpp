@@ -21,6 +21,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "qal.hpp"
 #include "common/json.hpp"
 #include "common/hash_map.hpp"
+#include "system/system.hpp"
+
+#include <climits>
+#include <cstdint>
 
 // translates from AL coordinate system to quake
 #define AL_UnpackVector(v)  -v[1],v[2],-v[0]
@@ -43,6 +47,8 @@ static bool         s_stream_paused;
 static bool         s_loop_points;
 static bool         s_source_spatialize;
 static ALuint       s_framecount;
+static uint64_t     s_paintedtime_monotonic;
+static uint64_t     s_previous_update_time;
 static ALint        s_merge_looping_minval;
 
 static ALuint       s_underwater_filter;
@@ -1314,83 +1320,96 @@ static void AL_Activate(void)
     AL_StreamPause(s_stream_paused);
 }
 
+/*
+=============
+AL_Update
+
+Update OpenAL listener state, spatialization, and streaming with a monotonic time source.
+=============
+*/
 static void AL_Update(void)
 {
-    int         i;
-    channel_t   *ch;
-    ALfloat     orientation[6];
+	int		i;
+	channel_t	*ch;
+	ALfloat	orientation[6];
+	uint64_t	now;
 
-    SoundSystem &soundSystem = S_GetSoundSystem();
-    channel_t *channels = soundSystem.channels_data();
-    int num_channels = soundSystem.num_channels();
-    const vec3_t &listener_origin = soundSystem.listener_origin();
-    const vec3_t &listener_forward = soundSystem.listener_forward();
-    const vec3_t &listener_up = soundSystem.listener_up();
+	SoundSystem &soundSystem = S_GetSoundSystem();
+	channel_t *channels = soundSystem.channels_data();
+	int num_channels = soundSystem.num_channels();
+	const vec3_t &listener_origin = soundSystem.listener_origin();
+	const vec3_t &listener_forward = soundSystem.listener_forward();
+	const vec3_t &listener_up = soundSystem.listener_up();
 
-    if (!s_active)
-        return;
+	if (!s_active)
+		return;
 
-    // handle time wraparound. FIXME: get rid of this?
-    i = cls.realtime & MASK(30);
-    if (i < s_paintedtime)
-        S_GetSoundSystem().StopAllSounds();
-    s_paintedtime = i;
+	now = Sys_Milliseconds();
+	if (!s_previous_update_time) {
+		s_previous_update_time = now;
+		s_paintedtime_monotonic = now;
+	} else {
+		s_paintedtime_monotonic += now - s_previous_update_time;
+		s_previous_update_time = now;
+	}
 
-    // set listener parameters
-    qalListener3f(AL_POSITION, AL_UnpackVector(listener_origin));
-    AL_CopyVector(listener_forward, orientation);
-    AL_CopyVector(listener_up, orientation + 3);
-    qalListenerfv(AL_ORIENTATION, orientation);
+	s_paintedtime = s_paintedtime_monotonic >= INT_MAX ? INT_MAX : (int)s_paintedtime_monotonic;
 
-    AL_UpdateUnderWater();
-    
-    if (s_use_reverb->integer) {
-        AL_UpdateReverb();
-    }
+	// set listener parameters
+	qalListener3f(AL_POSITION, AL_UnpackVector(listener_origin));
+	AL_CopyVector(listener_forward, orientation);
+	AL_CopyVector(listener_up, orientation + 3);
+	qalListenerfv(AL_ORIENTATION, orientation);
 
-    // update spatialization for dynamic sounds
-    for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
-        if (!ch->sfx)
-            continue;
+	AL_UpdateUnderWater();
 
-        if (ch->autosound) {
-            // autosounds are regenerated fresh each frame
-            if (ch->autoframe != s_framecount) {
-                AL_StopChannel(ch);
-                continue;
-            }
-        } else {
-            ALenum state = AL_STOPPED;
-            qalGetSourcei(ch->srcnum, AL_SOURCE_STATE, &state);
-            if (state == AL_STOPPED) {
-                AL_StopChannel(ch);
-                continue;
-            }
-        }
+	if (s_use_reverb->integer) {
+		AL_UpdateReverb();
+	}
+
+	// update spatialization for dynamic sounds
+	for (i = 0, ch = channels; channels && i < num_channels; i++, ch++) {
+		if (!ch->sfx)
+			continue;
+
+		if (ch->autosound) {
+			// autosounds are regenerated fresh each frame
+			if (ch->autoframe != s_framecount) {
+				AL_StopChannel(ch);
+				continue;
+			}
+		} else {
+			ALenum state = AL_STOPPED;
+			qalGetSourcei(ch->srcnum, AL_SOURCE_STATE, &state);
+			if (state == AL_STOPPED) {
+				AL_StopChannel(ch);
+				continue;
+			}
+		}
 
 #if USE_DEBUG
-        if (s_show->integer) {
-            ALfloat offset = 0;
-            qalGetSourcef(ch->srcnum, AL_SEC_OFFSET, &offset);
-            Com_Printf("%d %.1f %.1f %s\n", i, ch->master_vol, offset, ch->sfx->name);
-        }
+		if (s_show->integer) {
+			ALfloat offset = 0;
+			qalGetSourcef(ch->srcnum, AL_SEC_OFFSET, &offset);
+			Com_Printf("%d %.1f %.1f %s\n", i, ch->master_vol, offset, ch->sfx->name);
+		}
 #endif
 
-        AL_Spatialize(ch);  // respatialize channel
-    }
+		AL_Spatialize(ch);  // respatialize channel
+	}
 
-    s_framecount++;
+	s_framecount++;
 
-    // add loopsounds
-    if (al_merge_looping->integer >= s_merge_looping_minval) {
-        AL_MergeLoopSounds();
-    } else {
-        AL_AddLoopSounds();
-    }
+	// add loopsounds
+	if (al_merge_looping->integer >= s_merge_looping_minval) {
+		AL_MergeLoopSounds();
+	} else {
+		AL_AddLoopSounds();
+	}
 
-    AL_IssuePlaysounds();
+	AL_IssuePlaysounds();
 
-    AL_StreamUpdate();
+	AL_StreamUpdate();
 }
 
 static void AL_EndRegistration(void)
