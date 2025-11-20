@@ -2675,7 +2675,7 @@ static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 	pos = RL64(&header[8]);
 	prefix = header_pos - (ZIP_SIZECENTRALHEADER64 + sizeof(header)) - pos;
 	if (prefix < 0)
-		prefix = 0;
+	prefix = 0;
 	seek_pos = pos + prefix;
 	if (os_fseek(fp, seek_pos, SEEK_SET))
 		return 0;
@@ -2685,93 +2685,106 @@ static int64_t search_central_header64(FILE *fp, int64_t header_pos)
 		return 0;
 	return seek_pos;
 }
-}
 
+/*
+=============
+parse_extra_data
+
+Parse the extra data field of a central directory entry to locate Zip64 metadata.
+=============
+*/
 static bool parse_extra_data(const pack_t *pack, packfile_t *file, int xtra_size)
 {
-    byte buf[0xffff];
-    int pos = 0;
+	byte buf[0xffff];
+	int pos = 0;
 
-    if (!fread(buf, xtra_size, 1, pack->fp))
-        return false;
+	if (!fread(buf, xtra_size, 1, pack->fp))
+		return false;
 
-    while (pos + 4 < xtra_size) {
-        int id   = RL16(&buf[pos+0]);
-        int size = RL16(&buf[pos+2]);
-        if (pos + 4 + size > xtra_size)
-            break;
-        if (id == 0x0001)
-            return parse_zip64_extra_data(file, &buf[pos+4], size);
-        pos += 4 + size;
-    }
+	while (pos + 4 < xtra_size) {
+		int id   = RL16(&buf[pos+0]);
+		int size = RL16(&buf[pos+2]);
+		if (pos + 4 + size > xtra_size)
+		break;
+		if (id == 0x0001)
+		return parse_zip64_extra_data(file, &buf[pos+4], size);
+		pos += 4 + size;
+	}
 
-    return false;
+		return false;
 }
 
+/*
+=============
+get_file_info
+
+Extract information for a single central directory entry, including optional Zip64 fields.
+=============
+*/
 static bool get_file_info(const pack_t *pack, packfile_t *file, char *name, size_t *len, bool zip64)
 {
-    unsigned comp_mtd, comp_len, file_len, name_size, xtra_size, comm_size, file_pos;
-    byte header[ZIP_SIZECENTRALDIRITEM]; // we can't use a struct here because of packing
+	unsigned comp_mtd, comp_len, file_len, name_size, xtra_size, comm_size, file_pos;
+	byte header[ZIP_SIZECENTRALDIRITEM]; // we can't use a struct here because of packing
 
-    *len = 0;
+	*len = 0;
 
-    if (!fread(header, sizeof(header), 1, pack->fp)) {
-        Com_SetLastError("Reading central directory failed");
-        return false;
-    }
+	if (!fread(header, sizeof(header), 1, pack->fp)) {
+		Com_SetLastError("Reading central directory failed");
+		return false;
+	}
 
-    // check the magic
-    if (RL32(&header[0]) != ZIP_CENTRALHEADERMAGIC) {
-        Com_SetLastError("Bad central directory magic");
-        return false;
-    }
+	// check the magic
+	if (RL32(&header[0]) != ZIP_CENTRALHEADERMAGIC) {
+		Com_SetLastError("Bad central directory magic");
+		return false;
+	}
 
-    comp_mtd  = RL16(&header[10]);
-    comp_len  = RL32(&header[20]);
-    file_len  = RL32(&header[24]);
-    name_size = RL16(&header[28]);
-    xtra_size = RL16(&header[30]);
-    comm_size = RL16(&header[32]);
-    file_pos  = RL32(&header[42]);
+	comp_mtd  = RL16(&header[10]);
+	comp_len  = RL32(&header[20]);
+	file_len  = RL32(&header[24]);
+	name_size = RL16(&header[28]);
+	xtra_size = RL16(&header[30]);
+	comm_size = RL16(&header[32]);
+	file_pos  = RL32(&header[42]);
 
-    if (!file_len || !comp_len || !name_size || name_size >= MAX_QPATH) {
-        goto skip; // skip directories and empty files
-    }
+	if (!file_len || !comp_len || !name_size || name_size >= MAX_QPATH) {
+		goto skip; // skip directories and empty files
+	}
 
-    // fill in the info
-    file->compmtd = comp_mtd;
-    file->complen = comp_len;
-    file->filelen = file_len;
-    file->filepos = file_pos;
-    if (!fread(name, name_size, 1, pack->fp)) {
-        Com_SetLastError("Reading central directory failed");
-        return false;
-    }
-    name[name_size] = 0;
-    name_size = 0;
+	// fill in the info
+	file->compmtd = comp_mtd;
+	file->complen = comp_len;
+	file->filelen = file_len;
+	file->filepos = file_pos;
+	if (!fread(name, name_size, 1, pack->fp)) {
+		Com_SetLastError("Reading central directory failed");
+		return false;
+	}
+	name[name_size] = 0;
+	name_size = 0;
 
-    if (file_pos == UINT32_MAX || file_len == UINT32_MAX || comp_len == UINT32_MAX) {
-        if (!zip64) {
-            Com_SetLastError("File length or position too big");
-            return false;
-        }
-        if (!parse_extra_data(pack, file, xtra_size)) {
-            Com_SetLastError("Parsing zip64 extra data failed");
-            return false;
-        }
-        xtra_size = 0;
-    }
+	if (file_pos == UINT32_MAX || file_len == UINT32_MAX || comp_len == UINT32_MAX) {
+		if (!zip64) {
+			Com_SetLastError("File length or position too big");
+		return false;
+		}
+		if (!parse_extra_data(pack, file, xtra_size)) {
+			Com_SetLastError("Parsing zip64 extra data failed");
+		return false;
+		}
+		xtra_size = 0;
+	}
 
-    file->namelen = FS_NormalizePath(name);
-    *len = file->namelen + 1;
+	file->namelen = FS_NormalizePath(name);
+	*len = file->namelen + 1;
 
-skip:
-    if (os_fseek(pack->fp, name_size + xtra_size + comm_size, SEEK_CUR)) {
-        Com_SetLastError("Seeking to central directory failed");
-        return false;
-    }
+	skip:
+	if (os_fseek(pack->fp, name_size + xtra_size + comm_size, SEEK_CUR)) {
+		Com_SetLastError("Seeking to central directory failed");
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 static pack_t *load_zip_file(const char *packfile)
