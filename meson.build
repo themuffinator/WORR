@@ -179,6 +179,7 @@ client_src = [
   'src/client/cgame_classic.hpp',
   'src/common/async.cpp',
   'src/common/gamedll.cpp',
+  'src/server/effect_cull.cpp',
   'src/server/commands.cpp',
   'src/server/entities.cpp',
   'src/server/game.cpp',
