@@ -153,30 +153,33 @@ void SV_RemoveClient(client_t *client)
 
 void SV_CleanClient(client_t *client)
 {
-    int i;
+	int i;
 #if USE_AC_SERVER
-    string_entry_t *bad, *next;
+	string_entry_t *bad, *next;
 
-    for (bad = client->ac_bad_files; bad; bad = next) {
-        next = bad->next;
-        Z_Free(bad);
-    }
-    client->ac_bad_files = NULL;
+	for (bad = client->ac_bad_files; bad; bad = next) {
+	    next = bad->next;
+	    Z_Free(bad);
+	}
+	client->ac_bad_files = NULL;
 #endif
 
-    // close any existing download
-    SV_CloseDownload(client);
+	// close any existing download
+	SV_CloseDownload(client);
 
-    Z_Freep(&client->version_string);
+	Z_Freep(&client->version_string);
 
-    // free baselines allocated for this client
-    for (i = 0; i < SV_BASELINES_CHUNKS; i++) {
-        Z_Freep(&client->baselines[i]);
-    }
+	// free baselines allocated for this client
+	for (i = 0; i < SV_BASELINES_CHUNKS; i++) {
+	    Z_Freep(&client->baselines[i]);
+	}
 
-    // free packet entities
-    Z_Freep(&client->entities);
-    client->num_entities = 0;
+	// free packet entities
+	Z_Freep(&client->entities);
+	client->num_entities = 0;
+#if USE_ZLIB
+	Q2Proto_IO_ShutdownDeflate(&client->q2proto_deflate);
+#endif
 }
 
 static void print_drop_reason(client_t *client, const char *reason, clstate_t oldstate)

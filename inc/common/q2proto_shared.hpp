@@ -43,6 +43,7 @@ struct q2protoio_deflate_args_s
 void Q2Proto_IO_Init(void);
 void Q2Proto_IO_ResetInflate(void);
 void Q2Proto_IO_Shutdown(void);
+void Q2Proto_IO_ShutdownDeflate(struct q2protoio_deflate_args_s *deflate_args);
 #endif // USE_ZLIB
 
 typedef struct q2protoio_ioarg_s {
