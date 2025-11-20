@@ -846,9 +846,21 @@ static void CL_AddPacketEntities(void)
             ent.skinnum = 0;
         }
 
-        // only used for black hole model right now, FIXME: do better
-        if ((renderfx & RF_TRANSLUCENT) && !(renderfx & RF_BEAM))
-            ent.alpha = 0.70f;
+		// only used for black hole model right now, FIXME: do better
+		if ((renderfx & RF_TRANSLUCENT) && !(renderfx & RF_BEAM)) {
+			float renderfx_alpha = 0.0f;
+
+			if (s1->alpha)
+				renderfx_alpha = lerp_entity_alpha(cent);
+
+			if (!renderfx_alpha)
+				renderfx_alpha = (renderfx >> 24) * (1.0f / 255.0f);
+
+			if (!renderfx_alpha)
+				renderfx_alpha = 0.30f;
+
+			ent.alpha = renderfx_alpha;
+		}
 
         // render effects (fullbright, translucent, etc)
         if (effects & EF_COLOR_SHELL)
