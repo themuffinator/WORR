@@ -41,93 +41,138 @@ static bool         trail_active = false;
 #define NEXT(n)     (((n) + 1) & (TRAIL_LENGTH - 1))
 #define PREV(n)     (((n) - 1) & (TRAIL_LENGTH - 1))
 
+/*
+=============
+PlayerTrail_Init
+
+Initializes the player trail markers unless competitive modes are active.
+=============
+*/
 void PlayerTrail_Init(void)
 {
-    int     n;
+	int     n;
 
-    if (deathmatch->value /* FIXME || coop */)
-        return;
+	if (deathmatch->value || coop->value)
+		return;
 
-    for (n = 0; n < TRAIL_LENGTH; n++) {
-        trail[n] = G_Spawn();
-        trail[n]->classname = "player_trail";
-    }
+	for (n = 0; n < TRAIL_LENGTH; n++) {
+		trail[n] = G_Spawn();
+		trail[n]->classname = "player_trail";
+	}
 
-    trail_head = 0;
-    trail_active = true;
+	trail_head = 0;
+	trail_active = true;
 }
 
+/*
+=============
+PlayerTrail_Add
+
+Records a new point on the player trail.
+=============
+*/
 void PlayerTrail_Add(vec3_t spot)
 {
-    vec3_t  temp;
+	vec3_t  temp;
 
-    if (!trail_active)
-        return;
+	if (!trail_active)
+		return;
 
-    VectorCopy(spot, trail[trail_head]->s.origin);
+	VectorCopy(spot, trail[trail_head]->s.origin);
 
-    trail[trail_head]->timestamp = level.framenum;
+	trail[trail_head]->timestamp = level.framenum;
 
-    VectorSubtract(spot, trail[PREV(trail_head)]->s.origin, temp);
-    trail[trail_head]->s.angles[1] = vectoyaw(temp);
+	VectorSubtract(spot, trail[PREV(trail_head)]->s.origin, temp);
+	trail[trail_head]->s.angles[1] = vectoyaw(temp);
 
-    trail_head = NEXT(trail_head);
+	trail_head = NEXT(trail_head);
 }
 
+/*
+=============
+PlayerTrail_New
+
+Resets the trail and adds the first spot.
+=============
+*/
 void PlayerTrail_New(vec3_t spot)
 {
-    if (!trail_active)
-        return;
+	if (!trail_active)
+		return;
 
-    PlayerTrail_Init();
-    PlayerTrail_Add(spot);
+	PlayerTrail_Init();
+	PlayerTrail_Add(spot);
 }
 
+/*
+=============
+PlayerTrail_PickFirst
+
+Finds the first trail marker newer than the monster's last sighting.
+=============
+*/
 edict_t *PlayerTrail_PickFirst(edict_t *self)
 {
-    int     marker;
-    int     n;
+	int     marker;
+	int     n;
 
-    if (!trail_active)
-        return NULL;
+	if (!trail_active)
+		return NULL;
 
-    for (marker = trail_head, n = TRAIL_LENGTH; n; n--) {
-        if (trail[marker]->timestamp <= self->monsterinfo.trail_framenum)
-            marker = NEXT(marker);
-        else
-            break;
-    }
+	for (marker = trail_head, n = TRAIL_LENGTH; n; n--) {
+		if (trail[marker]->timestamp <= self->monsterinfo.trail_framenum)
+			marker = NEXT(marker);
+		else
+			break;
+	}
 
-    if (visible(self, trail[marker])) {
-        return trail[marker];
-    }
+	if (visible(self, trail[marker])) {
+		return trail[marker];
+	}
 
-    if (visible(self, trail[PREV(marker)])) {
-        return trail[PREV(marker)];
-    }
+	if (visible(self, trail[PREV(marker)])) {
+		return trail[PREV(marker)];
+	}
 
-    return trail[marker];
+	return trail[marker];
 }
 
+/*
+=============
+PlayerTrail_PickNext
+
+Advances to the next trail marker newer than the monster's last sighting.
+=============
+*/
 edict_t *PlayerTrail_PickNext(edict_t *self)
 {
-    int     marker;
-    int     n;
+	int     marker;
+	int     n;
 
-    if (!trail_active)
-        return NULL;
+	if (!trail_active)
+		return NULL;
 
-    for (marker = trail_head, n = TRAIL_LENGTH; n; n--) {
-        if (trail[marker]->timestamp <= self->monsterinfo.trail_framenum)
-            marker = NEXT(marker);
-        else
-            break;
-    }
+	for (marker = trail_head, n = TRAIL_LENGTH; n; n--) {
+		if (trail[marker]->timestamp <= self->monsterinfo.trail_framenum)
+			marker = NEXT(marker);
+		else
+			break;
+	}
 
-    return trail[marker];
+	return trail[marker];
 }
 
+/*
+=============
+PlayerTrail_LastSpot
+
+Returns the most recent trail marker when active.
+=============
+*/
 edict_t *PlayerTrail_LastSpot(void)
 {
-    return trail[PREV(trail_head)];
+	if (!trail_active)
+		return NULL;
+
+	return trail[PREV(trail_head)];
 }

@@ -1720,10 +1720,13 @@ void ClientBeginServerFrame(edict_t *ent)
         return;
     }
 
-    // add player trail so monsters can follow
-    if (!deathmatch->value)
-        if (!visible(ent, PlayerTrail_LastSpot()))
-            PlayerTrail_Add(ent->s.old_origin);
+	// add player trail so monsters can follow
+	if (!deathmatch->value && !coop->value) {
+		edict_t *last_trail = PlayerTrail_LastSpot();
+
+		if (last_trail && !visible(ent, last_trail))
+			PlayerTrail_Add(ent->s.old_origin);
+	}
 
     client->latched_buttons = 0;
 }
