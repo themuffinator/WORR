@@ -343,11 +343,47 @@ static void M_ReactToDamage(edict_t *targ, edict_t *attacker)
     }
 }
 
+/*
+=============
+CheckTeamDamage
+
+Determines whether damage between two entities should be suppressed because of
+friendly-fire rules.
+=============
+*/
 static bool CheckTeamDamage(edict_t *targ, edict_t *attacker)
 {
-    //FIXME make the next line real and uncomment this block
-    // if ((ability to damage a teammate == OFF) && (targ's team == attacker's team))
-    return false;
+	int	flags;
+
+	if (!targ || !attacker)
+		return false;
+
+	flags = (int)(dmflags->value);
+
+	if (coop->value) {
+		if (targ->client && attacker->client && (flags & DF_NO_FRIENDLY_FIRE)) {
+			if (sv_cheats && sv_cheats->value) {
+				const char *targName = targ->classname ? targ->classname : "unknown";
+				const char *attackerName = attacker->classname ? attacker->classname : "unknown";
+				gi.dprintf("CheckTeamDamage: blocked %s damage from %s (coop)\n", targName, attackerName);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	if (deathmatch->value && (flags & (DF_MODELTEAMS | DF_SKINTEAMS))) {
+		if (OnSameTeam(targ, attacker) && (flags & DF_NO_FRIENDLY_FIRE)) {
+			if (sv_cheats && sv_cheats->value) {
+				const char *targName = targ->classname ? targ->classname : "unknown";
+				const char *attackerName = attacker->classname ? attacker->classname : "unknown";
+				gi.dprintf("CheckTeamDamage: blocked %s damage from %s (dmflags=%d)\n", targName, attackerName, flags);
+			}
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void T_Damage(edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_t dir, vec3_t point, const vec3_t normal, int damage, int knockback, int dflags, int mod)
