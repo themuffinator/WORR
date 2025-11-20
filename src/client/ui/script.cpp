@@ -1304,12 +1304,16 @@ static void UI_ParseJsonBuffer(json_parse_t* parser, const char* buffer, size_t 
 
 	jsmn_init(&p);
 	parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
+	if (parser->num_tokens < 0)
+		Json_Error(parser, parser->pos, Json_JsmnErrorString(parser->num_tokens));
 	parser->tokens = static_cast<jsmntok_t*>(Z_TagMalloc(sizeof(jsmntok_t) * parser->num_tokens, TAG_FILESYSTEM));
 	if (!parser->tokens)
 		Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
 
 	jsmn_init(&p);
-	jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
+	int parse_result = jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
+	if (parse_result < 0)
+		Json_Error(parser, parser->pos, Json_JsmnErrorString(parse_result));
 	parser->pos = parser->tokens;
 }
 
