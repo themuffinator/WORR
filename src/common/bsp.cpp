@@ -442,8 +442,7 @@ int BSP_LoadMaterials(bsp_t *bsp)
 			HashMap_Insert(bsp->material_step_ids, &out->c.material, &out->step_id);
 	}
 
-	Com_DPrintf("%s: %d materials loaded
-", __func__, step_id);
+	Com_DPrintf("%s: %d materials loaded\n", __func__, step_id);
 	return step_id;
 }
 
@@ -451,84 +450,98 @@ int BSP_LoadMaterials(bsp_t *bsp)
 
 #if USE_REF
 
-#define DECOUPLED_LM_BYTES  40
+#define DECOUPLED_LM_BYTES	40
 
+/*
+=============
+BSP_ParseDecoupledLM
+
+Parses the decoupled lightmap lump and populates lightmap data for each face.
+=============
+*/
 static void BSP_ParseDecoupledLM(bsp_t *bsp, const byte *in, size_t filelen)
 {
-    mface_t *out;
-    bool errors;
+	mface_t *out;
+	bool errors;
 
-    if (filelen % DECOUPLED_LM_BYTES) {
-        Com_WPrintf("DECOUPLED_LM lump has odd size\n");
-        return;
-    }
+	if (filelen % DECOUPLED_LM_BYTES) {
+		Com_WPrintf("DECOUPLED_LM lump has odd size\n");
+		return;
+	}
 
-    if (bsp->numfaces > filelen / DECOUPLED_LM_BYTES) {
-        Com_WPrintf("DECOUPLED_LM lump too short\n");
-        return;
-    }
+	if (bsp->numfaces > filelen / DECOUPLED_LM_BYTES) {
+		Com_WPrintf("DECOUPLED_LM lump too short\n");
+		return;
+	}
 
-    out = bsp->faces;
-    errors = false;
-    for (int i = 0; i < bsp->numfaces; i++, out++) {
-        out->lm_width = BSP_Short();
-        out->lm_height = BSP_Short();
+	out = bsp->faces;
+	errors = false;
+	for (int i = 0; i < bsp->numfaces; i++, out++) {
+		out->lm_width = BSP_Short();
+		out->lm_height = BSP_Short();
 
-        uint32_t offset = BSP_Long();
-        if (offset == (std::numeric_limits<uint32_t>::max)())
-            out->lightmap = nullptr;
-        else if (offset < bsp->numlightmapbytes)
-            out->lightmap = bsp->lightmap + offset;
-        else {
-            out->lightmap = nullptr;
-            errors = true;
-        }
+		uint32_t offset = BSP_Long();
+		if (offset == (std::numeric_limits<uint32_t>::max)())
+			out->lightmap = nullptr;
+		else if (offset < bsp->numlightmapbytes)
+			out->lightmap = bsp->lightmap + offset;
+		else {
+			out->lightmap = nullptr;
+			errors = true;
+		}
 
-        for (int j = 0; j < 2; j++) {
-            BSP_Vector(out->lm_axis[j]);
-            out->lm_offset[j] = BSP_Float();
-        }
-    }
+		for (int j = 0; j < 2; j++) {
+			BSP_Vector(out->lm_axis[j]);
+			out->lm_offset[j] = BSP_Float();
+		}
+	}
 
-    if (errors)
-        Com_WPrintf("DECOUPLED_LM lump possibly corrupted\n");
+	if (errors)
+		Com_WPrintf("DECOUPLED_LM lump possibly corrupted\n");
 
-    bsp->lm_decoupled = true;
+	bsp->lm_decoupled = true;
 }
 
 #define FLAG_OCCLUDED   BIT(30)
 #define FLAG_LEAF       BIT(31)
 
+/*
+=============
+BSP_LookupLightgrid
+
+Traverses the packed lightgrid tree and returns the sample for the given point.
+=============
+*/
 const lightgrid_sample_t *BSP_LookupLightgrid(const lightgrid_t *grid, const uint32_t point[3])
 {
-    uint32_t nodenum = grid->rootnode;
+	uint32_t nodenum = grid->rootnode;
 
-    while (1) {
-        if (nodenum & FLAG_OCCLUDED)
-            return nullptr;
+	while (1) {
+		if (nodenum & FLAG_OCCLUDED)
+			return nullptr;
 
-        if (nodenum & FLAG_LEAF) {
-            const lightgrid_leaf_t *leaf = &grid->leafs[nodenum & ~FLAG_LEAF];
+		if (nodenum & FLAG_LEAF) {
+			const lightgrid_leaf_t *leaf = &grid->leafs[nodenum & ~FLAG_LEAF];
 
-            uint32_t pos[3];
-            VectorSubtract(point, leaf->mins, pos);
+			uint32_t pos[3];
+			VectorSubtract(point, leaf->mins, pos);
 
-            uint32_t w = leaf->size[0];
-            uint32_t h = leaf->size[1];
-            uint32_t index = w * (h * pos[2] + pos[1]) + pos[0];
-            if (index >= leaf->numsamples)
-                return nullptr;
+			uint32_t w = leaf->size[0];
+			uint32_t h = leaf->size[1];
+			uint32_t index = w * (h * pos[2] + pos[1]) + pos[0];
+			if (index >= leaf->numsamples)
+				return nullptr;
 
-            return &grid->samples[leaf->firstsample + index * grid->numstyles];
-        }
+			return &grid->samples[leaf->firstsample + index * grid->numstyles];
+		}
 
-        const lightgrid_node_t *node = &grid->nodes[nodenum];
-        nodenum = node->children[
-            (point[0] >= node->point[0]) << 2 |
-            (point[1] >= node->point[1]) << 1 |
-            (point[2] >= node->point[2]) << 0
-        ];
-    }
+		const lightgrid_node_t *node = &grid->nodes[nodenum];
+		nodenum = node->children[
+			(point[0] >= node->point[0]) << 2 |
+			(point[1] >= node->point[1]) << 1 |
+			(point[2] >= node->point[2]) << 0
+		];
+	}
 }
 
 // ugh, requires parsing entire thing
