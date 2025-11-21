@@ -80,6 +80,8 @@ cvar_t  *sys_homedir;
 cvar_t  *sys_debugprint;
 #endif
 
+static std::array<char, MAX_OSPATH> executable_basedir{};
+
 /*
 =============
 Sys_VerifyWritableDirectory
@@ -2050,25 +2052,36 @@ MAIN
 ========================================================================
 */
 
+/*
+=============
+fix_current_directory
+
+Resolve and switch to the executable directory while storing the UTF-8 path.
+=============
+*/
 static void fix_current_directory(void)
 {
-    WCHAR buffer[MAX_PATH];
-    DWORD ret = GetModuleFileNameW(NULL, buffer, MAX_PATH);
+	WCHAR buffer[MAX_PATH];
+	DWORD ret = GetModuleFileNameW(NULL, buffer, MAX_PATH);
 
-    if (ret < MAX_PATH)
-        while (ret)
-            if (buffer[--ret] == '\\')
-                break;
+	if (ret < MAX_PATH)
+		while (ret)
+			if (buffer[--ret] == '\')
+				break;
 
-    if (ret == 0)
-        Sys_Error("Can't determine base directory");
+	if (ret == 0)
+		Sys_Error("Can't determine base directory");
 
-    if (ret >= MAX_PATH - MAX_QPATH)
-        Sys_Error("Base directory path too long. Move your " PRODUCT " installation to a shorter path.");
+	if (ret >= MAX_PATH - MAX_QPATH)
+		Sys_Error("Base directory path too long. Move your " PRODUCT " installation to a shorter path.");
 
-    buffer[ret] = 0;
-    if (!SetCurrentDirectoryW(buffer))
-        Sys_Error("SetCurrentDirectoryW failed");
+	buffer[ret] = 0;
+	if (!SetCurrentDirectoryW(buffer))
+		Sys_Error("SetCurrentDirectoryW failed");
+
+	int length = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, executable_basedir.data(), static_cast<int>(executable_basedir.size()), NULL, NULL);
+	if (length == 0 || length >= static_cast<int>(executable_basedir.size()))
+		Sys_Error("Failed to resolve executable directory");
 }
 
 #if (_MSC_VER >= 1400)
