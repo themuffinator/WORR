@@ -1438,11 +1438,42 @@ bool Sys_IsMainThread(void)
     return GetCurrentThreadId() == main_thread_id;
 }
 
+/*
+=============
+Sys_Milliseconds
+
+Returns milliseconds since startup using a monotonic clock.
+Falls back to a lower-resolution timer if high-resolution queries fail.
+=============
+*/
 unsigned Sys_Milliseconds(void)
 {
-    LARGE_INTEGER tm;
-    QueryPerformanceCounter(&tm);
-    return tm.QuadPart * 1000ULL / timer_freq.QuadPart;
+	static bool qpc_available = true;
+	static DWORD fallback_base = 0;
+	static unsigned last_msec = 0;
+
+	if (qpc_available) {
+		LARGE_INTEGER tm;
+		if (QueryPerformanceCounter(&tm)) {
+			unsigned msec = static_cast<unsigned>(tm.QuadPart * 1000ULL / timer_freq.QuadPart);
+			if (msec < last_msec)
+				msec = last_msec;
+			last_msec = msec;
+			return msec;
+		}
+
+		Sys_Printf("QueryPerformanceCounter failed; falling back to timeGetTime (low resolution).\n");
+		qpc_available = false;
+		fallback_base = timeGetTime();
+	}
+
+	DWORD current = timeGetTime();
+	unsigned msec = current - fallback_base;
+	if (msec < last_msec)
+		msec = last_msec;
+	else
+		last_msec = msec;
+	return msec;
 }
 
 void Sys_AddDefaultConfig(void)
