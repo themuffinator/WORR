@@ -3531,70 +3531,21 @@ void Menu_Draw(menuFrameWork_t *menu)
 //
 // draw contents
 //
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
-        if (item->flags & QMF_HIDDEN) {
-            continue;
-        }
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
 
-        switch (item->type) {
-        case MTYPE_FIELD:
-            Field_Draw(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SLIDER:
-            Slider_Draw(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_LIST:
-            MenuList_Draw(static_cast<menuList_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-        case MTYPE_BITFIELD:
-        case MTYPE_PAIRS:
-        case MTYPE_VALUES:
-        case MTYPE_STRINGS:
-        case MTYPE_TOGGLE:
-        case MTYPE_EPISODE:
-        case MTYPE_UNIT:
-            SpinControl_Draw(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_CHECKBOX:
-            Checkbox_Draw(static_cast<menuCheckbox_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Draw(static_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_RADIO:
-            RadioButton_Draw(static_cast<menuRadioButton_t *>(rawItem));
-            break;
-        case MTYPE_ACTION:
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Action_Draw(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_SEPARATOR:
-            Separator_Draw(static_cast<menuSeparator_t *>(rawItem));
-            break;
-        case MTYPE_STATIC:
-            Static_Draw(static_cast<menuStatic_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Draw(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_BITMAP:
-            Bitmap_Draw(static_cast<menuBitmap_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Draw(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        default:
-            Q_assert(!"unknown item type");
-        }
+	for (size_t i = 0; i < itemCount; i++) {
+		auto *item = static_cast<menuCommon_t *>(menu->items[i]);
 
-        if (ui_debug->integer) {
-            UI_DrawRect8(&item->rect, 1, 223);
-        }
-    }
+		if (item->flags & QMF_HIDDEN) {
+			continue;
+		}
+
+		menu->itemsCpp[i]->Draw();
+
+		if (ui_debug->integer) {
+			UI_DrawRect8(&item->rect, 1, 223);
+		}
+	}
 
     if (openDropdown)
         Dropdown_DrawList(openDropdown);
