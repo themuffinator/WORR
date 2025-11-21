@@ -28,6 +28,288 @@ cvar_t    *ui_debug;
 static cvar_t    *ui_open;
 static cvar_t    *ui_scale;
 
+#define UI_COMPOSITOR_FADE_TIME	200
+#define UI_COMPOSITOR_SLIDE_PIXELS	32
+
+typedef enum uiTransitionType_e {
+	UI_TRANSITION_NONE,
+	UI_TRANSITION_FADE_IN,
+	UI_TRANSITION_FADE_OUT,
+	UI_TRANSITION_SLIDE_IN,
+	UI_TRANSITION_SLIDE_OUT
+} uiTransitionType_t;
+
+typedef struct uiLayerState_s {
+	menuFrameWork_t *menu;
+	float startOpacity;
+	float targetOpacity;
+	float opacity;
+	vec2_t slideStart;
+	vec2_t slideTarget;
+	vec2_t slide;
+	uiTransitionType_t transition;
+	unsigned startTime;
+	unsigned duration;
+	bool modal;
+	bool passthrough;
+	bool drawBackdrop;
+} uiLayerState_t;
+
+typedef struct uiCompositor_s {
+	uiLayerState_t layers[MAX_MENU_DEPTH];
+	int count;
+
+static uiCompositor_t ui_compositor;
+
+
+/*
+=============
+UI_CompositorReset
+
+Clears any cached compositor state when the menu stack is torn down.
+=============
+*/
+static void UI_CompositorReset(void)
+{
+	memset(&ui_compositor, 0, sizeof(ui_compositor));
+}
+
+/*
+=============
+UI_CompositorLerp
+
+Returns a clamped linear interpolation value for transition curves.
+=============
+*/
+static float UI_CompositorLerp(float from, float to, float frac)
+{
+	if (frac < 0.0f) {
+		frac = 0.0f;
+	} else if (frac > 1.0f) {
+		frac = 1.0f;
+	}
+
+	return from + (to - from) * frac;
+}
+
+/*
+=============
+UI_CompositorFindLayer
+
+Looks for cached layer information for the provided menu.
+=============
+*/
+static uiLayerState_t *UI_CompositorFindLayer(menuFrameWork_t *menu)
+{
+	for (int i = 0; i < ui_compositor.count; i++) {
+		uiLayerState_t *layer = &ui_compositor.layers[i];
+		if (layer->menu == menu) {
+			return layer;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+=============
+UI_CompositorSync
+
+Rebuilds the compositor layer list from the stacked menus while
+preserving transition progress for existing layers.
+=============
+*/
+static void UI_CompositorSync(void)
+{
+	uiLayerState_t rebuilt[MAX_MENU_DEPTH];
+	int rebuildCount = 0;
+
+	for (int i = 0; i < uis.menuDepth && rebuildCount < MAX_MENU_DEPTH; i++) {
+		menuFrameWork_t *menu = uis.layers[i];
+		uiLayerState_t *existing = UI_CompositorFindLayer(menu);
+		uiLayerState_t *dest = &rebuilt[rebuildCount++];
+
+		if (existing) {
+			*dest = *existing;
+		} else {
+			memset(dest, 0, sizeof(*dest));
+			dest->menu = menu;
+			dest->startOpacity = 0.0f;
+			dest->targetOpacity = menu->opacity > 0.0f ? menu->opacity : 1.0f;
+			dest->opacity = dest->startOpacity;
+			dest->transition = UI_TRANSITION_FADE_IN;
+			dest->startTime = uis.realtime;
+			dest->duration = UI_COMPOSITOR_FADE_TIME;
+			dest->slideStart[0] = 0.0f;
+			dest->slideStart[1] = UI_COMPOSITOR_SLIDE_PIXELS;
+			dest->slideTarget[0] = 0.0f;
+			dest->slideTarget[1] = 0.0f;
+			Vector2Copy(dest->slideStart, dest->slide);
+		}
+
+		dest->modal = menu->modal || !menu->allowInputPassthrough;
+		dest->passthrough = menu->allowInputPassthrough;
+		dest->drawBackdrop = menu->drawsBackdrop || (menu->modal && !menu->transparent);
+	}
+
+	ui_compositor.count = rebuildCount;
+	for (int i = 0; i < rebuildCount; i++) {
+		ui_compositor.layers[i] = rebuilt[i];
+	}
+}
+
+/*
+=============
+UI_CompositorUpdateLayer
+
+Applies transition math to a layer prior to drawing.
+=============
+*/
+static void UI_CompositorUpdateLayer(uiLayerState_t *layer)
+{
+	float frac = 1.0f;
+
+	if (layer->duration) {
+		unsigned elapsed = uis.realtime - layer->startTime;
+		if (elapsed < layer->duration) {
+			frac = static_cast<float>(elapsed) / static_cast<float>(layer->duration);
+		}
+	}
+
+	switch (layer->transition) {
+	case UI_TRANSITION_FADE_IN:
+	case UI_TRANSITION_NONE:
+		layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
+		break;
+	case UI_TRANSITION_FADE_OUT:
+		layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
+		break;
+	case UI_TRANSITION_SLIDE_IN:
+		Vector2Set(layer->slide,
+			UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
+			UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
+		layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
+		break;
+	case UI_TRANSITION_SLIDE_OUT:
+		Vector2Set(layer->slide,
+			UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
+			UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
+		layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
+		break;
+	}
+}
+
+/*
+=============
+UI_DrawBackdropForLayer
+
+Draws a dimmed overlay for modal layers.
+=============
+*/
+static void UI_DrawBackdropForLayer(const uiLayerState_t *layer)
+{
+	if (!layer->drawBackdrop) {
+		return;
+	}
+
+	int alpha = static_cast<int>(layer->opacity * 160.0f);
+	if (alpha < 0) {
+		alpha = 0;
+	} else if (alpha > 255) {
+		alpha = 255;
+	}
+	R_DrawFill32(Q_rint(layer->slide[0]), Q_rint(layer->slide[1]), uis.width, uis.height,
+		ColorSetAlpha(COLOR_BLACK, static_cast<uint8_t>(alpha)));
+}
+
+
+typedef struct uiColorStack_s {
+	color_t background;
+	color_t normal;
+	color_t active;
+	color_t selection;
+	color_t disabled;
+} uiColorStack_t;
+
+/*
+=============
+UI_CompositorPushOpacity
+
+Modulates UI palette colors to respect a layer's opacity.
+=============
+*/
+static void UI_CompositorPushOpacity(uiColorStack_t *backup, float opacity)
+{
+	*backup = uis.color;
+	if (opacity >= 1.0f) {
+		return;
+	}
+
+	int scaled = static_cast<int>(opacity * 255.0f);
+	if (scaled < 0) {
+		scaled = 0;
+	} else if (scaled > 255) {
+		scaled = 255;
+	}
+	uis.color.background = ColorSetAlpha(backup->background, static_cast<uint8_t>(scaled));
+	uis.color.normal = ColorSetAlpha(backup->normal, static_cast<uint8_t>(scaled));
+	uis.color.active = ColorSetAlpha(backup->active, static_cast<uint8_t>(scaled));
+	uis.color.selection = ColorSetAlpha(backup->selection, static_cast<uint8_t>(scaled));
+	uis.color.disabled = ColorSetAlpha(backup->disabled, static_cast<uint8_t>(scaled));
+}
+
+/*
+=============
+UI_CompositorPopOpacity
+
+Restores the UI palette after a composited layer has been drawn.
+=============
+*/
+static void UI_CompositorPopOpacity(const uiColorStack_t *backup)
+{
+	uis.color = *backup;
+}
+
+/*
+=============
+UI_UpdateActiveMenuFromStack
+
+Ensures the active menu reference points at the topmost layer.
+=============
+*/
+static void UI_UpdateActiveMenuFromStack(void)
+{
+	uis.activeMenu = NULL;
+	for (int i = uis.menuDepth - 1; i >= 0; i--) {
+		if (uis.layers[i]) {
+			uis.activeMenu = uis.layers[i];
+			break;
+		}
+	}
+}
+
+/*
+=============
+UI_ApplyMenuDefaults
+
+Initializes modal and opacity defaults for a menu layer.
+=============
+*/
+static void UI_ApplyMenuDefaults(menuFrameWork_t *menu)
+{
+	if (!menu->modal && !menu->allowInputPassthrough) {
+		menu->modal = true;
+	}
+
+	if (menu->opacity <= 0.0f || menu->opacity > 1.0f) {
+		menu->opacity = 1.0f;
+	}
+
+	if (!menu->drawsBackdrop && menu->modal && !menu->transparent) {
+		menu->drawsBackdrop = true;
+	}
+}
+
 // ===========================================================================
 
 /*
@@ -37,61 +319,65 @@ UI_PushMenu
 */
 void UI_PushMenu(menuFrameWork_t *menu)
 {
-    int i, j;
+	int i, j;
 
-    if (!menu) {
-        return;
-    }
+	if (!menu) {
+		return;
+	}
 
-    // if this menu is already present, drop back to that level
-    // to avoid stacking menus by hotkeys
-    for (i = 0; i < uis.menuDepth; i++) {
-        if (uis.layers[i] == menu) {
-            break;
-        }
-    }
+	// if this menu is already present, drop back to that level
+	// to avoid stacking menus by hotkeys
+	for (i = 0; i < uis.menuDepth; i++) {
+		if (uis.layers[i] == menu) {
+			break;
+		}
+	}
 
-    if (i == uis.menuDepth) {
-        if (uis.menuDepth >= MAX_MENU_DEPTH) {
-            Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
-            return;
-        }
-        uis.layers[uis.menuDepth++] = menu;
-    } else {
-        for (j = i; j < uis.menuDepth; j++) {
-            UI_PopMenu();
-        }
-        uis.menuDepth = i + 1;
-    }
+	if (i == uis.menuDepth) {
+		if (uis.menuDepth >= MAX_MENU_DEPTH) {
+			Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
+			return;
+		}
+		uis.layers[uis.menuDepth++] = menu;
+	} else {
+		for (j = i; j < uis.menuDepth; j++) {
+			UI_PopMenu();
+		}
+		uis.menuDepth = i + 1;
+	}
 
-    if (menu->push && !menu->push(menu)) {
-        uis.menuDepth--;
-        return;
-    }
+	if (menu->push && !menu->push(menu)) {
+		uis.menuDepth--;
+		return;
+	}
 
-    Menu_Init(menu);
+	UI_ApplyMenuDefaults(menu);
 
-    Key_SetDest(Key_FromMask((Key_GetDest() & ~KEY_CONSOLE) | KEY_MENU));
+	Menu_Init(menu);
 
-    Con_Close(true);
+	Key_SetDest(Key_FromMask((Key_GetDest() & ~KEY_CONSOLE) | KEY_MENU));
 
-    if (!uis.activeMenu) {
-        // opening menu moves cursor to the nice location
-        IN_WarpMouse(menu->mins[0] / uis.scale, menu->mins[1] / uis.scale);
+	Con_Close(true);
 
-        uis.mouseCoords[0] = menu->mins[0];
-        uis.mouseCoords[1] = menu->mins[1];
+	if (!uis.activeMenu) {
+		// opening menu moves cursor to the nice location
+		IN_WarpMouse(menu->mins[0] / uis.scale, menu->mins[1] / uis.scale);
 
-        uis.entersound = true;
-    }
+		uis.mouseCoords[0] = menu->mins[0];
+		uis.mouseCoords[1] = menu->mins[1];
 
-    uis.activeMenu = menu;
+		uis.entersound = true;
+	}
 
-    UI_DoHitTest();
+	uis.activeMenu = menu;
+	UI_UpdateActiveMenuFromStack();
 
-    if (menu->expose) {
-        menu->expose(menu);
-    }
+	UI_DoHitTest();
+	UI_CompositorSync();
+
+	if (menu->expose) {
+		menu->expose(menu);
+	}
 }
 
 static void UI_Resize(void)
@@ -117,21 +403,23 @@ UI_ForceMenuOff
 */
 void UI_ForceMenuOff(void)
 {
-    menuFrameWork_t *menu;
-    int i;
+	menuFrameWork_t *menu;
+	int i;
 
-    for (i = 0; i < uis.menuDepth; i++) {
-        menu = uis.layers[i];
-        if (menu->pop) {
-            menu->pop(menu);
-        }
-    }
+	for (i = 0; i < uis.menuDepth; i++) {
+		menu = uis.layers[i];
+		if (menu->pop) {
+			menu->pop(menu);
+		}
+	}
 
-    Key_SetDest(Key_FromMask(Key_GetDest() & ~KEY_MENU));
-    uis.menuDepth = 0;
-    uis.activeMenu = NULL;
-    uis.mouseTracker = NULL;
-    uis.transparent = false;
+	Key_SetDest(Key_FromMask(Key_GetDest() & ~KEY_MENU));
+	uis.menuDepth = 0;
+	uis.activeMenu = NULL;
+	uis.mouseTracker = NULL;
+	uis.transparent = false;
+	UI_CompositorReset();
+	UI_UpdateActiveMenuFromStack();
 }
 
 /*
@@ -141,24 +429,26 @@ UI_PopMenu
 */
 void UI_PopMenu(void)
 {
-    menuFrameWork_t *menu;
+	menuFrameWork_t *menu;
 
-    Q_assert(uis.menuDepth > 0);
+	Q_assert(uis.menuDepth > 0);
 
-    menu = uis.layers[--uis.menuDepth];
-    if (menu->pop) {
-        menu->pop(menu);
-    }
+	menu = uis.layers[--uis.menuDepth];
+	if (menu->pop) {
+		menu->pop(menu);
+	}
 
-    if (!uis.menuDepth) {
-        UI_ForceMenuOff();
-        return;
-    }
+	if (!uis.menuDepth) {
+		UI_ForceMenuOff();
+		return;
+	}
 
-    uis.activeMenu = uis.layers[uis.menuDepth - 1];
-    uis.mouseTracker = NULL;
+	uis.activeMenu = uis.layers[uis.menuDepth - 1];
+	uis.mouseTracker = NULL;
+	UI_UpdateActiveMenuFromStack();
+	UI_CompositorSync();
 
-    UI_DoHitTest();
+	UI_DoHitTest();
 }
 
 /*
@@ -345,33 +635,98 @@ UI_DoHitTest
 */
 bool UI_DoHitTest(void)
 {
-    menuCommon_t *item;
+menuCommon_t *item = NULL;
 
-    if (!uis.activeMenu) {
-        return false;
-    }
+	if (!uis.menuDepth) {
+		return false;
+	}
 
-    if (uis.mouseTracker) {
-        item = uis.mouseTracker;
-    } else {
-        if (!(item = Menu_HitTest(uis.activeMenu))) {
-            return false;
-        }
-    }
+	for (int i = uis.menuDepth - 1; i >= 0; i--) {
+		menuFrameWork_t *menu = uis.layers[i];
+		if (uis.mouseTracker && uis.mouseTracker->parent == menu) {
+			item = uis.mouseTracker;
+		} else {
+			item = Menu_HitTest(menu);
+		}
 
-    if (!UI_IsItemSelectable(item)) {
-        return false;
-    }
+		if (item && UI_IsItemSelectable(item)) {
+			Menu_MouseMove(item);
 
-    Menu_MouseMove(item);
+			if (!(item->flags & QMF_HASFOCUS)) {
+				Menu_SetFocus(item);
+			}
 
-    if (item->flags & QMF_HASFOCUS) {
-        return false;
-    }
+			uis.activeMenu = menu;
+			return true;
+		}
 
-    Menu_SetFocus(item);
+		if (menu->modal) {
+			break;
+		}
+	}
 
-    return true;
+UI_UpdateActiveMenuFromStack();
+return false;
+}
+
+/*
+=============
+UI_DispatchKeyToLayers
+
+Routes key presses through the stacked menus honoring modal barriers.
+=============
+*/
+static menuSound_t UI_DispatchKeyToLayers(int key)
+{
+	menuSound_t sound = QMS_NOTHANDLED;
+
+	for (int i = uis.menuDepth - 1; i >= 0; i--) {
+		menuFrameWork_t *menu = uis.layers[i];
+		sound = Menu_Keydown(menu, key);
+		if (sound != QMS_NOTHANDLED) {
+			uis.activeMenu = menu;
+			return sound;
+		}
+
+		if (menu->modal) {
+			return sound;
+		}
+	}
+
+	UI_UpdateActiveMenuFromStack();
+	return sound;
+}
+
+/*
+=============
+UI_DispatchCharToLayers
+
+Routes printable character input with pass-through semantics.
+=============
+*/
+static menuSound_t UI_DispatchCharToLayers(int key)
+{
+	for (int i = uis.menuDepth - 1; i >= 0; i--) {
+		menuFrameWork_t *menu = uis.layers[i];
+		menuCommon_t *item = Menu_ItemAtCursor(menu);
+		menuSound_t sound = QMS_NOTHANDLED;
+
+		if (item) {
+			sound = Menu_CharEvent(item, key);
+		}
+
+		if (sound != QMS_NOTHANDLED) {
+			uis.activeMenu = menu;
+			return sound;
+		}
+
+		if (menu->modal) {
+			return sound;
+		}
+	}
+
+	UI_UpdateActiveMenuFromStack();
+	return QMS_NOTHANDLED;
 }
 
 /*
@@ -381,13 +736,13 @@ UI_MouseEvent
 */
 void UI_MouseEvent(int x, int y)
 {
-    x = Q_clip(x, 0, r_config.width - 1);
-    y = Q_clip(y, 0, r_config.height - 1);
+	x = Q_clip(x, 0, r_config.width - 1);
+	y = Q_clip(y, 0, r_config.height - 1);
 
-    uis.mouseCoords[0] = Q_rint(x * uis.scale);
-    uis.mouseCoords[1] = Q_rint(y * uis.scale);
+	uis.mouseCoords[0] = Q_rint(x * uis.scale);
+	uis.mouseCoords[1] = Q_rint(y * uis.scale);
 
-    UI_DoHitTest();
+	UI_DoHitTest();
 }
 
 /*
@@ -397,59 +752,53 @@ UI_Draw
 */
 void UI_Draw(unsigned realtime)
 {
-    int i;
+	uiColorStack_t colors;
 
-    uis.realtime = realtime;
+	uis.realtime = realtime;
 
-    if (!(Key_GetDest() & KEY_MENU)) {
-        return;
-    }
+	if (!(Key_GetDest() & KEY_MENU)) {
+		return;
+	}
 
-    if (!uis.activeMenu) {
-        return;
-    }
+	if (!uis.menuDepth) {
+		return;
+	}
 
-    R_SetScale(uis.scale);
+	UI_UpdateActiveMenuFromStack();
+	UI_CompositorSync();
 
-    if (1) {
-        // draw top menu
-        if (uis.activeMenu->draw) {
-            uis.activeMenu->draw(uis.activeMenu);
-        } else {
-            Menu_Draw(uis.activeMenu);
-        }
-    } else {
-        // draw all layers
-        for (i = 0; i < uis.menuDepth; i++) {
-            if (uis.layers[i]->draw) {
-                uis.layers[i]->draw(uis.layers[i]);
-            } else {
-                Menu_Draw(uis.layers[i]);
-            }
-        }
-    }
+	R_SetScale(uis.scale);
 
-    // draw custom cursor in fullscreen mode
-    if (r_config.flags & QVF_FULLSCREEN) {
-        R_DrawPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
-                  uis.mouseCoords[1] - uis.cursorHeight / 2, 
-                  COLOR_WHITE, uis.cursorHandle);
-    }
+	for (int i = 0; i < ui_compositor.count; i++) {
+		uiLayerState_t *layer = &ui_compositor.layers[i];
+		UI_CompositorUpdateLayer(layer);
+		UI_DrawBackdropForLayer(layer);
+		UI_CompositorPushOpacity(&colors, layer->opacity);
+		if (layer->menu->draw) {
+			layer->menu->draw(layer->menu);
+		} else {
+			Menu_Draw(layer->menu);
+		}
+		UI_CompositorPopOpacity(&colors);
+	}
 
-    if (ui_debug->integer) {
-        UI_DrawString(uis.width - 4, 4, UI_RIGHT,
-                      COLOR_WHITE, va("%3i %3i", uis.mouseCoords[0], uis.mouseCoords[1]));
-    }
+	if (r_config.flags & QVF_FULLSCREEN) {
+		R_DrawPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
+				uis.mouseCoords[1] - uis.cursorHeight / 2,
+				COLOR_WHITE, uis.cursorHandle);
+	}
 
-    // delay playing the enter sound until after the
-    // menu has been drawn, to avoid delay while
-    // caching images
-    if (uis.entersound) {
-        uis.entersound = false;
-        S_StartLocalSound("misc/menu1.wav");
-    }
+	if (ui_debug->integer) {
+		UI_DrawString(uis.width - 4, 4, UI_RIGHT,
+				COLOR_WHITE, va("%3i %3i", uis.mouseCoords[0], uis.mouseCoords[1]));
+	}
 
-    R_SetScale(1.0f);
+	if (uis.entersound) {
+		uis.entersound = false;
+		S_StartLocalSound("misc/menu1.wav");
+	}
+
+	R_SetScale(1.0f);
 }
 
 void UI_StartSound(menuSound_t sound)
@@ -479,22 +828,24 @@ UI_KeyEvent
 */
 void UI_KeyEvent(int key, bool down)
 {
-    menuSound_t sound;
+	menuSound_t sound;
 
-    if (!uis.activeMenu) {
-        return;
-    }
+	if (!uis.menuDepth) {
+		return;
+	}
 
-    if (!down) {
-        if (key == K_MOUSE1) {
-            uis.mouseTracker = NULL;
-        }
-        return;
-    }
+	if (!down) {
+		if (key == K_MOUSE1) {
+			uis.mouseTracker = NULL;
+		}
+		return;
+	}
 
-    sound = Menu_Keydown(uis.activeMenu, key);
+	sound = UI_DispatchKeyToLayers(key);
 
-    UI_StartSound(sound);
+	if (sound != QMS_NOTHANDLED) {
+		UI_StartSound(sound);
+	}
 }
 
 /*
@@ -504,19 +855,16 @@ UI_CharEvent
 */
 void UI_CharEvent(int key)
 {
-    menuCommon_t *item;
-    menuSound_t sound;
+	menuSound_t sound;
 
-    if (!uis.activeMenu) {
-        return;
-    }
+	if (!uis.menuDepth) {
+		return;
+	}
 
-    if ((item = Menu_ItemAtCursor(uis.activeMenu)) == NULL ||
-        (sound = Menu_CharEvent(item, key)) == QMS_NOTHANDLED) {
-        return;
-    }
-
-    UI_StartSound(sound);
+	sound = UI_DispatchCharToLayers(key);
+	if (sound != QMS_NOTHANDLED) {
+		UI_StartSound(sound);
+	}
 }
 
 static void UI_Menu_g(genctx_t *ctx)

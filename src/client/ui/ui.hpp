@@ -102,9 +102,9 @@ struct uiItemGroup_s;
 struct uiConditionalBlock_s;
 
 typedef struct menuFrameWork_s {
-    list_t  entry;
+	list_t  entry;
 
-    char    *name, *title, *status;
+char    *name, *title, *status;
 
     void    **items;
     int     nitems;
@@ -123,19 +123,24 @@ typedef struct menuFrameWork_s {
     int mins[2];
     int maxs[2];
 
-    qhandle_t banner;
-    vrect_t banner_rc;
+	qhandle_t banner;
+	vrect_t banner_rc;
 
-    qhandle_t plaque;
-    vrect_t plaque_rc;
+	qhandle_t plaque;
+	vrect_t plaque_rc;
 
-    qhandle_t logo;
-    vrect_t logo_rc;
+	qhandle_t logo;
+	vrect_t logo_rc;
 
-    bool (*push)(struct menuFrameWork_s *);
-    void (*pop)(struct menuFrameWork_s *);
-    void (*expose)(struct menuFrameWork_s *);
-    void (*draw)(struct menuFrameWork_s *);
+	bool modal;
+	bool allowInputPassthrough;
+	bool drawsBackdrop;
+	float opacity;
+
+	bool (*push)(struct menuFrameWork_s *);
+	void (*pop)(struct menuFrameWork_s *);
+	void (*expose)(struct menuFrameWork_s *);
+	void (*draw)(struct menuFrameWork_s *);
     void (*size)(struct menuFrameWork_s *);
     void (*free)(struct menuFrameWork_s *);
     menuSound_t (*keydown)(struct menuFrameWork_s *, int);
@@ -369,11 +374,11 @@ typedef struct {
     char *directory;
 } playerModelInfo_t;
 
-void PlayerModel_Load(void);
-void PlayerModel_Free(void);
+	void PlayerModel_Load(void);
+	void PlayerModel_Free(void);
 
-void ImageSpinControl_Pop(menuSpinControl_t *s);
-void ImageSpinControl_Init(menuSpinControl_t *s);
+	void ImageSpinControl_Pop(menuSpinControl_t *s);
+	void ImageSpinControl_Init(menuSpinControl_t *s);
 
 #define MAX_MENU_DEPTH    8
 
@@ -422,50 +427,50 @@ extern list_t       ui_menus;
 
 extern cvar_t       *ui_debug;
 
-void        UI_PushMenu(menuFrameWork_t *menu);
-void        UI_ForceMenuOff(void);
-void        UI_PopMenu(void);
-void        UI_StartSound(menuSound_t sound);
-bool        UI_DoHitTest(void);
-bool        UI_CursorInRect(const vrect_t *rect);
-void        *UI_FormatColumns(int extrasize, ...) q_sentinel;
+	void        UI_PushMenu(menuFrameWork_t *menu);
+	void        UI_ForceMenuOff(void);
+	void        UI_PopMenu(void);
+	void        UI_StartSound(menuSound_t sound);
+	bool        UI_DoHitTest(void);
+	bool        UI_CursorInRect(const vrect_t *rect);
+	void        *UI_FormatColumns(int extrasize, ...) q_sentinel;
 char        *UI_GetColumn(char *s, int n);
-void        UI_DrawString(int x, int y, int flags, color_t color, const char *string);
-void        UI_DrawChar(int x, int y, int flags, color_t color, int ch);
-void        UI_DrawRect8(const vrect_t *rect, int border, int c);
-void        UI_StringDimensions(vrect_t *rc, int flags, const char *string);
+	void        UI_DrawString(int x, int y, int flags, color_t color, const char *string);
+	void        UI_DrawChar(int x, int y, int flags, color_t color, int ch);
+	void        UI_DrawRect8(const vrect_t *rect, int border, int c);
+	void        UI_StringDimensions(vrect_t *rc, int flags, const char *string);
 
-void        UI_LoadScript(void);
+	void        UI_LoadScript(void);
 menuFrameWork_t *UI_FindMenu(const char *name);
 
-void        Menu_Init(menuFrameWork_t *menu);
-void        Menu_Size(menuFrameWork_t *menu);
-void        Menu_Draw(menuFrameWork_t *menu);
-void        Menu_AddItem(menuFrameWork_t *menu, void *item);
+	void        Menu_Init(menuFrameWork_t *menu);
+	void        Menu_Size(menuFrameWork_t *menu);
+	void        Menu_Draw(menuFrameWork_t *menu);
+	void        Menu_AddItem(menuFrameWork_t *menu, void *item);
 menuSound_t Menu_SelectItem(menuFrameWork_t *menu);
 menuSound_t Menu_SlideItem(menuFrameWork_t *menu, int dir);
 menuSound_t Menu_KeyEvent(menuCommon_t *item, int key);
 menuSound_t Menu_CharEvent(menuCommon_t *item, int key);
 menuSound_t Menu_MouseMove(menuCommon_t *item);
 menuSound_t Menu_Keydown(menuFrameWork_t *menu, int key);
-void        Menu_SetFocus(menuCommon_t *item);
+	void        Menu_SetFocus(menuCommon_t *item);
 menuSound_t     Menu_AdjustCursor(menuFrameWork_t *menu, int dir);
 menuCommon_t    *Menu_ItemAtCursor(menuFrameWork_t *menu);
 menuCommon_t    *Menu_HitTest(menuFrameWork_t *menu);
-void        MenuList_Init(menuList_t *l);
-void        MenuList_SetValue(menuList_t *l, int value);
-void        MenuList_Sort(menuList_t *l, int offset,
+	void        MenuList_Init(menuList_t *l);
+	void        MenuList_SetValue(menuList_t *l, int value);
+	void        MenuList_Sort(menuList_t *l, int offset,
                           int (*cmpfunc)(const void *, const void *));
-void SpinControl_Init(menuSpinControl_t *s);
-bool        Menu_Push(menuFrameWork_t *menu);
-void        Menu_Pop(menuFrameWork_t *menu);
-void        Menu_Free(menuFrameWork_t *menu);
+	void SpinControl_Init(menuSpinControl_t *s);
+	bool        Menu_Push(menuFrameWork_t *menu);
+	void        Menu_Pop(menuFrameWork_t *menu);
+	void        Menu_Free(menuFrameWork_t *menu);
 
-void M_Menu_PlayerConfig(void);
-void M_Menu_Demos(void);
-void M_Menu_Servers(void);
+	void M_Menu_PlayerConfig(void);
+	void M_Menu_Demos(void);
+	void M_Menu_Servers(void);
 
-void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
-void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
-void UI_MapDB_Init(void);
-void UI_MapDB_Shutdown(void);
+	void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
+	void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
+	void UI_MapDB_Init(void);
+	void UI_MapDB_Shutdown(void);
