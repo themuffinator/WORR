@@ -153,22 +153,46 @@ bool Sys_GetAntiCheatAPI(void)
 
 bool Sys_SetNonBlock(int fd, bool nb)
 {
-    int ret = fcntl(fd, F_GETFL, 0);
-    if (ret == -1)
-        return false;
-    if ((bool)(ret & O_NONBLOCK) == nb)
-        return true;
-    return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
+	int ret = fcntl(fd, F_GETFL, 0);
+	if (ret == -1)
+		return false;
+	if ((bool)(ret & O_NONBLOCK) == nb)
+		return true;
+	return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
 }
 
 static void usr1_handler(int signum)
 {
-    flush_logs = true;
+	flush_logs = true;
 }
 
 static void term_handler(int signum)
 {
-    terminate = signum;
+	terminate = signum;
+}
+
+/*
+=================
+Sys_GetFallbackHomeDir
+
+Returns a writable per-user directory when HOME is unavailable.
+=================
+*/
+static const char *Sys_GetFallbackHomeDir(void)
+{
+	static char path[MAX_OSPATH];
+	const char *xdg;
+	int ret;
+
+	xdg = getenv("XDG_DATA_HOME");
+	if (xdg && *xdg)
+		return xdg;
+
+	ret = Q_snprintf(path, sizeof(path), "/tmp/q2pro-%u", (unsigned)getuid());
+	if (ret <= 0 || ret >= (int)sizeof(path))
+		return "";
+
+	return path;
 }
 
 /*
@@ -178,39 +202,44 @@ Sys_Init
 */
 void Sys_Init(void)
 {
-    const char *homedir;
+	const char *homedir;
+	const char *fallback;
 
-    signal(SIGTERM, term_handler);
-    signal(SIGINT, term_handler);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGHUP, term_handler);
-    signal(SIGUSR1, usr1_handler);
+	signal(SIGTERM, term_handler);
+	signal(SIGINT, term_handler);
+	signal(SIGTTIN, SIG_IGN);
+	signal(SIGTTOU, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGHUP, term_handler);
+	signal(SIGUSR1, usr1_handler);
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		char *s = getenv("HOME");
+		if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
+			Sys_Error("HOME path too long");
+		if (s && *s) {
+			homedir = va("%s%s", s, &HOMEDIR[1]);
+		} else {
+			fallback = Sys_GetFallbackHomeDir();
+			if (*fallback && strlen(fallback) < MAX_OSPATH - MAX_QPATH)
+				homedir = va("%s%s", fallback, &HOMEDIR[1]);
+			else
+				homedir = "";
+		}
+	} else {
+		homedir = HOMEDIR;
+	}
 
-    sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+	sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
 
-    tty_init_input();
+	tty_init_input();
 }
 
 /*
