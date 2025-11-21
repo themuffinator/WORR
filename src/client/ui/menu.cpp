@@ -3318,9 +3318,30 @@ menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
 	menuCommon_t *item;
 	int i;
 
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), static_cast<size_t>(m->nitems));
+
+	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
+		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
+		MenuItem *wrapped = m->itemsCpp[cppIndex].get();
+
+		if (wrapped && wrapped->HasFocus()) {
+			if (!(item->flags & QMF_HASFOCUS)) {
+				Menu_SetFocus(item);
+			}
+
+			return item;
+		}
+	}
+
 	for (i = 0; i < m->nitems; i++) {
 		item = static_cast<menuCommon_t *>(m->items[i]);
 		if (item->flags & QMF_HASFOCUS) {
+			MenuItem *wrapped = Menu_FindCppItem(m, item);
+
+			if (wrapped && !wrapped->HasFocus()) {
+				wrapped->SetFocus(true);
+			}
+
 			return item;
 		}
 	}
@@ -3391,54 +3412,73 @@ slot.
 */
 menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 {
-    menuCommon_t *item;
-    int cursor, pos;
-    int i;
+	menuCommon_t *item;
+	int cursor, pos;
+	int i;
+	bool foundFocus;
 
-    if (!m->nitems) {
-        return QMS_NOTHANDLED;
-    }
+	if (!m->nitems) {
+	return QMS_NOTHANDLED;
+	}
 
-    pos = 0;
-    for (i = 0; i < m->nitems; i++) {
-        item = static_cast<menuCommon_t *>(m->items[i]);
+	pos = 0;
+	foundFocus = false;
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), static_cast<size_t>(m->nitems));
 
-        if (item->flags & QMF_HASFOCUS) {
-            pos = i;
-            break;
-        }
-    }
+	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
+		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
+		MenuItem *wrapped = m->itemsCpp[cppIndex].get();
 
-    /*
-    ** crawl in the direction indicated until we find a valid spot
-    */
-    cursor = pos;
-    if (dir == 1) {
-        do {
-            cursor++;
-            if (cursor >= m->nitems)
-                cursor = 0;
+		if (wrapped && wrapped->HasFocus()) {
+			pos = static_cast<int>(cppIndex);
+			foundFocus = true;
+			break;
+		}
+	}
 
-            item = static_cast<menuCommon_t *>(m->items[cursor]);
-            if (UI_IsItemSelectable(item))
-                break;
-        } while (cursor != pos);
-    } else {
-        do {
-            cursor--;
-            if (cursor < 0)
-                cursor = m->nitems - 1;
+	if (!foundFocus) {
+		for (i = 0; i < m->nitems; i++) {
+			item = static_cast<menuCommon_t *>(m->items[i]);
 
-            item = static_cast<menuCommon_t *>(m->items[cursor]);
-            if (UI_IsItemSelectable(item))
-                break;
-        } while (cursor != pos);
-    }
+			if (item->flags & QMF_HASFOCUS) {
+				pos = i;
+				foundFocus = true;
+				break;
+			}
+		}
+	}
 
-    Menu_SetFocus(item);
+	/*
+	** crawl in the direction indicated until we find a valid spot
+	*/
+	cursor = pos;
+	if (dir == 1) {
+		do {
+			cursor++;
+			if (cursor >= m->nitems)
+				cursor = 0;
 
-    return QMS_MOVE;
+			item = static_cast<menuCommon_t *>(m->items[cursor]);
+			if (UI_IsItemSelectable(item))
+				break;
+		} while (cursor != pos);
+	} else {
+		do {
+			cursor--;
+			if (cursor < 0)
+				cursor = m->nitems - 1;
+
+			item = static_cast<menuCommon_t *>(m->items[cursor]);
+			if (UI_IsItemSelectable(item))
+				break;
+		} while (cursor != pos);
+	}
+
+	Menu_SetFocus(item);
+
+	return QMS_MOVE;
 }
+
 
 static void Menu_DrawStatus(menuFrameWork_t *menu)
 {
@@ -3953,108 +3993,122 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
 
 bool Menu_Push(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	for (int i = 0; i < menu->nitems; i++) {
+		void *rawItem = menu->items[i];
+		auto *item = static_cast<menuCommon_t *>(rawItem);
 
-        switch (item->type) {
-        case MTYPE_SLIDER:
-            Slider_Push(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-            BitField_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_STRINGS:
-            Strings_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-            SpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_TOGGLE:
-            Toggle_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Push(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Push(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Push(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Savegame_Push(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_EPISODE:
-            Episode_Push(static_cast<menuEpisodeSelector_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Push(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+		switch (item->type) {
+		case MTYPE_SLIDER:
+			Slider_Push(static_cast<menuSlider_t *>(rawItem));
+			break;
+		case MTYPE_BITFIELD:
+			BitField_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_PAIRS:
+			Pairs_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_STRINGS:
+			Strings_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_SPINCONTROL:
+			SpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_TOGGLE:
+			Toggle_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_DROPDOWN:
+			Dropdown_Push(reinterpret_cast<menuDropdown_t *>(rawItem));
+			break;
+		case MTYPE_KEYBIND:
+			Keybind_Push(static_cast<menuKeybind_t *>(rawItem));
+			break;
+		case MTYPE_FIELD:
+			Field_Push(static_cast<menuField_t *>(rawItem));
+			break;
+		case MTYPE_SAVEGAME:
+		case MTYPE_LOADGAME:
+			Savegame_Push(static_cast<menuAction_t *>(rawItem));
+			break;
+		case MTYPE_IMAGESPINCONTROL:
+			ImageSpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_EPISODE:
+			Episode_Push(static_cast<menuEpisodeSelector_t *>(rawItem));
+			break;
+		case MTYPE_UNIT:
+			Unit_Push(static_cast<menuUnitSelector_t *>(rawItem));
+			break;
+		default:
+			break;
+		}
+	}
 
-    Menu_UpdateConditionalState(menu);
-    return true;
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+
+	for (size_t i = 0; i < itemCount; i++) {
+		menu->itemsCpp[i]->OnAttach();
+	}
+
+	Menu_UpdateConditionalState(menu);
+	return true;
 }
+
 
 void Menu_Pop(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	for (int i = 0; i < menu->nitems; i++) {
+		void *rawItem = menu->items[i];
+		auto *item = static_cast<menuCommon_t *>(rawItem);
 
-        switch (item->type) {
-        case MTYPE_SLIDER:
-            Slider_Pop(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-            BitField_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_STRINGS:
-            Strings_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-            SpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_TOGGLE:
-            Toggle_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Pop(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Pop(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Pop(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_EPISODE:
-            Episode_Pop(static_cast<menuEpisodeSelector_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Pop(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+		switch (item->type) {
+		case MTYPE_SLIDER:
+			Slider_Pop(static_cast<menuSlider_t *>(rawItem));
+			break;
+		case MTYPE_BITFIELD:
+			BitField_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_PAIRS:
+			Pairs_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_STRINGS:
+			Strings_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_SPINCONTROL:
+			SpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_TOGGLE:
+			Toggle_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_DROPDOWN:
+			Dropdown_Pop(reinterpret_cast<menuDropdown_t *>(rawItem));
+			break;
+		case MTYPE_KEYBIND:
+			Keybind_Pop(static_cast<menuKeybind_t *>(rawItem));
+			break;
+		case MTYPE_FIELD:
+			Field_Pop(static_cast<menuField_t *>(rawItem));
+			break;
+		case MTYPE_IMAGESPINCONTROL:
+			ImageSpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_EPISODE:
+			Episode_Pop(static_cast<menuEpisodeSelector_t *>(rawItem));
+			break;
+		case MTYPE_UNIT:
+			Unit_Pop(static_cast<menuUnitSelector_t *>(rawItem));
+			break;
+		default:
+			break;
+		}
+	}
+
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+
+	for (size_t i = 0; i < itemCount; i++) {
+		menu->itemsCpp[i]->OnDetach();
+	}
 }
+
 
 void Menu_Free(menuFrameWork_t *menu)
 {
