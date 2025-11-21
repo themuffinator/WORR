@@ -18,7 +18,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ui.hpp"
 #include "MenuItem.h"
-#include "server/server.hpp"
 #include "common/files.hpp"
 
 #include <limits.h>
@@ -30,32 +29,27 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 ===============================================================================
 Menu item responsibilities (MenuItem parity)
 
-The legacy menu widgets below mirror MenuItem's virtuals:
-	- Draw():
-		Action_Draw, Static_Draw, Bitmap_Draw, Field_Draw, MenuList_Draw and
-		Slider_Draw are dispatched from Menu_Draw for rendering.
-	- HandleEvent():
-		Menu_KeyEvent routes keys to Field_Key, MenuList_Key and Slider_Key, while
-		Menu_CharEvent and Menu_MouseMove forward character and pointer input to
-		Field_Char, MenuList_MouseMove and Slider_MouseMove respectively. Menu_SlideItem
-		uses Slider_DoSlide for controller/keyboard slides, and Menu_SelectItem
-		triggers Common_DoEnter for activatable Action/Bitmap/Field/List items.
-	- Activate():
-		Common_DoEnter wraps the per-item activate callbacks for Action/Bitmap/Field
-		and List rows (including save/load actions). Slider_DoSlide handles slider
-		activation through directional input routed by Menu_SlideItem.
-	- SetFocus()/HasFocus():
-		Menu_Draw assigns QMF_HASFOCUS on navigable items via Menu_SetFocus, and the
-		individual draw helpers (Action_Draw, Bitmap_Draw, Field_Draw, MenuList_Draw,
-		Slider_Draw) read that flag to show cursors or highlights.
-	- OnAttach()/OnDetach():
-		Menu_Push invokes Field_Push, MenuList_Init (indirectly before use),
-		Slider_Push and Action/Savegame_Push to sync Cvars or populate display data
-		when a menu becomes active. Menu_Pop calls the matching *_Pop routines to
-		flush edits back to Cvars or free transient state.
+The legacy menu widgets mirror MenuItem's virtuals:
+        - HandleEvent():
+                Menu_KeyEvent routes keys to Field_Key, MenuList_Key and Slider_Key, while
+                Menu_CharEvent and Menu_MouseMove forward character and pointer input to
+                Field_Char, MenuList_MouseMove and Slider_MouseMove respectively. Menu_SlideItem
+                uses Slider_DoSlide for controller/keyboard slides, and Menu_SelectItem
+                triggers Common_DoEnter for activatable legacy items.
+        - Activate():
+                Common_DoEnter wraps the per-item activate callbacks for legacy widgets
+                and List rows (including save/load actions). Slider_DoSlide handles slider
+                activation through directional input routed by Menu_SlideItem.
+        - SetFocus()/HasFocus():
+                Menu_Draw assigns QMF_HASFOCUS on navigable items via Menu_SetFocus.
+        - OnAttach()/OnDetach():
+                Menu_Push invokes Field_Push, MenuList_Init (indirectly before use),
+                Slider_Push and Action/Savegame_Push to sync Cvars or populate display data
+                when a menu becomes active. Menu_Pop calls the matching *_Pop routines to
+                flush edits back to Cvars or free transient state.
 This mapping keeps the procedural menu controls aligned with the expectations
-in MenuItem.h: each widget owns its draw routine, input funnels, activation
-path and lifecycle hooks in a consistent, MenuItem-like shape.
+in MenuItem.h: each widget owns its input funnels, activation path and lifecycle
+hooks in a consistent, MenuItem-like shape.
 ===============================================================================
 */
 
@@ -200,37 +194,6 @@ static void Action_Init(menuAction_t *a)
 
 
 /*
-=================
-Action_Draw
-=================
-*/
-static void Action_Draw(menuAction_t *a)
-{
-    int flags;
-    color_t color = COLOR_WHITE;
-
-    flags = a->generic.uiFlags;
-    if (a->generic.flags & QMF_HASFOCUS) {
-        if ((a->generic.uiFlags & UI_CENTER) != UI_CENTER) {
-            if ((uis.realtime >> 8) & 1) {
-                UI_DrawChar(a->generic.x - RCOLUMN_OFFSET / 2, a->generic.y, a->generic.uiFlags | UI_RIGHT, color, 13);
-            }
-        } else {
-            flags |= UI_ALTCOLOR;
-            if ((uis.realtime >> 8) & 1) {
-                UI_DrawChar(a->generic.x - strlen(a->generic.name) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, a->generic.y, flags, color, 13);
-            }
-        }
-    }
-
-    if (a->generic.flags & QMF_GRAYED) {
-        color = uis.color.disabled;
-    }
-
-    UI_DrawString(a->generic.x, a->generic.y, flags, color, a->generic.name);
-}
-
-/*
 ===================================================================
 
 STATIC CONTROL
@@ -259,22 +222,6 @@ static void Static_Init(menuStatic_t *s)
 }
 
 /*
-=================
-Static_Draw
-=================
-*/
-static void Static_Draw(menuStatic_t *s)
-{
-    color_t color = COLOR_WHITE;
-
-    if (s->generic.flags & QMF_CUSTOM_COLOR) {
-        color = s->generic.color;
-    }
-
-    UI_DrawString(s->generic.x, s->generic.y, s->generic.uiFlags, color, s->generic.name);
-}
-
-/*
 ===================================================================
 
 BITMAP CONTROL
@@ -295,19 +242,6 @@ static void Bitmap_Init(menuBitmap_t *b)
     b->generic.rect.y = b->generic.y;
     b->generic.rect.width = b->generic.width;
     b->generic.rect.height = b->generic.height;
-}
-
-static void Bitmap_Draw(menuBitmap_t *b)
-{
-    color_t color = COLOR_WHITE;
-
-    if (b->generic.flags & QMF_HASFOCUS) {
-        unsigned frame = (uis.realtime / 100) % NUM_CURSOR_FRAMES;
-        R_DrawPic(b->generic.x - CURSOR_OFFSET, b->generic.y, color, uis.bitmapCursors[frame]);
-        R_DrawPic(b->generic.x, b->generic.y, color, b->pics[1]);
-    } else {
-        R_DrawPic(b->generic.x, b->generic.y, color, b->pics[0]);
-    }
 }
 
 /*
@@ -355,46 +289,6 @@ static void Keybind_Init(menuKeybind_t *k)
     }
 
     k->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + len * CONCHAR_WIDTH;
-}
-
-/*
-=================
-Keybind_Draw
-=================
-*/
-static void Keybind_Draw(menuKeybind_t *k)
-{
-    char string[MAX_STRING_CHARS];
-    int flags;
-    color_t color = COLOR_WHITE;
-
-    flags = UI_ALTCOLOR;
-    if (k->generic.flags & QMF_HASFOCUS) {
-        /*if(k->generic.parent->keywait) {
-            UI_DrawChar(k->generic.x + RCOLUMN_OFFSET / 2, k->generic.y, k->generic.uiFlags | UI_RIGHT, '=');
-        } else*/ if ((uis.realtime >> 8) & 1) {
-            UI_DrawChar(k->generic.x + RCOLUMN_OFFSET / 2, k->generic.y, k->generic.uiFlags | UI_RIGHT, color, 13);
-        }
-    } else {
-        if (k->generic.parent->keywait) {
-            color = uis.color.disabled;
-            flags = 0;
-        }
-    }
-
-    UI_DrawString(k->generic.x + LCOLUMN_OFFSET, k->generic.y,
-                  k->generic.uiFlags | UI_RIGHT | flags, color, k->generic.name);
-
-    if (k->altbinding[0]) {
-        Q_concat(string, sizeof(string), k->binding, " or ", k->altbinding);
-    } else if (k->binding[0]) {
-        Q_strlcpy(string, k->binding, sizeof(string));
-    } else {
-        strcpy(string, "???");
-    }
-
-    UI_DrawString(k->generic.x + RCOLUMN_OFFSET, k->generic.y,
-                  k->generic.uiFlags | UI_LEFT, color, string);
 }
 
 static void Keybind_Push(menuKeybind_t *k)
@@ -552,39 +446,6 @@ static void Field_Init(menuField_t *f)
     }
 }
 
-
-/*
-=================
-Field_Draw
-=================
-*/
-static void Field_Draw(menuField_t *f)
-{
-    int flags = f->generic.uiFlags;
-    color_t color = uis.color.normal;
-
-    if (f->generic.flags & QMF_HASFOCUS) {
-        flags |= UI_DRAWCURSOR;
-        color = uis.color.active;
-    }
-
-    if (f->generic.name) {
-        UI_DrawString(f->generic.x + LCOLUMN_OFFSET, f->generic.y,
-                      f->generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, color, f->generic.name);
-
-        R_DrawFill32(f->generic.x + RCOLUMN_OFFSET, f->generic.y - 1,
-                     f->field.visibleChars * CONCHAR_WIDTH, CONCHAR_HEIGHT + 2, color);
-
-        IF_Draw(&f->field, f->generic.x + RCOLUMN_OFFSET, f->generic.y,
-                flags, uis.fontHandle);
-    } else {
-        R_DrawFill32(f->generic.rect.x, f->generic.rect.y - 1,
-                     f->generic.rect.width, CONCHAR_HEIGHT + 2, color);
-
-        IF_Draw(&f->field, f->generic.rect.x, f->generic.rect.y,
-                flags, uis.fontHandle);
-    }
-}
 
 static bool Field_TestKey(menuField_t *f, int key)
 {
@@ -2626,40 +2487,6 @@ static menuSound_t Slider_DoSlide(menuSlider_t *s, int dir)
     }
 
     return QMS_SILENT;
-}
-
-/*
-=================
-Slider_Draw
-=================
-*/
-static void Slider_Draw(menuSlider_t *s)
-{
-    int     i, flags;
-    float   pos;
-    color_t color = COLOR_WHITE;
-
-    flags = s->generic.uiFlags & ~(UI_LEFT | UI_RIGHT);
-
-    if (s->generic.flags & QMF_HASFOCUS) {
-        if ((uis.realtime >> 8) & 1) {
-            UI_DrawChar(s->generic.x + RCOLUMN_OFFSET / 2, s->generic.y, s->generic.uiFlags | UI_RIGHT, color, 13);
-        }
-    }
-
-    UI_DrawString(s->generic.x + LCOLUMN_OFFSET, s->generic.y,
-                  flags | UI_RIGHT | UI_ALTCOLOR, color, s->generic.name);
-
-    UI_DrawChar(s->generic.x + RCOLUMN_OFFSET, s->generic.y, flags | UI_LEFT, color, 128);
-
-    for (i = 0; i < SLIDER_RANGE; i++)
-        UI_DrawChar(RCOLUMN_OFFSET + s->generic.x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, s->generic.y, flags | UI_LEFT, color, 129);
-
-    UI_DrawChar(RCOLUMN_OFFSET + s->generic.x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, s->generic.y, flags | UI_LEFT, color, 130);
-
-    pos = Q_clipf((s->curvalue - s->minvalue) / (s->maxvalue - s->minvalue), 0, 1);
-
-    UI_DrawChar(CONCHAR_WIDTH + RCOLUMN_OFFSET + s->generic.x + (SLIDER_RANGE - 1) * CONCHAR_WIDTH * pos, s->generic.y, flags | UI_LEFT, color, 131);
 }
 
 /*
