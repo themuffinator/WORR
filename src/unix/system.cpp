@@ -38,6 +38,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <string.h>
 
 #if USE_MEMORY_TRACES && HAVE_BACKTRACE
 #include <execinfo.h>
@@ -151,24 +152,61 @@ bool Sys_GetAntiCheatAPI(void)
 }
 #endif
 
+/*
+=============
+Sys_SetNonBlock
+
+Set or clear non-blocking flag for the given descriptor.
+=============
+*/
 bool Sys_SetNonBlock(int fd, bool nb)
 {
-    int ret = fcntl(fd, F_GETFL, 0);
-    if (ret == -1)
-        return false;
-    if ((bool)(ret & O_NONBLOCK) == nb)
-        return true;
-    return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
+	int ret = fcntl(fd, F_GETFL, 0);
+	if (ret == -1)
+		return false;
+	if ((bool)(ret & O_NONBLOCK) == nb)
+		return true;
+	return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
 }
 
+/*
+=============
+Sys_SetSignalHandler
+
+Install a signal handler with given flags and mask.
+=============
+*/
+static void Sys_SetSignalHandler(int signum, void (*handler)(int), int flags)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = handler;
+	sa.sa_flags = flags;
+
+	if (sigaction(signum, &sa, NULL) == -1)
+		Sys_Error("Failed to install handler for signal %d: %s", signum, strerror(errno));
+}
+
+/*
+=============
+usr1_handler
+=============
+*/
 static void usr1_handler(int signum)
 {
-    flush_logs = true;
+	flush_logs = true;
 }
 
+/*
+=============
+term_handler
+=============
+*/
 static void term_handler(int signum)
 {
-    terminate = signum;
+	terminate = signum;
 }
 
 /*
@@ -178,15 +216,15 @@ Sys_Init
 */
 void Sys_Init(void)
 {
-    const char *homedir;
+	const char *homedir;
 
-    signal(SIGTERM, term_handler);
-    signal(SIGINT, term_handler);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGHUP, term_handler);
-    signal(SIGUSR1, usr1_handler);
+	Sys_SetSignalHandler(SIGTERM, term_handler, 0);
+	Sys_SetSignalHandler(SIGINT, term_handler, 0);
+	Sys_SetSignalHandler(SIGTTIN, SIG_IGN, 0);
+	Sys_SetSignalHandler(SIGTTOU, SIG_IGN, 0);
+	Sys_SetSignalHandler(SIGPIPE, SIG_IGN, 0);
+	Sys_SetSignalHandler(SIGHUP, term_handler, SA_RESTART);
+	Sys_SetSignalHandler(SIGUSR1, usr1_handler, SA_RESTART);
 
     // basedir <path>
     // allows the game to run from outside the data tree

@@ -34,6 +34,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <string.h>
 #include <poll.h>
 
 #include <array>
@@ -519,9 +520,33 @@ static void tty_parse_input(const char *text)
 }
 
 #ifdef TIOCGWINSZ
+/*
+=============
+winch_handler
+=============
+*/
 static void winch_handler(int signum)
 {
-    tty_prompt.inputLine.visibleChars = 0;  // force refresh
+	tty_prompt.inputLine.visibleChars = 0;  // force refresh
+}
+
+/*
+=============
+tty_install_winch_handler
+
+Install SIGWINCH handler with restart semantics for TTY refresh.
+=============
+*/
+static bool tty_install_winch_handler(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = winch_handler;
+	sa.sa_flags = SA_RESTART;
+
+	return sigaction(SIGWINCH, &sa, NULL) == 0;
 }
 #endif
 
@@ -567,7 +592,8 @@ void tty_init_input(void)
         goto no_tty;
 
 #ifdef TIOCGWINSZ
-    signal(SIGWINCH, winch_handler);
+	if (!tty_install_winch_handler())
+		goto no_tty;
 #endif
 
     // determine terminal width
