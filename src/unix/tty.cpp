@@ -518,10 +518,18 @@ static void tty_parse_input(const char *text)
     }
 }
 
+/*
+=============
+winch_handler
+
+Forces a refresh of the visible input line on terminal resize.
+=============
+*/
 #ifdef TIOCGWINSZ
 static void winch_handler(int signum)
 {
-    tty_prompt.inputLine.visibleChars = 0;  // force refresh
+	(void)signum;
+	tty_prompt.inputLine.visibleChars = 0;  // force refresh
 }
 #endif
 
@@ -567,7 +575,14 @@ void tty_init_input(void)
         goto no_tty;
 
 #ifdef TIOCGWINSZ
-    signal(SIGWINCH, winch_handler);
+	struct sigaction sa;
+
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = winch_handler;
+	sa.sa_flags = SA_RESTART;
+
+	if (sigaction(SIGWINCH, &sa, NULL) != 0)
+	goto no_tty;
 #endif
 
     // determine terminal width

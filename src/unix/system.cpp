@@ -206,46 +206,66 @@ static void term_handler(int signum)
 
 /*
 =================
+Sys_SetSignalHandler
+
+Configures a signal handler using sigaction.
+Returns true on success.
+=================
+*/
+static bool Sys_SetSignalHandler(int signum, void (*handler)(int), int flags)
+{
+	struct sigaction sa;
+
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = handler;
+	sa.sa_flags = flags;
+
+	return sigaction(signum, &sa, NULL) == 0;
+}
+
+/*
+=================
 Sys_Init
 =================
 */
 void Sys_Init(void)
 {
-    const char *homedir;
+	const char *homedir;
 
-    signal(SIGTERM, term_handler);
-    signal(SIGINT, term_handler);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGHUP, term_handler);
-    signal(SIGUSR1, usr1_handler);
+	if (!Sys_SetSignalHandler(SIGTERM, term_handler, 0) ||
+	    !Sys_SetSignalHandler(SIGINT, term_handler, 0) ||
+	    !Sys_SetSignalHandler(SIGTTIN, SIG_IGN, 0) ||
+	    !Sys_SetSignalHandler(SIGTTOU, SIG_IGN, 0) ||
+	    !Sys_SetSignalHandler(SIGPIPE, SIG_IGN, 0) ||
+	    !Sys_SetSignalHandler(SIGHUP, term_handler, 0) ||
+	    !Sys_SetSignalHandler(SIGUSR1, usr1_handler, SA_RESTART)) {
+		Sys_Error("Failed to install signal handlers");
+	}
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		char *s = getenv("HOME");
+		if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
+			Sys_Error("HOME path too long");
+		if (s && *s) {
+			homedir = va("%s%s", s, &HOMEDIR[1]);
+		} else {
+			homedir = "";
+		}
+	} else {
+		homedir = HOMEDIR;
+	}
 
-    sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+	sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
 
-    tty_init_input();
+	tty_init_input();
 }
-
 /*
 =================
 Sys_Error
