@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <limits.h>
 #include <algorithm>
+#include <cstring>
 
 static menuDropdown_t *ui_activeDropdown = NULL;
 
@@ -3810,82 +3811,243 @@ void Menu_Pop(menuFrameWork_t *menu)
 
 void Menu_Free(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	for (int i = 0; i < menu->nitems; i++) {
+		void *rawItem = menu->items[i];
+		auto *item = static_cast<menuCommon_t *>(rawItem);
 
-        UI_FreeCommonExtensions(item);
+		UI_FreeCommonExtensions(item);
 
-        switch (item->type) {
-        case MTYPE_ACTION:
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Action_Free(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_SLIDER:
-            Slider_Free(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-        case MTYPE_TOGGLE:
-            BitField_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-        case MTYPE_STRINGS:
-        case MTYPE_EPISODE:
-            SpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_CHECKBOX:
-            Checkbox_Free(reinterpret_cast<menuCheckbox_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Free(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_RADIO:
-            RadioButton_Free(reinterpret_cast<menuRadioButton_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Free(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Free(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Free(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SEPARATOR:
-            Z_Free(rawItem);
-            break;
-        case MTYPE_BITMAP:
-            Bitmap_Free(static_cast<menuBitmap_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+		switch (item->type) {
+		case MTYPE_ACTION:
+		case MTYPE_SAVEGAME:
+		case MTYPE_LOADGAME:
+			Action_Free(static_cast<menuAction_t *>(rawItem));
+			break;
+		case MTYPE_SLIDER:
+			Slider_Free(static_cast<menuSlider_t *>(rawItem));
+			break;
+		case MTYPE_BITFIELD:
+		case MTYPE_TOGGLE:
+			BitField_Free(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_PAIRS:
+			Pairs_Free(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_SPINCONTROL:
+		case MTYPE_STRINGS:
+		case MTYPE_EPISODE:
+			SpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_CHECKBOX:
+			Checkbox_Free(reinterpret_cast<menuCheckbox_t *>(rawItem));
+			break;
+		case MTYPE_DROPDOWN:
+			Dropdown_Free(reinterpret_cast<menuDropdown_t *>(rawItem));
+			break;
+		case MTYPE_RADIO:
+			RadioButton_Free(reinterpret_cast<menuRadioButton_t *>(rawItem));
+			break;
+		case MTYPE_UNIT:
+			Unit_Free(static_cast<menuUnitSelector_t *>(rawItem));
+			break;
+		case MTYPE_KEYBIND:
+			Keybind_Free(static_cast<menuKeybind_t *>(rawItem));
+			break;
+		case MTYPE_FIELD:
+			Field_Free(static_cast<menuField_t *>(rawItem));
+			break;
+		case MTYPE_SEPARATOR:
+			Z_Free(rawItem);
+			break;
+		case MTYPE_BITMAP:
+			Bitmap_Free(static_cast<menuBitmap_t *>(rawItem));
+			break;
+		case MTYPE_IMAGESPINCONTROL:
+			ImageSpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		default:
+			break;
+		}
+	}
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
-        ui_activeDropdown = NULL;
+	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
+		ui_activeDropdown = NULL;
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
-            Z_Free(group->name);
-            Z_Free(group->label);
-            Z_Free(group);
-        }
-        Z_Free(menu->groups);
-    }
+	if (menu->groups) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i];
+			if (!group)
+				continue;
+			Z_Free(group->name);
+			Z_Free(group->label);
+			Z_Free(group);
+		}
+		Z_Free(menu->groups);
+	}
 
-    Z_Free(menu->items);
-    Z_Free(menu->title);
-    Z_Free(menu->name);
-    Z_Free(menu);
+	Z_Free(menu->items);
+	Z_Free(menu->title);
+	Z_Free(menu->name);
+	Z_Free(menu);
 }
+
+#ifdef UNIT_TESTS
+static menuCommon_t menuTest_baseItem;
+static menuCommon_t menuTest_overlayItem;
+static void *menuTest_baseItems[1];
+static void *menuTest_overlayItems[1];
+static menuFrameWork_t menuTest_base;
+static menuFrameWork_t menuTest_overlay;
+static bool menuTest_baseHandled;
+static bool menuTest_overlayHandled;
+
+/*
+=============
+MenuTest_ResetState
+
+Clears shared UI state before each regression check.
+=============
+*/
+static void MenuTest_ResetState(void)
+{
+	std::memset(&uis, 0, sizeof(uis));
+	std::memset(&menuTest_base, 0, sizeof(menuTest_base));
+	std::memset(&menuTest_overlay, 0, sizeof(menuTest_overlay));
+	std::memset(&menuTest_baseItem, 0, sizeof(menuTest_baseItem));
+	std::memset(&menuTest_overlayItem, 0, sizeof(menuTest_overlayItem));
+	menuTest_baseHandled = false;
+	menuTest_overlayHandled = false;
+
+	uis.scale = 1.0f;
+	uis.width = 640;
+	uis.height = 480;
+}
+
+/*
+=============
+MenuTest_BuildStack
+
+Constructs a two-layer stack with a non-modal overlay.
+=============
+*/
+static void MenuTest_BuildStack(void)
+{
+	MenuTest_ResetState();
+
+	menuTest_baseItems[0] = &menuTest_baseItem;
+	menuTest_base.items = menuTest_baseItems;
+	menuTest_base.nitems = 1;
+	menuTest_base.modal = true;
+	menuTest_base.allowInputPassthrough = false;
+	menuTest_base.opacity = 1.0f;
+	menuTest_base.drawsBackdrop = false;
+	menuTest_baseItem.type = MTYPE_ACTION;
+	menuTest_baseItem.rect.x = 0;
+	menuTest_baseItem.rect.y = 0;
+	menuTest_baseItem.rect.width = 96;
+	menuTest_baseItem.rect.height = 96;
+	menuTest_baseItem.parent = &menuTest_base;
+
+	menuTest_overlayItems[0] = &menuTest_overlayItem;
+	menuTest_overlay.items = menuTest_overlayItems;
+	menuTest_overlay.nitems = 1;
+	menuTest_overlay.modal = false;
+	menuTest_overlay.allowInputPassthrough = true;
+	menuTest_overlay.opacity = 1.0f;
+	menuTest_overlay.drawsBackdrop = false;
+	menuTest_overlayItem.type = MTYPE_ACTION;
+	menuTest_overlayItem.rect.x = 200;
+	menuTest_overlayItem.rect.y = 200;
+	menuTest_overlayItem.rect.width = 32;
+	menuTest_overlayItem.rect.height = 32;
+	menuTest_overlayItem.parent = &menuTest_overlay;
+
+	uis.layers[0] = &menuTest_base;
+	uis.layers[1] = &menuTest_overlay;
+	uis.menuDepth = 2;
+	uis.mouseCoords[0] = 8;
+	uis.mouseCoords[1] = 8;
+}
+
+/*
+=============
+MenuTest_OverlayKeydown
+
+Records key routing that reaches the overlay layer.
+=============
+*/
+static menuSound_t MenuTest_OverlayKeydown(menuFrameWork_t *, int)
+{
+	menuTest_overlayHandled = true;
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuTest_BaseKeydown
+
+Records key routing that reaches the base layer.
+=============
+*/
+static menuSound_t MenuTest_BaseKeydown(menuFrameWork_t *, int)
+{
+	menuTest_baseHandled = true;
+	return QMS_IN;
+}
+
+/*
+=============
+MenuTest_VerifyMouseRouting
+
+Ensures mouse focus skips non-modal overlays.
+=============
+*/
+static bool MenuTest_VerifyMouseRouting(void)
+{
+	MenuTest_BuildStack();
+	uis.activeMenu = uis.layers[uis.menuDepth - 1];
+	UI_DoHitTest();
+
+	return (menuTest_baseItem.flags & QMF_HASFOCUS) &&
+		!(menuTest_overlayItem.flags & QMF_HASFOCUS) &&
+		uis.activeMenu == &menuTest_base;
+}
+
+/*
+=============
+MenuTest_VerifyKeyRouting
+
+Ensures keys pass through non-modal overlays.
+=============
+*/
+static bool MenuTest_VerifyKeyRouting(void)
+{
+	MenuTest_BuildStack();
+	menuTest_overlay.keydown = MenuTest_OverlayKeydown;
+	menuTest_base.keydown = MenuTest_BaseKeydown;
+	uis.activeMenu = uis.layers[uis.menuDepth - 1];
+
+	UI_KeyEvent(K_ENTER, true);
+
+	return menuTest_overlayHandled && menuTest_baseHandled && uis.activeMenu == &menuTest_base;
+}
+
+/*
+=============
+main
+=============
+*/
+int main()
+{
+	if (!MenuTest_VerifyMouseRouting()) {
+		return 1;
+	}
+
+	if (!MenuTest_VerifyKeyRouting()) {
+		return 2;
+	}
+
+	return 0;
+}
+#endif
+
