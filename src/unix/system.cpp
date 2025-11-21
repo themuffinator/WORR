@@ -77,7 +77,7 @@ void Sys_DebugBreak(void)
 }
 
 #if USE_CLIENT
-bool Sys_IsMainThread(void)
+	bool Sys_IsMainThread(void)
 {
     return pthread_equal(main_thread, pthread_self());
 }
@@ -126,25 +126,48 @@ void Sys_Quit(void)
 
 #define SYS_SITE_CFG    "/etc/default/q2pro"
 
+/*
+=============
+Sys_AddDefaultConfig
+
+Loads and executes the site configuration if it fits inside the command buffer.
+=============
+*/
 void Sys_AddDefaultConfig(void)
 {
-    FILE *fp;
-    size_t len;
+	FILE *fp;
+	size_t len;
+	bool truncated;
 
-    fp = fopen(SYS_SITE_CFG, "r");
-    if (!fp) {
-        return;
-    }
+	fp = fopen(SYS_SITE_CFG, "r");
+	if (!fp) {
+		return;
+	}
 
-    len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
-    fclose(fp);
+	len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
 
-    cmd_buffer.text[len] = 0;
-    cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
-    if (cmd_buffer.cursize) {
-        Com_Printf("Execing %s\n", SYS_SITE_CFG);
-        Cbuf_Execute(&cmd_buffer);
-    }
+	truncated = ferror(fp);
+	if (len == cmd_buffer.maxsize - 1 && !truncated) {
+		truncated = fgetc(fp) != EOF;
+	}
+	if (!truncated && !feof(fp)) {
+		truncated = true;
+	}
+
+	fclose(fp);
+
+	if (truncated) {
+		Com_WPrintf("Ignoring %s: exceeds %zu byte command buffer or could not be read completely\n",
+			SYS_SITE_CFG, cmd_buffer.maxsize - 1);
+		return;
+	}
+
+	cmd_buffer.text[len] = 0;
+	cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
+	if (cmd_buffer.cursize) {
+		Com_Printf("Execing %s\n", SYS_SITE_CFG);
+		Cbuf_Execute(&cmd_buffer);
+	}
 }
 
 void Sys_Sleep(int msec)
@@ -162,14 +185,14 @@ const char *Sys_ErrorString(int err)
 }
 
 #if USE_AC_CLIENT
-bool Sys_GetAntiCheatAPI(void)
+	bool Sys_GetAntiCheatAPI(void)
 {
     Sys_Sleep(1500);
     return false;
 }
 #endif
 
-bool Sys_SetNonBlock(int fd, bool nb)
+	bool Sys_SetNonBlock(int fd, bool nb)
 {
     int ret = fcntl(fd, F_GETFL, 0);
     if (ret == -1)
@@ -504,7 +527,7 @@ static char* home_expand(const char *dir)
     return strdup(va("%s/%s", s, dir));
 }
 
-bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length)
+	bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length)
 {
     bool result = false;
 
