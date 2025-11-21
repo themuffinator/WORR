@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/steam.hpp"
 #include "shared/atomic.hpp"
 
+#include <cstdio>
 #include <array>
 #include <algorithm>
 #include <cstring>
@@ -1440,13 +1441,101 @@ bool Sys_IsMainThread(void)
 
 unsigned Sys_Milliseconds(void)
 {
-    LARGE_INTEGER tm;
-    QueryPerformanceCounter(&tm);
-    return tm.QuadPart * 1000ULL / timer_freq.QuadPart;
+	LARGE_INTEGER	 tm;
+	QueryPerformanceCounter(&tm);
+	return tm.QuadPart * 1000ULL / timer_freq.QuadPart;
 }
 
+static constexpr const char	*kSiteConfigName = "q2pro.default";
+
+/*
+=============
+Sys_ReadSiteConfig
+
+Attempts to read and execute a site-wide configuration file.
+=============
+*/
+static bool Sys_ReadSiteConfig(const char *path)
+{
+	FILE		*fp;
+	size_t		len;
+	bool		truncated;
+
+	fp = fopen(path, "rb");
+	if (!fp) {
+		return false;
+	}
+
+	len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
+	truncated = !feof(fp) && len == cmd_buffer.maxsize - 1;
+	fclose(fp);
+
+	cmd_buffer.text[len] = 0;
+	cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
+
+	if (truncated) {
+		Com_WPrintf("Site config %s is too large; only the first %zu bytes were loaded\n", path, len);
+	}
+
+	if (cmd_buffer.cursize) {
+		Com_Printf("Execing %s\n", path);
+		Cbuf_Execute(&cmd_buffer);
+		return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+Sys_GetProgramDataConfigPath
+
+Builds the ProgramData path to the site-wide configuration file.
+=============
+*/
+static bool Sys_GetProgramDataConfigPath(char *path, size_t path_length)
+{
+	PWSTR	program_data = NULL;
+	HRESULT	hr;
+	int	required;
+	bool	result = false;
+
+	hr = SHGetKnownFolderPath(FOLDERID_ProgramData, KF_FLAG_DEFAULT, NULL, &program_data);
+	if (FAILED(hr) || !program_data) {
+		return false;
+	}
+
+	required = WideCharToMultiByte(CP_UTF8, 0, program_data, -1, NULL, 0, NULL, NULL);
+	if (required > 0 && (size_t)required < path_length) {
+		if (WideCharToMultiByte(CP_UTF8, 0, program_data, -1, path, (int)path_length, NULL, NULL) > 0) {
+			if (Q_concat(path, path_length, path, "\\", PRODUCT, "\\", kSiteConfigName) < path_length) {
+				result = true;
+			}
+		}
+	}
+
+	CoTaskMemFree(program_data);
+	return result;
+}
+
+/*
+=============
+Sys_AddDefaultConfig
+
+Mirrors Unix behavior by executing a site-wide configuration when present.
+=============
+*/
 void Sys_AddDefaultConfig(void)
 {
+	std::array<char, MAX_OSPATH> path{};
+
+	if (Sys_ReadSiteConfig(kSiteConfigName)) {
+		return;
+	}
+
+	if (Sys_GetProgramDataConfigPath(path.data(), path.size())) {
+		Sys_ReadSiteConfig(path.data());
+	}
 }
 
 void Sys_Sleep(int msec)
