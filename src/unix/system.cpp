@@ -60,8 +60,8 @@ cvar_t  *sys_homedir;
 extern cvar_t   *console_prefix;
 #endif
 
-static int terminate;
-static bool flush_logs;
+static volatile sig_atomic_t terminate_flag;
+static volatile sig_atomic_t flush_logs_flag;
 
 /*
 ===============================================================================
@@ -161,14 +161,29 @@ bool Sys_SetNonBlock(int fd, bool nb)
     return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
 }
 
+/*
+=============
+usr1_handler
+
+Handles SIGUSR1 by scheduling a log flush.
+=============
+*/
 static void usr1_handler(int signum)
 {
-    flush_logs = true;
+	(void)signum;
+	flush_logs_flag = 1;
 }
 
+/*
+=============
+term_handler
+
+Captures termination signals and records the triggering signum.
+=============
+*/
 static void term_handler(int signum)
 {
-    terminate = signum;
+	terminate_flag = signum;
 }
 
 /*
@@ -594,15 +609,22 @@ int main(int argc, char **argv)
 
     Qcommon_Init(argc, argv);
 
-    while (!terminate) {
-        if (flush_logs) {
-            Com_FlushLogs();
-            flush_logs = false;
-        }
-        Qcommon_Frame();
-    }
+	for (;;) {
+		sig_atomic_t term = terminate_flag;
 
-    Com_Printf("%s\n", strsignal(terminate));
+		if (term) {
+			break;
+		}
+
+		if (flush_logs_flag) {
+			flush_logs_flag = 0;
+			Com_FlushLogs();
+		}
+
+		Qcommon_Frame();
+	}
+
+	Com_Printf("%s\n", strsignal(terminate_flag));
     Com_Quit(NULL, ERR_DISCONNECT);
 
     return EXIT_FAILURE; // never gets here
