@@ -14,7 +14,7 @@ Constructs a menu item with ownership-aware resources and optional children.
 MenuItem::MenuItem(std::string name,
 TextureHandle texture,
 Callback onActivate,
-std::vector<std::shared_ptr<MenuItem>> children)
+std::vector<std::unique_ptr<MenuItem>> children)
 : m_name(std::move(name)),
 m_texture(std::move(texture)),
 m_onActivate(std::move(onActivate)),
@@ -60,11 +60,11 @@ const MenuItem::TextureHandle &MenuItem::GetTexture() const
 ==============
 GetChildren
 
-Exposes shared ownership of child items. Holding on to the returned references
-keeps children alive as long as the caller retains a shared_ptr reference.
+Exposes owned child items. Callers can traverse the returned vector without
+altering ownership.
 ==============
 */
-const std::vector<std::shared_ptr<MenuItem>> &MenuItem::GetChildren() const
+const std::vector<std::unique_ptr<MenuItem>> &MenuItem::GetChildren() const
 {
 	return m_children;
 }
@@ -86,11 +86,11 @@ void MenuItem::SetActivateCallback(Callback callback)
 ==============
 AddChild
 
-Appends a child to the ownership-tracking collection. Shared ownership ensures
-children remain valid independently of the menu hierarchy.
+Appends a child to the ownership-tracking collection. Exclusive ownership keeps
+the hierarchy well-defined while eliminating manual delete calls.
 ==============
 */
-void MenuItem::AddChild(std::shared_ptr<MenuItem> child)
+void MenuItem::AddChild(std::unique_ptr<MenuItem> child)
 {
 	m_children.emplace_back(std::move(child));
 }
@@ -99,31 +99,34 @@ void MenuItem::AddChild(std::shared_ptr<MenuItem> child)
 ==============
 RemoveChild
 
-Removes a matching child instance from the container while leaving other
-shared references untouched.
+Removes a matching child instance from the container while preserving the
+ownership of unrelated entries.
 ==============
 */
-void MenuItem::RemoveChild(const std::shared_ptr<MenuItem> &child)
+void MenuItem::RemoveChild(const MenuItem *child)
 {
 	m_children.erase(
-	std::remove(m_children.begin(), m_children.end(), child),
-	m_children.end());
+		std::remove_if(m_children.begin(), m_children.end(),
+		[child](const std::unique_ptr<MenuItem> &candidate)
+{
+			return candidate.get() == child;
+		}),
+		m_children.end());
 }
 
 /*
 ==============
 ForEachChild
 
-Invokes a visitor for every child entry, preserving shared ownership during the
-iteration.
+Invokes a visitor for every child entry while maintaining unique ownership.
 ==============
 */
-void MenuItem::ForEachChild(const std::function<void(const std::shared_ptr<MenuItem> &)> &visitor) const
+void MenuItem::ForEachChild(const std::function<void(const MenuItem &)> &visitor) const
 {
 	for (const auto &child : m_children)
-	{
-		visitor(child);
-	}
+{
+		visitor(*child);
+}
 }
 
 /*

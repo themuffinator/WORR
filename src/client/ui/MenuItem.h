@@ -20,16 +20,16 @@ class SliderItem;
 	MenuItem
 
 	Interface describing the ownership and lifecycle expectations for UI menu
-	items. Texture handles and children are stored via shared ownership to keep
-	resources alive as long as a menu item exists. Callbacks are supplied via
-	std::function so callers can pass lambdas or other RAII-friendly callables
-	without leaking state.
+	items. Texture handles are shared to keep image resources alive across
+	references, while children are owned uniquely to eliminate manual lifetime
+	management. Callbacks are supplied via std::function so callers can pass
+	lambdas or other RAII-friendly callables without leaking state.
 	==============================================================================
 	*/
 class MenuItem {
-	public:
-	using TextureHandle = std::shared_ptr<void>;
-	using Callback = std::function<void(MenuItem &)>;
+public:
+using TextureHandle = std::shared_ptr<void>;
+using Callback = std::function<void(MenuItem &)>;
 
 	struct MenuEvent {
 	enum class Type {
@@ -47,7 +47,7 @@ int y{0};
 MenuItem(std::string name,
 TextureHandle texture,
 Callback onActivate,
-std::vector<std::shared_ptr<MenuItem>> children = {});
+std::vector<std::unique_ptr<MenuItem>> children = {});
 
 MenuItem(const MenuItem &) = delete;
 MenuItem(MenuItem &&) = delete;
@@ -58,14 +58,14 @@ virtual ~MenuItem();
 
 const std::string &GetName() const;
 const TextureHandle &GetTexture() const;
-const std::vector<std::shared_ptr<MenuItem>> &GetChildren() const;
+const std::vector<std::unique_ptr<MenuItem>> &GetChildren() const;
 
 void SetActivateCallback(Callback callback);
 
 protected:
-void AddChild(std::shared_ptr<MenuItem> child);
-void RemoveChild(const std::shared_ptr<MenuItem> &child);
-void ForEachChild(const std::function<void(const std::shared_ptr<MenuItem> &)> &visitor) const;
+void AddChild(std::unique_ptr<MenuItem> child);
+void RemoveChild(const MenuItem *child);
+void ForEachChild(const std::function<void(const MenuItem &)> &visitor) const;
 void TriggerActivate();
 
 virtual void Draw() const = 0;
@@ -80,7 +80,7 @@ private:
 std::string m_name;
 TextureHandle m_texture;
 Callback m_onActivate;
-std::vector<std::shared_ptr<MenuItem>> m_children;
+std::vector<std::unique_ptr<MenuItem>> m_children;
 };
 
 class ActionItem : public MenuItem {
