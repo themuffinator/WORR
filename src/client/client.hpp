@@ -1317,6 +1317,7 @@ void    SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, c
 
 qhandle_t SCR_DefaultFontHandle(void);
 qhandle_t SCR_RegisterFontPath(const char* name);
+qhandle_t SCR_RegisterFontPathWithSize(const char* name, int pixelHeight);
 int     SCR_FontLineHeight(int scale, qhandle_t font);
 int     SCR_MeasureString(int scale, int flags, size_t maxlen, const char* s, qhandle_t font);
 

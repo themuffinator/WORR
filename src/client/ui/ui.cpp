@@ -27,6 +27,11 @@ LIST_DECL(ui_menus);
 cvar_t    *ui_debug;
 static cvar_t    *ui_open;
 static cvar_t    *ui_scale;
+static cvar_t    *ui_font;
+static cvar_t    *ui_font_fallback;
+static cvar_t    *ui_font_size;
+static cvar_t    *ui_cursor_theme;
+static cvar_t    *ui_color_theme;
 
 #define UI_COMPOSITOR_FADE_TIME	200
 #define UI_COMPOSITOR_SLIDE_PIXELS	32
@@ -595,20 +600,24 @@ bool UI_CursorInRect(const vrect_t *rect)
 // nb: all UI strings are drawn at full alpha
 void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 {
-    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string,
-                          ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
+qhandle_t handle = UI_SelectFontHandle(string, flags);
+SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string,
+ColorSetAlpha(color, static_cast<uint8_t>(255)), handle);
 }
 
 // nb: all UI chars are drawn at full alpha
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 {
-    R_DrawChar(x, y, flags, ch, ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
+char buffer[2] = { static_cast<char>(ch), '\0' };
+qhandle_t handle = UI_SelectFontHandle(buffer, flags);
+R_DrawChar(x, y, flags, ch, ColorSetAlpha(color, static_cast<uint8_t>(255)), handle);
 }
 
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
 {
-    rc->height = SCR_FontLineHeight(1, uis.fontHandle);
-    rc->width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
+qhandle_t handle = UI_SelectFontHandle(string, flags);
+rc->height = SCR_FontLineHeight(1, handle);
+rc->width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, handle);
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         rc->x -= rc->width / 2;
@@ -918,7 +927,183 @@ static const cmdreg_t c_ui[] = {
 
 static void ui_scale_changed(cvar_t *self)
 {
-    UI_Resize();
+UI_Resize();
+}
+
+/*
+=============
+UI_AutoFontPixelHeight
+
+Derives a DPI-aware UI font height from the current renderer configuration.
+=============
+*/
+static int UI_AutoFontPixelHeight(void)
+{
+int scale = get_auto_scale();
+if (scale < 1)
+scale = 1;
+
+return 18 * scale;
+}
+
+/*
+=============
+UI_ResolvedFontPixelHeight
+
+Returns the active UI font height, preferring the configured override when valid.
+=============
+*/
+static int UI_ResolvedFontPixelHeight(void)
+{
+if (ui_font_size && ui_font_size->integer > 0)
+return ui_font_size->integer;
+
+return UI_AutoFontPixelHeight();
+}
+
+/*
+=============
+UI_RegisterScaledFont
+
+Registers the requested font path with a pixel height tuned for the active DPI.
+=============
+*/
+static qhandle_t UI_RegisterScaledFont(const char *path, int pixelHeight)
+{
+if (!path || !*path)
+return 0;
+
+return SCR_RegisterFontPathWithSize(path, pixelHeight);
+}
+
+/*
+=============
+UI_RefreshFonts
+
+Reloads the UI font handles using the configured primary and fallback font paths.
+=============
+*/
+static void UI_RefreshFonts(void)
+{
+const int pixelHeight = UI_ResolvedFontPixelHeight();
+uis.fontPixelHeight = pixelHeight;
+
+uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
+if (!uis.fontHandle)
+uis.fontHandle = SCR_DefaultFontHandle();
+
+uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
+if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
+uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
+}
+
+/*
+=============
+UI_ComputeCursorScale
+
+Returns a scaling factor for cursors derived from the current DPI-aware UI scale.
+=============
+*/
+static float UI_ComputeCursorScale(void)
+{
+int scale = get_auto_scale();
+if (scale < 1)
+scale = 1;
+
+return static_cast<float>(scale);
+}
+
+/*
+=============
+UI_RegisterCursorPic
+
+Attempts to register a themed cursor image and falls back to the legacy asset.
+=============
+*/
+static qhandle_t UI_RegisterCursorPic(const char *theme, const char *base)
+{
+if (theme && *theme) {
+qhandle_t themed = R_RegisterPic(va("ui/cursors/%s/%s", theme, base));
+if (themed)
+return themed;
+}
+
+return R_RegisterPic(base);
+}
+
+/*
+=============
+UI_RefreshCursors
+
+Loads the cursor theme and scales it according to the current DPI-aware settings.
+=============
+*/
+static void UI_RefreshCursors(void)
+{
+const char *theme = ui_cursor_theme ? ui_cursor_theme->string : "";
+uis.cursorHandle = UI_RegisterCursorPic(theme, "ch1");
+R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
+
+for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
+uis.bitmapCursors[i] = UI_RegisterCursorPic(theme, va("m_cursor%d", i));
+}
+
+uis.cursorScale = UI_ComputeCursorScale();
+uis.cursorDrawWidth = Q_rint(uis.cursorWidth * uis.cursorScale);
+uis.cursorDrawHeight = Q_rint(uis.cursorHeight * uis.cursorScale);
+
+if (uis.cursorDrawWidth <= 0)
+uis.cursorDrawWidth = uis.cursorWidth;
+if (uis.cursorDrawHeight <= 0)
+uis.cursorDrawHeight = uis.cursorHeight;
+}
+
+/*
+=============
+UI_ApplyThemeColors
+
+Sets the UI color palette according to the selected theme preference.
+=============
+*/
+static void UI_ApplyThemeColors(void)
+{
+const bool light = ui_color_theme && !Q_stricmp(ui_color_theme->string, "light");
+
+if (light) {
+uis.color.background = ColorRGBA(240, 240, 240, 255);
+uis.color.normal = ColorRGBA(20, 80, 160, 180);
+uis.color.active = ColorRGBA(10, 120, 220, 200);
+uis.color.selection = ColorRGBA(10, 120, 220, 200);
+uis.color.disabled = ColorRGBA(96, 96, 96, 255);
+return;
+}
+
+uis.color.background = ColorRGBA(0, 0, 0, 255);
+uis.color.normal = ColorRGBA(15, 128, 235, 100);
+uis.color.active = ColorRGBA(15, 128, 235, 100);
+uis.color.selection = ColorRGBA(15, 128, 235, 100);
+uis.color.disabled = ColorRGBA(127, 127, 127, 255);
+}
+
+/*
+=============
+UI_SelectFontHandle
+
+Returns the most appropriate font handle for the provided string, honoring fallbacks.
+=============
+*/
+static qhandle_t UI_SelectFontHandle(const char *string, int flags)
+{
+if (uis.fontHandle) {
+const int width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
+if (width > 0)
+return uis.fontHandle;
+}
+
+if (uis.fallbackFontHandle)
+return uis.fallbackFontHandle;
+
+return SCR_DefaultFontHandle();
 }
 
 void UI_ModeChanged(void)

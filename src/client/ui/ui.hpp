@@ -405,12 +405,16 @@ typedef struct {
     playerModelInfo_t pmi[MAX_PLAYERMODELS];
     char weaponModel[32];
 
-    qhandle_t backgroundHandle;
-    qhandle_t fontHandle;
-    qhandle_t cursorHandle;
-    int cursorWidth, cursorHeight;
+qhandle_t backgroundHandle;
+qhandle_t fontHandle;
+qhandle_t fallbackFontHandle;
+qhandle_t cursorHandle;
+float cursorScale;
+int cursorWidth, cursorHeight;
+int cursorDrawWidth, cursorDrawHeight;
+int fontPixelHeight;
 
-    qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
+qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
 
     struct {
         color_t background;
