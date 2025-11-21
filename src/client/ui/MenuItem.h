@@ -28,7 +28,7 @@ class SliderItem;
 	*/
 class MenuItem {
 public:
-using TextureHandle = std::shared_ptr<void>;
+using TextureHandle = std::shared_ptr<qhandle_t>;
 using Callback = std::function<void(MenuItem &)>;
 
 	struct MenuEvent {

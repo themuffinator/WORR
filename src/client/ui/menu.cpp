@@ -2769,10 +2769,12 @@ Creates a shared_ptr-backed texture handle for C++ menu items.
 static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
 {
 	if (!handle)
-	return nullptr;
+	{
+		return nullptr;
+	}
 
 	return std::make_shared<qhandle_t>(handle);
-	}
+}
 
 /*
 =============

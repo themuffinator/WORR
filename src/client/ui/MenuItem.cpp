@@ -154,8 +154,7 @@ Safely unwraps a shared_ptr-backed texture handle for draw routines.
 */
 static qhandle_t UI_ResolveHandle(const MenuItem::TextureHandle &handle)
 {
-	const auto converted = std::static_pointer_cast<qhandle_t>(handle);
-	return converted ? *converted : 0;
+	return handle ? *handle : 0;
 }
 
 /*
