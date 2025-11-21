@@ -60,8 +60,8 @@ cvar_t  *sys_homedir;
 extern cvar_t   *console_prefix;
 #endif
 
-static int terminate;
-static bool flush_logs;
+static volatile sig_atomic_t terminate_flag;
+static volatile sig_atomic_t flush_logs_flag;
 
 /*
 ===============================================================================
@@ -77,17 +77,35 @@ void Sys_DebugBreak(void)
 }
 
 #if USE_CLIENT
-bool Sys_IsMainThread(void)
+	bool Sys_IsMainThread(void)
 {
     return pthread_equal(main_thread, pthread_self());
 }
 #endif
 
+/*
+=============
+Sys_Milliseconds
+
+Returns monotonic milliseconds. Falls back to gettimeofday if clock_gettime fails.
+=============
+*/
 unsigned Sys_Milliseconds(void)
 {
-    struct timespec ts;
-    (void)clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL;
+	struct timespec ts;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+		return ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL;
+	}
+
+	struct timeval tv;
+	if (gettimeofday(&tv, NULL) == 0) {
+		Com_DPrintf("clock_gettime failed (%s), falling back to gettimeofday\n", strerror(errno));
+		return tv.tv_sec * 1000UL + tv.tv_usec / 1000UL;
+	}
+
+	Com_DPrintf("clock_gettime and gettimeofday failed, returning 0 milliseconds\n");
+	return 0;
 }
 
 /*
@@ -108,25 +126,48 @@ void Sys_Quit(void)
 
 #define SYS_SITE_CFG    "/etc/default/q2pro"
 
+/*
+=============
+Sys_AddDefaultConfig
+
+Loads and executes the site configuration if it fits inside the command buffer.
+=============
+*/
 void Sys_AddDefaultConfig(void)
 {
-    FILE *fp;
-    size_t len;
+	FILE *fp;
+	size_t len;
+	bool truncated;
 
-    fp = fopen(SYS_SITE_CFG, "r");
-    if (!fp) {
-        return;
-    }
+	fp = fopen(SYS_SITE_CFG, "r");
+	if (!fp) {
+		return;
+	}
 
-    len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
-    fclose(fp);
+	len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
 
-    cmd_buffer.text[len] = 0;
-    cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
-    if (cmd_buffer.cursize) {
-        Com_Printf("Execing %s\n", SYS_SITE_CFG);
-        Cbuf_Execute(&cmd_buffer);
-    }
+	truncated = ferror(fp);
+	if (len == cmd_buffer.maxsize - 1 && !truncated) {
+		truncated = fgetc(fp) != EOF;
+	}
+	if (!truncated && !feof(fp)) {
+		truncated = true;
+	}
+
+	fclose(fp);
+
+	if (truncated) {
+		Com_WPrintf("Ignoring %s: exceeds %zu byte command buffer or could not be read completely\n",
+			SYS_SITE_CFG, cmd_buffer.maxsize - 1);
+		return;
+	}
+
+	cmd_buffer.text[len] = 0;
+	cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
+	if (cmd_buffer.cursize) {
+		Com_Printf("Execing %s\n", SYS_SITE_CFG);
+		Cbuf_Execute(&cmd_buffer);
+	}
 }
 
 void Sys_Sleep(int msec)
@@ -144,14 +185,14 @@ const char *Sys_ErrorString(int err)
 }
 
 #if USE_AC_CLIENT
-bool Sys_GetAntiCheatAPI(void)
+	bool Sys_GetAntiCheatAPI(void)
 {
     Sys_Sleep(1500);
     return false;
 }
 #endif
 
-bool Sys_SetNonBlock(int fd, bool nb)
+	bool Sys_SetNonBlock(int fd, bool nb)
 {
     int ret = fcntl(fd, F_GETFL, 0);
     if (ret == -1)
@@ -161,14 +202,29 @@ bool Sys_SetNonBlock(int fd, bool nb)
     return fcntl(fd, F_SETFL, ret ^ O_NONBLOCK) == 0;
 }
 
+/*
+=============
+usr1_handler
+
+Handles SIGUSR1 by scheduling a log flush.
+=============
+*/
 static void usr1_handler(int signum)
 {
-    flush_logs = true;
+	(void)signum;
+	flush_logs_flag = 1;
 }
 
+/*
+=============
+term_handler
+
+Captures termination signals and records the triggering signum.
+=============
+*/
 static void term_handler(int signum)
 {
-    terminate = signum;
+	terminate_flag = signum;
 }
 
 /*
@@ -192,21 +248,29 @@ void Sys_Init(void)
     // allows the game to run from outside the data tree
     sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
-
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		char *s = getenv("HOME");
+		const char *suffix = &HOMEDIR[1];
+		const size_t limit = MAX_OSPATH - 1;
+		if (s && *s) {
+			size_t home_len = strlen(s);
+			size_t suffix_len = strlen(suffix);
+			size_t combined_len = home_len + suffix_len;
+			if (home_len > limit)
+				Sys_Error("HOME path too long");
+			if (combined_len > limit) {
+				homedir = "";
+			} else {
+				homedir = va("%s%s", s, suffix);
+			}
+		} else {
+			homedir = "";
+		}
+	} else {
+		homedir = HOMEDIR;
+	}
     sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
     sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
 
@@ -463,7 +527,7 @@ static char* home_expand(const char *dir)
     return strdup(va("%s/%s", s, dir));
 }
 
-bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length)
+	bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length)
 {
     bool result = false;
 
@@ -594,15 +658,22 @@ int main(int argc, char **argv)
 
     Qcommon_Init(argc, argv);
 
-    while (!terminate) {
-        if (flush_logs) {
-            Com_FlushLogs();
-            flush_logs = false;
-        }
-        Qcommon_Frame();
-    }
+	for (;;) {
+		sig_atomic_t term = terminate_flag;
 
-    Com_Printf("%s\n", strsignal(terminate));
+		if (term) {
+			break;
+		}
+
+		if (flush_logs_flag) {
+			flush_logs_flag = 0;
+			Com_FlushLogs();
+		}
+
+		Qcommon_Frame();
+	}
+
+	Com_Printf("%s\n", strsignal(terminate_flag));
     Com_Quit(NULL, ERR_DISCONNECT);
 
     return EXIT_FAILURE; // never gets here
