@@ -208,6 +208,7 @@ client_src = [
 ]
 
 ui_src = [
+  'src/client/ui/MenuItem.cpp',
   'src/client/ui/demos.cpp',
   'src/client/ui/menu.cpp',
   'src/client/ui/playerconfig.cpp',
