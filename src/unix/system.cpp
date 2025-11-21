@@ -178,39 +178,72 @@ Sys_Init
 */
 void Sys_Init(void)
 {
-    const char *homedir;
+	const char *homedir;
 
-    signal(SIGTERM, term_handler);
-    signal(SIGINT, term_handler);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGHUP, term_handler);
-    signal(SIGUSR1, usr1_handler);
+	signal(SIGTERM, term_handler);
+	signal(SIGINT, term_handler);
+	signal(SIGTTIN, SIG_IGN);
+	signal(SIGTTOU, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGHUP, term_handler);
+	signal(SIGUSR1, usr1_handler);
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		static char homedir_buffer[MAX_OSPATH];
+		char *s = getenv("HOME");
+		const char *suffix = &HOMEDIR[1];
 
-    sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+		if (s && *s) {
+			size_t home_len = strlen(s);
+			size_t suffix_len = strlen(suffix);
+			size_t max_total = MAX_OSPATH - 1;
+			size_t available_suffix = 0;
 
-    tty_init_input();
+			if (home_len < max_total) {
+				available_suffix = max_total - home_len;
+			}
+
+			if (home_len >= max_total) {
+				Q_strlcpy(homedir_buffer, s, sizeof(homedir_buffer));
+				Com_Printf("HOME (%s) exceeds %zu characters, truncating to fit limit\n", s, max_total);
+				homedir = homedir_buffer;
+			} else if (suffix_len > available_suffix) {
+				Q_strlcpy(homedir_buffer, s, sizeof(homedir_buffer));
+				if (available_suffix > 0) {
+					char truncated_suffix[MAX_OSPATH];
+
+					Q_strlcpy(truncated_suffix, suffix, available_suffix + 1);
+					Q_strlcat(homedir_buffer, truncated_suffix, sizeof(homedir_buffer));
+					Com_Printf(
+					"Combined HOME (%s) and HOMEDIR (%s) exceed %zu characters, truncating HOMEDIR to \"%s\"\n",
+					s, suffix, max_total, homedir_buffer);
+				} else {
+					Com_Printf(
+					"HOME (%s) length leaves no room for HOMEDIR (%s); using HOME only\n",
+					s, suffix);
+				}
+
+				homedir = homedir_buffer;
+			} else {
+				homedir = va("%s%s", s, suffix);
+			}
+		} else {
+			homedir = "";
+		}
+	} else {
+		homedir = HOMEDIR;
+	}
+
+	sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+
+	tty_init_input();
 }
 
 /*
