@@ -83,11 +83,29 @@ bool Sys_IsMainThread(void)
 }
 #endif
 
+/*
+=============
+Sys_Milliseconds
+
+Returns monotonic milliseconds. Falls back to gettimeofday if clock_gettime fails.
+=============
+*/
 unsigned Sys_Milliseconds(void)
 {
-    struct timespec ts;
-    (void)clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL;
+	struct timespec ts;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+		return ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL;
+	}
+
+	struct timeval tv;
+	if (gettimeofday(&tv, NULL) == 0) {
+		Com_DPrintf("clock_gettime failed (%s), falling back to gettimeofday\n", strerror(errno));
+		return tv.tv_sec * 1000UL + tv.tv_usec / 1000UL;
+	}
+
+	Com_DPrintf("clock_gettime and gettimeofday failed, returning 0 milliseconds\n");
+	return 0;
 }
 
 /*
