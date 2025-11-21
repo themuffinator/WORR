@@ -93,6 +93,11 @@ typedef enum {
 
 #define DOUBLE_CLICK_DELAY    300
 
+#include <memory>
+#include <vector>
+
+class MenuItem;
+
 #define UI_IsItemSelectable(item) \
     ((item)->type != MTYPE_SEPARATOR && \
      (item)->type != MTYPE_STATIC && \
@@ -136,6 +141,8 @@ char    *name, *title, *status;
 	bool allowInputPassthrough;
 	bool drawsBackdrop;
 	float opacity;
+
+	std::vector<std::unique_ptr<MenuItem>> itemsCpp;
 
 	bool (*push)(struct menuFrameWork_s *);
 	void (*pop)(struct menuFrameWork_s *);
