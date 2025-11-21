@@ -346,10 +346,10 @@ SCR_RegisterTrueTypeFontPath
 Attempts to load a TrueType/OpenType font using FreeType and returns its renderer handle.
 =============
 */
-static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHandleCreation, qhandle_t preferredHandle)
+static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHandleCreation, qhandle_t preferredHandle, int pixelHeight)
 {
-	if (!path || !*path)
-		return 0;
+if (!path || !*path)
+return 0;
 
 	std::array<char, MAX_QPATH> normalized{};
 	size_t normalizedLen = 0;
@@ -362,10 +362,12 @@ static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHa
 	if (!normalizedLen || normalizedLen >= normalized.size())
 		return 0;
 
-	const int pixelHeight = SCR_CurrentFontPixelHeight();
-	std::string cacheKey(normalized.data());
-	cacheKey.push_back('-');
-	cacheKey += std::to_string(pixelHeight);
+int resolvedPixelHeight = pixelHeight;
+if (resolvedPixelHeight <= 0)
+resolvedPixelHeight = SCR_CurrentFontPixelHeight();
+std::string cacheKey(normalized.data());
+cacheKey.push_back('-');
+cacheKey += std::to_string(resolvedPixelHeight);
 
 	qhandle_t targetHandle = preferredHandle;
 	if (!targetHandle) {
@@ -381,8 +383,8 @@ static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHa
 	if (!targetHandle)
 		return 0;
 
-	if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), pixelHeight, targetHandle))
-		return targetHandle;
+if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), resolvedPixelHeight, targetHandle))
+return targetHandle;
 
 	return 0;
 }
@@ -402,8 +404,8 @@ static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTy
 		return 0;
 
 #if USE_FREETYPE
-	if (SCR_IsTrueTypeFontPath(name))
-		return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0);
+if (SCR_IsTrueTypeFontPath(name))
+return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0, 0);
 #endif
 
 	if (SCR_IsPathSeparator(name[0]))
@@ -956,7 +958,23 @@ Registers a font by path, delegating to FreeType for TrueType/OpenType sources w
 */
 qhandle_t SCR_RegisterFontPath(const char* name)
 {
-	return SCR_RegisterFontPathInternal(name, true);
+return SCR_RegisterFontPathInternal(name, true);
+}
+
+/*
+=============
+SCR_RegisterFontPathWithSize
+
+Registers a font path with an explicit pixel height override for scalable fonts.
+=============
+*/
+qhandle_t SCR_RegisterFontPathWithSize(const char* name, int pixelHeight)
+{
+#if USE_FREETYPE
+if (SCR_IsTrueTypeFontPath(name))
+return SCR_RegisterTrueTypeFontPath(name, true, 0, pixelHeight);
+#endif
+return SCR_RegisterFontPathInternal(name, true);
 }
 
 /*
@@ -1053,7 +1071,7 @@ static void scr_font_changed(cvar_t* self)
 			lastAttempt = candidate;
 
 			const qhandle_t targetHandle = freetypeHandle ? freetypeHandle : previousHandle;
-			qhandle_t handle = SCR_RegisterTrueTypeFontPath(candidate, true, targetHandle);
+qhandle_t handle = SCR_RegisterTrueTypeFontPath(candidate, true, targetHandle, 0);
 			if (handle) {
 				scr.font_pic = handle;
 				loadedName = candidate;
