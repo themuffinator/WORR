@@ -107,26 +107,25 @@ struct uiItemGroup_s;
 struct uiConditionalBlock_s;
 
 typedef struct menuFrameWork_s {
-	list_t  entry;
+	list_t	entry;
 
-char    *name, *title, *status;
+	char		*name, *title, *status;
 
-    void    **items;
-    int     nitems;
+	std::vector<void *> items;
 
-    struct uiItemGroup_s   **groups;
-    int                     numGroups;
+	struct uiItemGroup_s	**groups;
+	int			numGroups;
 
-    bool compact;
-    bool transparent;
-    bool keywait;
+	bool compact;
+	bool transparent;
+	bool keywait;
 
-    qhandle_t image;
-    color_t color;
-    int y1, y2;
+	qhandle_t image;
+	color_t color;
+	int y1, y2;
 
-    int mins[2];
-    int maxs[2];
+	int mins[2];
+	int maxs[2];
 
 	qhandle_t banner;
 	vrect_t banner_rc;
@@ -148,9 +147,9 @@ char    *name, *title, *status;
 	void (*pop)(struct menuFrameWork_s *);
 	void (*expose)(struct menuFrameWork_s *);
 	void (*draw)(struct menuFrameWork_s *);
-    void (*size)(struct menuFrameWork_s *);
-    void (*free)(struct menuFrameWork_s *);
-    menuSound_t (*keydown)(struct menuFrameWork_s *, int);
+	void (*size)(struct menuFrameWork_s *);
+	void (*free)(struct menuFrameWork_s *);
+	menuSound_t (*keydown)(struct menuFrameWork_s *, int);
 } menuFrameWork_t;
 
 typedef struct menuCommon_s {
