@@ -1172,7 +1172,7 @@ static void ParseMenu(json_parse_t* parser)
 		menu = NULL;
 	}
 
-	menu = UI_Mallocz(sizeof(*menu));
+	menu = new menuFrameWork_t{};
 	menu->name = name;
 	menu->push = Menu_Push;
 	menu->pop = Menu_Pop;
@@ -1239,7 +1239,7 @@ static void ParseMenu(json_parse_t* parser)
 		}
 	}
 
-	if (!menu->nitems) {
+	if (menu->items.empty()) {
 		Com_WPrintf("Menu '%s' defined without items\n", menu->name);
 		menu->free(menu);
 		return;

@@ -133,29 +133,32 @@ static bool UI_EvaluateConditionAny(const uiItemCondition_t *conditions)
 
 static void Menu_UpdateConditionalState(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        auto *item = static_cast<menuCommon_t *>(menu->items[i]);
-        bool disabled = item->defaultDisabled;
+	const int itemCount = Menu_ItemCount(menu);
 
-        if (item->conditional) {
-            if (item->conditional->enable)
-                disabled = !UI_EvaluateConditionAll(item->conditional->enable);
-            if (!disabled && item->conditional->disable)
-                disabled = UI_EvaluateConditionAny(item->conditional->disable);
-        }
+	for (int i = 0; i < itemCount; i++) {
+		auto *item = static_cast<menuCommon_t *>(menu->items[i]);
+		bool disabled = item->defaultDisabled;
 
-        if (disabled)
-            item->flags |= QMF_DISABLED;
-        else
-            item->flags &= ~QMF_DISABLED;
-    }
+		if (item->conditional) {
+			if (item->conditional->enable)
+				disabled = !UI_EvaluateConditionAll(item->conditional->enable);
+			if (!disabled && item->conditional->disable)
+				disabled = UI_EvaluateConditionAny(item->conditional->disable);
+		}
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu) {
-        if (ui_activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
-            Dropdown_Close(ui_activeDropdown, false);
-    }
+		if (disabled)
+			item->flags |= QMF_DISABLED;
+		else
+			item->flags &= ~QMF_DISABLED;
+	}
+
+	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu) {
+		if (ui_activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
+			Dropdown_Close(ui_activeDropdown, false);
+	}
 }
 
+static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_UpdateGroupBounds(menuFrameWork_t *menu);
 
@@ -229,7 +232,7 @@ static void Keybind_Pop(menuKeybind_t *k)
 
 static void Keybind_Update(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         void *rawItem = menu->items[i];
         auto *item = static_cast<menuCommon_t *>(rawItem);
         if (item->type == MTYPE_KEYBIND) {
@@ -2254,6 +2257,36 @@ static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
 
 /*
 =============
+Menu_ItemCount
+
+Returns the number of legacy items attached to a menu.
+=============
+*/
+static int Menu_ItemCount(const menuFrameWork_t *menu)
+{
+	if (!menu)
+		return 0;
+
+	return static_cast<int>(menu->items.size());
+}
+
+/*
+=============
+Menu_EmplaceCppItem
+
+Builds and stores a C++ wrapper for a legacy menu widget.
+=============
+*/
+static void Menu_EmplaceCppItem(menuFrameWork_t *menu, menuCommon_t *item)
+{
+	std::unique_ptr<MenuItem> wrapped = Menu_BuildMenuItem(item);
+
+	if (wrapped)
+		menu->itemsCpp.emplace_back(std::move(wrapped));
+}
+
+/*
+=============
 Menu_BuildMenuItem
 
 Instantiates the modern MenuItem subclass for a legacy menu widget.
@@ -2348,14 +2381,14 @@ Finds the MenuItem wrapper associated with a legacy menu entry.
 static MenuItem *Menu_FindCppItem(menuFrameWork_t *menu, const menuCommon_t *item)
 {
 	if (!menu)
-	return nullptr;
+		return nullptr;
 
-	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
 
 	for (size_t i = 0; i < itemCount; i++) {
 		if (menu->items[i] == item)
 			return menu->itemsCpp[i].get();
-}
+	}
 
 	return nullptr;
 }
@@ -2366,23 +2399,12 @@ Menu_AddItem
 */
 void Menu_AddItem(menuFrameWork_t *menu, void *item)
 {
-	Q_assert(menu->nitems < MAX_MENU_ITEMS);
+	Q_assert(Menu_ItemCount(menu) < MAX_MENU_ITEMS);
 
-	z_allocation allocation;
-	if (!menu->nitems) {
-		allocation = z_allocation{UI_Malloc(MIN_MENU_ITEMS * sizeof(void *))};
-	} else {
-		allocation = Z_Realloc_allocation(
-			menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
-	}
-
-	menu->items = static_cast<void **>(allocation);
-	menu->items[menu->nitems++] = item;
+	menu->items.push_back(item);
 	static_cast<menuCommon_t *>(item)->parent = menu;
 
-	std::unique_ptr<MenuItem> wrapped = Menu_BuildMenuItem(static_cast<menuCommon_t *>(item));
-	if (wrapped)
-		menu->itemsCpp.emplace_back(std::move(wrapped));
+	Menu_EmplaceCppItem(menu, static_cast<menuCommon_t *>(item));
 }
 
 static void UI_ClearBounds(int mins[2], int maxs[2])
@@ -2418,7 +2440,7 @@ void Menu_Init(menuFrameWork_t *menu)
     }
     menu->size(menu);
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         void *rawItem = menu->items[i];
         auto *item = static_cast<menuCommon_t *>(rawItem);
 
@@ -2482,7 +2504,7 @@ void Menu_Init(menuFrameWork_t *menu)
     }
 
     // set focus to the first item by default
-    if (!focus && menu->nitems) {
+    if (!focus && Menu_ItemCount(menu)) {
         auto *item = static_cast<menuCommon_t *>(menu->items[0]);
         item->flags |= QMF_HASFOCUS;
         if (item->status) {
@@ -2495,7 +2517,7 @@ void Menu_Init(menuFrameWork_t *menu)
     // calc menu bounding box
     UI_ClearBounds(menu->mins, menu->maxs);
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         UI_AddRectToBounds(&item->rect, menu->mins, menu->maxs);
     }
@@ -2531,11 +2553,11 @@ void Menu_Size(menuFrameWork_t *menu)
     int widest = -1;
     uiItemGroup_t *currentGroup = NULL;
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
+if (menu->groups) {
+for (int i = 0; i < menu->numGroups; i++) {
+uiItemGroup_t *group = menu->groups[i];
+if (!group)
+continue;
             group->active = false;
             group->contentTop = 0;
             group->contentBottom = 0;
@@ -2547,7 +2569,7 @@ void Menu_Size(menuFrameWork_t *menu)
     }
 
     // count visible items including groups
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN)
             continue;
@@ -2649,7 +2671,7 @@ void Menu_Size(menuFrameWork_t *menu)
 
     // align items
     currentGroup = NULL;
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN)
             continue;
@@ -2712,7 +2734,7 @@ static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
         int minY = INT_MAX;
         int maxY = INT_MIN;
 
-        for (int j = 0; j < menu->nitems; j++) {
+        for (int j = 0; j < Menu_ItemCount(menu); j++) {
             auto *item = static_cast<menuCommon_t *>(menu->items[j]);
             if (item->flags & QMF_HIDDEN)
                 continue;
@@ -2796,7 +2818,7 @@ menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
 	menuCommon_t *item;
 	int i;
 
-	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), static_cast<size_t>(m->nitems));
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), m->items.size());
 
 	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
 		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
@@ -2811,7 +2833,7 @@ menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
 		}
 	}
 
-	for (i = 0; i < m->nitems; i++) {
+	for (i = 0; i < Menu_ItemCount(m); i++) {
 		item = static_cast<menuCommon_t *>(m->items[i]);
 		if (item->flags & QMF_HASFOCUS) {
 			MenuItem *wrapped = Menu_FindCppItem(m, item);
@@ -2851,7 +2873,7 @@ void Menu_SetFocus(menuCommon_t *focus)
 		Dropdown_Close(ui_activeDropdown, false);
 	}
 
-	for (i = 0; i < menu->nitems; i++) {
+	for (i = 0; i < Menu_ItemCount(menu); i++) {
 		item = static_cast<menuCommon_t *>(menu->items[i]);
 		MenuItem *wrapped = Menu_FindCppItem(menu, item);
 
@@ -2895,13 +2917,13 @@ menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 	int i;
 	bool foundFocus;
 
-	if (!m->nitems) {
+	if (!Menu_ItemCount(m)) {
 	return QMS_NOTHANDLED;
 	}
 
 	pos = 0;
 	foundFocus = false;
-	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), static_cast<size_t>(m->nitems));
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), m->items.size());
 
 	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
 		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
@@ -2915,7 +2937,7 @@ menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 	}
 
 	if (!foundFocus) {
-		for (i = 0; i < m->nitems; i++) {
+		for (i = 0; i < Menu_ItemCount(m); i++) {
 			item = static_cast<menuCommon_t *>(m->items[i]);
 
 			if (item->flags & QMF_HASFOCUS) {
@@ -2933,7 +2955,7 @@ menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 	if (dir == 1) {
 		do {
 			cursor++;
-			if (cursor >= m->nitems)
+			if (cursor >= Menu_ItemCount(m))
 				cursor = 0;
 
 			item = static_cast<menuCommon_t *>(m->items[cursor]);
@@ -2944,7 +2966,7 @@ menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 		do {
 			cursor--;
 			if (cursor < 0)
-				cursor = m->nitems - 1;
+				cursor = Menu_ItemCount(m) - 1;
 
 			item = static_cast<menuCommon_t *>(m->items[cursor]);
 			if (UI_IsItemSelectable(item))
@@ -3024,7 +3046,7 @@ void Menu_Draw(menuFrameWork_t *menu)
     }
 
     if (!focusItem) {
-        for (int i = 0; i < menu->nitems; i++) {
+        for (int i = 0; i < Menu_ItemCount(menu); i++) {
             auto *candidate = static_cast<menuCommon_t *>(menu->items[i]);
             if (candidate->flags & QMF_HIDDEN)
                 continue;
@@ -3083,7 +3105,7 @@ void Menu_Draw(menuFrameWork_t *menu)
 //
 // draw contents
 //
-	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
 
 	for (size_t i = 0; i < itemCount; i++) {
 		auto *item = static_cast<menuCommon_t *>(menu->items[i]);
@@ -3455,7 +3477,7 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
             return &ui_activeDropdown->spin.generic;
     }
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN) {
             continue;
@@ -3471,7 +3493,7 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
 
 bool Menu_Push(menuFrameWork_t *menu)
 {
-	for (int i = 0; i < menu->nitems; i++) {
+	for (int i = 0; i < Menu_ItemCount(menu); i++) {
 		void *rawItem = menu->items[i];
 		auto *item = static_cast<menuCommon_t *>(rawItem);
 
@@ -3521,7 +3543,7 @@ bool Menu_Push(menuFrameWork_t *menu)
 		}
 	}
 
-	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
 
 	for (size_t i = 0; i < itemCount; i++) {
 		menu->itemsCpp[i]->OnAttach();
@@ -3534,7 +3556,7 @@ bool Menu_Push(menuFrameWork_t *menu)
 
 void Menu_Pop(menuFrameWork_t *menu)
 {
-	for (int i = 0; i < menu->nitems; i++) {
+	for (int i = 0; i < Menu_ItemCount(menu); i++) {
 		void *rawItem = menu->items[i];
 		auto *item = static_cast<menuCommon_t *>(rawItem);
 
@@ -3580,7 +3602,7 @@ void Menu_Pop(menuFrameWork_t *menu)
 		}
 	}
 
-	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
 
 	for (size_t i = 0; i < itemCount; i++) {
 		menu->itemsCpp[i]->OnDetach();
@@ -3590,7 +3612,7 @@ void Menu_Pop(menuFrameWork_t *menu)
 
 void Menu_Free(menuFrameWork_t *menu)
 {
-	for (int i = 0; i < menu->nitems; i++) {
+	for (int i = 0; i < Menu_ItemCount(menu); i++) {
 		void *rawItem = menu->items[i];
 		auto *item = static_cast<menuCommon_t *>(rawItem);
 
@@ -3664,20 +3686,15 @@ void Menu_Free(menuFrameWork_t *menu)
 		Z_Free(menu->groups);
 	}
 
-	menu->itemsCpp.clear();
-	menu->itemsCpp.shrink_to_fit();
-
-	Z_Free(menu->items);
 	Z_Free(menu->title);
 	Z_Free(menu->name);
-	Z_Free(menu);
+
+	delete menu;
 }
 
 #ifdef UNIT_TESTS
 static menuCommon_t menuTest_baseItem;
 static menuCommon_t menuTest_overlayItem;
-static void *menuTest_baseItems[1];
-static void *menuTest_overlayItems[1];
 static menuFrameWork_t menuTest_base;
 static menuFrameWork_t menuTest_overlay;
 static bool menuTest_baseHandled;
@@ -3716,9 +3733,7 @@ static void MenuTest_BuildStack(void)
 {
 	MenuTest_ResetState();
 
-	menuTest_baseItems[0] = &menuTest_baseItem;
-	menuTest_base.items = menuTest_baseItems;
-	menuTest_base.nitems = 1;
+	menuTest_base.items.push_back(&menuTest_baseItem);
 	menuTest_base.modal = true;
 	menuTest_base.allowInputPassthrough = false;
 	menuTest_base.opacity = 1.0f;
@@ -3730,9 +3745,7 @@ static void MenuTest_BuildStack(void)
 	menuTest_baseItem.rect.height = 96;
 	menuTest_baseItem.parent = &menuTest_base;
 
-	menuTest_overlayItems[0] = &menuTest_overlayItem;
-	menuTest_overlay.items = menuTest_overlayItems;
-	menuTest_overlay.nitems = 1;
+	menuTest_overlay.items.push_back(&menuTest_overlayItem);
 	menuTest_overlay.modal = false;
 	menuTest_overlay.allowInputPassthrough = true;
 	menuTest_overlay.opacity = 1.0f;
