@@ -38,6 +38,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <pwd.h>
 
 #if USE_MEMORY_TRACES && HAVE_BACKTRACE
 #include <execinfo.h>
@@ -172,45 +173,141 @@ static void term_handler(int signum)
 }
 
 /*
+=============
+Sys_CopyPath
+
+Copies a non-empty source path into the destination buffer.
+=============
+*/
+static bool Sys_CopyPath(char *dest, size_t size, const char *src)
+{
+	size_t len;
+
+	if (!src || !*src) {
+		return false;
+	}
+
+	len = Q_strlcpy(dest, src, size);
+	if (len >= size) {
+		return false;
+	}
+
+	return true;
+}
+
+/*
+=============
+Sys_ResolveHomeBase
+
+Resolves a usable base directory for homedir expansion.
+=============
+*/
+static void Sys_ResolveHomeBase(char *buffer, size_t size)
+{
+	struct passwd *pw;
+
+	if (Sys_CopyPath(buffer, size, getenv("HOME")))
+		return;
+
+	pw = getpwuid(getuid());
+	if (pw && Sys_CopyPath(buffer, size, pw->pw_dir))
+		return;
+
+	if (Sys_CopyPath(buffer, size, getenv("XDG_DATA_HOME")))
+		return;
+
+	if (Sys_CopyPath(buffer, size, getenv("XDG_CONFIG_HOME")))
+		return;
+
+	Q_strlcpy(buffer, "/tmp", size);
+}
+
+/*
+=============
+Sys_PrepareWritableDir
+
+Ensures that the specified directory exists and is writable.
+=============
+*/
+static bool Sys_PrepareWritableDir(const char *path)
+{
+	char buffer[MAX_OSPATH];
+	size_t len;
+
+	if (!path || !*path) {
+		return false;
+	}
+
+	len = Q_strlcpy(buffer, path, sizeof(buffer));
+	if (len >= sizeof(buffer)) {
+		return false;
+	}
+
+	if (len && buffer[len - 1] != '/') {
+		if (len + 1 >= sizeof(buffer)) {
+			return false;
+		}
+		buffer[len++] = '/';
+		buffer[len] = 0;
+	}
+
+	if (FS_CreatePath(buffer) < 0) {
+		return false;
+	}
+
+	return access(path, W_OK) == 0;
+}
+
+/*
 =================
 Sys_Init
 =================
 */
 void Sys_Init(void)
 {
-    const char *homedir;
+	char homebase[MAX_OSPATH];
+	char homedir_buffer[MAX_OSPATH];
+	const char *homedir = "";
 
-    signal(SIGTERM, term_handler);
-    signal(SIGINT, term_handler);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGHUP, term_handler);
-    signal(SIGUSR1, usr1_handler);
+	Sys_ResolveHomeBase(homebase, sizeof(homebase));
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
+	signal(SIGTERM, term_handler);
+	signal(SIGINT, term_handler);
+	signal(SIGTTIN, SIG_IGN);
+	signal(SIGTTOU, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGHUP, term_handler);
+	signal(SIGUSR1, usr1_handler);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		if (strlen(homebase) >= MAX_OSPATH - MAX_QPATH)
+			Sys_Error("HOME path too long");
+		Q_snprintf(homedir_buffer, sizeof(homedir_buffer), "%s%s", homebase, &HOMEDIR[1]);
+		if (!Sys_PrepareWritableDir(homedir_buffer))
+			homedir_buffer[0] = 0;
+		else
+			homedir = homedir_buffer;
+	} else {
+		Q_strlcpy(homedir_buffer, HOMEDIR, sizeof(homedir_buffer));
+		if (!Sys_PrepareWritableDir(homedir_buffer))
+			homedir_buffer[0] = 0;
+		else
+			homedir = homedir_buffer;
+	}
 
-    tty_init_input();
+	if (!homedir_buffer[0] && Sys_PrepareWritableDir(homebase))
+		homedir = homebase;
+
+	sys_homedir = Cvar_Get("homedir", homedir && *homedir ? homedir : "", CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
+
+	tty_init_input();
 }
 
 /*
