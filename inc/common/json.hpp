@@ -58,8 +58,8 @@ static inline const char *Json_JsmnErrorString(int err)
 
 static inline void Json_Free(json_parse_t *parser)
 {
-    Z_Free(parser->tokens);
-    FS_FreeFile(parser->buffer);
+	Z_Free(parser->tokens);
+	FS_FreeFile(parser->buffer);
 }
 
 /*
@@ -71,10 +71,10 @@ Compute the line/column of the provided token for error reporting.
 */
 static inline void Json_ErrorLocation(json_parse_t *parser, jsmntok_t *tok)
 {
-	if (!tok || tok < parser->tokens || tok >= parser->tokens + parser->num_tokens) {
+	if (!parser->tokens || !parser->buffer || !tok || tok < parser->tokens || tok >= parser->tokens + parser->num_tokens) {
 		Q_strlcpy(parser->error_loc, "unknown location", sizeof(parser->error_loc));
 		return;
-	}
+}
 
 	int col = 1, row = 0;
 
@@ -84,11 +84,11 @@ static inline void Json_ErrorLocation(json_parse_t *parser, jsmntok_t *tok)
 
 			if (i > 0 && parser->buffer[i - 1] == '\r') {
 				--i;
-			}
+}
 		} else if (col == 1) {
 			row++;
-		}
-	}
+}
+}
 
 	Q_snprintf(parser->error_loc, sizeof(parser->error_loc), "%i:%i", col, row);
 }
@@ -116,37 +116,41 @@ q_noreturn static inline void Json_Errorno(json_parse_t *parser, jsmntok_t *tok,
 // zeroed parser.
 static inline void Json_Load(const char *filename, json_parse_t *parser)
 {
-    jsmn_parser p;
+	jsmn_parser p;
 
-    Q_assert(!parser->tokens);
+	parser->tokens = NULL;
+	parser->pos = NULL;
+	parser->buffer = NULL;
+	parser->num_tokens = 0;
+	parser->buffer_len = 0;
 
-    Q_strlcpy(parser->error, "unknown error", sizeof(parser->error));
-    Q_strlcpy(parser->error_loc, "unknown location", sizeof(parser->error_loc));
+	Q_strlcpy(parser->error, "unknown error", sizeof(parser->error));
+		Q_strlcpy(parser->error_loc, "unknown location", sizeof(parser->error_loc));
 
-    int buffer_len;
-    if ((buffer_len = FS_LoadFile(filename, (void **) &parser->buffer)) < 0)
-        Json_Error(parser, NULL, va("Couldn't load file \"%s\"", filename));
-    parser->buffer_len = buffer_len;
-    
-    // calculate the total token size so we can grok all of them.
-    jsmn_init(&p);
+	int buffer_len;
+	if ((buffer_len = FS_LoadFile(filename, (void **) &parser->buffer)) < 0)
+		Json_Error(parser, NULL, va("Couldn't load file \"%s\"", filename));
+	parser->buffer_len = buffer_len;
+
+	// calculate the total token size so we can grok all of them.
+	jsmn_init(&p);
 
 	parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
 	if (parser->num_tokens < 0)
-	Json_Error(parser, parser->pos, Json_JsmnErrorString(parser->num_tokens));
+		Json_Error(parser, parser->pos, Json_JsmnErrorString(parser->num_tokens));
 
-    parser->tokens = Z_Malloc(sizeof(jsmntok_t) * (parser->num_tokens));
+	parser->tokens = Z_Malloc(sizeof(jsmntok_t) * (parser->num_tokens));
 
-    if (!parser->tokens)
-        Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
+	if (!parser->tokens)
+		Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));
 
-    // decode all tokens
-    jsmn_init(&p);
+	// decode all tokens
+	jsmn_init(&p);
 	int parse_result = jsmn_parse(&p, parser->buffer, parser->buffer_len, parser->tokens, parser->num_tokens);
 	if (parse_result < 0)
-	Json_Error(parser, parser->pos, Json_JsmnErrorString(parse_result));
+		Json_Error(parser, parser->pos, Json_JsmnErrorString(parse_result));
 
-    parser->pos = parser->tokens;
+	parser->pos = parser->tokens;
 }
 
 // skips the current token entirely, making sure that
