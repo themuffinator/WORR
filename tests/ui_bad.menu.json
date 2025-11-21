@@ -1,0 +1,22 @@
+{
+  "menus": [
+    {
+      "name": "broken_menu",
+      "title": "Broken Menu",
+      "items": [
+        {
+          "type": "strings",
+          "label": "Bad Options",
+          "cvar": "menu_bad",
+          "options": [
+            {
+              "label": "bad",
+              "value": "broken"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

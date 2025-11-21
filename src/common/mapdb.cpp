@@ -217,13 +217,13 @@ static void MapDB_ParseKeys(json_parse_t *parser, void *obj, const mapdb_key_t *
 void MapDB_Init(void)
 {
 	json_parse_t parser = {0};
-	
-    if (Json_ErrorHandler(parser)) {
+
+	if (Json_ErrorHandler(&parser)) {
 		Com_WPrintf("Failed to load/parse mapdb.json[%s]: %s\n", parser.error_loc, parser.error);
 		MapDB_Shutdown();
-        return;
-    }
-	
+		return;
+	}
+
 	Json_Load("mapdb.json", &parser);
 
 	jsmntok_t *obj = Json_EnsureNext(&parser, JSMN_OBJECT);
