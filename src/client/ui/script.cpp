@@ -712,13 +712,24 @@ static void ParseMenuItem(json_parse_t* parser, menuFrameWork_t* menu)
 			if (!spin)
 				Json_Error(parser, object, "options only valid for spin controls");
 			jsmntok_t* arrayTok = Json_Ensure(parser, JSMN_ARRAY);
-			bool objects = arrayTok->size > 0 && (arrayTok + 1)->type == JSMN_OBJECT;
-			if (info.kind == ITEM_KIND_PAIRS || (dropdown && objects)) {
+			jsmntok_t* firstItem = arrayTok->size > 0 ? arrayTok + 1 : NULL;
+			bool objectOptions = firstItem && firstItem->type == JSMN_OBJECT;
+			bool primitiveOptions = firstItem && (firstItem->type == JSMN_PRIMITIVE || firstItem->type == JSMN_STRING);
+
+			if (info.kind == ITEM_KIND_PAIRS) {
+				if (firstItem && !objectOptions)
+					Json_Error(parser, arrayTok, "pair options must use objects with label/value");
+
 				ParsePairOptions(parser, spin);
-				if (dropdown)
-					dropdown->binding = DROPDOWN_BINDING_VALUE;
+			}
+			else if (dropdown && objectOptions) {
+				ParsePairOptions(parser, spin);
+				dropdown->binding = DROPDOWN_BINDING_VALUE;
 			}
 			else {
+				if (firstItem && !primitiveOptions && arrayTok->size > 0)
+					Json_Error(parser, arrayTok, "options entries must be string or primitive");
+
 				ParseSpinOptions(parser, spin);
 				if (dropdown && dropdown->binding == DROPDOWN_BINDING_VALUE)
 					dropdown->binding = DROPDOWN_BINDING_LABEL;
@@ -1313,6 +1324,53 @@ static void ParseMenus(json_parse_t* parser)
 
 /*
 =============
+UI_ParseRoot
+
+Parses the root UI object and dispatches handling for top-level keys.
+=============
+*/
+static void UI_ParseRoot(json_parse_t* parser)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		if (!Json_Strcmp(parser, "background")) {
+			Json_Next(parser);
+			ParseGlobalBackground(parser);
+		}
+		else if (!Json_Strcmp(parser, "font")) {
+			Json_Next(parser);
+			char* font = Json_CopyStringUI(parser);
+			uis.fontHandle = SCR_RegisterFontPath(font);
+			Z_Free(font);
+		}
+		else if (!Json_Strcmp(parser, "cursor")) {
+			Json_Next(parser);
+			ParseCursor(parser);
+		}
+		else if (!Json_Strcmp(parser, "weapon")) {
+			Json_Next(parser);
+			char* weapon = Json_CopyStringUI(parser);
+			Q_strlcpy(uis.weaponModel, weapon, sizeof(uis.weaponModel));
+			Z_Free(weapon);
+		}
+		else if (!Json_Strcmp(parser, "colors")) {
+			Json_Next(parser);
+			ParseColors(parser);
+		}
+		else if (!Json_Strcmp(parser, "menus")) {
+			Json_Next(parser);
+			ParseMenus(parser);
+		}
+		else {
+			Json_Next(parser);
+			Json_SkipToken(parser);
+		}
+	}
+}
+
+/*
+=============
 UI_ParseJsonBuffer
 
 Initializes a JSON parser from an in-memory buffer.
@@ -1351,13 +1409,15 @@ Attempts to load the UI definition from the filesystem.
 */
 static bool UI_TryLoadMenuFromFile(json_parse_t* parser)
 {
-	if (setjmp(parser->exception)) {
+	if (Json_ErrorHandler(parser)) {
 		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
 		Json_Free(parser);
 		return false;
 	}
 
 	Json_Load(UI_DEFAULT_FILE, parser);
+	UI_ParseRoot(parser);
+	Json_Free(parser);
 	return true;
 }
 
@@ -1370,13 +1430,15 @@ Loads the embedded fallback UI definition when the filesystem copy is unavailabl
 */
 static bool UI_LoadEmbeddedMenu(json_parse_t* parser)
 {
-	if (setjmp(parser->exception)) {
+	if (Json_ErrorHandler(parser)) {
 		Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
 		Json_Free(parser);
 		return false;
 	}
 
 	UI_ParseJsonBuffer(parser, res_worr_menu, res_worr_menu_size);
+	UI_ParseRoot(parser);
+	Json_Free(parser);
 	return true;
 }
 
@@ -1392,47 +1454,8 @@ void UI_LoadScript(void)
 	if (!UI_TryLoadMenuFromFile(&parser)) {
 		parser = {};
 		Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
-		if (!UI_LoadEmbeddedMenu(&parser)) {
+		if (!UI_LoadEmbeddedMenu(&parser))
 			return;
-		}
 	}
-
-	jsmntok_t* object = Json_EnsureNext(&parser, JSMN_OBJECT);
-
-	for (int i = 0; i < object->size; i++) {
-		if (!Json_Strcmp(&parser, "background")) {
-			Json_Next(&parser);
-			ParseGlobalBackground(&parser);
-		}
-		else if (!Json_Strcmp(&parser, "font")) {
-			Json_Next(&parser);
-			char* font = Json_CopyStringUI(&parser);
-			uis.fontHandle = SCR_RegisterFontPath(font);
-			Z_Free(font);
-		}
-		else if (!Json_Strcmp(&parser, "cursor")) {
-			Json_Next(&parser);
-			ParseCursor(&parser);
-		}
-		else if (!Json_Strcmp(&parser, "weapon")) {
-			Json_Next(&parser);
-			char* weapon = Json_CopyStringUI(&parser);
-			Q_strlcpy(uis.weaponModel, weapon, sizeof(uis.weaponModel));
-			Z_Free(weapon);
-		}
-		else if (!Json_Strcmp(&parser, "colors")) {
-			Json_Next(&parser);
-			ParseColors(&parser);
-		}
-		else if (!Json_Strcmp(&parser, "menus")) {
-			Json_Next(&parser);
-			ParseMenus(&parser);
-		}
-		else {
-			Json_Next(&parser);
-			Json_SkipToken(&parser);
-		}
-	}
-
-	Json_Free(&parser);
 }
+

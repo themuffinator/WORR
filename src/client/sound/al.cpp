@@ -494,19 +494,19 @@ static void AL_SetReverbStepIDs(void)
 
 static void AL_LoadReverbEnvironments(void)
 {
-    json_parse_t parser = {0};
-    al_reverb_environment_t *environments = NULL;
-    size_t n = 0;
+	json_parse_t parser = {0};
+	al_reverb_environment_t *environments = NULL;
+	size_t n = 0;
 
-    if (Json_ErrorHandler(parser)) {
-        Com_WPrintf("Couldn't load sound/default.environments[%s]; %s\n", parser.error_loc, parser.error);
-        AL_FreeReverbEnvironments(environments, n);
-        return;
-    }
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Couldn't load sound/default.environments[%s]; %s\n", parser.error_loc, parser.error);
+		AL_FreeReverbEnvironments(environments, n);
+		return;
+	}
 
-    Json_Load("sound/default.environments", &parser);
+	Json_Load("sound/default.environments", &parser);
 
-    Json_EnsureNext(&parser, JSMN_OBJECT);
+	Json_EnsureNext(&parser, JSMN_OBJECT);
 
     if (Json_Strcmp(&parser, "environments")) 
         Json_Error(&parser, parser.pos, "expected \"environments\" key\n");

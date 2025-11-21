@@ -22,17 +22,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define JSMN_HEADER
 #include "common/jsmn.hpp"
 
+#include <assert.h>
 #include <setjmp.h>
 
 typedef struct {
-    jmp_buf     exception;
-    char        error[256];
-    char        error_loc[256];
+	bool guard_active;
+	jmp_buf exception;
+	char error[256];
+	char error_loc[256];
 
-    char        *buffer;
-    size_t      buffer_len;
-    jsmntok_t   *tokens, *pos;
-    int         num_tokens;
+	char *buffer;
+	size_t buffer_len;
+	jsmntok_t *tokens, *pos;
+	int num_tokens;
 } json_parse_t;
 
 /*
@@ -58,6 +60,7 @@ static inline const char *Json_JsmnErrorString(int err)
 
 static inline void Json_Free(json_parse_t *parser)
 {
+	parser->guard_active = false;
 	Z_Free(parser->tokens);
 	FS_FreeFile(parser->buffer);
 }
@@ -95,19 +98,25 @@ static inline void Json_ErrorLocation(json_parse_t *parser, jsmntok_t *tok)
 
 q_noreturn static inline void Json_Error(json_parse_t *parser, jsmntok_t *tok, const char *err)
 {
-    Json_ErrorLocation(parser, tok);
-    Q_strlcpy(parser->error, err, sizeof(parser->error));
-    longjmp(parser->exception, -1);
+	assert(parser->guard_active);
+	Json_ErrorLocation(parser, tok);
+	Q_strlcpy(parser->error, err, sizeof(parser->error));
+	longjmp(parser->exception, -1);
 }
 
 q_noreturn static inline void Json_Errorno(json_parse_t *parser, jsmntok_t *tok, int err)
 {
-    Json_ErrorLocation(parser, tok);
-    Q_strlcpy(parser->error, Q_ErrorString(err), sizeof(parser->error));
-    longjmp(parser->exception, -1);
+	assert(parser->guard_active);
+	Json_ErrorLocation(parser, tok);
+	Q_strlcpy(parser->error, Q_ErrorString(err), sizeof(parser->error));
+	longjmp(parser->exception, -1);
 }
 
-#define Json_ErrorHandler(parser) setjmp(parser.exception)
+static inline int Json_ErrorHandler(json_parse_t *parser)
+{
+	parser->guard_active = true;
+	return setjmp(parser->exception);
+}
 
 // a simple little wrapper to using jsmn to
 // load/validate/parse JSON stuff.
