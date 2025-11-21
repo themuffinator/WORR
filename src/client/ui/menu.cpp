@@ -24,6 +24,39 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include <cstring>
 
+/*
+===============================================================================
+Menu item responsibilities (MenuItem parity)
+
+The legacy menu widgets below mirror MenuItem's virtuals:
+	- Draw():
+		Action_Draw, Static_Draw, Bitmap_Draw, Field_Draw, MenuList_Draw and
+		Slider_Draw are dispatched from Menu_Draw for rendering.
+	- HandleEvent():
+		Menu_KeyEvent routes keys to Field_Key, MenuList_Key and Slider_Key, while
+		Menu_CharEvent and Menu_MouseMove forward character and pointer input to
+		Field_Char, MenuList_MouseMove and Slider_MouseMove respectively. Menu_SlideItem
+		uses Slider_DoSlide for controller/keyboard slides, and Menu_SelectItem
+		triggers Common_DoEnter for activatable Action/Bitmap/Field/List items.
+	- Activate():
+		Common_DoEnter wraps the per-item activate callbacks for Action/Bitmap/Field
+		and List rows (including save/load actions). Slider_DoSlide handles slider
+		activation through directional input routed by Menu_SlideItem.
+	- SetFocus()/HasFocus():
+		Menu_Draw assigns QMF_HASFOCUS on navigable items via Menu_SetFocus, and the
+		individual draw helpers (Action_Draw, Bitmap_Draw, Field_Draw, MenuList_Draw,
+		Slider_Draw) read that flag to show cursors or highlights.
+	- OnAttach()/OnDetach():
+		Menu_Push invokes Field_Push, MenuList_Init (indirectly before use),
+		Slider_Push and Action/Savegame_Push to sync Cvars or populate display data
+		when a menu becomes active. Menu_Pop calls the matching *_Pop routines to
+		flush edits back to Cvars or free transient state.
+This mapping keeps the procedural menu controls aligned with the expectations
+in MenuItem.h: each widget owns its draw routine, input funnels, activation
+path and lifecycle hooks in a consistent, MenuItem-like shape.
+===============================================================================
+*/
+
 static menuDropdown_t *ui_activeDropdown = NULL;
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered);
