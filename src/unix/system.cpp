@@ -225,21 +225,29 @@ void Sys_Init(void)
     // allows the game to run from outside the data tree
     sys_basedir = Cvar_Get("basedir", DATADIR, CVAR_NOSET);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    if (HOMEDIR[0] == '~') {
-        char *s = getenv("HOME");
-        if (s && strlen(s) >= MAX_OSPATH - MAX_QPATH)
-            Sys_Error("HOME path too long");
-        if (s && *s) {
-            homedir = va("%s%s", s, &HOMEDIR[1]);
-        } else {
-            homedir = "";
-        }
-    } else {
-        homedir = HOMEDIR;
-    }
-
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	if (HOMEDIR[0] == '~') {
+		char *s = getenv("HOME");
+		const char *suffix = &HOMEDIR[1];
+		const size_t limit = MAX_OSPATH - 1;
+		if (s && *s) {
+			size_t home_len = strlen(s);
+			size_t suffix_len = strlen(suffix);
+			size_t combined_len = home_len + suffix_len;
+			if (home_len > limit)
+				Sys_Error("HOME path too long");
+			if (combined_len > limit) {
+				homedir = "";
+			} else {
+				homedir = va("%s%s", s, suffix);
+			}
+		} else {
+			homedir = "";
+		}
+	} else {
+		homedir = HOMEDIR;
+	}
     sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
     sys_libdir = Cvar_Get("libdir", LIBDIR, CVAR_NOSET);
 
