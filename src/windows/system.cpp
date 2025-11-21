@@ -80,6 +80,102 @@ cvar_t  *sys_debugprint;
 #endif
 
 /*
+=============
+Sys_VerifyWritableDirectory
+
+Ensures that the given directory exists and is writable by creating it and
+attempting to create a temporary file inside.
+=============
+*/
+static bool Sys_VerifyWritableDirectory(const char *path)
+{
+	DWORD create_result = SHCreateDirectoryExA(NULL, path, NULL);
+	if (create_result != ERROR_SUCCESS && create_result != ERROR_ALREADY_EXISTS) {
+		Com_WPrintf("Failed to create homedir '%s' (%lu)\n", path, create_result);
+		return false;
+	}
+
+	char test_path[MAX_OSPATH];
+	if (Q_snprintf(test_path, sizeof(test_path), "%s\\.__worr_test", path) >= (int)sizeof(test_path)) {
+		Com_WPrintf("Homedir path too long: %s\n", path);
+		return false;
+	}
+
+	HANDLE handle = CreateFileA(test_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+				 FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+	if (handle == INVALID_HANDLE_VALUE) {
+		Com_WPrintf("Homedir not writable '%s' (%lu)\n", path, GetLastError());
+		return false;
+	}
+
+	CloseHandle(handle);
+	return true;
+}
+
+/*
+=============
+Sys_TryKnownFolder
+
+Attempts to resolve a known folder path to UTF-8, append the product folder,
+and verify it is writable.
+=============
+*/
+static bool Sys_TryKnownFolder(REFKNOWNFOLDERID folder_id, const char *suffix, char *resolved_path, size_t resolved_length)
+{
+	PWSTR known_folder = NULL;
+	bool result = false;
+
+	HRESULT hr = SHGetKnownFolderPath(folder_id, KF_FLAG_CREATE | KF_FLAG_INIT, NULL, &known_folder);
+	if (!SUCCEEDED(hr)) {
+		Com_WPrintf("Failed to retrieve known folder (%.8lx)\n", (long)hr);
+		return false;
+	}
+
+	if (WideCharToMultiByte(CP_UTF8, 0, known_folder, -1, resolved_path, (int)resolved_length, NULL, NULL) == 0) {
+		Com_WPrintf("Failed to convert known folder (%lu)\n", GetLastError());
+		goto done;
+	}
+
+	if (suffix && *suffix) {
+		if (Q_strlcat(resolved_path, suffix, resolved_length) >= resolved_length) {
+			Com_WPrintf("Known folder path too long after appending suffix\n");
+			goto done;
+		}
+	}
+
+	result = Sys_VerifyWritableDirectory(resolved_path);
+
+	done:
+	CoTaskMemFree(known_folder);
+	return result;
+}
+
+/*
+=============
+Sys_ResolveHomeDirectory
+
+Determines a writable home directory using Saved Games or Local AppData,
+falling back to the base directory if necessary.
+=============
+*/
+static void Sys_ResolveHomeDirectory(char *homedir, size_t homedir_length)
+{
+	const char *product_suffix = "\\" PRODUCT;
+
+	homedir[0] = '\0';
+
+	if (Sys_TryKnownFolder(FOLDERID_SavedGames, product_suffix, homedir, homedir_length))
+		return;
+
+	if (Sys_TryKnownFolder(FOLDERID_LocalAppData, product_suffix, homedir, homedir_length))
+		return;
+
+	Q_strlcpy(homedir, sys_basedir->string, homedir_length);
+	if (!Sys_VerifyWritableDirectory(homedir))
+		Q_strlcpy(homedir, ".", homedir_length);
+}
+
+/*
 ===============================================================================
 
 CONSOLE I/O
@@ -1476,45 +1572,48 @@ Sys_Init
 void Sys_Init(void)
 {
 #ifdef _DEBUG
-    sys_debugprint = Cvar_Get("sys_debugprint", "0", 0);
+	sys_debugprint = Cvar_Get("sys_debugprint", "0", 0);
 #endif
 
-    if (!QueryPerformanceFrequency(&timer_freq))
-        Sys_Error("QueryPerformanceFrequency failed");
+	char homedir[MAX_OSPATH];
 
-    if (COM_DEDICATED)
-        SetErrorMode(SEM_FAILCRITICALERRORS);
+	if (!QueryPerformanceFrequency(&timer_freq))
+		Sys_Error("QueryPerformanceFrequency failed");
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", ".", CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", ".", CVAR_NOSET);
+	if (COM_DEDICATED)
+		SetErrorMode(SEM_FAILCRITICALERRORS);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    sys_homedir = Cvar_Get("homedir", "", CVAR_NOSET);
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", ".", CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", ".", CVAR_NOSET);
 
-    sys_exitonerror = Cvar_Get("sys_exitonerror", "0", 0);
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	Sys_ResolveHomeDirectory(homedir, sizeof(homedir));
+	sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
+
+	sys_exitonerror = Cvar_Get("sys_exitonerror", "0", 0);
 
 #if USE_WINSVC
-    Cmd_AddCommand("installservice", Sys_InstallService_f);
-    Cmd_AddCommand("deleteservice", Sys_DeleteService_f);
+	Cmd_AddCommand("installservice", Sys_InstallService_f);
+	Cmd_AddCommand("deleteservice", Sys_DeleteService_f);
 #endif
 
 #if USE_SYSCON
 #if USE_CLIENT
-    cvar_t *sys_viewlog = Cvar_Get("sys_viewlog", "0", CVAR_NOSET);
+	cvar_t *sys_viewlog = Cvar_Get("sys_viewlog", "0", CVAR_NOSET);
 
-    if (dedicated->integer || sys_viewlog->integer)
+	if (dedicated->integer || sys_viewlog->integer)
 #endif
-        Sys_ConsoleInit();
+		Sys_ConsoleInit();
 #endif // USE_SYSCON
 
 #if USE_DBGHELP
-    // install our exception filter
-    cvar_t *var = Cvar_Get("sys_disablecrashdump", "0", CVAR_NOSET);
-    if (!var->integer)
-        Sys_InstallExceptionFilter();
+	// install our exception filter
+	cvar_t *var = Cvar_Get("sys_disablecrashdump", "0", CVAR_NOSET);
+	if (!var->integer)
+		Sys_InstallExceptionFilter();
 #endif
 }
 
