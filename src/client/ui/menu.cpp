@@ -17,11 +17,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "ui.hpp"
+#include "MenuItem.h"
 #include "server/server.hpp"
 #include "common/files.hpp"
 
 #include <limits.h>
 #include <algorithm>
+#include <memory>
 #include <cstring>
 
 /*
@@ -2732,17 +2734,131 @@ Common_DoEnter
 */
 static menuSound_t Common_DoEnter(menuCommon_t *item)
 {
-    if (item->activate) {
-        menuSound_t sound = item->activate(item);
-        if (sound != QMS_NOTHANDLED) {
-            return sound;
-        }
-    }
+	if (item->activate) {
+		menuSound_t sound = item->activate(item);
+		if (sound != QMS_NOTHANDLED) {
+			return sound;
+		}
+	}
 
-    return QMS_IN;
+	return QMS_IN;
 }
 
+/*
+=============
+Menu_MakeActivateCallback
 
+Bridges legacy activation hooks to the C++ menu item callbacks.
+=============
+*/
+static MenuItem::Callback Menu_MakeActivateCallback(menuCommon_t *item)
+{
+	return [item](MenuItem &)
+	{
+		Common_DoEnter(item);
+	};
+}
+
+/*
+=============
+Menu_MakeTextureHandle
+
+Creates a shared_ptr-backed texture handle for C++ menu items.
+=============
+*/
+static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
+{
+	if (!handle)
+		return nullptr;
+
+	return std::make_shared<qhandle_t>(handle);
+}
+
+/*
+=============
+Menu_BuildMenuItem
+
+Instantiates the modern MenuItem subclass for a legacy menu widget.
+=============
+*/
+static std::unique_ptr<MenuItem> Menu_BuildMenuItem(menuCommon_t *item)
+{
+	switch (item->type)
+	{
+	case MTYPE_ACTION:
+	{
+		auto *action = static_cast<menuAction_t *>(item);
+		bool disabled = (action->generic.flags & (QMF_GRAYED | QMF_DISABLED)) != 0;
+		return std::make_unique<ActionItem>(action->generic.name ? action->generic.name : "",
+			action->generic.x,
+			action->generic.y,
+			action->generic.uiFlags,
+			Menu_MakeActivateCallback(item),
+			nullptr,
+			disabled);
+	}
+	case MTYPE_STATIC:
+	{
+		auto *s = static_cast<menuStatic_t *>(item);
+		color_t color = (s->generic.flags & QMF_CUSTOM_COLOR) ? s->generic.color : COLOR_WHITE;
+		return std::make_unique<StaticItem>(s->generic.name ? s->generic.name : "",
+			s->generic.x,
+			s->generic.y,
+			s->generic.uiFlags,
+			nullptr,
+			color);
+	}
+	case MTYPE_BITMAP:
+	{
+		auto *bitmap = static_cast<menuBitmap_t *>(item);
+		return std::make_unique<BitmapItem>(bitmap->generic.name ? bitmap->generic.name : "",
+			bitmap->generic.x,
+			bitmap->generic.y,
+			bitmap->generic.width,
+			bitmap->generic.height,
+			Menu_MakeTextureHandle(bitmap->pics[0]),
+			Menu_MakeTextureHandle(bitmap->pics[1]),
+			Menu_MakeActivateCallback(item));
+	}
+	case MTYPE_FIELD:
+	{
+		auto *field = static_cast<menuField_t *>(item);
+		return std::make_unique<FieldItem>(field->generic.name ? field->generic.name : "",
+			field->generic.x,
+			field->generic.y,
+			field->generic.uiFlags,
+			field->field.text,
+			field->field.visibleChars,
+			field->field.maxChars,
+			[field](MenuItem &)
+			{
+				if (field->generic.change)
+					field->generic.change(&field->generic);
+			},
+			nullptr);
+	}
+	case MTYPE_SLIDER:
+	{
+		auto *slider = static_cast<menuSlider_t *>(item);
+		return std::make_unique<SliderItem>(slider->generic.name ? slider->generic.name : "",
+			slider->generic.x,
+			slider->generic.y,
+			slider->generic.uiFlags,
+			slider->minvalue,
+			slider->maxvalue,
+			slider->step,
+			slider->curvalue,
+			[slider](MenuItem &)
+			{
+				if (slider->generic.change)
+					slider->generic.change(&slider->generic);
+			},
+			nullptr);
+	}
+	default:
+		return nullptr;
+	}
+}
 /*
 =================
 Menu_AddItem
@@ -2750,19 +2866,23 @@ Menu_AddItem
 */
 void Menu_AddItem(menuFrameWork_t *menu, void *item)
 {
-    Q_assert(menu->nitems < MAX_MENU_ITEMS);
+	Q_assert(menu->nitems < MAX_MENU_ITEMS);
 
-    z_allocation allocation;
-    if (!menu->nitems) {
-        allocation = z_allocation{UI_Malloc(MIN_MENU_ITEMS * sizeof(void *))};
-    } else {
-        allocation = Z_Realloc_allocation(
-            menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
-    }
+	z_allocation allocation;
+	if (!menu->nitems) {
+		allocation = z_allocation{UI_Malloc(MIN_MENU_ITEMS * sizeof(void *))};
+	} else {
+		allocation = Z_Realloc_allocation(
+			menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
+	}
 
-    menu->items = static_cast<void **>(allocation);
-    menu->items[menu->nitems++] = item;
-    static_cast<menuCommon_t *>(item)->parent = menu;
+	menu->items = static_cast<void **>(allocation);
+	menu->items[menu->nitems++] = item;
+	static_cast<menuCommon_t *>(item)->parent = menu;
+
+	std::unique_ptr<MenuItem> wrapped = Menu_BuildMenuItem(static_cast<menuCommon_t *>(item));
+	if (wrapped)
+		menu->itemsCpp.emplace_back(std::move(wrapped));
 }
 
 static void UI_ClearBounds(int mins[2], int maxs[2])
@@ -2880,9 +3000,9 @@ void Menu_Init(menuFrameWork_t *menu)
         UI_AddRectToBounds(&item->rect, menu->mins, menu->maxs);
     }
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
+if (menu->groups) {
+for (int i = 0; i < menu->numGroups; i++) {
+uiItemGroup_t *group = menu->groups[i];
             if (!group || !group->active)
                 continue;
             if (group->rect.width <= 0 || group->rect.height <= 0)
@@ -3918,6 +4038,9 @@ void Menu_Free(menuFrameWork_t *menu)
 		Z_Free(menu->groups);
 	}
 
+	menu->itemsCpp.clear();
+	menu->itemsCpp.shrink_to_fit();
+
 	Z_Free(menu->items);
 	Z_Free(menu->title);
 	Z_Free(menu->name);
@@ -3943,11 +4066,11 @@ Clears shared UI state before each regression check.
 */
 static void MenuTest_ResetState(void)
 {
-	std::memset(&uis, 0, sizeof(uis));
-	std::memset(&menuTest_base, 0, sizeof(menuTest_base));
-	std::memset(&menuTest_overlay, 0, sizeof(menuTest_overlay));
-	std::memset(&menuTest_baseItem, 0, sizeof(menuTest_baseItem));
-	std::memset(&menuTest_overlayItem, 0, sizeof(menuTest_overlayItem));
+	uis = {};
+	menuTest_base = menuFrameWork_t{};
+	menuTest_overlay = menuFrameWork_t{};
+	menuTest_baseItem = {};
+	menuTest_overlayItem = {};
 	menuTest_baseHandled = false;
 	menuTest_overlayHandled = false;
 
