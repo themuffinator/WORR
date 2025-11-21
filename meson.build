@@ -210,7 +210,12 @@ client_src = [
 ui_src = [
   'src/client/ui/MenuItem.cpp',
   'src/client/ui/demos.cpp',
+  'src/client/ui/menu_action.cpp',
+  'src/client/ui/menu_bitmap.cpp',
   'src/client/ui/menu.cpp',
+  'src/client/ui/menu_field.cpp',
+  'src/client/ui/menu_slider.cpp',
+  'src/client/ui/menu_static.cpp',
   'src/client/ui/playerconfig.cpp',
   'src/client/ui/playermodels.cpp',
   'src/client/ui/script.cpp',
