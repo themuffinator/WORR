@@ -2769,10 +2769,10 @@ Creates a shared_ptr-backed texture handle for C++ menu items.
 static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
 {
 	if (!handle)
-		return nullptr;
+	return nullptr;
 
 	return std::make_shared<qhandle_t>(handle);
-}
+	}
 
 /*
 =============
@@ -2855,9 +2855,31 @@ static std::unique_ptr<MenuItem> Menu_BuildMenuItem(menuCommon_t *item)
 			},
 			nullptr);
 	}
-	default:
-		return nullptr;
-	}
+default:
+	return nullptr;
+}
+}
+
+/*
+=============
+Menu_FindCppItem
+
+Finds the MenuItem wrapper associated with a legacy menu entry.
+=============
+*/
+static MenuItem *Menu_FindCppItem(menuFrameWork_t *menu, const menuCommon_t *item)
+{
+	if (!menu)
+	return nullptr;
+
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), static_cast<size_t>(menu->nitems));
+
+	for (size_t i = 0; i < itemCount; i++) {
+		if (menu->items[i] == item)
+			return menu->itemsCpp[i].get();
+}
+
+	return nullptr;
 }
 /*
 =================
@@ -3293,56 +3315,68 @@ static void Menu_DrawGroups(menuFrameWork_t *menu)
 
 menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
 {
-    menuCommon_t *item;
-    int i;
+	menuCommon_t *item;
+	int i;
 
-    for (i = 0; i < m->nitems; i++) {
-        item = static_cast<menuCommon_t *>(m->items[i]);
-        if (item->flags & QMF_HASFOCUS) {
-            return item;
-        }
-    }
+	for (i = 0; i < m->nitems; i++) {
+		item = static_cast<menuCommon_t *>(m->items[i]);
+		if (item->flags & QMF_HASFOCUS) {
+			return item;
+		}
+	}
 
-    return NULL;
+	return NULL;
 }
 
+/*
+=============
+Menu_SetFocus
+
+Synchronizes focus flags across legacy items and their C++ wrappers.
+=============
+*/
 void Menu_SetFocus(menuCommon_t *focus)
 {
-    menuFrameWork_t *menu;
-    menuCommon_t *item;
-    int i;
+	menuFrameWork_t *menu;
+	menuCommon_t *item;
+	int i;
 
-    if (focus->flags & QMF_HASFOCUS) {
-        return;
-    }
+	if (focus->flags & QMF_HASFOCUS) {
+		return;
+	}
 
-    menu = focus->parent;
+	menu = focus->parent;
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu &&
-        &ui_activeDropdown->spin.generic != focus) {
-        Dropdown_Close(ui_activeDropdown, false);
-    }
+	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu &&
+		&ui_activeDropdown->spin.generic != focus) {
+		Dropdown_Close(ui_activeDropdown, false);
+	}
 
-    for (i = 0; i < menu->nitems; i++) {
-        item = static_cast<menuCommon_t *>(menu->items[i]);
+	for (i = 0; i < menu->nitems; i++) {
+		item = static_cast<menuCommon_t *>(menu->items[i]);
+		MenuItem *wrapped = Menu_FindCppItem(menu, item);
 
-        if (item == focus) {
-            item->flags |= QMF_HASFOCUS;
-            if (item->focus) {
-                item->focus(item, true);
-            } else if (item->status) {
-                menu->status = item->status;
-            }
-        } else if (item->flags & QMF_HASFOCUS) {
-            item->flags &= ~QMF_HASFOCUS;
-            if (item->focus) {
-                item->focus(item, false);
-            } else if (menu->status == item->status
-                       && menu->status != focus->status) {
-                menu->status = NULL;
-            }
-        }
-    }
+		if (item == focus) {
+			item->flags |= QMF_HASFOCUS;
+			if (item->focus) {
+				item->focus(item, true);
+			} else if (item->status) {
+				menu->status = item->status;
+			}
+		} else if (item->flags & QMF_HASFOCUS) {
+			item->flags &= ~QMF_HASFOCUS;
+			if (item->focus) {
+				item->focus(item, false);
+			} else if (menu->status == item->status
+				   && menu->status != focus->status) {
+				menu->status = NULL;
+			}
+		}
+
+		if (wrapped) {
+			wrapped->SetFocus((item->flags & QMF_HASFOCUS) != 0);
+		}
+	}
 
 }
 
@@ -3558,201 +3592,310 @@ void Menu_Draw(menuFrameWork_t *menu)
     }
 }
 
+/*
+=============
+Menu_SelectItem
+
+Activates the currently focused menu item, favoring C++ handlers before
+falling back to legacy callbacks.
+=============
+*/
 menuSound_t Menu_SelectItem(menuFrameWork_t *s)
 {
-    menuCommon_t *item;
+	menuCommon_t *item;
 
-    if (!(item = Menu_ItemAtCursor(s))) {
-        return QMS_NOTHANDLED;
-    }
+	if (!(item = Menu_ItemAtCursor(s))) {
+		return QMS_NOTHANDLED;
+	}
 
-    switch (item->type) {
-    //case MTYPE_SLIDER:
-    //    return Slider_DoSlide((menuSlider_t *)item, 1);
-    case MTYPE_SPINCONTROL:
-    case MTYPE_BITFIELD:
-    case MTYPE_PAIRS:
-    case MTYPE_VALUES:
-    case MTYPE_STRINGS:
-    case MTYPE_TOGGLE:
-    case MTYPE_IMAGESPINCONTROL:
-    case MTYPE_EPISODE:
-    case MTYPE_UNIT:
-        return static_cast<menuSound_t>(
-            SpinControl_DoEnter(reinterpret_cast<menuSpinControl_t *>(item)));
-    case MTYPE_KEYBIND:
-        return Keybind_DoEnter(reinterpret_cast<menuKeybind_t *>(item));
-    case MTYPE_FIELD:
-    case MTYPE_ACTION:
-    case MTYPE_LIST:
-    case MTYPE_BITMAP:
-    case MTYPE_SAVEGAME:
-    case MTYPE_LOADGAME:
-    case MTYPE_CHECKBOX:
-    case MTYPE_DROPDOWN:
-    case MTYPE_RADIO:
-        return Common_DoEnter(item);
-    default:
-        return QMS_NOTHANDLED;
-    }
+	if (MenuItem *wrapped = Menu_FindCppItem(s, item)) {
+		if (wrapped->Activate()) {
+			return QMS_IN;
+		}
+	}
+
+	switch (item->type) {
+	//case MTYPE_SLIDER:
+	//	return Slider_DoSlide((menuSlider_t *)item, 1);
+	case MTYPE_SPINCONTROL:
+	case MTYPE_BITFIELD:
+	case MTYPE_PAIRS:
+	case MTYPE_VALUES:
+	case MTYPE_STRINGS:
+	case MTYPE_TOGGLE:
+	case MTYPE_IMAGESPINCONTROL:
+	case MTYPE_EPISODE:
+	case MTYPE_UNIT:
+		return static_cast<menuSound_t>(
+			SpinControl_DoEnter(reinterpret_cast<menuSpinControl_t *>(item)));
+	case MTYPE_KEYBIND:
+		return Keybind_DoEnter(reinterpret_cast<menuKeybind_t *>(item));
+	case MTYPE_FIELD:
+	case MTYPE_ACTION:
+	case MTYPE_LIST:
+	case MTYPE_BITMAP:
+	case MTYPE_SAVEGAME:
+	case MTYPE_LOADGAME:
+	case MTYPE_CHECKBOX:
+	case MTYPE_DROPDOWN:
+	case MTYPE_RADIO:
+		return Common_DoEnter(item);
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_SlideItem
+
+Routes directional input through MenuItem handlers before falling back.
+=============
+*/
 menuSound_t Menu_SlideItem(menuFrameWork_t *s, int dir)
 {
-    menuCommon_t *item;
+	menuCommon_t *item;
 
-    if (!(item = Menu_ItemAtCursor(s))) {
-        return QMS_NOTHANDLED;
-    }
+	if (!(item = Menu_ItemAtCursor(s))) {
+		return QMS_NOTHANDLED;
+	}
 
-    switch (item->type) {
-    case MTYPE_SLIDER:
-        return Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
-    case MTYPE_SPINCONTROL:
-    case MTYPE_BITFIELD:
-    case MTYPE_PAIRS:
-    case MTYPE_VALUES:
-    case MTYPE_STRINGS:
-    case MTYPE_TOGGLE:
-    case MTYPE_IMAGESPINCONTROL:
-    case MTYPE_EPISODE:
-    case MTYPE_UNIT:
-        return static_cast<menuSound_t>(
-            SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
-    case MTYPE_CHECKBOX:
-        return Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
-    case MTYPE_DROPDOWN:
-        return Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
-    default:
-        return QMS_NOTHANDLED;
-    }
+	MenuItem::MenuEvent event{};
+	event.type = MenuItem::MenuEvent::Type::Key;
+	event.key = (dir < 0) ? K_LEFTARROW : K_RIGHTARROW;
+	event.x = uis.mouseCoords[0];
+	event.y = uis.mouseCoords[1];
+
+	if (MenuItem *wrapped = Menu_FindCppItem(s, item)) {
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	switch (item->type) {
+	case MTYPE_SLIDER:
+		return Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
+	case MTYPE_SPINCONTROL:
+	case MTYPE_BITFIELD:
+	case MTYPE_PAIRS:
+	case MTYPE_VALUES:
+	case MTYPE_STRINGS:
+	case MTYPE_TOGGLE:
+	case MTYPE_IMAGESPINCONTROL:
+	case MTYPE_EPISODE:
+	case MTYPE_UNIT:
+		return static_cast<menuSound_t>(
+			SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
+	case MTYPE_CHECKBOX:
+		return Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
+	case MTYPE_DROPDOWN:
+		return Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_KeyEvent
+
+Builds a MenuEvent for key presses and dispatches to C++ handlers before
+legacy fallbacks.
+=============
+*/
 menuSound_t Menu_KeyEvent(menuCommon_t *item, int key)
 {
-    if (item->keydown) {
-        menuSound_t sound = item->keydown(item, key);
-        if (sound != QMS_NOTHANDLED) {
-            return sound;
-        }
-    }
+	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Key;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
 
-    switch (item->type) {
-    case MTYPE_FIELD:
-        return static_cast<menuSound_t>(
-            Field_Key(reinterpret_cast<menuField_t *>(item), key));
-    case MTYPE_LIST:
-        return MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
-    case MTYPE_SLIDER:
-        return Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
-    case MTYPE_KEYBIND:
-        return Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
-    default:
-        return QMS_NOTHANDLED;
-    }
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	if (item->keydown) {
+		menuSound_t sound = item->keydown(item, key);
+		if (sound != QMS_NOTHANDLED) {
+			return sound;
+		}
+	}
+
+	switch (item->type) {
+	case MTYPE_FIELD:
+		return static_cast<menuSound_t>(
+			Field_Key(reinterpret_cast<menuField_t *>(item), key));
+	case MTYPE_LIST:
+		return MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
+	case MTYPE_SLIDER:
+		return Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
+	case MTYPE_KEYBIND:
+		return Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_CharEvent
+
+Sends character input through MenuItem handlers before legacy fallbacks.
+=============
+*/
 menuSound_t Menu_CharEvent(menuCommon_t *item, int key)
 {
-    switch (item->type) {
-    case MTYPE_FIELD:
-        return static_cast<menuSound_t>(
-            Field_Char(reinterpret_cast<menuField_t *>(item), key));
-    default:
-        return QMS_NOTHANDLED;
-    }
+	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Key;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	switch (item->type) {
+	case MTYPE_FIELD:
+		return static_cast<menuSound_t>(
+			Field_Char(reinterpret_cast<menuField_t *>(item), key));
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_MouseMove
+
+Translates pointer movement into MenuEvents for C++ handlers before legacy dispatch.
+=============
+*/
 menuSound_t Menu_MouseMove(menuCommon_t *item)
 {
-    switch (item->type) {
-    case MTYPE_LIST:
-        return MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
-    case MTYPE_SLIDER:
-        return Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
-    case MTYPE_DROPDOWN:
-        return Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
-    default:
-        return QMS_NOTHANDLED;
-    }
+	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Pointer;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	switch (item->type) {
+	case MTYPE_LIST:
+		return MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
+	case MTYPE_SLIDER:
+		return Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
+	case MTYPE_DROPDOWN:
+		return Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_DefaultKey
+
+Handles menu-level shortcuts while forwarding pointer activation into MenuItem handlers.
+=============
+*/
 static menuSound_t Menu_DefaultKey(menuFrameWork_t *m, int key)
 {
-    menuCommon_t *item;
+	menuCommon_t *item;
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == m && ui_activeDropdown->open) {
-        menuDropdown_t *dropdown = ui_activeDropdown;
-        if (key == K_ESCAPE) {
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        }
+	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == m && ui_activeDropdown->open) {
+		menuDropdown_t *dropdown = ui_activeDropdown;
+		if (key == K_ESCAPE) {
+			Dropdown_Close(dropdown, false);
+			return QMS_SILENT;
+		}
 
-        if (key == K_MOUSE2) {
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        }
+		if (key == K_MOUSE2) {
+			Dropdown_Close(dropdown, false);
+			return QMS_SILENT;
+		}
 
-        if (key == K_MOUSE1) {
-            if (UI_CursorInRect(&dropdown->listRect)) {
-                if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
-                    Dropdown_SetSelection(dropdown, dropdown->hovered, true);
-                Dropdown_Close(dropdown, false);
-                return QMS_MOVE;
-            }
+		if (key == K_MOUSE1) {
+			if (UI_CursorInRect(&dropdown->listRect)) {
+				if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
+					Dropdown_SetSelection(dropdown, dropdown->hovered, true);
+				Dropdown_Close(dropdown, false);
+				return QMS_MOVE;
+			}
 
-            Dropdown_Close(dropdown, false);
-        }
-    }
+			Dropdown_Close(dropdown, false);
+		}
+	}
 
-    switch (key) {
-    case K_ESCAPE:
-    case K_MOUSE2:
-        UI_PopMenu();
-        return QMS_OUT;
+	switch (key) {
+	case K_ESCAPE:
+	case K_MOUSE2:
+		UI_PopMenu();
+		return QMS_OUT;
 
-    case K_KP_UPARROW:
-    case K_UPARROW:
-    case 'k':
-        return Menu_AdjustCursor(m, -1);
+	case K_KP_UPARROW:
+	case K_UPARROW:
+	case 'k':
+		return Menu_AdjustCursor(m, -1);
 
-    case K_KP_DOWNARROW:
-    case K_DOWNARROW:
-    case K_TAB:
-    case 'j':
-        return Menu_AdjustCursor(m, 1);
+	case K_KP_DOWNARROW:
+	case K_DOWNARROW:
+	case K_TAB:
+	case 'j':
+		return Menu_AdjustCursor(m, 1);
 
-    case K_KP_LEFTARROW:
-    case K_LEFTARROW:
-    case K_MWHEELDOWN:
-    case 'h':
-        return Menu_SlideItem(m, -1);
+	case K_KP_LEFTARROW:
+	case K_LEFTARROW:
+	case K_MWHEELDOWN:
+	case 'h':
+		return Menu_SlideItem(m, -1);
 
-    case K_KP_RIGHTARROW:
-    case K_RIGHTARROW:
-    case K_MWHEELUP:
-    case 'l':
-        return Menu_SlideItem(m, 1);
+	case K_KP_RIGHTARROW:
+	case K_RIGHTARROW:
+	case K_MWHEELUP:
+	case 'l':
+		return Menu_SlideItem(m, 1);
 
-    case K_MOUSE1:
-    //case K_MOUSE2:
-    case K_MOUSE3:
-        item = Menu_HitTest(m);
-        if (!item) {
-            return QMS_NOTHANDLED;
-        }
+	case K_MOUSE1:
+	//case K_MOUSE2:
+	case K_MOUSE3:
+		item = Menu_HitTest(m);
+		if (!item) {
+			return QMS_NOTHANDLED;
+		}
 
-        if (!(item->flags & QMF_HASFOCUS)) {
-            return QMS_NOTHANDLED;
-        }
-        // fall through
+		if (!(item->flags & QMF_HASFOCUS)) {
+			return QMS_NOTHANDLED;
+		}
 
-    case K_KP_ENTER:
-    case K_ENTER:
-        return Menu_SelectItem(m);
-    }
+		if (MenuItem *wrapped = Menu_FindCppItem(m, item)) {
+			MenuItem::MenuEvent event{};
+			event.type = MenuItem::MenuEvent::Type::Pointer;
+			event.key = key;
+			event.x = uis.mouseCoords[0];
+			event.y = uis.mouseCoords[1];
 
-    return QMS_NOTHANDLED;
+			if (wrapped->HandleEvent(event)) {
+				return QMS_IN;
+			}
+		}
+	// fall through
+
+	case K_KP_ENTER:
+	case K_ENTER:
+		return Menu_SelectItem(m);
+	}
+
+	return QMS_NOTHANDLED;
 }
 
 menuSound_t Menu_Keydown(menuFrameWork_t *menu, int key)
