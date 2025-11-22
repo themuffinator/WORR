@@ -2257,6 +2257,47 @@ static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
 
 /*
 =============
+Menu_SyncLegacyToCpp
+
+Copies mutable legacy widget state back into its MenuItem wrapper so the C++
+rendering and input layers retain user edits.
+=============
+*/
+static void Menu_SyncLegacyToCpp(menuCommon_t *item, MenuItem &wrapped)
+{
+	switch (item->type)
+	{
+	case MTYPE_FIELD:
+	{
+		auto *field = dynamic_cast<FieldItem *>(&wrapped);
+		auto *legacy = reinterpret_cast<menuField_t *>(item);
+
+		if (field && legacy)
+		{
+			field->SetValue(legacy->field.text);
+		}
+		break;
+	}
+	case MTYPE_SLIDER:
+	{
+		auto *slider = dynamic_cast<SliderItem *>(&wrapped);
+		auto *legacy = reinterpret_cast<menuSlider_t *>(item);
+
+		if (slider && legacy)
+		{
+			slider->SetRange(legacy->minvalue, legacy->maxvalue);
+			slider->SetStep(legacy->step);
+			slider->SetValue(legacy->curvalue);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+/*
+=============
 Menu_ItemCount
 
 Returns the number of legacy items attached to a menu.
@@ -3200,21 +3241,25 @@ menuSound_t Menu_SlideItem(menuFrameWork_t *s, int dir)
 		return QMS_NOTHANDLED;
 	}
 
+	MenuItem *wrapped = Menu_FindCppItem(s, item);
 	MenuItem::MenuEvent event{};
 	event.type = MenuItem::MenuEvent::Type::Key;
 	event.key = (dir < 0) ? K_LEFTARROW : K_RIGHTARROW;
 	event.x = uis.mouseCoords[0];
 	event.y = uis.mouseCoords[1];
 
-	if (MenuItem *wrapped = Menu_FindCppItem(s, item)) {
+	if (wrapped) {
 		if (wrapped->HandleEvent(event)) {
 			return QMS_SILENT;
 		}
 	}
 
+	menuSound_t sound = QMS_NOTHANDLED;
+
 	switch (item->type) {
 	case MTYPE_SLIDER:
-		return Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
+		sound = Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
+		break;
 	case MTYPE_SPINCONTROL:
 	case MTYPE_BITFIELD:
 	case MTYPE_PAIRS:
@@ -3224,15 +3269,24 @@ menuSound_t Menu_SlideItem(menuFrameWork_t *s, int dir)
 	case MTYPE_IMAGESPINCONTROL:
 	case MTYPE_EPISODE:
 	case MTYPE_UNIT:
-		return static_cast<menuSound_t>(
-			SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
+		sound = static_cast<menuSound_t>(
+				SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
+		break;
 	case MTYPE_CHECKBOX:
-		return Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
+		sound = Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
+		break;
 	case MTYPE_DROPDOWN:
-		return Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
+		sound = Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
+		break;
 	default:
-		return QMS_NOTHANDLED;
+		break;
 	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
 
 /*
@@ -3245,7 +3299,9 @@ legacy fallbacks.
 */
 menuSound_t Menu_KeyEvent(menuCommon_t *item, int key)
 {
-	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
+
+	if (wrapped) {
 		MenuItem::MenuEvent event{};
 		event.type = MenuItem::MenuEvent::Type::Key;
 		event.key = key;
@@ -3257,27 +3313,44 @@ menuSound_t Menu_KeyEvent(menuCommon_t *item, int key)
 		}
 	}
 
+	menuSound_t sound = QMS_NOTHANDLED;
+
 	if (item->keydown) {
-		menuSound_t sound = item->keydown(item, key);
+		sound = item->keydown(item, key);
 		if (sound != QMS_NOTHANDLED) {
+			if (wrapped) {
+				Menu_SyncLegacyToCpp(item, *wrapped);
+			}
 			return sound;
 		}
 	}
 
 	switch (item->type) {
 	case MTYPE_FIELD:
-		return static_cast<menuSound_t>(
-			Field_Key(reinterpret_cast<menuField_t *>(item), key));
+		sound = static_cast<menuSound_t>(
+				Field_Key(reinterpret_cast<menuField_t *>(item), key));
+		break;
 	case MTYPE_LIST:
-		return MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
+		sound = MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
+		break;
 	case MTYPE_SLIDER:
-		return Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
+		sound = Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
+		break;
 	case MTYPE_KEYBIND:
-		return Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
+		sound = Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
+		break;
 	default:
-		return QMS_NOTHANDLED;
+		sound = QMS_NOTHANDLED;
+		break;
 	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
+
 
 /*
 =============
@@ -3288,7 +3361,9 @@ Sends character input through MenuItem handlers before legacy fallbacks.
 */
 menuSound_t Menu_CharEvent(menuCommon_t *item, int key)
 {
-	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
+
+	if (wrapped) {
 		MenuItem::MenuEvent event{};
 		event.type = MenuItem::MenuEvent::Type::Key;
 		event.key = key;
@@ -3300,14 +3375,24 @@ menuSound_t Menu_CharEvent(menuCommon_t *item, int key)
 		}
 	}
 
+	menuSound_t sound = QMS_NOTHANDLED;
+
 	switch (item->type) {
 	case MTYPE_FIELD:
-		return static_cast<menuSound_t>(
-			Field_Char(reinterpret_cast<menuField_t *>(item), key));
+		sound = static_cast<menuSound_t>(
+				Field_Char(reinterpret_cast<menuField_t *>(item), key));
+		break;
 	default:
-		return QMS_NOTHANDLED;
+		break;
 	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
+
 
 /*
 =============
@@ -3318,7 +3403,9 @@ Translates pointer movement into MenuEvents for C++ handlers before legacy dispa
 */
 menuSound_t Menu_MouseMove(menuCommon_t *item)
 {
-	if (MenuItem *wrapped = Menu_FindCppItem(item->parent, item)) {
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
+
+	if (wrapped) {
 		MenuItem::MenuEvent event{};
 		event.type = MenuItem::MenuEvent::Type::Pointer;
 		event.x = uis.mouseCoords[0];
@@ -3329,17 +3416,29 @@ menuSound_t Menu_MouseMove(menuCommon_t *item)
 		}
 	}
 
+	menuSound_t sound = QMS_NOTHANDLED;
+
 	switch (item->type) {
 	case MTYPE_LIST:
-		return MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
+		sound = MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
+		break;
 	case MTYPE_SLIDER:
-		return Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
+		sound = Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
+		break;
 	case MTYPE_DROPDOWN:
-		return Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
+		sound = Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
+		break;
 	default:
-		return QMS_NOTHANDLED;
+		break;
 	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
+
 
 /*
 =============
