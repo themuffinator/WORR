@@ -3832,7 +3832,7 @@ static void MenuTest_BuildStack(void)
 {
 	MenuTest_ResetState();
 
-	menuTest_base.items.push_back(&menuTest_baseItem);
+        Menu_AddItem(&menuTest_base, &menuTest_baseItem);
 	menuTest_base.modal = true;
 	menuTest_base.allowInputPassthrough = false;
 	menuTest_base.opacity = 1.0f;
@@ -3844,7 +3844,7 @@ static void MenuTest_BuildStack(void)
 	menuTest_baseItem.rect.height = 96;
 	menuTest_baseItem.parent = &menuTest_base;
 
-	menuTest_overlay.items.push_back(&menuTest_overlayItem);
+        Menu_AddItem(&menuTest_overlay, &menuTest_overlayItem);
 	menuTest_overlay.modal = false;
 	menuTest_overlay.allowInputPassthrough = true;
 	menuTest_overlay.opacity = 1.0f;
