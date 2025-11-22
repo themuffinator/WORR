@@ -1291,6 +1291,11 @@ typedef struct {
 
 extern cl_scr_t scr;
 
+typedef struct scr_font_metrics_s {
+	int		lineHeight;
+	int		capHeight;
+} scr_font_metrics_t;
+
 void    SCR_Init(void);
 void    SCR_Shutdown(void);
 void    SCR_InitFontSystem(void);
@@ -1318,6 +1323,8 @@ void    SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, c
 qhandle_t SCR_DefaultFontHandle(void);
 qhandle_t SCR_RegisterFontPath(const char* name);
 qhandle_t SCR_RegisterFontPathWithSize(const char* name, int pixelHeight);
+scr_font_metrics_t SCR_GetCachedFontMetrics(qhandle_t font);
+void    SCR_InvalidateFontMetrics(qhandle_t font);
 int     SCR_FontLineHeight(int scale, qhandle_t font);
 int     SCR_MeasureString(int scale, int flags, size_t maxlen, const char* s, qhandle_t font);
 
