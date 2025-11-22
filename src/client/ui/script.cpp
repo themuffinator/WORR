@@ -124,6 +124,10 @@ static void UI_ClearTypographyFonts(void)
 	for (auto &entry : uis.typographyFonts) {
 		entry.clear();
 	}
+
+	for (auto &height : uis.typographyPixelHeights) {
+		height = 0;
+	}
 }
 
 /*
@@ -1625,6 +1629,24 @@ static void ParseRoleFonts(json_parse_t* parser, uiTypographyRole_t role)
 
 /*
 =============
+ParseRoleFontSize
+
+Parses a pixel height override for a typography role.
+=============
+*/
+static void ParseRoleFontSize(json_parse_t* parser, uiTypographyRole_t role)
+{
+	if (parser->pos->type != JSMN_PRIMITIVE)
+		Json_Error(parser, parser->pos, "font size must be a number");
+
+	const int pixelHeight = Json_ReadInt(parser);
+
+	if (pixelHeight > 0)
+		uis.typographyPixelHeights[role] = pixelHeight;
+}
+
+/*
+=============
 ParseFonts
 
 Parses typography font preferences keyed by role names.
@@ -1647,121 +1669,28 @@ static void ParseFonts(json_parse_t* parser)
 	}
 }
 
-static void ParseGlobalBackground(json_parse_t* parser)
+/*
+=============
+ParseFontSizes
+
+Parses per-role typography pixel heights keyed by role names.
+=============
+*/
+static void ParseFontSizes(json_parse_t* parser)
 {
-	if (parser->pos->type != JSMN_STRING)
-		Json_Error(parser, parser->pos, "background must be a string");
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
 
-	char* value = Json_CopyStringUI(parser);
+	for (int i = 0; i < object->size; i++) {
+		char roleName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
+		uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
 
-	if (SCR_ParseColor(value, &uis.color.background)) {
-		uis.backgroundHandle = 0;
-		uis.transparent = uis.color.background.a != 255;
+		if (role == UI_TYPO_ROLE_COUNT)
+			Json_Error(parser, parser->pos, "unknown typography role");
+
+		Json_Next(parser);
+		ParseRoleFontSize(parser, role);
 	}
-	else {
-		uis.backgroundHandle = R_RegisterPic(value);
-		uis.transparent = R_GetPicSize(NULL, NULL, uis.backgroundHandle);
-	}
-
-	Z_Free(value);
-}
-
-static void ParseCursor(json_parse_t* parser)
-{
-	if (parser->pos->type != JSMN_STRING)
-		Json_Error(parser, parser->pos, "cursor must be a string");
-
-	char* name = Json_CopyStringUI(parser);
-	uis.cursorHandle = R_RegisterPic(name);
-	R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
-	Z_Free(name);
-}
-
-static void ParseMenus(json_parse_t* parser)
-{
-	jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
-
-	for (int i = 0; i < array->size; i++)
-		ParseMenu(parser);
-}
-
-/*
-=============
-ParseModuleList
-
-Loads a list of menu modules from a JSON array in order.
-=============
-*/
-static void ParseModuleList(json_parse_t* parser)
-{
-	jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
-
-	for (int i = 0; i < array->size; i++) {
-		if (parser->pos->type != JSMN_STRING)
-			Json_Error(parser, parser->pos, "module entries must be strings");
-
-		char path[MAX_QPATH];
-		Json_CopyStringToBuffer(parser, path, sizeof(path));
-
-		if (!UI_LoadMenuModule(path))
-			Json_Error(parser, parser->pos - 1, va("failed to load module \"%s\"", path));
-}
-}
-
-/*
-=============
-ParseRoleFonts
-
-Parses a font path or list of font paths for a typography role.
-=============
-*/
-static void ParseRoleFonts(json_parse_t* parser, uiTypographyRole_t role)
-{
-if (parser->pos->type == JSMN_ARRAY) {
-jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
-
-for (int i = 0; i < array->size; i++) {
-if (parser->pos->type != JSMN_STRING)
-Json_Error(parser, parser->pos, "font entries must be strings");
-
-char* value = Json_CopyStringUI(parser);
-UI_AddTypographyFont(role, value);
-Z_Free(value);
-}
-
-return;
-}
-
-if (parser->pos->type != JSMN_STRING)
-Json_Error(parser, parser->pos, "font entry must be a string or array");
-
-char* value = Json_CopyStringUI(parser);
-UI_AddTypographyFont(role, value);
-Z_Free(value);
-}
-
-/*
-=============
-ParseFonts
-
-Parses typography font preferences keyed by role names.
-=============
-*/
-static void ParseFonts(json_parse_t* parser)
-{
-jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
-
-for (int i = 0; i < object->size; i++) {
-char roleName[MAX_QPATH];
-Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
-uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
-
-if (role == UI_TYPO_ROLE_COUNT)
-Json_Error(parser, parser->pos, "unknown typography role");
-
-Json_Next(parser);
-ParseRoleFonts(parser, role);
-}
 }
 
 /*
@@ -1776,27 +1705,31 @@ static void UI_ParseRoot(json_parse_t* parser)
 	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
 
 	for (int i = 0; i < object->size; i++) {
-if (!Json_Strcmp(parser, "background")) {
-Json_Next(parser);
-ParseGlobalBackground(parser);
-}
-else if (!Json_Strcmp(parser, "font")) {
-Json_Next(parser);
-char* font = Json_CopyStringUI(parser);
+		if (!Json_Strcmp(parser, "background")) {
+			Json_Next(parser);
+			ParseGlobalBackground(parser);
+		}
+		else if (!Json_Strcmp(parser, "font")) {
+			Json_Next(parser);
+			char* font = Json_CopyStringUI(parser);
 
-for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
-UI_AddTypographyFont(static_cast<uiTypographyRole_t>(role), font);
+			for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
+				UI_AddTypographyFont(static_cast<uiTypographyRole_t>(role), font);
 
-uis.fontHandle = SCR_RegisterFontPath(font);
-Z_Free(font);
-}
-else if (!Json_Strcmp(parser, "fonts")) {
-Json_Next(parser);
-ParseFonts(parser);
-}
-else if (!Json_Strcmp(parser, "cursor")) {
-Json_Next(parser);
-ParseCursor(parser);
+			uis.fontHandle = SCR_RegisterFontPath(font);
+			Z_Free(font);
+		}
+		else if (!Json_Strcmp(parser, "fonts")) {
+			Json_Next(parser);
+			ParseFonts(parser);
+		}
+		else if (!Json_Strcmp(parser, "fontSizes")) {
+			Json_Next(parser);
+			ParseFontSizes(parser);
+		}
+		else if (!Json_Strcmp(parser, "cursor")) {
+			Json_Next(parser);
+			ParseCursor(parser);
 		}
 		else if (!Json_Strcmp(parser, "weapon")) {
 			Json_Next(parser);

@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/input.hpp"
 #include "common/prompt.hpp"
 #include "ux.hpp"
+#include <array>
+#include <cctype>
 #include <vector>
 
 uiStatic_t    uis;
@@ -32,12 +34,22 @@ static cvar_t    *ui_scale;
 static cvar_t    *ui_font;
 static cvar_t    *ui_font_fallback;
 static cvar_t    *ui_font_size;
+static std::array<cvar_t *, UI_TYPO_ROLE_COUNT> ui_role_fonts;
+static std::array<cvar_t *, UI_TYPO_ROLE_COUNT> ui_role_font_sizes;
 static cvar_t    *ui_cursor_theme;
 static cvar_t    *ui_color_theme;
 static UiManager ui_manager;
 
+static const char *const ui_typographyRoleNames[UI_TYPO_ROLE_COUNT] = {
+"body",
+"label",
+"heading",
+"monospace"
+};
+
 static void UI_UpdateLayoutMetrics(void);
 static void UI_UpdateTypographySet(void);
+static void UI_RegisterTypographyCvars(void);
 static void UI_PopulateDefaultPalette(bool lightTheme);
 static void UI_UpdateLegacyColorsFromPalette(void);
 static int UI_KeyForNavigationDirection(ui::ux::NavigationDirection direction);
@@ -1773,7 +1785,19 @@ static const cmdreg_t c_ui[] = {
 
 static void ui_scale_changed(cvar_t *self)
 {
-UI_Resize();
+	UI_Resize();
+}
+
+/*
+=============
+ui_font_config_changed
+
+Reloads typography assets when font cvars change.
+=============
+*/
+static void ui_font_config_changed(cvar_t *self)
+{
+	UI_RefreshFonts();
 }
 
 /*
@@ -1801,10 +1825,80 @@ Returns the active UI font height, preferring the configured override when valid
 */
 static int UI_ResolvedFontPixelHeight(void)
 {
-if (ui_font_size && ui_font_size->integer > 0)
-return ui_font_size->integer;
+	if (ui_font_size && ui_font_size->integer > 0)
+		return ui_font_size->integer;
 
-return UI_AutoFontPixelHeight();
+	return UI_AutoFontPixelHeight();
+}
+
+/*
+=============
+UI_DefaultRolePixelHeight
+
+Returns the baseline pixel height for a typography role using the shared base size.
+=============
+*/
+static int UI_DefaultRolePixelHeight(uiTypographyRole_t role, int baseHeight)
+{
+	switch (role) {
+	case UI_TYPO_LABEL:
+		return UI_ScaledFontSize(Q_rint(baseHeight * 0.95f));
+	case UI_TYPO_HEADING:
+		return UI_ScaledFontSize(Q_rint(baseHeight * 1.25f));
+	case UI_TYPO_MONOSPACE:
+	case UI_TYPO_BODY:
+	default:
+		return baseHeight;
+	}
+}
+
+/*
+=============
+UI_TypographyPixelHeightOverride
+
+Returns the configured pixel height override for a typography role.
+=============
+*/
+static int UI_TypographyPixelHeightOverride(uiTypographyRole_t role)
+{
+	if (role < 0 || role >= UI_TYPO_ROLE_COUNT) {
+		return 0;
+	}
+
+	cvar_t *roleSize = ui_role_font_sizes[role];
+	if (roleSize && roleSize->integer > 0) {
+		return roleSize->integer;
+	}
+
+	if (uis.typographyPixelHeights[role] > 0) {
+		return uis.typographyPixelHeights[role];
+	}
+
+	return 0;
+}
+
+/*
+=============
+UI_ComputeRolePixelHeights
+
+Builds a per-role typography height map using overrides and default scaling.
+=============
+*/
+static std::array<int, UI_TYPO_ROLE_COUNT> UI_ComputeRolePixelHeights(int baseHeight)
+{
+	std::array<int, UI_TYPO_ROLE_COUNT> heights{};
+
+	for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++) {
+		const int overrideHeight = UI_TypographyPixelHeightOverride(static_cast<uiTypographyRole_t>(role));
+		if (overrideHeight > 0) {
+			heights[role] = overrideHeight;
+			continue;
+		}
+
+		heights[role] = UI_DefaultRolePixelHeight(static_cast<uiTypographyRole_t>(role), baseHeight);
+	}
+
+	return heights;
 }
 
 /*
@@ -1817,50 +1911,78 @@ Rebuilds the typography roles using the latest font handles and scaling data.
 static void UI_UpdateTypographySet(void)
 {
 	const int baseHeight = UI_ResolvedFontPixelHeight();
+	const auto roleHeights = UI_ComputeRolePixelHeights(baseHeight);
+
+	const auto filterHandles = [](const std::vector<qhandle_t> &handles) {
+		std::vector<qhandle_t> filtered;
+
+		for (qhandle_t handle : handles) {
+			if (handle)
+				filtered.push_back(handle);
+		}
+
+		return filtered;
+	};
 
 	uiTypographySpec_t body{};
 	uiTypographySpec_t label{};
 	uiTypographySpec_t heading{};
 	uiTypographySpec_t monospace{};
 
-	const auto &bodyHandles = uis.typographyHandles[UI_TYPO_BODY].empty() ? uis.typographyHandles[UI_TYPO_MONOSPACE] : uis.typographyHandles[UI_TYPO_BODY];
-	const auto &labelHandles = uis.typographyHandles[UI_TYPO_LABEL].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_LABEL];
-	const auto &headingHandles = uis.typographyHandles[UI_TYPO_HEADING].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_HEADING];
-	const auto &monoHandles = uis.typographyHandles[UI_TYPO_MONOSPACE].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_MONOSPACE];
+	body.handles = filterHandles(uis.typographyHandles[UI_TYPO_BODY]);
+	if (body.handles.empty()) {
+		body.handles = filterHandles(uis.typographyHandles[UI_TYPO_MONOSPACE]);
+	}
 
-	const auto applyHandles = [](uiTypographySpec_t &spec, const std::vector<qhandle_t> &handles) {
-		spec.handles.clear();
+	if (body.handles.empty()) {
+		const qhandle_t fallback = SCR_DefaultFontHandle();
+		if (fallback)
+			body.handles.push_back(fallback);
+	}
 
-		for (qhandle_t handle : handles) {
-			if (handle)
-				spec.handles.push_back(handle);
-		}
+	label.handles = filterHandles(uis.typographyHandles[UI_TYPO_LABEL]);
+	if (label.handles.empty()) {
+		label.handles = body.handles;
+	}
 
-		if (spec.handles.empty()) {
-			const qhandle_t fallback = SCR_DefaultFontHandle();
-			if (fallback)
-				spec.handles.push_back(fallback);
-		}
-	};
+	heading.handles = filterHandles(uis.typographyHandles[UI_TYPO_HEADING]);
+	if (heading.handles.empty()) {
+		heading.handles = body.handles;
+	}
 
-	applyHandles(body, bodyHandles);
-	applyHandles(label, labelHandles);
-	applyHandles(heading, headingHandles);
-	applyHandles(monospace, monoHandles);
+	monospace.handles = filterHandles(uis.typographyHandles[UI_TYPO_MONOSPACE]);
+	if (monospace.handles.empty()) {
+		monospace.handles = body.handles;
+	}
 
-	body.pixelHeight = baseHeight;
-	label.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 0.95f));
-	heading.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 1.25f));
-	monospace.pixelHeight = baseHeight;
+	if (monospace.handles.empty()) {
+		const qhandle_t fallback = SCR_DefaultFontHandle();
+		if (fallback)
+			monospace.handles.push_back(fallback);
+	}
+
+	body.pixelHeight = roleHeights[UI_TYPO_BODY];
+	label.pixelHeight = roleHeights[UI_TYPO_LABEL];
+	heading.pixelHeight = roleHeights[UI_TYPO_HEADING];
+	monospace.pixelHeight = roleHeights[UI_TYPO_MONOSPACE];
 
 	uis.typography.roles[UI_TYPO_BODY] = body;
 	uis.typography.roles[UI_TYPO_LABEL] = label;
 	uis.typography.roles[UI_TYPO_HEADING] = heading;
 	uis.typography.roles[UI_TYPO_MONOSPACE] = monospace;
 
-	uis.fontHandle = UI_FontForRole(UI_TYPO_BODY);
 	const auto &bodyChain = uis.typography.roles[UI_TYPO_BODY].handles;
-	uis.fallbackFontHandle = bodyChain.size() > 1 ? bodyChain[1] : UI_FontForRole(UI_TYPO_MONOSPACE);
+	const auto &monoChain = uis.typography.roles[UI_TYPO_MONOSPACE].handles;
+
+	uis.fontHandle = !bodyChain.empty() ? bodyChain.front() : SCR_DefaultFontHandle();
+
+	if (bodyChain.size() > 1) {
+		uis.fallbackFontHandle = bodyChain[1];
+	} else if (!monoChain.empty()) {
+		uis.fallbackFontHandle = monoChain.front();
+	} else {
+		uis.fallbackFontHandle = SCR_DefaultFontHandle();
+	}
 
 	UI_GetManager().SyncTypography(uis.typography);
 }
@@ -1916,6 +2038,46 @@ static void UI_AppendFontPath(std::vector<std::string> &paths, const char *path)
 
 /*
 =============
+UI_AppendFontList
+
+Expands a comma- or semicolon-delimited font list into unique entries.
+=============
+*/
+static void UI_AppendFontList(std::vector<std::string> &paths, const char *value)
+{
+	if (!value)
+		return;
+
+	const char *cursor = value;
+
+	while (cursor && *cursor) {
+		while (*cursor && (isspace(static_cast<unsigned char>(*cursor)) || *cursor == ',' || *cursor == ';'))
+			cursor++;
+
+		if (!*cursor)
+			break;
+
+		const char *start = cursor;
+
+		while (*cursor && *cursor != ',' && *cursor != ';')
+			cursor++;
+
+		size_t length = cursor - start;
+		while (length && isspace(static_cast<unsigned char>(start[length - 1])))
+			length--;
+
+		if (length) {
+			std::string entry(start, length);
+			UI_AppendFontPath(paths, entry.c_str());
+		}
+
+		if (*cursor)
+			cursor++;
+	}
+}
+
+/*
+=============
 UI_FontPathsForRole
 
 Builds an ordered list of font paths for a typography role using cvars, script data, and defaults.
@@ -1925,8 +2087,14 @@ static std::vector<std::string> UI_FontPathsForRole(uiTypographyRole_t role)
 {
 	std::vector<std::string> paths;
 
+	if (role >= 0 && role < UI_TYPO_ROLE_COUNT) {
+		cvar_t *roleFont = ui_role_fonts[role];
+		if (roleFont && roleFont->string[0])
+			UI_AppendFontList(paths, roleFont->string);
+	}
+
 	if (ui_font && ui_font->string[0])
-		UI_AppendFontPath(paths, ui_font->string);
+		UI_AppendFontList(paths, ui_font->string);
 
 	for (const auto &preferred : uis.typographyFonts[role])
 		UI_AppendFontPath(paths, preferred.c_str());
@@ -1937,7 +2105,7 @@ static std::vector<std::string> UI_FontPathsForRole(uiTypographyRole_t role)
 	}
 
 	if (ui_font_fallback && ui_font_fallback->string[0])
-		UI_AppendFontPath(paths, ui_font_fallback->string);
+		UI_AppendFontList(paths, ui_font_fallback->string);
 
 	UI_AppendFontPath(paths, "conchars.pcx");
 
@@ -1973,6 +2141,46 @@ static void UI_RegisterTypographyRole(uiTypographyRole_t role, int pixelHeight)
 
 /*
 =============
+UI_RegisterTypographyCvars
+
+Initializes typography-related cvars and change hooks.
+=============
+*/
+static void UI_RegisterTypographyCvars(void)
+{
+	ui_font = Cvar_Get("ui_font", "", CVAR_ARCHIVE);
+	ui_font_fallback = Cvar_Get("ui_font_fallback", "", CVAR_ARCHIVE);
+	ui_font_size = Cvar_Get("ui_font_size", "0", CVAR_ARCHIVE);
+
+	for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++) {
+		char fontName[32];
+		Q_snprintf(fontName, sizeof(fontName), "ui_font_%s", ui_typographyRoleNames[role]);
+		ui_role_fonts[role] = Cvar_Get(fontName, "", CVAR_ARCHIVE);
+
+		char sizeName[32];
+		Q_snprintf(sizeName, sizeof(sizeName), "ui_font_size_%s", ui_typographyRoleNames[role]);
+		ui_role_font_sizes[role] = Cvar_Get(sizeName, "0", CVAR_ARCHIVE);
+	}
+
+	cvar_t *globalFonts[] = { ui_font, ui_font_fallback, ui_font_size };
+	for (cvar_t *entry : globalFonts) {
+		if (entry)
+			entry->changed = ui_font_config_changed;
+	}
+
+	for (auto *entry : ui_role_fonts) {
+		if (entry)
+			entry->changed = ui_font_config_changed;
+	}
+
+	for (auto *entry : ui_role_font_sizes) {
+		if (entry)
+			entry->changed = ui_font_config_changed;
+	}
+}
+
+/*
+=============
 UI_RefreshFonts
 
 Reloads UI typography handles using configured font paths and fallbacks.
@@ -1980,13 +2188,17 @@ Reloads UI typography handles using configured font paths and fallbacks.
 */
 void UI_RefreshFonts(void)
 {
-	const int pixelHeight = UI_ResolvedFontPixelHeight();
-	uis.fontPixelHeight = pixelHeight;
+	const int baseHeight = UI_ResolvedFontPixelHeight();
+	const auto roleHeights = UI_ComputeRolePixelHeights(baseHeight);
+
+	uis.fontPixelHeight = baseHeight;
 
 	UI_ClearTypographyHandles();
 
-	for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
-		UI_RegisterTypographyRole(static_cast<uiTypographyRole_t>(role), pixelHeight);
+	for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++) {
+		const int height = roleHeights[role] > 0 ? roleHeights[role] : baseHeight;
+		UI_RegisterTypographyRole(static_cast<uiTypographyRole_t>(role), height);
+	}
 
 	UI_UpdateLayoutMetrics();
 	UI_UpdateTypographySet();
@@ -2335,9 +2547,11 @@ void UI_Init(void)
 
 	ui_debug = Cvar_Get("ui_debug", "0", 0);
 	ui_open = Cvar_Get("ui_open", "0", 0);
+	UI_RegisterTypographyCvars();
 
 	UI_InitScriptController();
 	UI_ModeChanged();
+
 
 	uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
 	uis.cursorHandle = R_RegisterPic("ch1");
