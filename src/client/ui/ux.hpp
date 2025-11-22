@@ -278,16 +278,19 @@ namespace ui::ux {
 		std::vector<AnimationClip> m_clips;
 	};
 
-	class ThemeContext {
-		public:
-		ThemeContext();
+class ThemeContext {
+public:
+ThemeContext();
 
-		void SetPalette(std::vector<uiPaletteEntry_t> palette);
-		uiPaletteEntry_t Resolve(uiColorRole_t role) const;
+void SetPalette(std::vector<uiPaletteEntry_t> palette);
+void SetTypography(uiTypographySet_t typography);
+uiPaletteEntry_t Resolve(uiColorRole_t role) const;
+const uiTypographySet_t &Typography() const;
 
-		private:
-		std::vector<uiPaletteEntry_t> m_palette;
-	};
+private:
+std::vector<uiPaletteEntry_t> m_palette;
+uiTypographySet_t m_typography;
+};
 
 	class UIXSystem {
 		public:

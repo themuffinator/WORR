@@ -1246,17 +1246,29 @@ namespace ui::ux {
 	{
 	}
 
-	/*
-	=============
-	ThemeContext::SetPalette
+/*
+=============
+ThemeContext::SetPalette
 
 	Stores a palette for later lookups.
 	=============
 	*/
-	void ThemeContext::SetPalette(std::vector<uiPaletteEntry_t> palette)
-	{
-		m_palette = std::move(palette);
-	}
+void ThemeContext::SetPalette(std::vector<uiPaletteEntry_t> palette)
+{
+	m_palette = std::move(palette);
+}
+
+/*
+=============
+ThemeContext::SetTypography
+
+Stores a typography set for later lookups.
+=============
+*/
+void ThemeContext::SetTypography(uiTypographySet_t typography)
+{
+	m_typography = std::move(typography);
+}
 
 	/*
 	=============
@@ -1265,18 +1277,30 @@ namespace ui::ux {
 	Returns a palette entry for the requested role or a default value.
 	=============
 	*/
-	uiPaletteEntry_t ThemeContext::Resolve(uiColorRole_t role) const
-	{
-		if (role >= 0 && static_cast<size_t>(role) < m_palette.size()) {
-			return m_palette[static_cast<size_t>(role)];
-		}
+uiPaletteEntry_t ThemeContext::Resolve(uiColorRole_t role) const
+{
+if (role >= 0 && static_cast<size_t>(role) < m_palette.size()) {
+return m_palette[static_cast<size_t>(role)];
+}
 
 		uiPaletteEntry_t fallback{};
 		for (int i = 0; i < UI_STATE_COUNT; i++) {
-			fallback.states[i] = color_white;
-		}
-		return fallback;
-	}
+fallback.states[i] = color_white;
+}
+return fallback;
+}
+
+/*
+=============
+ThemeContext::Typography
+
+Returns the stored typography set.
+=============
+*/
+const uiTypographySet_t &ThemeContext::Typography() const
+{
+	return m_typography;
+}
 
 	/*
 	=============

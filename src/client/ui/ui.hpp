@@ -158,7 +158,7 @@ UI_TYPO_ROLE_COUNT
 } uiTypographyRole_t;
 
 typedef struct uiTypographySpec_s {
-qhandle_t handle;
+std::vector<qhandle_t> handles;
 int pixelHeight;
 } uiTypographySpec_t;
 
@@ -200,6 +200,7 @@ int UI_CharHeight(void);
 
 #include <array>
 #include <memory>
+#include <string>
 #include <vector>
 
 class MenuItem;
@@ -529,6 +530,8 @@ int fontPixelHeight;
 qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
 
 std::array<uiPaletteEntry_t, UI_COLOR_ROLE_COUNT> palette;
+std::array<std::vector<std::string>, UI_TYPO_ROLE_COUNT> typographyFonts;
+std::array<std::vector<qhandle_t>, UI_TYPO_ROLE_COUNT> typographyHandles;
 uiTypographySet_t typography;
 
     struct {
@@ -550,9 +553,10 @@ class UiManager {
 		
 		void Initialize();
 		void Shutdown();
-		void SyncPalette(const uiStatic_t &state);
-		void SyncLayout(const uiLayoutMetrics_t &metrics);
-		void SyncLegacyMenus(menuFrameWork_t **stack, int depth);
+void SyncPalette(const uiStatic_t &state);
+void SyncTypography(const uiTypographySet_t &typography);
+void SyncLayout(const uiLayoutMetrics_t &metrics);
+void SyncLegacyMenus(menuFrameWork_t **stack, int depth);
 		void RoutePointerEvent(const vrect_t &cursorRegion);
 		void RouteNavigationKey(int key);
 		std::shared_ptr<ui::ux::Widget> MenuRoot() const;
@@ -594,6 +598,7 @@ typedef enum uiScriptContext_e {
 
 	void	UI_ClearMenus(void);
 	void	UI_RegisterBuiltinMenus(void);
+	void	UI_RefreshFonts(void);
 
 	void        UI_PushMenu(menuFrameWork_t *menu);
 	void        UI_ForceMenuOff(void);
