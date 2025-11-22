@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <memory>
 #include <limits.h>
 #include <string.h>
+#include <algorithm>
+#include <vector>
 
 extern const char res_worr_menu[];
 extern const size_t res_worr_menu_size;
@@ -43,7 +45,224 @@ static uiScriptContext_t ui_activeContext = UI_SCRIPT_MAIN;
 static bool ui_scriptLoaded;
 static bool ui_forceReload;
 static cvar_t *ui_menu_context;
+static std::vector<std::string> ui_loadedScripts;
+static char ui_scriptStack[8][MAX_QPATH];
+static int ui_scriptDepth;
 
+static const char ui_builtinFallback[] = R"({
+"background": "black",
+"font": "conchars.pcx",
+"menus": [
+{
+"name": "safe_mode",
+"title": "WORR Safe Mode",
+"items": [
+{ "type": "action", "label": "reconnect", "command": "reconnect" },
+{ "type": "action", "label": "multiplayer browser", "command": "menu_joinserver" },
+{ "type": "action", "label": "video defaults", "command": "vid_reset" },
+{ "type": "action", "label": "quit", "command": "quit" }
+]
+}
+]
+})";
+
+/*
+=============
+UI_ResetScriptState
+
+Clears the module tracking before attempting a new menu load.
+=============
+*/
+static void UI_ResetScriptState(void)
+{
+	ui_loadedScripts.clear();
+	ui_scriptDepth = 0;
+}
+
+/*
+=============
+UI_CurrentScriptPath
+
+Returns the path of the currently parsed script, if any.
+=============
+*/
+static const char* UI_CurrentScriptPath(void)
+{
+	if (ui_scriptDepth <= 0)
+		return "";
+
+	return ui_scriptStack[ui_scriptDepth - 1];
+}
+
+/*
+=============
+UI_PushScriptPath
+
+Pushes a script path onto the include stack.
+=============
+*/
+static bool UI_PushScriptPath(const char* path)
+{
+	if (ui_scriptDepth >= q_countof(ui_scriptStack)) {
+		Com_WPrintf("Exceeded maximum UI include depth trying to load %s\n", path);
+		return false;
+	}
+
+	Q_strlcpy(ui_scriptStack[ui_scriptDepth], path, sizeof(ui_scriptStack[ui_scriptDepth]));
+	ui_scriptDepth++;
+	return true;
+}
+
+/*
+=============
+UI_PopScriptPath
+
+Removes the most recent script path from the include stack.
+=============
+*/
+static void UI_PopScriptPath(void)
+{
+	if (ui_scriptDepth > 0)
+		ui_scriptDepth--;
+}
+
+/*
+=============
+UI_IsScriptInStack
+
+Determines whether a script is already in the active include stack.
+=============
+*/
+static bool UI_IsScriptInStack(const char* path)
+{
+	for (int i = 0; i < ui_scriptDepth; i++) {
+		if (!Q_stricmp(ui_scriptStack[i], path))
+			return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+UI_HasLoadedScript
+
+Checks if a script path has already been parsed during this load cycle.
+=============
+*/
+static bool UI_HasLoadedScript(const char* path)
+{
+	return std::any_of(ui_loadedScripts.cbegin(), ui_loadedScripts.cend(), [path](const std::string& loaded) {
+		return !Q_stricmp(loaded.c_str(), path);
+	});
+}
+
+/*
+=============
+UI_NoteLoadedScript
+
+Tracks a script as loaded for the current load cycle.
+=============
+*/
+static void UI_NoteLoadedScript(const char* path)
+{
+	ui_loadedScripts.emplace_back(path);
+}
+
+/*
+=============
+UI_ResolveModulePath
+
+Resolves a module path against the current script location.
+=============
+*/
+static void UI_ResolveModulePath(const char* basePath, const char* module, char* resolved, size_t size)
+{
+	if (!module || !module[0]) {
+		resolved[0] = '\0';
+		return;
+	}
+
+	const char* lastSlash = strrchr(basePath, '/');
+	if (lastSlash && !strchr(module, '/')) {
+		size_t baseLen = (lastSlash - basePath) + 1;
+		if (baseLen >= size) {
+			resolved[0] = '\0';
+			return;
+		}
+
+		memcpy(resolved, basePath, baseLen);
+		Q_strlcpy(resolved + baseLen, module, size - baseLen);
+		return;
+	}
+
+	Q_strlcpy(resolved, module, size);
+}
+
+/*
+=============
+UI_LoadMenuScriptFromBuffer
+
+Loads a menu definition from an in-memory buffer using a virtual path for tracking.
+=============
+*/
+static bool UI_LoadMenuScriptFromBuffer(const char* virtualPath, const char* buffer, size_t length)
+{
+	json_parse_t parser = {};
+
+	if (UI_IsScriptInStack(virtualPath)) {
+		Com_WPrintf("Detected recursive include of %s\n", virtualPath);
+		return false;
+	}
+
+	if (UI_HasLoadedScript(virtualPath))
+		return true;
+
+	if (!UI_PushScriptPath(virtualPath))
+		return false;
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load %s[%s]: %s\n", virtualPath, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		UI_PopScriptPath();
+		return false;
+	}
+
+	UI_ParseJsonBuffer(&parser, buffer, length);
+	UI_ParseRoot(&parser);
+	Json_Free(&parser);
+	UI_PopScriptPath();
+	UI_NoteLoadedScript(virtualPath);
+	return true;
+}
+
+/*
+=============
+UI_LoadMenuModule
+
+Loads a module relative to the current script file, preventing cycles.
+=============
+*/
+static bool UI_LoadMenuModule(const char* module)
+{
+	char resolved[MAX_QPATH];
+
+	UI_ResolveModulePath(UI_CurrentScriptPath(), module, resolved, sizeof(resolved));
+	if (!resolved[0]) {
+		Com_WPrintf("Invalid module path referenced from %s\n", UI_CurrentScriptPath());
+		return false;
+	}
+
+	if (UI_IsScriptInStack(resolved)) {
+		Com_WPrintf("Detected recursive include of %s (from %s)\n", resolved, UI_CurrentScriptPath());
+		return false;
+	}
+
+	if (UI_HasLoadedScript(resolved))
+		return true;
+
+	return UI_LoadMenuScriptFromFile(resolved);
+}
 static menuSound_t Activate(menuCommon_t* self)
 {
 	switch (self->type) {
@@ -1344,6 +1563,29 @@ static void ParseMenus(json_parse_t* parser)
 
 /*
 =============
+ParseModuleList
+
+Loads a list of menu modules from a JSON array in order.
+=============
+*/
+static void ParseModuleList(json_parse_t* parser)
+{
+	jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+	for (int i = 0; i < array->size; i++) {
+		if (parser->pos->type != JSMN_STRING)
+			Json_Error(parser, parser->pos, "module entries must be strings");
+
+		char path[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, path, sizeof(path));
+
+		if (!UI_LoadMenuModule(path))
+			Json_Error(parser, parser->pos - 1, va("failed to load module \"%s\"", path));
+}
+}
+
+/*
+=============
 UI_ParseRoot
 
 Parses the root UI object and dispatches handling for top-level keys.
@@ -1382,6 +1624,10 @@ static void UI_ParseRoot(json_parse_t* parser)
 			Json_Next(parser);
 			ParseMenus(parser);
 		}
+		else if (!Json_Strcmp(parser, "modules") || !Json_Strcmp(parser, "include")) {
+			Json_Next(parser);
+			ParseModuleList(parser);
+		}
 		else {
 			Json_Next(parser);
 			Json_SkipToken(parser);
@@ -1389,6 +1635,9 @@ static void UI_ParseRoot(json_parse_t* parser)
 	}
 }
 
+/*
+=============
+UI_ParseJsonBuffer
 /*
 =============
 UI_ParseJsonBuffer
@@ -1550,15 +1799,29 @@ static bool UI_LoadMenuScriptFromFile(const char* filename)
 {
 	json_parse_t parser = {};
 
+	if (UI_IsScriptInStack(filename)) {
+		Com_WPrintf("Detected recursive include of %s\n", filename);
+		return false;
+	}
+
+	if (UI_HasLoadedScript(filename))
+		return true;
+
+	if (!UI_PushScriptPath(filename))
+		return false;
+
 	if (Json_ErrorHandler(&parser)) {
 		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", filename, parser.error_loc, parser.error);
 		Json_Free(&parser);
+		UI_PopScriptPath();
 		return false;
 	}
 
 	Json_Load(filename, &parser);
 	UI_ParseRoot(&parser);
 	Json_Free(&parser);
+	UI_PopScriptPath();
+	UI_NoteLoadedScript(filename);
 	return true;
 }
 
@@ -1571,18 +1834,12 @@ Loads the embedded fallback UI definition when the filesystem copy is unavailabl
 */
 static bool UI_LoadEmbeddedMenu(void)
 {
-	json_parse_t parser = {};
+	if (UI_LoadMenuScriptFromBuffer(UI_DEFAULT_FILE, res_worr_menu, res_worr_menu_size))
+		return true;
 
-	if (Json_ErrorHandler(&parser)) {
-		Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser.error_loc, parser.error);
-		Json_Free(&parser);
-		return false;
-	}
-
-	UI_ParseJsonBuffer(&parser, res_worr_menu, res_worr_menu_size);
-	UI_ParseRoot(&parser);
-	Json_Free(&parser);
-	return true;
+	Com_WPrintf("Falling back to hardcoded menu definition\n");
+	UI_ResetScriptState();
+	return UI_LoadMenuScriptFromBuffer("<builtin>/fallback.menu.json", ui_builtinFallback, strlen(ui_builtinFallback));
 }
 
 /*
@@ -1616,6 +1873,8 @@ static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
 	for (int i = 0; i < numCandidates; i++) {
 		if (!candidates[i].path[0])
 			continue;
+
+		UI_ResetScriptState();
 
 		if (UI_LoadMenuScriptFromFile(candidates[i].path)) {
 			ui_activeContext = candidates[i].context;
@@ -1654,6 +1913,9 @@ void UI_SyncMenuContext(void)
 		UI_LoadScript();
 }
 
+/*
+=============
+UI_SetMenuContext
 /*
 =============
 UI_SetMenuContext
@@ -1710,11 +1972,13 @@ void UI_LoadScript(void)
 	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
 
 	UI_ClearMenus();
+	UI_ResetScriptState();
 
 	UI_LoadManifest(&ui_manifest);
 
 	if (!UI_AttemptMenuLoad(desiredContext)) {
 		Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
+		UI_ResetScriptState();
 		if (!UI_LoadEmbeddedMenu())
 			return;
 		ui_activeContext = UI_SCRIPT_MAIN;

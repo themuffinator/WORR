@@ -1422,6 +1422,14 @@ make it easier to express complex interactions:
   supplies `name`, an optional `label`, visual hints such as `background` colour
   and `border`, and layout hints (`indent`, `padding`, `headerHeight`). Menu
   items reference a group by name through their `group` property.
+* Top-level `modules` (or the alias `include`) accepts an array of menu files to
+  load. Modules are pulled in deterministically in the order they are listed,
+  with recursive includes and duplicate entries ignored, which makes it easier
+  to split a menu into focused files (for example, controls, visuals, and
+  behaviours) without unpredictable merges.
+* If both the manifest targets and embedded menu assets fail to parse, the UI
+  loader now falls back to a minimal built-in menu so the user always has a
+  safe way to navigate and recover.
 
 The checkbox, radio, and dropdown controls currently use font glyphs as a
 placeholder. UI artists should create dedicated 32×32 glyphs for the checked
