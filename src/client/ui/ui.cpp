@@ -34,6 +34,9 @@ static cvar_t    *ui_cursor_theme;
 static cvar_t    *ui_color_theme;
 
 static void UI_UpdateLayoutMetrics(void);
+static void UI_UpdateTypographySet(void);
+static void UI_PopulateDefaultPalette(bool lightTheme);
+static void UI_UpdateLegacyColorsFromPalette(void);
 
 /*
 =============
@@ -221,12 +224,50 @@ Returns the DPI-aware scrollbar width for lists.
 =============
 */
 int UI_ListScrollbarWidth(void)
-	{
-	if (uis.layout.listScrollbarWidth > 0) {
-	return uis.layout.listScrollbarWidth;
-	}
+{
+if (uis.layout.listScrollbarWidth > 0) {
+return uis.layout.listScrollbarWidth;
+}
 
 return UI_GenericSpacing(CONCHAR_WIDTH);
+}
+
+/*
+=============
+UI_ScaledFontSize
+
+Scales a base font pixel height using the active DPI-aware multiplier.
+=============
+*/
+int UI_ScaledFontSize(int base)
+{
+if (base <= 0) {
+return 0;
+}
+
+float scale = uis.layout.dpiScale;
+if (scale < 1.0f) {
+scale = 1.0f;
+}
+
+return Q_rint(base * scale);
+}
+
+/*
+=============
+UI_ScaledPixels
+
+Returns a DPI-aware scaled measurement for arbitrary pixel values.
+=============
+*/
+float UI_ScaledPixels(float base)
+{
+float scale = uis.layout.dpiScale;
+if (scale < 1.0f) {
+scale = 1.0f;
+}
+
+return base * scale;
 }
 
 /*
@@ -1306,6 +1347,39 @@ return UI_AutoFontPixelHeight();
 
 /*
 =============
+UI_UpdateTypographySet
+
+Rebuilds the typography roles using the latest font handles and scaling data.
+=============
+*/
+static void UI_UpdateTypographySet(void)
+{
+const int baseHeight = UI_ResolvedFontPixelHeight();
+const qhandle_t primary = uis.fontHandle ? uis.fontHandle : SCR_DefaultFontHandle();
+const qhandle_t mono = uis.fallbackFontHandle ? uis.fallbackFontHandle : primary;
+
+uiTypographySpec_t body{};
+body.handle = primary;
+body.pixelHeight = baseHeight;
+
+uiTypographySpec_t label = body;
+label.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 0.95f));
+
+uiTypographySpec_t heading = body;
+heading.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 1.25f));
+
+uiTypographySpec_t monospace{};
+monospace.handle = mono;
+monospace.pixelHeight = baseHeight;
+
+uis.typography.roles[UI_TYPO_BODY] = body;
+uis.typography.roles[UI_TYPO_LABEL] = label;
+uis.typography.roles[UI_TYPO_HEADING] = heading;
+uis.typography.roles[UI_TYPO_MONOSPACE] = monospace;
+}
+
+/*
+=============
 UI_RegisterScaledFont
 
 Registers the requested font path with a pixel height tuned for the active DPI.
@@ -1328,18 +1402,19 @@ Reloads the UI font handles using the configured primary and fallback font paths
 */
 static void UI_RefreshFonts(void)
 {
-	const int pixelHeight = UI_ResolvedFontPixelHeight();
-	uis.fontPixelHeight = pixelHeight;
+const int pixelHeight = UI_ResolvedFontPixelHeight();
+uis.fontPixelHeight = pixelHeight;
 	
 	uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
 	if (!uis.fontHandle)
 	uis.fontHandle = SCR_DefaultFontHandle();
 	
-	uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
-	if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
-	uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
-	
-	UI_UpdateLayoutMetrics();
+uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
+if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
+uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
+
+UI_UpdateLayoutMetrics();
+UI_UpdateTypographySet();
 }
 
 /*
@@ -1374,6 +1449,116 @@ return themed;
 }
 
 return R_RegisterPic(base);
+}
+
+/*
+=============
+UI_EffectiveStateColor
+
+Returns a palette state color, falling back to the default state when needed.
+=============
+*/
+static color_t UI_EffectiveStateColor(const uiPaletteEntry_t *entry, uiControlState_t state)
+{
+color_t color = entry->states[state];
+
+if (!color.u32) {
+color = entry->states[UI_STATE_DEFAULT];
+}
+
+return color;
+}
+
+/*
+=============
+UI_ColorForRole
+
+Resolves a color for the requested palette role and UI state.
+=============
+*/
+color_t UI_ColorForRole(uiColorRole_t role, uiControlState_t state)
+{
+if (role < 0 || role >= UI_COLOR_ROLE_COUNT) {
+return ColorRGBA(0, 0, 0, 0);
+}
+
+if (state < 0 || state >= UI_STATE_COUNT) {
+state = UI_STATE_DEFAULT;
+}
+
+return UI_EffectiveStateColor(&uis.palette[role], state);
+}
+
+/*
+=============
+UI_SetPaletteEntry
+
+Initializes a palette entry with state-aware variants.
+=============
+*/
+static uiPaletteEntry_t UI_SetPaletteEntry(color_t base, color_t hovered, color_t active, color_t disabled, color_t focused)
+{
+uiPaletteEntry_t entry{};
+
+entry.states[UI_STATE_DEFAULT] = base;
+entry.states[UI_STATE_HOVERED] = hovered.u32 ? hovered : base;
+entry.states[UI_STATE_ACTIVE] = active.u32 ? active : base;
+entry.states[UI_STATE_DISABLED] = disabled.u32 ? disabled : base;
+entry.states[UI_STATE_FOCUSED] = focused.u32 ? focused : base;
+
+return entry;
+}
+
+/*
+=============
+UI_PopulateDefaultPalette
+
+Defines the default palette entries for the active theme.
+=============
+*/
+static void UI_PopulateDefaultPalette(bool lightTheme)
+{
+color_t backgroundBase = lightTheme ? ColorRGBA(240, 240, 240, 255) : ColorRGBA(12, 12, 16, 255);
+color_t backgroundHover = lightTheme ? ColorRGBA(230, 230, 230, 255) : ColorRGBA(24, 24, 32, 255);
+color_t backgroundActive = lightTheme ? ColorRGBA(220, 220, 220, 255) : ColorRGBA(32, 32, 48, 255);
+color_t backgroundDisabled = lightTheme ? ColorRGBA(210, 210, 210, 255) : ColorRGBA(24, 24, 24, 255);
+
+color_t surfaceBase = lightTheme ? ColorRGBA(252, 252, 252, 240) : ColorRGBA(24, 24, 32, 240);
+color_t surfaceHover = lightTheme ? ColorRGBA(246, 246, 246, 240) : ColorRGBA(32, 32, 44, 240);
+color_t surfaceActive = lightTheme ? ColorRGBA(240, 240, 240, 240) : ColorRGBA(40, 40, 56, 240);
+color_t surfaceDisabled = lightTheme ? ColorRGBA(232, 232, 232, 230) : ColorRGBA(28, 28, 36, 230);
+
+color_t accentBase = lightTheme ? ColorRGBA(30, 110, 210, 200) : ColorRGBA(15, 128, 235, 180);
+color_t accentHover = lightTheme ? ColorRGBA(20, 100, 200, 220) : ColorRGBA(32, 154, 255, 200);
+color_t accentActive = lightTheme ? ColorRGBA(10, 80, 170, 240) : ColorRGBA(10, 120, 220, 220);
+color_t accentDisabled = lightTheme ? ColorRGBA(120, 140, 170, 180) : ColorRGBA(80, 96, 120, 160);
+
+color_t textBase = lightTheme ? ColorRGBA(18, 18, 18, 255) : ColorRGBA(235, 235, 240, 255);
+color_t textMuted = lightTheme ? ColorRGBA(96, 96, 96, 255) : ColorRGBA(160, 160, 160, 255);
+color_t textHighlight = lightTheme ? ColorRGBA(0, 80, 160, 255) : ColorRGBA(96, 176, 255, 255);
+
+uis.palette[UI_COLOR_BACKGROUND] = UI_SetPaletteEntry(backgroundBase, backgroundHover, backgroundActive, backgroundDisabled, backgroundHover);
+uis.palette[UI_COLOR_SURFACE] = UI_SetPaletteEntry(surfaceBase, surfaceHover, surfaceActive, surfaceDisabled, surfaceHover);
+uis.palette[UI_COLOR_ACCENT] = UI_SetPaletteEntry(accentBase, accentHover, accentActive, accentDisabled, accentHover);
+uis.palette[UI_COLOR_TEXT] = UI_SetPaletteEntry(textBase, textBase, textBase, textMuted, textHighlight);
+uis.palette[UI_COLOR_HIGHLIGHT] = UI_SetPaletteEntry(textHighlight, accentHover, accentActive, accentDisabled, textHighlight);
+uis.palette[UI_COLOR_MUTED] = UI_SetPaletteEntry(textMuted, textMuted, textMuted, textMuted, textMuted);
+}
+
+/*
+=============
+UI_UpdateLegacyColorsFromPalette
+
+Keeps the legacy color bundle in sync with the new palette roles.
+=============
+*/
+static void UI_UpdateLegacyColorsFromPalette(void)
+{
+uis.color.background = UI_ColorForRole(UI_COLOR_BACKGROUND, UI_STATE_DEFAULT);
+uis.color.normal = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_DEFAULT);
+uis.color.active = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_ACTIVE);
+uis.color.selection = UI_ColorForRole(UI_COLOR_HIGHLIGHT, UI_STATE_DEFAULT);
+uis.color.disabled = UI_ColorForRole(UI_COLOR_MUTED, UI_STATE_DISABLED);
 }
 
 /*
@@ -1414,20 +1599,8 @@ static void UI_ApplyThemeColors(void)
 {
 const bool light = ui_color_theme && !Q_stricmp(ui_color_theme->string, "light");
 
-if (light) {
-uis.color.background = ColorRGBA(240, 240, 240, 255);
-uis.color.normal = ColorRGBA(20, 80, 160, 180);
-uis.color.active = ColorRGBA(10, 120, 220, 200);
-uis.color.selection = ColorRGBA(10, 120, 220, 200);
-uis.color.disabled = ColorRGBA(96, 96, 96, 255);
-return;
-}
-
-uis.color.background = ColorRGBA(0, 0, 0, 255);
-uis.color.normal = ColorRGBA(15, 128, 235, 100);
-uis.color.active = ColorRGBA(15, 128, 235, 100);
-uis.color.selection = ColorRGBA(15, 128, 235, 100);
-uis.color.disabled = ColorRGBA(127, 127, 127, 255);
+UI_PopulateDefaultPalette(light);
+UI_UpdateLegacyColorsFromPalette();
 }
 
 /*
@@ -1449,6 +1622,50 @@ if (uis.fallbackFontHandle)
 return uis.fallbackFontHandle;
 
 return SCR_DefaultFontHandle();
+}
+
+/*
+=============
+UI_FontForRole
+
+Returns the configured font handle for a typography role.
+=============
+*/
+qhandle_t UI_FontForRole(uiTypographyRole_t role)
+{
+if (role < 0 || role >= UI_TYPO_ROLE_COUNT) {
+return SCR_DefaultFontHandle();
+}
+
+qhandle_t handle = uis.typography.roles[role].handle;
+
+if (!handle) {
+return SCR_DefaultFontHandle();
+}
+
+return handle;
+}
+
+/*
+=============
+UI_FontPixelHeightForRole
+
+Returns the pixel height configured for a typography role.
+=============
+*/
+int UI_FontPixelHeightForRole(uiTypographyRole_t role)
+{
+if (role < 0 || role >= UI_TYPO_ROLE_COUNT) {
+return UI_ResolvedFontPixelHeight();
+}
+
+const int height = uis.typography.roles[role].pixelHeight;
+
+if (height > 0) {
+return height;
+}
+
+return UI_ResolvedFontPixelHeight();
 }
 
 void UI_ModeChanged(void)
@@ -1493,11 +1710,9 @@ void UI_Init(void)
         uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
     }
 
-    uis.color.background    = ColorRGBA(0,   0,   0,   255);
-    uis.color.normal        = ColorRGBA(15,  128, 235, 100);
-    uis.color.active        = ColorRGBA(15,  128, 235, 100);
-    uis.color.selection     = ColorRGBA(15,  128, 235, 100);
-    uis.color.disabled      = ColorRGBA(127, 127, 127, 255);
+    UI_PopulateDefaultPalette(false);
+    UI_UpdateLegacyColorsFromPalette();
+    UI_UpdateTypographySet();
 
     strcpy(uis.weaponModel, "w_railgun.md2");
 

@@ -121,10 +121,50 @@ typedef struct uiLayoutMetrics_s {
 } uiLayoutMetrics_t;
 
 typedef struct uiLayoutSplit_s {
-	vrect_t bounds;
-	vrect_t label;
-	vrect_t field;
+vrect_t bounds;
+vrect_t label;
+vrect_t field;
 } uiLayoutSplit_t;
+
+typedef enum uiColorRole_e {
+UI_COLOR_BACKGROUND,
+UI_COLOR_SURFACE,
+UI_COLOR_ACCENT,
+UI_COLOR_TEXT,
+UI_COLOR_HIGHLIGHT,
+UI_COLOR_MUTED,
+UI_COLOR_ROLE_COUNT
+} uiColorRole_t;
+
+typedef enum uiControlState_e {
+UI_STATE_DEFAULT,
+UI_STATE_HOVERED,
+UI_STATE_ACTIVE,
+UI_STATE_DISABLED,
+UI_STATE_FOCUSED,
+UI_STATE_COUNT
+} uiControlState_t;
+
+typedef struct uiPaletteEntry_s {
+color_t states[UI_STATE_COUNT];
+} uiPaletteEntry_t;
+
+typedef enum uiTypographyRole_e {
+UI_TYPO_BODY,
+UI_TYPO_LABEL,
+UI_TYPO_HEADING,
+UI_TYPO_MONOSPACE,
+UI_TYPO_ROLE_COUNT
+} uiTypographyRole_t;
+
+typedef struct uiTypographySpec_s {
+qhandle_t handle;
+int pixelHeight;
+} uiTypographySpec_t;
+
+typedef struct uiTypographySet_s {
+std::array<uiTypographySpec_t, UI_TYPO_ROLE_COUNT> roles;
+} uiTypographySet_t;
 
 	uiLayoutValue_t UI_Percent(float percent);
 	uiLayoutValue_t UI_Pixels(float pixels);
@@ -135,6 +175,8 @@ int UI_GenericSpacing(int base);
 int UI_MenuSpacing(void);
 int UI_ListSpacing(void);
 int UI_ListScrollbarWidth(void);
+int UI_ScaledFontSize(int base);
+float UI_ScaledPixels(float base);
 int UI_LeftColumnOffset(void);
 int UI_RightColumnOffset(void);
 int UI_ColumnPadding(void);
@@ -149,6 +191,7 @@ int UI_CharHeight(void);
 
 #define DOUBLE_CLICK_DELAY    300
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -478,14 +521,21 @@ int fontPixelHeight;
 
 qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
 
+std::array<uiPaletteEntry_t, UI_COLOR_ROLE_COUNT> palette;
+uiTypographySet_t typography;
+
     struct {
-        color_t background;
-        color_t normal;
-        color_t active;
-        color_t selection;
-        color_t disabled;
-    } color;
+color_t background;
+color_t normal;
+color_t active;
+color_t selection;
+color_t disabled;
+} color;
 } uiStatic_t;
+
+color_t UI_ColorForRole(uiColorRole_t role, uiControlState_t state);
+qhandle_t UI_FontForRole(uiTypographyRole_t role);
+int UI_FontPixelHeightForRole(uiTypographyRole_t role);
 
 extern uiStatic_t   uis;
 
@@ -538,5 +588,5 @@ menuCommon_t    *Menu_HitTest(menuFrameWork_t *menu);
 
 	void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
 	void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
-	void UI_MapDB_Init(void);
-	void UI_MapDB_Shutdown(void);
+        void UI_MapDB_Init(void);
+        void UI_MapDB_Shutdown(void);
