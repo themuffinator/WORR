@@ -451,7 +451,7 @@ namespace ui::ux {
 	=============
 	*/
 	UIEvent::UIEvent(EventType type, NavigationDirection direction, vrect_t region)
-	: m_type(type), m_direction(direction), m_region(region)
+	: m_type(type), m_direction(direction), m_region(region), m_key(0)
 	{
 	}
 
@@ -463,7 +463,19 @@ namespace ui::ux {
 	=============
 	*/
 	UIEvent::UIEvent(EventType type, vrect_t region)
-	: m_type(type), m_direction(NavigationDirection::Next), m_region(region)
+	: m_type(type), m_direction(NavigationDirection::Next), m_region(region), m_key(0)
+	{
+	}
+
+	/*
+	=============
+	UIEvent::UIEvent
+
+	Builds an event carrying a direct key payload.
+	=============
+	*/
+	UIEvent::UIEvent(EventType type, int key, vrect_t region)
+	: m_type(type), m_direction(NavigationDirection::Next), m_region(region), m_key(key)
 	{
 	}
 
@@ -501,6 +513,18 @@ namespace ui::ux {
 	vrect_t UIEvent::Region() const
 	{
 		return m_region;
+	}
+
+	/*
+	=============
+	UIEvent::Key
+
+	Returns the key payload attached to the event.
+	=============
+	*/
+	int UIEvent::Key() const
+	{
+		return m_key;
 	}
 
 	/*

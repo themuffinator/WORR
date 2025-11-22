@@ -29,13 +29,17 @@ namespace ui::ux {
 		ModalOverlay
 	};
 
-	enum class EventType : uint8_t {
-		Focus,
-		Hover,
-		Activate,
-		Navigate,
-		PointerMove
-	};
+		enum class EventType : uint8_t {
+			Focus,
+			Hover,
+			Activate,
+			Navigate,
+			PointerMove,
+			PointerDown,
+			PointerUp,
+			Scroll,
+			TextInput
+		};
 
 	enum class NavigationDirection : uint8_t {
 		Next,
@@ -115,17 +119,20 @@ namespace ui::ux {
 
 	class UIEvent {
 		public:
-		UIEvent(EventType type, NavigationDirection direction, vrect_t region);
-		UIEvent(EventType type, vrect_t region);
+			UIEvent(EventType type, NavigationDirection direction, vrect_t region);
+			UIEvent(EventType type, vrect_t region);
+			UIEvent(EventType type, int key, vrect_t region);
 
-		EventType Type() const;
-		NavigationDirection Direction() const;
-		vrect_t Region() const;
+			EventType Type() const;
+			NavigationDirection Direction() const;
+			vrect_t Region() const;
+			int Key() const;
 
-		private:
-		EventType m_type;
-		NavigationDirection m_direction;
-		vrect_t m_region;
+			private:
+			EventType m_type;
+			NavigationDirection m_direction;
+			vrect_t m_region;
+			int m_key;
 	};
 
 	class Widget : public std::enable_shared_from_this<Widget> {
