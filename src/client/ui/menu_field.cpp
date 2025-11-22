@@ -27,20 +27,6 @@ void Field_Pop(menuField_t *f)
 
 /*
 =============
-Field_Free
-
-Releases memory owned by a field widget.
-=============
-*/
-void Field_Free(menuField_t *f)
-{
-	Z_Free(f->generic.name);
-	Z_Free(f->generic.status);
-	Z_Free(f);
-}
-
-/*
-=============
 Field_Init
 
 Initializes geometry for a field widget.

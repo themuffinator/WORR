@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ui.hpp"
 #include "common/json.hpp"
 
+#include <memory>
 #include <limits.h>
 #include <string.h>
 
@@ -478,11 +479,11 @@ static void ParsePairOptions(json_parse_t* parser, menuSpinControl_t* s)
 
 static uiItemGroup_t* Menu_FindGroup(menuFrameWork_t* menu, const char* name)
 {
-	if (!menu->groups)
+	if (menu->groups.empty())
 		return NULL;
 
-	for (int i = 0; i < menu->numGroups; i++) {
-		uiItemGroup_t* group = menu->groups[i];
+	for (const auto &groupPtr : menu->groups) {
+		uiItemGroup_t* group = groupPtr.get();
 		if (group && group->name && !Q_stricmp(group->name, name))
 			return group;
 	}
@@ -1015,11 +1016,12 @@ static void ParseMenuGroups(json_parse_t* parser, menuFrameWork_t* menu)
 	if (!menu->numGroups)
 		return;
 
-	menu->groups = UI_Mallocz(sizeof(uiItemGroup_t*) * menu->numGroups);
+	menu->groups.clear();
+	menu->groups.resize(menu->numGroups);
 
 	for (int i = 0; i < array->size; i++) {
 		jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
-		uiItemGroup_t* group = UI_Mallocz(sizeof(*group));
+		std::unique_ptr<uiItemGroup_t> group = std::make_unique<uiItemGroup_t>();
 		group->indent = RCOLUMN_OFFSET;
 		group->padding = MENU_SPACING / 2;
 		group->headerHeight = MENU_SPACING;
@@ -1073,13 +1075,13 @@ static void ParseMenuGroups(json_parse_t* parser, menuFrameWork_t* menu)
 			}
 		}
 
-		if (!group->name)
-			Json_Error(parser, object, "menu group missing name");
-		if (!group->label)
-			group->headerHeight = 0;
+if (!group->name)
+Json_Error(parser, object, "menu group missing name");
+if (!group->label)
+group->headerHeight = 0;
 
-		menu->groups[i] = group;
-	}
+menu->groups[i] = std::move(group);
+}
 }
 
 static void ApplyMenuBackground(menuFrameWork_t* menu, const char* value)
