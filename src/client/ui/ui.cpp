@@ -302,23 +302,28 @@ bool UI_CursorInRect(const vrect_t *rect)
     return true;
 }
 
+static cvar_t* ui_font = nullptr;
+static cvar_t* ui_font_size = nullptr;
+static int ui_font_scale = 1;
+
 // nb: all UI strings are drawn at full alpha
 void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 {
-    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string,
+    SCR_DrawStringStretch(x, y, ui_font_scale, flags, MAX_STRING_CHARS, string,
                           ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
 }
 
 // nb: all UI chars are drawn at full alpha
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 {
-    R_DrawChar(x, y, flags, ch, ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
+    SCR_DrawGlyph(x, y, ui_font_scale, flags, static_cast<unsigned char>(ch),
+        ColorSetAlpha(color, static_cast<uint8_t>(255)));
 }
 
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
 {
-    rc->height = SCR_FontLineHeight(1, uis.fontHandle);
-    rc->width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
+    rc->height = SCR_FontLineHeight(ui_font_scale, uis.fontHandle);
+    rc->width = SCR_MeasureString(ui_font_scale, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         rc->x -= rc->width / 2;
@@ -604,10 +609,23 @@ void UI_Init(void)
 
     ui_debug = Cvar_Get("ui_debug", "0", 0);
     ui_open = Cvar_Get("ui_open", "0", 0);
+    ui_font = Cvar_Get("ui_font", "/fonts/RobotoMono-Regular.ttf", CVAR_ARCHIVE);
+    ui_font_size = Cvar_Get("ui_font_size", "1", CVAR_ARCHIVE);
+    ui_font_scale = std::max(1, ui_font_size->integer);
+    ui_font->changed = [](cvar_t* self) {
+        uis.fontHandle = SCR_RegisterFontPath(self->string);
+        if (!uis.fontHandle)
+            uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
+    };
+    ui_font_size->changed = [](cvar_t* self) {
+        ui_font_scale = std::max(1, self->integer);
+    };
 
     UI_ModeChanged();
 
-    uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
+    uis.fontHandle = SCR_RegisterFontPath(ui_font->string);
+    if (!uis.fontHandle)
+        uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
     uis.cursorHandle = R_RegisterPic("ch1");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
 

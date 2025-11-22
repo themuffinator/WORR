@@ -107,6 +107,17 @@ For information on using and configuring **WORR**, refer to the manuals in the `
 - Server configuration, match presets and hosting details,
 - Notes on compatibility with Quake II Rerelease assets.
 
+### Font system quick reference
+
+- `scr_font` / `scr_font_size` / `scr_fontpath`: select TTF/OTF or legacy fonts and pixel height for HUD text.
+- `scr_text_backend`: choose `ttf`, `kfont`, or `legacy` (bitmap) rendering.
+- `scr_text_dpi_scale`: override automatic DPI scaling (0 = auto).
+- `scr_text_outline`: default outline thickness (0 = disabled).
+- `scr_text_bg` / `scr_text_bg_alpha`: enable an optional black text background and set its opacity.
+- `ui_font` / `ui_font_size`: menu/UI font selection and scale.
+- `con_font` / `con_scale`: console font selection and scale.
+- Style flags available to UI code: `UI_BOLD`, `UI_ITALIC`, `UI_UNDERLINE`, `UI_OUTLINE`, plus shadow/color flags.
+
 ---
 
 ## Related Repositories

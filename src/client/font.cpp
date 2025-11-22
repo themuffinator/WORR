@@ -26,6 +26,10 @@ static void SCR_FreeFreeTypeFonts(void);
 static bool SCR_LoadDefaultFreeTypeFont(qhandle_t handle);
 static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 #endif
+static cvar_t* scr_text_dpi_scale = nullptr;
+static cvar_t* scr_text_outline = nullptr;
+static cvar_t* scr_text_bg = nullptr;
+static cvar_t* scr_text_bg_alpha = nullptr;
 
 namespace {
         constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
@@ -68,8 +72,66 @@ static bool SCR_HasPathSeparator(const char* text)
 static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTypeBaseCreation);
 static void scr_font_changed(cvar_t* self);
 
-// nb: this is dumb but C doesn't allow
-// `(T) { }` to count as a constant
+static float SCR_ActiveDpiScale()
+{
+	if (scr_text_dpi_scale && scr_text_dpi_scale->value > 0.0f)
+		return scr_text_dpi_scale->value;
+	return 0.0f;
+}
+
+static float SCR_DefaultOutlineThickness()
+{
+	if (scr_text_outline && scr_text_outline->value > 0.0f)
+		return scr_text_outline->value;
+	return 0.0f;
+}
+
+static color_t SCR_BackgroundColor()
+{
+	const float alpha = (scr_text_bg_alpha && scr_text_bg_alpha->value > 0.0f)
+		? std::clamp(scr_text_bg_alpha->value, 0.0f, 1.0f)
+		: 0.0f;
+	if (alpha <= 0.0f)
+		return ColorA(0);
+	return ColorRGBA(0, 0, 0, static_cast<uint8_t>(alpha * 255.0f));
+}
+
+static bool SCR_ShouldDrawTextBackground()
+{
+	return scr_text_bg && scr_text_bg->integer != 0 && SCR_BackgroundColor().a != 0;
+}
+
+static void SCR_FillTextRequest(text_render_request_t& req, int x, int y, int scale, int flags,
+                                size_t maxlen, const char* text, color_t color, qhandle_t font)
+{
+	req = {};
+	req.x = x;
+	req.y = y;
+	req.scale = std::max(scale, 1);
+	req.flags = flags;
+	req.max_bytes = maxlen;
+	req.text = text;
+	req.base_color = color;
+	req.font = font;
+	req.kfont = SCR_ShouldUseKFont() ? &scr.kfont : nullptr;
+	req.style.allow_color_codes = !(flags & UI_IGNORECOLOR);
+	req.dpi_scale = SCR_ActiveDpiScale();
+	const float outline = SCR_DefaultOutlineThickness();
+	if (outline > 0.0f) {
+		req.style.outline_thickness = outline;
+		req.style.outline_color = ColorA(color.a);
+	}
+#if USE_FREETYPE
+	if (SCR_ShouldUseFreeType(font))
+		req.ftfont = SCR_FTFontForHandle(font);
+#endif
+	if (gl_fontshadow->integer > 0) {
+		const float offset = static_cast<float>(req.scale);
+		req.style.shadow.offset_x = offset;
+		req.style.shadow.offset_y = offset;
+		req.style.shadow.color = ColorA(color.a);
+	}
+}
 
 
 #if USE_FREETYPE
@@ -750,35 +812,17 @@ qhandle_t SCR_DefaultFontHandle(void)
 
 int SCR_FontLineHeight(int scale, qhandle_t font)
 {
-	const int clampedScale = std::max(scale, 1);
-#if USE_FREETYPE
-	if (SCR_ShouldUseFreeType(font)) {
-		if (const ftfont_t* ftFont = SCR_FTFontForHandle(font))
-			return Q_rint(R_FreeTypeFontLineHeight(clampedScale, ftFont));
-	}
-#endif
-	if (SCR_ShouldUseKFont() && scr.kfont.line_height)
-		return scr.kfont.line_height * clampedScale;
-	return CONCHAR_HEIGHT * clampedScale;
+	text_render_request_t req{};
+	SCR_FillTextRequest(req, 0, 0, scale, 0, 0, nullptr, COLOR_WHITE, font);
+	return Q_rint(R_TextLineHeight(req));
 }
 
 int SCR_MeasureString(int scale, int flags, size_t maxlen, const char* s, qhandle_t font)
 {
-        const auto metrics = SCR_TextMetrics(s, maxlen, flags, COLOR_WHITE);
-        const size_t visibleChars = metrics.visibleChars;
-        const size_t processedBytes = metrics.processedBytes;
-
-#if USE_FREETYPE
-	if (SCR_ShouldUseFreeType(font)) {
-                if (const ftfont_t* ftFont = SCR_FTFontForHandle(font))
-                        return R_MeasureFreeTypeString(scale, flags, processedBytes, s, font, ftFont);
-	}
-#endif
-
-	if (SCR_ShouldUseKFont())
-		return SCR_MeasureKFontString(scale, flags, maxlen, s);
-
-	return static_cast<int>(visibleChars) * CONCHAR_WIDTH * std::max(scale, 1);
+	text_render_request_t req{};
+	SCR_FillTextRequest(req, 0, 0, scale, flags, maxlen, s, COLOR_WHITE, font);
+	auto res = R_TextMeasureString(req);
+	return res.width;
 }
 
 /*
@@ -789,55 +833,21 @@ SCR_DrawStringStretch
 int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 	const char* s, color_t color, qhandle_t font)
 {
-        const auto metrics = SCR_TextMetrics(s, maxlen, flags, color);
-        const size_t visibleChars = metrics.visibleChars;
-        const size_t processedBytes = metrics.processedBytes;
-        const int clampedScale = std::max(scale, 1);
-
-#if USE_FREETYPE
-	const bool useFreeType = SCR_ShouldUseFreeType(font);
-	const ftfont_t* ftFont = useFreeType ? SCR_FTFontForHandle(font) : nullptr;
-#else
-	const bool useFreeType = false;
-	const ftfont_t* ftFont = nullptr;
-#endif
-
+	text_render_request_t req{};
+	SCR_FillTextRequest(req, x, y, scale, flags, maxlen, s, color, font);
+	auto measured = R_TextMeasureString(req);
 	if ((flags & UI_CENTER) == UI_CENTER) {
-		int width = 0;
-#if USE_FREETYPE
-                if (useFreeType && ftFont)
-                        width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, processedBytes, s, font, ftFont);
-		else
-#endif
-			if (SCR_ShouldUseKFont())
-				width = SCR_MeasureKFontString(clampedScale, flags & ~UI_MULTILINE, maxlen, s);
-			else
-				width = static_cast<int>(visibleChars) * CONCHAR_WIDTH * clampedScale;
-		x -= width / 2;
-	}
-	else if (flags & UI_RIGHT) {
-		int width = 0;
-#if USE_FREETYPE
-                if (useFreeType && ftFont)
-                        width = R_MeasureFreeTypeString(scale, flags & ~UI_MULTILINE, processedBytes, s, font, ftFont);
-		else
-#endif
-			if (SCR_ShouldUseKFont())
-				width = SCR_MeasureKFontString(clampedScale, flags & ~UI_MULTILINE, maxlen, s);
-			else
-				width = static_cast<int>(visibleChars) * CONCHAR_WIDTH * clampedScale;
-		x -= width;
+		req.x -= measured.width / 2;
+	} else if (flags & UI_RIGHT) {
+		req.x -= measured.width;
 	}
 
-	if (SCR_ShouldUseKFont())
-		return SCR_DrawKFontStringLine(x, y, clampedScale, flags, maxlen, s, color);
+	if (SCR_ShouldDrawTextBackground()) {
+		const color_t bg = SCR_BackgroundColor();
+		R_DrawFill32(req.x, req.y, measured.width, measured.height, bg);
+	}
 
-#if USE_FREETYPE
-        if (useFreeType && ftFont)
-                return R_DrawFreeTypeString(x, y, scale, flags, processedBytes, s, color, font, ftFont);
-#endif
-
-	return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font, nullptr);
+	return R_TextDrawString(req);
 }
 
 
@@ -1283,6 +1293,10 @@ void SCR_InitFontSystem(void)
 #else
 	scr_font = Cvar_Get("scr_font", SCR_LEGACY_FONT, 0);
 #endif
+	scr_text_dpi_scale = Cvar_Get("scr_text_dpi_scale", "0", CVAR_ARCHIVE);
+	scr_text_outline = Cvar_Get("scr_text_outline", "0", CVAR_ARCHIVE);
+	scr_text_bg = Cvar_Get("scr_text_bg", "0", CVAR_ARCHIVE);
+	scr_text_bg_alpha = Cvar_Get("scr_text_bg_alpha", "0.5", CVAR_ARCHIVE);
 	if (scr_font)
 		scr_font->changed = scr_font_changed;
 #if USE_FREETYPE
