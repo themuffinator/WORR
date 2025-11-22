@@ -184,8 +184,9 @@ class FieldItem : public MenuItem {
 
 	~FieldItem() override;
 
-	const inputField_t &GetField() const;
-	std::string GetValue() const;
+const inputField_t &GetField() const;
+std::string GetValue() const;
+void SetValue(const std::string &value);
 
 	protected:
 	void Draw() const override;
@@ -261,7 +262,11 @@ class SliderItem : public MenuItem {
 
 	~SliderItem() override;
 
-	float GetValue() const;
+float GetValue() const;
+void SetValue(float value);
+
+void SetStep(float step);
+void SetRange(float minValue, float maxValue);
 
 	protected:
 	void Draw() const override;

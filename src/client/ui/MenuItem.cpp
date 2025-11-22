@@ -615,6 +615,19 @@ std::string FieldItem::GetValue() const
 
 /*
 =============
+FieldItem::SetValue
+
+Replaces the current input buffer contents with the provided string.
+=============
+*/
+void FieldItem::SetValue(const std::string &value)
+{
+	Q_strncpyz(m_field.text, value.c_str(), sizeof(m_field.text));
+	m_field.cursor = Q_min<int>(static_cast<int>(value.size()), m_field.maxChars);
+}
+
+/*
+=============
 FieldItem::Draw
 
 Renders the label and editable input field with blinking cursor when focused.
@@ -979,6 +992,39 @@ SliderItem::GetValue
 float SliderItem::GetValue() const
 {
 	return m_value;
+}
+
+/*
+=============
+SliderItem::SetValue
+
+Directly sets the slider position without invoking the change callback.
+=============
+*/
+void SliderItem::SetValue(float value)
+{
+	m_value = Q_clipf(value, m_minValue, m_maxValue);
+}
+
+/*
+=============
+SliderItem::SetStep
+=============
+*/
+void SliderItem::SetStep(float step)
+{
+	m_step = step;
+}
+
+/*
+=============
+SliderItem::SetRange
+=============
+*/
+void SliderItem::SetRange(float minValue, float maxValue)
+{
+	m_minValue = minValue;
+	m_maxValue = maxValue;
 }
 
 /*
