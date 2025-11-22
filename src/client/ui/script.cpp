@@ -52,6 +52,9 @@ static cvar_t *ui_menu_context;
 static std::vector<std::string> ui_loadedScripts;
 static char ui_scriptStack[8][MAX_QPATH];
 static int ui_scriptDepth;
+static uiTypographyRole_t UI_TypographyRoleFromString(const char* name);
+static void UI_ClearTypographyFonts(void);
+static void UI_AddTypographyFont(uiTypographyRole_t role, const char* font);
 
 static const char ui_builtinFallback[] = R"({
 "background": "black",
@@ -81,6 +84,67 @@ static void UI_ResetScriptState(void)
 {
 	ui_loadedScripts.clear();
 	ui_scriptDepth = 0;
+
+	UI_ClearTypographyFonts();
+}
+
+/*
+=============
+UI_TypographyRoleFromString
+
+Maps a string identifier to a typography role value.
+=============
+*/
+static uiTypographyRole_t UI_TypographyRoleFromString(const char* name)
+{
+	if (!name || !*name)
+		return UI_TYPO_ROLE_COUNT;
+
+	if (!Q_stricmp(name, "body"))
+		return UI_TYPO_BODY;
+	if (!Q_stricmp(name, "label"))
+		return UI_TYPO_LABEL;
+	if (!Q_stricmp(name, "heading"))
+		return UI_TYPO_HEADING;
+	if (!Q_stricmp(name, "monospace"))
+		return UI_TYPO_MONOSPACE;
+
+	return UI_TYPO_ROLE_COUNT;
+}
+
+/*
+=============
+UI_ClearTypographyFonts
+
+Clears any script-provided font preferences for each typography role.
+=============
+*/
+static void UI_ClearTypographyFonts(void)
+{
+	for (auto &entry : uis.typographyFonts) {
+		entry.clear();
+	}
+}
+
+/*
+=============
+UI_AddTypographyFont
+
+Adds a script-declared font path to the specified typography role without duplicating entries.
+=============
+*/
+static void UI_AddTypographyFont(uiTypographyRole_t role, const char* font)
+{
+	if (role < 0 || role >= UI_TYPO_ROLE_COUNT || !font || !*font)
+		return;
+
+	auto &entry = uis.typographyFonts[role];
+	for (const auto &existing : entry) {
+		if (!Q_stricmp(existing.c_str(), font))
+			return;
+	}
+
+	entry.emplace_back(font);
 }
 
 /*
@@ -1527,6 +1591,62 @@ static void ParseColors(json_parse_t* parser)
 	}
 }
 
+/*
+=============
+ParseRoleFonts
+
+Parses a font path or list of font paths for a typography role.
+=============
+*/
+static void ParseRoleFonts(json_parse_t* parser, uiTypographyRole_t role)
+{
+	if (parser->pos->type == JSMN_ARRAY) {
+		jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+		for (int i = 0; i < array->size; i++) {
+			if (parser->pos->type != JSMN_STRING)
+				Json_Error(parser, parser->pos, "font entries must be strings");
+
+			char* value = Json_CopyStringUI(parser);
+			UI_AddTypographyFont(role, value);
+			Z_Free(value);
+		}
+
+		return;
+	}
+
+	if (parser->pos->type != JSMN_STRING)
+		Json_Error(parser, parser->pos, "font entry must be a string or array");
+
+	char* value = Json_CopyStringUI(parser);
+	UI_AddTypographyFont(role, value);
+	Z_Free(value);
+}
+
+/*
+=============
+ParseFonts
+
+Parses typography font preferences keyed by role names.
+=============
+*/
+static void ParseFonts(json_parse_t* parser)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char roleName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
+		uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
+
+		if (role == UI_TYPO_ROLE_COUNT)
+			Json_Error(parser, parser->pos, "unknown typography role");
+
+		Json_Next(parser);
+		ParseRoleFonts(parser, role);
+	}
+}
+
 static void ParseGlobalBackground(json_parse_t* parser)
 {
 	if (parser->pos->type != JSMN_STRING)
@@ -1590,6 +1710,62 @@ static void ParseModuleList(json_parse_t* parser)
 
 /*
 =============
+ParseRoleFonts
+
+Parses a font path or list of font paths for a typography role.
+=============
+*/
+static void ParseRoleFonts(json_parse_t* parser, uiTypographyRole_t role)
+{
+if (parser->pos->type == JSMN_ARRAY) {
+jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+for (int i = 0; i < array->size; i++) {
+if (parser->pos->type != JSMN_STRING)
+Json_Error(parser, parser->pos, "font entries must be strings");
+
+char* value = Json_CopyStringUI(parser);
+UI_AddTypographyFont(role, value);
+Z_Free(value);
+}
+
+return;
+}
+
+if (parser->pos->type != JSMN_STRING)
+Json_Error(parser, parser->pos, "font entry must be a string or array");
+
+char* value = Json_CopyStringUI(parser);
+UI_AddTypographyFont(role, value);
+Z_Free(value);
+}
+
+/*
+=============
+ParseFonts
+
+Parses typography font preferences keyed by role names.
+=============
+*/
+static void ParseFonts(json_parse_t* parser)
+{
+jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+for (int i = 0; i < object->size; i++) {
+char roleName[MAX_QPATH];
+Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
+uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
+
+if (role == UI_TYPO_ROLE_COUNT)
+Json_Error(parser, parser->pos, "unknown typography role");
+
+Json_Next(parser);
+ParseRoleFonts(parser, role);
+}
+}
+
+/*
+=============
 UI_ParseRoot
 
 Parses the root UI object and dispatches handling for top-level keys.
@@ -1600,19 +1776,27 @@ static void UI_ParseRoot(json_parse_t* parser)
 	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
 
 	for (int i = 0; i < object->size; i++) {
-		if (!Json_Strcmp(parser, "background")) {
-			Json_Next(parser);
-			ParseGlobalBackground(parser);
-		}
-		else if (!Json_Strcmp(parser, "font")) {
-			Json_Next(parser);
-			char* font = Json_CopyStringUI(parser);
-			uis.fontHandle = SCR_RegisterFontPath(font);
-			Z_Free(font);
-		}
-		else if (!Json_Strcmp(parser, "cursor")) {
-			Json_Next(parser);
-			ParseCursor(parser);
+if (!Json_Strcmp(parser, "background")) {
+Json_Next(parser);
+ParseGlobalBackground(parser);
+}
+else if (!Json_Strcmp(parser, "font")) {
+Json_Next(parser);
+char* font = Json_CopyStringUI(parser);
+
+for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
+UI_AddTypographyFont(static_cast<uiTypographyRole_t>(role), font);
+
+uis.fontHandle = SCR_RegisterFontPath(font);
+Z_Free(font);
+}
+else if (!Json_Strcmp(parser, "fonts")) {
+Json_Next(parser);
+ParseFonts(parser);
+}
+else if (!Json_Strcmp(parser, "cursor")) {
+Json_Next(parser);
+ParseCursor(parser);
 		}
 		else if (!Json_Strcmp(parser, "weapon")) {
 			Json_Next(parser);
@@ -2232,5 +2416,7 @@ void UI_LoadScript(void)
 	ui_forceReload = false;
 
 	UI_RegisterBuiltinMenus();
+
+	UI_RefreshFonts();
 }
 

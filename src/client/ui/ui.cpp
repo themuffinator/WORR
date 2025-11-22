@@ -128,8 +128,8 @@ Copies the resolved palette into the UIX theme context.
 */
 void UiManager::SyncPalette(const uiStatic_t &state)
 {
-	if (!m_system) {
-	return;
+if (!m_system) {
+return;
 }
 
 	std::vector<uiPaletteEntry_t> palette;
@@ -138,7 +138,23 @@ void UiManager::SyncPalette(const uiStatic_t &state)
 	palette.push_back(entry);
 }
 
-	m_system->Theme().SetPalette(std::move(palette));
+m_system->Theme().SetPalette(std::move(palette));
+}
+
+/*
+=============
+UiManager::SyncTypography
+
+Copies the resolved typography set into the UIX theme context.
+=============
+*/
+void UiManager::SyncTypography(const uiTypographySet_t &typography)
+{
+	if (!m_system) {
+		return;
+	}
+
+	m_system->Theme().SetTypography(typography);
 }
 
 /*
@@ -1771,28 +1787,53 @@ Rebuilds the typography roles using the latest font handles and scaling data.
 */
 static void UI_UpdateTypographySet(void)
 {
-const int baseHeight = UI_ResolvedFontPixelHeight();
-const qhandle_t primary = uis.fontHandle ? uis.fontHandle : SCR_DefaultFontHandle();
-const qhandle_t mono = uis.fallbackFontHandle ? uis.fallbackFontHandle : primary;
+	const int baseHeight = UI_ResolvedFontPixelHeight();
 
-uiTypographySpec_t body{};
-body.handle = primary;
-body.pixelHeight = baseHeight;
+	uiTypographySpec_t body{};
+	uiTypographySpec_t label{};
+	uiTypographySpec_t heading{};
+	uiTypographySpec_t monospace{};
 
-uiTypographySpec_t label = body;
-label.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 0.95f));
+	const auto &bodyHandles = uis.typographyHandles[UI_TYPO_BODY].empty() ? uis.typographyHandles[UI_TYPO_MONOSPACE] : uis.typographyHandles[UI_TYPO_BODY];
+	const auto &labelHandles = uis.typographyHandles[UI_TYPO_LABEL].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_LABEL];
+	const auto &headingHandles = uis.typographyHandles[UI_TYPO_HEADING].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_HEADING];
+	const auto &monoHandles = uis.typographyHandles[UI_TYPO_MONOSPACE].empty() ? bodyHandles : uis.typographyHandles[UI_TYPO_MONOSPACE];
 
-uiTypographySpec_t heading = body;
-heading.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 1.25f));
+	const auto applyHandles = [](uiTypographySpec_t &spec, const std::vector<qhandle_t> &handles) {
+		spec.handles.clear();
 
-uiTypographySpec_t monospace{};
-monospace.handle = mono;
-monospace.pixelHeight = baseHeight;
+		for (qhandle_t handle : handles) {
+			if (handle)
+				spec.handles.push_back(handle);
+		}
 
-uis.typography.roles[UI_TYPO_BODY] = body;
-uis.typography.roles[UI_TYPO_LABEL] = label;
-uis.typography.roles[UI_TYPO_HEADING] = heading;
-uis.typography.roles[UI_TYPO_MONOSPACE] = monospace;
+		if (spec.handles.empty()) {
+			const qhandle_t fallback = SCR_DefaultFontHandle();
+			if (fallback)
+				spec.handles.push_back(fallback);
+		}
+	};
+
+	applyHandles(body, bodyHandles);
+	applyHandles(label, labelHandles);
+	applyHandles(heading, headingHandles);
+	applyHandles(monospace, monoHandles);
+
+	body.pixelHeight = baseHeight;
+	label.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 0.95f));
+	heading.pixelHeight = UI_ScaledFontSize(Q_rint(baseHeight * 1.25f));
+	monospace.pixelHeight = baseHeight;
+
+	uis.typography.roles[UI_TYPO_BODY] = body;
+	uis.typography.roles[UI_TYPO_LABEL] = label;
+	uis.typography.roles[UI_TYPO_HEADING] = heading;
+	uis.typography.roles[UI_TYPO_MONOSPACE] = monospace;
+
+	uis.fontHandle = UI_FontForRole(UI_TYPO_BODY);
+	const auto &bodyChain = uis.typography.roles[UI_TYPO_BODY].handles;
+	uis.fallbackFontHandle = bodyChain.size() > 1 ? bodyChain[1] : UI_FontForRole(UI_TYPO_MONOSPACE);
+
+	UI_GetManager().SyncTypography(uis.typography);
 }
 
 /*
@@ -1804,32 +1845,122 @@ Registers the requested font path with a pixel height tuned for the active DPI.
 */
 static qhandle_t UI_RegisterScaledFont(const char *path, int pixelHeight)
 {
-if (!path || !*path)
-return 0;
+	if (!path || !*path)
+		return 0;
 
-return SCR_RegisterFontPathWithSize(path, pixelHeight);
+	return SCR_RegisterFontPathWithSize(path, pixelHeight);
+}
+
+/*
+=============
+UI_ClearTypographyHandles
+
+Clears cached typography handles for each role.
+=============
+*/
+static void UI_ClearTypographyHandles(void)
+{
+	for (auto &entry : uis.typographyHandles) {
+		entry.clear();
+	}
+}
+
+/*
+=============
+UI_AppendFontPath
+
+Adds a unique font path to the provided collection.
+=============
+*/
+static void UI_AppendFontPath(std::vector<std::string> &paths, const char *path)
+{
+	if (!path || !*path)
+		return;
+
+	for (const auto &existing : paths) {
+		if (!Q_stricmp(existing.c_str(), path))
+			return;
+	}
+
+	paths.emplace_back(path);
+}
+
+/*
+=============
+UI_FontPathsForRole
+
+Builds an ordered list of font paths for a typography role using cvars, script data, and defaults.
+=============
+*/
+static std::vector<std::string> UI_FontPathsForRole(uiTypographyRole_t role)
+{
+	std::vector<std::string> paths;
+
+	if (ui_font && ui_font->string[0])
+		UI_AppendFontPath(paths, ui_font->string);
+
+	for (const auto &preferred : uis.typographyFonts[role])
+		UI_AppendFontPath(paths, preferred.c_str());
+
+	if (role != UI_TYPO_BODY) {
+		for (const auto &fallback : uis.typographyFonts[UI_TYPO_BODY])
+			UI_AppendFontPath(paths, fallback.c_str());
+	}
+
+	if (ui_font_fallback && ui_font_fallback->string[0])
+		UI_AppendFontPath(paths, ui_font_fallback->string);
+
+	UI_AppendFontPath(paths, "conchars.pcx");
+
+	return paths;
+}
+
+/*
+=============
+UI_RegisterTypographyRole
+
+Registers all font paths for a typography role at the desired pixel height.
+=============
+*/
+static void UI_RegisterTypographyRole(uiTypographyRole_t role, int pixelHeight)
+{
+	std::vector<std::string> paths = UI_FontPathsForRole(role);
+	auto &handles = uis.typographyHandles[role];
+
+	handles.clear();
+
+	for (const auto &path : paths) {
+		qhandle_t handle = UI_RegisterScaledFont(path.c_str(), pixelHeight);
+		if (handle)
+			handles.push_back(handle);
+	}
+
+	if (handles.empty()) {
+		qhandle_t fallback = SCR_DefaultFontHandle();
+		if (fallback)
+			handles.push_back(fallback);
+	}
 }
 
 /*
 =============
 UI_RefreshFonts
 
-Reloads the UI font handles using the configured primary and fallback font paths.
+Reloads UI typography handles using configured font paths and fallbacks.
 =============
 */
-static void UI_RefreshFonts(void)
+void UI_RefreshFonts(void)
 {
-const int pixelHeight = UI_ResolvedFontPixelHeight();
-uis.fontPixelHeight = pixelHeight;
-		uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
-	if (!uis.fontHandle)
-	uis.fontHandle = SCR_DefaultFontHandle();
-	uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
-if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
-uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
+	const int pixelHeight = UI_ResolvedFontPixelHeight();
+	uis.fontPixelHeight = pixelHeight;
 
-UI_UpdateLayoutMetrics();
-UI_UpdateTypographySet();
+	UI_ClearTypographyHandles();
+
+	for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
+		UI_RegisterTypographyRole(static_cast<uiTypographyRole_t>(role), pixelHeight);
+
+	UI_UpdateLayoutMetrics();
+	UI_UpdateTypographySet();
 }
 
 /*
@@ -2052,16 +2183,18 @@ Returns the most appropriate font handle for the provided string, honoring fallb
 */
 static qhandle_t UI_SelectFontHandle(const char *string, int flags)
 {
-if (uis.fontHandle) {
-const int width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
-if (width > 0)
-return uis.fontHandle;
-}
+	const auto &handles = uis.typography.roles[UI_TYPO_BODY].handles;
 
-if (uis.fallbackFontHandle)
-return uis.fallbackFontHandle;
+	for (qhandle_t handle : handles) {
+		const int width = SCR_MeasureString(1, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, handle);
+		if (width > 0)
+			return handle;
+	}
 
-return SCR_DefaultFontHandle();
+	if (uis.fallbackFontHandle)
+		return uis.fallbackFontHandle;
+
+	return SCR_DefaultFontHandle();
 }
 
 /*
@@ -2073,17 +2206,18 @@ Returns the configured font handle for a typography role.
 */
 qhandle_t UI_FontForRole(uiTypographyRole_t role)
 {
-if (role < 0 || role >= UI_TYPO_ROLE_COUNT) {
-return SCR_DefaultFontHandle();
-}
+	if (role < 0 || role >= UI_TYPO_ROLE_COUNT) {
+		return SCR_DefaultFontHandle();
+	}
 
-qhandle_t handle = uis.typography.roles[role].handle;
+	const auto &handles = uis.typography.roles[role].handles;
 
-if (!handle) {
-return SCR_DefaultFontHandle();
-}
+	for (qhandle_t handle : handles) {
+		if (handle)
+			return handle;
+	}
 
-return handle;
+	return SCR_DefaultFontHandle();
 }
 
 /*
