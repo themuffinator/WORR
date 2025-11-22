@@ -543,6 +543,20 @@ extern list_t       ui_menus;
 
 extern cvar_t       *ui_debug;
 
+typedef enum uiScriptContext_e {
+	UI_SCRIPT_MAIN,
+	UI_SCRIPT_INGAME
+} uiScriptContext_t;
+
+	void	UI_InitScriptController(void);
+	void	UI_SyncMenuContext(void);
+	void	UI_SetMenuContext(const char *context);
+	const char	*UI_ActiveMenuContextName(void);
+	void	UI_RequestMenuReload(void);
+
+	void	UI_ClearMenus(void);
+	void	UI_RegisterBuiltinMenus(void);
+
 	void        UI_PushMenu(menuFrameWork_t *menu);
 	void        UI_ForceMenuOff(void);
 	void        UI_PopMenu(void);

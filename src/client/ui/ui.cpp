@@ -878,37 +878,39 @@ UI_OpenMenu
 */
 void UI_OpenMenu(uiMenu_t type)
 {
-    menuFrameWork_t *menu = NULL;
+	menuFrameWork_t *menu = NULL;
 
-    if (!uis.initialized) {
-        return;
-    }
+	if (!uis.initialized) {
+		return;
+	}
 
-    // close any existing menus
-    UI_ForceMenuOff();
+	UI_SyncMenuContext();
 
-    switch (type) {
-    case UIMENU_DEFAULT:
-        if (ui_open->integer) {
-            menu = UI_FindMenu("main");
-        }
-        break;
-    case UIMENU_MAIN:
-        menu = UI_FindMenu("main");
-        break;
-    case UIMENU_GAME:
-        menu = UI_FindMenu("game");
-        if (!menu) {
-            menu = UI_FindMenu("main");
-        }
-        break;
-    case UIMENU_NONE:
-        break;
-    default:
-        Q_assert(!"bad menu");
-    }
+	// close any existing menus
+	UI_ForceMenuOff();
 
-    UI_PushMenu(menu);
+	switch (type) {
+	case UIMENU_DEFAULT:
+		if (ui_open->integer) {
+			menu = UI_FindMenu("main");
+		}
+		break;
+	case UIMENU_MAIN:
+		menu = UI_FindMenu("main");
+		break;
+	case UIMENU_GAME:
+		menu = UI_FindMenu("game");
+		if (!menu) {
+			menu = UI_FindMenu("main");
+		}
+		break;
+	case UIMENU_NONE:
+		break;
+	default:
+		Q_assert(!"bad menu");
+	}
+
+	UI_PushMenu(menu);
 }
 
 //=============================================================================
@@ -1277,36 +1279,69 @@ static void UI_PushMenu_c(genctx_t *ctx, int argnum)
 
 static void UI_PushMenu_f(void)
 {
-    menuFrameWork_t *menu;
-    char *s;
+	menuFrameWork_t *menu;
+	char *s;
 
-    if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
-        return;
-    }
-    s = Cmd_Argv(1);
-    menu = UI_FindMenu(s);
-    if (menu) {
-        UI_PushMenu(menu);
-    } else {
-        Com_Printf("No such menu: %s\n", s);
-    }
+	if (Cmd_Argc() < 2) {
+		Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
+		return;
+	}
+	s = Cmd_Argv(1);
+	menu = UI_FindMenu(s);
+	if (menu) {
+		UI_PushMenu(menu);
+	} else {
+		Com_Printf("No such menu: %s\n", s);
+	}
 }
 
 static void UI_PopMenu_f(void)
 {
-    if (uis.activeMenu) {
-        UI_PopMenu();
-    }
+	if (uis.activeMenu) {
+		UI_PopMenu();
+	}
+}
+
+/*
+=============
+UI_ReloadMenus_f
+
+Console command to force reloading menu scripts.
+=============
+*/
+static void UI_ReloadMenus_f(void)
+{
+	UI_RequestMenuReload();
+	UI_SyncMenuContext();
+}
+
+/*
+=============
+UI_SetMenuContext_f
+
+Console command to select the active menu script context.
+=============
+*/
+static void UI_SetMenuContext_f(void)
+{
+	if (Cmd_Argc() < 2) {
+		Com_Printf("Usage: %s <main|ingame|auto>\n", Cmd_Argv(0));
+		return;
+	}
+
+	UI_SetMenuContext(Cmd_Argv(1));
+	UI_SyncMenuContext();
 }
 
 
 static const cmdreg_t c_ui[] = {
-    { "forcemenuoff", UI_ForceMenuOff },
-    { "pushmenu", UI_PushMenu_f, UI_PushMenu_c },
-    { "popmenu", UI_PopMenu_f },
+	{ "forcemenuoff", UI_ForceMenuOff },
+	{ "pushmenu", UI_PushMenu_f, UI_PushMenu_c },
+	{ "popmenu", UI_PopMenu_f },
+	{ "ui_reloadmenus", UI_ReloadMenus_f },
+	{ "ui_setcontext", UI_SetMenuContext_f },
 
-    { NULL, NULL }
+	{ NULL, NULL }
 };
 
 static void ui_scale_changed(cvar_t *self)
@@ -1675,18 +1710,51 @@ void UI_ModeChanged(void)
     UI_Resize();
 }
 
+/*
+=================
+UI_FreeMenus
+
+Releases all registered menus.
+=================
+*/
 static void UI_FreeMenus(void)
 {
-    menuFrameWork_t *menu, *next;
+	menuFrameWork_t *menu, *next;
 
-    LIST_FOR_EACH_SAFE(menuFrameWork_t, menu, next, &ui_menus, entry) {
-        if (menu->free) {
-            menu->free(menu);
-        }
-    }
-    List_Init(&ui_menus);
+	LIST_FOR_EACH_SAFE(menuFrameWork_t, menu, next, &ui_menus, entry) {
+		if (menu->free) {
+			menu->free(menu);
+		}
+	}
+	List_Init(&ui_menus);
 }
 
+/*
+=================
+UI_ClearMenus
+
+Closes any active menus and clears the menu list.
+=================
+*/
+void UI_ClearMenus(void)
+{
+	UI_ForceMenuOff();
+	UI_FreeMenus();
+}
+
+/*
+=================
+UI_RegisterBuiltinMenus
+
+Registers built-in menu definitions.
+=================
+*/
+void UI_RegisterBuiltinMenus(void)
+{
+	M_Menu_PlayerConfig();
+	M_Menu_Servers();
+	M_Menu_Demos();
+}
 
 /*
 =================
@@ -1695,41 +1763,35 @@ UI_Init
 */
 void UI_Init(void)
 {
-    Cmd_Register(c_ui);
+	Cmd_Register(c_ui);
 
-    ui_debug = Cvar_Get("ui_debug", "0", 0);
-    ui_open = Cvar_Get("ui_open", "0", 0);
+	ui_debug = Cvar_Get("ui_debug", "0", 0);
+	ui_open = Cvar_Get("ui_open", "0", 0);
 
-    UI_ModeChanged();
+	UI_InitScriptController();
+	UI_ModeChanged();
 
-    uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
-    uis.cursorHandle = R_RegisterPic("ch1");
-    R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
+	uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
+	uis.cursorHandle = R_RegisterPic("ch1");
+	R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
 
-    for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
-        uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
-    }
+	for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
+		uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
+	}
 
-    UI_PopulateDefaultPalette(false);
-    UI_UpdateLegacyColorsFromPalette();
-    UI_UpdateTypographySet();
+	UI_PopulateDefaultPalette(false);
+	UI_UpdateLegacyColorsFromPalette();
+	UI_UpdateTypographySet();
 
-    strcpy(uis.weaponModel, "w_railgun.md2");
+	strcpy(uis.weaponModel, "w_railgun.md2");
 
-    // load mapdb
-    UI_MapDB_Init();
+	UI_MapDB_Init();
 
-    // load custom menus
-    UI_LoadScript();
+	UI_LoadScript();
 
-    // load built-in menus
-    M_Menu_PlayerConfig();
-    M_Menu_Servers();
-    M_Menu_Demos();
+	Com_DPrintf("Registered %d menus.\n", List_Count(&ui_menus));
 
-    Com_DPrintf("Registered %d menus.\n", List_Count(&ui_menus));
-
-    uis.initialized = true;
+	uis.initialized = true;
 }
 
 /*

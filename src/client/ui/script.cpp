@@ -26,6 +26,24 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 extern const char res_worr_menu[];
 extern const size_t res_worr_menu_size;
 
+#define UI_MANIFEST_FILE "menus/index.json"
+
+typedef struct uiScriptSource_s {
+	char	path[MAX_QPATH];
+	char	override_path[MAX_QPATH];
+} uiScriptSource_t;
+
+typedef struct uiScriptManifest_s {
+	uiScriptSource_t	mainScript;
+	uiScriptSource_t	ingameScript;
+} uiScriptManifest_t;
+
+static uiScriptManifest_t ui_manifest;
+static uiScriptContext_t ui_activeContext = UI_SCRIPT_MAIN;
+static bool ui_scriptLoaded;
+static bool ui_forceReload;
+static cvar_t *ui_menu_context;
+
 static menuSound_t Activate(menuCommon_t* self)
 {
 	switch (self->type) {
@@ -1404,22 +1422,143 @@ static void UI_ParseJsonBuffer(json_parse_t* parser, const char* buffer, size_t 
 
 /*
 =============
-UI_TryLoadMenuFromFile
+UI_ResetManifest
 
-Attempts to load the UI definition from the filesystem.
+Resets the script manifest entries to defaults.
 =============
 */
-static bool UI_TryLoadMenuFromFile(json_parse_t* parser)
+static void UI_ResetManifest(uiScriptManifest_t* manifest)
 {
-	if (Json_ErrorHandler(parser)) {
-		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
-		Json_Free(parser);
+	Q_assert(manifest);
+
+	memset(manifest, 0, sizeof(*manifest));
+	Q_strlcpy(manifest->mainScript.path, UI_DEFAULT_FILE, sizeof(manifest->mainScript.path));
+}
+
+/*
+=============
+UI_ParseManifestOverrides
+
+Parses override entries that can replace default script paths.
+=============
+*/
+static void UI_ParseManifestOverrides(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		if (!Json_Strcmp(parser, "main")) {
+			Json_Next(parser);
+			Json_CopyStringToBuffer(parser, manifest->mainScript.override_path, sizeof(manifest->mainScript.override_path));
+		}
+		else if (!Json_Strcmp(parser, "ingame")) {
+			Json_Next(parser);
+			Json_CopyStringToBuffer(parser, manifest->ingameScript.override_path, sizeof(manifest->ingameScript.override_path));
+		}
+		else {
+			Json_Next(parser);
+			Json_SkipToken(parser);
+		}
+	}
+}
+
+/*
+=============
+UI_ParseManifest
+
+Parses the top-level menu manifest to find script sources.
+=============
+*/
+static void UI_ParseManifest(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		if (!Json_Strcmp(parser, "main")) {
+			Json_Next(parser);
+			Json_CopyStringToBuffer(parser, manifest->mainScript.path, sizeof(manifest->mainScript.path));
+		}
+		else if (!Json_Strcmp(parser, "ingame")) {
+			Json_Next(parser);
+			Json_CopyStringToBuffer(parser, manifest->ingameScript.path, sizeof(manifest->ingameScript.path));
+		}
+		else if (!Json_Strcmp(parser, "overrides")) {
+			Json_Next(parser);
+			UI_ParseManifestOverrides(parser, manifest);
+		}
+		else {
+			Json_Next(parser);
+			Json_SkipToken(parser);
+		}
+	}
+}
+
+/*
+=============
+UI_LoadManifest
+
+Loads the manifest describing available menu scripts.
+=============
+*/
+static void UI_LoadManifest(uiScriptManifest_t* manifest)
+{
+	json_parse_t parser = {};
+
+	UI_ResetManifest(manifest);
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_MANIFEST_FILE, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		return;
+	}
+
+	Json_Load(UI_MANIFEST_FILE, &parser);
+	UI_ParseManifest(&parser, manifest);
+	Json_Free(&parser);
+}
+
+/*
+=============
+UI_DetermineDesiredContext
+
+Resolves the target script context based on cvars and game state.
+=============
+*/
+static uiScriptContext_t UI_DetermineDesiredContext(void)
+{
+	if (ui_menu_context && ui_menu_context->string[0]) {
+		if (!Q_stricmp(ui_menu_context->string, "main"))
+			return UI_SCRIPT_MAIN;
+		if (!Q_stricmp(ui_menu_context->string, "ingame"))
+			return UI_SCRIPT_INGAME;
+	}
+
+	if (cls.state >= ca_active)
+		return UI_SCRIPT_INGAME;
+
+	return UI_SCRIPT_MAIN;
+}
+
+/*
+=============
+UI_LoadMenuScriptFromFile
+
+Attempts to load a menu script from the filesystem.
+=============
+*/
+static bool UI_LoadMenuScriptFromFile(const char* filename)
+{
+	json_parse_t parser = {};
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", filename, parser.error_loc, parser.error);
+		Json_Free(&parser);
 		return false;
 	}
 
-	Json_Load(UI_DEFAULT_FILE, parser);
-	UI_ParseRoot(parser);
-	Json_Free(parser);
+	Json_Load(filename, &parser);
+	UI_ParseRoot(&parser);
+	Json_Free(&parser);
 	return true;
 }
 
@@ -1430,18 +1569,135 @@ UI_LoadEmbeddedMenu
 Loads the embedded fallback UI definition when the filesystem copy is unavailable.
 =============
 */
-static bool UI_LoadEmbeddedMenu(json_parse_t* parser)
+static bool UI_LoadEmbeddedMenu(void)
 {
-	if (Json_ErrorHandler(parser)) {
-		Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
-		Json_Free(parser);
+	json_parse_t parser = {};
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser.error_loc, parser.error);
+		Json_Free(&parser);
 		return false;
 	}
 
-	UI_ParseJsonBuffer(parser, res_worr_menu, res_worr_menu_size);
-	UI_ParseRoot(parser);
-	Json_Free(parser);
+	UI_ParseJsonBuffer(&parser, res_worr_menu, res_worr_menu_size);
+	UI_ParseRoot(&parser);
+	Json_Free(&parser);
 	return true;
+}
+
+/*
+=============
+UI_AttemptMenuLoad
+
+Attempts to load the desired script with fallbacks.
+=============
+*/
+static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
+{
+	struct {
+		const char* path;
+		uiScriptContext_t context;
+	} candidates[5];
+	int numCandidates = 0;
+
+	if (desired == UI_SCRIPT_INGAME) {
+		if (ui_manifest.ingameScript.override_path[0])
+			candidates[numCandidates++] = { ui_manifest.ingameScript.override_path, UI_SCRIPT_INGAME };
+		if (ui_manifest.ingameScript.path[0])
+			candidates[numCandidates++] = { ui_manifest.ingameScript.path, UI_SCRIPT_INGAME };
+	}
+
+	if (ui_manifest.mainScript.override_path[0])
+		candidates[numCandidates++] = { ui_manifest.mainScript.override_path, UI_SCRIPT_MAIN };
+
+	if (ui_manifest.mainScript.path[0])
+		candidates[numCandidates++] = { ui_manifest.mainScript.path, UI_SCRIPT_MAIN };
+
+	for (int i = 0; i < numCandidates; i++) {
+		if (!candidates[i].path[0])
+			continue;
+
+		if (UI_LoadMenuScriptFromFile(candidates[i].path)) {
+			ui_activeContext = candidates[i].context;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+=============
+UI_InitScriptController
+
+Initializes script controller state and cvars.
+=============
+*/
+void UI_InitScriptController(void)
+{
+	ui_menu_context = Cvar_Get("ui_menu_context", "auto", 0);
+	ui_forceReload = true;
+}
+
+/*
+=============
+UI_SyncMenuContext
+
+Ensures the active menu script matches the current context.
+=============
+*/
+void UI_SyncMenuContext(void)
+{
+	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
+
+	if (!ui_scriptLoaded || ui_forceReload || desiredContext != ui_activeContext)
+		UI_LoadScript();
+}
+
+/*
+=============
+UI_SetMenuContext
+
+Sets the desired context via cvar and schedules a reload.
+=============
+*/
+void UI_SetMenuContext(const char* context)
+{
+	if (!ui_menu_context || !context || !context[0])
+		return;
+
+	Cvar_Set(ui_menu_context->name, context);
+	ui_forceReload = true;
+}
+
+/*
+=============
+UI_ActiveMenuContextName
+
+Returns the name of the currently active script context.
+=============
+*/
+const char* UI_ActiveMenuContextName(void)
+{
+	switch (ui_activeContext) {
+	case UI_SCRIPT_INGAME:
+		return "ingame";
+	case UI_SCRIPT_MAIN:
+	default:
+		return "main";
+	}
+}
+
+/*
+=============
+UI_RequestMenuReload
+
+Flags that scripts should be reloaded on next sync.
+=============
+*/
+void UI_RequestMenuReload(void)
+{
+	ui_forceReload = true;
 }
 
 /*
@@ -1451,13 +1707,22 @@ UI_LoadScript
 */
 void UI_LoadScript(void)
 {
-	json_parse_t parser = {};
+	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
 
-	if (!UI_TryLoadMenuFromFile(&parser)) {
-		parser = {};
+	UI_ClearMenus();
+
+	UI_LoadManifest(&ui_manifest);
+
+	if (!UI_AttemptMenuLoad(desiredContext)) {
 		Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
-		if (!UI_LoadEmbeddedMenu(&parser))
+		if (!UI_LoadEmbeddedMenu())
 			return;
+		ui_activeContext = UI_SCRIPT_MAIN;
 	}
+
+	ui_scriptLoaded = true;
+	ui_forceReload = false;
+
+	UI_RegisterBuiltinMenus();
 }
 
