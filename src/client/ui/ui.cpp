@@ -33,6 +33,340 @@ static cvar_t    *ui_font_size;
 static cvar_t    *ui_cursor_theme;
 static cvar_t    *ui_color_theme;
 
+static void UI_UpdateLayoutMetrics(void);
+
+/*
+=============
+UI_Percent
+
+Builds a percentage-based layout value.
+=============
+*/
+uiLayoutValue_t UI_Percent(float percent)
+{
+	uiLayoutValue_t value;
+	
+	value.value = percent;
+	value.unit = UI_UNIT_PERCENT;
+	
+	return value;
+}
+
+/*
+=============
+UI_Pixels
+
+Builds a pixel-based layout value.
+=============
+*/
+uiLayoutValue_t UI_Pixels(float pixels)
+{
+	uiLayoutValue_t value;
+	
+	value.value = pixels;
+	value.unit = UI_UNIT_PIXELS;
+	
+	return value;
+}
+
+/*
+=============
+UI_ResolveLayoutValue
+
+Converts a relative layout value into pixels using the provided reference.
+=============
+*/
+int UI_ResolveLayoutValue(const uiLayoutValue_t *value, int reference)
+{
+	if (!value) {
+	return 0;
+	}
+	
+	switch (value->unit) {
+	case UI_UNIT_PERCENT:
+	return Q_rint(value->value * reference);
+	case UI_UNIT_PIXELS:
+	default:
+	return Q_rint(value->value);
+	}
+}
+
+/*
+=============
+UI_LayoutToPixels
+
+Resolves a relative layout rectangle into pixel bounds within the provided parent.
+=============
+*/
+vrect_t UI_LayoutToPixels(const uiLayoutRect_t *rect, const vrect_t *parent)
+{
+	vrect_t resolved{};
+	vrect_t root{};
+	
+	if (parent) {
+	root = *parent;
+	} else {
+	root.x = 0;
+	root.y = 0;
+	root.width = uis.layout.screenWidth;
+	root.height = uis.layout.screenHeight;
+	}
+	
+	resolved.x = root.x + UI_ResolveLayoutValue(&rect->x, root.width);
+	resolved.y = root.y + UI_ResolveLayoutValue(&rect->y, root.height);
+	resolved.width = UI_ResolveLayoutValue(&rect->width, root.width);
+	resolved.height = UI_ResolveLayoutValue(&rect->height, root.height);
+	
+	if (rect->padding) {
+	resolved.x += rect->padding;
+	resolved.y += rect->padding;
+	resolved.width -= rect->padding * 2;
+	resolved.height -= rect->padding * 2;
+	
+	if (resolved.width < 0) {
+	resolved.width = 0;
+	}
+	if (resolved.height < 0) {
+	resolved.height = 0;
+	}
+	}
+	
+	return resolved;
+}
+
+/*
+=============
+UI_SplitLayoutRow
+
+Splits a resolved layout rectangle into label and field regions using percentages.
+=============
+*/
+uiLayoutSplit_t UI_SplitLayoutRow(const uiLayoutRect_t *rect, const vrect_t *parent, float labelPercent)
+{
+	uiLayoutSplit_t split{};
+	
+	split.bounds = UI_LayoutToPixels(rect, parent);
+	
+	const int spacing = rect ? rect->spacing : 0;
+	const int labelWidth = Q_rint(split.bounds.width * labelPercent);
+	const int fieldStart = split.bounds.x + labelWidth + spacing;
+	const int availableWidth = split.bounds.width - labelWidth - spacing;
+	
+	split.label.x = split.bounds.x;
+	split.label.y = split.bounds.y;
+	split.label.width = labelWidth;
+	split.label.height = split.bounds.height;
+	
+	split.field.x = fieldStart;
+	split.field.y = split.bounds.y;
+	split.field.width = availableWidth > 0 ? availableWidth : 0;
+	split.field.height = split.bounds.height;
+	
+	return split;
+	}
+	
+/*
+=============
+UI_GenericSpacing
+
+Returns the scaled spacing for a base measurement.
+=============
+*/
+int UI_GenericSpacing(int base)
+	{
+	if (base <= 0) {
+	return 0;
+	}
+	
+	return base + base / 4;
+	}
+	
+/*
+=============
+UI_MenuSpacing
+
+Returns the DPI-aware spacing used for menu row separation.
+=============
+*/
+int UI_MenuSpacing(void)
+	{
+	if (uis.layout.menuSpacing > 0) {
+	return uis.layout.menuSpacing;
+	}
+	
+	return UI_GenericSpacing(CONCHAR_HEIGHT);
+	}
+	
+/*
+=============
+UI_ListSpacing
+
+Returns the DPI-aware spacing used for list rows.
+=============
+*/
+int UI_ListSpacing(void)
+	{
+	if (uis.layout.listSpacing > 0) {
+	return uis.layout.listSpacing;
+	}
+	
+	return UI_GenericSpacing(CONCHAR_HEIGHT);
+	}
+	
+/*
+=============
+UI_ListScrollbarWidth
+
+Returns the DPI-aware scrollbar width for lists.
+=============
+*/
+int UI_ListScrollbarWidth(void)
+	{
+	if (uis.layout.listScrollbarWidth > 0) {
+	return uis.layout.listScrollbarWidth;
+	}
+
+return UI_GenericSpacing(CONCHAR_WIDTH);
+}
+
+/*
+=============
+UI_ListPadding
+	
+	Returns the padding applied to list cells using the current metrics.
+	=============
+	*/
+int UI_ListPadding(void)
+{
+return MLIST_PRESTEP * 2;
+}
+
+/*
+=============
+UI_LeftColumnOffset
+	
+	Returns the left column offset derived from layout metrics.
+	=============
+	*/
+int UI_LeftColumnOffset(void)
+{
+if (uis.layout.columnOffset) {
+return -uis.layout.columnOffset;
+}
+
+return -CONCHAR_WIDTH * 2;
+}
+	
+	/*
+	=============
+	UI_RightColumnOffset
+	
+Returns the right column offset derived from layout metrics.
+=============
+*/
+int UI_RightColumnOffset(void)
+{
+if (uis.layout.columnOffset) {
+return uis.layout.columnOffset;
+}
+
+return CONCHAR_WIDTH * 2;
+}
+
+/*
+=============
+UI_ColumnPadding
+
+Returns the padding between paired columns.
+=============
+*/
+int UI_ColumnPadding(void)
+{
+if (uis.layout.columnPadding) {
+return uis.layout.columnPadding;
+}
+
+return CONCHAR_WIDTH * 4;
+}
+
+/*
+=============
+UI_CharWidth
+
+Returns the active UI character width.
+=============
+*/
+int UI_CharWidth(void)
+{
+if (uis.layout.charWidth > 0) {
+return uis.layout.charWidth;
+}
+
+return CONCHAR_WIDTH;
+}
+
+/*
+=============
+UI_CharHeight
+
+Returns the active UI character height.
+=============
+*/
+int UI_CharHeight(void)
+{
+	if (uis.layout.charHeight > 0) {
+	return uis.layout.charHeight;
+	}
+	
+	return CONCHAR_HEIGHT;
+}
+
+/*
+=============
+UI_UpdateLayoutMetrics
+
+Refreshes layout measurements using the active screen size and font metrics.
+=============
+*/
+static void UI_UpdateLayoutMetrics(void)
+{
+	uiLayoutMetrics_t metrics{};
+	uiLayoutValue_t columnValue = UI_Percent(0.05f);
+	
+	metrics.screenWidth = uis.width;
+	metrics.screenHeight = uis.height;
+	metrics.dpiScale = static_cast<float>(get_auto_scale());
+	
+	if (metrics.dpiScale < 1.0f) {
+	metrics.dpiScale = 1.0f;
+	}
+	
+	qhandle_t handle = uis.fontHandle ? uis.fontHandle : SCR_DefaultFontHandle();
+	metrics.charHeight = SCR_FontLineHeight(1, handle);
+	metrics.charWidth = SCR_MeasureString(1, UI_LEFT, 1, "M", handle);
+	
+	if (metrics.charWidth <= 0) {
+	metrics.charWidth = Q_rint(CONCHAR_WIDTH * metrics.dpiScale);
+	}
+	if (metrics.charHeight <= 0) {
+	metrics.charHeight = Q_rint(CONCHAR_HEIGHT * metrics.dpiScale);
+	}
+	
+	metrics.genericSpacing = UI_GenericSpacing(metrics.charHeight);
+	metrics.menuSpacing = metrics.genericSpacing;
+	metrics.listSpacing = metrics.genericSpacing;
+	metrics.listScrollbarWidth = UI_GenericSpacing(metrics.charWidth);
+	
+	metrics.columnOffset = UI_ResolveLayoutValue(&columnValue, metrics.screenWidth);
+	if (metrics.columnOffset < metrics.charWidth * 2) {
+	metrics.columnOffset = metrics.charWidth * 2;
+	}
+	
+	metrics.columnPadding = metrics.columnOffset + metrics.charWidth;
+	
+	uis.layout = metrics;
+	}
+
 #define UI_COMPOSITOR_FADE_TIME	200
 #define UI_COMPOSITOR_SLIDE_PIXELS	32
 
@@ -385,19 +719,28 @@ void UI_PushMenu(menuFrameWork_t *menu)
 	}
 }
 
+/*
+=============
+UI_Resize
+
+Recomputes UI scale and layout metrics after a mode change.
+=============
+*/
 static void UI_Resize(void)
 {
-    int i;
-
-    uis.scale = R_ClampScale(ui_scale);
-    uis.width = Q_rint(r_config.width * uis.scale);
-    uis.height = Q_rint(r_config.height * uis.scale);
-
-    for (i = 0; i < uis.menuDepth; i++) {
-        Menu_Init(uis.layers[i]);
-    }
-
-    //CL_WarpMouse(0, 0);
+	int i;
+	
+	uis.scale = R_ClampScale(ui_scale);
+	uis.width = Q_rint(r_config.width * uis.scale);
+	uis.height = Q_rint(r_config.height * uis.scale);
+	
+	UI_UpdateLayoutMetrics();
+	
+	for (i = 0; i < uis.menuDepth; i++) {
+	Menu_Init(uis.layers[i]);
+	}
+	
+	//CL_WarpMouse(0, 0);
 }
 
 
@@ -985,16 +1328,18 @@ Reloads the UI font handles using the configured primary and fallback font paths
 */
 static void UI_RefreshFonts(void)
 {
-const int pixelHeight = UI_ResolvedFontPixelHeight();
-uis.fontPixelHeight = pixelHeight;
-
-uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
-if (!uis.fontHandle)
-uis.fontHandle = SCR_DefaultFontHandle();
-
-uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
-if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
-uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
+	const int pixelHeight = UI_ResolvedFontPixelHeight();
+	uis.fontPixelHeight = pixelHeight;
+	
+	uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
+	if (!uis.fontHandle)
+	uis.fontHandle = SCR_DefaultFontHandle();
+	
+	uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
+	if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
+	uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
+	
+	UI_UpdateLayoutMetrics();
 }
 
 /*

@@ -84,12 +84,68 @@ typedef enum {
     QMS_BEEP
 } menuSound_t;
 
-#define RCOLUMN_OFFSET  (CONCHAR_WIDTH * 2)
-#define LCOLUMN_OFFSET -RCOLUMN_OFFSET
+typedef enum uiLayoutUnit_e {
+	UI_UNIT_PIXELS,
+	UI_UNIT_PERCENT
+} uiLayoutUnit_t;
 
-#define GENERIC_SPACING(x)   ((x) + (x) / 4)
+typedef struct uiLayoutValue_s {
+	float value;
+	uiLayoutUnit_t unit;
+} uiLayoutValue_t;
 
-#define MENU_SPACING    GENERIC_SPACING(CONCHAR_HEIGHT)
+typedef struct uiLayoutRect_s {
+	uiLayoutValue_t x;
+	uiLayoutValue_t y;
+	uiLayoutValue_t width;
+	uiLayoutValue_t height;
+
+	int padding;
+	int spacing;
+} uiLayoutRect_t;
+
+typedef struct uiLayoutMetrics_s {
+	int screenWidth;
+	int screenHeight;
+	float dpiScale;
+
+	int charWidth;
+	int charHeight;
+
+	int genericSpacing;
+	int menuSpacing;
+	int listSpacing;
+	int listScrollbarWidth;
+	int columnOffset;
+	int columnPadding;
+} uiLayoutMetrics_t;
+
+typedef struct uiLayoutSplit_s {
+	vrect_t bounds;
+	vrect_t label;
+	vrect_t field;
+} uiLayoutSplit_t;
+
+	uiLayoutValue_t UI_Percent(float percent);
+	uiLayoutValue_t UI_Pixels(float pixels);
+int UI_ResolveLayoutValue(const uiLayoutValue_t *value, int reference);
+vrect_t UI_LayoutToPixels(const uiLayoutRect_t *rect, const vrect_t *parent);
+uiLayoutSplit_t UI_SplitLayoutRow(const uiLayoutRect_t *rect, const vrect_t *parent, float labelPercent);
+int UI_GenericSpacing(int base);
+int UI_MenuSpacing(void);
+int UI_ListSpacing(void);
+int UI_ListScrollbarWidth(void);
+int UI_LeftColumnOffset(void);
+int UI_RightColumnOffset(void);
+int UI_ColumnPadding(void);
+int UI_CharWidth(void);
+int UI_CharHeight(void);
+#define RCOLUMN_OFFSET	UI_RightColumnOffset()
+#define LCOLUMN_OFFSET	UI_LeftColumnOffset()
+#define GENERIC_SPACING(x)	UI_GenericSpacing(x)
+#define MENU_SPACING	UI_MenuSpacing()
+#define MLIST_SPACING	UI_ListSpacing()
+#define MLIST_SCROLLBAR_WIDTH	UI_ListScrollbarWidth()
 
 #define DOUBLE_CLICK_DELAY    300
 
@@ -162,7 +218,7 @@ typedef struct menuCommon_s {
     char *status;
 
     int x, y;
-    int width, height;
+	int width, height;
 
     int flags;
     int uiFlags;
@@ -181,7 +237,7 @@ typedef struct {
     menuCommon_t generic;
     inputField_t field;
     cvar_t *cvar;
-    int width;
+	int width;
 } menuField_t;
 
 #define SLIDER_RANGE 10
@@ -199,11 +255,10 @@ typedef struct {
 
 #define MAX_COLUMNS     8
 
-#define MLIST_SPACING           GENERIC_SPACING(CONCHAR_HEIGHT)
 #define MLIST_BORDER_WIDTH      1
-#define MLIST_SCROLLBAR_WIDTH   GENERIC_SPACING(CONCHAR_WIDTH)
 #define MLIST_PRESTEP           3
-#define MLIST_PADDING           (MLIST_PRESTEP*2)
+
+	int UI_ListPadding(void);
 
 #define MLF_HEADER      BIT(0)
 #define MLF_SCROLLBAR   BIT(1)
@@ -211,7 +266,7 @@ typedef struct {
 
 typedef struct {
     const char *name;
-    int width;
+	int width;
     int uiFlags;
 } menuListColumn_t;
 
@@ -397,8 +452,9 @@ typedef struct {
 typedef struct {
     bool initialized;
     unsigned realtime;
-    int width, height; // scaled
-    float scale;
+	int width, height; // scaled
+	float scale;
+	uiLayoutMetrics_t layout;
     int menuDepth;
     menuFrameWork_t *layers[MAX_MENU_DEPTH];
     menuFrameWork_t *activeMenu;
