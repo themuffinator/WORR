@@ -531,6 +531,7 @@ qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
 
 std::array<uiPaletteEntry_t, UI_COLOR_ROLE_COUNT> palette;
 std::array<std::vector<std::string>, UI_TYPO_ROLE_COUNT> typographyFonts;
+std::array<int, UI_TYPO_ROLE_COUNT> typographyPixelHeights;
 std::array<std::vector<qhandle_t>, UI_TYPO_ROLE_COUNT> typographyHandles;
 uiTypographySet_t typography;
 
