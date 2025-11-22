@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "MenuItem.h"
 #include "common/files.hpp"
 #include "menu_controls.hpp"
+#include "renderer.hpp"
 
 #include <limits.h>
 #include <initializer_list>
@@ -245,6 +246,50 @@ static void Menu_UpdateConditionalState(menuFrameWork_t *menu)
 static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_UpdateGroupBounds(menuFrameWork_t *menu);
+
+/*
+=============
+Menu_ControlState
+
+Maps menu interaction flags to renderer-friendly UI states.
+=============
+*/
+static uiControlState_t Menu_ControlState(bool disabled, bool focused, bool active = false)
+{
+	if (disabled) {
+		return UI_STATE_DISABLED;
+	}
+
+	if (active) {
+		return UI_STATE_ACTIVE;
+	}
+
+	if (focused) {
+		return UI_STATE_FOCUSED;
+	}
+
+	return UI_STATE_DEFAULT;
+}
+
+/*
+=============
+Menu_RowLayout
+
+Creates a shared two-column layout split for menu controls.
+=============
+*/
+static uiLayoutSplit_t Menu_RowLayout(const menuCommon_t *generic, float labelPercent)
+{
+	uiLayoutRect_t row{};
+
+	row.x = UI_Pixels(static_cast<float>(generic->x));
+	row.y = UI_Pixels(static_cast<float>(generic->y));
+	row.width = UI_Percent(0.6f);
+	row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	row.spacing = UI_ColumnPadding();
+
+	return UI_SplitLayoutRow(&row, NULL, labelPercent);
+}
 
 /*
 ===================================================================
