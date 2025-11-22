@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "font_freetype.hpp"
+#include "text.hpp"
 #include "gl_draw_utils.hpp"
 #include "common/q3colors.hpp"
 #include <algorithm>
@@ -416,56 +417,70 @@ static inline void draw_char(int x, int y, int w, int h, int flags, int c, color
 
 void R_DrawChar(int x, int y, int flags, int c, color_t color, qhandle_t font)
 {
-	if (gl_fontshadow->integer > 0)
-		flags |= UI_DROPSHADOW;
-
-	draw_char(x, y, CONCHAR_WIDTH, CONCHAR_HEIGHT, flags, c & 255, color, IMG_ForHandle(font));
+	text_render_request_t req{};
+	req.x = x;
+	req.y = y;
+	req.scale = 1;
+	req.flags = flags;
+	req.max_bytes = 1;
+	char buf[2] = { static_cast<char>(c & 255), '\0' };
+	req.text = buf;
+	req.base_color = color;
+	req.font = font;
+	if (gl_fontshadow->integer > 0) {
+		req.style.shadow.offset_x = 1.0f;
+		req.style.shadow.offset_y = 1.0f;
+		req.style.shadow.color = ColorA(color.a);
+	}
+	R_TextDrawString(req);
 }
 
 void R_DrawStretchChar(int x, int y, int w, int h, int flags, int c, color_t color, qhandle_t font)
 {
-	draw_char(x, y, w, h, flags, c & 255, color, IMG_ForHandle(font));
+	const int scale = w > 0 ? w / CONCHAR_WIDTH : 1;
+	text_render_request_t req{};
+	req.x = x;
+	req.y = y;
+	req.scale = (scale > 0) ? scale : 1;
+	req.flags = flags;
+	req.max_bytes = 1;
+	char buf[2] = { static_cast<char>(c & 255), '\0' };
+	req.text = buf;
+	req.base_color = color;
+	req.font = font;
+	if (gl_fontshadow->integer > 0) {
+		const float offset = static_cast<float>((std::max)(req.scale, 1));
+		req.style.shadow.offset_x = offset;
+		req.style.shadow.offset_y = offset;
+		req.style.shadow.color = ColorA(color.a);
+	}
+	R_TextDrawString(req);
 }
 
 int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 	const char* s, color_t color, qhandle_t font,
 	const ftfont_t* ftFont)
 {
-	(void)ftFont;
-	const image_t* image = IMG_ForHandle(font);
+	text_render_request_t req{};
+	req.x = x;
+	req.y = y;
+	req.scale = scale;
+	req.flags = flags;
+	req.max_bytes = maxlen;
+	req.text = s;
+	req.base_color = color;
+	req.font = font;
+	req.ftfont = ftFont;
+	req.style.allow_color_codes = !(flags & UI_IGNORECOLOR);
 
-	if (gl_fontshadow->integer > 0)
-		flags |= UI_DROPSHADOW;
-
-	int sx = x;
-	color_t currentColor = color;
-	const char* p = s;
-	size_t remaining = maxlen;
-
-	while (remaining && *p) {
-		if (!(flags & UI_IGNORECOLOR)) {
-			size_t consumed = 0;
-			if (Q3_ParseColorEscape(p, remaining, currentColor, consumed)) {
-				p += consumed;
-				remaining -= consumed;
-				continue;
-			}
-		}
-
-		byte c = static_cast<byte>(*p++);
-		--remaining;
-
-		if ((flags & UI_MULTILINE) && c == '\n') {
-			y += CONCHAR_HEIGHT * scale + (1.0 / draw.scale);
-			x = sx;
-			continue;
-		}
-
-		draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, currentColor, image);
-		x += CONCHAR_WIDTH * scale;
+	if (gl_fontshadow->integer > 0) {
+		const float offs = static_cast<float>((std::max)(scale, 1));
+		req.style.shadow.offset_x = offs;
+		req.style.shadow.offset_y = offs;
+		req.style.shadow.color = ColorA(color.a);
 	}
 
-	return x;
+	return R_TextDrawString(req);
 }
 
 static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t* kfont)

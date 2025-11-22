@@ -1,6 +1,7 @@
 #include "client.hpp"
 #include "common/q3colors.hpp"
 #include "common/utf8.hpp"
+#include "refresh/text.hpp"
 
 #include <algorithm>
 #include <array>
@@ -949,18 +950,22 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
 	while (*s && maxlen) {
 		p = strchr(s, '\n');
 		if (!p) {
-			const auto metrics = SCR_TextMetrics(s, maxlen, flags, currentColor);
-			last_x = SCR_DrawStringStretch(x, y, scale, flags, maxlen, s, currentColor, font);
+			text_render_request_t req{};
+			SCR_FillTextRequest(req, x, y, scale, flags & ~UI_MULTILINE, maxlen, s, currentColor, font);
+			auto metrics = R_TextMeasureString(req);
+			last_x = R_TextDrawString(req);
 			last_y = y;
-			currentColor = metrics.finalColor;
+			currentColor = metrics.final_color;
 			break;
 		}
 
                 len = std::min<size_t>(static_cast<size_t>(p - s), maxlen);
-		const auto metrics = SCR_TextMetrics(s, len, flags, currentColor);
-		last_x = SCR_DrawStringStretch(x, y, scale, flags, len, s, currentColor, font);
+		text_render_request_t req{};
+		SCR_FillTextRequest(req, x, y, scale, flags & ~UI_MULTILINE, len, s, currentColor, font);
+		auto metrics = R_TextMeasureString(req);
+		last_x = R_TextDrawString(req);
 		last_y = y;
-		currentColor = metrics.finalColor;
+		currentColor = metrics.final_color;
 		maxlen -= len;
 
 		y += lineHeight;
@@ -999,12 +1004,18 @@ void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, colo
                 color_t finalColor = color;
                 if (hasAltColor)
                         finalColor = ColorSetAlpha(COLOR_WHITE, color.a);
-                R_DrawKFontChar(x, y, clampedScale, flags, baseGlyph, finalColor, &scr.kfont);
+                char text[2] = { static_cast<char>(baseGlyph), '\0' };
+                text_render_request_t req{};
+                SCR_FillTextRequest(req, x, y, clampedScale, flags, 1, text, finalColor, SCR_DefaultFontHandle());
+                req.kfont = &scr.kfont;
+                R_TextDrawString(req);
                 return;
         }
 
-        R_DrawStretchChar(x, y, CONCHAR_WIDTH * clampedScale, CONCHAR_HEIGHT * clampedScale,
-                flags, glyph, color, scr.font_pic);
+        char text[2] = { static_cast<char>(baseGlyph), '\0' };
+        text_render_request_t req{};
+        SCR_FillTextRequest(req, x, y, clampedScale, flags, 1, text, color, scr.font_pic);
+        R_TextDrawString(req);
 }
 
 namespace {
