@@ -2,20 +2,6 @@
 
 /*
 =============
-Bitmap_Free
-
-Releases bitmap menu item resources.
-=============
-*/
-void Bitmap_Free(menuBitmap_t *b)
-{
-	Z_Free(b->generic.status);
-	Z_Free(b->cmd);
-	Z_Free(b);
-}
-
-/*
-=============
 Bitmap_Init
 
 Initializes layout information for a bitmap menu item.

@@ -2,21 +2,6 @@
 
 /*
 =============
-Action_Free
-
-Releases memory owned by an action menu item.
-=============
-*/
-void Action_Free(menuAction_t *a)
-{
-	Z_Free(a->generic.name);
-	Z_Free(a->generic.status);
-	Z_Free(a->cmd);
-	Z_Free(a);
-}
-
-/*
-=============
 Action_Init
 
 Initializes geometry for an action menu item.

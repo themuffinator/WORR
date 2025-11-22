@@ -54,20 +54,6 @@ void Slider_Pop(menuSlider_t *s)
 
 /*
 =============
-Slider_Free
-
-Releases memory owned by a slider widget.
-=============
-*/
-void Slider_Free(menuSlider_t *s)
-{
-	Z_Free(s->generic.name);
-	Z_Free(s->generic.status);
-	Z_Free(s);
-}
-
-/*
-=============
 Slider_Init
 
 Initializes layout information for a slider widget.

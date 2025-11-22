@@ -58,26 +58,6 @@ static menuDropdown_t *ui_activeDropdown = NULL;
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered);
 
-static void UI_FreeConditionList(uiItemCondition_t *list)
-{
-    while (list) {
-        uiItemCondition_t *next = list->next;
-        Z_Free(list->value);
-        Z_Free(list);
-        list = next;
-    }
-}
-
-static void UI_FreeCommonExtensions(menuCommon_t *item)
-{
-    if (item->conditional) {
-        UI_FreeConditionList(item->conditional->enable);
-        UI_FreeConditionList(item->conditional->disable);
-        Z_Free(item->conditional);
-        item->conditional = NULL;
-    }
-}
-
 static bool UI_TestCondition(const uiItemCondition_t *condition)
 {
     if (!condition)
@@ -169,15 +149,6 @@ KEYBIND CONTROL
 
 ===================================================================
 */
-
-static void Keybind_Free(menuKeybind_t *k)
-{
-    Z_Free(k->generic.name);
-    Z_Free(k->generic.status);
-    Z_Free(k->cmd);
-    Z_Free(k->altstatus);
-    Z_Free(k);
-}
 
 /*
 =================
@@ -335,19 +306,6 @@ static void SpinControl_Pop(menuSpinControl_t *s)
 {
     if (s->curvalue >= 0 && s->curvalue < s->numItems)
         Cvar_SetInteger(s->cvar, s->curvalue, FROM_MENU);
-}
-
-static void SpinControl_Free(menuSpinControl_t *s)
-{
-    int i;
-
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    for (i = 0; i < s->numItems; i++) {
-        Z_Free(s->itemnames[i]);
-    }
-    Z_Free(s->itemnames);
-    Z_Free(s);
 }
 
 /*
@@ -521,16 +479,6 @@ void ImageSpinControl_Pop(menuSpinControl_t *s)
 ImageSpinControl_Free
 =================
 */
-static void ImageSpinControl_Free(menuSpinControl_t *s)
-{
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    Z_Free(s->filter);
-    Z_Free(s->path);
-    FS_FreeList(reinterpret_cast<void **>(s->itemnames));
-    Z_Free(s);
-}
-
 /*
 =================
 ImageSpinControl_Draw
@@ -616,13 +564,6 @@ static void BitField_Pop(menuSpinControl_t *s)
     Cvar_SetInteger(s->cvar, val, FROM_MENU);
 }
 
-static void BitField_Free(menuSpinControl_t *s)
-{
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    Z_Free(s);
-}
-
 /*
 ===================================================================
 
@@ -649,21 +590,6 @@ static void Pairs_Pop(menuSpinControl_t *s)
 {
     if (s->curvalue >= 0 && s->curvalue < s->numItems)
         Cvar_SetByVar(s->cvar, s->itemvalues[s->curvalue], FROM_MENU);
-}
-
-static void Pairs_Free(menuSpinControl_t *s)
-{
-    int i;
-
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    for (i = 0; i < s->numItems; i++) {
-        Z_Free(s->itemnames[i]);
-        Z_Free(s->itemvalues[i]);
-    }
-    Z_Free(s->itemnames);
-    Z_Free(s->itemvalues);
-    Z_Free(s);
 }
 
 /*
@@ -852,15 +778,6 @@ static void Checkbox_Draw(menuCheckbox_t *c)
     const char *mark = Checkbox_GetState(c) ? "[x]" : "[ ]";
     UI_DrawString(c->generic.x + RCOLUMN_OFFSET, c->generic.y,
                   c->generic.uiFlags | UI_LEFT, valueColor, mark);
-}
-
-static void Checkbox_Free(menuCheckbox_t *c)
-{
-    Z_Free(c->generic.name);
-    Z_Free(c->generic.status);
-    Z_Free(c->checkedValue);
-    Z_Free(c->uncheckedValue);
-    Z_Free(c);
 }
 
 /*
@@ -1296,29 +1213,6 @@ static void Dropdown_Pop(menuDropdown_t *d)
     Dropdown_Commit(d);
 }
 
-static void Dropdown_Free(menuDropdown_t *d)
-{
-    if (ui_activeDropdown == d)
-        ui_activeDropdown = NULL;
-
-    Z_Free(d->spin.generic.name);
-    Z_Free(d->spin.generic.status);
-
-    if (d->spin.itemnames) {
-        for (int i = 0; i < d->spin.numItems; i++)
-            Z_Free(d->spin.itemnames[i]);
-        Z_Free(d->spin.itemnames);
-    }
-
-    if (d->spin.itemvalues) {
-        for (int i = 0; i < d->spin.numItems; i++)
-            Z_Free(d->spin.itemvalues[i]);
-        Z_Free(d->spin.itemvalues);
-    }
-
-    Z_Free(d);
-}
-
 /*
 ===================================================================
 
@@ -1413,14 +1307,6 @@ static void RadioButton_Draw(menuRadioButton_t *r)
                   r->generic.uiFlags | UI_LEFT, valueColor, mark);
 }
 
-static void RadioButton_Free(menuRadioButton_t *r)
-{
-    Z_Free(r->generic.name);
-    Z_Free(r->generic.status);
-    Z_Free(r->value);
-    Z_Free(r);
-}
-
 // Episode selector
 
 static void Episode_Push(menuEpisodeSelector_t *s)
@@ -1435,12 +1321,6 @@ static void Episode_Pop(menuEpisodeSelector_t *s)
 }
 
 // Unit selector
-
-static void Unit_Free(menuUnitSelector_t *s)
-{
-    Z_Free(s->itemindices);
-    SpinControl_Free(&s->spin);
-}
 
 static void Unit_Push(menuUnitSelector_t *s)
 {
@@ -2563,16 +2443,16 @@ void Menu_Init(menuFrameWork_t *menu)
         UI_AddRectToBounds(&item->rect, menu->mins, menu->maxs);
     }
 
-if (menu->groups) {
-for (int i = 0; i < menu->numGroups; i++) {
-uiItemGroup_t *group = menu->groups[i];
-            if (!group || !group->active)
-                continue;
-            if (group->rect.width <= 0 || group->rect.height <= 0)
-                continue;
-            UI_AddRectToBounds(&group->rect, menu->mins, menu->maxs);
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group || !group->active)
+				continue;
+			if (group->rect.width <= 0 || group->rect.height <= 0)
+				continue;
+			UI_AddRectToBounds(&group->rect, menu->mins, menu->maxs);
+		}
+	}
 
     // expand
     menu->mins[0] -= MENU_SPACING;
@@ -2594,20 +2474,20 @@ void Menu_Size(menuFrameWork_t *menu)
     int widest = -1;
     uiItemGroup_t *currentGroup = NULL;
 
-if (menu->groups) {
-for (int i = 0; i < menu->numGroups; i++) {
-uiItemGroup_t *group = menu->groups[i];
-if (!group)
-continue;
-            group->active = false;
-            group->contentTop = 0;
-            group->contentBottom = 0;
-            group->headerY = 0;
-            group->baseX = 0;
-            group->rect = {};
-            group->headerRect = {};
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group)
+				continue;
+			group->active = false;
+			group->contentTop = 0;
+			group->contentBottom = 0;
+			group->headerY = 0;
+			group->baseX = 0;
+			group->rect = {};
+			group->headerRect = {};
+		}
+	}
 
     // count visible items including groups
     for (int i = 0; i < Menu_ItemCount(menu); i++) {
@@ -2674,15 +2554,15 @@ continue;
     // set menu vertical base
     y = (uis.height - h) / 2;
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
-            group->contentTop = 0;
-            group->contentBottom = 0;
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group)
+				continue;
+			group->contentTop = 0;
+			group->contentBottom = 0;
+		}
+	}
 
     // banner is horizontally centered and
     // positioned on top of all menu items
@@ -2756,33 +2636,33 @@ continue;
 
 static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
 {
-    if (!menu->groups)
-        return;
+	if (menu->groups.empty())
+		return;
 
-    for (int i = 0; i < menu->numGroups; i++) {
-        uiItemGroup_t *group = menu->groups[i];
-        if (!group)
-            continue;
+	for (int i = 0; i < menu->numGroups; i++) {
+		uiItemGroup_t *group = menu->groups[i].get();
+		if (!group)
+			continue;
 
-        if (!group->active) {
-            group->rect = {};
-            group->headerRect = {};
-            continue;
-        }
+		if (!group->active) {
+			group->rect = {};
+			group->headerRect = {};
+			continue;
+		}
 
-        int minX = INT_MAX;
-        int maxX = INT_MIN;
-        int minY = INT_MAX;
-        int maxY = INT_MIN;
+		int minX = INT_MAX;
+		int maxX = INT_MIN;
+		int minY = INT_MAX;
+		int maxY = INT_MIN;
 
-        for (int j = 0; j < Menu_ItemCount(menu); j++) {
-            auto *item = static_cast<menuCommon_t *>(menu->items[j]);
-            if (item->flags & QMF_HIDDEN)
-                continue;
-            if (item->group != group)
-                continue;
+		for (int j = 0; j < Menu_ItemCount(menu); j++) {
+			auto *item = static_cast<menuCommon_t *>(menu->items[j]);
+			if (item->flags & QMF_HIDDEN)
+				continue;
+			if (item->group != group)
+				continue;
 
-            const vrect_t &rect = item->rect;
+			const vrect_t &rect = item->rect;
             if (minX > rect.x)
                 minX = rect.x;
             if (maxX < rect.x + rect.width)
@@ -2824,25 +2704,25 @@ static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
 
 static void Menu_DrawGroups(menuFrameWork_t *menu)
 {
-    if (!menu->groups)
-        return;
+	if (menu->groups.empty())
+		return;
 
-    for (int i = 0; i < menu->numGroups; i++) {
-        uiItemGroup_t *group = menu->groups[i];
-        if (!group || !group->active)
-            continue;
+	for (int i = 0; i < menu->numGroups; i++) {
+		uiItemGroup_t *group = menu->groups[i].get();
+		if (!group || !group->active)
+			continue;
 
-        if (group->rect.width <= 0 || group->rect.height <= 0)
-            continue;
+		if (group->rect.width <= 0 || group->rect.height <= 0)
+			continue;
 
-        color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, static_cast<uint8_t>(160));
-        R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
+		color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, static_cast<uint8_t>(160));
+		R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
 
-        if (group->border) {
-            color_t border = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
-            R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
-            R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
-            R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);
+		if (group->border) {
+			color_t border = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
+			R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
+			R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
+			R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);
             R_DrawFill32(group->rect.x + group->rect.width - 1, group->rect.y, 1, group->rect.height, border);
         }
 
@@ -3711,79 +3591,13 @@ void Menu_Pop(menuFrameWork_t *menu)
 
 void Menu_Free(menuFrameWork_t *menu)
 {
-	for (int i = 0; i < Menu_ItemCount(menu); i++) {
-		void *rawItem = menu->items[i];
-		auto *item = static_cast<menuCommon_t *>(rawItem);
-
-		UI_FreeCommonExtensions(item);
-
-		switch (item->type) {
-		case MTYPE_ACTION:
-		case MTYPE_SAVEGAME:
-		case MTYPE_LOADGAME:
-			Action_Free(static_cast<menuAction_t *>(rawItem));
-			break;
-		case MTYPE_SLIDER:
-			Slider_Free(static_cast<menuSlider_t *>(rawItem));
-			break;
-		case MTYPE_BITFIELD:
-		case MTYPE_TOGGLE:
-			BitField_Free(static_cast<menuSpinControl_t *>(rawItem));
-			break;
-		case MTYPE_PAIRS:
-			Pairs_Free(static_cast<menuSpinControl_t *>(rawItem));
-			break;
-		case MTYPE_SPINCONTROL:
-		case MTYPE_STRINGS:
-		case MTYPE_EPISODE:
-			SpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-			break;
-		case MTYPE_CHECKBOX:
-			Checkbox_Free(reinterpret_cast<menuCheckbox_t *>(rawItem));
-			break;
-		case MTYPE_DROPDOWN:
-			Dropdown_Free(reinterpret_cast<menuDropdown_t *>(rawItem));
-			break;
-		case MTYPE_RADIO:
-			RadioButton_Free(reinterpret_cast<menuRadioButton_t *>(rawItem));
-			break;
-		case MTYPE_UNIT:
-			Unit_Free(static_cast<menuUnitSelector_t *>(rawItem));
-			break;
-		case MTYPE_KEYBIND:
-			Keybind_Free(static_cast<menuKeybind_t *>(rawItem));
-			break;
-		case MTYPE_FIELD:
-			Field_Free(static_cast<menuField_t *>(rawItem));
-			break;
-		case MTYPE_SEPARATOR:
-			Z_Free(rawItem);
-			break;
-		case MTYPE_BITMAP:
-			Bitmap_Free(static_cast<menuBitmap_t *>(rawItem));
-			break;
-		case MTYPE_IMAGESPINCONTROL:
-			ImageSpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-			break;
-		default:
-			break;
-		}
-	}
-
 	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
 		ui_activeDropdown = NULL;
 
-	if (menu->groups) {
-		for (int i = 0; i < menu->numGroups; i++) {
-			uiItemGroup_t *group = menu->groups[i];
-			if (!group)
-				continue;
-			Z_Free(group->name);
-			Z_Free(group->label);
-			Z_Free(group);
-		}
-		Z_Free(menu->groups);
-	}
+	menu->items.clear();
+	menu->itemsCpp.clear();
+	menu->groups.clear();
+	menu->numGroups = 0;
 
 	Z_Free(menu->title);
 	Z_Free(menu->name);

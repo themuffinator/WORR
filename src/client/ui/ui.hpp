@@ -113,7 +113,7 @@ typedef struct menuFrameWork_s {
 
 	std::vector<void *> items;
 
-	struct uiItemGroup_s	**groups;
+	std::vector<std::unique_ptr<uiItemGroup_t>> groups;
 	int			numGroups;
 
 	bool compact;
