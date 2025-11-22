@@ -936,6 +936,16 @@ gamestate_test = executable('test_gamestate_configstrings',
   test('effect_cull_visibility', effect_cull_test,
     is_parallel: false,
   )
+  menu_items_test = executable('test_menu_items',
+    ['tests/test_menu_items.cpp', 'src/client/ui/MenuItem.cpp'],
+    include_directories: ['inc', 'src'],
+    dependencies:          common_deps,
+    gnu_symbol_visibility: 'hidden',
+  )
+
+  test('menu_items_cpp', menu_items_test,
+    is_parallel: false,
+  )
   pmove_waterjump_test = executable('test_pmove_waterjump',
     ['tests/test_pmove_waterjump.cpp', 'src/common/game3_pmove/waterjump.cpp'],
     include_directories: 'inc',
