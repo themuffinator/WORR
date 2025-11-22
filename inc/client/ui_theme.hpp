@@ -9,13 +9,21 @@ uiState_t
 Enumerates UI interaction states used for theming.
 =============
 */
-typedef enum uiState_e {
-	UI_STATE_NORMAL = 0,
-	UI_STATE_HOVER,
-	UI_STATE_ACTIVE,
-	UI_STATE_DISABLED,
-	UI_STATE_COUNT
-} uiState_t;
+typedef enum uiThemeState_e {
+	UI_THEME_STATE_NORMAL = 0,
+	UI_THEME_STATE_HOVER,
+	UI_THEME_STATE_ACTIVE,
+	UI_THEME_STATE_DISABLED,
+	UI_THEME_STATE_COUNT
+} uiThemeState_t;
+
+// Legacy compatibility aliases
+typedef uiThemeState_t uiState_t;
+#define UI_STATE_NORMAL UI_THEME_STATE_NORMAL
+#define UI_STATE_HOVER UI_THEME_STATE_HOVER
+#define UI_STATE_ACTIVE UI_THEME_STATE_ACTIVE
+#define UI_STATE_DISABLED UI_THEME_STATE_DISABLED
+#define UI_STATE_COUNT UI_THEME_STATE_COUNT
 
 /*
 =============

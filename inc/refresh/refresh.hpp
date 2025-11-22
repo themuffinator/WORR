@@ -41,6 +41,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef UI_MULTILINE
 #define UI_MULTILINE (1u << 9)
 #endif
+#ifndef UI_BOLD
+#define UI_BOLD (1u << 11)
+#endif
+#ifndef UI_ITALIC
+#define UI_ITALIC (1u << 12)
+#endif
+#ifndef UI_UNDERLINE
+#define UI_UNDERLINE (1u << 13)
+#endif
+#ifndef UI_OUTLINE
+#define UI_OUTLINE (1u << 14)
+#endif
 
 #if USE_FREETYPE && defined(USE_REF) && USE_REF
 #include <ft2build.h>

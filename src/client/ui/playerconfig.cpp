@@ -327,7 +327,8 @@ static void Free(menuFrameWork_t *self)
     UI_SetString(&m_player.dogtag.path, NULL);
     UI_SetString(&m_player.dogtag.filter, NULL);
 
-    Z_Free(m_player.menu.items);
+    m_player.menu.items.clear();
+    m_player.menu.items.shrink_to_fit();
     memset(&m_player, 0, sizeof(m_player));
 }
 

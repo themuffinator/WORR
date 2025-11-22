@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <utility>
+#include <cstring>
+#include <cstring>
 
 /*
 ==============
@@ -699,11 +701,12 @@ FieldItem::SetValue
 Replaces the current input buffer contents with the provided string.
 	=============
 	*/
-	void FieldItem::SetValue(const std::string &value)
-	{
-	Q_strncpyz(m_field.text, value.c_str(), sizeof(m_field.text));
-	m_field.cursor = Q_min<int>(static_cast<int>(value.size()), m_field.maxChars);
-	}
+void FieldItem::SetValue(const std::string &value)
+{
+	std::strncpy(m_field.text, value.c_str(), sizeof(m_field.text) - 1);
+	m_field.text[sizeof(m_field.text) - 1] = '\0';
+	m_field.cursorPos = std::min(value.size(), static_cast<size_t>(m_field.maxChars));
+}
 	
 	/*
 	=============
@@ -726,11 +729,8 @@ Replaces the current input buffer contents with the provided string.
 				UI_RendererDrawText(&ctx, &labelStyle, static_cast<float>(m_x + LCOLUMN_OFFSET), static_cast<float>(m_y), GetName().c_str());
 
 	const qhandle_t fieldFont = UI_FontForRole(UI_TYPO_MONOSPACE);
-	const color_t fieldColor = UI_ColorForRole(UI_COLOR_TEXT, state);
-	IF_Draw(&m_field, m_x + RCOLUMN_OFFSET, m_y, m_uiFlags | (m_hasFocus ? UI_BLINK : 0), fieldFont);
-
-	// IF_Draw currently renders with its own color, so ensure the theme selection is applied to subsequent UI operations.
-	(void)fieldColor;
+	const int flags = m_uiFlags | (m_hasFocus ? UI_DRAWCURSOR : 0);
+	IF_Draw(&m_field, m_x + RCOLUMN_OFFSET, m_y, flags, fieldFont);
 }
 
 /*

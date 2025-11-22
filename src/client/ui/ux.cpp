@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <utility>
+#include <span>
 
 namespace ui::ux {
 
@@ -1309,9 +1310,9 @@ return m_palette[static_cast<size_t>(role)];
 
 		uiPaletteEntry_t fallback{};
 		for (int i = 0; i < UI_STATE_COUNT; i++) {
-fallback.states[i] = color_white;
-}
-return fallback;
+			fallback.states[i] = COLOR_WHITE;
+		}
+		return fallback;
 }
 
 /*

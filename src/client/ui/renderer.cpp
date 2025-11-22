@@ -250,5 +250,5 @@ void UI_RendererStrokeRect(const uiRendererContext_t *ctx, const uiRendererRectS
 	R_DrawFill32(drawX, drawY, border, drawHeight, color);
 	R_DrawFill32(right, drawY, border, drawHeight, color);
 	R_DrawFill32(drawX + border, drawY, drawWidth - border * 2, border, color);
-	R_DrawFill32(drawX + border, bottom, drawWidth - border * 2, border);
+	R_DrawFill32(drawX + border, bottom, drawWidth - border * 2, border, color);
 }

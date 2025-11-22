@@ -1,9 +1,10 @@
 #include "gl.hpp"
 #include "font_freetype.hpp"
-#include "text.hpp"
+#include "refresh/text.hpp"
 #include "gl_draw_utils.hpp"
 #include "common/q3colors.hpp"
 #include "common/utf8.hpp"
+#include "refresh/refresh.hpp"
 
 #include <algorithm>
 #include <array>

@@ -34,10 +34,14 @@ static cvar_t* scr_text_bg = nullptr;
 static cvar_t* scr_text_bg_alpha = nullptr;
 static cvar_t* scr_text_debug = nullptr;
 
+static bool SCR_ShouldUseFreeType(qhandle_t font);
+static bool SCR_ShouldUseKFont();
+extern cvar_t* gl_fontshadow;
+
 namespace {
-constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
-constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
-constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+        constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
+	constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
+	constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
 }
 
 static std::unordered_map<qhandle_t, scr_font_metrics_t> scr_fontMetricsCache;

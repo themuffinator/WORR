@@ -18,7 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.hpp"
 #include "font_freetype.hpp"
-#include "text.hpp"
+#include "refresh/text.hpp"
 #include "gl_draw_utils.hpp"
 #include "common/q3colors.hpp"
 #include <algorithm>

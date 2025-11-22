@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "common/net/net.hpp"
 #include "client/client.hpp"
+#include "MenuItem.h"
 
 typedef enum {
     UIMENU_NONE,

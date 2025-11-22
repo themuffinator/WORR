@@ -1096,7 +1096,8 @@ static void Expose(menuFrameWork_t *self)
 
 static void Free(menuFrameWork_t *self)
 {
-    Z_Free(m_servers.menu.items);
+    m_servers.menu.items.clear();
+    m_servers.menu.items.shrink_to_fit();
     Z_Free(m_servers.menu_name);
     Z_Free(m_servers.menu_title);
     Z_Free(m_servers.column_hostname);
@@ -1238,3 +1239,9 @@ void M_Menu_Servers(void)
 
     List_Append(&ui_menus, &m_servers.menu.entry);
 }
+#ifndef MLIST_PADDING
+#define MLIST_PADDING 2
+#endif
+#ifndef MLIST_PADDING
+#define MLIST_PADDING 2
+#endif

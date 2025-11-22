@@ -28,6 +28,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <unordered_map>
 #include <vector>
 
+// Forward declarations for parser helpers
+typedef struct uiScriptManifest_s uiScriptManifest_t;
+static void UI_ParseJsonBuffer(json_parse_t *parser, const char *buffer, size_t length);
+static void UI_ParseRoot(json_parse_t *parser);
+static void UI_ParseController(json_parse_t *parser, uiScriptManifest_t *manifest);
+static bool UI_LoadMenuScriptFromFile(const char* filename);
+static void ParseGlobalBackground(json_parse_t *parser);
+static void ParseCursor(json_parse_t *parser);
+static void ParseMenus(json_parse_t *parser);
+static void ParseModuleList(json_parse_t *parser);
+
 extern const char res_worr_menu[];
 extern const size_t res_worr_menu_size;
 
@@ -2230,8 +2241,7 @@ bool uiScriptControllerManager::LoadControllerFromBuffer(const std::string &buff
 	ResetControllerState();
 
 	if (Json_ErrorHandler(&parser)) {
-		Com_WPrintf("Failed to load/parse %s[%s]: %s
-		", manifest.controllerPath, parser.error_loc, parser.error);
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", manifest.controllerPath, parser.error_loc, parser.error);
 		Json_Free(&parser);
 		return false;
 	}

@@ -211,6 +211,7 @@ class MenuItem;
      !((item)->flags & (QMF_GRAYED | QMF_HIDDEN | QMF_DISABLED)))
 
 struct uiItemGroup_s;
+typedef struct uiItemGroup_s uiItemGroup_t;
 struct uiConditionalBlock_s;
 
 typedef struct menuFrameWork_s {

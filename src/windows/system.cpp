@@ -2066,7 +2066,7 @@ static void fix_current_directory(void)
 
 	if (ret < MAX_PATH)
 		while (ret)
-			if (buffer[--ret] == '\')
+			if (buffer[--ret] == L'\\')
 				break;
 
 	if (ret == 0)

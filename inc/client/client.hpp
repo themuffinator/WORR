@@ -130,6 +130,7 @@ float CL_ActiveTimeScale(void);
 #define UI_AUTOWRAP         BIT(8)
 #define UI_MULTILINE        BIT(9)
 #define UI_DRAWCURSOR       BIT(10)
+#define UI_BLINK            UI_DRAWCURSOR
 
 extern const color_t   colorTable[8];
 
