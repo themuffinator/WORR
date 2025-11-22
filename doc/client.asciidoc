@@ -1430,6 +1430,31 @@ store them alongside the rest of the UI artwork (for example under
 `pics/ui/checkbox_checked.tga`, `pics/ui/radio_on.tga`, and
 `pics/ui/dropdown_caret.tga`).
 
+MenuItem developer notes
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The modern menu system layers a C++ `MenuItem` tree over the legacy widget
+structs. The base class keeps texture handles alive through shared ownership
+and manages children with `std::unique_ptr`, so callers do not need to juggle
+manual allocations or cleanup. Each subclass implements the same virtuals as
+the legacy controls (`Draw`, `HandleEvent`, `Activate`, `SetFocus`, `HasFocus`,
+`OnAttach`, and `OnDetach`) so input, focus, and lifecycle hooks stay aligned
+between the old and new code paths.
+
+Migration tips for new menu items
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Derive from `MenuItem` and honour its ownership model: expose your texture
+  handles as `TextureHandle` (a `std::shared_ptr<qhandle_t>`) and store child
+  items in `std::unique_ptr` containers to keep RAII ownership consistent.
+* Implement the virtuals expected by the legacy wrappers so the menu can route
+  `MenuItem::MenuEvent` keyboard, pointer, or controller input through your
+  control while preserving focus state.
+* When adding a new legacy widget or JSON item type, wire it into the parser in
+  `ParseMenuItem` and register a corresponding constructor in `Menu_BuildMenuItem`
+  so the procedural menu can instantiate your subclass alongside the existing
+  action, static, bitmap, field, list, and slider wrappers.
+
 com_time_format::
     Time format used by ‘com_time’ macro. Default value is "%H.%M" on Win32 and
     "%H:%M" on UNIX. See strftime(3) for syntax description.

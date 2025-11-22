@@ -1,7 +1,7 @@
 windows = import('windows')
 
 common_src += files('system.cpp', 'hunk.cpp')
-client_src += files('client.cpp', 'wgl.cpp')
+client_src += files('client.cpp', 'wgl.cpp', 'ac.cpp')
 
 common_deps += cc.find_library('ws2_32')
 client_deps += cc.find_library('opengl32')
