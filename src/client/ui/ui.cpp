@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ui.hpp"
 #include "client/input.hpp"
 #include "common/prompt.hpp"
+#include "ux.hpp"
+#include <vector>
 
 uiStatic_t    uis;
 
@@ -32,26 +34,30 @@ static cvar_t    *ui_font_fallback;
 static cvar_t    *ui_font_size;
 static cvar_t    *ui_cursor_theme;
 static cvar_t    *ui_color_theme;
+static std::shared_ptr<ui::ux::SceneLayer> ui_scene_layer;
+static std::shared_ptr<ui::ux::Widget> ui_root_widget;
 
 static void UI_UpdateLayoutMetrics(void);
 static void UI_UpdateTypographySet(void);
 static void UI_PopulateDefaultPalette(bool lightTheme);
 static void UI_UpdateLegacyColorsFromPalette(void);
+static void UI_SyncUxPalette(void);
+static void UI_SyncUxLayout(void);
 
-/*
-=============
-UI_Percent
+	/*
+	=============
+	UI_Percent
 
-Builds a percentage-based layout value.
-=============
-*/
-uiLayoutValue_t UI_Percent(float percent)
-{
+	Builds a percentage-based layout value.
+	=============
+	*/
+	uiLayoutValue_t UI_Percent(float percent)
+	{
 	uiLayoutValue_t value;
-	
+
 	value.value = percent;
 	value.unit = UI_UNIT_PERCENT;
-	
+
 	return value;
 }
 
@@ -373,40 +379,41 @@ static void UI_UpdateLayoutMetrics(void)
 {
 	uiLayoutMetrics_t metrics{};
 	uiLayoutValue_t columnValue = UI_Percent(0.05f);
-	
+
 	metrics.screenWidth = uis.width;
 	metrics.screenHeight = uis.height;
 	metrics.dpiScale = static_cast<float>(get_auto_scale());
-	
+
 	if (metrics.dpiScale < 1.0f) {
-	metrics.dpiScale = 1.0f;
+		metrics.dpiScale = 1.0f;
 	}
-	
+
 	qhandle_t handle = uis.fontHandle ? uis.fontHandle : SCR_DefaultFontHandle();
 	metrics.charHeight = SCR_FontLineHeight(1, handle);
 	metrics.charWidth = SCR_MeasureString(1, UI_LEFT, 1, "M", handle);
-	
+
 	if (metrics.charWidth <= 0) {
-	metrics.charWidth = Q_rint(CONCHAR_WIDTH * metrics.dpiScale);
+		metrics.charWidth = Q_rint(CONCHAR_WIDTH * metrics.dpiScale);
 	}
 	if (metrics.charHeight <= 0) {
-	metrics.charHeight = Q_rint(CONCHAR_HEIGHT * metrics.dpiScale);
+		metrics.charHeight = Q_rint(CONCHAR_HEIGHT * metrics.dpiScale);
 	}
-	
+
 	metrics.genericSpacing = UI_GenericSpacing(metrics.charHeight);
 	metrics.menuSpacing = metrics.genericSpacing;
 	metrics.listSpacing = metrics.genericSpacing;
 	metrics.listScrollbarWidth = UI_GenericSpacing(metrics.charWidth);
-	
+
 	metrics.columnOffset = UI_ResolveLayoutValue(&columnValue, metrics.screenWidth);
 	if (metrics.columnOffset < metrics.charWidth * 2) {
-	metrics.columnOffset = metrics.charWidth * 2;
+		metrics.columnOffset = metrics.charWidth * 2;
 	}
-	
+
 	metrics.columnPadding = metrics.columnOffset + metrics.charWidth;
-	
+
 	uis.layout = metrics;
-	}
+	UI_SyncUxLayout();
+}
 
 #define UI_COMPOSITOR_FADE_TIME	200
 #define UI_COMPOSITOR_SLIDE_PIXELS	32
@@ -1578,6 +1585,7 @@ uis.palette[UI_COLOR_ACCENT] = UI_SetPaletteEntry(accentBase, accentHover, accen
 uis.palette[UI_COLOR_TEXT] = UI_SetPaletteEntry(textBase, textBase, textBase, textMuted, textHighlight);
 uis.palette[UI_COLOR_HIGHLIGHT] = UI_SetPaletteEntry(textHighlight, accentHover, accentActive, accentDisabled, textHighlight);
 uis.palette[UI_COLOR_MUTED] = UI_SetPaletteEntry(textMuted, textMuted, textMuted, textMuted, textMuted);
+	UI_SyncUxPalette();
 }
 
 /*
@@ -1589,11 +1597,61 @@ Keeps the legacy color bundle in sync with the new palette roles.
 */
 static void UI_UpdateLegacyColorsFromPalette(void)
 {
-uis.color.background = UI_ColorForRole(UI_COLOR_BACKGROUND, UI_STATE_DEFAULT);
-uis.color.normal = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_DEFAULT);
-uis.color.active = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_ACTIVE);
-uis.color.selection = UI_ColorForRole(UI_COLOR_HIGHLIGHT, UI_STATE_DEFAULT);
-uis.color.disabled = UI_ColorForRole(UI_COLOR_MUTED, UI_STATE_DISABLED);
+	uis.color.background = UI_ColorForRole(UI_COLOR_BACKGROUND, UI_STATE_DEFAULT);
+	uis.color.normal = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_DEFAULT);
+	uis.color.active = UI_ColorForRole(UI_COLOR_ACCENT, UI_STATE_ACTIVE);
+	uis.color.selection = UI_ColorForRole(UI_COLOR_HIGHLIGHT, UI_STATE_DEFAULT);
+	uis.color.disabled = UI_ColorForRole(UI_COLOR_MUTED, UI_STATE_DISABLED);
+}
+
+/*
+=============
+UI_SyncUxPalette
+
+Copies the resolved palette into the UIX theming context.
+=============
+*/
+static void UI_SyncUxPalette(void)
+{
+	std::vector<uiPaletteEntry_t> palette;
+	palette.reserve(UI_COLOR_ROLE_COUNT);
+	for (const auto &entry : uis.palette) {
+		palette.push_back(entry);
+	}
+
+	ui::ux::GetSystem().Theme().SetPalette(std::move(palette));
+}
+
+/*
+=============
+UI_SyncUxLayout
+
+Updates the UIX layout engine and root scene graph layer using the latest metrics.
+=============
+*/
+static void UI_SyncUxLayout(void)
+{
+	ui::ux::UIXSystem &system = ui::ux::GetSystem();
+	system.UpdateLayout(uis.layout);
+
+	vrect_t root{};
+	root.x = 0;
+	root.y = 0;
+	root.width = uis.layout.screenWidth;
+	root.height = uis.layout.screenHeight;
+
+	if (!ui_scene_layer) {
+		ui_root_widget = std::make_shared<ui::ux::Widget>("ui-root", ui::ux::WidgetType::Container);
+		ui_root_widget->SetLayout(ui::ux::LayoutRect(ui::ux::LayoutValue::Pixels(0.0f), ui::ux::LayoutValue::Pixels(0.0f), ui::ux::LayoutValue::Percent(1.0f), ui::ux::LayoutValue::Percent(1.0f)));
+
+		ui_scene_layer = std::make_shared<ui::ux::SceneLayer>("legacy-root", 0);
+		ui_scene_layer->SetRoot(ui_root_widget);
+		system.Graph().AddLayer(ui_scene_layer);
+	}
+
+	if (ui_root_widget) {
+		ui_root_widget->OnLayout(system.Layout(), root);
+	}
 }
 
 /*
