@@ -32,6 +32,7 @@ static cvar_t* scr_text_dpi_scale = nullptr;
 static cvar_t* scr_text_outline = nullptr;
 static cvar_t* scr_text_bg = nullptr;
 static cvar_t* scr_text_bg_alpha = nullptr;
+static cvar_t* scr_text_debug = nullptr;
 
 namespace {
 constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
@@ -766,52 +767,6 @@ UTILS
 ===============================================================================
 */
 
-namespace {
-
-	struct scr_text_metrics_t {
-		size_t	visibleChars{ 0 };
-		size_t	processedBytes{ 0 };
-		color_t	finalColor;
-	};
-
-/*
-=============
-SCR_TextMetrics
-
-Measure visible codepoints, track processed bytes, and capture the final color state for a string.
-=============
-*/
-	static scr_text_metrics_t SCR_TextMetrics(const char* s, size_t maxlen, int flags, color_t color)
-	{
-		scr_text_metrics_t metrics{ 0, 0, color };
-
-		const char* p = s;
-		size_t remaining = maxlen;
-
-		while (remaining && *p) {
-			if (!(flags & UI_IGNORECOLOR)) {
-				size_t consumed = 0;
-				if (Q3_ParseColorEscape(p, remaining, metrics.finalColor, consumed)) {
-					p += consumed;
-					remaining -= consumed;
-					continue;
-				}
-			}
-
-			const uint32_t codepoint = utf8_next(p, remaining);
-			if (!codepoint)
-				break;
-
-			++metrics.visibleChars;
-		}
-
-		metrics.processedBytes = maxlen - remaining;
-
-		return metrics;
-	}
-
-} // namespace
-
 static int SCR_MeasureKFontString(int scale, int flags, size_t maxlen, const char* s)
 {
 	if (!SCR_ShouldUseKFont())
@@ -927,6 +882,19 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
 		R_DrawFill32(req.x, req.y, measured.width, measured.height, bg);
 	}
 
+	if (scr_text_debug && scr_text_debug->integer != 0) {
+		// simple debug outline to visualize extents
+		const color_t dbg = ColorRGBA(255, 0, 255, 128);
+		const int w = measured.width;
+		const int h = measured.height;
+		if (w > 0 && h > 0) {
+			R_DrawFill32(req.x, req.y, w, 1, dbg);
+			R_DrawFill32(req.x, req.y + h - 1, w, 1, dbg);
+			R_DrawFill32(req.x, req.y, 1, h, dbg);
+			R_DrawFill32(req.x + w - 1, req.y, 1, h, dbg);
+		}
+	}
+
 	return R_TextDrawString(req);
 }
 
@@ -1008,6 +976,11 @@ void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, colo
                 text_render_request_t req{};
                 SCR_FillTextRequest(req, x, y, clampedScale, flags, 1, text, finalColor, SCR_DefaultFontHandle());
                 req.kfont = &scr.kfont;
+                auto meas = R_TextMeasureString(req);
+                if (SCR_ShouldDrawTextBackground()) {
+                        const color_t bg = SCR_BackgroundColor();
+                        R_DrawFill32(req.x, req.y, meas.width, meas.height, bg);
+                }
                 R_TextDrawString(req);
                 return;
         }
@@ -1015,6 +988,11 @@ void SCR_DrawGlyph(int x, int y, int scale, int flags, unsigned char glyph, colo
         char text[2] = { static_cast<char>(baseGlyph), '\0' };
         text_render_request_t req{};
         SCR_FillTextRequest(req, x, y, clampedScale, flags, 1, text, color, scr.font_pic);
+        if (SCR_ShouldDrawTextBackground()) {
+                auto meas = R_TextMeasureString(req);
+                const color_t bg = SCR_BackgroundColor();
+                R_DrawFill32(req.x, req.y, meas.width, meas.height, bg);
+        }
         R_TextDrawString(req);
 }
 
@@ -1403,6 +1381,7 @@ void SCR_InitFontSystem(void)
 	scr_text_outline = Cvar_Get("scr_text_outline", "0", CVAR_ARCHIVE);
 	scr_text_bg = Cvar_Get("scr_text_bg", "0", CVAR_ARCHIVE);
 	scr_text_bg_alpha = Cvar_Get("scr_text_bg_alpha", "0.5", CVAR_ARCHIVE);
+	scr_text_debug = Cvar_Get("scr_text_debug", "0", 0);
 	if (scr_font)
 		scr_font->changed = scr_font_changed;
 #if USE_FREETYPE

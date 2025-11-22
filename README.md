@@ -115,7 +115,9 @@ For information on using and configuring **WORR**, refer to the manuals in the `
 - `scr_text_outline`: default outline thickness (0 = disabled).
 - `scr_text_bg` / `scr_text_bg_alpha`: enable an optional black text background and set its opacity.
 - `ui_font` / `ui_font_size`: menu/UI font selection and scale.
+- `ui_text_bg` / `ui_text_bg_alpha`: UI-only background fill and opacity.
 - `con_font` / `con_scale`: console font selection and scale.
+- `scr_text_debug`: draw debug outlines around text bounds for troubleshooting.
 - Style flags available to UI code: `UI_BOLD`, `UI_ITALIC`, `UI_UNDERLINE`, `UI_OUTLINE`, plus shadow/color flags.
 
 ---

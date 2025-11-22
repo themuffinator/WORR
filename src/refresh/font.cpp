@@ -15,9 +15,17 @@
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 extern drawStatic_t draw;
 
 namespace {
+
+static constexpr int GLYPH_PADDING = 2;
+static constexpr int MAX_ATLASES = 8;
 
 static inline bool is_newline(uint32_t codepoint) noexcept
 {
@@ -35,7 +43,30 @@ static inline float resolve_dpi(const text_render_request_t &req) noexcept
         return req.dpi_scale;
     if (draw.scale > 0.0f)
         return draw.scale;
-    return 1.0f;
+#ifdef _WIN32
+    // Try to use system DPI on Windows if available
+    UINT dpi = 0;
+    HDC hdc = GetDC(nullptr);
+    if (hdc) {
+        dpi = static_cast<UINT>(GetDeviceCaps(hdc, LOGPIXELSY));
+        ReleaseDC(nullptr, hdc);
+    }
+    if (dpi > 0) {
+        const float normalized = dpi / 96.0f;
+        if (normalized > 0.0f)
+            return normalized;
+    }
+#endif
+
+    // Fallback heuristic based on render resolution (avoid tiny text on high DPI).
+    const float refW = 1920.0f;
+    const float refH = 1080.0f;
+    const float w = static_cast<float>(r_config.width);
+    const float h = static_cast<float>(r_config.height);
+    const float scaleW = (refW > 0.0f) ? (w / refW) : 1.0f;
+    const float scaleH = (refH > 0.0f) ? (h / refH) : 1.0f;
+    const float heuristic = (std::max)(1.0f, (std::max)(scaleW, scaleH));
+    return heuristic;
 }
 
 static inline text_style_t style_from_flags(int flags, const text_render_request_t &req)
@@ -140,8 +171,8 @@ static void draw_styled_quad(float x, float y, float w, float h,
 
 struct FtAtlas {
     GLuint texnum = 0;
-    int width = 512;
-    int height = 512;
+    int width = 0;
+    int height = 0;
     int pen_x = 0;
     int pen_y = 0;
     int row_height = 0;
@@ -407,16 +438,19 @@ public:
             return {};
 
         auto tryAllocate = [&](FtAtlas &atlas, int index) -> FtAtlasPlacement {
-            if (width + 1 > atlas.width || height + 1 > atlas.height)
+            const int padded_w = width + GLYPH_PADDING;
+            const int padded_h = height + GLYPH_PADDING;
+
+            if (padded_w > atlas.width || padded_h > atlas.height)
                 return {};
 
-            if (atlas.pen_x + width + 1 > atlas.width) {
+            if (atlas.pen_x + padded_w > atlas.width) {
                 atlas.pen_x = 0;
                 atlas.pen_y += atlas.row_height;
                 atlas.row_height = 0;
             }
 
-            if (atlas.pen_y + height + 1 > atlas.height)
+            if (atlas.pen_y + padded_h > atlas.height)
                 return {};
 
             FtAtlasPlacement placement{};
@@ -425,8 +459,8 @@ public:
             placement.x = atlas.pen_x;
             placement.y = atlas.pen_y;
 
-            atlas.pen_x += width + 1;
-            atlas.row_height = (std::max)(atlas.row_height, height + 1);
+            atlas.pen_x += padded_w;
+            atlas.row_height = (std::max)(atlas.row_height, padded_h);
 
             return placement;
         };
@@ -439,13 +473,40 @@ public:
 
         FtAtlas &atlas = create_atlas(fontSize);
         const int index = static_cast<int>(fontSize.atlases.size() - 1);
+        if (atlas.texnum == 0 || atlas.width == 0 || atlas.height == 0)
+            return {};
         FtAtlasPlacement placement = tryAllocate(atlas, index);
         return placement;
     }
 
+    static int atlas_dimension(int pixel_height)
+    {
+        // Heuristic: scale atlas size with requested pixel height; clamp to sane pow2 range.
+        const int base_height = (pixel_height > 0) ? pixel_height : (CONCHAR_HEIGHT * 4);
+        const float scale = (std::max)(1.0f, base_height / static_cast<float>(CONCHAR_HEIGHT * 4));
+        int size = 512;
+        if (scale > 3.0f)
+            size = 2048;
+        else if (scale > 1.5f)
+            size = 1024;
+
+        // ensure power of two
+        int pow2 = 1;
+        while (pow2 < size && pow2 < 4096)
+            pow2 <<= 1;
+        return (std::min)(pow2, 2048);
+    }
+
     FtAtlas &create_atlas(FtFontSize &fontSize)
     {
+        static FtAtlas invalid{};
+        if (fontSize.atlases.size() >= MAX_ATLASES)
+            return invalid;
+
         FtAtlas atlas{};
+        const int target = atlas_dimension(fontSize.pixel_height);
+        atlas.width = target;
+        atlas.height = target;
         qglGenTextures(1, &atlas.texnum);
         GL_ForceTexture(TMU_TEXTURE, atlas.texnum);
 

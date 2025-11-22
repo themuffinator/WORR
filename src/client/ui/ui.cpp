@@ -305,10 +305,31 @@ bool UI_CursorInRect(const vrect_t *rect)
 static cvar_t* ui_font = nullptr;
 static cvar_t* ui_font_size = nullptr;
 static int ui_font_scale = 1;
+static cvar_t* ui_text_bg = nullptr;
+static cvar_t* ui_text_bg_alpha = nullptr;
+
+static color_t UI_BackgroundColor()
+{
+    if (!ui_text_bg || ui_text_bg->integer == 0)
+        return ColorA(0);
+    float alpha = 0.0f;
+    if (ui_text_bg_alpha)
+        alpha = std::clamp(ui_text_bg_alpha->value, 0.0f, 1.0f);
+    if (alpha <= 0.0f)
+        return ColorA(0);
+    return ColorRGBA(0, 0, 0, static_cast<uint8_t>(alpha * 255.0f));
+}
 
 // nb: all UI strings are drawn at full alpha
 void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 {
+    const color_t bg = UI_BackgroundColor();
+    if (bg.a) {
+        int width = SCR_MeasureString(ui_font_scale, flags & ~UI_MULTILINE, MAX_STRING_CHARS, string, uis.fontHandle);
+        int height = SCR_FontLineHeight(ui_font_scale, uis.fontHandle);
+        R_DrawFill32(x - (flags & UI_RIGHT ? width : 0) - ((flags & UI_CENTER) == UI_CENTER ? width / 2 : 0),
+            y, width, height, bg);
+    }
     SCR_DrawStringStretch(x, y, ui_font_scale, flags, MAX_STRING_CHARS, string,
                           ColorSetAlpha(color, static_cast<uint8_t>(255)), uis.fontHandle);
 }
@@ -316,6 +337,12 @@ void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 // nb: all UI chars are drawn at full alpha
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 {
+    const color_t bg = UI_BackgroundColor();
+    if (bg.a) {
+        int height = SCR_FontLineHeight(ui_font_scale, uis.fontHandle);
+        int width = SCR_MeasureString(ui_font_scale, UI_IGNORECOLOR, 1, " ", uis.fontHandle);
+        R_DrawFill32(x, y, width, height, bg);
+    }
     SCR_DrawGlyph(x, y, ui_font_scale, flags, static_cast<unsigned char>(ch),
         ColorSetAlpha(color, static_cast<uint8_t>(255)));
 }
@@ -611,6 +638,8 @@ void UI_Init(void)
     ui_open = Cvar_Get("ui_open", "0", 0);
     ui_font = Cvar_Get("ui_font", "/fonts/RobotoMono-Regular.ttf", CVAR_ARCHIVE);
     ui_font_size = Cvar_Get("ui_font_size", "1", CVAR_ARCHIVE);
+    ui_text_bg = Cvar_Get("ui_text_bg", "0", CVAR_ARCHIVE);
+    ui_text_bg_alpha = Cvar_Get("ui_text_bg_alpha", "0.4", CVAR_ARCHIVE);
     ui_font_scale = std::max(1, ui_font_size->integer);
     ui_font->changed = [](cvar_t* self) {
         uis.fontHandle = SCR_RegisterFontPath(self->string);
@@ -626,6 +655,7 @@ void UI_Init(void)
     uis.fontHandle = SCR_RegisterFontPath(ui_font->string);
     if (!uis.fontHandle)
         uis.fontHandle = SCR_RegisterFontPath("conchars.pcx");
+
     uis.cursorHandle = R_RegisterPic("ch1");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
 
