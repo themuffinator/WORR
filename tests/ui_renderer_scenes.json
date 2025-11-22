@@ -1,0 +1,152 @@
+{
+  "description": "Sample UI renderer scenes for exercising primitives, interaction states, and DPI scaling.",
+  "scenes": [
+    {
+      "name": "dpi_1x_primitives",
+      "dpi_scale": 1.0,
+      "layout_scale": 1.0,
+      "commands": [
+        {
+          "primitive": "fill_rect",
+          "state": "normal",
+          "palette": "ui.fill.surface",
+          "x": 32,
+          "y": 32,
+          "width": 240,
+          "height": 64,
+          "corner_radius": 6,
+          "note": "Base surface block for comparing stroke/text overlays."
+        },
+        {
+          "primitive": "stroke_rect",
+          "state": "hover",
+          "palette": "ui.stroke.focus",
+          "x": 36,
+          "y": 36,
+          "width": 232,
+          "height": 56,
+          "corner_radius": 10,
+          "note": "Hover outline around the surface block."
+        },
+        {
+          "primitive": "icon",
+          "state": "active",
+          "icon": "ui.icon.action",
+          "palette": "ui.icon.primary",
+          "x": 52,
+          "y": 52,
+          "size": 24,
+          "note": "Active icon tint against the base surface."
+        },
+        {
+          "primitive": "text",
+          "state": "disabled",
+          "text": "Disabled label",
+          "typography": "ui.label.md",
+          "palette": "ui.text.primary",
+          "x": 88,
+          "y": 68,
+          "note": "Disabled text layered beside the icon."
+        }
+      ]
+    },
+    {
+      "name": "dpi_150_states",
+      "dpi_scale": 1.5,
+      "layout_scale": 1.0,
+      "commands": [
+        {
+          "primitive": "fill_rect",
+          "state": "active",
+          "palette": "ui.fill.accent",
+          "x": 20,
+          "y": 128,
+          "width": 260,
+          "height": 72,
+          "corner_radius": 8,
+          "note": "Scaled active fill for DPI 150%."
+        },
+        {
+          "primitive": "stroke_rect",
+          "state": "disabled",
+          "palette": "ui.stroke.muted",
+          "x": 24,
+          "y": 132,
+          "width": 252,
+          "height": 64,
+          "corner_radius": 12,
+          "note": "Disabled outline at 150% DPI to confirm stroke snapping."
+        },
+        {
+          "primitive": "icon",
+          "state": "normal",
+          "icon": "ui.icon.info",
+          "palette": "ui.icon.secondary",
+          "x": 44,
+          "y": 148,
+          "size": 28,
+          "note": "Normal icon tint next to hover text."
+        },
+        {
+          "primitive": "text",
+          "state": "hover",
+          "text": "Hover text at 150%",
+          "typography": "ui.label.lg",
+          "palette": "ui.text.primary",
+          "x": 88,
+          "y": 164,
+          "note": "Hover label verifying scaled font metrics."
+        }
+      ]
+    },
+    {
+      "name": "dpi_200_layout",
+      "dpi_scale": 2.0,
+      "layout_scale": 1.25,
+      "commands": [
+        {
+          "primitive": "fill_rect",
+          "state": "hover",
+          "palette": "ui.fill.surface_alt",
+          "x": 48,
+          "y": 224,
+          "width": 288,
+          "height": 88,
+          "corner_radius": 10,
+          "note": "Hover fill with enlarged layout scale for dense DPI."
+        },
+        {
+          "primitive": "stroke_rect",
+          "state": "active",
+          "palette": "ui.stroke.accent",
+          "x": 52,
+          "y": 228,
+          "width": 280,
+          "height": 80,
+          "corner_radius": 14,
+          "note": "Active outline aligned to scaled hover block."
+        },
+        {
+          "primitive": "icon",
+          "state": "disabled",
+          "icon": "ui.icon.lock",
+          "palette": "ui.icon.disabled",
+          "x": 76,
+          "y": 248,
+          "size": 36,
+          "note": "Disabled icon tint at 200% DPI with layout zoom."
+        },
+        {
+          "primitive": "text",
+          "state": "normal",
+          "text": "Normal text @2x/1.25x",
+          "typography": "ui.label.sm",
+          "palette": "ui.text.secondary",
+          "x": 124,
+          "y": 268,
+          "note": "Normal text aligned to disabled icon for mixed-state layering."
+        }
+      ]
+    }
+  ]
+}
