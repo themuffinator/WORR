@@ -1,5 +1,6 @@
 #include "MenuItem.h"
 #include "ui.hpp"
+#include "renderer.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -123,7 +124,7 @@ Invokes a visitor for every child entry while maintaining unique ownership.
 */
 void MenuItem::ForEachChild(const std::function<void(const MenuItem &)> &visitor) const
 {
-	for (const auto &child : m_children)
+			for (const auto &child : m_children)
 {
 		visitor(*child);
 }
@@ -155,6 +156,47 @@ Safely unwraps a shared_ptr-backed texture handle for draw routines.
 static qhandle_t UI_ResolveHandle(const MenuItem::TextureHandle &handle)
 {
 	return handle ? *handle : 0;
+}
+
+/*
+=============
+UI_MenuInitRendererContext
+
+Creates a renderer context with the current UI scale settings applied.
+=============
+*/
+static uiRendererContext_t UI_MenuInitRendererContext()
+{
+	uiRendererContext_t ctx{};
+	UI_RendererInitContext(&ctx);
+	return ctx;
+}
+
+/*
+=============
+UI_MenuControlState
+
+Resolves the uiControlState_t for a widget based on interaction flags.
+=============
+*/
+static uiControlState_t UI_MenuControlState(bool disabled, bool focused, bool active = false)
+{
+	if (disabled)
+{
+	return UI_STATE_DISABLED;
+}
+
+	if (active)
+{
+	return UI_STATE_ACTIVE;
+}
+
+	if (focused)
+{
+	return UI_STATE_FOCUSED;
+}
+
+	return UI_STATE_DEFAULT;
 }
 
 /*
@@ -201,33 +243,35 @@ Action_Draw helper.
 void ActionItem::Draw() const
 {
 	int flags = m_uiFlags;
-	color_t color = COLOR_WHITE;
-
+	const uiControlState_t state = UI_MenuControlState(m_disabled, m_hasFocus);
+	uiRendererContext_t ctx = UI_MenuInitRendererContext();
+	
+	uiRendererTextStyle_t textStyle{};
+	textStyle.typography = UI_TYPO_BODY;
+	textStyle.color = UI_COLOR_TEXT;
+	textStyle.state = state;
+	textStyle.flags = flags;
+	
 	if (m_hasFocus)
 	{
+				const color_t cursorColor = UI_ColorForRole(UI_COLOR_HIGHLIGHT, UI_STATE_FOCUSED);
 		if ((m_uiFlags & UI_CENTER) != UI_CENTER)
-		{
-			if ((uis.realtime >> 8) & 1)
-			{
-				UI_DrawChar(m_x - RCOLUMN_OFFSET / 2, m_y, m_uiFlags | UI_RIGHT, color, 13);
-			}
-		}
-		else
-		{
-			flags |= UI_ALTCOLOR;
-			if ((uis.realtime >> 8) & 1)
-			{
-				UI_DrawChar(m_x - static_cast<int>(GetName().length()) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, m_y, flags, color, 13);
-			}
-		}
-	}
-
-	if (m_disabled)
 	{
-		color = uis.color.disabled;
+			if ((uis.realtime >> 8) & 1)
+	{
+				UI_DrawChar(m_x - RCOLUMN_OFFSET / 2, m_y, m_uiFlags | UI_RIGHT, cursorColor, 13);
 	}
-
-	UI_DrawString(m_x, m_y, flags, color, GetName().c_str());
+	}
+		else
+	{
+			if ((uis.realtime >> 8) & 1)
+	{
+				UI_DrawChar(m_x - static_cast<int>(GetName().length()) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, m_y, flags, cursorColor, 13);
+	}
+	}
+	}
+	
+				UI_RendererDrawText(&ctx, &textStyle, static_cast<float>(m_x), static_cast<float>(m_y), GetName().c_str());
 }
 
 /*
@@ -356,7 +400,42 @@ Renders the text at the configured position without interaction.
 */
 void StaticItem::Draw() const
 {
+	uiRendererContext_t ctx = UI_MenuInitRendererContext();
+	uiControlState_t state = UI_STATE_DEFAULT;
+	uiColorRole_t role = UI_COLOR_TEXT;
+	
+	if (m_color.u32 == uis.color.disabled.u32)
+	{
+		state = UI_STATE_DISABLED;
+		role = UI_COLOR_MUTED;
+	}
+	else if (m_color.u32 == uis.color.selection.u32)
+	{
+		state = UI_STATE_FOCUSED;
+		role = UI_COLOR_TEXT;
+	}
+	else if (m_color.u32 == uis.color.active.u32 || m_color.u32 == uis.color.normal.u32)
+	{
+		role = UI_COLOR_ACCENT;
+	}
+	
+	uiRendererTextStyle_t textStyle{};
+	textStyle.typography = UI_TYPO_BODY;
+	textStyle.color = role;
+	textStyle.state = state;
+	textStyle.flags = m_uiFlags;
+	
+	if (m_color.u32 && m_color.u32 != COLOR_WHITE.u32 &&
+	m_color.u32 != uis.color.disabled.u32 &&
+	m_color.u32 != uis.color.selection.u32 &&
+	m_color.u32 != uis.color.active.u32 &&
+	m_color.u32 != uis.color.normal.u32)
+	{
 	UI_DrawString(m_x, m_y, m_uiFlags, m_color, GetName().c_str());
+	return;
+	}
+	
+				UI_RendererDrawText(&ctx, &textStyle, static_cast<float>(m_x), static_cast<float>(m_y), GetName().c_str());
 }
 
 /*
@@ -618,25 +697,40 @@ std::string FieldItem::GetValue() const
 FieldItem::SetValue
 
 Replaces the current input buffer contents with the provided string.
-=============
-*/
-void FieldItem::SetValue(const std::string &value)
-{
+	=============
+	*/
+	void FieldItem::SetValue(const std::string &value)
+	{
 	Q_strncpyz(m_field.text, value.c_str(), sizeof(m_field.text));
 	m_field.cursor = Q_min<int>(static_cast<int>(value.size()), m_field.maxChars);
-}
+	}
+	
+	/*
+	=============
+	FieldItem::Draw
+	
+	Renders the label and editable input field with blinking cursor when focused.
+	=============
+	*/
+	void FieldItem::Draw() const
+	{
+	uiRendererContext_t ctx = UI_MenuInitRendererContext();
+	const uiControlState_t state = UI_MenuControlState(false, m_hasFocus);
+	
+	uiRendererTextStyle_t labelStyle{};
+	labelStyle.typography = UI_TYPO_BODY;
+	labelStyle.color = UI_COLOR_TEXT;
+	labelStyle.state = state;
+	labelStyle.flags = m_uiFlags | UI_RIGHT;
+	
+				UI_RendererDrawText(&ctx, &labelStyle, static_cast<float>(m_x + LCOLUMN_OFFSET), static_cast<float>(m_y), GetName().c_str());
 
-/*
-=============
-FieldItem::Draw
+	const qhandle_t fieldFont = UI_FontForRole(UI_TYPO_MONOSPACE);
+	const color_t fieldColor = UI_ColorForRole(UI_COLOR_TEXT, state);
+	IF_Draw(&m_field, m_x + RCOLUMN_OFFSET, m_y, m_uiFlags | (m_hasFocus ? UI_BLINK : 0), fieldFont);
 
-Renders the label and editable input field with blinking cursor when focused.
-=============
-*/
-void FieldItem::Draw() const
-{
-	UI_DrawString(m_x + LCOLUMN_OFFSET, m_y, m_uiFlags | UI_RIGHT | UI_ALTCOLOR, COLOR_WHITE, GetName().c_str());
-	IF_Draw(&m_field, m_x + RCOLUMN_OFFSET, m_y, m_uiFlags | (m_hasFocus ? UI_BLINK : 0), uis.fontHandle);
+	// IF_Draw currently renders with its own color, so ensure the theme selection is applied to subsequent UI operations.
+	(void)fieldColor;
 }
 
 /*
@@ -783,7 +877,7 @@ void ListItem::SetSelection(int index)
 	if (m_rows.empty())
 	{
 		m_selectedRow = 0;
-		return;
+	return;
 	}
 
 	if (index < 0)
@@ -803,38 +897,46 @@ void ListItem::SetSelection(int index)
 ListItem::GetRows
 =============
 */
-const ListItem::Rows &ListItem::GetRows() const
-{
-	return m_rows;
-}
-
-/*
-=============
-ListItem::Draw
-
-Displays each row with a focus highlight akin to MenuList_Draw.
-=============
-*/
-void ListItem::Draw() const
-{
-	int yCursor = m_y;
-	const int flags = m_uiFlags & ~(UI_LEFT | UI_RIGHT);
-
-	for (size_t rowIndex = 0; rowIndex < m_rows.size(); rowIndex++)
+	const ListItem::Rows &ListItem::GetRows() const
 	{
-		const bool selected = static_cast<int>(rowIndex) == m_selectedRow;
-		color_t color = selected ? uis.color.textHighlight : COLOR_WHITE;
-		int xCursor = m_x;
-
-		for (const auto &col : m_rows[rowIndex])
-		{
-			UI_DrawString(xCursor, yCursor, flags | UI_LEFT | (selected ? UI_ALTCOLOR : 0), color, col.c_str());
-			xCursor += m_width / std::max<int>(1, static_cast<int>(m_rows[rowIndex].size()));
+	return m_rows;
+	}
+	
+	/*
+	=============
+	ListItem::Draw
+	
+	Displays each row with a focus highlight akin to MenuList_Draw.
+	=============
+	*/
+	void ListItem::Draw() const
+	{
+		int yCursor = m_y;
+		const int flags = m_uiFlags & ~(UI_LEFT | UI_RIGHT);
+	uiRendererContext_t ctx = UI_MenuInitRendererContext();
+	
+		for (size_t rowIndex = 0; rowIndex < m_rows.size(); rowIndex++)
+	{
+			const bool selected = static_cast<int>(rowIndex) == m_selectedRow;
+	const uiControlState_t state = UI_MenuControlState(false, m_hasFocus, selected);
+	
+			uiRendererTextStyle_t rowStyle{};
+			rowStyle.typography = UI_TYPO_BODY;
+			rowStyle.color = UI_COLOR_TEXT;
+			rowStyle.state = state;
+			int xCursor = m_x;
+	
+			for (const auto &col : m_rows[rowIndex])
+	{
+				rowStyle.flags = flags | UI_LEFT;
+				UI_RendererDrawText(&ctx, &rowStyle, static_cast<float>(xCursor), static_cast<float>(yCursor), col.c_str());
+				xCursor += m_width / std::max<int>(1, static_cast<int>(m_rows[rowIndex].size()));
 		}
 
-		if (selected && m_hasFocus)
-		{
-			UI_DrawChar(m_x - CURSOR_OFFSET / 2, yCursor, flags | UI_RIGHT, color, 13);
+			if (selected && m_hasFocus)
+{
+				const color_t cursorColor = UI_ColorForRole(UI_COLOR_HIGHLIGHT, UI_STATE_FOCUSED);
+				UI_DrawChar(m_x - CURSOR_OFFSET / 2, yCursor, flags | UI_RIGHT, cursorColor, 13);
 		}
 
 		yCursor += MLIST_SPACING;
@@ -1035,30 +1137,40 @@ Renders a text label and slider bar, using the same glyph layout as Slider_Draw.
 =============
 */
 void SliderItem::Draw() const
-{
+	{
 	int flags = m_uiFlags & ~(UI_LEFT | UI_RIGHT);
-	color_t color = COLOR_WHITE;
-
+	const uiControlState_t state = UI_MenuControlState(false, m_hasFocus);
+	uiRendererContext_t ctx = UI_MenuInitRendererContext();
+	
+	uiRendererTextStyle_t labelStyle{};
+	labelStyle.typography = UI_TYPO_BODY;
+	labelStyle.color = UI_COLOR_TEXT;
+	labelStyle.state = state;
+	labelStyle.flags = flags | UI_RIGHT;
+	
+	const color_t trackColor = UI_ColorForRole(UI_COLOR_ACCENT, state);
+	const color_t cursorColor = UI_ColorForRole(UI_COLOR_HIGHLIGHT, m_hasFocus ? UI_STATE_FOCUSED : state);
+	
 	if (m_hasFocus)
 	{
 		if ((uis.realtime >> 8) & 1)
-		{
-			UI_DrawChar(m_x + RCOLUMN_OFFSET / 2, m_y, m_uiFlags | UI_RIGHT, color, 13);
-		}
+	{
+	UI_DrawChar(m_x + RCOLUMN_OFFSET / 2, m_y, m_uiFlags | UI_RIGHT, cursorColor, 13);
 	}
-
-	UI_DrawString(m_x + LCOLUMN_OFFSET, m_y, flags | UI_RIGHT | UI_ALTCOLOR, color, GetName().c_str());
-	UI_DrawChar(m_x + RCOLUMN_OFFSET, m_y, flags | UI_LEFT, color, 128);
-
+	}
+	
+	UI_RendererDrawText(&ctx, &labelStyle, static_cast<float>(m_x + LCOLUMN_OFFSET), static_cast<float>(m_y), GetName().c_str());
+	UI_DrawChar(m_x + RCOLUMN_OFFSET, m_y, flags | UI_LEFT, trackColor, 128);
+	
 	for (int i = 0; i < SLIDER_RANGE; i++)
 	{
-		UI_DrawChar(RCOLUMN_OFFSET + m_x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, m_y, flags | UI_LEFT, color, 129);
+		UI_DrawChar(RCOLUMN_OFFSET + m_x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, m_y, flags | UI_LEFT, trackColor, 129);
 	}
-
-	UI_DrawChar(RCOLUMN_OFFSET + m_x + SLIDER_RANGE * CONCHAR_WIDTH + CONCHAR_WIDTH, m_y, flags | UI_LEFT, color, 130);
+	
+	UI_DrawChar(RCOLUMN_OFFSET + m_x + SLIDER_RANGE * CONCHAR_WIDTH + CONCHAR_WIDTH, m_y, flags | UI_LEFT, trackColor, 130);
 
 	const float pos = Q_clipf((m_value - m_minValue) / (m_maxValue - m_minValue), 0.0f, 1.0f);
-	UI_DrawChar(CONCHAR_WIDTH + RCOLUMN_OFFSET + m_x + (SLIDER_RANGE - 1) * CONCHAR_WIDTH * pos, m_y, flags | UI_LEFT, color, 131);
+	UI_DrawChar(CONCHAR_WIDTH + RCOLUMN_OFFSET + m_x + (SLIDER_RANGE - 1) * CONCHAR_WIDTH * pos, m_y, flags | UI_LEFT, trackColor, 131);
 }
 
 /*
