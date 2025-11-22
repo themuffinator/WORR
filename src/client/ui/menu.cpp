@@ -261,27 +261,40 @@ Keybind_Init
 */
 static void Keybind_Init(menuKeybind_t *k)
 {
-    size_t len;
-
-    Q_assert(k->generic.name);
-
-    k->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
-
-    k->generic.rect.x = k->generic.x + LCOLUMN_OFFSET;
-    k->generic.rect.y = k->generic.y;
-
-    UI_StringDimensions(&k->generic.rect,
-                        k->generic.uiFlags | UI_RIGHT, k->generic.name);
-
-    if (k->altbinding[0]) {
-        len = strlen(k->binding) + 4 + strlen(k->altbinding);
-    } else if (k->binding[0]) {
-        len = strlen(k->binding);
-    } else {
-        len = 3;
-    }
-
-    k->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + len * CONCHAR_WIDTH;
+	size_t len;
+	uiLayoutRect_t row{};
+	uiLayoutSplit_t split{};
+	
+	Q_assert(k->generic.name);
+	
+	k->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+	
+	row.x = UI_Pixels(static_cast<float>(k->generic.x));
+	row.y = UI_Pixels(static_cast<float>(k->generic.y));
+	row.width = UI_Percent(0.6f);
+	row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	row.spacing = UI_ColumnPadding();
+	
+	split = UI_SplitLayoutRow(&row, nullptr, 0.45f);
+	
+	k->generic.rect = split.label;
+	UI_StringDimensions(&k->generic.rect,
+		k->generic.uiFlags | UI_RIGHT, k->generic.name);
+	
+	if (k->altbinding[0]) {
+	len = strlen(k->binding) + 4 + strlen(k->altbinding);
+	} else if (k->binding[0]) {
+	len = strlen(k->binding);
+	} else {
+	len = 3;
+	}
+	
+	const int fieldExtent = (split.field.x + split.field.width) - k->generic.rect.x;
+	if (k->generic.rect.width < fieldExtent) {
+	k->generic.rect.width = fieldExtent;
+	}
+	
+	k->generic.rect.width += len * UI_CharWidth();
 }
 
 static void Keybind_Push(menuKeybind_t *k)
@@ -420,32 +433,44 @@ SpinControl_Init
 */
 void SpinControl_Init(menuSpinControl_t *s)
 {
-    char **n;
-    int    maxLength, length;
+	    char **n;
+	    int    maxLength, length;
+	    uiLayoutRect_t row{};
+	    uiLayoutSplit_t split{};
+	
+	    s->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+	
+	    row.x = UI_Pixels(static_cast<float>(s->generic.x));
+	    row.y = UI_Pixels(static_cast<float>(s->generic.y));
+	    row.width = UI_Percent(0.6f);
+	    row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	    row.spacing = UI_ColumnPadding();
+	
+	    split = UI_SplitLayoutRow(&row, nullptr, 0.45f);
+	
+	    s->generic.rect = split.label;
+	    UI_StringDimensions(&s->generic.rect,
+	                        s->generic.uiFlags | UI_RIGHT, s->generic.name);
+	
+	    maxLength = 0;
+	    s->numItems = 0;
+	    n = s->itemnames;
+	    while (*n) {
+	        length = strlen(*n);
+	
+	        if (maxLength < length) {
+	            maxLength = length;
+	        }
+	        s->numItems++;
+	        n++;
+	    }
+	
+	    const int minWidth = (split.field.x + split.field.width) - s->generic.rect.x;
+	    if (s->generic.rect.width < minWidth) {
+	        s->generic.rect.width = minWidth;
+	    }
 
-    s->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
-
-    s->generic.rect.x = s->generic.x + LCOLUMN_OFFSET;
-    s->generic.rect.y = s->generic.y;
-
-    UI_StringDimensions(&s->generic.rect,
-                        s->generic.uiFlags | UI_RIGHT, s->generic.name);
-
-    maxLength = 0;
-    s->numItems = 0;
-    n = s->itemnames;
-    while (*n) {
-        length = strlen(*n);
-
-        if (maxLength < length) {
-            maxLength = length;
-        }
-        s->numItems++;
-        n++;
-    }
-
-    s->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) +
-                             maxLength * CONCHAR_WIDTH;
+	    s->generic.rect.width += maxLength * UI_CharWidth();
 }
 
 /*
