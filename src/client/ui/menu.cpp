@@ -22,41 +22,144 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "menu_controls.hpp"
 
 #include <limits.h>
+#include <initializer_list>
 #include <algorithm>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 #include <cstring>
 
-/*
-===============================================================================
-Menu item responsibilities (MenuItem parity)
+class MenuController {
+public:
+	enum class Action {
+		Up,
+		Down,
+		Left,
+		Right,
+		Activate,
+		Back,
+		Primary,
+Secondary,
+Tertiary,
+ClearBinding,
+First,
+Last,
+ScrollUp,
+ScrollDown
+};
 
-The legacy menu widgets mirror MenuItem's virtuals:
-        - HandleEvent():
-                Menu_KeyEvent routes keys to Field_Key, MenuList_Key and Slider_Key, while
-                Menu_CharEvent and Menu_MouseMove forward character and pointer input to
-                Field_Char, MenuList_MouseMove and Slider_MouseMove respectively. Menu_SlideItem
-                uses Slider_DoSlide for controller/keyboard slides, and Menu_SelectItem
-                triggers Common_DoEnter for activatable legacy items.
-        - Activate():
-                Common_DoEnter wraps the per-item activate callbacks for legacy widgets
-                and List rows (including save/load actions). Slider_DoSlide handles slider
-                activation through directional input routed by Menu_SlideItem.
-        - SetFocus()/HasFocus():
-                Menu_Draw assigns QMF_HASFOCUS on navigable items via Menu_SetFocus.
-        - OnAttach()/OnDetach():
-                Menu_Push invokes Field_Push, MenuList_Init (indirectly before use),
-                Slider_Push and Action/Savegame_Push to sync Cvars or populate display data
-                when a menu becomes active. Menu_Pop calls the matching *_Pop routines to
-                flush edits back to Cvars or free transient state.
-This mapping keeps the procedural menu controls aligned with the expectations
-in MenuItem.h: each widget owns its input funnels, activation path and lifecycle
-hooks in a consistent, MenuItem-like shape.
-===============================================================================
-*/
+	MenuController();
 
-static menuDropdown_t *ui_activeDropdown = NULL;
+	menuSound_t HandleKey(menuFrameWork_t *menu, int key);
+	void CloseDropdown(menuDropdown_t *d, bool applyHovered);
+	void OpenDropdown(menuDropdown_t *d);
+	menuDropdown_t *ActiveDropdown(menuFrameWork_t *menu) const;
+	void ResetDropdown(menuFrameWork_t *menu);
+	bool HasAction(int key, Action action) const;
+	std::vector<Action> ActionsForKey(int key) const;
+
+private:
+	std::vector<std::pair<int, Action>> bindings;
+	menuDropdown_t *activeDropdown;
+
+	void Bind(Action action, std::initializer_list<int> keys);
+	menuSound_t HandleDropdownAction(menuFrameWork_t *menu, menuDropdown_t *dropdown, Action action);
+	menuSound_t HandleMenuAction(menuFrameWork_t *menu, Action action, int key);
+	menuSound_t HandlePointerAction(menuFrameWork_t *menu, Action action, int key);
+};
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered);
+
+/*
+=============
+UI_MenuController
+
+Returns the shared menu input controller.
+=============
+*/
+static MenuController &UI_MenuController()
+{
+	static MenuController controller;
+	return controller;
+}
+
+/*
+=============
+MenuController
+
+Initializes the menu controller with default bindings and no active dropdown.
+=============
+*/
+MenuController::MenuController()
+	: activeDropdown(NULL)
+{
+	Bind(Action::Back, { K_ESCAPE, K_MOUSE2 });
+	Bind(Action::Up, { K_KP_UPARROW, K_UPARROW, 'k' });
+	Bind(Action::Down, { K_KP_DOWNARROW, K_DOWNARROW, 'j', K_TAB });
+Bind(Action::Left, { K_KP_LEFTARROW, K_LEFTARROW, 'h', K_MWHEELDOWN });
+Bind(Action::Right, { K_KP_RIGHTARROW, K_RIGHTARROW, 'l', K_MWHEELUP });
+	Bind(Action::Activate, { K_SPACE, K_ENTER, K_KP_ENTER });
+Bind(Action::Primary, { K_MOUSE1, K_MOUSE3 });
+Bind(Action::Secondary, { K_MOUSE2 });
+Bind(Action::Tertiary, { });
+Bind(Action::ClearBinding, { K_BACKSPACE, K_DEL });
+Bind(Action::First, { K_HOME, K_KP_HOME });
+Bind(Action::Last, { K_END, K_KP_END });
+Bind(Action::ScrollUp, { K_MWHEELUP });
+Bind(Action::ScrollDown, { K_MWHEELDOWN });
+}
+
+/*
+=============
+MenuController::Bind
+
+Registers one or more keys for a given action.
+=============
+*/
+void MenuController::Bind(Action action, std::initializer_list<int> keys)
+{
+	for (int key : keys) {
+		bindings.emplace_back(key, action);
+	}
+}
+
+/*
+=============
+MenuController::HasAction
+
+Returns whether a key is bound to the provided action.
+=============
+*/
+bool MenuController::HasAction(int key, Action action) const
+{
+	for (const auto &binding : bindings) {
+		if (binding.first == key && binding.second == action) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+=============
+MenuController::ActionsForKey
+
+Collects the actions mapped to a key in insertion order.
+=============
+*/
+std::vector<MenuController::Action> MenuController::ActionsForKey(int key) const
+{
+	std::vector<Action> results;
+
+	for (const auto &binding : bindings) {
+		if (binding.first == key) {
+			results.push_back(binding.second);
+		}
+	}
+
+	return results;
+}
 
 static bool UI_TestCondition(const uiItemCondition_t *condition)
 {
@@ -132,9 +235,10 @@ static void Menu_UpdateConditionalState(menuFrameWork_t *menu)
 			item->flags &= ~QMF_DISABLED;
 	}
 
-	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu) {
-		if (ui_activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
-			Dropdown_Close(ui_activeDropdown, false);
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown) {
+		if (activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
+			Dropdown_Close(activeDropdown, false);
 	}
 }
 
@@ -268,19 +372,20 @@ static menuSound_t Keybind_DoEnter(menuKeybind_t *k)
 
 static menuSound_t Keybind_Key(menuKeybind_t *k, int key)
 {
-    menuFrameWork_t *menu = k->generic.parent;
+	menuFrameWork_t *menu = k->generic.parent;
 
-    if (menu->keywait) {
-        return QMS_OUT; // never gets there
-    }
+	if (menu->keywait) {
+		return QMS_OUT; // never gets there
+	}
 
-    if (key == K_BACKSPACE || key == K_DEL) {
-        Keybind_Remove(k->cmd);
-        Keybind_Update(menu);
-        return QMS_IN;
-    }
+	MenuController &controller = UI_MenuController();
+	if (controller.HasAction(key, MenuController::Action::ClearBinding)) {
+		Keybind_Remove(k->cmd);
+		Keybind_Update(menu);
+		return QMS_IN;
+	}
 
-    return QMS_NOTHANDLED;
+	return QMS_NOTHANDLED;
 }
 
 
@@ -891,32 +996,12 @@ static void Dropdown_SetSelection(menuDropdown_t *d, int index, bool notify)
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered)
 {
-    if (!d || !d->open)
-        return;
-
-    if (applyHovered && d->hovered >= 0 && d->hovered < d->spin.numItems)
-        Dropdown_SetSelection(d, d->hovered, true);
-
-    d->open = false;
-    d->hovered = -1;
-    d->listRect = {};
-
-    if (ui_activeDropdown == d)
-        ui_activeDropdown = NULL;
+UI_MenuController().CloseDropdown(d, applyHovered);
 }
 
 static void Dropdown_Open(menuDropdown_t *d)
 {
-    if (!d)
-        return;
-
-    if (ui_activeDropdown && ui_activeDropdown != d)
-        Dropdown_Close(ui_activeDropdown, false);
-
-    d->open = true;
-    ui_activeDropdown = d;
-    d->hovered = d->spin.curvalue;
-    Dropdown_UpdateScroll(d);
+UI_MenuController().OpenDropdown(d);
 }
 
 static void Dropdown_DrawList(menuDropdown_t *d)
@@ -1031,70 +1116,53 @@ static menuSound_t Dropdown_Activate(menuCommon_t *item)
         return QMS_IN;
     }
 
-    return QMS_NOTHANDLED;
+return QMS_NOTHANDLED;
 }
 
 static menuSound_t Dropdown_Keydown(menuCommon_t *item, int key)
 {
-    auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+	auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+	MenuController &controller = UI_MenuController();
+	std::vector<MenuController::Action> actions = controller.ActionsForKey(key);
 
-    if (dropdown->open) {
-        switch (key) {
-        case K_ESCAPE:
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        case K_ENTER:
-        case K_KP_ENTER:
-            Dropdown_Close(dropdown, true);
-            return QMS_MOVE;
-        case K_KP_UPARROW:
-        case K_UPARROW:
-        case 'k':
-        case K_MWHEELUP:
-            if (dropdown->hovered > 0) {
-                dropdown->hovered--;
-                Dropdown_UpdateScroll(dropdown);
-                return QMS_MOVE;
-            }
-            return QMS_BEEP;
-        case K_KP_DOWNARROW:
-        case K_DOWNARROW:
-        case 'j':
-        case K_MWHEELDOWN:
-            if (dropdown->hovered < dropdown->spin.numItems - 1) {
-                dropdown->hovered++;
-                Dropdown_UpdateScroll(dropdown);
-                return QMS_MOVE;
-            }
-            return QMS_BEEP;
-        case K_HOME:
-        case K_KP_HOME:
-            dropdown->hovered = 0;
-            Dropdown_UpdateScroll(dropdown);
-            return QMS_MOVE;
-        case K_END:
-        case K_KP_END:
-            dropdown->hovered = dropdown->spin.numItems - 1;
-            Dropdown_UpdateScroll(dropdown);
-            return QMS_MOVE;
-        case K_SPACE:
-            Dropdown_Close(dropdown, true);
-            return QMS_MOVE;
-        default:
-            break;
-        }
-    } else {
-        switch (key) {
-        case K_SPACE:
-        case K_ENTER:
-        case K_KP_ENTER:
-            return Dropdown_Activate(item);
-        default:
-            break;
-        }
-    }
+	if (dropdown->open) {
+		for (MenuController::Action action : actions) {
+			switch (action) {
+			case MenuController::Action::Back:
+			case MenuController::Action::Secondary:
+				Dropdown_Close(dropdown, false);
+				return QMS_SILENT;
+			case MenuController::Action::Activate:
+				Dropdown_Close(dropdown, true);
+				return QMS_MOVE;
+			case MenuController::Action::Up:
+			case MenuController::Action::ScrollUp:
+				if (dropdown->hovered > 0) {
+					dropdown->hovered--;
+					Dropdown_UpdateScroll(dropdown);
+					return QMS_MOVE;
+				}
+				return QMS_BEEP;
+			case MenuController::Action::Down:
+			case MenuController::Action::ScrollDown:
+				if (dropdown->hovered < dropdown->spin.numItems - 1) {
+					dropdown->hovered++;
+					Dropdown_UpdateScroll(dropdown);
+					return QMS_MOVE;
+				}
+				return QMS_BEEP;
+			default:
+				break;
+			}
+		}
+	} else {
+		for (MenuController::Action action : actions) {
+			if (action == MenuController::Action::Activate || action == MenuController::Action::Primary)
+				return Dropdown_Activate(item);
+		}
+	}
 
-    return QMS_NOTHANDLED;
+	return QMS_NOTHANDLED;
 }
 
 static menuSound_t Dropdown_MouseMove(menuDropdown_t *d)
@@ -1130,21 +1198,250 @@ static menuSound_t Dropdown_MouseMove(menuDropdown_t *d)
 
 static menuSound_t Dropdown_Slide(menuDropdown_t *d, int dir)
 {
-    if (!d->spin.numItems)
-        return QMS_BEEP;
+	if (!d->spin.numItems)
+		return QMS_BEEP;
 
-    int next = d->spin.curvalue + dir;
+	int next = d->spin.curvalue + dir;
 
-    if (next < 0)
-        next = d->spin.numItems - 1;
-    else if (next >= d->spin.numItems)
-        next = 0;
+	if (next < 0)
+		next = d->spin.numItems - 1;
+	else if (next >= d->spin.numItems)
+		next = 0;
 
-    if (next == d->spin.curvalue)
-        return QMS_BEEP;
+	if (next == d->spin.curvalue)
+		return QMS_BEEP;
 
-    Dropdown_SetSelection(d, next, true);
-    return QMS_MOVE;
+	Dropdown_SetSelection(d, next, true);
+	return QMS_MOVE;
+}
+
+/*
+=============
+MenuController::CloseDropdown
+
+Closes the tracked dropdown and optionally applies the hovered selection.
+=============
+*/
+void MenuController::CloseDropdown(menuDropdown_t *d, bool applyHovered)
+{
+	if (!d || !d->open)
+		return;
+
+	if (applyHovered && d->hovered >= 0 && d->hovered < d->spin.numItems)
+		Dropdown_SetSelection(d, d->hovered, true);
+
+	d->open = false;
+	d->hovered = -1;
+	d->listRect = {};
+
+	if (activeDropdown == d)
+		activeDropdown = NULL;
+}
+
+/*
+=============
+MenuController::OpenDropdown
+
+Opens the requested dropdown while closing any other active dropdown.
+=============
+*/
+void MenuController::OpenDropdown(menuDropdown_t *d)
+{
+	if (!d)
+		return;
+
+	if (activeDropdown && activeDropdown != d)
+		CloseDropdown(activeDropdown, false);
+
+	d->open = true;
+	activeDropdown = d;
+	d->hovered = d->spin.curvalue;
+	Dropdown_UpdateScroll(d);
+}
+
+/*
+=============
+MenuController::ActiveDropdown
+
+Returns the active dropdown for a menu, if any.
+=============
+*/
+menuDropdown_t *MenuController::ActiveDropdown(menuFrameWork_t *menu) const
+{
+	if (activeDropdown && activeDropdown->spin.generic.parent == menu)
+		return activeDropdown;
+
+	return NULL;
+}
+
+/*
+=============
+MenuController::ResetDropdown
+
+Clears the tracked dropdown when a menu is being discarded.
+=============
+*/
+void MenuController::ResetDropdown(menuFrameWork_t *menu)
+{
+	if (activeDropdown && activeDropdown->spin.generic.parent == menu)
+		activeDropdown = NULL;
+}
+
+/*
+=============
+MenuController::HandleDropdownAction
+
+Applies input actions while a dropdown list is open.
+=============
+*/
+menuSound_t MenuController::HandleDropdownAction(menuFrameWork_t *menu, menuDropdown_t *dropdown, Action action)
+{
+	if (!dropdown || !dropdown->open || dropdown->spin.generic.parent != menu)
+		return QMS_NOTHANDLED;
+
+	switch (action) {
+	case Action::Back:
+	case Action::Secondary:
+		CloseDropdown(dropdown, false);
+		return QMS_SILENT;
+	case Action::Activate:
+		CloseDropdown(dropdown, true);
+		return QMS_MOVE;
+	case Action::Up:
+	case Action::ScrollUp:
+		if (dropdown->hovered > 0) {
+			dropdown->hovered--;
+			Dropdown_UpdateScroll(dropdown);
+			return QMS_MOVE;
+		}
+		return QMS_BEEP;
+case Action::Down:
+case Action::ScrollDown:
+if (dropdown->hovered < dropdown->spin.numItems - 1) {
+dropdown->hovered++;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+}
+return QMS_BEEP;
+case Action::First:
+dropdown->hovered = 0;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+case Action::Last:
+dropdown->hovered = dropdown->spin.numItems - 1;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+case Action::Primary:
+if (UI_CursorInRect(&dropdown->listRect)) {
+if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
+Dropdown_SetSelection(dropdown, dropdown->hovered, true);
+			CloseDropdown(dropdown, false);
+			return QMS_MOVE;
+		}
+
+		CloseDropdown(dropdown, false);
+		return QMS_SILENT;
+	default:
+		break;
+	}
+
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuController::HandlePointerAction
+
+Routes pointer-style activation actions through hit-testing.
+=============
+*/
+menuSound_t MenuController::HandlePointerAction(menuFrameWork_t *menu, Action action, int key)
+{
+	if (action != Action::Primary && action != Action::Tertiary)
+		return QMS_NOTHANDLED;
+
+	menuCommon_t *item = Menu_HitTest(menu);
+	if (!item)
+		return QMS_NOTHANDLED;
+
+	if (!(item->flags & QMF_HASFOCUS))
+		return QMS_NOTHANDLED;
+
+	if (MenuItem *wrapped = Menu_FindCppItem(menu, item)) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Pointer;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_IN;
+		}
+	}
+
+	return Menu_SelectItem(menu);
+}
+
+/*
+=============
+MenuController::HandleMenuAction
+
+Executes default menu-level actions.
+=============
+*/
+menuSound_t MenuController::HandleMenuAction(menuFrameWork_t *menu, Action action, int key)
+{
+	switch (action) {
+	case Action::Back:
+		UI_PopMenu();
+		return QMS_OUT;
+	case Action::Up:
+		return Menu_AdjustCursor(menu, -1);
+	case Action::Down:
+		return Menu_AdjustCursor(menu, 1);
+	case Action::Left:
+		return Menu_SlideItem(menu, -1);
+	case Action::Right:
+		return Menu_SlideItem(menu, 1);
+	case Action::Activate:
+		return Menu_SelectItem(menu);
+	case Action::Primary:
+	case Action::Tertiary:
+		return HandlePointerAction(menu, action, key);
+	default:
+		break;
+	}
+
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuController::HandleKey
+
+Converts a raw key into actions and dispatches them.
+=============
+*/
+menuSound_t MenuController::HandleKey(menuFrameWork_t *menu, int key)
+{
+	std::vector<Action> actions = ActionsForKey(key);
+	menuDropdown_t *dropdown = ActiveDropdown(menu);
+
+	if (dropdown && dropdown->open) {
+		for (Action action : actions) {
+			menuSound_t sound = HandleDropdownAction(menu, dropdown, action);
+			if (sound != QMS_NOTHANDLED)
+				return sound;
+		}
+	}
+
+	for (Action action : actions) {
+		menuSound_t sound = HandleMenuAction(menu, action, key);
+		if (sound != QMS_NOTHANDLED)
+			return sound;
+	}
+
+	return QMS_NOTHANDLED;
 }
 
 static void Dropdown_Init(menuDropdown_t *d)
@@ -2789,9 +3086,9 @@ void Menu_SetFocus(menuCommon_t *focus)
 
 	menu = focus->parent;
 
-	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu &&
-		&ui_activeDropdown->spin.generic != focus) {
-		Dropdown_Close(ui_activeDropdown, false);
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown && &activeDropdown->spin.generic != focus) {
+		Dropdown_Close(activeDropdown, false);
 	}
 
 	for (i = 0; i < Menu_ItemCount(menu); i++) {
@@ -2985,9 +3282,9 @@ void Menu_Draw(menuFrameWork_t *menu)
 
     Menu_UpdateGroupBounds(menu);
 
-    menuDropdown_t *openDropdown = NULL;
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open)
-        openDropdown = ui_activeDropdown;
+	menuDropdown_t *openDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (openDropdown && !openDropdown->open)
+		openDropdown = NULL;
 
 //
 // draw background
@@ -3329,92 +3626,7 @@ Handles menu-level shortcuts while forwarding pointer activation into MenuItem h
 */
 static menuSound_t Menu_DefaultKey(menuFrameWork_t *m, int key)
 {
-	menuCommon_t *item;
-
-	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == m && ui_activeDropdown->open) {
-		menuDropdown_t *dropdown = ui_activeDropdown;
-		if (key == K_ESCAPE) {
-			Dropdown_Close(dropdown, false);
-			return QMS_SILENT;
-		}
-
-		if (key == K_MOUSE2) {
-			Dropdown_Close(dropdown, false);
-			return QMS_SILENT;
-		}
-
-		if (key == K_MOUSE1) {
-			if (UI_CursorInRect(&dropdown->listRect)) {
-				if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
-					Dropdown_SetSelection(dropdown, dropdown->hovered, true);
-				Dropdown_Close(dropdown, false);
-				return QMS_MOVE;
-			}
-
-			Dropdown_Close(dropdown, false);
-		}
-	}
-
-	switch (key) {
-	case K_ESCAPE:
-	case K_MOUSE2:
-		UI_PopMenu();
-		return QMS_OUT;
-
-	case K_KP_UPARROW:
-	case K_UPARROW:
-	case 'k':
-		return Menu_AdjustCursor(m, -1);
-
-	case K_KP_DOWNARROW:
-	case K_DOWNARROW:
-	case K_TAB:
-	case 'j':
-		return Menu_AdjustCursor(m, 1);
-
-	case K_KP_LEFTARROW:
-	case K_LEFTARROW:
-	case K_MWHEELDOWN:
-	case 'h':
-		return Menu_SlideItem(m, -1);
-
-	case K_KP_RIGHTARROW:
-	case K_RIGHTARROW:
-	case K_MWHEELUP:
-	case 'l':
-		return Menu_SlideItem(m, 1);
-
-	case K_MOUSE1:
-	//case K_MOUSE2:
-	case K_MOUSE3:
-		item = Menu_HitTest(m);
-		if (!item) {
-			return QMS_NOTHANDLED;
-		}
-
-		if (!(item->flags & QMF_HASFOCUS)) {
-			return QMS_NOTHANDLED;
-		}
-
-		if (MenuItem *wrapped = Menu_FindCppItem(m, item)) {
-			MenuItem::MenuEvent event{};
-			event.type = MenuItem::MenuEvent::Type::Pointer;
-			event.key = key;
-			event.x = uis.mouseCoords[0];
-			event.y = uis.mouseCoords[1];
-
-			if (wrapped->HandleEvent(event)) {
-				return QMS_IN;
-			}
-		}
-	// fall through
-
-	case K_KP_ENTER:
-	case K_ENTER:
-		return Menu_SelectItem(m);
-	}
-
-	return QMS_NOTHANDLED;
+	return UI_MenuController().HandleKey(m, key);
 }
 
 menuSound_t Menu_Keydown(menuFrameWork_t *menu, int key)
@@ -3451,10 +3663,11 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
         return NULL;
     }
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open) {
-        if (UI_CursorInRect(&ui_activeDropdown->listRect))
-            return &ui_activeDropdown->spin.generic;
-    }
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown && activeDropdown->open) {
+		if (UI_CursorInRect(&activeDropdown->listRect))
+			return &activeDropdown->spin.generic;
+	}
 
     for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
@@ -3591,8 +3804,7 @@ void Menu_Pop(menuFrameWork_t *menu)
 
 void Menu_Free(menuFrameWork_t *menu)
 {
-	if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
-		ui_activeDropdown = NULL;
+	UI_MenuController().ResetDropdown(menu);
 
 	menu->items.clear();
 	menu->itemsCpp.clear();
