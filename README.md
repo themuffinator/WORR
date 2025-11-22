@@ -107,6 +107,10 @@ For information on using and configuring **WORR**, refer to the manuals in the `
 - Server configuration, match presets and hosting details,
 - Notes on compatibility with Quake II Rerelease assets.
 
+### UI Architecture
+
+The client UI is now driven by a modern `MenuItem` class hierarchy that mirrors the legacy menu widgets while using RAII to manage ownership. Menu textures are reference-counted and shared across items, while child items are owned through `std::unique_ptr`, eliminating manual lifetime management and keeping activation callbacks self-contained.
+
 ---
 
 ## Related Repositories
