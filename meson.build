@@ -221,8 +221,10 @@ ui_src = [
   'src/client/ui/script.cpp',
   'src/client/ui/servers.cpp',
   'src/client/ui/mapdb.cpp',
+  'src/client/ui/renderer.cpp',
   'src/client/ui/ui.cpp',
   'src/client/ui/ui.hpp',
+  'src/client/ui/renderer.hpp',
 ]
 
 refresh_src = [
