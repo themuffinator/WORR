@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ui.hpp"
 #include "common/json.hpp"
+#include "common/mdfour.hpp"
 
 #include <memory>
 #include <limits.h>
@@ -44,10 +45,39 @@ typedef struct uiScriptManifest_s {
 	char	controllerPath[MAX_QPATH];
 } uiScriptManifest_t;
 
-static uiScriptManifest_t ui_manifest;
+typedef struct uiScriptFileSignature_s {
+	uint32_t hash;
+	bool valid;
+} uiScriptFileSignature_t;
+
+class uiScriptControllerManager {
+public:
+	uiScriptControllerManager();
+
+	void Init(void);
+	void RequestReload(void);
+	bool NeedsReload(void) const;
+	bool Sync(void);
+	const uiScriptManifest_t &Manifest(void) const;
+
+private:
+	uiScriptManifest_t manifest;
+	uiScriptFileSignature_t manifestSignature;
+	uiScriptFileSignature_t controllerSignature;
+	bool manifestLoaded;
+	bool forceReload;
+
+	bool SignatureChanged(const uiScriptFileSignature_t &incoming, const uiScriptFileSignature_t &current) const;
+	bool TryLoadFileWithSignature(const char *path, std::string *buffer, uiScriptFileSignature_t *signature) const;
+	bool LoadManifestFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature);
+	bool LoadControllerFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature);
+	void ResetControllerState(void);
+	bool SyncController(bool force);
+};
+
+static uiScriptControllerManager ui_scriptControllerManager;
 static uiScriptContext_t ui_activeContext = UI_SCRIPT_MAIN;
 static bool ui_scriptLoaded;
-static bool ui_forceReload;
 static cvar_t *ui_menu_context;
 static std::vector<std::string> ui_loadedScripts;
 static char ui_scriptStack[8][MAX_QPATH];
@@ -1910,6 +1940,20 @@ static const char* UI_ScriptSourcePath(const uiScriptSource_t& source)
 
 /*
 =============
+UI_ResetControllerOrder
+
+Clears controller ordering and restores default context fallbacks.
+=============
+*/
+static void UI_ResetControllerOrder(uiScriptManifest_t* manifest)
+{
+	manifest->controllerOrder.clear();
+	manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
+	manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
+}
+
+/*
+=============
 UI_ResetManifest
 
 Resets the script manifest entries to defaults.
@@ -1921,7 +1965,7 @@ static void UI_ResetManifest(uiScriptManifest_t* manifest)
 
 	manifest->scriptLists.clear();
 	manifest->overrideLists.clear();
-	manifest->controllerOrder.clear();
+	UI_ResetControllerOrder(manifest);
 	memset(manifest->controllerPath, 0, sizeof(manifest->controllerPath));
 
 	uiScriptSource_t defaultSource = {};
@@ -1929,18 +1973,8 @@ static void UI_ResetManifest(uiScriptManifest_t* manifest)
 	std::vector<uiScriptSource_t>& mainList = manifest->scriptLists["main"];
 	mainList.clear();
 	mainList.push_back(defaultSource);
-
-	manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
-	manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
 }
 
-/*
-=============
-UI_ParseManifestOverrides
-
-Parses override entries that can replace default script paths.
-=============
-*/
 static void UI_ParseManifestOverrides(json_parse_t* parser, uiScriptManifest_t* manifest)
 {
 	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
@@ -2031,54 +2065,254 @@ static void UI_EnsureControllerFallbacks(uiScriptManifest_t* manifest)
 
 /*
 =============
-UI_LoadManifestController
+uiScriptControllerManager::uiScriptControllerManager
 
-Loads the controller file specified by the manifest.
+Initializes default state for controller tracking.
 =============
 */
-static void UI_LoadManifestController(uiScriptManifest_t* manifest)
+uiScriptControllerManager::uiScriptControllerManager(void)
 {
-	json_parse_t parser = {};
-
-	if (!manifest->controllerPath[0])
-		return;
-
-	if (Json_ErrorHandler(&parser)) {
-		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", manifest->controllerPath, parser.error_loc, parser.error);
-		Json_Free(&parser);
-		return;
-	}
-
-	Json_Load(manifest->controllerPath, &parser);
-	UI_ParseController(&parser, manifest);
-	Json_Free(&parser);
+	manifestLoaded = false;
+	forceReload = true;
+	manifestSignature = {};
+	controllerSignature = {};
+	UI_ResetManifest(&manifest);
 }
 
 /*
 =============
-UI_LoadManifest
+uiScriptControllerManager::Manifest
 
-Loads the manifest describing available menu scripts.
+Returns the cached manifest instance.
 =============
 */
-static void UI_LoadManifest(uiScriptManifest_t* manifest)
+const uiScriptManifest_t &uiScriptControllerManager::Manifest(void) const
+{
+	return manifest;
+}
+
+/*
+=============
+uiScriptControllerManager::Init
+
+Resets controller state and forces the next sync to reload data.
+=============
+*/
+void uiScriptControllerManager::Init(void)
+{
+	manifestLoaded = false;
+	forceReload = true;
+	manifestSignature = {};
+	controllerSignature = {};
+	UI_ResetManifest(&manifest);
+}
+
+/*
+=============
+uiScriptControllerManager::RequestReload
+
+Marks the controller manager so that the next sync rebuilds state.
+=============
+*/
+void uiScriptControllerManager::RequestReload(void)
+{
+	forceReload = true;
+}
+
+/*
+=============
+uiScriptControllerManager::NeedsReload
+
+Determines whether a sync should refresh cached data.
+=============
+*/
+bool uiScriptControllerManager::NeedsReload(void) const
+{
+	return !manifestLoaded || forceReload;
+}
+
+/*
+=============
+uiScriptControllerManager::SignatureChanged
+
+Checks whether a file signature differs from the cached value.
+=============
+*/
+bool uiScriptControllerManager::SignatureChanged(const uiScriptFileSignature_t &incoming, const uiScriptFileSignature_t &current) const
+{
+	if (!incoming.valid || !current.valid)
+		return true;
+
+	return incoming.hash != current.hash;
+}
+
+/*
+=============
+uiScriptControllerManager::TryLoadFileWithSignature
+
+Loads a file into a buffer and computes its version signature.
+=============
+*/
+bool uiScriptControllerManager::TryLoadFileWithSignature(const char *path, std::string *buffer, uiScriptFileSignature_t *signature) const
+{
+	char *rawBuffer = nullptr;
+
+	const int length = FS_LoadFile(path, reinterpret_cast<void **>(&rawBuffer));
+	if (length < 0)
+		return false;
+
+	buffer->assign(rawBuffer, static_cast<size_t>(length));
+
+	if (signature) {
+		signature->hash = Com_BlockChecksum(rawBuffer, static_cast<size_t>(length));
+		signature->valid = true;
+	}
+
+	FS_FreeFile(rawBuffer);
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::LoadManifestFromBuffer
+
+Parses a manifest buffer and refreshes cached signatures.
+=============
+*/
+bool uiScriptControllerManager::LoadManifestFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature)
 {
 	json_parse_t parser = {};
 
-	UI_ResetManifest(manifest);
+	UI_ResetManifest(&manifest);
+	controllerSignature = {};
 
 	if (Json_ErrorHandler(&parser)) {
 		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_MANIFEST_FILE, parser.error_loc, parser.error);
 		Json_Free(&parser);
-		return;
+		manifestLoaded = true;
+		return false;
 	}
 
-	Json_Load(UI_MANIFEST_FILE, &parser);
-	UI_ParseManifest(&parser, manifest);
+	UI_ParseJsonBuffer(&parser, buffer.data(), buffer.size());
+	UI_ParseManifest(&parser, &manifest);
 	Json_Free(&parser);
 
-	UI_LoadManifestController(manifest);
-	UI_EnsureControllerFallbacks(manifest);
+	manifestSignature = signature;
+	manifestLoaded = true;
+
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::ResetControllerState
+
+Resets controller-specific ordering without touching script lists.
+=============
+*/
+void uiScriptControllerManager::ResetControllerState(void)
+{
+	UI_ResetControllerOrder(&manifest);
+	controllerSignature = {};
+}
+
+/*
+=============
+uiScriptControllerManager::LoadControllerFromBuffer
+
+Parses a controller buffer onto the current manifest ordering.
+=============
+*/
+bool uiScriptControllerManager::LoadControllerFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature)
+{
+	json_parse_t parser = {};
+
+	ResetControllerState();
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s
+		", manifest.controllerPath, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		return false;
+	}
+
+	UI_ParseJsonBuffer(&parser, buffer.data(), buffer.size());
+	UI_ParseController(&parser, &manifest);
+	Json_Free(&parser);
+
+	controllerSignature = signature;
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::SyncController
+
+Ensures controller ordering matches the latest controller file state.
+=============
+*/
+bool uiScriptControllerManager::SyncController(bool force)
+{
+	if (!manifest.controllerPath[0]) {
+		ResetControllerState();
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return true;
+	}
+
+	std::string controllerBuffer;
+	uiScriptFileSignature_t incomingSignature = {};
+
+	if (!TryLoadFileWithSignature(manifest.controllerPath, &controllerBuffer, &incomingSignature)) {
+		ResetControllerState();
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return false;
+	}
+
+	if (!force && !SignatureChanged(incomingSignature, controllerSignature)) {
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return true;
+	}
+
+	const bool parsed = LoadControllerFromBuffer(controllerBuffer, incomingSignature);
+	UI_EnsureControllerFallbacks(&manifest);
+	forceReload = false;
+	return parsed;
+}
+
+/*
+=============
+uiScriptControllerManager::Sync
+
+Synchronizes manifest/controller data with disk, reusing caches when possible.
+=============
+*/
+bool uiScriptControllerManager::Sync(void)
+{
+	std::string manifestBuffer;
+	uiScriptFileSignature_t incomingSignature = {};
+	const bool loadedManifest = TryLoadFileWithSignature(UI_MANIFEST_FILE, &manifestBuffer, &incomingSignature);
+	bool forceControllerReload = forceReload || !manifestLoaded;
+
+	if (loadedManifest) {
+		if (forceReload || !manifestLoaded || SignatureChanged(incomingSignature, manifestSignature)) {
+			if (!LoadManifestFromBuffer(manifestBuffer, incomingSignature))
+				return SyncController(true);
+
+			forceControllerReload = true;
+		}
+	} else if (!manifestLoaded) {
+		UI_ResetManifest(&manifest);
+		manifestSignature = {};
+		controllerSignature = {};
+		manifestLoaded = true;
+		forceReload = false;
+		return SyncController(true);
+	}
+
+	return SyncController(forceControllerReload);
 }
 
 /*
@@ -2166,23 +2400,24 @@ Chooses a controller order for the desired context, applying fallbacks.
 */
 static const std::vector<std::string>* UI_SelectControllerOrder(uiScriptContext_t desired, uiScriptContext_t* resolvedContext)
 {
-	const auto desiredIt = ui_manifest.controllerOrder.find(desired);
+	const uiScriptManifest_t &manifest = ui_scriptControllerManager.Manifest();
+	const auto desiredIt = manifest.controllerOrder.find(desired);
 
-	if (desiredIt != ui_manifest.controllerOrder.end() && !desiredIt->second.empty()) {
+	if (desiredIt != manifest.controllerOrder.end() && !desiredIt->second.empty()) {
 		*resolvedContext = desired;
 		return &desiredIt->second;
 	}
 
 	if (desired == UI_SCRIPT_INGAME) {
-		const auto mainIt = ui_manifest.controllerOrder.find(UI_SCRIPT_MAIN);
-		if (mainIt != ui_manifest.controllerOrder.end() && !mainIt->second.empty()) {
+		const auto mainIt = manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+		if (mainIt != manifest.controllerOrder.end() && !mainIt->second.empty()) {
 			*resolvedContext = UI_SCRIPT_MAIN;
 			return &mainIt->second;
 		}
 	}
 
-	const auto mainIt = ui_manifest.controllerOrder.find(UI_SCRIPT_MAIN);
-	if (mainIt != ui_manifest.controllerOrder.end()) {
+	const auto mainIt = manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+	if (mainIt != manifest.controllerOrder.end()) {
 		*resolvedContext = UI_SCRIPT_MAIN;
 		return &mainIt->second;
 	}
@@ -2199,6 +2434,7 @@ Attempts to load the desired script with fallbacks.
 */
 static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
 {
+	const uiScriptManifest_t &manifest = ui_scriptControllerManager.Manifest();
 	uiScriptContext_t resolvedContext = desired;
 	const std::vector<std::string>* order = UI_SelectControllerOrder(desired, &resolvedContext);
 	bool attempted = false;
@@ -2209,14 +2445,14 @@ static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
 	for (const std::string& listName : *order) {
 		std::vector<const uiScriptSource_t*> sources;
 
-		auto overrideIt = ui_manifest.overrideLists.find(listName);
-		if (overrideIt != ui_manifest.overrideLists.end()) {
+		auto overrideIt = manifest.overrideLists.find(listName);
+		if (overrideIt != manifest.overrideLists.end()) {
 			for (const uiScriptSource_t& source : overrideIt->second)
 				sources.push_back(&source);
 		}
 
-		auto listIt = ui_manifest.scriptLists.find(listName);
-		if (listIt != ui_manifest.scriptLists.end()) {
+		auto listIt = manifest.scriptLists.find(listName);
+		if (listIt != manifest.scriptLists.end()) {
 			for (const uiScriptSource_t& source : listIt->second)
 				sources.push_back(&source);
 		}
@@ -2256,7 +2492,8 @@ Initializes script controller state and cvars.
 void UI_InitScriptController(void)
 {
 	ui_menu_context = Cvar_Get("ui_menu_context", "auto", 0);
-	ui_forceReload = true;
+	ui_scriptControllerManager.Init();
+	ui_scriptLoaded = false;
 }
 
 /*
@@ -2270,7 +2507,7 @@ void UI_SyncMenuContext(void)
 {
 	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
 
-	if (!ui_scriptLoaded || ui_forceReload || desiredContext != ui_activeContext)
+	if (!ui_scriptLoaded || ui_scriptControllerManager.NeedsReload() || desiredContext != ui_activeContext)
 		UI_LoadScript();
 }
 
@@ -2290,7 +2527,7 @@ void UI_SetMenuContext(const char* context)
 		return;
 
 	Cvar_Set(ui_menu_context->name, context);
-	ui_forceReload = true;
+	ui_scriptControllerManager.RequestReload();
 }
 
 /*
@@ -2320,7 +2557,7 @@ Flags that scripts should be reloaded on next sync.
 */
 void UI_RequestMenuReload(void)
 {
-	ui_forceReload = true;
+	ui_scriptControllerManager.RequestReload();
 }
 
 /*
@@ -2335,7 +2572,7 @@ void UI_LoadScript(void)
 	UI_ClearMenus();
 	UI_ResetScriptState();
 
-	UI_LoadManifest(&ui_manifest);
+	ui_scriptControllerManager.Sync();
 
 	if (!UI_AttemptMenuLoad(desiredContext)) {
 		Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
@@ -2346,10 +2583,8 @@ void UI_LoadScript(void)
 	}
 
 	ui_scriptLoaded = true;
-	ui_forceReload = false;
 
 	UI_RegisterBuiltinMenus();
 
 	UI_RefreshFonts();
 }
-
