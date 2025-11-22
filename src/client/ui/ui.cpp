@@ -41,6 +41,8 @@ static void UI_UpdateTypographySet(void);
 static void UI_PopulateDefaultPalette(bool lightTheme);
 static void UI_UpdateLegacyColorsFromPalette(void);
 static int UI_KeyForNavigationDirection(ui::ux::NavigationDirection direction);
+static menuSound_t UI_DispatchKeyToLayers(int key);
+static menuSound_t UI_DispatchCharToLayers(int key);
 
 /*
 =============
@@ -399,28 +401,55 @@ void LegacyMenuWidget::OnLayout(ui::ux::LayoutEngine &engine, const vrect_t &par
 	m_bounds = parentBounds;
 	ui::ux::Widget::OnLayout(engine, parentBounds);
 	}
-		/*
-	=============
-	LegacyMenuWidget::OnEvent
-		Forwards navigation and activation into the legacy menu dispatchers.
-	=============
-	*/
-	void LegacyMenuWidget::OnEvent(const ui::ux::UIEvent &event)
-	{
+/*
+=============
+LegacyMenuWidget::OnEvent
+
+Translates UIX events into legacy key, pointer, and text dispatchers.
+=============
+*/
+void LegacyMenuWidget::OnEvent(const ui::ux::UIEvent &event)
+{
 	if (!m_menu) {
-	return;
+		return;
 	}
-		switch (event.Type()) {
-	case ui::ux::EventType::Navigate:
-	UI_DispatchKeyToLayers(UI_KeyForNavigationDirection(event.Direction()));
-	break;
-	case ui::ux::EventType::Activate:
-	UI_DispatchKeyToLayers(K_ENTER);
-	break;
+
+	switch (event.Type()) {
+	case ui::ux::EventType::PointerMove:
+	case ui::ux::EventType::PointerDown:
+	case ui::ux::EventType::PointerUp:
+	case ui::ux::EventType::Scroll:
+		uis.mouseCoords[0] = event.Region().x;
+		uis.mouseCoords[1] = event.Region().y;
+		UI_DoHitTest();
+		break;
 	default:
-	ui::ux::Widget::OnEvent(event);
-	break;
-}
+		break;
+	}
+
+	switch (event.Type()) {
+	case ui::ux::EventType::Navigate:
+		UI_DispatchKeyToLayers(UI_KeyForNavigationDirection(event.Direction()));
+		break;
+	case ui::ux::EventType::Activate:
+		UI_DispatchKeyToLayers(K_ENTER);
+		break;
+	case ui::ux::EventType::PointerDown:
+		UI_DispatchKeyToLayers(event.Key());
+		break;
+	case ui::ux::EventType::PointerUp:
+		UI_DispatchKeyToLayers(event.Key());
+		break;
+	case ui::ux::EventType::Scroll:
+		UI_DispatchKeyToLayers(event.Key());
+		break;
+	case ui::ux::EventType::TextInput:
+		UI_DispatchCharToLayers(event.Key());
+		break;
+	default:
+		ui::ux::Widget::OnEvent(event);
+		break;
+	}
 }
 
 /*
