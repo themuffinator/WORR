@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -32,9 +33,84 @@ static cvar_t* scr_text_bg = nullptr;
 static cvar_t* scr_text_bg_alpha = nullptr;
 
 namespace {
-        constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
-	constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
-	constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
+constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
+constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+}
+
+static std::unordered_map<qhandle_t, scr_font_metrics_t> scr_fontMetricsCache;
+
+/*
+=============
+SCR_ComputeFontMetrics
+
+Builds a metrics snapshot for the provided renderer font handle.
+=============
+*/
+static scr_font_metrics_t SCR_ComputeFontMetrics(qhandle_t font)
+{
+	scr_font_metrics_t metrics{};
+
+	if (!font)
+		return metrics;
+
+	metrics.lineHeight = SCR_FontLineHeight(1, font);
+
+#if USE_FREETYPE
+	if (SCR_ShouldUseFreeType(font)) {
+		if (const ftfont_t* ftFont = SCR_FTFontForHandle(font)) {
+			if (ftFont->face && ftFont->face->size) {
+				const FT_Size_Metrics sizeMetrics = ftFont->face->size->metrics;
+				const int ascender = static_cast<int>(sizeMetrics.ascender >> 6);
+				const int descender = static_cast<int>((-sizeMetrics.descender) >> 6);
+				const int capHeight = ascender + descender;
+
+				if (capHeight > 0)
+					metrics.capHeight = capHeight;
+				else if (sizeMetrics.y_ppem > 0)
+					metrics.capHeight = sizeMetrics.y_ppem;
+			}
+		}
+	}
+#endif
+
+	if (!metrics.capHeight)
+		metrics.capHeight = metrics.lineHeight;
+
+	return metrics;
+}
+
+/*
+=============
+SCR_GetCachedFontMetrics
+
+Returns cached font metrics for the provided renderer handle, computing them on demand.
+=============
+*/
+scr_font_metrics_t SCR_GetCachedFontMetrics(qhandle_t font)
+{
+	const auto it = scr_fontMetricsCache.find(font);
+	if (it != scr_fontMetricsCache.end())
+		return it->second;
+
+	scr_font_metrics_t metrics = SCR_ComputeFontMetrics(font);
+	scr_fontMetricsCache[font] = metrics;
+	return metrics;
+}
+
+/*
+=============
+SCR_InvalidateFontMetrics
+
+Removes cached metrics for a renderer font handle.
+=============
+*/
+void SCR_InvalidateFontMetrics(qhandle_t font)
+{
+	if (!font)
+		return;
+
+	scr_fontMetricsCache.erase(font);
 }
 
 /*
@@ -245,10 +321,11 @@ static void SCR_FreeFreeTypeFonts(void)
 		R_ReleaseFreeTypeFont(&entry.second.renderInfo);
 	}
 
-	scr.freetype.fonts.clear();
-	scr.freetype.handleLookup.clear();
-	scr.freetype.activeFontKey.clear();
-	scr.freetype.activeFontHandle = 0;
+scr.freetype.fonts.clear();
+scr.freetype.handleLookup.clear();
+scr.freetype.activeFontKey.clear();
+scr.freetype.activeFontHandle = 0;
+	scr_fontMetricsCache.clear();
 }
 
 /*
@@ -315,10 +392,10 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 		if (inserted)
 			R_AcquireFreeTypeFont(handle, &it->second.renderInfo);
 	}
-
 	scr.freetype.handleLookup[handle] = cacheKey;
 	scr.freetype.activeFontKey = cacheKey;
 	scr.freetype.activeFontHandle = handle;
+	SCR_InvalidateFontMetrics(handle);
 	return true;
 }
 
@@ -408,10 +485,10 @@ SCR_RegisterTrueTypeFontPath
 Attempts to load a TrueType/OpenType font using FreeType and returns its renderer handle.
 =============
 */
-static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHandleCreation, qhandle_t preferredHandle)
+static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHandleCreation, qhandle_t preferredHandle, int pixelHeight)
 {
-	if (!path || !*path)
-		return 0;
+if (!path || !*path)
+return 0;
 
 	std::array<char, MAX_QPATH> normalized{};
 	size_t normalizedLen = 0;
@@ -424,10 +501,12 @@ static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHa
 	if (!normalizedLen || normalizedLen >= normalized.size())
 		return 0;
 
-	const int pixelHeight = SCR_CurrentFontPixelHeight();
-	std::string cacheKey(normalized.data());
-	cacheKey.push_back('-');
-	cacheKey += std::to_string(pixelHeight);
+int resolvedPixelHeight = pixelHeight;
+if (resolvedPixelHeight <= 0)
+resolvedPixelHeight = SCR_CurrentFontPixelHeight();
+std::string cacheKey(normalized.data());
+cacheKey.push_back('-');
+cacheKey += std::to_string(resolvedPixelHeight);
 
 	qhandle_t targetHandle = preferredHandle;
 	if (!targetHandle) {
@@ -443,8 +522,8 @@ static qhandle_t SCR_RegisterTrueTypeFontPath(const char* path, bool allowBaseHa
 	if (!targetHandle)
 		return 0;
 
-	if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), pixelHeight, targetHandle))
-		return targetHandle;
+if (SCR_LoadFreeTypeFont(cacheKey, normalized.data(), resolvedPixelHeight, targetHandle))
+return targetHandle;
 
 	return 0;
 }
@@ -464,8 +543,8 @@ static qhandle_t SCR_RegisterFontPathInternal(const char* name, bool allowFreeTy
 		return 0;
 
 #if USE_FREETYPE
-	if (SCR_IsTrueTypeFontPath(name))
-		return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0);
+if (SCR_IsTrueTypeFontPath(name))
+return SCR_RegisterTrueTypeFontPath(name, allowFreeTypeBaseCreation, 0, 0);
 #endif
 
 	if (SCR_IsPathSeparator(name[0]))
@@ -966,7 +1045,23 @@ Registers a font by path, delegating to FreeType for TrueType/OpenType sources w
 */
 qhandle_t SCR_RegisterFontPath(const char* name)
 {
-	return SCR_RegisterFontPathInternal(name, true);
+return SCR_RegisterFontPathInternal(name, true);
+}
+
+/*
+=============
+SCR_RegisterFontPathWithSize
+
+Registers a font path with an explicit pixel height override for scalable fonts.
+=============
+*/
+qhandle_t SCR_RegisterFontPathWithSize(const char* name, int pixelHeight)
+{
+#if USE_FREETYPE
+if (SCR_IsTrueTypeFontPath(name))
+return SCR_RegisterTrueTypeFontPath(name, true, 0, pixelHeight);
+#endif
+return SCR_RegisterFontPathInternal(name, true);
 }
 
 /*
@@ -1063,7 +1158,7 @@ static void scr_font_changed(cvar_t* self)
 			lastAttempt = candidate;
 
 			const qhandle_t targetHandle = freetypeHandle ? freetypeHandle : previousHandle;
-			qhandle_t handle = SCR_RegisterTrueTypeFontPath(candidate, true, targetHandle);
+qhandle_t handle = SCR_RegisterTrueTypeFontPath(candidate, true, targetHandle, 0);
 			if (handle) {
 				scr.font_pic = handle;
 				loadedName = candidate;
@@ -1332,4 +1427,6 @@ void SCR_ShutdownFontSystem(void)
 	scr.freetype.activeFontKey.clear();
 	scr.freetype.activeFontHandle = 0;
 #endif
+	scr_fontMetricsCache.clear();
 }
+

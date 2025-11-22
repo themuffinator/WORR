@@ -1422,6 +1422,14 @@ make it easier to express complex interactions:
   supplies `name`, an optional `label`, visual hints such as `background` colour
   and `border`, and layout hints (`indent`, `padding`, `headerHeight`). Menu
   items reference a group by name through their `group` property.
+* Top-level `modules` (or the alias `include`) accepts an array of menu files to
+  load. Modules are pulled in deterministically in the order they are listed,
+  with recursive includes and duplicate entries ignored, which makes it easier
+  to split a menu into focused files (for example, controls, visuals, and
+  behaviours) without unpredictable merges.
+* If both the manifest targets and embedded menu assets fail to parse, the UI
+  loader now falls back to a minimal built-in menu so the user always has a
+  safe way to navigate and recover.
 
 The checkbox, radio, and dropdown controls currently use font glyphs as a
 placeholder. UI artists should create dedicated 32×32 glyphs for the checked
@@ -1429,6 +1437,31 @@ and unchecked checkbox states, radio on/off states, and a dropdown caret, and
 store them alongside the rest of the UI artwork (for example under
 `pics/ui/checkbox_checked.tga`, `pics/ui/radio_on.tga`, and
 `pics/ui/dropdown_caret.tga`).
+
+MenuItem developer notes
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The modern menu system layers a C++ `MenuItem` tree over the legacy widget
+structs. The base class keeps texture handles alive through shared ownership
+and manages children with `std::unique_ptr`, so callers do not need to juggle
+manual allocations or cleanup. Each subclass implements the same virtuals as
+the legacy controls (`Draw`, `HandleEvent`, `Activate`, `SetFocus`, `HasFocus`,
+`OnAttach`, and `OnDetach`) so input, focus, and lifecycle hooks stay aligned
+between the old and new code paths.
+
+Migration tips for new menu items
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Derive from `MenuItem` and honour its ownership model: expose your texture
+  handles as `TextureHandle` (a `std::shared_ptr<qhandle_t>`) and store child
+  items in `std::unique_ptr` containers to keep RAII ownership consistent.
+* Implement the virtuals expected by the legacy wrappers so the menu can route
+  `MenuItem::MenuEvent` keyboard, pointer, or controller input through your
+  control while preserving focus state.
+* When adding a new legacy widget or JSON item type, wire it into the parser in
+  `ParseMenuItem` and register a corresponding constructor in `Menu_BuildMenuItem`
+  so the procedural menu can instantiate your subclass alongside the existing
+  action, static, bitmap, field, list, and slider wrappers.
 
 com_time_format::
     Time format used by ‘com_time’ macro. Default value is "%H.%M" on Win32 and

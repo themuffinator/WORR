@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/steam.hpp"
 #include "shared/atomic.hpp"
 
+#include <cstdio>
 #include <array>
 #include <algorithm>
 #include <cstring>
@@ -78,6 +79,104 @@ cvar_t  *sys_homedir;
 #ifdef _DEBUG
 cvar_t  *sys_debugprint;
 #endif
+
+static std::array<char, MAX_OSPATH> executable_basedir{};
+
+/*
+=============
+Sys_VerifyWritableDirectory
+
+Ensures that the given directory exists and is writable by creating it and
+attempting to create a temporary file inside.
+=============
+*/
+static bool Sys_VerifyWritableDirectory(const char *path)
+{
+	DWORD create_result = SHCreateDirectoryExA(NULL, path, NULL);
+	if (create_result != ERROR_SUCCESS && create_result != ERROR_ALREADY_EXISTS) {
+		Com_WPrintf("Failed to create homedir '%s' (%lu)\n", path, create_result);
+		return false;
+	}
+
+	char test_path[MAX_OSPATH];
+	if (Q_snprintf(test_path, sizeof(test_path), "%s\\.__worr_test", path) >= (int)sizeof(test_path)) {
+		Com_WPrintf("Homedir path too long: %s\n", path);
+		return false;
+	}
+
+	HANDLE handle = CreateFileA(test_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+				 FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+	if (handle == INVALID_HANDLE_VALUE) {
+		Com_WPrintf("Homedir not writable '%s' (%lu)\n", path, GetLastError());
+		return false;
+	}
+
+	CloseHandle(handle);
+	return true;
+}
+
+/*
+=============
+Sys_TryKnownFolder
+
+Attempts to resolve a known folder path to UTF-8, append the product folder,
+and verify it is writable.
+=============
+*/
+static bool Sys_TryKnownFolder(REFKNOWNFOLDERID folder_id, const char *suffix, char *resolved_path, size_t resolved_length)
+{
+	PWSTR known_folder = NULL;
+	bool result = false;
+
+	HRESULT hr = SHGetKnownFolderPath(folder_id, KF_FLAG_CREATE | KF_FLAG_INIT, NULL, &known_folder);
+	if (!SUCCEEDED(hr)) {
+		Com_WPrintf("Failed to retrieve known folder (%.8lx)\n", (long)hr);
+		return false;
+	}
+
+	if (WideCharToMultiByte(CP_UTF8, 0, known_folder, -1, resolved_path, (int)resolved_length, NULL, NULL) == 0) {
+		Com_WPrintf("Failed to convert known folder (%lu)\n", GetLastError());
+		goto done;
+	}
+
+	if (suffix && *suffix) {
+		if (Q_strlcat(resolved_path, suffix, resolved_length) >= resolved_length) {
+			Com_WPrintf("Known folder path too long after appending suffix\n");
+			goto done;
+		}
+	}
+
+	result = Sys_VerifyWritableDirectory(resolved_path);
+
+	done:
+	CoTaskMemFree(known_folder);
+	return result;
+}
+
+/*
+=============
+Sys_ResolveHomeDirectory
+
+Determines a writable home directory using Saved Games or Local AppData,
+falling back to the base directory if necessary.
+=============
+*/
+static void Sys_ResolveHomeDirectory(char *homedir, size_t homedir_length)
+{
+	const char *product_suffix = "\\" PRODUCT;
+
+	homedir[0] = '\0';
+
+	if (Sys_TryKnownFolder(FOLDERID_SavedGames, product_suffix, homedir, homedir_length))
+		return;
+
+	if (Sys_TryKnownFolder(FOLDERID_LocalAppData, product_suffix, homedir, homedir_length))
+		return;
+
+	Q_strlcpy(homedir, sys_basedir->string, homedir_length);
+	if (!Sys_VerifyWritableDirectory(homedir))
+		Q_strlcpy(homedir, ".", homedir_length);
+}
 
 /*
 ===============================================================================
@@ -1440,13 +1539,101 @@ bool Sys_IsMainThread(void)
 
 unsigned Sys_Milliseconds(void)
 {
-    LARGE_INTEGER tm;
-    QueryPerformanceCounter(&tm);
-    return tm.QuadPart * 1000ULL / timer_freq.QuadPart;
+	LARGE_INTEGER	 tm;
+	QueryPerformanceCounter(&tm);
+	return tm.QuadPart * 1000ULL / timer_freq.QuadPart;
 }
 
+static constexpr const char	*kSiteConfigName = "q2pro.default";
+
+/*
+=============
+Sys_ReadSiteConfig
+
+Attempts to read and execute a site-wide configuration file.
+=============
+*/
+static bool Sys_ReadSiteConfig(const char *path)
+{
+	FILE		*fp;
+	size_t		len;
+	bool		truncated;
+
+	fp = fopen(path, "rb");
+	if (!fp) {
+		return false;
+	}
+
+	len = fread(cmd_buffer.text, 1, cmd_buffer.maxsize - 1, fp);
+	truncated = !feof(fp) && len == cmd_buffer.maxsize - 1;
+	fclose(fp);
+
+	cmd_buffer.text[len] = 0;
+	cmd_buffer.cursize = COM_Compress(cmd_buffer.text);
+
+	if (truncated) {
+		Com_WPrintf("Site config %s is too large; only the first %zu bytes were loaded\n", path, len);
+	}
+
+	if (cmd_buffer.cursize) {
+		Com_Printf("Execing %s\n", path);
+		Cbuf_Execute(&cmd_buffer);
+		return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+Sys_GetProgramDataConfigPath
+
+Builds the ProgramData path to the site-wide configuration file.
+=============
+*/
+static bool Sys_GetProgramDataConfigPath(char *path, size_t path_length)
+{
+	PWSTR	program_data = NULL;
+	HRESULT	hr;
+	int	required;
+	bool	result = false;
+
+	hr = SHGetKnownFolderPath(FOLDERID_ProgramData, KF_FLAG_DEFAULT, NULL, &program_data);
+	if (FAILED(hr) || !program_data) {
+		return false;
+	}
+
+	required = WideCharToMultiByte(CP_UTF8, 0, program_data, -1, NULL, 0, NULL, NULL);
+	if (required > 0 && (size_t)required < path_length) {
+		if (WideCharToMultiByte(CP_UTF8, 0, program_data, -1, path, (int)path_length, NULL, NULL) > 0) {
+			if (Q_concat(path, path_length, path, "\\", PRODUCT, "\\", kSiteConfigName) < path_length) {
+				result = true;
+			}
+		}
+	}
+
+	CoTaskMemFree(program_data);
+	return result;
+}
+
+/*
+=============
+Sys_AddDefaultConfig
+
+Mirrors Unix behavior by executing a site-wide configuration when present.
+=============
+*/
 void Sys_AddDefaultConfig(void)
 {
+	std::array<char, MAX_OSPATH> path{};
+
+	if (Sys_ReadSiteConfig(kSiteConfigName)) {
+		return;
+	}
+
+	if (Sys_GetProgramDataConfigPath(path.data(), path.size())) {
+		Sys_ReadSiteConfig(path.data());
+	}
 }
 
 void Sys_Sleep(int msec)
@@ -1476,45 +1663,48 @@ Sys_Init
 void Sys_Init(void)
 {
 #ifdef _DEBUG
-    sys_debugprint = Cvar_Get("sys_debugprint", "0", 0);
+	sys_debugprint = Cvar_Get("sys_debugprint", "0", 0);
 #endif
 
-    if (!QueryPerformanceFrequency(&timer_freq))
-        Sys_Error("QueryPerformanceFrequency failed");
+	char homedir[MAX_OSPATH];
 
-    if (COM_DEDICATED)
-        SetErrorMode(SEM_FAILCRITICALERRORS);
+	if (!QueryPerformanceFrequency(&timer_freq))
+		Sys_Error("QueryPerformanceFrequency failed");
 
-    // basedir <path>
-    // allows the game to run from outside the data tree
-    sys_basedir = Cvar_Get("basedir", ".", CVAR_NOSET);
-    sys_libdir = Cvar_Get("libdir", ".", CVAR_NOSET);
+	if (COM_DEDICATED)
+		SetErrorMode(SEM_FAILCRITICALERRORS);
 
-    // homedir <path>
-    // specifies per-user writable directory for demos, screenshots, etc
-    sys_homedir = Cvar_Get("homedir", "", CVAR_NOSET);
+	// basedir <path>
+	// allows the game to run from outside the data tree
+	sys_basedir = Cvar_Get("basedir", ".", CVAR_NOSET);
+	sys_libdir = Cvar_Get("libdir", ".", CVAR_NOSET);
 
-    sys_exitonerror = Cvar_Get("sys_exitonerror", "0", 0);
+	// homedir <path>
+	// specifies per-user writable directory for demos, screenshots, etc
+	Sys_ResolveHomeDirectory(homedir, sizeof(homedir));
+	sys_homedir = Cvar_Get("homedir", homedir, CVAR_NOSET);
+
+	sys_exitonerror = Cvar_Get("sys_exitonerror", "0", 0);
 
 #if USE_WINSVC
-    Cmd_AddCommand("installservice", Sys_InstallService_f);
-    Cmd_AddCommand("deleteservice", Sys_DeleteService_f);
+	Cmd_AddCommand("installservice", Sys_InstallService_f);
+	Cmd_AddCommand("deleteservice", Sys_DeleteService_f);
 #endif
 
 #if USE_SYSCON
 #if USE_CLIENT
-    cvar_t *sys_viewlog = Cvar_Get("sys_viewlog", "0", CVAR_NOSET);
+	cvar_t *sys_viewlog = Cvar_Get("sys_viewlog", "0", CVAR_NOSET);
 
-    if (dedicated->integer || sys_viewlog->integer)
+	if (dedicated->integer || sys_viewlog->integer)
 #endif
-        Sys_ConsoleInit();
+		Sys_ConsoleInit();
 #endif // USE_SYSCON
 
 #if USE_DBGHELP
-    // install our exception filter
-    cvar_t *var = Cvar_Get("sys_disablecrashdump", "0", CVAR_NOSET);
-    if (!var->integer)
-        Sys_InstallExceptionFilter();
+	// install our exception filter
+	cvar_t *var = Cvar_Get("sys_disablecrashdump", "0", CVAR_NOSET);
+	if (!var->integer)
+		Sys_InstallExceptionFilter();
 #endif
 }
 
@@ -1862,25 +2052,36 @@ MAIN
 ========================================================================
 */
 
+/*
+=============
+fix_current_directory
+
+Resolve and switch to the executable directory while storing the UTF-8 path.
+=============
+*/
 static void fix_current_directory(void)
 {
-    WCHAR buffer[MAX_PATH];
-    DWORD ret = GetModuleFileNameW(NULL, buffer, MAX_PATH);
+	WCHAR buffer[MAX_PATH];
+	DWORD ret = GetModuleFileNameW(NULL, buffer, MAX_PATH);
 
-    if (ret < MAX_PATH)
-        while (ret)
-            if (buffer[--ret] == '\\')
-                break;
+	if (ret < MAX_PATH)
+		while (ret)
+			if (buffer[--ret] == '\')
+				break;
 
-    if (ret == 0)
-        Sys_Error("Can't determine base directory");
+	if (ret == 0)
+		Sys_Error("Can't determine base directory");
 
-    if (ret >= MAX_PATH - MAX_QPATH)
-        Sys_Error("Base directory path too long. Move your " PRODUCT " installation to a shorter path.");
+	if (ret >= MAX_PATH - MAX_QPATH)
+		Sys_Error("Base directory path too long. Move your " PRODUCT " installation to a shorter path.");
 
-    buffer[ret] = 0;
-    if (!SetCurrentDirectoryW(buffer))
-        Sys_Error("SetCurrentDirectoryW failed");
+	buffer[ret] = 0;
+	if (!SetCurrentDirectoryW(buffer))
+		Sys_Error("SetCurrentDirectoryW failed");
+
+	int length = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, executable_basedir.data(), static_cast<int>(executable_basedir.size()), NULL, NULL);
+	if (length == 0 || length >= static_cast<int>(executable_basedir.size()))
+		Sys_Error("Failed to resolve executable directory");
 }
 
 #if (_MSC_VER >= 1400)

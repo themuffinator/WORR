@@ -18,13 +18,353 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ui.hpp"
 #include "common/json.hpp"
+#include "common/mdfour.hpp"
 
+#include <memory>
 #include <limits.h>
+#include <string>
 #include <string.h>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
 
 extern const char res_worr_menu[];
 extern const size_t res_worr_menu_size;
 
+#define UI_MANIFEST_FILE "menus/index.json"
+
+typedef struct uiScriptSource_s {
+	char	path[MAX_QPATH];
+	char	override_path[MAX_QPATH];
+} uiScriptSource_t;
+
+typedef struct uiScriptManifest_s {
+	std::unordered_map<std::string, std::vector<uiScriptSource_t>>	scriptLists;
+	std::unordered_map<std::string, std::vector<uiScriptSource_t>>	overrideLists;
+	std::unordered_map<uiScriptContext_t, std::vector<std::string>>	controllerOrder;
+	char	controllerPath[MAX_QPATH];
+} uiScriptManifest_t;
+
+typedef struct uiScriptFileSignature_s {
+	uint32_t hash;
+	bool valid;
+} uiScriptFileSignature_t;
+
+class uiScriptControllerManager {
+public:
+	uiScriptControllerManager();
+
+	void Init(void);
+	void RequestReload(void);
+	bool NeedsReload(void) const;
+	bool Sync(void);
+	const uiScriptManifest_t &Manifest(void) const;
+
+private:
+	uiScriptManifest_t manifest;
+	uiScriptFileSignature_t manifestSignature;
+	uiScriptFileSignature_t controllerSignature;
+	bool manifestLoaded;
+	bool forceReload;
+
+	bool SignatureChanged(const uiScriptFileSignature_t &incoming, const uiScriptFileSignature_t &current) const;
+	bool TryLoadFileWithSignature(const char *path, std::string *buffer, uiScriptFileSignature_t *signature) const;
+	bool LoadManifestFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature);
+	bool LoadControllerFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature);
+	void ResetControllerState(void);
+	bool SyncController(bool force);
+};
+
+static uiScriptControllerManager ui_scriptControllerManager;
+static uiScriptContext_t ui_activeContext = UI_SCRIPT_MAIN;
+static bool ui_scriptLoaded;
+static cvar_t *ui_menu_context;
+static std::vector<std::string> ui_loadedScripts;
+static char ui_scriptStack[8][MAX_QPATH];
+static int ui_scriptDepth;
+static uiTypographyRole_t UI_TypographyRoleFromString(const char* name);
+static void UI_ClearTypographyFonts(void);
+static void UI_AddTypographyFont(uiTypographyRole_t role, const char* font);
+
+static const char ui_builtinFallback[] = R"({
+"background": "black",
+"font": "conchars.pcx",
+"menus": [
+{
+"name": "safe_mode",
+"title": "WORR Safe Mode",
+"items": [
+{ "type": "action", "label": "reconnect", "command": "reconnect" },
+{ "type": "action", "label": "multiplayer browser", "command": "menu_joinserver" },
+{ "type": "action", "label": "video defaults", "command": "vid_reset" },
+{ "type": "action", "label": "quit", "command": "quit" }
+]
+}
+]
+})";
+
+/*
+=============
+UI_ResetScriptState
+
+Clears the module tracking before attempting a new menu load.
+=============
+*/
+static void UI_ResetScriptState(void)
+{
+	ui_loadedScripts.clear();
+	ui_scriptDepth = 0;
+
+	UI_ClearTypographyFonts();
+}
+
+/*
+=============
+UI_TypographyRoleFromString
+
+Maps a string identifier to a typography role value.
+=============
+*/
+static uiTypographyRole_t UI_TypographyRoleFromString(const char* name)
+{
+	if (!name || !*name)
+		return UI_TYPO_ROLE_COUNT;
+
+	if (!Q_stricmp(name, "body"))
+		return UI_TYPO_BODY;
+	if (!Q_stricmp(name, "label"))
+		return UI_TYPO_LABEL;
+	if (!Q_stricmp(name, "heading"))
+		return UI_TYPO_HEADING;
+	if (!Q_stricmp(name, "monospace"))
+		return UI_TYPO_MONOSPACE;
+
+	return UI_TYPO_ROLE_COUNT;
+}
+
+/*
+=============
+UI_ClearTypographyFonts
+
+Clears any script-provided font preferences for each typography role.
+=============
+*/
+static void UI_ClearTypographyFonts(void)
+{
+	for (auto &entry : uis.typographyFonts) {
+		entry.clear();
+	}
+
+	for (auto &height : uis.typographyPixelHeights) {
+		height = 0;
+	}
+}
+
+/*
+=============
+UI_AddTypographyFont
+
+Adds a script-declared font path to the specified typography role without duplicating entries.
+=============
+*/
+static void UI_AddTypographyFont(uiTypographyRole_t role, const char* font)
+{
+	if (role < 0 || role >= UI_TYPO_ROLE_COUNT || !font || !*font)
+		return;
+
+	auto &entry = uis.typographyFonts[role];
+	for (const auto &existing : entry) {
+		if (!Q_stricmp(existing.c_str(), font))
+			return;
+	}
+
+	entry.emplace_back(font);
+}
+
+/*
+=============
+UI_CurrentScriptPath
+
+Returns the path of the currently parsed script, if any.
+=============
+*/
+static const char* UI_CurrentScriptPath(void)
+{
+	if (ui_scriptDepth <= 0)
+		return "";
+
+	return ui_scriptStack[ui_scriptDepth - 1];
+}
+
+/*
+=============
+UI_PushScriptPath
+
+Pushes a script path onto the include stack.
+=============
+*/
+static bool UI_PushScriptPath(const char* path)
+{
+	if (ui_scriptDepth >= q_countof(ui_scriptStack)) {
+		Com_WPrintf("Exceeded maximum UI include depth trying to load %s\n", path);
+		return false;
+	}
+
+	Q_strlcpy(ui_scriptStack[ui_scriptDepth], path, sizeof(ui_scriptStack[ui_scriptDepth]));
+	ui_scriptDepth++;
+	return true;
+}
+
+/*
+=============
+UI_PopScriptPath
+
+Removes the most recent script path from the include stack.
+=============
+*/
+static void UI_PopScriptPath(void)
+{
+	if (ui_scriptDepth > 0)
+		ui_scriptDepth--;
+}
+
+/*
+=============
+UI_IsScriptInStack
+
+Determines whether a script is already in the active include stack.
+=============
+*/
+static bool UI_IsScriptInStack(const char* path)
+{
+	for (int i = 0; i < ui_scriptDepth; i++) {
+		if (!Q_stricmp(ui_scriptStack[i], path))
+			return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+UI_HasLoadedScript
+
+Checks if a script path has already been parsed during this load cycle.
+=============
+*/
+static bool UI_HasLoadedScript(const char* path)
+{
+	return std::any_of(ui_loadedScripts.cbegin(), ui_loadedScripts.cend(), [path](const std::string& loaded) {
+		return !Q_stricmp(loaded.c_str(), path);
+	});
+}
+
+/*
+=============
+UI_NoteLoadedScript
+
+Tracks a script as loaded for the current load cycle.
+=============
+*/
+static void UI_NoteLoadedScript(const char* path)
+{
+	ui_loadedScripts.emplace_back(path);
+}
+
+/*
+=============
+UI_ResolveModulePath
+
+Resolves a module path against the current script location.
+=============
+*/
+static void UI_ResolveModulePath(const char* basePath, const char* module, char* resolved, size_t size)
+{
+	if (!module || !module[0]) {
+		resolved[0] = '\0';
+		return;
+	}
+
+	const char* lastSlash = strrchr(basePath, '/');
+	if (lastSlash && !strchr(module, '/')) {
+		size_t baseLen = (lastSlash - basePath) + 1;
+		if (baseLen >= size) {
+			resolved[0] = '\0';
+			return;
+		}
+
+		memcpy(resolved, basePath, baseLen);
+		Q_strlcpy(resolved + baseLen, module, size - baseLen);
+		return;
+	}
+
+	Q_strlcpy(resolved, module, size);
+}
+
+/*
+=============
+UI_LoadMenuScriptFromBuffer
+
+Loads a menu definition from an in-memory buffer using a virtual path for tracking.
+=============
+*/
+static bool UI_LoadMenuScriptFromBuffer(const char* virtualPath, const char* buffer, size_t length)
+{
+	json_parse_t parser = {};
+
+	if (UI_IsScriptInStack(virtualPath)) {
+		Com_WPrintf("Detected recursive include of %s\n", virtualPath);
+		return false;
+	}
+
+	if (UI_HasLoadedScript(virtualPath))
+		return true;
+
+	if (!UI_PushScriptPath(virtualPath))
+		return false;
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load %s[%s]: %s\n", virtualPath, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		UI_PopScriptPath();
+		return false;
+	}
+
+	UI_ParseJsonBuffer(&parser, buffer, length);
+	UI_ParseRoot(&parser);
+	Json_Free(&parser);
+	UI_PopScriptPath();
+	UI_NoteLoadedScript(virtualPath);
+	return true;
+}
+
+/*
+=============
+UI_LoadMenuModule
+
+Loads a module relative to the current script file, preventing cycles.
+=============
+*/
+static bool UI_LoadMenuModule(const char* module)
+{
+	char resolved[MAX_QPATH];
+
+	UI_ResolveModulePath(UI_CurrentScriptPath(), module, resolved, sizeof(resolved));
+	if (!resolved[0]) {
+		Com_WPrintf("Invalid module path referenced from %s\n", UI_CurrentScriptPath());
+		return false;
+	}
+
+	if (UI_IsScriptInStack(resolved)) {
+		Com_WPrintf("Detected recursive include of %s (from %s)\n", resolved, UI_CurrentScriptPath());
+		return false;
+	}
+
+	if (UI_HasLoadedScript(resolved))
+		return true;
+
+	return UI_LoadMenuScriptFromFile(resolved);
+}
 static menuSound_t Activate(menuCommon_t* self)
 {
 	switch (self->type) {
@@ -478,11 +818,11 @@ static void ParsePairOptions(json_parse_t* parser, menuSpinControl_t* s)
 
 static uiItemGroup_t* Menu_FindGroup(menuFrameWork_t* menu, const char* name)
 {
-	if (!menu->groups)
+	if (menu->groups.empty())
 		return NULL;
 
-	for (int i = 0; i < menu->numGroups; i++) {
-		uiItemGroup_t* group = menu->groups[i];
+	for (const auto &groupPtr : menu->groups) {
+		uiItemGroup_t* group = groupPtr.get();
 		if (group && group->name && !Q_stricmp(group->name, name))
 			return group;
 	}
@@ -1015,11 +1355,12 @@ static void ParseMenuGroups(json_parse_t* parser, menuFrameWork_t* menu)
 	if (!menu->numGroups)
 		return;
 
-	menu->groups = UI_Mallocz(sizeof(uiItemGroup_t*) * menu->numGroups);
+	menu->groups.clear();
+	menu->groups.resize(menu->numGroups);
 
 	for (int i = 0; i < array->size; i++) {
 		jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
-		uiItemGroup_t* group = UI_Mallocz(sizeof(*group));
+		std::unique_ptr<uiItemGroup_t> group = std::make_unique<uiItemGroup_t>();
 		group->indent = RCOLUMN_OFFSET;
 		group->padding = MENU_SPACING / 2;
 		group->headerHeight = MENU_SPACING;
@@ -1073,13 +1414,13 @@ static void ParseMenuGroups(json_parse_t* parser, menuFrameWork_t* menu)
 			}
 		}
 
-		if (!group->name)
-			Json_Error(parser, object, "menu group missing name");
-		if (!group->label)
-			group->headerHeight = 0;
+if (!group->name)
+Json_Error(parser, object, "menu group missing name");
+if (!group->label)
+group->headerHeight = 0;
 
-		menu->groups[i] = group;
-	}
+menu->groups[i] = std::move(group);
+}
 }
 
 static void ApplyMenuBackground(menuFrameWork_t* menu, const char* value)
@@ -1172,7 +1513,7 @@ static void ParseMenu(json_parse_t* parser)
 		menu = NULL;
 	}
 
-	menu = UI_Mallocz(sizeof(*menu));
+	menu = new menuFrameWork_t{};
 	menu->name = name;
 	menu->push = Menu_Push;
 	menu->pop = Menu_Pop;
@@ -1239,7 +1580,7 @@ static void ParseMenu(json_parse_t* parser)
 		}
 	}
 
-	if (!menu->nitems) {
+	if (menu->items.empty()) {
 		Com_WPrintf("Menu '%s' defined without items\n", menu->name);
 		menu->free(menu);
 		return;
@@ -1284,42 +1625,102 @@ static void ParseColors(json_parse_t* parser)
 	}
 }
 
-static void ParseGlobalBackground(json_parse_t* parser)
+/*
+=============
+ParseRoleFonts
+
+Parses a font path or list of font paths for a typography role.
+=============
+*/
+static void ParseRoleFonts(json_parse_t* parser, uiTypographyRole_t role)
 {
+	if (parser->pos->type == JSMN_ARRAY) {
+		jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
+
+		for (int i = 0; i < array->size; i++) {
+			if (parser->pos->type != JSMN_STRING)
+				Json_Error(parser, parser->pos, "font entries must be strings");
+
+			char* value = Json_CopyStringUI(parser);
+			UI_AddTypographyFont(role, value);
+			Z_Free(value);
+		}
+
+		return;
+	}
+
 	if (parser->pos->type != JSMN_STRING)
-		Json_Error(parser, parser->pos, "background must be a string");
+		Json_Error(parser, parser->pos, "font entry must be a string or array");
 
 	char* value = Json_CopyStringUI(parser);
-
-	if (SCR_ParseColor(value, &uis.color.background)) {
-		uis.backgroundHandle = 0;
-		uis.transparent = uis.color.background.a != 255;
-	}
-	else {
-		uis.backgroundHandle = R_RegisterPic(value);
-		uis.transparent = R_GetPicSize(NULL, NULL, uis.backgroundHandle);
-	}
-
+	UI_AddTypographyFont(role, value);
 	Z_Free(value);
 }
 
-static void ParseCursor(json_parse_t* parser)
-{
-	if (parser->pos->type != JSMN_STRING)
-		Json_Error(parser, parser->pos, "cursor must be a string");
+/*
+=============
+ParseRoleFontSize
 
-	char* name = Json_CopyStringUI(parser);
-	uis.cursorHandle = R_RegisterPic(name);
-	R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
-	Z_Free(name);
+Parses a pixel height override for a typography role.
+=============
+*/
+static void ParseRoleFontSize(json_parse_t* parser, uiTypographyRole_t role)
+{
+	if (parser->pos->type != JSMN_PRIMITIVE)
+		Json_Error(parser, parser->pos, "font size must be a number");
+
+	const int pixelHeight = Json_ReadInt(parser);
+
+	if (pixelHeight > 0)
+		uis.typographyPixelHeights[role] = pixelHeight;
 }
 
-static void ParseMenus(json_parse_t* parser)
-{
-	jsmntok_t* array = Json_EnsureNext(parser, JSMN_ARRAY);
+/*
+=============
+ParseFonts
 
-	for (int i = 0; i < array->size; i++)
-		ParseMenu(parser);
+Parses typography font preferences keyed by role names.
+=============
+*/
+static void ParseFonts(json_parse_t* parser)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char roleName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
+		uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
+
+		if (role == UI_TYPO_ROLE_COUNT)
+			Json_Error(parser, parser->pos, "unknown typography role");
+
+		Json_Next(parser);
+		ParseRoleFonts(parser, role);
+	}
+}
+
+/*
+=============
+ParseFontSizes
+
+Parses per-role typography pixel heights keyed by role names.
+=============
+*/
+static void ParseFontSizes(json_parse_t* parser)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char roleName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, roleName, sizeof(roleName));
+		uiTypographyRole_t role = UI_TypographyRoleFromString(roleName);
+
+		if (role == UI_TYPO_ROLE_COUNT)
+			Json_Error(parser, parser->pos, "unknown typography role");
+
+		Json_Next(parser);
+		ParseRoleFontSize(parser, role);
+	}
 }
 
 /*
@@ -1341,8 +1742,20 @@ static void UI_ParseRoot(json_parse_t* parser)
 		else if (!Json_Strcmp(parser, "font")) {
 			Json_Next(parser);
 			char* font = Json_CopyStringUI(parser);
+
+			for (int role = 0; role < UI_TYPO_ROLE_COUNT; role++)
+				UI_AddTypographyFont(static_cast<uiTypographyRole_t>(role), font);
+
 			uis.fontHandle = SCR_RegisterFontPath(font);
 			Z_Free(font);
+		}
+		else if (!Json_Strcmp(parser, "fonts")) {
+			Json_Next(parser);
+			ParseFonts(parser);
+		}
+		else if (!Json_Strcmp(parser, "fontSizes")) {
+			Json_Next(parser);
+			ParseFontSizes(parser);
 		}
 		else if (!Json_Strcmp(parser, "cursor")) {
 			Json_Next(parser);
@@ -1362,6 +1775,10 @@ static void UI_ParseRoot(json_parse_t* parser)
 			Json_Next(parser);
 			ParseMenus(parser);
 		}
+		else if (!Json_Strcmp(parser, "modules") || !Json_Strcmp(parser, "include")) {
+			Json_Next(parser);
+			ParseModuleList(parser);
+		}
 		else {
 			Json_Next(parser);
 			Json_SkipToken(parser);
@@ -1369,6 +1786,9 @@ static void UI_ParseRoot(json_parse_t* parser)
 	}
 }
 
+/*
+=============
+UI_ParseJsonBuffer
 /*
 =============
 UI_ParseJsonBuffer
@@ -1402,22 +1822,555 @@ static void UI_ParseJsonBuffer(json_parse_t* parser, const char* buffer, size_t 
 
 /*
 =============
-UI_TryLoadMenuFromFile
+UI_AddScriptEntryToList
 
-Attempts to load the UI definition from the filesystem.
+Adds a single script path to the provided manifest list.
 =============
 */
-static bool UI_TryLoadMenuFromFile(json_parse_t* parser)
+static void UI_AddScriptEntryToList(json_parse_t* parser, std::vector<uiScriptSource_t>* list, bool overrideEntry)
 {
-	if (Json_ErrorHandler(parser)) {
-		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
-		Json_Free(parser);
+	uiScriptSource_t source = {};
+
+	if (overrideEntry)
+		Json_CopyStringToBuffer(parser, source.override_path, sizeof(source.override_path));
+	else
+		Json_CopyStringToBuffer(parser, source.path, sizeof(source.path));
+
+	list->push_back(source);
+}
+
+/*
+=============
+UI_ParseManifestList
+
+Parses either a single script path or an array of paths into a list.
+=============
+*/
+static void UI_ParseManifestList(json_parse_t* parser, std::vector<uiScriptSource_t>* list, bool overrideEntry)
+{
+	list->clear();
+
+	switch (parser->pos->type) {
+	case JSMN_ARRAY: {
+		jsmntok_t* array = Json_Next(parser);
+
+		for (int i = 0; i < array->size; i++)
+			UI_AddScriptEntryToList(parser, list, overrideEntry);
+		break;
+	}
+	case JSMN_STRING:
+		UI_AddScriptEntryToList(parser, list, overrideEntry);
+		break;
+	default:
+		Json_SkipToken(parser);
+		break;
+	}
+}
+
+/*
+=============
+UI_ParseControllerList
+
+Collects a controller ordering entry into a vector of list names.
+=============
+*/
+static void UI_ParseControllerList(json_parse_t* parser, std::vector<std::string>* order)
+{
+	order->clear();
+
+	switch (parser->pos->type) {
+	case JSMN_ARRAY: {
+		jsmntok_t* array = Json_Next(parser);
+
+		for (int i = 0; i < array->size; i++) {
+			char name[MAX_QPATH];
+			Json_CopyStringToBuffer(parser, name, sizeof(name));
+			order->emplace_back(name);
+		}
+		break;
+	}
+	case JSMN_STRING: {
+		char name[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, name, sizeof(name));
+		order->emplace_back(name);
+		break;
+	}
+	default:
+		Json_SkipToken(parser);
+		break;
+	}
+}
+
+/*
+=============
+UI_ContextFromName
+
+Translates a controller context name to an enum value.
+=============
+*/
+static bool UI_ContextFromName(const char* name, uiScriptContext_t* context)
+{
+	if (!Q_stricmp(name, "main")) {
+		*context = UI_SCRIPT_MAIN;
+		return true;
+	}
+
+	if (!Q_stricmp(name, "ingame")) {
+		*context = UI_SCRIPT_INGAME;
+		return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+UI_ScriptSourcePath
+
+Returns the configured path for a manifest entry, preferring overrides.
+=============
+*/
+static const char* UI_ScriptSourcePath(const uiScriptSource_t& source)
+{
+	if (source.override_path[0])
+		return source.override_path;
+
+	return source.path;
+}
+
+/*
+=============
+UI_ResetControllerOrder
+
+Clears controller ordering and restores default context fallbacks.
+=============
+*/
+static void UI_ResetControllerOrder(uiScriptManifest_t* manifest)
+{
+	manifest->controllerOrder.clear();
+	manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
+	manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
+}
+
+/*
+=============
+UI_ResetManifest
+
+Resets the script manifest entries to defaults.
+=============
+*/
+static void UI_ResetManifest(uiScriptManifest_t* manifest)
+{
+	Q_assert(manifest);
+
+	manifest->scriptLists.clear();
+	manifest->overrideLists.clear();
+	UI_ResetControllerOrder(manifest);
+	memset(manifest->controllerPath, 0, sizeof(manifest->controllerPath));
+
+	uiScriptSource_t defaultSource = {};
+	Q_strlcpy(defaultSource.path, UI_DEFAULT_FILE, sizeof(defaultSource.path));
+	std::vector<uiScriptSource_t>& mainList = manifest->scriptLists["main"];
+	mainList.clear();
+	mainList.push_back(defaultSource);
+}
+
+static void UI_ParseManifestOverrides(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char listName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, listName, sizeof(listName));
+		std::vector<uiScriptSource_t>& list = manifest->overrideLists[listName];
+		UI_ParseManifestList(parser, &list, true);
+	}
+}
+
+/*
+=============
+UI_ParseManifest
+
+Parses the top-level menu manifest to find script sources.
+=============
+*/
+static void UI_ParseManifest(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		if (!Json_Strcmp(parser, "controller")) {
+			Json_Next(parser);
+			Json_CopyStringToBuffer(parser, manifest->controllerPath, sizeof(manifest->controllerPath));
+			continue;
+		}
+
+		if (!Json_Strcmp(parser, "overrides")) {
+			Json_Next(parser);
+			UI_ParseManifestOverrides(parser, manifest);
+			continue;
+		}
+
+		char listName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, listName, sizeof(listName));
+		std::vector<uiScriptSource_t>& list = manifest->scriptLists[listName];
+		UI_ParseManifestList(parser, &list, false);
+	}
+}
+
+/*
+=============
+UI_ParseController
+
+Parses the controller file that maps contexts to script list names.
+=============
+*/
+static void UI_ParseController(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char contextName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, contextName, sizeof(contextName));
+		uiScriptContext_t context;
+
+		if (!UI_ContextFromName(contextName, &context)) {
+			Json_SkipToken(parser);
+			continue;
+		}
+
+		std::vector<std::string> order;
+		UI_ParseControllerList(parser, &order);
+
+		if (!order.empty())
+			manifest->controllerOrder[context] = order;
+	}
+}
+
+/*
+=============
+UI_EnsureControllerFallbacks
+
+Ensures controller orders always include safe defaults.
+=============
+*/
+static void UI_EnsureControllerFallbacks(uiScriptManifest_t* manifest)
+{
+	if (manifest->controllerOrder[UI_SCRIPT_MAIN].empty())
+		manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
+
+	if (manifest->controllerOrder[UI_SCRIPT_INGAME].empty())
+		manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
+}
+
+/*
+=============
+uiScriptControllerManager::uiScriptControllerManager
+
+Initializes default state for controller tracking.
+=============
+*/
+uiScriptControllerManager::uiScriptControllerManager(void)
+{
+	manifestLoaded = false;
+	forceReload = true;
+	manifestSignature = {};
+	controllerSignature = {};
+	UI_ResetManifest(&manifest);
+}
+
+/*
+=============
+uiScriptControllerManager::Manifest
+
+Returns the cached manifest instance.
+=============
+*/
+const uiScriptManifest_t &uiScriptControllerManager::Manifest(void) const
+{
+	return manifest;
+}
+
+/*
+=============
+uiScriptControllerManager::Init
+
+Resets controller state and forces the next sync to reload data.
+=============
+*/
+void uiScriptControllerManager::Init(void)
+{
+	manifestLoaded = false;
+	forceReload = true;
+	manifestSignature = {};
+	controllerSignature = {};
+	UI_ResetManifest(&manifest);
+}
+
+/*
+=============
+uiScriptControllerManager::RequestReload
+
+Marks the controller manager so that the next sync rebuilds state.
+=============
+*/
+void uiScriptControllerManager::RequestReload(void)
+{
+	forceReload = true;
+}
+
+/*
+=============
+uiScriptControllerManager::NeedsReload
+
+Determines whether a sync should refresh cached data.
+=============
+*/
+bool uiScriptControllerManager::NeedsReload(void) const
+{
+	return !manifestLoaded || forceReload;
+}
+
+/*
+=============
+uiScriptControllerManager::SignatureChanged
+
+Checks whether a file signature differs from the cached value.
+=============
+*/
+bool uiScriptControllerManager::SignatureChanged(const uiScriptFileSignature_t &incoming, const uiScriptFileSignature_t &current) const
+{
+	if (!incoming.valid || !current.valid)
+		return true;
+
+	return incoming.hash != current.hash;
+}
+
+/*
+=============
+uiScriptControllerManager::TryLoadFileWithSignature
+
+Loads a file into a buffer and computes its version signature.
+=============
+*/
+bool uiScriptControllerManager::TryLoadFileWithSignature(const char *path, std::string *buffer, uiScriptFileSignature_t *signature) const
+{
+	char *rawBuffer = nullptr;
+
+	const int length = FS_LoadFile(path, reinterpret_cast<void **>(&rawBuffer));
+	if (length < 0)
+		return false;
+
+	buffer->assign(rawBuffer, static_cast<size_t>(length));
+
+	if (signature) {
+		signature->hash = Com_BlockChecksum(rawBuffer, static_cast<size_t>(length));
+		signature->valid = true;
+	}
+
+	FS_FreeFile(rawBuffer);
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::LoadManifestFromBuffer
+
+Parses a manifest buffer and refreshes cached signatures.
+=============
+*/
+bool uiScriptControllerManager::LoadManifestFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature)
+{
+	json_parse_t parser = {};
+
+	UI_ResetManifest(&manifest);
+	controllerSignature = {};
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", UI_MANIFEST_FILE, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		manifestLoaded = true;
 		return false;
 	}
 
-	Json_Load(UI_DEFAULT_FILE, parser);
-	UI_ParseRoot(parser);
-	Json_Free(parser);
+	UI_ParseJsonBuffer(&parser, buffer.data(), buffer.size());
+	UI_ParseManifest(&parser, &manifest);
+	Json_Free(&parser);
+
+	manifestSignature = signature;
+	manifestLoaded = true;
+
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::ResetControllerState
+
+Resets controller-specific ordering without touching script lists.
+=============
+*/
+void uiScriptControllerManager::ResetControllerState(void)
+{
+	UI_ResetControllerOrder(&manifest);
+	controllerSignature = {};
+}
+
+/*
+=============
+uiScriptControllerManager::LoadControllerFromBuffer
+
+Parses a controller buffer onto the current manifest ordering.
+=============
+*/
+bool uiScriptControllerManager::LoadControllerFromBuffer(const std::string &buffer, const uiScriptFileSignature_t &signature)
+{
+	json_parse_t parser = {};
+
+	ResetControllerState();
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s
+		", manifest.controllerPath, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		return false;
+	}
+
+	UI_ParseJsonBuffer(&parser, buffer.data(), buffer.size());
+	UI_ParseController(&parser, &manifest);
+	Json_Free(&parser);
+
+	controllerSignature = signature;
+	return true;
+}
+
+/*
+=============
+uiScriptControllerManager::SyncController
+
+Ensures controller ordering matches the latest controller file state.
+=============
+*/
+bool uiScriptControllerManager::SyncController(bool force)
+{
+	if (!manifest.controllerPath[0]) {
+		ResetControllerState();
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return true;
+	}
+
+	std::string controllerBuffer;
+	uiScriptFileSignature_t incomingSignature = {};
+
+	if (!TryLoadFileWithSignature(manifest.controllerPath, &controllerBuffer, &incomingSignature)) {
+		ResetControllerState();
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return false;
+	}
+
+	if (!force && !SignatureChanged(incomingSignature, controllerSignature)) {
+		UI_EnsureControllerFallbacks(&manifest);
+		forceReload = false;
+		return true;
+	}
+
+	const bool parsed = LoadControllerFromBuffer(controllerBuffer, incomingSignature);
+	UI_EnsureControllerFallbacks(&manifest);
+	forceReload = false;
+	return parsed;
+}
+
+/*
+=============
+uiScriptControllerManager::Sync
+
+Synchronizes manifest/controller data with disk, reusing caches when possible.
+=============
+*/
+bool uiScriptControllerManager::Sync(void)
+{
+	std::string manifestBuffer;
+	uiScriptFileSignature_t incomingSignature = {};
+	const bool loadedManifest = TryLoadFileWithSignature(UI_MANIFEST_FILE, &manifestBuffer, &incomingSignature);
+	bool forceControllerReload = forceReload || !manifestLoaded;
+
+	if (loadedManifest) {
+		if (forceReload || !manifestLoaded || SignatureChanged(incomingSignature, manifestSignature)) {
+			if (!LoadManifestFromBuffer(manifestBuffer, incomingSignature))
+				return SyncController(true);
+
+			forceControllerReload = true;
+		}
+	} else if (!manifestLoaded) {
+		UI_ResetManifest(&manifest);
+		manifestSignature = {};
+		controllerSignature = {};
+		manifestLoaded = true;
+		forceReload = false;
+		return SyncController(true);
+	}
+
+	return SyncController(forceControllerReload);
+}
+
+/*
+=============
+UI_DetermineDesiredContext
+
+Resolves the target script context based on cvars and game state.
+=============
+*/
+static uiScriptContext_t UI_DetermineDesiredContext(void)
+{
+	if (ui_menu_context && ui_menu_context->string[0]) {
+		if (!Q_stricmp(ui_menu_context->string, "main"))
+			return UI_SCRIPT_MAIN;
+		if (!Q_stricmp(ui_menu_context->string, "ingame"))
+			return UI_SCRIPT_INGAME;
+	}
+
+	if (cls.state >= ca_active)
+		return UI_SCRIPT_INGAME;
+
+	return UI_SCRIPT_MAIN;
+}
+
+/*
+=============
+UI_LoadMenuScriptFromFile
+
+Attempts to load a menu script from the filesystem.
+=============
+*/
+static bool UI_LoadMenuScriptFromFile(const char* filename)
+{
+	json_parse_t parser = {};
+
+	if (UI_IsScriptInStack(filename)) {
+		Com_WPrintf("Detected recursive include of %s\n", filename);
+		return false;
+	}
+
+	if (UI_HasLoadedScript(filename))
+		return true;
+
+	if (!UI_PushScriptPath(filename))
+		return false;
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", filename, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		UI_PopScriptPath();
+		return false;
+	}
+
+	Json_Load(filename, &parser);
+	UI_ParseRoot(&parser);
+	Json_Free(&parser);
+	UI_PopScriptPath();
+	UI_NoteLoadedScript(filename);
 	return true;
 }
 
@@ -1428,18 +2381,183 @@ UI_LoadEmbeddedMenu
 Loads the embedded fallback UI definition when the filesystem copy is unavailable.
 =============
 */
-static bool UI_LoadEmbeddedMenu(json_parse_t* parser)
+static bool UI_LoadEmbeddedMenu(void)
 {
-	if (Json_ErrorHandler(parser)) {
-		Com_WPrintf("Failed to load embedded %s[%s]: %s\n", UI_DEFAULT_FILE, parser->error_loc, parser->error);
-		Json_Free(parser);
-		return false;
+	if (UI_LoadMenuScriptFromBuffer(UI_DEFAULT_FILE, res_worr_menu, res_worr_menu_size))
+		return true;
+
+	Com_WPrintf("Falling back to hardcoded menu definition\n");
+	UI_ResetScriptState();
+	return UI_LoadMenuScriptFromBuffer("<builtin>/fallback.menu.json", ui_builtinFallback, strlen(ui_builtinFallback));
+}
+
+/*
+=============
+UI_SelectControllerOrder
+
+Chooses a controller order for the desired context, applying fallbacks.
+=============
+*/
+static const std::vector<std::string>* UI_SelectControllerOrder(uiScriptContext_t desired, uiScriptContext_t* resolvedContext)
+{
+	const uiScriptManifest_t &manifest = ui_scriptControllerManager.Manifest();
+	const auto desiredIt = manifest.controllerOrder.find(desired);
+
+	if (desiredIt != manifest.controllerOrder.end() && !desiredIt->second.empty()) {
+		*resolvedContext = desired;
+		return &desiredIt->second;
 	}
 
-	UI_ParseJsonBuffer(parser, res_worr_menu, res_worr_menu_size);
-	UI_ParseRoot(parser);
-	Json_Free(parser);
-	return true;
+	if (desired == UI_SCRIPT_INGAME) {
+		const auto mainIt = manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+		if (mainIt != manifest.controllerOrder.end() && !mainIt->second.empty()) {
+			*resolvedContext = UI_SCRIPT_MAIN;
+			return &mainIt->second;
+		}
+	}
+
+	const auto mainIt = manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+	if (mainIt != manifest.controllerOrder.end()) {
+		*resolvedContext = UI_SCRIPT_MAIN;
+		return &mainIt->second;
+	}
+
+	return NULL;
+}
+
+/*
+=============
+UI_AttemptMenuLoad
+
+Attempts to load the desired script with fallbacks.
+=============
+*/
+static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
+{
+	const uiScriptManifest_t &manifest = ui_scriptControllerManager.Manifest();
+	uiScriptContext_t resolvedContext = desired;
+	const std::vector<std::string>* order = UI_SelectControllerOrder(desired, &resolvedContext);
+	bool attempted = false;
+
+	if (!order)
+		return false;
+
+	for (const std::string& listName : *order) {
+		std::vector<const uiScriptSource_t*> sources;
+
+		auto overrideIt = manifest.overrideLists.find(listName);
+		if (overrideIt != manifest.overrideLists.end()) {
+			for (const uiScriptSource_t& source : overrideIt->second)
+				sources.push_back(&source);
+		}
+
+		auto listIt = manifest.scriptLists.find(listName);
+		if (listIt != manifest.scriptLists.end()) {
+			for (const uiScriptSource_t& source : listIt->second)
+				sources.push_back(&source);
+		}
+
+		if (sources.empty())
+			continue;
+
+		attempted = true;
+
+		for (const uiScriptSource_t* source : sources) {
+			const char* path = UI_ScriptSourcePath(*source);
+			if (!path || !path[0])
+				continue;
+
+			UI_ResetScriptState();
+
+			if (UI_LoadMenuScriptFromFile(path)) {
+				ui_activeContext = resolvedContext;
+				return true;
+			}
+		}
+	}
+
+	if (!attempted && desired == UI_SCRIPT_INGAME && resolvedContext == UI_SCRIPT_INGAME)
+		return UI_AttemptMenuLoad(UI_SCRIPT_MAIN);
+
+	return false;
+}
+
+/*
+=============
+UI_InitScriptController
+
+Initializes script controller state and cvars.
+=============
+*/
+void UI_InitScriptController(void)
+{
+	ui_menu_context = Cvar_Get("ui_menu_context", "auto", 0);
+	ui_scriptControllerManager.Init();
+	ui_scriptLoaded = false;
+}
+
+/*
+=============
+UI_SyncMenuContext
+
+Ensures the active menu script matches the current context.
+=============
+*/
+void UI_SyncMenuContext(void)
+{
+	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
+
+	if (!ui_scriptLoaded || ui_scriptControllerManager.NeedsReload() || desiredContext != ui_activeContext)
+		UI_LoadScript();
+}
+
+/*
+=============
+UI_SetMenuContext
+/*
+=============
+UI_SetMenuContext
+
+Sets the desired context via cvar and schedules a reload.
+=============
+*/
+void UI_SetMenuContext(const char* context)
+{
+	if (!ui_menu_context || !context || !context[0])
+		return;
+
+	Cvar_Set(ui_menu_context->name, context);
+	ui_scriptControllerManager.RequestReload();
+}
+
+/*
+=============
+UI_ActiveMenuContextName
+
+Returns the name of the currently active script context.
+=============
+*/
+const char* UI_ActiveMenuContextName(void)
+{
+	switch (ui_activeContext) {
+	case UI_SCRIPT_INGAME:
+		return "ingame";
+	case UI_SCRIPT_MAIN:
+	default:
+		return "main";
+	}
+}
+
+/*
+=============
+UI_RequestMenuReload
+
+Flags that scripts should be reloaded on next sync.
+=============
+*/
+void UI_RequestMenuReload(void)
+{
+	ui_scriptControllerManager.RequestReload();
 }
 
 /*
@@ -1449,13 +2567,24 @@ UI_LoadScript
 */
 void UI_LoadScript(void)
 {
-	json_parse_t parser = {};
+	const uiScriptContext_t desiredContext = UI_DetermineDesiredContext();
 
-	if (!UI_TryLoadMenuFromFile(&parser)) {
-		parser = {};
+	UI_ClearMenus();
+	UI_ResetScriptState();
+
+	ui_scriptControllerManager.Sync();
+
+	if (!UI_AttemptMenuLoad(desiredContext)) {
 		Com_WPrintf("Falling back to built-in %s\n", UI_DEFAULT_FILE);
-		if (!UI_LoadEmbeddedMenu(&parser))
+		UI_ResetScriptState();
+		if (!UI_LoadEmbeddedMenu())
 			return;
+		ui_activeContext = UI_SCRIPT_MAIN;
 	}
-}
 
+	ui_scriptLoaded = true;
+
+	UI_RegisterBuiltinMenus();
+
+	UI_RefreshFonts();
+}

@@ -17,34 +17,149 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "ui.hpp"
-#include "server/server.hpp"
+#include "MenuItem.h"
 #include "common/files.hpp"
+#include "menu_controls.hpp"
+#include "renderer.hpp"
 
 #include <limits.h>
+#include <initializer_list>
 #include <algorithm>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include <cstring>
 
-static menuDropdown_t *ui_activeDropdown = NULL;
+class MenuController {
+public:
+	enum class Action {
+		Up,
+		Down,
+		Left,
+		Right,
+		Activate,
+		Back,
+		Primary,
+Secondary,
+Tertiary,
+ClearBinding,
+First,
+Last,
+ScrollUp,
+ScrollDown
+};
+
+	MenuController();
+
+	menuSound_t HandleKey(menuFrameWork_t *menu, int key);
+	void CloseDropdown(menuDropdown_t *d, bool applyHovered);
+	void OpenDropdown(menuDropdown_t *d);
+	menuDropdown_t *ActiveDropdown(menuFrameWork_t *menu) const;
+	void ResetDropdown(menuFrameWork_t *menu);
+	bool HasAction(int key, Action action) const;
+	std::vector<Action> ActionsForKey(int key) const;
+
+private:
+	std::vector<std::pair<int, Action>> bindings;
+	menuDropdown_t *activeDropdown;
+
+	void Bind(Action action, std::initializer_list<int> keys);
+	menuSound_t HandleDropdownAction(menuFrameWork_t *menu, menuDropdown_t *dropdown, Action action);
+	menuSound_t HandleMenuAction(menuFrameWork_t *menu, Action action, int key);
+	menuSound_t HandlePointerAction(menuFrameWork_t *menu, Action action, int key);
+};
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered);
 
-static void UI_FreeConditionList(uiItemCondition_t *list)
+/*
+=============
+UI_MenuController
+
+Returns the shared menu input controller.
+=============
+*/
+static MenuController &UI_MenuController()
 {
-    while (list) {
-        uiItemCondition_t *next = list->next;
-        Z_Free(list->value);
-        Z_Free(list);
-        list = next;
-    }
+	static MenuController controller;
+	return controller;
 }
 
-static void UI_FreeCommonExtensions(menuCommon_t *item)
+/*
+=============
+MenuController
+
+Initializes the menu controller with default bindings and no active dropdown.
+=============
+*/
+MenuController::MenuController()
+	: activeDropdown(NULL)
 {
-    if (item->conditional) {
-        UI_FreeConditionList(item->conditional->enable);
-        UI_FreeConditionList(item->conditional->disable);
-        Z_Free(item->conditional);
-        item->conditional = NULL;
-    }
+	Bind(Action::Back, { K_ESCAPE, K_MOUSE2 });
+	Bind(Action::Up, { K_KP_UPARROW, K_UPARROW, 'k' });
+	Bind(Action::Down, { K_KP_DOWNARROW, K_DOWNARROW, 'j', K_TAB });
+Bind(Action::Left, { K_KP_LEFTARROW, K_LEFTARROW, 'h', K_MWHEELDOWN });
+Bind(Action::Right, { K_KP_RIGHTARROW, K_RIGHTARROW, 'l', K_MWHEELUP });
+	Bind(Action::Activate, { K_SPACE, K_ENTER, K_KP_ENTER });
+Bind(Action::Primary, { K_MOUSE1, K_MOUSE3 });
+Bind(Action::Secondary, { K_MOUSE2 });
+Bind(Action::Tertiary, { });
+Bind(Action::ClearBinding, { K_BACKSPACE, K_DEL });
+Bind(Action::First, { K_HOME, K_KP_HOME });
+Bind(Action::Last, { K_END, K_KP_END });
+Bind(Action::ScrollUp, { K_MWHEELUP });
+Bind(Action::ScrollDown, { K_MWHEELDOWN });
+}
+
+/*
+=============
+MenuController::Bind
+
+Registers one or more keys for a given action.
+=============
+*/
+void MenuController::Bind(Action action, std::initializer_list<int> keys)
+{
+	for (int key : keys) {
+		bindings.emplace_back(key, action);
+	}
+}
+
+/*
+=============
+MenuController::HasAction
+
+Returns whether a key is bound to the provided action.
+=============
+*/
+bool MenuController::HasAction(int key, Action action) const
+{
+	for (const auto &binding : bindings) {
+		if (binding.first == key && binding.second == action) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+=============
+MenuController::ActionsForKey
+
+Collects the actions mapped to a key in insertion order.
+=============
+*/
+std::vector<MenuController::Action> MenuController::ActionsForKey(int key) const
+{
+	std::vector<Action> results;
+
+	for (const auto &binding : bindings) {
+		if (binding.first == key) {
+			results.push_back(binding.second);
+		}
+	}
+
+	return results;
 }
 
 static bool UI_TestCondition(const uiItemCondition_t *condition)
@@ -102,176 +217,78 @@ static bool UI_EvaluateConditionAny(const uiItemCondition_t *conditions)
 
 static void Menu_UpdateConditionalState(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        auto *item = static_cast<menuCommon_t *>(menu->items[i]);
-        bool disabled = item->defaultDisabled;
+	const int itemCount = Menu_ItemCount(menu);
 
-        if (item->conditional) {
-            if (item->conditional->enable)
-                disabled = !UI_EvaluateConditionAll(item->conditional->enable);
-            if (!disabled && item->conditional->disable)
-                disabled = UI_EvaluateConditionAny(item->conditional->disable);
-        }
+	for (int i = 0; i < itemCount; i++) {
+		auto *item = static_cast<menuCommon_t *>(menu->items[i]);
+		bool disabled = item->defaultDisabled;
 
-        if (disabled)
-            item->flags |= QMF_DISABLED;
-        else
-            item->flags &= ~QMF_DISABLED;
-    }
+		if (item->conditional) {
+			if (item->conditional->enable)
+				disabled = !UI_EvaluateConditionAll(item->conditional->enable);
+			if (!disabled && item->conditional->disable)
+				disabled = UI_EvaluateConditionAny(item->conditional->disable);
+		}
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu) {
-        if (ui_activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
-            Dropdown_Close(ui_activeDropdown, false);
-    }
+		if (disabled)
+			item->flags |= QMF_DISABLED;
+		else
+			item->flags &= ~QMF_DISABLED;
+	}
+
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown) {
+		if (activeDropdown->spin.generic.flags & (QMF_DISABLED | QMF_HIDDEN))
+			Dropdown_Close(activeDropdown, false);
+	}
 }
 
+static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_DrawGroups(menuFrameWork_t *menu);
 static void Menu_UpdateGroupBounds(menuFrameWork_t *menu);
 
 /*
-===================================================================
+=============
+Menu_ControlState
 
-ACTION CONTROL
-
-===================================================================
+Maps menu interaction flags to renderer-friendly UI states.
+=============
 */
-
-static void Action_Free(menuAction_t *a)
+static uiControlState_t Menu_ControlState(bool disabled, bool focused, bool active = false)
 {
-    Z_Free(a->generic.name);
-    Z_Free(a->generic.status);
-    Z_Free(a->cmd);
-    Z_Free(a);
+	if (disabled) {
+		return UI_STATE_DISABLED;
+	}
+
+	if (active) {
+		return UI_STATE_ACTIVE;
+	}
+
+	if (focused) {
+		return UI_STATE_FOCUSED;
+	}
+
+	return UI_STATE_DEFAULT;
 }
 
 /*
-=================
-Action_Init
-=================
+=============
+Menu_RowLayout
+
+Creates a shared two-column layout split for menu controls.
+=============
 */
-static void Action_Init(menuAction_t *a)
+static uiLayoutSplit_t Menu_RowLayout(const menuCommon_t *generic, float labelPercent)
 {
-    Q_assert(a->generic.name);
+	uiLayoutRect_t row{};
 
-    if ((a->generic.uiFlags & UI_CENTER) != UI_CENTER) {
-        a->generic.x += RCOLUMN_OFFSET;
-    }
+	row.x = UI_Pixels(static_cast<float>(generic->x));
+	row.y = UI_Pixels(static_cast<float>(generic->y));
+	row.width = UI_Percent(0.6f);
+	row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	row.spacing = UI_ColumnPadding();
 
-    a->generic.rect.x = a->generic.x;
-    a->generic.rect.y = a->generic.y;
-    UI_StringDimensions(&a->generic.rect, a->generic.uiFlags, a->generic.name);
-}
-
-
-/*
-=================
-Action_Draw
-=================
-*/
-static void Action_Draw(menuAction_t *a)
-{
-    int flags;
-    color_t color = COLOR_WHITE;
-
-    flags = a->generic.uiFlags;
-    if (a->generic.flags & QMF_HASFOCUS) {
-        if ((a->generic.uiFlags & UI_CENTER) != UI_CENTER) {
-            if ((uis.realtime >> 8) & 1) {
-                UI_DrawChar(a->generic.x - RCOLUMN_OFFSET / 2, a->generic.y, a->generic.uiFlags | UI_RIGHT, color, 13);
-            }
-        } else {
-            flags |= UI_ALTCOLOR;
-            if ((uis.realtime >> 8) & 1) {
-                UI_DrawChar(a->generic.x - strlen(a->generic.name) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, a->generic.y, flags, color, 13);
-            }
-        }
-    }
-
-    if (a->generic.flags & QMF_GRAYED) {
-        color = uis.color.disabled;
-    }
-
-    UI_DrawString(a->generic.x, a->generic.y, flags, color, a->generic.name);
-}
-
-/*
-===================================================================
-
-STATIC CONTROL
-
-===================================================================
-*/
-
-/*
-=================
-Static_Init
-=================
-*/
-static void Static_Init(menuStatic_t *s)
-{
-    Q_assert(s->generic.name);
-
-    if (!s->maxChars) {
-        s->maxChars = MAX_STRING_CHARS;
-    }
-
-    s->generic.rect.x = s->generic.x;
-    s->generic.rect.y = s->generic.y;
-
-    UI_StringDimensions(&s->generic.rect,
-                        s->generic.uiFlags, s->generic.name);
-}
-
-/*
-=================
-Static_Draw
-=================
-*/
-static void Static_Draw(menuStatic_t *s)
-{
-    color_t color = COLOR_WHITE;
-
-    if (s->generic.flags & QMF_CUSTOM_COLOR) {
-        color = s->generic.color;
-    }
-
-    UI_DrawString(s->generic.x, s->generic.y, s->generic.uiFlags, color, s->generic.name);
-}
-
-/*
-===================================================================
-
-BITMAP CONTROL
-
-===================================================================
-*/
-
-static void Bitmap_Free(menuBitmap_t *b)
-{
-    Z_Free(b->generic.status);
-    Z_Free(b->cmd);
-    Z_Free(b);
-}
-
-static void Bitmap_Init(menuBitmap_t *b)
-{
-    b->generic.rect.x = b->generic.x;
-    b->generic.rect.y = b->generic.y;
-    b->generic.rect.width = b->generic.width;
-    b->generic.rect.height = b->generic.height;
-}
-
-static void Bitmap_Draw(menuBitmap_t *b)
-{
-    color_t color = COLOR_WHITE;
-
-    if (b->generic.flags & QMF_HASFOCUS) {
-        unsigned frame = (uis.realtime / 100) % NUM_CURSOR_FRAMES;
-        R_DrawPic(b->generic.x - CURSOR_OFFSET, b->generic.y, color, uis.bitmapCursors[frame]);
-        R_DrawPic(b->generic.x, b->generic.y, color, b->pics[1]);
-    } else {
-        R_DrawPic(b->generic.x, b->generic.y, color, b->pics[0]);
-    }
+	return UI_SplitLayoutRow(&row, NULL, labelPercent);
 }
 
 /*
@@ -282,15 +299,6 @@ KEYBIND CONTROL
 ===================================================================
 */
 
-static void Keybind_Free(menuKeybind_t *k)
-{
-    Z_Free(k->generic.name);
-    Z_Free(k->generic.status);
-    Z_Free(k->cmd);
-    Z_Free(k->altstatus);
-    Z_Free(k);
-}
-
 /*
 =================
 Keybind_Init
@@ -298,67 +306,40 @@ Keybind_Init
 */
 static void Keybind_Init(menuKeybind_t *k)
 {
-    size_t len;
-
-    Q_assert(k->generic.name);
-
-    k->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
-
-    k->generic.rect.x = k->generic.x + LCOLUMN_OFFSET;
-    k->generic.rect.y = k->generic.y;
-
-    UI_StringDimensions(&k->generic.rect,
-                        k->generic.uiFlags | UI_RIGHT, k->generic.name);
-
-    if (k->altbinding[0]) {
-        len = strlen(k->binding) + 4 + strlen(k->altbinding);
-    } else if (k->binding[0]) {
-        len = strlen(k->binding);
-    } else {
-        len = 3;
-    }
-
-    k->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + len * CONCHAR_WIDTH;
-}
-
-/*
-=================
-Keybind_Draw
-=================
-*/
-static void Keybind_Draw(menuKeybind_t *k)
-{
-    char string[MAX_STRING_CHARS];
-    int flags;
-    color_t color = COLOR_WHITE;
-
-    flags = UI_ALTCOLOR;
-    if (k->generic.flags & QMF_HASFOCUS) {
-        /*if(k->generic.parent->keywait) {
-            UI_DrawChar(k->generic.x + RCOLUMN_OFFSET / 2, k->generic.y, k->generic.uiFlags | UI_RIGHT, '=');
-        } else*/ if ((uis.realtime >> 8) & 1) {
-            UI_DrawChar(k->generic.x + RCOLUMN_OFFSET / 2, k->generic.y, k->generic.uiFlags | UI_RIGHT, color, 13);
-        }
-    } else {
-        if (k->generic.parent->keywait) {
-            color = uis.color.disabled;
-            flags = 0;
-        }
-    }
-
-    UI_DrawString(k->generic.x + LCOLUMN_OFFSET, k->generic.y,
-                  k->generic.uiFlags | UI_RIGHT | flags, color, k->generic.name);
-
-    if (k->altbinding[0]) {
-        Q_concat(string, sizeof(string), k->binding, " or ", k->altbinding);
-    } else if (k->binding[0]) {
-        Q_strlcpy(string, k->binding, sizeof(string));
-    } else {
-        strcpy(string, "???");
-    }
-
-    UI_DrawString(k->generic.x + RCOLUMN_OFFSET, k->generic.y,
-                  k->generic.uiFlags | UI_LEFT, color, string);
+	size_t len;
+	uiLayoutRect_t row{};
+	uiLayoutSplit_t split{};
+	
+	Q_assert(k->generic.name);
+	
+	k->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+	
+	row.x = UI_Pixels(static_cast<float>(k->generic.x));
+	row.y = UI_Pixels(static_cast<float>(k->generic.y));
+	row.width = UI_Percent(0.6f);
+	row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	row.spacing = UI_ColumnPadding();
+	
+	split = UI_SplitLayoutRow(&row, nullptr, 0.45f);
+	
+	k->generic.rect = split.label;
+	UI_StringDimensions(&k->generic.rect,
+		k->generic.uiFlags | UI_RIGHT, k->generic.name);
+	
+	if (k->altbinding[0]) {
+	len = strlen(k->binding) + 4 + strlen(k->altbinding);
+	} else if (k->binding[0]) {
+	len = strlen(k->binding);
+	} else {
+	len = 3;
+	}
+	
+	const int fieldExtent = (split.field.x + split.field.width) - k->generic.rect.x;
+	if (k->generic.rect.width < fieldExtent) {
+	k->generic.rect.width = fieldExtent;
+	}
+	
+	k->generic.rect.width += len * UI_CharWidth();
 }
 
 static void Keybind_Push(menuKeybind_t *k)
@@ -384,7 +365,7 @@ static void Keybind_Pop(menuKeybind_t *k)
 
 static void Keybind_Update(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         void *rawItem = menu->items[i];
         auto *item = static_cast<menuCommon_t *>(rawItem);
         if (item->type == MTYPE_KEYBIND) {
@@ -449,154 +430,22 @@ static menuSound_t Keybind_DoEnter(menuKeybind_t *k)
 
 static menuSound_t Keybind_Key(menuKeybind_t *k, int key)
 {
-    menuFrameWork_t *menu = k->generic.parent;
+	menuFrameWork_t *menu = k->generic.parent;
 
-    if (menu->keywait) {
-        return QMS_OUT; // never gets there
-    }
+	if (menu->keywait) {
+		return QMS_OUT; // never gets there
+	}
 
-    if (key == K_BACKSPACE || key == K_DEL) {
-        Keybind_Remove(k->cmd);
-        Keybind_Update(menu);
-        return QMS_IN;
-    }
+	MenuController &controller = UI_MenuController();
+	if (controller.HasAction(key, MenuController::Action::ClearBinding)) {
+		Keybind_Remove(k->cmd);
+		Keybind_Update(menu);
+		return QMS_IN;
+	}
 
-    return QMS_NOTHANDLED;
+	return QMS_NOTHANDLED;
 }
 
-
-/*
-===================================================================
-
-FIELD CONTROL
-
-===================================================================
-*/
-
-static void Field_Push(menuField_t *f)
-{
-    IF_Init(&f->field, f->width, f->width);
-    IF_Replace(&f->field, f->cvar->string);
-}
-
-static void Field_Pop(menuField_t *f)
-{
-    Cvar_SetByVar(f->cvar, f->field.text, FROM_MENU);
-}
-
-static void Field_Free(menuField_t *f)
-{
-    Z_Free(f->generic.name);
-    Z_Free(f->generic.status);
-    Z_Free(f);
-}
-
-/*
-=================
-Field_Init
-=================
-*/
-static void Field_Init(menuField_t *f)
-{
-    int w = f->width * CONCHAR_WIDTH;
-
-    f->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
-
-    if (f->generic.name) {
-        f->generic.rect.x = f->generic.x + LCOLUMN_OFFSET;
-        f->generic.rect.y = f->generic.y;
-        UI_StringDimensions(&f->generic.rect,
-                            f->generic.uiFlags | UI_RIGHT, f->generic.name);
-        f->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) + w;
-    } else {
-        f->generic.rect.x = f->generic.x - w / 2;
-        f->generic.rect.y = f->generic.y;
-        f->generic.rect.width = w;
-        f->generic.rect.height = CONCHAR_HEIGHT;
-    }
-}
-
-
-/*
-=================
-Field_Draw
-=================
-*/
-static void Field_Draw(menuField_t *f)
-{
-    int flags = f->generic.uiFlags;
-    color_t color = uis.color.normal;
-
-    if (f->generic.flags & QMF_HASFOCUS) {
-        flags |= UI_DRAWCURSOR;
-        color = uis.color.active;
-    }
-
-    if (f->generic.name) {
-        UI_DrawString(f->generic.x + LCOLUMN_OFFSET, f->generic.y,
-                      f->generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, color, f->generic.name);
-
-        R_DrawFill32(f->generic.x + RCOLUMN_OFFSET, f->generic.y - 1,
-                     f->field.visibleChars * CONCHAR_WIDTH, CONCHAR_HEIGHT + 2, color);
-
-        IF_Draw(&f->field, f->generic.x + RCOLUMN_OFFSET, f->generic.y,
-                flags, uis.fontHandle);
-    } else {
-        R_DrawFill32(f->generic.rect.x, f->generic.rect.y - 1,
-                     f->generic.rect.width, CONCHAR_HEIGHT + 2, color);
-
-        IF_Draw(&f->field, f->generic.rect.x, f->generic.rect.y,
-                flags, uis.fontHandle);
-    }
-}
-
-static bool Field_TestKey(menuField_t *f, int key)
-{
-    if (f->generic.flags & QMF_NUMBERSONLY) {
-        return Q_isdigit(key) || key == '+' || key == '-' || key == '.';
-    }
-
-    return Q_isprint(key);
-}
-
-/*
-=================
-Field_Key
-=================
-*/
-static int Field_Key(menuField_t *f, int key)
-{
-    if (IF_KeyEvent(&f->field, key)) {
-        return QMS_SILENT;
-    }
-
-    if (Field_TestKey(f, key)) {
-        return QMS_SILENT;
-    }
-
-    return QMS_NOTHANDLED;
-}
-
-/*
-=================
-Field_Char
-=================
-*/
-static int Field_Char(menuField_t *f, int key)
-{
-    bool ret;
-
-    if (!Field_TestKey(f, key)) {
-        return QMS_BEEP;
-    }
-
-    ret = IF_CharEvent(&f->field, key);
-    if (f->generic.change) {
-        f->generic.change(&f->generic);
-    }
-
-    return ret ? QMS_SILENT : QMS_NOTHANDLED;
-}
 
 /*
 ===================================================================
@@ -622,19 +471,6 @@ static void SpinControl_Pop(menuSpinControl_t *s)
         Cvar_SetInteger(s->cvar, s->curvalue, FROM_MENU);
 }
 
-static void SpinControl_Free(menuSpinControl_t *s)
-{
-    int i;
-
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    for (i = 0; i < s->numItems; i++) {
-        Z_Free(s->itemnames[i]);
-    }
-    Z_Free(s->itemnames);
-    Z_Free(s);
-}
-
 /*
 =================
 SpinControl_Init
@@ -642,32 +478,44 @@ SpinControl_Init
 */
 void SpinControl_Init(menuSpinControl_t *s)
 {
-    char **n;
-    int    maxLength, length;
+	    char **n;
+	    int    maxLength, length;
+	    uiLayoutRect_t row{};
+	    uiLayoutSplit_t split{};
+	
+	    s->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
+	
+	    row.x = UI_Pixels(static_cast<float>(s->generic.x));
+	    row.y = UI_Pixels(static_cast<float>(s->generic.y));
+	    row.width = UI_Percent(0.6f);
+	    row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
+	    row.spacing = UI_ColumnPadding();
+	
+	    split = UI_SplitLayoutRow(&row, nullptr, 0.45f);
+	
+	    s->generic.rect = split.label;
+	    UI_StringDimensions(&s->generic.rect,
+	                        s->generic.uiFlags | UI_RIGHT, s->generic.name);
+	
+	    maxLength = 0;
+	    s->numItems = 0;
+	    n = s->itemnames;
+	    while (*n) {
+	        length = strlen(*n);
+	
+	        if (maxLength < length) {
+	            maxLength = length;
+	        }
+	        s->numItems++;
+	        n++;
+	    }
+	
+	    const int minWidth = (split.field.x + split.field.width) - s->generic.rect.x;
+	    if (s->generic.rect.width < minWidth) {
+	        s->generic.rect.width = minWidth;
+	    }
 
-    s->generic.uiFlags &= ~(UI_LEFT | UI_RIGHT);
-
-    s->generic.rect.x = s->generic.x + LCOLUMN_OFFSET;
-    s->generic.rect.y = s->generic.y;
-
-    UI_StringDimensions(&s->generic.rect,
-                        s->generic.uiFlags | UI_RIGHT, s->generic.name);
-
-    maxLength = 0;
-    s->numItems = 0;
-    n = s->itemnames;
-    while (*n) {
-        length = strlen(*n);
-
-        if (maxLength < length) {
-            maxLength = length;
-        }
-        s->numItems++;
-        n++;
-    }
-
-    s->generic.rect.width += (RCOLUMN_OFFSET - LCOLUMN_OFFSET) +
-                             maxLength * CONCHAR_WIDTH;
+	    s->generic.rect.width += maxLength * UI_CharWidth();
 }
 
 /*
@@ -806,16 +654,6 @@ void ImageSpinControl_Pop(menuSpinControl_t *s)
 ImageSpinControl_Free
 =================
 */
-static void ImageSpinControl_Free(menuSpinControl_t *s)
-{
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    Z_Free(s->filter);
-    Z_Free(s->path);
-    FS_FreeList(reinterpret_cast<void **>(s->itemnames));
-    Z_Free(s);
-}
-
 /*
 =================
 ImageSpinControl_Draw
@@ -901,13 +739,6 @@ static void BitField_Pop(menuSpinControl_t *s)
     Cvar_SetInteger(s->cvar, val, FROM_MENU);
 }
 
-static void BitField_Free(menuSpinControl_t *s)
-{
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    Z_Free(s);
-}
-
 /*
 ===================================================================
 
@@ -934,21 +765,6 @@ static void Pairs_Pop(menuSpinControl_t *s)
 {
     if (s->curvalue >= 0 && s->curvalue < s->numItems)
         Cvar_SetByVar(s->cvar, s->itemvalues[s->curvalue], FROM_MENU);
-}
-
-static void Pairs_Free(menuSpinControl_t *s)
-{
-    int i;
-
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    for (i = 0; i < s->numItems; i++) {
-        Z_Free(s->itemnames[i]);
-        Z_Free(s->itemvalues[i]);
-    }
-    Z_Free(s->itemnames);
-    Z_Free(s->itemvalues);
-    Z_Free(s);
 }
 
 /*
@@ -1139,15 +955,6 @@ static void Checkbox_Draw(menuCheckbox_t *c)
                   c->generic.uiFlags | UI_LEFT, valueColor, mark);
 }
 
-static void Checkbox_Free(menuCheckbox_t *c)
-{
-    Z_Free(c->generic.name);
-    Z_Free(c->generic.status);
-    Z_Free(c->checkedValue);
-    Z_Free(c->uncheckedValue);
-    Z_Free(c);
-}
-
 /*
 ===================================================================
 
@@ -1259,32 +1066,12 @@ static void Dropdown_SetSelection(menuDropdown_t *d, int index, bool notify)
 
 static void Dropdown_Close(menuDropdown_t *d, bool applyHovered)
 {
-    if (!d || !d->open)
-        return;
-
-    if (applyHovered && d->hovered >= 0 && d->hovered < d->spin.numItems)
-        Dropdown_SetSelection(d, d->hovered, true);
-
-    d->open = false;
-    d->hovered = -1;
-    d->listRect = {};
-
-    if (ui_activeDropdown == d)
-        ui_activeDropdown = NULL;
+UI_MenuController().CloseDropdown(d, applyHovered);
 }
 
 static void Dropdown_Open(menuDropdown_t *d)
 {
-    if (!d)
-        return;
-
-    if (ui_activeDropdown && ui_activeDropdown != d)
-        Dropdown_Close(ui_activeDropdown, false);
-
-    d->open = true;
-    ui_activeDropdown = d;
-    d->hovered = d->spin.curvalue;
-    Dropdown_UpdateScroll(d);
+UI_MenuController().OpenDropdown(d);
 }
 
 static void Dropdown_DrawList(menuDropdown_t *d)
@@ -1399,70 +1186,53 @@ static menuSound_t Dropdown_Activate(menuCommon_t *item)
         return QMS_IN;
     }
 
-    return QMS_NOTHANDLED;
+return QMS_NOTHANDLED;
 }
 
 static menuSound_t Dropdown_Keydown(menuCommon_t *item, int key)
 {
-    auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+	auto *dropdown = reinterpret_cast<menuDropdown_t *>(item);
+	MenuController &controller = UI_MenuController();
+	std::vector<MenuController::Action> actions = controller.ActionsForKey(key);
 
-    if (dropdown->open) {
-        switch (key) {
-        case K_ESCAPE:
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        case K_ENTER:
-        case K_KP_ENTER:
-            Dropdown_Close(dropdown, true);
-            return QMS_MOVE;
-        case K_KP_UPARROW:
-        case K_UPARROW:
-        case 'k':
-        case K_MWHEELUP:
-            if (dropdown->hovered > 0) {
-                dropdown->hovered--;
-                Dropdown_UpdateScroll(dropdown);
-                return QMS_MOVE;
-            }
-            return QMS_BEEP;
-        case K_KP_DOWNARROW:
-        case K_DOWNARROW:
-        case 'j':
-        case K_MWHEELDOWN:
-            if (dropdown->hovered < dropdown->spin.numItems - 1) {
-                dropdown->hovered++;
-                Dropdown_UpdateScroll(dropdown);
-                return QMS_MOVE;
-            }
-            return QMS_BEEP;
-        case K_HOME:
-        case K_KP_HOME:
-            dropdown->hovered = 0;
-            Dropdown_UpdateScroll(dropdown);
-            return QMS_MOVE;
-        case K_END:
-        case K_KP_END:
-            dropdown->hovered = dropdown->spin.numItems - 1;
-            Dropdown_UpdateScroll(dropdown);
-            return QMS_MOVE;
-        case K_SPACE:
-            Dropdown_Close(dropdown, true);
-            return QMS_MOVE;
-        default:
-            break;
-        }
-    } else {
-        switch (key) {
-        case K_SPACE:
-        case K_ENTER:
-        case K_KP_ENTER:
-            return Dropdown_Activate(item);
-        default:
-            break;
-        }
-    }
+	if (dropdown->open) {
+		for (MenuController::Action action : actions) {
+			switch (action) {
+			case MenuController::Action::Back:
+			case MenuController::Action::Secondary:
+				Dropdown_Close(dropdown, false);
+				return QMS_SILENT;
+			case MenuController::Action::Activate:
+				Dropdown_Close(dropdown, true);
+				return QMS_MOVE;
+			case MenuController::Action::Up:
+			case MenuController::Action::ScrollUp:
+				if (dropdown->hovered > 0) {
+					dropdown->hovered--;
+					Dropdown_UpdateScroll(dropdown);
+					return QMS_MOVE;
+				}
+				return QMS_BEEP;
+			case MenuController::Action::Down:
+			case MenuController::Action::ScrollDown:
+				if (dropdown->hovered < dropdown->spin.numItems - 1) {
+					dropdown->hovered++;
+					Dropdown_UpdateScroll(dropdown);
+					return QMS_MOVE;
+				}
+				return QMS_BEEP;
+			default:
+				break;
+			}
+		}
+	} else {
+		for (MenuController::Action action : actions) {
+			if (action == MenuController::Action::Activate || action == MenuController::Action::Primary)
+				return Dropdown_Activate(item);
+		}
+	}
 
-    return QMS_NOTHANDLED;
+	return QMS_NOTHANDLED;
 }
 
 static menuSound_t Dropdown_MouseMove(menuDropdown_t *d)
@@ -1498,21 +1268,250 @@ static menuSound_t Dropdown_MouseMove(menuDropdown_t *d)
 
 static menuSound_t Dropdown_Slide(menuDropdown_t *d, int dir)
 {
-    if (!d->spin.numItems)
-        return QMS_BEEP;
+	if (!d->spin.numItems)
+		return QMS_BEEP;
 
-    int next = d->spin.curvalue + dir;
+	int next = d->spin.curvalue + dir;
 
-    if (next < 0)
-        next = d->spin.numItems - 1;
-    else if (next >= d->spin.numItems)
-        next = 0;
+	if (next < 0)
+		next = d->spin.numItems - 1;
+	else if (next >= d->spin.numItems)
+		next = 0;
 
-    if (next == d->spin.curvalue)
-        return QMS_BEEP;
+	if (next == d->spin.curvalue)
+		return QMS_BEEP;
 
-    Dropdown_SetSelection(d, next, true);
-    return QMS_MOVE;
+	Dropdown_SetSelection(d, next, true);
+	return QMS_MOVE;
+}
+
+/*
+=============
+MenuController::CloseDropdown
+
+Closes the tracked dropdown and optionally applies the hovered selection.
+=============
+*/
+void MenuController::CloseDropdown(menuDropdown_t *d, bool applyHovered)
+{
+	if (!d || !d->open)
+		return;
+
+	if (applyHovered && d->hovered >= 0 && d->hovered < d->spin.numItems)
+		Dropdown_SetSelection(d, d->hovered, true);
+
+	d->open = false;
+	d->hovered = -1;
+	d->listRect = {};
+
+	if (activeDropdown == d)
+		activeDropdown = NULL;
+}
+
+/*
+=============
+MenuController::OpenDropdown
+
+Opens the requested dropdown while closing any other active dropdown.
+=============
+*/
+void MenuController::OpenDropdown(menuDropdown_t *d)
+{
+	if (!d)
+		return;
+
+	if (activeDropdown && activeDropdown != d)
+		CloseDropdown(activeDropdown, false);
+
+	d->open = true;
+	activeDropdown = d;
+	d->hovered = d->spin.curvalue;
+	Dropdown_UpdateScroll(d);
+}
+
+/*
+=============
+MenuController::ActiveDropdown
+
+Returns the active dropdown for a menu, if any.
+=============
+*/
+menuDropdown_t *MenuController::ActiveDropdown(menuFrameWork_t *menu) const
+{
+	if (activeDropdown && activeDropdown->spin.generic.parent == menu)
+		return activeDropdown;
+
+	return NULL;
+}
+
+/*
+=============
+MenuController::ResetDropdown
+
+Clears the tracked dropdown when a menu is being discarded.
+=============
+*/
+void MenuController::ResetDropdown(menuFrameWork_t *menu)
+{
+	if (activeDropdown && activeDropdown->spin.generic.parent == menu)
+		activeDropdown = NULL;
+}
+
+/*
+=============
+MenuController::HandleDropdownAction
+
+Applies input actions while a dropdown list is open.
+=============
+*/
+menuSound_t MenuController::HandleDropdownAction(menuFrameWork_t *menu, menuDropdown_t *dropdown, Action action)
+{
+	if (!dropdown || !dropdown->open || dropdown->spin.generic.parent != menu)
+		return QMS_NOTHANDLED;
+
+	switch (action) {
+	case Action::Back:
+	case Action::Secondary:
+		CloseDropdown(dropdown, false);
+		return QMS_SILENT;
+	case Action::Activate:
+		CloseDropdown(dropdown, true);
+		return QMS_MOVE;
+	case Action::Up:
+	case Action::ScrollUp:
+		if (dropdown->hovered > 0) {
+			dropdown->hovered--;
+			Dropdown_UpdateScroll(dropdown);
+			return QMS_MOVE;
+		}
+		return QMS_BEEP;
+case Action::Down:
+case Action::ScrollDown:
+if (dropdown->hovered < dropdown->spin.numItems - 1) {
+dropdown->hovered++;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+}
+return QMS_BEEP;
+case Action::First:
+dropdown->hovered = 0;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+case Action::Last:
+dropdown->hovered = dropdown->spin.numItems - 1;
+Dropdown_UpdateScroll(dropdown);
+return QMS_MOVE;
+case Action::Primary:
+if (UI_CursorInRect(&dropdown->listRect)) {
+if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
+Dropdown_SetSelection(dropdown, dropdown->hovered, true);
+			CloseDropdown(dropdown, false);
+			return QMS_MOVE;
+		}
+
+		CloseDropdown(dropdown, false);
+		return QMS_SILENT;
+	default:
+		break;
+	}
+
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuController::HandlePointerAction
+
+Routes pointer-style activation actions through hit-testing.
+=============
+*/
+menuSound_t MenuController::HandlePointerAction(menuFrameWork_t *menu, Action action, int key)
+{
+	if (action != Action::Primary && action != Action::Tertiary)
+		return QMS_NOTHANDLED;
+
+	menuCommon_t *item = Menu_HitTest(menu);
+	if (!item)
+		return QMS_NOTHANDLED;
+
+	if (!(item->flags & QMF_HASFOCUS))
+		return QMS_NOTHANDLED;
+
+	if (MenuItem *wrapped = Menu_FindCppItem(menu, item)) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Pointer;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_IN;
+		}
+	}
+
+	return Menu_SelectItem(menu);
+}
+
+/*
+=============
+MenuController::HandleMenuAction
+
+Executes default menu-level actions.
+=============
+*/
+menuSound_t MenuController::HandleMenuAction(menuFrameWork_t *menu, Action action, int key)
+{
+	switch (action) {
+	case Action::Back:
+		UI_PopMenu();
+		return QMS_OUT;
+	case Action::Up:
+		return Menu_AdjustCursor(menu, -1);
+	case Action::Down:
+		return Menu_AdjustCursor(menu, 1);
+	case Action::Left:
+		return Menu_SlideItem(menu, -1);
+	case Action::Right:
+		return Menu_SlideItem(menu, 1);
+	case Action::Activate:
+		return Menu_SelectItem(menu);
+	case Action::Primary:
+	case Action::Tertiary:
+		return HandlePointerAction(menu, action, key);
+	default:
+		break;
+	}
+
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuController::HandleKey
+
+Converts a raw key into actions and dispatches them.
+=============
+*/
+menuSound_t MenuController::HandleKey(menuFrameWork_t *menu, int key)
+{
+	std::vector<Action> actions = ActionsForKey(key);
+	menuDropdown_t *dropdown = ActiveDropdown(menu);
+
+	if (dropdown && dropdown->open) {
+		for (Action action : actions) {
+			menuSound_t sound = HandleDropdownAction(menu, dropdown, action);
+			if (sound != QMS_NOTHANDLED)
+				return sound;
+		}
+	}
+
+	for (Action action : actions) {
+		menuSound_t sound = HandleMenuAction(menu, action, key);
+		if (sound != QMS_NOTHANDLED)
+			return sound;
+	}
+
+	return QMS_NOTHANDLED;
 }
 
 static void Dropdown_Init(menuDropdown_t *d)
@@ -1579,29 +1578,6 @@ static void Dropdown_Pop(menuDropdown_t *d)
 {
     Dropdown_Close(d, false);
     Dropdown_Commit(d);
-}
-
-static void Dropdown_Free(menuDropdown_t *d)
-{
-    if (ui_activeDropdown == d)
-        ui_activeDropdown = NULL;
-
-    Z_Free(d->spin.generic.name);
-    Z_Free(d->spin.generic.status);
-
-    if (d->spin.itemnames) {
-        for (int i = 0; i < d->spin.numItems; i++)
-            Z_Free(d->spin.itemnames[i]);
-        Z_Free(d->spin.itemnames);
-    }
-
-    if (d->spin.itemvalues) {
-        for (int i = 0; i < d->spin.numItems; i++)
-            Z_Free(d->spin.itemvalues[i]);
-        Z_Free(d->spin.itemvalues);
-    }
-
-    Z_Free(d);
 }
 
 /*
@@ -1698,14 +1674,6 @@ static void RadioButton_Draw(menuRadioButton_t *r)
                   r->generic.uiFlags | UI_LEFT, valueColor, mark);
 }
 
-static void RadioButton_Free(menuRadioButton_t *r)
-{
-    Z_Free(r->generic.name);
-    Z_Free(r->generic.status);
-    Z_Free(r->value);
-    Z_Free(r);
-}
-
 // Episode selector
 
 static void Episode_Push(menuEpisodeSelector_t *s)
@@ -1720,12 +1688,6 @@ static void Episode_Pop(menuEpisodeSelector_t *s)
 }
 
 // Unit selector
-
-static void Unit_Free(menuUnitSelector_t *s)
-{
-    Z_Free(s->itemindices);
-    SpinControl_Free(&s->spin);
-}
 
 static void Unit_Push(menuUnitSelector_t *s)
 {
@@ -2456,179 +2418,6 @@ void MenuList_Sort(menuList_t *l, int offset, int (*cmpfunc)(const void *, const
 /*
 ===================================================================
 
-SLIDER CONTROL
-
-===================================================================
-*/
-
-static menuSound_t Slider_DoSlide(menuSlider_t *s, int dir);
-
-static void Slider_Push(menuSlider_t *s)
-{
-    s->modified = false;
-    s->curvalue = Q_circ_clipf(s->cvar->value, s->minvalue, s->maxvalue);
-}
-
-static void Slider_Pop(menuSlider_t *s)
-{
-    if (s->modified) {
-        float val = Q_circ_clipf(s->curvalue, s->minvalue, s->maxvalue);
-        Cvar_SetValue(s->cvar, val, FROM_MENU);
-    }
-}
-
-static void Slider_Free(menuSlider_t *s)
-{
-    Z_Free(s->generic.name);
-    Z_Free(s->generic.status);
-    Z_Free(s);
-}
-
-static void Slider_Init(menuSlider_t *s)
-{
-    int len = strlen(s->generic.name) * CONCHAR_WIDTH;
-
-    s->generic.rect.x = s->generic.x + LCOLUMN_OFFSET - len;
-    s->generic.rect.y = s->generic.y;
-
-    s->generic.rect.width = (RCOLUMN_OFFSET - LCOLUMN_OFFSET) +
-                            len + (SLIDER_RANGE + 2) * CONCHAR_WIDTH;
-    s->generic.rect.height = CONCHAR_HEIGHT;
-}
-
-static menuSound_t Slider_Click(menuSlider_t *s)
-{
-    vrect_t rect;
-    float   pos;
-    int     x;
-
-    pos = Q_clipf((s->curvalue - s->minvalue) / (s->maxvalue - s->minvalue), 0, 1);
-
-    x = CONCHAR_WIDTH + (SLIDER_RANGE - 1) * CONCHAR_WIDTH * pos;
-
-    // click left of thumb
-    rect.x = s->generic.x + RCOLUMN_OFFSET;
-    rect.y = s->generic.y;
-    rect.width = x;
-    rect.height = CONCHAR_HEIGHT;
-    if (UI_CursorInRect(&rect))
-        return Slider_DoSlide(s, -1);
-
-    // click on thumb
-    rect.x = s->generic.x + RCOLUMN_OFFSET + x;
-    rect.y = s->generic.y;
-    rect.width = CONCHAR_WIDTH;
-    rect.height = CONCHAR_HEIGHT;
-    if (UI_CursorInRect(&rect)) {
-        uis.mouseTracker = &s->generic;
-        return QMS_SILENT;
-    }
-
-    // click right of thumb
-    rect.x = s->generic.x + RCOLUMN_OFFSET + x + CONCHAR_WIDTH;
-    rect.y = s->generic.y;
-    rect.width = (SLIDER_RANGE + 1) * CONCHAR_WIDTH - x;
-    rect.height = CONCHAR_HEIGHT;
-    if (UI_CursorInRect(&rect))
-        return Slider_DoSlide(s, 1);
-
-    return QMS_SILENT;
-}
-
-static menuSound_t Slider_MouseMove(menuSlider_t *s)
-{
-    float   pos, value;
-    int     steps;
-
-    if (uis.mouseTracker != &s->generic)
-        return QMS_NOTHANDLED;
-
-    pos = (uis.mouseCoords[0] - (s->generic.x + RCOLUMN_OFFSET + CONCHAR_WIDTH)) * (1.0f / (SLIDER_RANGE * CONCHAR_WIDTH));
-
-    value = Q_clipf(pos, 0, 1) * (s->maxvalue - s->minvalue);
-    steps = Q_rint(value / s->step);
-
-    s->modified = true;
-    s->curvalue = s->minvalue + steps * s->step;
-    return QMS_SILENT;
-}
-
-static menuSound_t Slider_Key(menuSlider_t *s, int key)
-{
-    switch (key) {
-    case K_END:
-        s->modified = true;
-        s->curvalue = s->maxvalue;
-        return QMS_MOVE;
-    case K_HOME:
-        s->modified = true;
-        s->curvalue = s->minvalue;
-        return QMS_MOVE;
-    case K_MOUSE1:
-        return Slider_Click(s);
-    }
-
-    return QMS_NOTHANDLED;
-}
-
-
-/*
-=================
-Slider_DoSlide
-=================
-*/
-static menuSound_t Slider_DoSlide(menuSlider_t *s, int dir)
-{
-    s->modified = true;
-    s->curvalue = Q_circ_clipf(s->curvalue + dir * s->step, s->minvalue, s->maxvalue);
-
-    if (s->generic.change) {
-        menuSound_t sound = s->generic.change(&s->generic);
-        if (sound != QMS_NOTHANDLED) {
-            return sound;
-        }
-    }
-
-    return QMS_SILENT;
-}
-
-/*
-=================
-Slider_Draw
-=================
-*/
-static void Slider_Draw(menuSlider_t *s)
-{
-    int     i, flags;
-    float   pos;
-    color_t color = COLOR_WHITE;
-
-    flags = s->generic.uiFlags & ~(UI_LEFT | UI_RIGHT);
-
-    if (s->generic.flags & QMF_HASFOCUS) {
-        if ((uis.realtime >> 8) & 1) {
-            UI_DrawChar(s->generic.x + RCOLUMN_OFFSET / 2, s->generic.y, s->generic.uiFlags | UI_RIGHT, color, 13);
-        }
-    }
-
-    UI_DrawString(s->generic.x + LCOLUMN_OFFSET, s->generic.y,
-                  flags | UI_RIGHT | UI_ALTCOLOR, color, s->generic.name);
-
-    UI_DrawChar(s->generic.x + RCOLUMN_OFFSET, s->generic.y, flags | UI_LEFT, color, 128);
-
-    for (i = 0; i < SLIDER_RANGE; i++)
-        UI_DrawChar(RCOLUMN_OFFSET + s->generic.x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, s->generic.y, flags | UI_LEFT, color, 129);
-
-    UI_DrawChar(RCOLUMN_OFFSET + s->generic.x + i * CONCHAR_WIDTH + CONCHAR_WIDTH, s->generic.y, flags | UI_LEFT, color, 130);
-
-    pos = Q_clipf((s->curvalue - s->minvalue) / (s->maxvalue - s->minvalue), 0, 1);
-
-    UI_DrawChar(CONCHAR_WIDTH + RCOLUMN_OFFSET + s->generic.x + (SLIDER_RANGE - 1) * CONCHAR_WIDTH * pos, s->generic.y, flags | UI_LEFT, color, 131);
-}
-
-/*
-===================================================================
-
 SEPARATOR CONTROL
 
 ===================================================================
@@ -2659,33 +2448,6 @@ static void Separator_Draw(menuSeparator_t *s)
 /*
 ===================================================================
 
-SAVEGAME CONTROL
-
-===================================================================
-*/
-
-static void Savegame_Push(menuAction_t *a)
-{
-    char *info;
-
-    Z_Free(a->generic.name);
-
-    info = SV_GetSaveInfo(a->cmd);
-    if (info) {
-        a->generic.name = info;
-        a->generic.flags &= ~QMF_GRAYED;
-    } else {
-        a->generic.name = UI_CopyString("<EMPTY>");
-        if (a->generic.type == MTYPE_LOADGAME)
-            a->generic.flags |= QMF_GRAYED;
-    }
-
-    UI_StringDimensions(&a->generic.rect, a->generic.uiFlags, a->generic.name);
-}
-
-/*
-===================================================================
-
 MISC
 
 ===================================================================
@@ -2698,17 +2460,226 @@ Common_DoEnter
 */
 static menuSound_t Common_DoEnter(menuCommon_t *item)
 {
-    if (item->activate) {
-        menuSound_t sound = item->activate(item);
-        if (sound != QMS_NOTHANDLED) {
-            return sound;
-        }
-    }
+	if (item->activate) {
+		menuSound_t sound = item->activate(item);
+		if (sound != QMS_NOTHANDLED) {
+			return sound;
+		}
+	}
 
-    return QMS_IN;
+	return QMS_IN;
 }
 
+/*
+=============
+Menu_MakeActivateCallback
 
+Bridges legacy activation hooks to the C++ menu item callbacks.
+=============
+*/
+static MenuItem::Callback Menu_MakeActivateCallback(menuCommon_t *item)
+{
+	return [item](MenuItem &)
+	{
+		Common_DoEnter(item);
+	};
+}
+
+/*
+=============
+Menu_MakeTextureHandle
+
+Creates a shared_ptr-backed texture handle for C++ menu items.
+=============
+*/
+static MenuItem::TextureHandle Menu_MakeTextureHandle(qhandle_t handle)
+{
+	if (!handle)
+	{
+		return nullptr;
+	}
+
+	return std::make_shared<qhandle_t>(handle);
+}
+
+/*
+=============
+Menu_SyncLegacyToCpp
+
+Copies mutable legacy widget state back into its MenuItem wrapper so the C++
+rendering and input layers retain user edits.
+=============
+*/
+static void Menu_SyncLegacyToCpp(menuCommon_t *item, MenuItem &wrapped)
+{
+	switch (item->type)
+	{
+	case MTYPE_FIELD:
+	{
+		auto *field = dynamic_cast<FieldItem *>(&wrapped);
+		auto *legacy = reinterpret_cast<menuField_t *>(item);
+
+		if (field && legacy)
+		{
+			field->SetValue(legacy->field.text);
+		}
+		break;
+	}
+	case MTYPE_SLIDER:
+	{
+		auto *slider = dynamic_cast<SliderItem *>(&wrapped);
+		auto *legacy = reinterpret_cast<menuSlider_t *>(item);
+
+		if (slider && legacy)
+		{
+			slider->SetRange(legacy->minvalue, legacy->maxvalue);
+			slider->SetStep(legacy->step);
+			slider->SetValue(legacy->curvalue);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+/*
+=============
+Menu_ItemCount
+
+Returns the number of legacy items attached to a menu.
+=============
+*/
+static int Menu_ItemCount(const menuFrameWork_t *menu)
+{
+	if (!menu)
+		return 0;
+
+	return static_cast<int>(menu->items.size());
+}
+
+/*
+=============
+Menu_EmplaceCppItem
+
+Builds and stores a C++ wrapper for a legacy menu widget.
+=============
+*/
+static void Menu_EmplaceCppItem(menuFrameWork_t *menu, menuCommon_t *item)
+{
+	std::unique_ptr<MenuItem> wrapped = Menu_BuildMenuItem(item);
+
+	if (wrapped)
+		menu->itemsCpp.emplace_back(std::move(wrapped));
+}
+
+/*
+=============
+Menu_BuildMenuItem
+
+Instantiates the modern MenuItem subclass for a legacy menu widget.
+=============
+*/
+static std::unique_ptr<MenuItem> Menu_BuildMenuItem(menuCommon_t *item)
+{
+	switch (item->type)
+	{
+	case MTYPE_ACTION:
+	{
+		auto *action = static_cast<menuAction_t *>(item);
+		bool disabled = (action->generic.flags & (QMF_GRAYED | QMF_DISABLED)) != 0;
+		return std::make_unique<ActionItem>(action->generic.name ? action->generic.name : "",
+			action->generic.x,
+			action->generic.y,
+			action->generic.uiFlags,
+			Menu_MakeActivateCallback(item),
+			nullptr,
+			disabled);
+	}
+	case MTYPE_STATIC:
+	{
+		auto *s = static_cast<menuStatic_t *>(item);
+		color_t color = (s->generic.flags & QMF_CUSTOM_COLOR) ? s->generic.color : COLOR_WHITE;
+		return std::make_unique<StaticItem>(s->generic.name ? s->generic.name : "",
+			s->generic.x,
+			s->generic.y,
+			s->generic.uiFlags,
+			nullptr,
+			color);
+	}
+	case MTYPE_BITMAP:
+	{
+		auto *bitmap = static_cast<menuBitmap_t *>(item);
+		return std::make_unique<BitmapItem>(bitmap->generic.name ? bitmap->generic.name : "",
+			bitmap->generic.x,
+			bitmap->generic.y,
+			bitmap->generic.width,
+			bitmap->generic.height,
+			Menu_MakeTextureHandle(bitmap->pics[0]),
+			Menu_MakeTextureHandle(bitmap->pics[1]),
+			Menu_MakeActivateCallback(item));
+	}
+	case MTYPE_FIELD:
+	{
+		auto *field = static_cast<menuField_t *>(item);
+		return std::make_unique<FieldItem>(field->generic.name ? field->generic.name : "",
+			field->generic.x,
+			field->generic.y,
+			field->generic.uiFlags,
+			field->field.text,
+			field->field.visibleChars,
+			field->field.maxChars,
+			[field](MenuItem &)
+			{
+				if (field->generic.change)
+					field->generic.change(&field->generic);
+			},
+			nullptr);
+	}
+	case MTYPE_SLIDER:
+	{
+		auto *slider = static_cast<menuSlider_t *>(item);
+		return std::make_unique<SliderItem>(slider->generic.name ? slider->generic.name : "",
+			slider->generic.x,
+			slider->generic.y,
+			slider->generic.uiFlags,
+			slider->minvalue,
+			slider->maxvalue,
+			slider->step,
+			slider->curvalue,
+			[slider](MenuItem &)
+			{
+				if (slider->generic.change)
+					slider->generic.change(&slider->generic);
+			},
+			nullptr);
+	}
+default:
+	return nullptr;
+}
+}
+
+/*
+=============
+Menu_FindCppItem
+
+Finds the MenuItem wrapper associated with a legacy menu entry.
+=============
+*/
+static MenuItem *Menu_FindCppItem(menuFrameWork_t *menu, const menuCommon_t *item)
+{
+	if (!menu)
+		return nullptr;
+
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
+
+	for (size_t i = 0; i < itemCount; i++) {
+		if (menu->items[i] == item)
+			return menu->itemsCpp[i].get();
+	}
+
+	return nullptr;
+}
 /*
 =================
 Menu_AddItem
@@ -2716,19 +2687,12 @@ Menu_AddItem
 */
 void Menu_AddItem(menuFrameWork_t *menu, void *item)
 {
-    Q_assert(menu->nitems < MAX_MENU_ITEMS);
+	Q_assert(Menu_ItemCount(menu) < MAX_MENU_ITEMS);
 
-    z_allocation allocation;
-    if (!menu->nitems) {
-        allocation = z_allocation{UI_Malloc(MIN_MENU_ITEMS * sizeof(void *))};
-    } else {
-        allocation = Z_Realloc_allocation(
-            menu->items, Q_ALIGN(menu->nitems + 1, MIN_MENU_ITEMS) * sizeof(void *));
-    }
+	menu->items.push_back(item);
+	static_cast<menuCommon_t *>(item)->parent = menu;
 
-    menu->items = static_cast<void **>(allocation);
-    menu->items[menu->nitems++] = item;
-    static_cast<menuCommon_t *>(item)->parent = menu;
+	Menu_EmplaceCppItem(menu, static_cast<menuCommon_t *>(item));
 }
 
 static void UI_ClearBounds(int mins[2], int maxs[2])
@@ -2764,7 +2728,7 @@ void Menu_Init(menuFrameWork_t *menu)
     }
     menu->size(menu);
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         void *rawItem = menu->items[i];
         auto *item = static_cast<menuCommon_t *>(rawItem);
 
@@ -2828,7 +2792,7 @@ void Menu_Init(menuFrameWork_t *menu)
     }
 
     // set focus to the first item by default
-    if (!focus && menu->nitems) {
+    if (!focus && Menu_ItemCount(menu)) {
         auto *item = static_cast<menuCommon_t *>(menu->items[0]);
         item->flags |= QMF_HASFOCUS;
         if (item->status) {
@@ -2841,21 +2805,21 @@ void Menu_Init(menuFrameWork_t *menu)
     // calc menu bounding box
     UI_ClearBounds(menu->mins, menu->maxs);
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         UI_AddRectToBounds(&item->rect, menu->mins, menu->maxs);
     }
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group || !group->active)
-                continue;
-            if (group->rect.width <= 0 || group->rect.height <= 0)
-                continue;
-            UI_AddRectToBounds(&group->rect, menu->mins, menu->maxs);
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group || !group->active)
+				continue;
+			if (group->rect.width <= 0 || group->rect.height <= 0)
+				continue;
+			UI_AddRectToBounds(&group->rect, menu->mins, menu->maxs);
+		}
+	}
 
     // expand
     menu->mins[0] -= MENU_SPACING;
@@ -2877,23 +2841,23 @@ void Menu_Size(menuFrameWork_t *menu)
     int widest = -1;
     uiItemGroup_t *currentGroup = NULL;
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
-            group->active = false;
-            group->contentTop = 0;
-            group->contentBottom = 0;
-            group->headerY = 0;
-            group->baseX = 0;
-            group->rect = {};
-            group->headerRect = {};
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group)
+				continue;
+			group->active = false;
+			group->contentTop = 0;
+			group->contentBottom = 0;
+			group->headerY = 0;
+			group->baseX = 0;
+			group->rect = {};
+			group->headerRect = {};
+		}
+	}
 
     // count visible items including groups
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN)
             continue;
@@ -2957,15 +2921,15 @@ void Menu_Size(menuFrameWork_t *menu)
     // set menu vertical base
     y = (uis.height - h) / 2;
 
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
-            group->contentTop = 0;
-            group->contentBottom = 0;
-        }
-    }
+	if (!menu->groups.empty()) {
+		for (int i = 0; i < menu->numGroups; i++) {
+			uiItemGroup_t *group = menu->groups[i].get();
+			if (!group)
+				continue;
+			group->contentTop = 0;
+			group->contentBottom = 0;
+		}
+	}
 
     // banner is horizontally centered and
     // positioned on top of all menu items
@@ -2995,7 +2959,7 @@ void Menu_Size(menuFrameWork_t *menu)
 
     // align items
     currentGroup = NULL;
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN)
             continue;
@@ -3039,33 +3003,33 @@ void Menu_Size(menuFrameWork_t *menu)
 
 static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
 {
-    if (!menu->groups)
-        return;
+	if (menu->groups.empty())
+		return;
 
-    for (int i = 0; i < menu->numGroups; i++) {
-        uiItemGroup_t *group = menu->groups[i];
-        if (!group)
-            continue;
+	for (int i = 0; i < menu->numGroups; i++) {
+		uiItemGroup_t *group = menu->groups[i].get();
+		if (!group)
+			continue;
 
-        if (!group->active) {
-            group->rect = {};
-            group->headerRect = {};
-            continue;
-        }
+		if (!group->active) {
+			group->rect = {};
+			group->headerRect = {};
+			continue;
+		}
 
-        int minX = INT_MAX;
-        int maxX = INT_MIN;
-        int minY = INT_MAX;
-        int maxY = INT_MIN;
+		int minX = INT_MAX;
+		int maxX = INT_MIN;
+		int minY = INT_MAX;
+		int maxY = INT_MIN;
 
-        for (int j = 0; j < menu->nitems; j++) {
-            auto *item = static_cast<menuCommon_t *>(menu->items[j]);
-            if (item->flags & QMF_HIDDEN)
-                continue;
-            if (item->group != group)
-                continue;
+		for (int j = 0; j < Menu_ItemCount(menu); j++) {
+			auto *item = static_cast<menuCommon_t *>(menu->items[j]);
+			if (item->flags & QMF_HIDDEN)
+				continue;
+			if (item->group != group)
+				continue;
 
-            const vrect_t &rect = item->rect;
+			const vrect_t &rect = item->rect;
             if (minX > rect.x)
                 minX = rect.x;
             if (maxX < rect.x + rect.width)
@@ -3107,25 +3071,25 @@ static void Menu_UpdateGroupBounds(menuFrameWork_t *menu)
 
 static void Menu_DrawGroups(menuFrameWork_t *menu)
 {
-    if (!menu->groups)
-        return;
+	if (menu->groups.empty())
+		return;
 
-    for (int i = 0; i < menu->numGroups; i++) {
-        uiItemGroup_t *group = menu->groups[i];
-        if (!group || !group->active)
-            continue;
+	for (int i = 0; i < menu->numGroups; i++) {
+		uiItemGroup_t *group = menu->groups[i].get();
+		if (!group || !group->active)
+			continue;
 
-        if (group->rect.width <= 0 || group->rect.height <= 0)
-            continue;
+		if (group->rect.width <= 0 || group->rect.height <= 0)
+			continue;
 
-        color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, static_cast<uint8_t>(160));
-        R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
+		color_t background = group->hasBackground ? group->background : ColorSetAlpha(uis.color.background, static_cast<uint8_t>(160));
+		R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, group->rect.height, background);
 
-        if (group->border) {
-            color_t border = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
-            R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
-            R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
-            R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);
+		if (group->border) {
+			color_t border = ColorSetAlpha(uis.color.selection, static_cast<uint8_t>(200));
+			R_DrawFill32(group->rect.x, group->rect.y, group->rect.width, 1, border);
+			R_DrawFill32(group->rect.x, group->rect.y + group->rect.height - 1, group->rect.width, 1, border);
+			R_DrawFill32(group->rect.x, group->rect.y, 1, group->rect.height, border);
             R_DrawFill32(group->rect.x + group->rect.width - 1, group->rect.y, 1, group->rect.height, border);
         }
 
@@ -3139,56 +3103,89 @@ static void Menu_DrawGroups(menuFrameWork_t *menu)
 
 menuCommon_t *Menu_ItemAtCursor(menuFrameWork_t *m)
 {
-    menuCommon_t *item;
-    int i;
+	menuCommon_t *item;
+	int i;
 
-    for (i = 0; i < m->nitems; i++) {
-        item = static_cast<menuCommon_t *>(m->items[i]);
-        if (item->flags & QMF_HASFOCUS) {
-            return item;
-        }
-    }
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), m->items.size());
 
-    return NULL;
+	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
+		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
+		MenuItem *wrapped = m->itemsCpp[cppIndex].get();
+
+		if (wrapped && wrapped->HasFocus()) {
+			if (!(item->flags & QMF_HASFOCUS)) {
+				Menu_SetFocus(item);
+			}
+
+			return item;
+		}
+	}
+
+	for (i = 0; i < Menu_ItemCount(m); i++) {
+		item = static_cast<menuCommon_t *>(m->items[i]);
+		if (item->flags & QMF_HASFOCUS) {
+			MenuItem *wrapped = Menu_FindCppItem(m, item);
+
+			if (wrapped && !wrapped->HasFocus()) {
+				wrapped->SetFocus(true);
+			}
+
+			return item;
+		}
+	}
+
+	return NULL;
 }
 
+/*
+=============
+Menu_SetFocus
+
+Synchronizes focus flags across legacy items and their C++ wrappers.
+=============
+*/
 void Menu_SetFocus(menuCommon_t *focus)
 {
-    menuFrameWork_t *menu;
-    menuCommon_t *item;
-    int i;
+	menuFrameWork_t *menu;
+	menuCommon_t *item;
+	int i;
 
-    if (focus->flags & QMF_HASFOCUS) {
-        return;
-    }
+	if (focus->flags & QMF_HASFOCUS) {
+		return;
+	}
 
-    menu = focus->parent;
+	menu = focus->parent;
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu &&
-        &ui_activeDropdown->spin.generic != focus) {
-        Dropdown_Close(ui_activeDropdown, false);
-    }
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown && &activeDropdown->spin.generic != focus) {
+		Dropdown_Close(activeDropdown, false);
+	}
 
-    for (i = 0; i < menu->nitems; i++) {
-        item = static_cast<menuCommon_t *>(menu->items[i]);
+	for (i = 0; i < Menu_ItemCount(menu); i++) {
+		item = static_cast<menuCommon_t *>(menu->items[i]);
+		MenuItem *wrapped = Menu_FindCppItem(menu, item);
 
-        if (item == focus) {
-            item->flags |= QMF_HASFOCUS;
-            if (item->focus) {
-                item->focus(item, true);
-            } else if (item->status) {
-                menu->status = item->status;
-            }
-        } else if (item->flags & QMF_HASFOCUS) {
-            item->flags &= ~QMF_HASFOCUS;
-            if (item->focus) {
-                item->focus(item, false);
-            } else if (menu->status == item->status
-                       && menu->status != focus->status) {
-                menu->status = NULL;
-            }
-        }
-    }
+		if (item == focus) {
+			item->flags |= QMF_HASFOCUS;
+			if (item->focus) {
+				item->focus(item, true);
+			} else if (item->status) {
+				menu->status = item->status;
+			}
+		} else if (item->flags & QMF_HASFOCUS) {
+			item->flags &= ~QMF_HASFOCUS;
+			if (item->focus) {
+				item->focus(item, false);
+			} else if (menu->status == item->status
+				   && menu->status != focus->status) {
+				menu->status = NULL;
+			}
+		}
+
+		if (wrapped) {
+			wrapped->SetFocus((item->flags & QMF_HASFOCUS) != 0);
+		}
+	}
 
 }
 
@@ -3203,54 +3200,73 @@ slot.
 */
 menuSound_t Menu_AdjustCursor(menuFrameWork_t *m, int dir)
 {
-    menuCommon_t *item;
-    int cursor, pos;
-    int i;
+	menuCommon_t *item;
+	int cursor, pos;
+	int i;
+	bool foundFocus;
 
-    if (!m->nitems) {
-        return QMS_NOTHANDLED;
-    }
+	if (!Menu_ItemCount(m)) {
+	return QMS_NOTHANDLED;
+	}
 
-    pos = 0;
-    for (i = 0; i < m->nitems; i++) {
-        item = static_cast<menuCommon_t *>(m->items[i]);
+	pos = 0;
+	foundFocus = false;
+	const size_t itemCount = std::min<size_t>(m->itemsCpp.size(), m->items.size());
 
-        if (item->flags & QMF_HASFOCUS) {
-            pos = i;
-            break;
-        }
-    }
+	for (size_t cppIndex = 0; cppIndex < itemCount; cppIndex++) {
+		item = static_cast<menuCommon_t *>(m->items[cppIndex]);
+		MenuItem *wrapped = m->itemsCpp[cppIndex].get();
 
-    /*
-    ** crawl in the direction indicated until we find a valid spot
-    */
-    cursor = pos;
-    if (dir == 1) {
-        do {
-            cursor++;
-            if (cursor >= m->nitems)
-                cursor = 0;
+		if (wrapped && wrapped->HasFocus()) {
+			pos = static_cast<int>(cppIndex);
+			foundFocus = true;
+			break;
+		}
+	}
 
-            item = static_cast<menuCommon_t *>(m->items[cursor]);
-            if (UI_IsItemSelectable(item))
-                break;
-        } while (cursor != pos);
-    } else {
-        do {
-            cursor--;
-            if (cursor < 0)
-                cursor = m->nitems - 1;
+	if (!foundFocus) {
+		for (i = 0; i < Menu_ItemCount(m); i++) {
+			item = static_cast<menuCommon_t *>(m->items[i]);
 
-            item = static_cast<menuCommon_t *>(m->items[cursor]);
-            if (UI_IsItemSelectable(item))
-                break;
-        } while (cursor != pos);
-    }
+			if (item->flags & QMF_HASFOCUS) {
+				pos = i;
+				foundFocus = true;
+				break;
+			}
+		}
+	}
 
-    Menu_SetFocus(item);
+	/*
+	** crawl in the direction indicated until we find a valid spot
+	*/
+	cursor = pos;
+	if (dir == 1) {
+		do {
+			cursor++;
+			if (cursor >= Menu_ItemCount(m))
+				cursor = 0;
 
-    return QMS_MOVE;
+			item = static_cast<menuCommon_t *>(m->items[cursor]);
+			if (UI_IsItemSelectable(item))
+				break;
+		} while (cursor != pos);
+	} else {
+		do {
+			cursor--;
+			if (cursor < 0)
+				cursor = Menu_ItemCount(m) - 1;
+
+			item = static_cast<menuCommon_t *>(m->items[cursor]);
+			if (UI_IsItemSelectable(item))
+				break;
+		} while (cursor != pos);
+	}
+
+	Menu_SetFocus(item);
+
+	return QMS_MOVE;
 }
+
 
 static void Menu_DrawStatus(menuFrameWork_t *menu)
 {
@@ -3318,7 +3334,7 @@ void Menu_Draw(menuFrameWork_t *menu)
     }
 
     if (!focusItem) {
-        for (int i = 0; i < menu->nitems; i++) {
+        for (int i = 0; i < Menu_ItemCount(menu); i++) {
             auto *candidate = static_cast<menuCommon_t *>(menu->items[i]);
             if (candidate->flags & QMF_HIDDEN)
                 continue;
@@ -3336,9 +3352,9 @@ void Menu_Draw(menuFrameWork_t *menu)
 
     Menu_UpdateGroupBounds(menu);
 
-    menuDropdown_t *openDropdown = NULL;
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open)
-        openDropdown = ui_activeDropdown;
+	menuDropdown_t *openDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (openDropdown && !openDropdown->open)
+		openDropdown = NULL;
 
 //
 // draw background
@@ -3377,70 +3393,21 @@ void Menu_Draw(menuFrameWork_t *menu)
 //
 // draw contents
 //
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
-        if (item->flags & QMF_HIDDEN) {
-            continue;
-        }
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
 
-        switch (item->type) {
-        case MTYPE_FIELD:
-            Field_Draw(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SLIDER:
-            Slider_Draw(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_LIST:
-            MenuList_Draw(static_cast<menuList_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-        case MTYPE_BITFIELD:
-        case MTYPE_PAIRS:
-        case MTYPE_VALUES:
-        case MTYPE_STRINGS:
-        case MTYPE_TOGGLE:
-        case MTYPE_EPISODE:
-        case MTYPE_UNIT:
-            SpinControl_Draw(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_CHECKBOX:
-            Checkbox_Draw(static_cast<menuCheckbox_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Draw(static_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_RADIO:
-            RadioButton_Draw(static_cast<menuRadioButton_t *>(rawItem));
-            break;
-        case MTYPE_ACTION:
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Action_Draw(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_SEPARATOR:
-            Separator_Draw(static_cast<menuSeparator_t *>(rawItem));
-            break;
-        case MTYPE_STATIC:
-            Static_Draw(static_cast<menuStatic_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Draw(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_BITMAP:
-            Bitmap_Draw(static_cast<menuBitmap_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Draw(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        default:
-            Q_assert(!"unknown item type");
-        }
+	for (size_t i = 0; i < itemCount; i++) {
+		auto *item = static_cast<menuCommon_t *>(menu->items[i]);
 
-        if (ui_debug->integer) {
-            UI_DrawRect8(&item->rect, 1, 223);
-        }
-    }
+		if (item->flags & QMF_HIDDEN) {
+			continue;
+		}
+
+		menu->itemsCpp[i]->Draw();
+
+		if (ui_debug->integer) {
+			UI_DrawRect8(&item->rect, 1, 223);
+		}
+	}
 
     if (openDropdown)
         Dropdown_DrawList(openDropdown);
@@ -3453,201 +3420,283 @@ void Menu_Draw(menuFrameWork_t *menu)
     }
 }
 
+/*
+=============
+Menu_SelectItem
+
+Activates the currently focused menu item, favoring C++ handlers before
+falling back to legacy callbacks.
+=============
+*/
 menuSound_t Menu_SelectItem(menuFrameWork_t *s)
 {
-    menuCommon_t *item;
+	menuCommon_t *item;
 
-    if (!(item = Menu_ItemAtCursor(s))) {
-        return QMS_NOTHANDLED;
-    }
+	if (!(item = Menu_ItemAtCursor(s))) {
+		return QMS_NOTHANDLED;
+	}
 
-    switch (item->type) {
-    //case MTYPE_SLIDER:
-    //    return Slider_DoSlide((menuSlider_t *)item, 1);
-    case MTYPE_SPINCONTROL:
-    case MTYPE_BITFIELD:
-    case MTYPE_PAIRS:
-    case MTYPE_VALUES:
-    case MTYPE_STRINGS:
-    case MTYPE_TOGGLE:
-    case MTYPE_IMAGESPINCONTROL:
-    case MTYPE_EPISODE:
-    case MTYPE_UNIT:
-        return static_cast<menuSound_t>(
-            SpinControl_DoEnter(reinterpret_cast<menuSpinControl_t *>(item)));
-    case MTYPE_KEYBIND:
-        return Keybind_DoEnter(reinterpret_cast<menuKeybind_t *>(item));
-    case MTYPE_FIELD:
-    case MTYPE_ACTION:
-    case MTYPE_LIST:
-    case MTYPE_BITMAP:
-    case MTYPE_SAVEGAME:
-    case MTYPE_LOADGAME:
-    case MTYPE_CHECKBOX:
-    case MTYPE_DROPDOWN:
-    case MTYPE_RADIO:
-        return Common_DoEnter(item);
-    default:
-        return QMS_NOTHANDLED;
-    }
+	if (MenuItem *wrapped = Menu_FindCppItem(s, item)) {
+		if (wrapped->Activate()) {
+			return QMS_IN;
+		}
+	}
+
+	switch (item->type) {
+	//case MTYPE_SLIDER:
+	//	return Slider_DoSlide((menuSlider_t *)item, 1);
+	case MTYPE_SPINCONTROL:
+	case MTYPE_BITFIELD:
+	case MTYPE_PAIRS:
+	case MTYPE_VALUES:
+	case MTYPE_STRINGS:
+	case MTYPE_TOGGLE:
+	case MTYPE_IMAGESPINCONTROL:
+	case MTYPE_EPISODE:
+	case MTYPE_UNIT:
+		return static_cast<menuSound_t>(
+			SpinControl_DoEnter(reinterpret_cast<menuSpinControl_t *>(item)));
+	case MTYPE_KEYBIND:
+		return Keybind_DoEnter(reinterpret_cast<menuKeybind_t *>(item));
+	case MTYPE_FIELD:
+	case MTYPE_ACTION:
+	case MTYPE_LIST:
+	case MTYPE_BITMAP:
+	case MTYPE_SAVEGAME:
+	case MTYPE_LOADGAME:
+	case MTYPE_CHECKBOX:
+	case MTYPE_DROPDOWN:
+	case MTYPE_RADIO:
+		return Common_DoEnter(item);
+	default:
+		return QMS_NOTHANDLED;
+	}
 }
 
+/*
+=============
+Menu_SlideItem
+
+Routes directional input through MenuItem handlers before falling back.
+=============
+*/
 menuSound_t Menu_SlideItem(menuFrameWork_t *s, int dir)
 {
-    menuCommon_t *item;
+	menuCommon_t *item;
 
-    if (!(item = Menu_ItemAtCursor(s))) {
-        return QMS_NOTHANDLED;
-    }
+	if (!(item = Menu_ItemAtCursor(s))) {
+		return QMS_NOTHANDLED;
+	}
 
-    switch (item->type) {
-    case MTYPE_SLIDER:
-        return Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
-    case MTYPE_SPINCONTROL:
-    case MTYPE_BITFIELD:
-    case MTYPE_PAIRS:
-    case MTYPE_VALUES:
-    case MTYPE_STRINGS:
-    case MTYPE_TOGGLE:
-    case MTYPE_IMAGESPINCONTROL:
-    case MTYPE_EPISODE:
-    case MTYPE_UNIT:
-        return static_cast<menuSound_t>(
-            SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
-    case MTYPE_CHECKBOX:
-        return Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
-    case MTYPE_DROPDOWN:
-        return Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
-    default:
-        return QMS_NOTHANDLED;
-    }
+	MenuItem *wrapped = Menu_FindCppItem(s, item);
+	MenuItem::MenuEvent event{};
+	event.type = MenuItem::MenuEvent::Type::Key;
+	event.key = (dir < 0) ? K_LEFTARROW : K_RIGHTARROW;
+	event.x = uis.mouseCoords[0];
+	event.y = uis.mouseCoords[1];
+
+	if (wrapped) {
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	menuSound_t sound = QMS_NOTHANDLED;
+
+	switch (item->type) {
+	case MTYPE_SLIDER:
+		sound = Slider_DoSlide(reinterpret_cast<menuSlider_t *>(item), dir);
+		break;
+	case MTYPE_SPINCONTROL:
+	case MTYPE_BITFIELD:
+	case MTYPE_PAIRS:
+	case MTYPE_VALUES:
+	case MTYPE_STRINGS:
+	case MTYPE_TOGGLE:
+	case MTYPE_IMAGESPINCONTROL:
+	case MTYPE_EPISODE:
+	case MTYPE_UNIT:
+		sound = static_cast<menuSound_t>(
+				SpinControl_DoSlide(reinterpret_cast<menuSpinControl_t *>(item), dir));
+		break;
+	case MTYPE_CHECKBOX:
+		sound = Checkbox_Slide(reinterpret_cast<menuCheckbox_t *>(item), dir);
+		break;
+	case MTYPE_DROPDOWN:
+		sound = Dropdown_Slide(reinterpret_cast<menuDropdown_t *>(item), dir);
+		break;
+	default:
+		break;
+	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
 
+/*
+=============
+Menu_KeyEvent
+
+Builds a MenuEvent for key presses and dispatches to C++ handlers before
+legacy fallbacks.
+=============
+*/
 menuSound_t Menu_KeyEvent(menuCommon_t *item, int key)
 {
-    if (item->keydown) {
-        menuSound_t sound = item->keydown(item, key);
-        if (sound != QMS_NOTHANDLED) {
-            return sound;
-        }
-    }
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
 
-    switch (item->type) {
-    case MTYPE_FIELD:
-        return static_cast<menuSound_t>(
-            Field_Key(reinterpret_cast<menuField_t *>(item), key));
-    case MTYPE_LIST:
-        return MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
-    case MTYPE_SLIDER:
-        return Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
-    case MTYPE_KEYBIND:
-        return Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
-    default:
-        return QMS_NOTHANDLED;
-    }
+	if (wrapped) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Key;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	menuSound_t sound = QMS_NOTHANDLED;
+
+	if (item->keydown) {
+		sound = item->keydown(item, key);
+		if (sound != QMS_NOTHANDLED) {
+			if (wrapped) {
+				Menu_SyncLegacyToCpp(item, *wrapped);
+			}
+			return sound;
+		}
+	}
+
+	switch (item->type) {
+	case MTYPE_FIELD:
+		sound = static_cast<menuSound_t>(
+				Field_Key(reinterpret_cast<menuField_t *>(item), key));
+		break;
+	case MTYPE_LIST:
+		sound = MenuList_Key(reinterpret_cast<menuList_t *>(item), key);
+		break;
+	case MTYPE_SLIDER:
+		sound = Slider_Key(reinterpret_cast<menuSlider_t *>(item), key);
+		break;
+	case MTYPE_KEYBIND:
+		sound = Keybind_Key(reinterpret_cast<menuKeybind_t *>(item), key);
+		break;
+	default:
+		sound = QMS_NOTHANDLED;
+		break;
+	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
 
+
+/*
+=============
+Menu_CharEvent
+
+Sends character input through MenuItem handlers before legacy fallbacks.
+=============
+*/
 menuSound_t Menu_CharEvent(menuCommon_t *item, int key)
 {
-    switch (item->type) {
-    case MTYPE_FIELD:
-        return static_cast<menuSound_t>(
-            Field_Char(reinterpret_cast<menuField_t *>(item), key));
-    default:
-        return QMS_NOTHANDLED;
-    }
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
+
+	if (wrapped) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Key;
+		event.key = key;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	menuSound_t sound = QMS_NOTHANDLED;
+
+	switch (item->type) {
+	case MTYPE_FIELD:
+		sound = static_cast<menuSound_t>(
+				Field_Char(reinterpret_cast<menuField_t *>(item), key));
+		break;
+	default:
+		break;
+	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
 
+
+/*
+=============
+Menu_MouseMove
+
+Translates pointer movement into MenuEvents for C++ handlers before legacy dispatch.
+=============
+*/
 menuSound_t Menu_MouseMove(menuCommon_t *item)
 {
-    switch (item->type) {
-    case MTYPE_LIST:
-        return MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
-    case MTYPE_SLIDER:
-        return Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
-    case MTYPE_DROPDOWN:
-        return Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
-    default:
-        return QMS_NOTHANDLED;
-    }
+	MenuItem *wrapped = Menu_FindCppItem(item->parent, item);
+
+	if (wrapped) {
+		MenuItem::MenuEvent event{};
+		event.type = MenuItem::MenuEvent::Type::Pointer;
+		event.x = uis.mouseCoords[0];
+		event.y = uis.mouseCoords[1];
+
+		if (wrapped->HandleEvent(event)) {
+			return QMS_SILENT;
+		}
+	}
+
+	menuSound_t sound = QMS_NOTHANDLED;
+
+	switch (item->type) {
+	case MTYPE_LIST:
+		sound = MenuList_MouseMove(reinterpret_cast<menuList_t *>(item));
+		break;
+	case MTYPE_SLIDER:
+		sound = Slider_MouseMove(reinterpret_cast<menuSlider_t *>(item));
+		break;
+	case MTYPE_DROPDOWN:
+		sound = Dropdown_MouseMove(reinterpret_cast<menuDropdown_t *>(item));
+		break;
+	default:
+		break;
+	}
+
+	if (wrapped) {
+		Menu_SyncLegacyToCpp(item, *wrapped);
+	}
+
+	return sound;
 }
 
+
+/*
+=============
+Menu_DefaultKey
+
+Handles menu-level shortcuts while forwarding pointer activation into MenuItem handlers.
+=============
+*/
 static menuSound_t Menu_DefaultKey(menuFrameWork_t *m, int key)
 {
-    menuCommon_t *item;
-
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == m && ui_activeDropdown->open) {
-        menuDropdown_t *dropdown = ui_activeDropdown;
-        if (key == K_ESCAPE) {
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        }
-
-        if (key == K_MOUSE2) {
-            Dropdown_Close(dropdown, false);
-            return QMS_SILENT;
-        }
-
-        if (key == K_MOUSE1) {
-            if (UI_CursorInRect(&dropdown->listRect)) {
-                if (dropdown->hovered >= 0 && dropdown->hovered < dropdown->spin.numItems)
-                    Dropdown_SetSelection(dropdown, dropdown->hovered, true);
-                Dropdown_Close(dropdown, false);
-                return QMS_MOVE;
-            }
-
-            Dropdown_Close(dropdown, false);
-        }
-    }
-
-    switch (key) {
-    case K_ESCAPE:
-    case K_MOUSE2:
-        UI_PopMenu();
-        return QMS_OUT;
-
-    case K_KP_UPARROW:
-    case K_UPARROW:
-    case 'k':
-        return Menu_AdjustCursor(m, -1);
-
-    case K_KP_DOWNARROW:
-    case K_DOWNARROW:
-    case K_TAB:
-    case 'j':
-        return Menu_AdjustCursor(m, 1);
-
-    case K_KP_LEFTARROW:
-    case K_LEFTARROW:
-    case K_MWHEELDOWN:
-    case 'h':
-        return Menu_SlideItem(m, -1);
-
-    case K_KP_RIGHTARROW:
-    case K_RIGHTARROW:
-    case K_MWHEELUP:
-    case 'l':
-        return Menu_SlideItem(m, 1);
-
-    case K_MOUSE1:
-    //case K_MOUSE2:
-    case K_MOUSE3:
-        item = Menu_HitTest(m);
-        if (!item) {
-            return QMS_NOTHANDLED;
-        }
-
-        if (!(item->flags & QMF_HASFOCUS)) {
-            return QMS_NOTHANDLED;
-        }
-        // fall through
-
-    case K_KP_ENTER:
-    case K_ENTER:
-        return Menu_SelectItem(m);
-    }
-
-    return QMS_NOTHANDLED;
+	return UI_MenuController().HandleKey(m, key);
 }
 
 menuSound_t Menu_Keydown(menuFrameWork_t *menu, int key)
@@ -3684,12 +3733,13 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
         return NULL;
     }
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu && ui_activeDropdown->open) {
-        if (UI_CursorInRect(&ui_activeDropdown->listRect))
-            return &ui_activeDropdown->spin.generic;
-    }
+	menuDropdown_t *activeDropdown = UI_MenuController().ActiveDropdown(menu);
+	if (activeDropdown && activeDropdown->open) {
+		if (UI_CursorInRect(&activeDropdown->listRect))
+			return &activeDropdown->spin.generic;
+	}
 
-    for (int i = 0; i < menu->nitems; i++) {
+    for (int i = 0; i < Menu_ItemCount(menu); i++) {
         auto *item = static_cast<menuCommon_t *>(menu->items[i]);
         if (item->flags & QMF_HIDDEN) {
             continue;
@@ -3705,187 +3755,289 @@ menuCommon_t *Menu_HitTest(menuFrameWork_t *menu)
 
 bool Menu_Push(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	for (int i = 0; i < Menu_ItemCount(menu); i++) {
+		void *rawItem = menu->items[i];
+		auto *item = static_cast<menuCommon_t *>(rawItem);
 
-        switch (item->type) {
-        case MTYPE_SLIDER:
-            Slider_Push(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-            BitField_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_STRINGS:
-            Strings_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-            SpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_TOGGLE:
-            Toggle_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Push(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Push(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Push(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Savegame_Push(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_EPISODE:
-            Episode_Push(static_cast<menuEpisodeSelector_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Push(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+		switch (item->type) {
+		case MTYPE_SLIDER:
+			Slider_Push(static_cast<menuSlider_t *>(rawItem));
+			break;
+		case MTYPE_BITFIELD:
+			BitField_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_PAIRS:
+			Pairs_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_STRINGS:
+			Strings_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_SPINCONTROL:
+			SpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_TOGGLE:
+			Toggle_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_DROPDOWN:
+			Dropdown_Push(reinterpret_cast<menuDropdown_t *>(rawItem));
+			break;
+		case MTYPE_KEYBIND:
+			Keybind_Push(static_cast<menuKeybind_t *>(rawItem));
+			break;
+		case MTYPE_FIELD:
+			Field_Push(static_cast<menuField_t *>(rawItem));
+			break;
+		case MTYPE_SAVEGAME:
+		case MTYPE_LOADGAME:
+			Savegame_Push(static_cast<menuAction_t *>(rawItem));
+			break;
+		case MTYPE_IMAGESPINCONTROL:
+			ImageSpinControl_Push(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_EPISODE:
+			Episode_Push(static_cast<menuEpisodeSelector_t *>(rawItem));
+			break;
+		case MTYPE_UNIT:
+			Unit_Push(static_cast<menuUnitSelector_t *>(rawItem));
+			break;
+		default:
+			break;
+		}
+	}
 
-    Menu_UpdateConditionalState(menu);
-    return true;
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
+
+	for (size_t i = 0; i < itemCount; i++) {
+		menu->itemsCpp[i]->OnAttach();
+	}
+
+	Menu_UpdateConditionalState(menu);
+	return true;
 }
+
 
 void Menu_Pop(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	for (int i = 0; i < Menu_ItemCount(menu); i++) {
+		void *rawItem = menu->items[i];
+		auto *item = static_cast<menuCommon_t *>(rawItem);
 
-        switch (item->type) {
-        case MTYPE_SLIDER:
-            Slider_Pop(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-            BitField_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_STRINGS:
-            Strings_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-            SpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_TOGGLE:
-            Toggle_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Pop(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Pop(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Pop(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_EPISODE:
-            Episode_Pop(static_cast<menuEpisodeSelector_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Pop(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+		switch (item->type) {
+		case MTYPE_SLIDER:
+			Slider_Pop(static_cast<menuSlider_t *>(rawItem));
+			break;
+		case MTYPE_BITFIELD:
+			BitField_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_PAIRS:
+			Pairs_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_STRINGS:
+			Strings_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_SPINCONTROL:
+			SpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_TOGGLE:
+			Toggle_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_DROPDOWN:
+			Dropdown_Pop(reinterpret_cast<menuDropdown_t *>(rawItem));
+			break;
+		case MTYPE_KEYBIND:
+			Keybind_Pop(static_cast<menuKeybind_t *>(rawItem));
+			break;
+		case MTYPE_FIELD:
+			Field_Pop(static_cast<menuField_t *>(rawItem));
+			break;
+		case MTYPE_IMAGESPINCONTROL:
+			ImageSpinControl_Pop(static_cast<menuSpinControl_t *>(rawItem));
+			break;
+		case MTYPE_EPISODE:
+			Episode_Pop(static_cast<menuEpisodeSelector_t *>(rawItem));
+			break;
+		case MTYPE_UNIT:
+			Unit_Pop(static_cast<menuUnitSelector_t *>(rawItem));
+			break;
+		default:
+			break;
+		}
+	}
+
+	const size_t itemCount = std::min<size_t>(menu->itemsCpp.size(), menu->items.size());
+
+	for (size_t i = 0; i < itemCount; i++) {
+		menu->itemsCpp[i]->OnDetach();
+	}
 }
+
 
 void Menu_Free(menuFrameWork_t *menu)
 {
-    for (int i = 0; i < menu->nitems; i++) {
-        void *rawItem = menu->items[i];
-        auto *item = static_cast<menuCommon_t *>(rawItem);
+	UI_MenuController().ResetDropdown(menu);
 
-        UI_FreeCommonExtensions(item);
+	menu->items.clear();
+	menu->itemsCpp.clear();
+	menu->groups.clear();
+	menu->numGroups = 0;
 
-        switch (item->type) {
-        case MTYPE_ACTION:
-        case MTYPE_SAVEGAME:
-        case MTYPE_LOADGAME:
-            Action_Free(static_cast<menuAction_t *>(rawItem));
-            break;
-        case MTYPE_SLIDER:
-            Slider_Free(static_cast<menuSlider_t *>(rawItem));
-            break;
-        case MTYPE_BITFIELD:
-        case MTYPE_TOGGLE:
-            BitField_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_PAIRS:
-            Pairs_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_SPINCONTROL:
-        case MTYPE_STRINGS:
-        case MTYPE_EPISODE:
-            SpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        case MTYPE_CHECKBOX:
-            Checkbox_Free(reinterpret_cast<menuCheckbox_t *>(rawItem));
-            break;
-        case MTYPE_DROPDOWN:
-            Dropdown_Free(reinterpret_cast<menuDropdown_t *>(rawItem));
-            break;
-        case MTYPE_RADIO:
-            RadioButton_Free(reinterpret_cast<menuRadioButton_t *>(rawItem));
-            break;
-        case MTYPE_UNIT:
-            Unit_Free(static_cast<menuUnitSelector_t *>(rawItem));
-            break;
-        case MTYPE_KEYBIND:
-            Keybind_Free(static_cast<menuKeybind_t *>(rawItem));
-            break;
-        case MTYPE_FIELD:
-            Field_Free(static_cast<menuField_t *>(rawItem));
-            break;
-        case MTYPE_SEPARATOR:
-            Z_Free(rawItem);
-            break;
-        case MTYPE_BITMAP:
-            Bitmap_Free(static_cast<menuBitmap_t *>(rawItem));
-            break;
-        case MTYPE_IMAGESPINCONTROL:
-            ImageSpinControl_Free(static_cast<menuSpinControl_t *>(rawItem));
-            break;
-        default:
-            break;
-        }
-    }
+	Z_Free(menu->title);
+	Z_Free(menu->name);
 
-    if (ui_activeDropdown && ui_activeDropdown->spin.generic.parent == menu)
-        ui_activeDropdown = NULL;
-
-    if (menu->groups) {
-        for (int i = 0; i < menu->numGroups; i++) {
-            uiItemGroup_t *group = menu->groups[i];
-            if (!group)
-                continue;
-            Z_Free(group->name);
-            Z_Free(group->label);
-            Z_Free(group);
-        }
-        Z_Free(menu->groups);
-    }
-
-    Z_Free(menu->items);
-    Z_Free(menu->title);
-    Z_Free(menu->name);
-    Z_Free(menu);
+	delete menu;
 }
+
+#ifdef UNIT_TESTS
+static menuCommon_t menuTest_baseItem;
+static menuCommon_t menuTest_overlayItem;
+static menuFrameWork_t menuTest_base;
+static menuFrameWork_t menuTest_overlay;
+static bool menuTest_baseHandled;
+static bool menuTest_overlayHandled;
+
+/*
+=============
+MenuTest_ResetState
+
+Clears shared UI state before each regression check.
+=============
+*/
+static void MenuTest_ResetState(void)
+{
+	uis = {};
+	menuTest_base = menuFrameWork_t{};
+	menuTest_overlay = menuFrameWork_t{};
+	menuTest_baseItem = {};
+	menuTest_overlayItem = {};
+	menuTest_baseHandled = false;
+	menuTest_overlayHandled = false;
+
+	uis.scale = 1.0f;
+	uis.width = 640;
+	uis.height = 480;
+}
+
+/*
+=============
+MenuTest_BuildStack
+
+Constructs a two-layer stack with a non-modal overlay.
+=============
+*/
+static void MenuTest_BuildStack(void)
+{
+	MenuTest_ResetState();
+
+        Menu_AddItem(&menuTest_base, &menuTest_baseItem);
+	menuTest_base.modal = true;
+	menuTest_base.allowInputPassthrough = false;
+	menuTest_base.opacity = 1.0f;
+	menuTest_base.drawsBackdrop = false;
+	menuTest_baseItem.type = MTYPE_ACTION;
+	menuTest_baseItem.rect.x = 0;
+	menuTest_baseItem.rect.y = 0;
+	menuTest_baseItem.rect.width = 96;
+	menuTest_baseItem.rect.height = 96;
+	menuTest_baseItem.parent = &menuTest_base;
+
+        Menu_AddItem(&menuTest_overlay, &menuTest_overlayItem);
+	menuTest_overlay.modal = false;
+	menuTest_overlay.allowInputPassthrough = true;
+	menuTest_overlay.opacity = 1.0f;
+	menuTest_overlay.drawsBackdrop = false;
+	menuTest_overlayItem.type = MTYPE_ACTION;
+	menuTest_overlayItem.rect.x = 200;
+	menuTest_overlayItem.rect.y = 200;
+	menuTest_overlayItem.rect.width = 32;
+	menuTest_overlayItem.rect.height = 32;
+	menuTest_overlayItem.parent = &menuTest_overlay;
+
+	uis.layers[0] = &menuTest_base;
+	uis.layers[1] = &menuTest_overlay;
+	uis.menuDepth = 2;
+	uis.mouseCoords[0] = 8;
+	uis.mouseCoords[1] = 8;
+}
+
+/*
+=============
+MenuTest_OverlayKeydown
+
+Records key routing that reaches the overlay layer.
+=============
+*/
+static menuSound_t MenuTest_OverlayKeydown(menuFrameWork_t *, int)
+{
+	menuTest_overlayHandled = true;
+	return QMS_NOTHANDLED;
+}
+
+/*
+=============
+MenuTest_BaseKeydown
+
+Records key routing that reaches the base layer.
+=============
+*/
+static menuSound_t MenuTest_BaseKeydown(menuFrameWork_t *, int)
+{
+	menuTest_baseHandled = true;
+	return QMS_IN;
+}
+
+/*
+=============
+MenuTest_VerifyMouseRouting
+
+Ensures mouse focus skips non-modal overlays.
+=============
+*/
+static bool MenuTest_VerifyMouseRouting(void)
+{
+	MenuTest_BuildStack();
+	uis.activeMenu = uis.layers[uis.menuDepth - 1];
+	UI_DoHitTest();
+
+	return (menuTest_baseItem.flags & QMF_HASFOCUS) &&
+		!(menuTest_overlayItem.flags & QMF_HASFOCUS) &&
+		uis.activeMenu == &menuTest_base;
+}
+
+/*
+=============
+MenuTest_VerifyKeyRouting
+
+Ensures keys pass through non-modal overlays.
+=============
+*/
+static bool MenuTest_VerifyKeyRouting(void)
+{
+	MenuTest_BuildStack();
+	menuTest_overlay.keydown = MenuTest_OverlayKeydown;
+	menuTest_base.keydown = MenuTest_BaseKeydown;
+	uis.activeMenu = uis.layers[uis.menuDepth - 1];
+
+	UI_KeyEvent(K_ENTER, true);
+
+	return menuTest_overlayHandled && menuTest_baseHandled && uis.activeMenu == &menuTest_base;
+}
+
+/*
+=============
+main
+=============
+*/
+int main()
+{
+	if (!MenuTest_VerifyMouseRouting()) {
+		return 1;
+	}
+
+	if (!MenuTest_VerifyKeyRouting()) {
+		return 2;
+	}
+
+	return 0;
+}
+#endif
+

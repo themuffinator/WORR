@@ -208,15 +208,25 @@ client_src = [
 ]
 
 ui_src = [
+  'src/client/ui/MenuItem.cpp',
   'src/client/ui/demos.cpp',
+  'src/client/ui/menu_action.cpp',
+  'src/client/ui/menu_bitmap.cpp',
   'src/client/ui/menu.cpp',
+  'src/client/ui/menu_field.cpp',
+  'src/client/ui/menu_slider.cpp',
+  'src/client/ui/menu_static.cpp',
   'src/client/ui/playerconfig.cpp',
   'src/client/ui/playermodels.cpp',
   'src/client/ui/script.cpp',
   'src/client/ui/servers.cpp',
   'src/client/ui/mapdb.cpp',
+  'src/client/ui/renderer.cpp',
+  'src/client/ui/ux.cpp',
   'src/client/ui/ui.cpp',
   'src/client/ui/ui.hpp',
+  'src/client/ui/renderer.hpp',
+  'src/client/ui/ux.hpp',
 ]
 
 refresh_src = [
@@ -928,6 +938,16 @@ gamestate_test = executable('test_gamestate_configstrings',
   )
 
   test('effect_cull_visibility', effect_cull_test,
+    is_parallel: false,
+  )
+  menu_items_test = executable('test_menu_items',
+    ['tests/test_menu_items.cpp', 'src/client/ui/MenuItem.cpp'],
+    include_directories: ['inc', 'src'],
+    dependencies:          common_deps,
+    gnu_symbol_visibility: 'hidden',
+  )
+
+  test('menu_items_cpp', menu_items_test,
     is_parallel: false,
   )
   pmove_waterjump_test = executable('test_pmove_waterjump',

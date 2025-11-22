@@ -84,14 +84,126 @@ typedef enum {
     QMS_BEEP
 } menuSound_t;
 
-#define RCOLUMN_OFFSET  (CONCHAR_WIDTH * 2)
-#define LCOLUMN_OFFSET -RCOLUMN_OFFSET
+typedef enum uiLayoutUnit_e {
+	UI_UNIT_PIXELS,
+	UI_UNIT_PERCENT
+} uiLayoutUnit_t;
 
-#define GENERIC_SPACING(x)   ((x) + (x) / 4)
+typedef struct uiLayoutValue_s {
+	float value;
+	uiLayoutUnit_t unit;
+} uiLayoutValue_t;
 
-#define MENU_SPACING    GENERIC_SPACING(CONCHAR_HEIGHT)
+typedef struct uiLayoutRect_s {
+	uiLayoutValue_t x;
+	uiLayoutValue_t y;
+	uiLayoutValue_t width;
+	uiLayoutValue_t height;
+
+	int padding;
+	int spacing;
+} uiLayoutRect_t;
+
+typedef struct uiLayoutMetrics_s {
+	int screenWidth;
+	int screenHeight;
+	float dpiScale;
+
+	int charWidth;
+	int charHeight;
+
+	int genericSpacing;
+	int menuSpacing;
+	int listSpacing;
+	int listScrollbarWidth;
+	int columnOffset;
+	int columnPadding;
+} uiLayoutMetrics_t;
+
+typedef struct uiLayoutSplit_s {
+vrect_t bounds;
+vrect_t label;
+vrect_t field;
+} uiLayoutSplit_t;
+
+typedef enum uiColorRole_e {
+UI_COLOR_BACKGROUND,
+UI_COLOR_SURFACE,
+UI_COLOR_ACCENT,
+UI_COLOR_TEXT,
+UI_COLOR_HIGHLIGHT,
+UI_COLOR_MUTED,
+UI_COLOR_ROLE_COUNT
+} uiColorRole_t;
+
+typedef enum uiControlState_e {
+UI_STATE_DEFAULT,
+UI_STATE_HOVERED,
+UI_STATE_ACTIVE,
+UI_STATE_DISABLED,
+UI_STATE_FOCUSED,
+UI_STATE_COUNT
+} uiControlState_t;
+
+typedef struct uiPaletteEntry_s {
+color_t states[UI_STATE_COUNT];
+} uiPaletteEntry_t;
+
+typedef enum uiTypographyRole_e {
+UI_TYPO_BODY,
+UI_TYPO_LABEL,
+UI_TYPO_HEADING,
+UI_TYPO_MONOSPACE,
+UI_TYPO_ROLE_COUNT
+} uiTypographyRole_t;
+
+typedef struct uiTypographySpec_s {
+std::vector<qhandle_t> handles;
+int pixelHeight;
+} uiTypographySpec_t;
+
+typedef struct uiTypographySet_s {
+std::array<uiTypographySpec_t, UI_TYPO_ROLE_COUNT> roles;
+} uiTypographySet_t;
+
+namespace ui::ux {
+class SceneLayer;
+class Widget;
+class UIXSystem;
+class UIEvent;
+}
+
+	uiLayoutValue_t UI_Percent(float percent);
+	uiLayoutValue_t UI_Pixels(float pixels);
+int UI_ResolveLayoutValue(const uiLayoutValue_t *value, int reference);
+vrect_t UI_LayoutToPixels(const uiLayoutRect_t *rect, const vrect_t *parent);
+uiLayoutSplit_t UI_SplitLayoutRow(const uiLayoutRect_t *rect, const vrect_t *parent, float labelPercent);
+int UI_GenericSpacing(int base);
+int UI_MenuSpacing(void);
+int UI_ListSpacing(void);
+int UI_ListScrollbarWidth(void);
+int UI_ScaledFontSize(int base);
+float UI_ScaledPixels(float base);
+int UI_LeftColumnOffset(void);
+int UI_RightColumnOffset(void);
+int UI_ColumnPadding(void);
+int UI_CharWidth(void);
+int UI_CharHeight(void);
+#define RCOLUMN_OFFSET	UI_RightColumnOffset()
+#define LCOLUMN_OFFSET	UI_LeftColumnOffset()
+#define GENERIC_SPACING(x)	UI_GenericSpacing(x)
+#define MENU_SPACING	UI_MenuSpacing()
+#define MLIST_SPACING	UI_ListSpacing()
+#define MLIST_SCROLLBAR_WIDTH	UI_ListScrollbarWidth()
 
 #define DOUBLE_CLICK_DELAY    300
+
+#include <array>
+#include <memory>
+#include <string>
+#include <vector>
+
+class MenuItem;
 
 #define UI_IsItemSelectable(item) \
     ((item)->type != MTYPE_SEPARATOR && \
@@ -102,43 +214,49 @@ struct uiItemGroup_s;
 struct uiConditionalBlock_s;
 
 typedef struct menuFrameWork_s {
-    list_t  entry;
+	list_t	entry;
 
-    char    *name, *title, *status;
+	char		*name, *title, *status;
 
-    void    **items;
-    int     nitems;
+	std::vector<void *> items;
 
-    struct uiItemGroup_s   **groups;
-    int                     numGroups;
+	std::vector<std::unique_ptr<uiItemGroup_t>> groups;
+	int			numGroups;
 
-    bool compact;
-    bool transparent;
-    bool keywait;
+	bool compact;
+	bool transparent;
+	bool keywait;
 
-    qhandle_t image;
-    color_t color;
-    int y1, y2;
+	qhandle_t image;
+	color_t color;
+	int y1, y2;
 
-    int mins[2];
-    int maxs[2];
+	int mins[2];
+	int maxs[2];
 
-    qhandle_t banner;
-    vrect_t banner_rc;
+	qhandle_t banner;
+	vrect_t banner_rc;
 
-    qhandle_t plaque;
-    vrect_t plaque_rc;
+	qhandle_t plaque;
+	vrect_t plaque_rc;
 
-    qhandle_t logo;
-    vrect_t logo_rc;
+	qhandle_t logo;
+	vrect_t logo_rc;
 
-    bool (*push)(struct menuFrameWork_s *);
-    void (*pop)(struct menuFrameWork_s *);
-    void (*expose)(struct menuFrameWork_s *);
-    void (*draw)(struct menuFrameWork_s *);
-    void (*size)(struct menuFrameWork_s *);
-    void (*free)(struct menuFrameWork_s *);
-    menuSound_t (*keydown)(struct menuFrameWork_s *, int);
+	bool modal;
+	bool allowInputPassthrough;
+	bool drawsBackdrop;
+	float opacity;
+
+	std::vector<std::unique_ptr<MenuItem>> itemsCpp;
+
+	bool (*push)(struct menuFrameWork_s *);
+	void (*pop)(struct menuFrameWork_s *);
+	void (*expose)(struct menuFrameWork_s *);
+	void (*draw)(struct menuFrameWork_s *);
+	void (*size)(struct menuFrameWork_s *);
+	void (*free)(struct menuFrameWork_s *);
+	menuSound_t (*keydown)(struct menuFrameWork_s *, int);
 } menuFrameWork_t;
 
 typedef struct menuCommon_s {
@@ -151,7 +269,7 @@ typedef struct menuCommon_s {
     char *status;
 
     int x, y;
-    int width, height;
+	int width, height;
 
     int flags;
     int uiFlags;
@@ -170,7 +288,7 @@ typedef struct {
     menuCommon_t generic;
     inputField_t field;
     cvar_t *cvar;
-    int width;
+	int width;
 } menuField_t;
 
 #define SLIDER_RANGE 10
@@ -188,11 +306,10 @@ typedef struct {
 
 #define MAX_COLUMNS     8
 
-#define MLIST_SPACING           GENERIC_SPACING(CONCHAR_HEIGHT)
 #define MLIST_BORDER_WIDTH      1
-#define MLIST_SCROLLBAR_WIDTH   GENERIC_SPACING(CONCHAR_WIDTH)
 #define MLIST_PRESTEP           3
-#define MLIST_PADDING           (MLIST_PRESTEP*2)
+
+	int UI_ListPadding(void);
 
 #define MLF_HEADER      BIT(0)
 #define MLF_SCROLLBAR   BIT(1)
@@ -200,7 +317,7 @@ typedef struct {
 
 typedef struct {
     const char *name;
-    int width;
+	int width;
     int uiFlags;
 } menuListColumn_t;
 
@@ -369,11 +486,11 @@ typedef struct {
     char *directory;
 } playerModelInfo_t;
 
-void PlayerModel_Load(void);
-void PlayerModel_Free(void);
+	void PlayerModel_Load(void);
+	void PlayerModel_Free(void);
 
-void ImageSpinControl_Pop(menuSpinControl_t *s);
-void ImageSpinControl_Init(menuSpinControl_t *s);
+	void ImageSpinControl_Pop(menuSpinControl_t *s);
+	void ImageSpinControl_Init(menuSpinControl_t *s);
 
 #define MAX_MENU_DEPTH    8
 
@@ -386,8 +503,9 @@ void ImageSpinControl_Init(menuSpinControl_t *s);
 typedef struct {
     bool initialized;
     unsigned realtime;
-    int width, height; // scaled
-    float scale;
+	int width, height; // scaled
+	float scale;
+	uiLayoutMetrics_t layout;
     int menuDepth;
     menuFrameWork_t *layers[MAX_MENU_DEPTH];
     menuFrameWork_t *activeMenu;
@@ -400,21 +518,67 @@ typedef struct {
     playerModelInfo_t pmi[MAX_PLAYERMODELS];
     char weaponModel[32];
 
-    qhandle_t backgroundHandle;
-    qhandle_t fontHandle;
-    qhandle_t cursorHandle;
-    int cursorWidth, cursorHeight;
+qhandle_t backgroundHandle;
+qhandle_t fontHandle;
+qhandle_t fallbackFontHandle;
+qhandle_t cursorHandle;
+float cursorScale;
+int cursorWidth, cursorHeight;
+int cursorDrawWidth, cursorDrawHeight;
+int fontPixelHeight;
 
-    qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
+qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
+
+std::array<uiPaletteEntry_t, UI_COLOR_ROLE_COUNT> palette;
+std::array<std::vector<std::string>, UI_TYPO_ROLE_COUNT> typographyFonts;
+std::array<int, UI_TYPO_ROLE_COUNT> typographyPixelHeights;
+std::array<std::vector<qhandle_t>, UI_TYPO_ROLE_COUNT> typographyHandles;
+uiTypographySet_t typography;
 
     struct {
-        color_t background;
-        color_t normal;
-        color_t active;
-        color_t selection;
-        color_t disabled;
-    } color;
+color_t background;
+color_t normal;
+color_t active;
+color_t selection;
+color_t disabled;
+} color;
 } uiStatic_t;
+
+color_t UI_ColorForRole(uiColorRole_t role, uiControlState_t state);
+qhandle_t UI_FontForRole(uiTypographyRole_t role);
+int UI_FontPixelHeightForRole(uiTypographyRole_t role);
+
+class UiManager {
+	public:
+		UiManager();
+		
+		void Initialize();
+		void Shutdown();
+void SyncPalette(const uiStatic_t &state);
+void SyncTypography(const uiTypographySet_t &typography);
+void SyncLayout(const uiLayoutMetrics_t &metrics);
+void SyncLegacyMenus(menuFrameWork_t **stack, int depth);
+		void RoutePointerEvent(const vrect_t &cursorRegion);
+		void RouteNavigationKey(int key);
+		std::shared_ptr<ui::ux::Widget> MenuRoot() const;
+		std::shared_ptr<ui::ux::Widget> OverlayRoot() const;
+		std::shared_ptr<ui::ux::Widget> HudRoot() const;
+
+	private:
+		void EnsureLayers();
+		void LayoutRoot(const std::shared_ptr<ui::ux::Widget> &root, const uiLayoutMetrics_t &metrics) const;
+		std::vector<std::shared_ptr<ui::ux::SceneLayer>> OrderedLayers() const;
+		
+		ui::ux::UIXSystem *m_system;
+		std::shared_ptr<ui::ux::SceneLayer> m_menuLayer;
+		std::shared_ptr<ui::ux::SceneLayer> m_overlayLayer;
+		std::shared_ptr<ui::ux::SceneLayer> m_hudLayer;
+		std::shared_ptr<ui::ux::Widget> m_menuRoot;
+		std::shared_ptr<ui::ux::Widget> m_overlayRoot;
+		std::shared_ptr<ui::ux::Widget> m_hudRoot;
+	};
+
+UiManager &UI_GetManager(void);
 
 extern uiStatic_t   uis;
 
@@ -422,50 +586,65 @@ extern list_t       ui_menus;
 
 extern cvar_t       *ui_debug;
 
-void        UI_PushMenu(menuFrameWork_t *menu);
-void        UI_ForceMenuOff(void);
-void        UI_PopMenu(void);
-void        UI_StartSound(menuSound_t sound);
-bool        UI_DoHitTest(void);
-bool        UI_CursorInRect(const vrect_t *rect);
-void        *UI_FormatColumns(int extrasize, ...) q_sentinel;
-char        *UI_GetColumn(char *s, int n);
-void        UI_DrawString(int x, int y, int flags, color_t color, const char *string);
-void        UI_DrawChar(int x, int y, int flags, color_t color, int ch);
-void        UI_DrawRect8(const vrect_t *rect, int border, int c);
-void        UI_StringDimensions(vrect_t *rc, int flags, const char *string);
+typedef enum uiScriptContext_e {
+	UI_SCRIPT_MAIN,
+	UI_SCRIPT_INGAME
+} uiScriptContext_t;
 
-void        UI_LoadScript(void);
+	void	UI_InitScriptController(void);
+	void	UI_SyncMenuContext(void);
+	void	UI_SetMenuContext(const char *context);
+	const char	*UI_ActiveMenuContextName(void);
+	void	UI_RequestMenuReload(void);
+
+	void	UI_ClearMenus(void);
+	void	UI_RegisterBuiltinMenus(void);
+	void	UI_RefreshFonts(void);
+
+	void        UI_PushMenu(menuFrameWork_t *menu);
+	void        UI_ForceMenuOff(void);
+	void        UI_PopMenu(void);
+	void        UI_StartSound(menuSound_t sound);
+	bool        UI_DoHitTest(void);
+	bool        UI_CursorInRect(const vrect_t *rect);
+	void        *UI_FormatColumns(int extrasize, ...) q_sentinel;
+char        *UI_GetColumn(char *s, int n);
+	void        UI_DrawString(int x, int y, int flags, color_t color, const char *string);
+	void        UI_DrawChar(int x, int y, int flags, color_t color, int ch);
+	void        UI_DrawRect8(const vrect_t *rect, int border, int c);
+	void        UI_StringDimensions(vrect_t *rc, int flags, const char *string);
+
+	void        UI_LoadScript(void);
 menuFrameWork_t *UI_FindMenu(const char *name);
 
-void        Menu_Init(menuFrameWork_t *menu);
-void        Menu_Size(menuFrameWork_t *menu);
-void        Menu_Draw(menuFrameWork_t *menu);
-void        Menu_AddItem(menuFrameWork_t *menu, void *item);
+	void        Menu_Init(menuFrameWork_t *menu);
+	void        Menu_Size(menuFrameWork_t *menu);
+	void        Menu_Draw(menuFrameWork_t *menu);
+	void        Menu_AddItem(menuFrameWork_t *menu, void *item);
 menuSound_t Menu_SelectItem(menuFrameWork_t *menu);
 menuSound_t Menu_SlideItem(menuFrameWork_t *menu, int dir);
 menuSound_t Menu_KeyEvent(menuCommon_t *item, int key);
 menuSound_t Menu_CharEvent(menuCommon_t *item, int key);
 menuSound_t Menu_MouseMove(menuCommon_t *item);
 menuSound_t Menu_Keydown(menuFrameWork_t *menu, int key);
-void        Menu_SetFocus(menuCommon_t *item);
+	void        Menu_SetFocus(menuCommon_t *item);
 menuSound_t     Menu_AdjustCursor(menuFrameWork_t *menu, int dir);
 menuCommon_t    *Menu_ItemAtCursor(menuFrameWork_t *menu);
 menuCommon_t    *Menu_HitTest(menuFrameWork_t *menu);
-void        MenuList_Init(menuList_t *l);
-void        MenuList_SetValue(menuList_t *l, int value);
-void        MenuList_Sort(menuList_t *l, int offset,
+	void        MenuList_Init(menuList_t *l);
+	void        MenuList_SetValue(menuList_t *l, int value);
+	void        MenuList_Sort(menuList_t *l, int offset,
                           int (*cmpfunc)(const void *, const void *));
-void SpinControl_Init(menuSpinControl_t *s);
-bool        Menu_Push(menuFrameWork_t *menu);
-void        Menu_Pop(menuFrameWork_t *menu);
-void        Menu_Free(menuFrameWork_t *menu);
+	void SpinControl_Init(menuSpinControl_t *s);
+	bool        Menu_Push(menuFrameWork_t *menu);
+	void        Menu_Pop(menuFrameWork_t *menu);
+	void        Menu_Free(menuFrameWork_t *menu);
 
-void M_Menu_PlayerConfig(void);
-void M_Menu_Demos(void);
-void M_Menu_Servers(void);
+	void M_Menu_PlayerConfig(void);
+	void M_Menu_Demos(void);
+	void M_Menu_Servers(void);
 
-void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
-void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
-void UI_MapDB_Init(void);
-void UI_MapDB_Shutdown(void);
+	void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
+	void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
+        void UI_MapDB_Init(void);
+        void UI_MapDB_Shutdown(void);
