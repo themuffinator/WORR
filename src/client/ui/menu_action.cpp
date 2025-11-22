@@ -11,12 +11,13 @@ void Action_Init(menuAction_t *a)
 {
 	Q_assert(a->generic.name);
 
-	if ((a->generic.uiFlags & UI_CENTER) != UI_CENTER) {
-		a->generic.x += RCOLUMN_OFFSET;
-	}
+	uiLayoutRect_t row{};
+	row.x = UI_Pixels(static_cast<float>(a->generic.x));
+	row.y = UI_Pixels(static_cast<float>(a->generic.y));
+	row.width = UI_Percent(0.6f);
+	row.height = UI_Pixels(static_cast<float>(UI_CharHeight()));
 
-	a->generic.rect.x = a->generic.x;
-	a->generic.rect.y = a->generic.y;
+	a->generic.rect = UI_LayoutToPixels(&row, NULL);
 	UI_StringDimensions(&a->generic.rect, a->generic.uiFlags, a->generic.name);
 }
 
