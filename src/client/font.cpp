@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -28,9 +29,84 @@ static const ftfont_t* SCR_FTFontForHandle(qhandle_t handle);
 #endif
 
 namespace {
-        constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
-	constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
-	constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+constexpr const char* SCR_LEGACY_FONT = "conchars.pcx";
+constexpr char SCR_PATH_SEPARATOR_UNIX = '/';
+constexpr char SCR_PATH_SEPARATOR_WINDOWS = '\x5c';
+}
+
+static std::unordered_map<qhandle_t, scr_font_metrics_t> scr_fontMetricsCache;
+
+/*
+=============
+SCR_ComputeFontMetrics
+
+Builds a metrics snapshot for the provided renderer font handle.
+=============
+*/
+static scr_font_metrics_t SCR_ComputeFontMetrics(qhandle_t font)
+{
+	scr_font_metrics_t metrics{};
+
+	if (!font)
+		return metrics;
+
+	metrics.lineHeight = SCR_FontLineHeight(1, font);
+
+#if USE_FREETYPE
+	if (SCR_ShouldUseFreeType(font)) {
+		if (const ftfont_t* ftFont = SCR_FTFontForHandle(font)) {
+			if (ftFont->face && ftFont->face->size) {
+				const FT_Size_Metrics sizeMetrics = ftFont->face->size->metrics;
+				const int ascender = static_cast<int>(sizeMetrics.ascender >> 6);
+				const int descender = static_cast<int>((-sizeMetrics.descender) >> 6);
+				const int capHeight = ascender + descender;
+
+				if (capHeight > 0)
+					metrics.capHeight = capHeight;
+				else if (sizeMetrics.y_ppem > 0)
+					metrics.capHeight = sizeMetrics.y_ppem;
+			}
+		}
+	}
+#endif
+
+	if (!metrics.capHeight)
+		metrics.capHeight = metrics.lineHeight;
+
+	return metrics;
+}
+
+/*
+=============
+SCR_GetCachedFontMetrics
+
+Returns cached font metrics for the provided renderer handle, computing them on demand.
+=============
+*/
+scr_font_metrics_t SCR_GetCachedFontMetrics(qhandle_t font)
+{
+	const auto it = scr_fontMetricsCache.find(font);
+	if (it != scr_fontMetricsCache.end())
+		return it->second;
+
+	scr_font_metrics_t metrics = SCR_ComputeFontMetrics(font);
+	scr_fontMetricsCache[font] = metrics;
+	return metrics;
+}
+
+/*
+=============
+SCR_InvalidateFontMetrics
+
+Removes cached metrics for a renderer font handle.
+=============
+*/
+void SCR_InvalidateFontMetrics(qhandle_t font)
+{
+	if (!font)
+		return;
+
+	scr_fontMetricsCache.erase(font);
 }
 
 /*
@@ -183,10 +259,11 @@ static void SCR_FreeFreeTypeFonts(void)
 		R_ReleaseFreeTypeFont(&entry.second.renderInfo);
 	}
 
-	scr.freetype.fonts.clear();
-	scr.freetype.handleLookup.clear();
-	scr.freetype.activeFontKey.clear();
-	scr.freetype.activeFontHandle = 0;
+scr.freetype.fonts.clear();
+scr.freetype.handleLookup.clear();
+scr.freetype.activeFontKey.clear();
+scr.freetype.activeFontHandle = 0;
+	scr_fontMetricsCache.clear();
 }
 
 /*
@@ -253,10 +330,10 @@ static bool SCR_LoadFreeTypeFont(const std::string& cacheKey, const std::string&
 		if (inserted)
 			R_AcquireFreeTypeFont(handle, &it->second.renderInfo);
 	}
-
 	scr.freetype.handleLookup[handle] = cacheKey;
 	scr.freetype.activeFontKey = cacheKey;
 	scr.freetype.activeFontHandle = handle;
+	SCR_InvalidateFontMetrics(handle);
 	return true;
 }
 
@@ -1336,4 +1413,6 @@ void SCR_ShutdownFontSystem(void)
 	scr.freetype.activeFontKey.clear();
 	scr.freetype.activeFontHandle = 0;
 #endif
+	scr_fontMetricsCache.clear();
 }
+
