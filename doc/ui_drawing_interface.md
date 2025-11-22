@@ -57,15 +57,32 @@ Holds scaling factors and theme lookup hooks for draw calls.
 =============
 */
 typedef struct UIDrawContext {
-	float dpi_scale;     /* device pixel ratio */
-	float layout_scale;  /* user or viewport zoom */
+        float dpi_scale;     /* device pixel ratio */
+        float layout_scale;  /* user or viewport zoom */
 
 	/* Theme resolvers supplied by the embedding UI system */
 	const UIColor *(*resolve_color)(const UIPaletteKey *key, UIState state);
 	float (*resolve_stroke_width)(const UIPaletteKey *key, UIState state);
-	const UIFont *(*resolve_font)(const UITypographyToken *token, UIState state, float dpi_scale, float layout_scale);
+        const UIFont *(*resolve_font)(const UITypographyToken *token, UIState state, float dpi_scale, float layout_scale);
 } UIDrawContext;
 ```
+
+### Palette roles with state variants
+- Palette entries are defined as **roles** so fill, stroke, text, and icon lookups can share names such as `ui.surface`, `ui.text.primary`, and `ui.accent`.
+- Each role carries a **normal** value and optional overrides for `hover`, `active`, and `disabled` states. Roles omit overrides they do not need; lookups then fall back to the normal entry.
+- Color values are stored as floats to keep interpolation and alpha modulation lossless before converting to renderer-native formats.
+
+### Typography tokens and font recipes
+- Typography tokens provide a base pixel size plus ratios for line height and letter spacing. State overrides can swap font family/weight and adjust the scales, enabling focused or disabled variants without duplicating the token catalog.
+- Tokens are keyed (e.g., `ui.label.sm`, `ui.button.md`) and map to recipes that are expanded using the current DPI/layout scales. A typography-specific `type_scale` multiplies the combined DPI/layout factor, allowing readable type ramping without inflating icon sizes.
+
+### DPI and layout scaling rules
+- `dpi_scale` tracks the device pixel ratio; `layout_scale` captures user zoom or viewport scaling. Both feed into size calculations, while a `min_dpi_scale` guard clamps tiny ratios during window downscaling.
+- Layout helpers use `dpi_scale * layout_scale` to size borders, padding, and iconography. Typography helpers use the same product plus `type_scale` to bias font sizes separately from UI chrome.
+
+## State-aware lookup resolution
+- Color lookups request a palette role plus the current `UIState`. If that role supplies an override for the requested state, it is used; otherwise the `normal` entry is returned. This preserves predictable fallback behavior when some states share the same appearance.
+- Typography resolution follows the same pattern: use the requested state's override when present, else fall back to the normal variant. The resolved recipe multiplies `size_px`, `line_height_px`, and `letter_spacing_px` by the combined DPI/layout scale and `type_scale` so per-state tweaks stay proportional at any zoom level.
 
 ## Drawing Operations
 ```c
