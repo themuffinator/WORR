@@ -166,6 +166,13 @@ typedef struct uiTypographySet_s {
 std::array<uiTypographySpec_t, UI_TYPO_ROLE_COUNT> roles;
 } uiTypographySet_t;
 
+namespace ui::ux {
+class SceneLayer;
+class Widget;
+class UIXSystem;
+class UIEvent;
+}
+
 	uiLayoutValue_t UI_Percent(float percent);
 	uiLayoutValue_t UI_Pixels(float pixels);
 int UI_ResolveLayoutValue(const uiLayoutValue_t *value, int reference);
@@ -536,6 +543,37 @@ color_t disabled;
 color_t UI_ColorForRole(uiColorRole_t role, uiControlState_t state);
 qhandle_t UI_FontForRole(uiTypographyRole_t role);
 int UI_FontPixelHeightForRole(uiTypographyRole_t role);
+
+class UiManager {
+	public:
+		UiManager();
+		
+		void Initialize();
+		void Shutdown();
+		void SyncPalette(const uiStatic_t &state);
+		void SyncLayout(const uiLayoutMetrics_t &metrics);
+		void SyncLegacyMenus(menuFrameWork_t **stack, int depth);
+		void RoutePointerEvent(const vrect_t &cursorRegion);
+		void RouteNavigationKey(int key);
+		std::shared_ptr<ui::ux::Widget> MenuRoot() const;
+		std::shared_ptr<ui::ux::Widget> OverlayRoot() const;
+		std::shared_ptr<ui::ux::Widget> HudRoot() const;
+
+	private:
+		void EnsureLayers();
+		void LayoutRoot(const std::shared_ptr<ui::ux::Widget> &root, const uiLayoutMetrics_t &metrics) const;
+		std::vector<std::shared_ptr<ui::ux::SceneLayer>> OrderedLayers() const;
+		
+		ui::ux::UIXSystem *m_system;
+		std::shared_ptr<ui::ux::SceneLayer> m_menuLayer;
+		std::shared_ptr<ui::ux::SceneLayer> m_overlayLayer;
+		std::shared_ptr<ui::ux::SceneLayer> m_hudLayer;
+		std::shared_ptr<ui::ux::Widget> m_menuRoot;
+		std::shared_ptr<ui::ux::Widget> m_overlayRoot;
+		std::shared_ptr<ui::ux::Widget> m_hudRoot;
+	};
+
+UiManager &UI_GetManager(void);
 
 extern uiStatic_t   uis;
 

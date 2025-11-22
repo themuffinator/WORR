@@ -34,31 +34,431 @@ static cvar_t    *ui_font_fallback;
 static cvar_t    *ui_font_size;
 static cvar_t    *ui_cursor_theme;
 static cvar_t    *ui_color_theme;
-static std::shared_ptr<ui::ux::SceneLayer> ui_scene_layer;
-static std::shared_ptr<ui::ux::Widget> ui_root_widget;
+static UiManager ui_manager;
 
 static void UI_UpdateLayoutMetrics(void);
 static void UI_UpdateTypographySet(void);
 static void UI_PopulateDefaultPalette(bool lightTheme);
 static void UI_UpdateLegacyColorsFromPalette(void);
-static void UI_SyncUxPalette(void);
-static void UI_SyncUxLayout(void);
+static int UI_KeyForNavigationDirection(ui::ux::NavigationDirection direction);
 
-	/*
+/*
+=============
+	UI_GetManager
+
+Returns the global UI manager instance.
+=============
+*/
+UiManager &UI_GetManager(void)
+{
+	return ui_manager;
+}
+
+/*
+=============
+LegacyMenuWidget
+
+Wraps a legacy menu frame in a UIX widget container.
+=============
+*/
+class LegacyMenuWidget : public ui::ux::Widget {
+	public:
+	LegacyMenuWidget(menuFrameWork_t *menu);
+
+	void OnLayout(ui::ux::LayoutEngine &engine, const vrect_t &parentBounds) override;
+	void OnEvent(const ui::ux::UIEvent &event) override;
+	menuFrameWork_t *Menu() const;
+
+	private:
+	menuFrameWork_t *m_menu;
+};
+
+/*
+=============
+UiManager::UiManager
+
+Builds a UI manager bound to the shared UIX system.
+=============
+*/
+UiManager::UiManager()
+: m_system(&ui::ux::GetSystem())
+{
+}
+
+/*
+=============
+UiManager::Initialize
+
+Sets up the base scene layers and applies the current layout metrics.
+=============
+*/
+void UiManager::Initialize()
+{
+	EnsureLayers();
+	SyncLayout(uis.layout);
+}
+
+/*
+=============
+UiManager::Shutdown
+
+Clears scene layers and detaches all UI roots.
+=============
+*/
+void UiManager::Shutdown()
+{
+	if (!m_system) {
+	return;
+	}
+		m_system->Graph().Clear();
+	m_menuLayer.reset();
+	m_overlayLayer.reset();
+	m_hudLayer.reset();
+	m_menuRoot.reset();
+	m_overlayRoot.reset();
+	m_hudRoot.reset();
+}
+
+/*
+=============
+UiManager::SyncPalette
+
+Copies the resolved palette into the UIX theme context.
+=============
+*/
+void UiManager::SyncPalette(const uiStatic_t &state)
+{
+	if (!m_system) {
+	return;
+}
+
+	std::vector<uiPaletteEntry_t> palette;
+	palette.reserve(UI_COLOR_ROLE_COUNT);
+	for (const auto &entry : state.palette) {
+	palette.push_back(entry);
+}
+
+	m_system->Theme().SetPalette(std::move(palette));
+}
+
+/*
+=============
+UiManager::SyncLayout
+
+Updates layout metrics and reapplies sizing to all managed roots.
+=============
+*/
+void UiManager::SyncLayout(const uiLayoutMetrics_t &metrics)
+{
+	if (!m_system) {
+	return;
+}
+
+	m_system->UpdateLayout(metrics);
+	EnsureLayers();
+	LayoutRoot(m_menuRoot, metrics);
+	LayoutRoot(m_overlayRoot, metrics);
+	LayoutRoot(m_hudRoot, metrics);
+}
+
+/*
+=============
+UiManager::SyncLegacyMenus
+
+Rebuilds the menu layer widget tree from the legacy menu stack.
+=============
+*/
+void UiManager::SyncLegacyMenus(menuFrameWork_t **stack, int depth)
+{
+	EnsureLayers();
+	if (!m_menuRoot) {
+	return;
+}
+
+	std::vector<std::shared_ptr<ui::ux::Widget>> &children = m_menuRoot->Children();
+	children.clear();
+
+	for (int i = 0; i < depth; i++) {
+	menuFrameWork_t *menu = stack[i];
+	if (!menu) {
+	continue;
+}
+
+	std::shared_ptr<LegacyMenuWidget> widget = std::make_shared<LegacyMenuWidget>(menu);
+	children.push_back(widget);
+}
+}
+
+/*
+=============
+UiManager::RoutePointerEvent
+
+Sends pointer movement to all roots using the UIX interaction controller.
+=============
+*/
+void UiManager::RoutePointerEvent(const vrect_t &cursorRegion)
+{
+	if (!m_system) {
+	return;
+}
+
+	ui::ux::UIEvent event(ui::ux::EventType::PointerMove, cursorRegion);
+	for (const auto &layer : OrderedLayers()) {
+	if (layer && layer->Root()) {
+	m_system->Interaction().RouteEvent(event, layer->Root());
+}
+}
+}
+
+/*
+=============
+UiManager::RouteNavigationKey
+
+Maps legacy key presses into UIX navigation events while preserving layering.
+=============
+*/
+void UiManager::RouteNavigationKey(int key)
+{
+	if (!m_system) {
+	return;
+	}
+		ui::ux::EventType type = ui::ux::EventType::Navigate;
+	ui::ux::NavigationDirection direction = ui::ux::NavigationDirection::Next;
+		switch (key) {
+	case K_TAB:
+	direction = ui::ux::NavigationDirection::Next;
+	break;
+	case K_UPARROW:
+	direction = ui::ux::NavigationDirection::Up;
+	break;
+	case K_DOWNARROW:
+	direction = ui::ux::NavigationDirection::Down;
+	break;
+	case K_LEFTARROW:
+	direction = ui::ux::NavigationDirection::Left;
+	break;
+	case K_RIGHTARROW:
+	direction = ui::ux::NavigationDirection::Right;
+	break;
+	case K_ENTER:
+	type = ui::ux::EventType::Activate;
+	break;
+	default:
+	return;
+	}
+		ui::ux::UIEvent event(type, direction, { uis.mouseCoords[0], uis.mouseCoords[1], 1, 1 });
+	for (const auto &layer : OrderedLayers()) {
+	if (layer && layer->Root()) {
+	m_system->Interaction().RouteEvent(event, layer->Root());
+	}
+}
+}
+
+/*
+=============
+UiManager::MenuRoot
+
+Returns the menu root widget.
+=============
+*/
+std::shared_ptr<ui::ux::Widget> UiManager::MenuRoot() const
+	{
+	return m_menuRoot;
+	}
+
+/*
+=============
+UiManager::OverlayRoot
+
+Returns the overlay root widget.
+=============
+*/
+std::shared_ptr<ui::ux::Widget> UiManager::OverlayRoot() const
+	{
+	return m_overlayRoot;
+	}
+
+/*
+=============
+UiManager::HudRoot
+
+Returns the HUD root widget.
+=============
+*/
+std::shared_ptr<ui::ux::Widget> UiManager::HudRoot() const
+	{
+	return m_hudRoot;
+	}
+
+/*
+=============
+UiManager::EnsureLayers
+
+Creates base scene graph layers if they do not already exist.
+=============
+*/
+void UiManager::EnsureLayers()
+{
+	if (!m_system) {
+	return;
+	}
+		if (!m_menuLayer) {
+	m_menuLayer = std::make_shared<ui::ux::SceneLayer>("menu", 10);
+	m_menuRoot = std::make_shared<ui::ux::Widget>("menu-root", ui::ux::WidgetType::Container);
+	m_menuLayer->SetRoot(m_menuRoot);
+	m_system->Graph().AddLayer(m_menuLayer);
+	}
+		if (!m_overlayLayer) {
+	m_overlayLayer = std::make_shared<ui::ux::SceneLayer>("overlay", 20);
+	m_overlayRoot = std::make_shared<ui::ux::Widget>("overlay-root", ui::ux::WidgetType::Container);
+	m_overlayLayer->SetRoot(m_overlayRoot);
+	m_system->Graph().AddLayer(m_overlayLayer);
+	}
+		if (!m_hudLayer) {
+	m_hudLayer = std::make_shared<ui::ux::SceneLayer>("hud", 0);
+	m_hudRoot = std::make_shared<ui::ux::Widget>("hud-root", ui::ux::WidgetType::Container);
+	m_hudLayer->SetRoot(m_hudRoot);
+	m_system->Graph().AddLayer(m_hudLayer);
+	}
+}
+
+/*
+=============
+UiManager::LayoutRoot
+
+Applies full-screen layout constraints to the provided root widget.
+=============
+*/
+void UiManager::LayoutRoot(const std::shared_ptr<ui::ux::Widget> &root, const uiLayoutMetrics_t &metrics) const
+{
+	if (!root || !m_system) {
+	return;
+	}
+		root->SetLayout(ui::ux::LayoutRect(ui::ux::LayoutValue::Pixels(0.0f), ui::ux::LayoutValue::Pixels(0.0f),
+	ui::ux::LayoutValue::Percent(1.0f), ui::ux::LayoutValue::Percent(1.0f)));
+		vrect_t bounds{};
+	bounds.x = 0;
+	bounds.y = 0;
+	bounds.width = metrics.screenWidth;
+	bounds.height = metrics.screenHeight;
+		root->OnLayout(m_system->Layout(), bounds);
+}
+
+/*
+=============
+UiManager::OrderedLayers
+
+Returns the scene graph layers sorted by z-index.
+=============
+*/
+std::vector<std::shared_ptr<ui::ux::SceneLayer>> UiManager::OrderedLayers() const
+{
+	if (!m_system) {
+	return {};
+	}
+		return m_system->Graph().OrderedLayers();
+}
+
+/*
+=============
+LegacyMenuWidget::LegacyMenuWidget
+
+Initializes a wrapper for a legacy menu.
+=============
+*/
+LegacyMenuWidget::LegacyMenuWidget(menuFrameWork_t *menu)
+	: Widget(menu ? menu->name : "legacy-menu", ui::ux::WidgetType::Container), m_menu(menu)
+	{
+	}
+
+/*
+=============
+LegacyMenuWidget::OnLayout
+
+Inherits the parent bounds to mirror legacy full-screen menus.
+=============
+*/
+void LegacyMenuWidget::OnLayout(ui::ux::LayoutEngine &engine, const vrect_t &parentBounds)
+{
+	m_bounds = parentBounds;
+	ui::ux::Widget::OnLayout(engine, parentBounds);
+	}
+		/*
 	=============
-	UI_Percent
-
-	Builds a percentage-based layout value.
+	LegacyMenuWidget::OnEvent
+		Forwards navigation and activation into the legacy menu dispatchers.
 	=============
 	*/
-	uiLayoutValue_t UI_Percent(float percent)
+	void LegacyMenuWidget::OnEvent(const ui::ux::UIEvent &event)
 	{
-	uiLayoutValue_t value;
+	if (!m_menu) {
+	return;
+	}
+		switch (event.Type()) {
+	case ui::ux::EventType::Navigate:
+	UI_DispatchKeyToLayers(UI_KeyForNavigationDirection(event.Direction()));
+	break;
+	case ui::ux::EventType::Activate:
+	UI_DispatchKeyToLayers(K_ENTER);
+	break;
+	default:
+	ui::ux::Widget::OnEvent(event);
+	break;
+}
+}
 
-	value.value = percent;
-	value.unit = UI_UNIT_PERCENT;
+/*
+=============
+LegacyMenuWidget::Menu
 
-	return value;
+Returns the underlying legacy menu.
+=============
+*/
+menuFrameWork_t *LegacyMenuWidget::Menu() const
+{
+	return m_menu;
+	}
+
+/*
+=============
+UI_KeyForNavigationDirection
+
+Maps a UIX navigation direction back to a legacy key code.
+=============
+*/
+static int UI_KeyForNavigationDirection(ui::ux::NavigationDirection direction)
+{
+	switch (direction) {
+	case ui::ux::NavigationDirection::Up:
+	return K_UPARROW;
+	case ui::ux::NavigationDirection::Down:
+	return K_DOWNARROW;
+	case ui::ux::NavigationDirection::Left:
+	return K_LEFTARROW;
+	case ui::ux::NavigationDirection::Right:
+	return K_RIGHTARROW;
+	case ui::ux::NavigationDirection::Previous:
+	return K_TAB;
+	case ui::ux::NavigationDirection::Next:
+	default:
+	return K_TAB;
+}
+}
+/*
+=============
+UI_Percent
+
+Builds a percentage-based layout value.
+=============
+*/
+uiLayoutValue_t UI_Percent(float percent)
+{
+uiLayoutValue_t value;
+
+value.value = percent;
+value.unit = UI_UNIT_PERCENT;
+
+return value;
 }
 
 /*
@@ -71,11 +471,9 @@ Builds a pixel-based layout value.
 uiLayoutValue_t UI_Pixels(float pixels)
 {
 	uiLayoutValue_t value;
-	
-	value.value = pixels;
+		value.value = pixels;
 	value.unit = UI_UNIT_PIXELS;
-	
-	return value;
+		return value;
 }
 
 /*
@@ -90,8 +488,7 @@ int UI_ResolveLayoutValue(const uiLayoutValue_t *value, int reference)
 	if (!value) {
 	return 0;
 	}
-	
-	switch (value->unit) {
+		switch (value->unit) {
 	case UI_UNIT_PERCENT:
 	return Q_rint(value->value * reference);
 	case UI_UNIT_PIXELS:
@@ -111,8 +508,7 @@ vrect_t UI_LayoutToPixels(const uiLayoutRect_t *rect, const vrect_t *parent)
 {
 	vrect_t resolved{};
 	vrect_t root{};
-	
-	if (parent) {
+		if (parent) {
 	root = *parent;
 	} else {
 	root.x = 0;
@@ -120,27 +516,23 @@ vrect_t UI_LayoutToPixels(const uiLayoutRect_t *rect, const vrect_t *parent)
 	root.width = uis.layout.screenWidth;
 	root.height = uis.layout.screenHeight;
 	}
-	
-	resolved.x = root.x + UI_ResolveLayoutValue(&rect->x, root.width);
+		resolved.x = root.x + UI_ResolveLayoutValue(&rect->x, root.width);
 	resolved.y = root.y + UI_ResolveLayoutValue(&rect->y, root.height);
 	resolved.width = UI_ResolveLayoutValue(&rect->width, root.width);
 	resolved.height = UI_ResolveLayoutValue(&rect->height, root.height);
-	
-	if (rect->padding) {
+		if (rect->padding) {
 	resolved.x += rect->padding;
 	resolved.y += rect->padding;
 	resolved.width -= rect->padding * 2;
 	resolved.height -= rect->padding * 2;
-	
-	if (resolved.width < 0) {
+		if (resolved.width < 0) {
 	resolved.width = 0;
 	}
 	if (resolved.height < 0) {
 	resolved.height = 0;
 	}
 	}
-	
-	return resolved;
+		return resolved;
 }
 
 /*
@@ -153,28 +545,22 @@ Splits a resolved layout rectangle into label and field regions using percentage
 uiLayoutSplit_t UI_SplitLayoutRow(const uiLayoutRect_t *rect, const vrect_t *parent, float labelPercent)
 {
 	uiLayoutSplit_t split{};
-	
-	split.bounds = UI_LayoutToPixels(rect, parent);
-	
-	const int spacing = rect ? rect->spacing : 0;
+		split.bounds = UI_LayoutToPixels(rect, parent);
+		const int spacing = rect ? rect->spacing : 0;
 	const int labelWidth = Q_rint(split.bounds.width * labelPercent);
 	const int fieldStart = split.bounds.x + labelWidth + spacing;
 	const int availableWidth = split.bounds.width - labelWidth - spacing;
-	
-	split.label.x = split.bounds.x;
+		split.label.x = split.bounds.x;
 	split.label.y = split.bounds.y;
 	split.label.width = labelWidth;
 	split.label.height = split.bounds.height;
-	
-	split.field.x = fieldStart;
+		split.field.x = fieldStart;
 	split.field.y = split.bounds.y;
 	split.field.width = availableWidth > 0 ? availableWidth : 0;
 	split.field.height = split.bounds.height;
-	
-	return split;
+		return split;
 	}
-	
-/*
+	/*
 =============
 UI_GenericSpacing
 
@@ -186,11 +572,9 @@ int UI_GenericSpacing(int base)
 	if (base <= 0) {
 	return 0;
 	}
-	
-	return base + base / 4;
+		return base + base / 4;
 	}
-	
-/*
+	/*
 =============
 UI_MenuSpacing
 
@@ -202,11 +586,9 @@ int UI_MenuSpacing(void)
 	if (uis.layout.menuSpacing > 0) {
 	return uis.layout.menuSpacing;
 	}
-	
-	return UI_GenericSpacing(CONCHAR_HEIGHT);
+		return UI_GenericSpacing(CONCHAR_HEIGHT);
 	}
-	
-/*
+	/*
 =============
 UI_ListSpacing
 
@@ -218,11 +600,9 @@ int UI_ListSpacing(void)
 	if (uis.layout.listSpacing > 0) {
 	return uis.layout.listSpacing;
 	}
-	
-	return UI_GenericSpacing(CONCHAR_HEIGHT);
+		return UI_GenericSpacing(CONCHAR_HEIGHT);
 	}
-	
-/*
+	/*
 =============
 UI_ListScrollbarWidth
 
@@ -279,8 +659,7 @@ return base * scale;
 /*
 =============
 UI_ListPadding
-	
-	Returns the padding applied to list cells using the current metrics.
+		Returns the padding applied to list cells using the current metrics.
 	=============
 	*/
 int UI_ListPadding(void)
@@ -291,8 +670,7 @@ return MLIST_PRESTEP * 2;
 /*
 =============
 UI_LeftColumnOffset
-	
-	Returns the left column offset derived from layout metrics.
+		Returns the left column offset derived from layout metrics.
 	=============
 	*/
 int UI_LeftColumnOffset(void)
@@ -303,12 +681,10 @@ return -uis.layout.columnOffset;
 
 return -CONCHAR_WIDTH * 2;
 }
-	
-	/*
+		/*
 	=============
 	UI_RightColumnOffset
-	
-Returns the right column offset derived from layout metrics.
+	Returns the right column offset derived from layout metrics.
 =============
 */
 int UI_RightColumnOffset(void)
@@ -364,8 +740,7 @@ int UI_CharHeight(void)
 	if (uis.layout.charHeight > 0) {
 	return uis.layout.charHeight;
 	}
-	
-	return CONCHAR_HEIGHT;
+		return CONCHAR_HEIGHT;
 }
 
 /*
@@ -385,7 +760,7 @@ static void UI_UpdateLayoutMetrics(void)
 	metrics.dpiScale = static_cast<float>(get_auto_scale());
 
 	if (metrics.dpiScale < 1.0f) {
-		metrics.dpiScale = 1.0f;
+	metrics.dpiScale = 1.0f;
 	}
 
 	qhandle_t handle = uis.fontHandle ? uis.fontHandle : SCR_DefaultFontHandle();
@@ -393,10 +768,10 @@ static void UI_UpdateLayoutMetrics(void)
 	metrics.charWidth = SCR_MeasureString(1, UI_LEFT, 1, "M", handle);
 
 	if (metrics.charWidth <= 0) {
-		metrics.charWidth = Q_rint(CONCHAR_WIDTH * metrics.dpiScale);
+	metrics.charWidth = Q_rint(CONCHAR_WIDTH * metrics.dpiScale);
 	}
 	if (metrics.charHeight <= 0) {
-		metrics.charHeight = Q_rint(CONCHAR_HEIGHT * metrics.dpiScale);
+	metrics.charHeight = Q_rint(CONCHAR_HEIGHT * metrics.dpiScale);
 	}
 
 	metrics.genericSpacing = UI_GenericSpacing(metrics.charHeight);
@@ -406,7 +781,7 @@ static void UI_UpdateLayoutMetrics(void)
 
 	metrics.columnOffset = UI_ResolveLayoutValue(&columnValue, metrics.screenWidth);
 	if (metrics.columnOffset < metrics.charWidth * 2) {
-		metrics.columnOffset = metrics.charWidth * 2;
+	metrics.columnOffset = metrics.charWidth * 2;
 	}
 
 	metrics.columnPadding = metrics.columnOffset + metrics.charWidth;
@@ -471,9 +846,9 @@ Returns a clamped linear interpolation value for transition curves.
 static float UI_CompositorLerp(float from, float to, float frac)
 {
 	if (frac < 0.0f) {
-		frac = 0.0f;
+	frac = 0.0f;
 	} else if (frac > 1.0f) {
-		frac = 1.0f;
+	frac = 1.0f;
 	}
 
 	return from + (to - from) * frac;
@@ -489,10 +864,10 @@ Looks for cached layer information for the provided menu.
 static uiLayerState_t *UI_CompositorFindLayer(menuFrameWork_t *menu)
 {
 	for (int i = 0; i < ui_compositor.count; i++) {
-		uiLayerState_t *layer = &ui_compositor.layers[i];
-		if (layer->menu == menu) {
-			return layer;
-		}
+	uiLayerState_t *layer = &ui_compositor.layers[i];
+	if (layer->menu == menu) {
+	return layer;
+	}
 	}
 
 	return NULL;
@@ -512,36 +887,36 @@ static void UI_CompositorSync(void)
 	int rebuildCount = 0;
 
 	for (int i = 0; i < uis.menuDepth && rebuildCount < MAX_MENU_DEPTH; i++) {
-		menuFrameWork_t *menu = uis.layers[i];
-		uiLayerState_t *existing = UI_CompositorFindLayer(menu);
-		uiLayerState_t *dest = &rebuilt[rebuildCount++];
+	menuFrameWork_t *menu = uis.layers[i];
+	uiLayerState_t *existing = UI_CompositorFindLayer(menu);
+	uiLayerState_t *dest = &rebuilt[rebuildCount++];
 
-		if (existing) {
-			*dest = *existing;
-		} else {
-			memset(dest, 0, sizeof(*dest));
-			dest->menu = menu;
-			dest->startOpacity = 0.0f;
-			dest->targetOpacity = menu->opacity > 0.0f ? menu->opacity : 1.0f;
-			dest->opacity = dest->startOpacity;
-			dest->transition = UI_TRANSITION_FADE_IN;
-			dest->startTime = uis.realtime;
-			dest->duration = UI_COMPOSITOR_FADE_TIME;
-			dest->slideStart[0] = 0.0f;
-			dest->slideStart[1] = UI_COMPOSITOR_SLIDE_PIXELS;
-			dest->slideTarget[0] = 0.0f;
-			dest->slideTarget[1] = 0.0f;
-			Vector2Copy(dest->slideStart, dest->slide);
-		}
+	if (existing) {
+	*dest = *existing;
+	} else {
+	memset(dest, 0, sizeof(*dest));
+	dest->menu = menu;
+	dest->startOpacity = 0.0f;
+	dest->targetOpacity = menu->opacity > 0.0f ? menu->opacity : 1.0f;
+	dest->opacity = dest->startOpacity;
+	dest->transition = UI_TRANSITION_FADE_IN;
+	dest->startTime = uis.realtime;
+	dest->duration = UI_COMPOSITOR_FADE_TIME;
+	dest->slideStart[0] = 0.0f;
+	dest->slideStart[1] = UI_COMPOSITOR_SLIDE_PIXELS;
+	dest->slideTarget[0] = 0.0f;
+	dest->slideTarget[1] = 0.0f;
+	Vector2Copy(dest->slideStart, dest->slide);
+	}
 
-		dest->modal = menu->modal || !menu->allowInputPassthrough;
-		dest->passthrough = menu->allowInputPassthrough;
-		dest->drawBackdrop = menu->drawsBackdrop || (menu->modal && !menu->transparent);
+	dest->modal = menu->modal || !menu->allowInputPassthrough;
+	dest->passthrough = menu->allowInputPassthrough;
+	dest->drawBackdrop = menu->drawsBackdrop || (menu->modal && !menu->transparent);
 	}
 
 	ui_compositor.count = rebuildCount;
 	for (int i = 0; i < rebuildCount; i++) {
-		ui_compositor.layers[i] = rebuilt[i];
+	ui_compositor.layers[i] = rebuilt[i];
 	}
 }
 
@@ -557,32 +932,32 @@ static void UI_CompositorUpdateLayer(uiLayerState_t *layer)
 	float frac = 1.0f;
 
 	if (layer->duration) {
-		unsigned elapsed = uis.realtime - layer->startTime;
-		if (elapsed < layer->duration) {
-			frac = static_cast<float>(elapsed) / static_cast<float>(layer->duration);
-		}
+	unsigned elapsed = uis.realtime - layer->startTime;
+	if (elapsed < layer->duration) {
+	frac = static_cast<float>(elapsed) / static_cast<float>(layer->duration);
+	}
 	}
 
 	switch (layer->transition) {
 	case UI_TRANSITION_FADE_IN:
 	case UI_TRANSITION_NONE:
-		layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
-		break;
+	layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
+	break;
 	case UI_TRANSITION_FADE_OUT:
-		layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
-		break;
+	layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
+	break;
 	case UI_TRANSITION_SLIDE_IN:
-		Vector2Set(layer->slide,
-			UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
-			UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
-		layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
-		break;
+	Vector2Set(layer->slide,
+	UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
+	UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
+	layer->opacity = UI_CompositorLerp(layer->startOpacity, layer->targetOpacity, frac);
+	break;
 	case UI_TRANSITION_SLIDE_OUT:
-		Vector2Set(layer->slide,
-			UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
-			UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
-		layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
-		break;
+	Vector2Set(layer->slide,
+	UI_CompositorLerp(layer->slideStart[0], layer->slideTarget[0], frac),
+	UI_CompositorLerp(layer->slideStart[1], layer->slideTarget[1], frac));
+	layer->opacity = UI_CompositorLerp(layer->startOpacity, 0.0f, frac);
+	break;
 	}
 }
 
@@ -596,17 +971,17 @@ Draws a dimmed overlay for modal layers.
 static void UI_DrawBackdropForLayer(const uiLayerState_t *layer)
 {
 	if (!layer->drawBackdrop) {
-		return;
+	return;
 	}
 
 	int alpha = static_cast<int>(layer->opacity * 160.0f);
 	if (alpha < 0) {
-		alpha = 0;
+	alpha = 0;
 	} else if (alpha > 255) {
-		alpha = 255;
+	alpha = 255;
 	}
 	R_DrawFill32(Q_rint(layer->slide[0]), Q_rint(layer->slide[1]), uis.width, uis.height,
-		ColorSetAlpha(COLOR_BLACK, static_cast<uint8_t>(alpha)));
+	ColorSetAlpha(COLOR_BLACK, static_cast<uint8_t>(alpha)));
 }
 
 
@@ -629,14 +1004,14 @@ static void UI_CompositorPushOpacity(uiColorStack_t *backup, float opacity)
 {
 	*backup = uis.color;
 	if (opacity >= 1.0f) {
-		return;
+	return;
 	}
 
 	int scaled = static_cast<int>(opacity * 255.0f);
 	if (scaled < 0) {
-		scaled = 0;
+	scaled = 0;
 	} else if (scaled > 255) {
-		scaled = 255;
+	scaled = 255;
 	}
 	uis.color.background = ColorSetAlpha(backup->background, static_cast<uint8_t>(scaled));
 	uis.color.normal = ColorSetAlpha(backup->normal, static_cast<uint8_t>(scaled));
@@ -668,10 +1043,10 @@ static void UI_UpdateActiveMenuFromStack(void)
 {
 	uis.activeMenu = NULL;
 	for (int i = uis.menuDepth - 1; i >= 0; i--) {
-		if (uis.layers[i]) {
-			uis.activeMenu = uis.layers[i];
-			break;
-		}
+	if (uis.layers[i]) {
+	uis.activeMenu = uis.layers[i];
+	break;
+	}
 	}
 }
 
@@ -685,15 +1060,15 @@ Initializes modal and opacity defaults for a menu layer.
 static void UI_ApplyMenuDefaults(menuFrameWork_t *menu)
 {
 	if (!menu->modal && !menu->allowInputPassthrough) {
-		menu->modal = true;
+	menu->modal = true;
 	}
 
 	if (menu->opacity <= 0.0f || menu->opacity > 1.0f) {
-		menu->opacity = 1.0f;
+	menu->opacity = 1.0f;
 	}
 
 	if (!menu->drawsBackdrop && menu->modal && !menu->transparent) {
-		menu->drawsBackdrop = true;
+	menu->drawsBackdrop = true;
 	}
 }
 
@@ -709,33 +1084,33 @@ void UI_PushMenu(menuFrameWork_t *menu)
 	int i, j;
 
 	if (!menu) {
-		return;
+	return;
 	}
 
 	// if this menu is already present, drop back to that level
 	// to avoid stacking menus by hotkeys
 	for (i = 0; i < uis.menuDepth; i++) {
-		if (uis.layers[i] == menu) {
-			break;
-		}
+	if (uis.layers[i] == menu) {
+	break;
+	}
 	}
 
 	if (i == uis.menuDepth) {
-		if (uis.menuDepth >= MAX_MENU_DEPTH) {
-			Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
-			return;
-		}
-		uis.layers[uis.menuDepth++] = menu;
+	if (uis.menuDepth >= MAX_MENU_DEPTH) {
+	Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
+	return;
+	}
+	uis.layers[uis.menuDepth++] = menu;
 	} else {
-		for (j = i; j < uis.menuDepth; j++) {
-			UI_PopMenu();
-		}
-		uis.menuDepth = i + 1;
+	for (j = i; j < uis.menuDepth; j++) {
+	UI_PopMenu();
+	}
+	uis.menuDepth = i + 1;
 	}
 
 	if (menu->push && !menu->push(menu)) {
-		uis.menuDepth--;
-		return;
+	uis.menuDepth--;
+	return;
 	}
 
 	UI_ApplyMenuDefaults(menu);
@@ -747,13 +1122,13 @@ void UI_PushMenu(menuFrameWork_t *menu)
 	Con_Close(true);
 
 	if (!uis.activeMenu) {
-		// opening menu moves cursor to the nice location
-		IN_WarpMouse(menu->mins[0] / uis.scale, menu->mins[1] / uis.scale);
+	// opening menu moves cursor to the nice location
+	IN_WarpMouse(menu->mins[0] / uis.scale, menu->mins[1] / uis.scale);
 
-		uis.mouseCoords[0] = menu->mins[0];
-		uis.mouseCoords[1] = menu->mins[1];
+	uis.mouseCoords[0] = menu->mins[0];
+	uis.mouseCoords[1] = menu->mins[1];
 
-		uis.entersound = true;
+	uis.entersound = true;
 	}
 
 	uis.activeMenu = menu;
@@ -763,7 +1138,7 @@ void UI_PushMenu(menuFrameWork_t *menu)
 	UI_CompositorSync();
 
 	if (menu->expose) {
-		menu->expose(menu);
+	menu->expose(menu);
 	}
 }
 
@@ -777,18 +1152,14 @@ Recomputes UI scale and layout metrics after a mode change.
 static void UI_Resize(void)
 {
 	int i;
-	
-	uis.scale = R_ClampScale(ui_scale);
+		uis.scale = R_ClampScale(ui_scale);
 	uis.width = Q_rint(r_config.width * uis.scale);
 	uis.height = Q_rint(r_config.height * uis.scale);
-	
-	UI_UpdateLayoutMetrics();
-	
-	for (i = 0; i < uis.menuDepth; i++) {
+		UI_UpdateLayoutMetrics();
+		for (i = 0; i < uis.menuDepth; i++) {
 	Menu_Init(uis.layers[i]);
 	}
-	
-	//CL_WarpMouse(0, 0);
+		//CL_WarpMouse(0, 0);
 }
 
 
@@ -803,10 +1174,10 @@ void UI_ForceMenuOff(void)
 	int i;
 
 	for (i = 0; i < uis.menuDepth; i++) {
-		menu = uis.layers[i];
-		if (menu->pop) {
-			menu->pop(menu);
-		}
+	menu = uis.layers[i];
+	if (menu->pop) {
+	menu->pop(menu);
+	}
 	}
 
 	Key_SetDest(Key_FromMask(Key_GetDest() & ~KEY_MENU));
@@ -831,12 +1202,12 @@ void UI_PopMenu(void)
 
 	menu = uis.layers[--uis.menuDepth];
 	if (menu->pop) {
-		menu->pop(menu);
+	menu->pop(menu);
 	}
 
 	if (!uis.menuDepth) {
-		UI_ForceMenuOff();
-		return;
+	UI_ForceMenuOff();
+	return;
 	}
 
 	uis.activeMenu = uis.layers[uis.menuDepth - 1];
@@ -888,7 +1259,7 @@ void UI_OpenMenu(uiMenu_t type)
 	menuFrameWork_t *menu = NULL;
 
 	if (!uis.initialized) {
-		return;
+	return;
 	}
 
 	UI_SyncMenuContext();
@@ -898,23 +1269,23 @@ void UI_OpenMenu(uiMenu_t type)
 
 	switch (type) {
 	case UIMENU_DEFAULT:
-		if (ui_open->integer) {
-			menu = UI_FindMenu("main");
-		}
-		break;
+	if (ui_open->integer) {
+	menu = UI_FindMenu("main");
+	}
+	break;
 	case UIMENU_MAIN:
-		menu = UI_FindMenu("main");
-		break;
+	menu = UI_FindMenu("main");
+	break;
 	case UIMENU_GAME:
-		menu = UI_FindMenu("game");
-		if (!menu) {
-			menu = UI_FindMenu("main");
-		}
-		break;
+	menu = UI_FindMenu("game");
+	if (!menu) {
+	menu = UI_FindMenu("main");
+	}
+	break;
 	case UIMENU_NONE:
-		break;
+	break;
 	default:
-		Q_assert(!"bad menu");
+	Q_assert(!"bad menu");
 	}
 
 	UI_PushMenu(menu);
@@ -1040,31 +1411,31 @@ bool UI_DoHitTest(void)
 menuCommon_t *item = NULL;
 
 	if (!uis.menuDepth) {
-		return false;
+	return false;
 	}
 
 	for (int i = uis.menuDepth - 1; i >= 0; i--) {
-		menuFrameWork_t *menu = uis.layers[i];
-		if (uis.mouseTracker && uis.mouseTracker->parent == menu) {
-			item = uis.mouseTracker;
-		} else {
-			item = Menu_HitTest(menu);
-		}
+	menuFrameWork_t *menu = uis.layers[i];
+	if (uis.mouseTracker && uis.mouseTracker->parent == menu) {
+	item = uis.mouseTracker;
+	} else {
+	item = Menu_HitTest(menu);
+	}
 
-		if (item && UI_IsItemSelectable(item)) {
-			Menu_MouseMove(item);
+	if (item && UI_IsItemSelectable(item)) {
+	Menu_MouseMove(item);
 
-			if (!(item->flags & QMF_HASFOCUS)) {
-				Menu_SetFocus(item);
-			}
+	if (!(item->flags & QMF_HASFOCUS)) {
+	Menu_SetFocus(item);
+	}
 
-			uis.activeMenu = menu;
-			return true;
-		}
+	uis.activeMenu = menu;
+	return true;
+	}
 
-		if (menu->modal) {
-			break;
-		}
+	if (menu->modal) {
+	break;
+	}
 	}
 
 UI_UpdateActiveMenuFromStack();
@@ -1083,16 +1454,16 @@ static menuSound_t UI_DispatchKeyToLayers(int key)
 	menuSound_t sound = QMS_NOTHANDLED;
 
 	for (int i = uis.menuDepth - 1; i >= 0; i--) {
-		menuFrameWork_t *menu = uis.layers[i];
-		sound = Menu_Keydown(menu, key);
-		if (sound != QMS_NOTHANDLED) {
-			uis.activeMenu = menu;
-			return sound;
-		}
+	menuFrameWork_t *menu = uis.layers[i];
+	sound = Menu_Keydown(menu, key);
+	if (sound != QMS_NOTHANDLED) {
+	uis.activeMenu = menu;
+	return sound;
+	}
 
-		if (menu->modal) {
-			return sound;
-		}
+	if (menu->modal) {
+	return sound;
+	}
 	}
 
 	UI_UpdateActiveMenuFromStack();
@@ -1109,22 +1480,22 @@ Routes printable character input with pass-through semantics.
 static menuSound_t UI_DispatchCharToLayers(int key)
 {
 	for (int i = uis.menuDepth - 1; i >= 0; i--) {
-		menuFrameWork_t *menu = uis.layers[i];
-		menuCommon_t *item = Menu_ItemAtCursor(menu);
-		menuSound_t sound = QMS_NOTHANDLED;
+	menuFrameWork_t *menu = uis.layers[i];
+	menuCommon_t *item = Menu_ItemAtCursor(menu);
+	menuSound_t sound = QMS_NOTHANDLED;
 
-		if (item) {
-			sound = Menu_CharEvent(item, key);
-		}
+	if (item) {
+	sound = Menu_CharEvent(item, key);
+	}
 
-		if (sound != QMS_NOTHANDLED) {
-			uis.activeMenu = menu;
-			return sound;
-		}
+	if (sound != QMS_NOTHANDLED) {
+	uis.activeMenu = menu;
+	return sound;
+	}
 
-		if (menu->modal) {
-			return sound;
-		}
+	if (menu->modal) {
+	return sound;
+	}
 	}
 
 	UI_UpdateActiveMenuFromStack();
@@ -1143,8 +1514,13 @@ void UI_MouseEvent(int x, int y)
 
 	uis.mouseCoords[0] = Q_rint(x * uis.scale);
 	uis.mouseCoords[1] = Q_rint(y * uis.scale);
-
-	UI_DoHitTest();
+		UI_DoHitTest();
+		vrect_t region{};
+	region.x = uis.mouseCoords[0];
+	region.y = uis.mouseCoords[1];
+	region.width = 1;
+	region.height = 1;
+	UI_GetManager().RoutePointerEvent(region);
 }
 
 /*
@@ -1159,45 +1535,46 @@ void UI_Draw(unsigned realtime)
 	uis.realtime = realtime;
 
 	if (!(Key_GetDest() & KEY_MENU)) {
-		return;
+	return;
 	}
 
-	if (!uis.menuDepth) {
-		return;
-	}
+if (!uis.menuDepth) {
+return;
+}
 
-	UI_UpdateActiveMenuFromStack();
-	UI_CompositorSync();
+	UI_GetManager().SyncLegacyMenus(uis.layers, uis.menuDepth);
+UI_UpdateActiveMenuFromStack();
+UI_CompositorSync();
 
 	R_SetScale(uis.scale);
 
 	for (int i = 0; i < ui_compositor.count; i++) {
-		uiLayerState_t *layer = &ui_compositor.layers[i];
-		UI_CompositorUpdateLayer(layer);
-		UI_DrawBackdropForLayer(layer);
-		UI_CompositorPushOpacity(&colors, layer->opacity);
-		if (layer->menu->draw) {
-			layer->menu->draw(layer->menu);
-		} else {
-			Menu_Draw(layer->menu);
-		}
-		UI_CompositorPopOpacity(&colors);
+	uiLayerState_t *layer = &ui_compositor.layers[i];
+	UI_CompositorUpdateLayer(layer);
+	UI_DrawBackdropForLayer(layer);
+	UI_CompositorPushOpacity(&colors, layer->opacity);
+	if (layer->menu->draw) {
+	layer->menu->draw(layer->menu);
+	} else {
+	Menu_Draw(layer->menu);
+	}
+	UI_CompositorPopOpacity(&colors);
 	}
 
 	if (r_config.flags & QVF_FULLSCREEN) {
-		R_DrawPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
-				uis.mouseCoords[1] - uis.cursorHeight / 2,
-				COLOR_WHITE, uis.cursorHandle);
+	R_DrawPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
+	uis.mouseCoords[1] - uis.cursorHeight / 2,
+	COLOR_WHITE, uis.cursorHandle);
 	}
 
 	if (ui_debug->integer) {
-		UI_DrawString(uis.width - 4, 4, UI_RIGHT,
-				COLOR_WHITE, va("%3i %3i", uis.mouseCoords[0], uis.mouseCoords[1]));
+	UI_DrawString(uis.width - 4, 4, UI_RIGHT,
+	COLOR_WHITE, va("%3i %3i", uis.mouseCoords[0], uis.mouseCoords[1]));
 	}
 
 	if (uis.entersound) {
-		uis.entersound = false;
-		S_StartLocalSound("misc/menu1.wav");
+	uis.entersound = false;
+	S_StartLocalSound("misc/menu1.wav");
 	}
 
 	R_SetScale(1.0f);
@@ -1231,22 +1608,20 @@ UI_KeyEvent
 void UI_KeyEvent(int key, bool down)
 {
 	menuSound_t sound;
-
-	if (!uis.menuDepth) {
-		return;
+		if (!uis.menuDepth) {
+	return;
 	}
-
-	if (!down) {
-		if (key == K_MOUSE1) {
-			uis.mouseTracker = NULL;
-		}
-		return;
+		if (!down) {
+	if (key == K_MOUSE1) {
+	uis.mouseTracker = NULL;
 	}
-
+	return;
+	}
+		UI_GetManager().RouteNavigationKey(key);
 	sound = UI_DispatchKeyToLayers(key);
 
 	if (sound != QMS_NOTHANDLED) {
-		UI_StartSound(sound);
+	UI_StartSound(sound);
 	}
 }
 
@@ -1260,12 +1635,12 @@ void UI_CharEvent(int key)
 	menuSound_t sound;
 
 	if (!uis.menuDepth) {
-		return;
+	return;
 	}
 
 	sound = UI_DispatchCharToLayers(key);
 	if (sound != QMS_NOTHANDLED) {
-		UI_StartSound(sound);
+	UI_StartSound(sound);
 	}
 }
 
@@ -1290,22 +1665,22 @@ static void UI_PushMenu_f(void)
 	char *s;
 
 	if (Cmd_Argc() < 2) {
-		Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
-		return;
+	Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
+	return;
 	}
 	s = Cmd_Argv(1);
 	menu = UI_FindMenu(s);
 	if (menu) {
-		UI_PushMenu(menu);
+	UI_PushMenu(menu);
 	} else {
-		Com_Printf("No such menu: %s\n", s);
+	Com_Printf("No such menu: %s\n", s);
 	}
 }
 
 static void UI_PopMenu_f(void)
 {
 	if (uis.activeMenu) {
-		UI_PopMenu();
+	UI_PopMenu();
 	}
 }
 
@@ -1332,8 +1707,8 @@ Console command to select the active menu script context.
 static void UI_SetMenuContext_f(void)
 {
 	if (Cmd_Argc() < 2) {
-		Com_Printf("Usage: %s <main|ingame|auto>\n", Cmd_Argv(0));
-		return;
+	Com_Printf("Usage: %s <main|ingame|auto>\n", Cmd_Argv(0));
+	return;
 	}
 
 	UI_SetMenuContext(Cmd_Argv(1));
@@ -1446,12 +1821,10 @@ static void UI_RefreshFonts(void)
 {
 const int pixelHeight = UI_ResolvedFontPixelHeight();
 uis.fontPixelHeight = pixelHeight;
-	
-	uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
+		uis.fontHandle = UI_RegisterScaledFont(ui_font ? ui_font->string : nullptr, pixelHeight);
 	if (!uis.fontHandle)
 	uis.fontHandle = SCR_DefaultFontHandle();
-	
-uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
+	uis.fallbackFontHandle = UI_RegisterScaledFont(ui_font_fallback ? ui_font_fallback->string : nullptr, pixelHeight);
 if (!uis.fallbackFontHandle && (!ui_font_fallback || Q_stricmp("conchars.pcx", ui_font_fallback->string)))
 uis.fallbackFontHandle = UI_RegisterScaledFont("conchars.pcx", pixelHeight);
 
@@ -1613,13 +1986,7 @@ Copies the resolved palette into the UIX theming context.
 */
 static void UI_SyncUxPalette(void)
 {
-	std::vector<uiPaletteEntry_t> palette;
-	palette.reserve(UI_COLOR_ROLE_COUNT);
-	for (const auto &entry : uis.palette) {
-		palette.push_back(entry);
-	}
-
-	ui::ux::GetSystem().Theme().SetPalette(std::move(palette));
+	UI_GetManager().SyncPalette(uis);
 }
 
 /*
@@ -1631,27 +1998,7 @@ Updates the UIX layout engine and root scene graph layer using the latest metric
 */
 static void UI_SyncUxLayout(void)
 {
-	ui::ux::UIXSystem &system = ui::ux::GetSystem();
-	system.UpdateLayout(uis.layout);
-
-	vrect_t root{};
-	root.x = 0;
-	root.y = 0;
-	root.width = uis.layout.screenWidth;
-	root.height = uis.layout.screenHeight;
-
-	if (!ui_scene_layer) {
-		ui_root_widget = std::make_shared<ui::ux::Widget>("ui-root", ui::ux::WidgetType::Container);
-		ui_root_widget->SetLayout(ui::ux::LayoutRect(ui::ux::LayoutValue::Pixels(0.0f), ui::ux::LayoutValue::Pixels(0.0f), ui::ux::LayoutValue::Percent(1.0f), ui::ux::LayoutValue::Percent(1.0f)));
-
-		ui_scene_layer = std::make_shared<ui::ux::SceneLayer>("legacy-root", 0);
-		ui_scene_layer->SetRoot(ui_root_widget);
-		system.Graph().AddLayer(ui_scene_layer);
-	}
-
-	if (ui_root_widget) {
-		ui_root_widget->OnLayout(system.Layout(), root);
-	}
+	UI_GetManager().SyncLayout(uis.layout);
 }
 
 /*
@@ -1770,7 +2117,7 @@ void UI_ModeChanged(void)
 
 /*
 =================
-UI_FreeMenus
+	UI_FreeMenus
 
 Releases all registered menus.
 =================
@@ -1780,9 +2127,9 @@ static void UI_FreeMenus(void)
 	menuFrameWork_t *menu, *next;
 
 	LIST_FOR_EACH_SAFE(menuFrameWork_t, menu, next, &ui_menus, entry) {
-		if (menu->free) {
-			menu->free(menu);
-		}
+	if (menu->free) {
+	menu->free(menu);
+	}
 	}
 	List_Init(&ui_menus);
 }
@@ -1834,13 +2181,13 @@ void UI_Init(void)
 	R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
 
 	for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
-		uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
+	uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
 	}
 
 	UI_PopulateDefaultPalette(false);
 	UI_UpdateLegacyColorsFromPalette();
 	UI_UpdateTypographySet();
-
+	UI_GetManager().Initialize();
 	strcpy(uis.weaponModel, "w_railgun.md2");
 
 	UI_MapDB_Init();
@@ -1859,22 +2206,24 @@ UI_Shutdown
 */
 void UI_Shutdown(void)
 {
-    if (!uis.initialized) {
-        return;
-    }
-    UI_ForceMenuOff();
-
-    ui_scale->changed = NULL;
-
-    PlayerModel_Free();
-
-    UI_FreeMenus();
-
-    Cmd_Deregister(c_ui);
-
-    memset(&uis, 0, sizeof(uis));
-
-    UI_MapDB_Shutdown();
-
-    Z_LeakTest(TAG_UI);
+		if (!uis.initialized) {
+			return;
+			}
+		UI_ForceMenuOff();
+	
+		ui_scale->changed = NULL;
+	
+		PlayerModel_Free();
+	
+		UI_FreeMenus();
+	
+		UI_GetManager().Shutdown();
+	
+		Cmd_Deregister(c_ui);
+	
+			memset(&uis, 0, sizeof(uis));
+	
+		UI_MapDB_Shutdown();
+	
+		Z_LeakTest(TAG_UI);
 }
