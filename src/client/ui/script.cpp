@@ -21,8 +21,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <memory>
 #include <limits.h>
+#include <string>
 #include <string.h>
 #include <algorithm>
+#include <unordered_map>
 #include <vector>
 
 extern const char res_worr_menu[];
@@ -36,8 +38,10 @@ typedef struct uiScriptSource_s {
 } uiScriptSource_t;
 
 typedef struct uiScriptManifest_s {
-	uiScriptSource_t	mainScript;
-	uiScriptSource_t	ingameScript;
+	std::unordered_map<std::string, std::vector<uiScriptSource_t>>	scriptLists;
+	std::unordered_map<std::string, std::vector<uiScriptSource_t>>	overrideLists;
+	std::unordered_map<uiScriptContext_t, std::vector<std::string>>	controllerOrder;
+	char	controllerPath[MAX_QPATH];
 } uiScriptManifest_t;
 
 static uiScriptManifest_t ui_manifest;
@@ -1671,6 +1675,124 @@ static void UI_ParseJsonBuffer(json_parse_t* parser, const char* buffer, size_t 
 
 /*
 =============
+UI_AddScriptEntryToList
+
+Adds a single script path to the provided manifest list.
+=============
+*/
+static void UI_AddScriptEntryToList(json_parse_t* parser, std::vector<uiScriptSource_t>* list, bool overrideEntry)
+{
+	uiScriptSource_t source = {};
+
+	if (overrideEntry)
+		Json_CopyStringToBuffer(parser, source.override_path, sizeof(source.override_path));
+	else
+		Json_CopyStringToBuffer(parser, source.path, sizeof(source.path));
+
+	list->push_back(source);
+}
+
+/*
+=============
+UI_ParseManifestList
+
+Parses either a single script path or an array of paths into a list.
+=============
+*/
+static void UI_ParseManifestList(json_parse_t* parser, std::vector<uiScriptSource_t>* list, bool overrideEntry)
+{
+	list->clear();
+
+	switch (parser->pos->type) {
+	case JSMN_ARRAY: {
+		jsmntok_t* array = Json_Next(parser);
+
+		for (int i = 0; i < array->size; i++)
+			UI_AddScriptEntryToList(parser, list, overrideEntry);
+		break;
+	}
+	case JSMN_STRING:
+		UI_AddScriptEntryToList(parser, list, overrideEntry);
+		break;
+	default:
+		Json_SkipToken(parser);
+		break;
+	}
+}
+
+/*
+=============
+UI_ParseControllerList
+
+Collects a controller ordering entry into a vector of list names.
+=============
+*/
+static void UI_ParseControllerList(json_parse_t* parser, std::vector<std::string>* order)
+{
+	order->clear();
+
+	switch (parser->pos->type) {
+	case JSMN_ARRAY: {
+		jsmntok_t* array = Json_Next(parser);
+
+		for (int i = 0; i < array->size; i++) {
+			char name[MAX_QPATH];
+			Json_CopyStringToBuffer(parser, name, sizeof(name));
+			order->emplace_back(name);
+		}
+		break;
+	}
+	case JSMN_STRING: {
+		char name[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, name, sizeof(name));
+		order->emplace_back(name);
+		break;
+	}
+	default:
+		Json_SkipToken(parser);
+		break;
+	}
+}
+
+/*
+=============
+UI_ContextFromName
+
+Translates a controller context name to an enum value.
+=============
+*/
+static bool UI_ContextFromName(const char* name, uiScriptContext_t* context)
+{
+	if (!Q_stricmp(name, "main")) {
+		*context = UI_SCRIPT_MAIN;
+		return true;
+	}
+
+	if (!Q_stricmp(name, "ingame")) {
+		*context = UI_SCRIPT_INGAME;
+		return true;
+	}
+
+	return false;
+}
+
+/*
+=============
+UI_ScriptSourcePath
+
+Returns the configured path for a manifest entry, preferring overrides.
+=============
+*/
+static const char* UI_ScriptSourcePath(const uiScriptSource_t& source)
+{
+	if (source.override_path[0])
+		return source.override_path;
+
+	return source.path;
+}
+
+/*
+=============
 UI_ResetManifest
 
 Resets the script manifest entries to defaults.
@@ -1680,8 +1802,19 @@ static void UI_ResetManifest(uiScriptManifest_t* manifest)
 {
 	Q_assert(manifest);
 
-	memset(manifest, 0, sizeof(*manifest));
-	Q_strlcpy(manifest->mainScript.path, UI_DEFAULT_FILE, sizeof(manifest->mainScript.path));
+	manifest->scriptLists.clear();
+	manifest->overrideLists.clear();
+	manifest->controllerOrder.clear();
+	memset(manifest->controllerPath, 0, sizeof(manifest->controllerPath));
+
+	uiScriptSource_t defaultSource = {};
+	Q_strlcpy(defaultSource.path, UI_DEFAULT_FILE, sizeof(defaultSource.path));
+	std::vector<uiScriptSource_t>& mainList = manifest->scriptLists["main"];
+	mainList.clear();
+	mainList.push_back(defaultSource);
+
+	manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
+	manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
 }
 
 /*
@@ -1696,18 +1829,10 @@ static void UI_ParseManifestOverrides(json_parse_t* parser, uiScriptManifest_t* 
 	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
 
 	for (int i = 0; i < object->size; i++) {
-		if (!Json_Strcmp(parser, "main")) {
-			Json_Next(parser);
-			Json_CopyStringToBuffer(parser, manifest->mainScript.override_path, sizeof(manifest->mainScript.override_path));
-		}
-		else if (!Json_Strcmp(parser, "ingame")) {
-			Json_Next(parser);
-			Json_CopyStringToBuffer(parser, manifest->ingameScript.override_path, sizeof(manifest->ingameScript.override_path));
-		}
-		else {
-			Json_Next(parser);
-			Json_SkipToken(parser);
-		}
+		char listName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, listName, sizeof(listName));
+		std::vector<uiScriptSource_t>& list = manifest->overrideLists[listName];
+		UI_ParseManifestList(parser, &list, true);
 	}
 }
 
@@ -1723,23 +1848,93 @@ static void UI_ParseManifest(json_parse_t* parser, uiScriptManifest_t* manifest)
 	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
 
 	for (int i = 0; i < object->size; i++) {
-		if (!Json_Strcmp(parser, "main")) {
+		if (!Json_Strcmp(parser, "controller")) {
 			Json_Next(parser);
-			Json_CopyStringToBuffer(parser, manifest->mainScript.path, sizeof(manifest->mainScript.path));
+			Json_CopyStringToBuffer(parser, manifest->controllerPath, sizeof(manifest->controllerPath));
+			continue;
 		}
-		else if (!Json_Strcmp(parser, "ingame")) {
-			Json_Next(parser);
-			Json_CopyStringToBuffer(parser, manifest->ingameScript.path, sizeof(manifest->ingameScript.path));
-		}
-		else if (!Json_Strcmp(parser, "overrides")) {
+
+		if (!Json_Strcmp(parser, "overrides")) {
 			Json_Next(parser);
 			UI_ParseManifestOverrides(parser, manifest);
+			continue;
 		}
-		else {
-			Json_Next(parser);
-			Json_SkipToken(parser);
-		}
+
+		char listName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, listName, sizeof(listName));
+		std::vector<uiScriptSource_t>& list = manifest->scriptLists[listName];
+		UI_ParseManifestList(parser, &list, false);
 	}
+}
+
+/*
+=============
+UI_ParseController
+
+Parses the controller file that maps contexts to script list names.
+=============
+*/
+static void UI_ParseController(json_parse_t* parser, uiScriptManifest_t* manifest)
+{
+	jsmntok_t* object = Json_EnsureNext(parser, JSMN_OBJECT);
+
+	for (int i = 0; i < object->size; i++) {
+		char contextName[MAX_QPATH];
+		Json_CopyStringToBuffer(parser, contextName, sizeof(contextName));
+		uiScriptContext_t context;
+
+		if (!UI_ContextFromName(contextName, &context)) {
+			Json_SkipToken(parser);
+			continue;
+		}
+
+		std::vector<std::string> order;
+		UI_ParseControllerList(parser, &order);
+
+		if (!order.empty())
+			manifest->controllerOrder[context] = order;
+	}
+}
+
+/*
+=============
+UI_EnsureControllerFallbacks
+
+Ensures controller orders always include safe defaults.
+=============
+*/
+static void UI_EnsureControllerFallbacks(uiScriptManifest_t* manifest)
+{
+	if (manifest->controllerOrder[UI_SCRIPT_MAIN].empty())
+		manifest->controllerOrder[UI_SCRIPT_MAIN] = { "main" };
+
+	if (manifest->controllerOrder[UI_SCRIPT_INGAME].empty())
+		manifest->controllerOrder[UI_SCRIPT_INGAME] = { "ingame", "main" };
+}
+
+/*
+=============
+UI_LoadManifestController
+
+Loads the controller file specified by the manifest.
+=============
+*/
+static void UI_LoadManifestController(uiScriptManifest_t* manifest)
+{
+	json_parse_t parser = {};
+
+	if (!manifest->controllerPath[0])
+		return;
+
+	if (Json_ErrorHandler(&parser)) {
+		Com_WPrintf("Failed to load/parse %s[%s]: %s\n", manifest->controllerPath, parser.error_loc, parser.error);
+		Json_Free(&parser);
+		return;
+	}
+
+	Json_Load(manifest->controllerPath, &parser);
+	UI_ParseController(&parser, manifest);
+	Json_Free(&parser);
 }
 
 /*
@@ -1764,6 +1959,9 @@ static void UI_LoadManifest(uiScriptManifest_t* manifest)
 	Json_Load(UI_MANIFEST_FILE, &parser);
 	UI_ParseManifest(&parser, manifest);
 	Json_Free(&parser);
+
+	UI_LoadManifestController(manifest);
+	UI_EnsureControllerFallbacks(manifest);
 }
 
 /*
@@ -1844,6 +2042,39 @@ static bool UI_LoadEmbeddedMenu(void)
 
 /*
 =============
+UI_SelectControllerOrder
+
+Chooses a controller order for the desired context, applying fallbacks.
+=============
+*/
+static const std::vector<std::string>* UI_SelectControllerOrder(uiScriptContext_t desired, uiScriptContext_t* resolvedContext)
+{
+	const auto desiredIt = ui_manifest.controllerOrder.find(desired);
+
+	if (desiredIt != ui_manifest.controllerOrder.end() && !desiredIt->second.empty()) {
+		*resolvedContext = desired;
+		return &desiredIt->second;
+	}
+
+	if (desired == UI_SCRIPT_INGAME) {
+		const auto mainIt = ui_manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+		if (mainIt != ui_manifest.controllerOrder.end() && !mainIt->second.empty()) {
+			*resolvedContext = UI_SCRIPT_MAIN;
+			return &mainIt->second;
+		}
+	}
+
+	const auto mainIt = ui_manifest.controllerOrder.find(UI_SCRIPT_MAIN);
+	if (mainIt != ui_manifest.controllerOrder.end()) {
+		*resolvedContext = UI_SCRIPT_MAIN;
+		return &mainIt->second;
+	}
+
+	return NULL;
+}
+
+/*
+=============
 UI_AttemptMenuLoad
 
 Attempts to load the desired script with fallbacks.
@@ -1851,36 +2082,49 @@ Attempts to load the desired script with fallbacks.
 */
 static bool UI_AttemptMenuLoad(uiScriptContext_t desired)
 {
-	struct {
-		const char* path;
-		uiScriptContext_t context;
-	} candidates[5];
-	int numCandidates = 0;
+	uiScriptContext_t resolvedContext = desired;
+	const std::vector<std::string>* order = UI_SelectControllerOrder(desired, &resolvedContext);
+	bool attempted = false;
 
-	if (desired == UI_SCRIPT_INGAME) {
-		if (ui_manifest.ingameScript.override_path[0])
-			candidates[numCandidates++] = { ui_manifest.ingameScript.override_path, UI_SCRIPT_INGAME };
-		if (ui_manifest.ingameScript.path[0])
-			candidates[numCandidates++] = { ui_manifest.ingameScript.path, UI_SCRIPT_INGAME };
-	}
+	if (!order)
+		return false;
 
-	if (ui_manifest.mainScript.override_path[0])
-		candidates[numCandidates++] = { ui_manifest.mainScript.override_path, UI_SCRIPT_MAIN };
+	for (const std::string& listName : *order) {
+		std::vector<const uiScriptSource_t*> sources;
 
-	if (ui_manifest.mainScript.path[0])
-		candidates[numCandidates++] = { ui_manifest.mainScript.path, UI_SCRIPT_MAIN };
+		auto overrideIt = ui_manifest.overrideLists.find(listName);
+		if (overrideIt != ui_manifest.overrideLists.end()) {
+			for (const uiScriptSource_t& source : overrideIt->second)
+				sources.push_back(&source);
+		}
 
-	for (int i = 0; i < numCandidates; i++) {
-		if (!candidates[i].path[0])
+		auto listIt = ui_manifest.scriptLists.find(listName);
+		if (listIt != ui_manifest.scriptLists.end()) {
+			for (const uiScriptSource_t& source : listIt->second)
+				sources.push_back(&source);
+		}
+
+		if (sources.empty())
 			continue;
 
-		UI_ResetScriptState();
+		attempted = true;
 
-		if (UI_LoadMenuScriptFromFile(candidates[i].path)) {
-			ui_activeContext = candidates[i].context;
-			return true;
+		for (const uiScriptSource_t* source : sources) {
+			const char* path = UI_ScriptSourcePath(*source);
+			if (!path || !path[0])
+				continue;
+
+			UI_ResetScriptState();
+
+			if (UI_LoadMenuScriptFromFile(path)) {
+				ui_activeContext = resolvedContext;
+				return true;
+			}
 		}
 	}
+
+	if (!attempted && desired == UI_SCRIPT_INGAME && resolvedContext == UI_SCRIPT_INGAME)
+		return UI_AttemptMenuLoad(UI_SCRIPT_MAIN);
 
 	return false;
 }

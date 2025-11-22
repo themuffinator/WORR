@@ -1,5 +1,10 @@
 {
-  "main": "worr.menu.json",
-  "ingame": "worr.menu.json",
+  "controller": "menus/controller.json",
+  "main": [
+    "worr.menu.json"
+  ],
+  "ingame": [
+    "worr.menu.json"
+  ],
   "overrides": {}
 }
