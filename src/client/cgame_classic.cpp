@@ -240,206 +240,231 @@ static bool CGC_KeyNameToKeynum(const char *key_name, int *keynum)
     return false;
 }
 
+/*
+=============
+CGC_KeynumToIcon
+
+Translates a key number into a bind icon path and sizing information.
+=============
+*/
 static bool CGC_KeynumToIcon(int keynum, bind_icon_t &icon)
 {
-    char pic[MAX_QPATH];
+	char pic[MAX_QPATH];
 
-    auto set_keyboard_icon = [&](int value) -> bool {
-        Q_snprintf(pic, sizeof(pic), "gfx/controller/keyboard/%d.png", value);
-        int w = 0;
-        int h = 0;
-        cgi.Draw_GetPicSize(&w, &h, pic);
-        if (!w || !h) {
-            return false;
-        }
-        icon.name = pic;
-        icon.width = w;
-        icon.height = h;
-        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
-        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
-        if (icon.draw_width <= 0) {
-            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
-        }
-        return true;
-    };
+	auto set_keyboard_icon = [&](int value) -> bool {
+		Q_snprintf(pic, sizeof(pic), "gfx/controller/keyboard/%d.png", value);
+		int w = 0;
+		int h = 0;
+		cgi.Draw_GetPicSize(&w, &h, pic);
+		if (!w || !h) {
+			return false;
+		}
+		icon.name = pic;
+		icon.width = w;
+		icon.height = h;
+		icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+		icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+		if (icon.draw_width <= 0) {
+			icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+		}
+		return true;
+	};
 
-    if (keynum >= 0 && keynum < 256 && keynum != '"') {
-        if (set_keyboard_icon(keynum)) {
-            return true;
-        }
-    }
+	if (keynum >= 0 && keynum < 256 && keynum != '"') {
+		if (set_keyboard_icon(keynum)) {
+			return true;
+		}
+	}
 
-    if (keynum >= K_UPARROW && keynum <= K_KP_MULTIPLY) {
-        return set_keyboard_icon(keynum + 128);
-    }
+	if (keynum >= K_UPARROW && keynum <= K_KP_MULTIPLY) {
+		return set_keyboard_icon(keynum + 128);
+	}
 
-    if (keynum >= K_LALT && keynum <= K_RSHIFT) {
-        return set_keyboard_icon(keynum + 128);
-    }
+	if (keynum >= K_LALT && keynum <= K_RSHIFT) {
+		return set_keyboard_icon(keynum + 128);
+	}
 
-    if (keynum >= K_MOUSEFIRST && keynum <= K_MOUSE8) {
-        const int index = keynum - K_MOUSEFIRST;
-        Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
-        int w = 0;
-        int h = 0;
-        cgi.Draw_GetPicSize(&w, &h, pic);
-        if (!w || !h) {
-            return false;
-        }
-        icon.name = pic;
-        icon.width = w;
-        icon.height = h;
-        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
-        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
-        if (icon.draw_width <= 0) {
-            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
-        }
-        return true;
-    }
+	if (keynum >= K_MOUSEFIRST && keynum <= K_MOUSE8) {
+		const int index = keynum - K_MOUSEFIRST;
+		Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
+		int w = 0;
+		int h = 0;
+		cgi.Draw_GetPicSize(&w, &h, pic);
+		if (!w || !h) {
+			return false;
+		}
+		icon.name = pic;
+		icon.width = w;
+		icon.height = h;
+		icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+		icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+		if (icon.draw_width <= 0) {
+			icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+		}
+		return true;
+	}
 
-    if (keynum == K_MWHEELUP || keynum == K_MWHEELDOWN) {
-        const int index = (keynum == K_MWHEELUP) ? 8 : 9;
-        Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
-        int w = 0;
-        int h = 0;
-        cgi.Draw_GetPicSize(&w, &h, pic);
-        if (!w || !h) {
-            return false;
-        }
-        icon.name = pic;
-        icon.width = w;
-        icon.height = h;
-        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
-        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
-        if (icon.draw_width <= 0) {
-            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
-        }
-        return true;
-    }
+	if (keynum == K_MWHEELUP || keynum == K_MWHEELDOWN) {
+		const int index = (keynum == K_MWHEELUP) ? 8 : 9;
+		Q_snprintf(pic, sizeof(pic), "gfx/controller/mouse/f%04d.png", index);
+		int w = 0;
+		int h = 0;
+		cgi.Draw_GetPicSize(&w, &h, pic);
+		if (!w || !h) {
+			return false;
+		}
+		icon.name = pic;
+		icon.width = w;
+		icon.height = h;
+		icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+		icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+		if (icon.draw_width <= 0) {
+			icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+		}
+		return true;
+	}
 
-    if (keynum >= K_PAD_FIRST && keynum <= K_PAD_FIRST + 0x22) {
-        const int index = keynum - K_PAD_FIRST;
-        Q_snprintf(pic, sizeof(pic), "gfx/controller/generic/f%04x.png", index);
-        int w = 0;
-        int h = 0;
-        cgi.Draw_GetPicSize(&w, &h, pic);
-        if (!w || !h) {
-            return false;
-        }
-        icon.name = pic;
-        icon.width = w;
-        icon.height = h;
-        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
-        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
-        if (icon.draw_width <= 0) {
-            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
-        }
-        return true;
-    }
+	if (keynum >= K_PAD_FIRST && keynum <= K_PAD_FIRST + 0x22) {
+		const int index = keynum - K_PAD_FIRST;
+		Q_snprintf(pic, sizeof(pic), "gfx/controller/generic/f%04x.png", index);
+		int w = 0;
+		int h = 0;
+		cgi.Draw_GetPicSize(&w, &h, pic);
+		if (!w || !h) {
+			return false;
+		}
+		icon.name = pic;
+		icon.width = w;
+		icon.height = h;
+		icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+		icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+		if (icon.draw_width <= 0) {
+			icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+		}
+		return true;
+	}
 
-    return false;
+	return false;
 }
 
+/*
+=============
+CGC_BuildBindIcon
+
+Attempts to resolve a binding into a controller icon path, falling back to formatted text.
+=============
+*/
 static bool CGC_BuildBindIcon(const char *binding, bind_icon_t &icon, std::string &fallback)
 {
-    fallback.clear();
-    if (!binding || !*binding) {
-        fallback.assign("UNBOUND");
-        return false;
-    }
+	fallback.clear();
+	if (!binding || !*binding) {
+		fallback.assign("UNBOUND");
+		return false;
+	}
 
-    const char *key_name = cgi.CL_GetKeyBinding(binding);
-    if (!key_name || !*key_name) {
-        fallback.assign("UNBOUND");
-        return false;
-    }
+	const char *key_name = cgi.CL_GetKeyBinding(binding);
+	if (!key_name || !*key_name) {
+		fallback.assign("UNBOUND");
+		return false;
+	}
 
-    int keynum;
-    if (!CGC_KeyNameToKeynum(key_name, &keynum)) {
-        fallback = CGC_FormatKeyName(key_name);
-        return false;
-    }
+	int keynum;
+	if (!CGC_KeyNameToKeynum(key_name, &keynum)) {
+		fallback = CGC_FormatKeyName(key_name);
+		return false;
+	}
 
-    if (CGC_KeynumToIcon(keynum, icon)) {
-        return true;
-    }
+	if (CGC_KeynumToIcon(keynum, icon)) {
+		return true;
+	}
 
-    fallback = CGC_FormatKeyName(key_name);
-    return false;
+	fallback = CGC_FormatKeyName(key_name);
+	return false;
 }
 
+/*
+=============
+CGC_BuildBindSegments
+
+Parses a centerprint line with :bind: markers into text and icon segments and calculates layout metrics.
+=============
+*/
 static void CGC_BuildBindSegments(const char *line, size_t line_limit,
-                                  std::vector<bind_segment_t> &segments,
-                                  int &line_width, int &line_height)
+			std::vector<bind_segment_t> &segments,
+			int &line_width, int &line_height)
 {
-    segments.clear();
-    std::string text_buffer;
+	segments.clear();
+	std::string text_buffer;
 
-    const char *cursor = line;
-    const char *line_end = line + line_limit;
+	const char *cursor = line;
+	const char *line_end = line + line_limit;
 
-    auto flush_text = [&]() {
-        if (text_buffer.empty()) {
-            return;
-        }
-        if (!segments.empty() && segments.back().type == bind_segment_type_t::text) {
-            segments.back().text.append(text_buffer);
-        } else {
-            bind_segment_t seg;
-            seg.type = bind_segment_type_t::text;
-            seg.text = text_buffer;
-            segments.push_back(std::move(seg));
-        }
-        text_buffer.clear();
-    };
+	auto flush_text = [&]() {
+		if (text_buffer.empty()) {
+			return;
+		}
+		if (!segments.empty() && segments.back().type == bind_segment_type_t::text) {
+			segments.back().text.append(text_buffer);
+		} else {
+			bind_segment_t seg;
+			seg.type = bind_segment_type_t::text;
+			seg.text = text_buffer;
+			segments.push_back(std::move(seg));
+		}
+		text_buffer.clear();
+	};
 
-    while (cursor < line_end) {
-        if ((line_end - cursor) >= 6 && !strncmp(cursor, ":bind:", 6)) {
-            const char *command_start = cursor + 6;
-            const char *command_end = command_start;
-            while (command_end < line_end && *command_end != ':') {
-                ++command_end;
-            }
+	while (cursor < line_end) {
+		if ((line_end - cursor) >= 6 && !strncmp(cursor, ":bind:", 6)) {
+			const char *command_start = cursor + 6;
+			const char *command_end = command_start;
+			while (command_end < line_end && *command_end != ':') {
+				++command_end;
+			}
 
-            if (command_end < line_end && *command_end == ':') {
-                flush_text();
-                std::string command(command_start, command_end - command_start);
-                bind_icon_t icon;
-                std::string fallback;
-                if (CGC_BuildBindIcon(command.c_str(), icon, fallback)) {
-                    bind_segment_t seg;
-                    seg.type = bind_segment_type_t::icon;
-                    seg.icon = std::move(icon);
-                    segments.push_back(std::move(seg));
-                } else if (!fallback.empty()) {
-                    text_buffer.append(fallback);
-                }
-                cursor = command_end + 1;
-                continue;
-            }
-        }
+			if (command_end < line_end && *command_end == ':') {
+				flush_text();
+				std::string command(command_start, command_end - command_start);
+				bind_icon_t icon;
+				std::string fallback;
+				bool add_space = false;
+				if (CGC_BuildBindIcon(command.c_str(), icon, fallback)) {
+					bind_segment_t seg;
+					seg.type = bind_segment_type_t::icon;
+					seg.icon = std::move(icon);
+					segments.push_back(std::move(seg));
+					add_space = true;
+				} else if (!fallback.empty()) {
+					text_buffer.append(fallback);
+				}
+				cursor = command_end + 1;
+				if (add_space && cursor < line_end && *cursor != ' ' && *cursor != '\t') {
+					text_buffer.push_back(' ');
+				}
+				continue;
+			}
+		}
 
-        text_buffer.push_back(*cursor);
-        ++cursor;
-    }
+		text_buffer.push_back(*cursor);
+		++cursor;
+	}
 
-    flush_text();
+	flush_text();
 
-    line_width = 0;
-    line_height = CONCHAR_HEIGHT;
+	line_width = 0;
+	line_height = CONCHAR_HEIGHT;
 
-    for (const bind_segment_t &seg : segments) {
-        if (seg.type == bind_segment_type_t::text) {
-            line_width += static_cast<int>(seg.text.length()) * CONCHAR_WIDTH;
-        } else {
-            line_width += seg.icon.draw_width;
-            if (seg.icon.draw_height > line_height) {
-                line_height = seg.icon.draw_height;
-            }
-        }
-    }
+	for (const bind_segment_t &seg : segments) {
+		if (seg.type == bind_segment_type_t::text) {
+			line_width += static_cast<int>(seg.text.length()) * CONCHAR_WIDTH;
+		} else {
+			line_width += seg.icon.draw_width;
+			if (seg.icon.draw_height > line_height) {
+				line_height = seg.icon.draw_height;
+			}
+		}
+	}
 }
-
 
 struct hud_space_t
 {
