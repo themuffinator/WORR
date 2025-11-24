@@ -1593,6 +1593,52 @@ MISC
 */
 
 /*
+===============
+Sys_BlockOnConsoleFailure
+
+Blocks until the user acknowledges a fatal error so that the console buffer
+remains available for scrollback and copy operations.
+================
+*/
+static void Sys_BlockOnConsoleFailure(void)
+{
+	HANDLE	input = GetStdHandle(STD_INPUT_HANDLE);
+	DWORD	oldMode = 0;
+	BOOL	hasMode = FALSE;
+
+	if (input != INVALID_HANDLE_VALUE) {
+		hasMode = GetConsoleMode(input, &oldMode);
+	}
+
+	if (hasMode) {
+		SetConsoleMode(input, ENABLE_PROCESSED_INPUT);
+	}
+
+	Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	Sys_Printf("Press any key or close this window to exit.\n");
+
+	if (input == INVALID_HANDLE_VALUE || !hasMode) {
+		Sleep(INFINITE);
+		return;
+	}
+
+	for (;;) {
+		INPUT_RECORD	record;
+		DWORD		read = 0;
+		if (!ReadConsoleInputW(input, &record, 1, &read)) {
+			break;
+		}
+		if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+			break;
+		}
+	}
+
+	if (hasMode) {
+		SetConsoleMode(input, oldMode);
+	}
+}
+
+/*
 ================
 Sys_Error
 ================
@@ -1629,18 +1675,14 @@ void Sys_Error(const char *error, ...)
         exit(1);
 
 #if USE_SYSCON
-    if (g_allocatedConsole) {
-        DWORD list;
-        if (GetConsoleProcessList(&list, 1) > 1)
-            exit(1);
-        g_console.shutdown();
-        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-        if (input != INVALID_HANDLE_VALUE) {
-            SetConsoleMode(input, ENABLE_PROCESSED_INPUT);
-        }
-        Sys_Printf("Press Ctrl+C to exit.\n");
-        Sleep(INFINITE);
-    }
+	if (g_allocatedConsole) {
+		DWORD list;
+		if (GetConsoleProcessList(&list, 1) > 1)
+			exit(1);
+		g_console.shutdown();
+		Sys_BlockOnConsoleFailure();
+		exit(1);
+	}
 #endif
 
     MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
@@ -1657,11 +1699,18 @@ This function never returns.
 void Sys_Quit(void)
 {
 #if USE_WINSVC
-    if (statusHandle)
-        longjmp(exitBuf, 1);
+	if (statusHandle)
+		longjmp(exitBuf, 1);
 #endif
 
-    exit(0);
+#if USE_SYSCON
+	if (g_consoleInitialized) {
+		Sys_SetConsoleColor(COLOR_INDEX_NONE);
+		g_console.shutdown();
+	}
+#endif
+
+	exit(0);
 }
 
 void Sys_DebugBreak(void)
