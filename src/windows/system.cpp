@@ -374,6 +374,7 @@ private:
 static commandPrompt_t sys_con;
 static WinConsole g_console;
 static bool g_allocatedConsole = false;
+static bool g_consoleInitialized = false;
 
 #define FOREGROUND_BLACK    0
 #define FOREGROUND_WHITE    (FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_RED)
@@ -388,6 +389,8 @@ constexpr std::array<WORD, 8> kTextColors = {
     FOREGROUND_RED | FOREGROUND_BLUE,
     FOREGROUND_WHITE
 };
+
+static constexpr const char*kConsoleTitle = PRODUCT " Console";
 
 std::optional<CONSOLE_SCREEN_BUFFER_INFO> WinConsole::queryBufferInfo() const
 {
@@ -1083,56 +1086,57 @@ void WinConsole::writeWrapped(const std::wstring &text)
 
 bool WinConsole::initialize()
 {
-    input_ = GetStdHandle(STD_INPUT_HANDLE);
-    output_ = GetStdHandle(STD_OUTPUT_HANDLE);
+	input_ = GetStdHandle(STD_INPUT_HANDLE);
+	output_ = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    if (input_ == INVALID_HANDLE_VALUE || output_ == INVALID_HANDLE_VALUE) {
-        Com_EPrintf("Couldn't acquire console handles.\n");
-        return false;
-    }
+	if (input_ == INVALID_HANDLE_VALUE || output_ == INVALID_HANDLE_VALUE) {
+		Com_EPrintf("Couldn't acquire console handles.\n");
+		return false;
+	}
 
-    auto info = queryBufferInfo();
-    if (!info) {
-        Com_EPrintf("Couldn't get console buffer info.\n");
-        return false;
-    }
+	auto info = queryBufferInfo();
+	if (!info) {
+		Com_EPrintf("Couldn't get console buffer info.\n");
+		return false;
+	}
 
-    DWORD inputMode = 0;
-    if (!GetConsoleMode(input_, &inputMode)) {
-        Com_EPrintf("Couldn't get console input mode.\n");
-        return false;
-    }
+	DWORD inputMode = 0;
+	if (!GetConsoleMode(input_, &inputMode)) {
+		Com_EPrintf("Couldn't get console input mode.\n");
+		return false;
+	}
 
-    inputMode &= ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-    inputMode |= ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE;
-    if (!SetConsoleMode(input_, inputMode)) {
-        Com_EPrintf("Couldn't set console input mode.\n");
-        return false;
-    }
+	inputMode |= ENABLE_PROCESSED_INPUT;
+	inputMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE);
+	inputMode |= ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE;
+	if (!SetConsoleMode(input_, inputMode)) {
+		Com_EPrintf("Couldn't set console input mode.\n");
+		return false;
+	}
 
-    DWORD outputMode = 0;
-    if (GetConsoleMode(output_, &outputMode)) {
-        outputMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        SetConsoleMode(output_, outputMode);
-    }
+	DWORD outputMode = 0;
+	if (GetConsoleMode(output_, &outputMode)) {
+		outputMode |= ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+		SetConsoleMode(output_, outputMode);
+	}
 
-    applyFont();
+	applyFont();
 
-    SetConsoleTitleA(PRODUCT " console");
+	SetConsoleTitleA(kConsoleTitle);
 
-    sys_con.printf = Sys_Printf;
-    sys_con.widthInChars = info->dwSize.X;
-    IF_Init(&sys_con.inputLine, info->dwSize.X > 0 ? info->dwSize.X - 1 : 0, MAX_FIELD_TEXT - 1);
+	sys_con.printf = Sys_Printf;
+	sys_con.widthInChars = info->dwSize.X;
+	IF_Init(&sys_con.inputLine, info->dwSize.X > 0 ? info->dwSize.X - 1 : 0, MAX_FIELD_TEXT - 1);
 
-    updateDimensions(*info);
+	updateDimensions(*info);
 
-    ready_ = true;
-    hiddenDepth_ = 1;
-    markInputDirty();
-    showInput();
+	ready_ = true;
+	hiddenDepth_ = 1;
+	markInputDirty();
+	showInput();
 
-    Com_DPrintf("System console initialized (%d cols, %d rows).\n", info->dwSize.X, info->dwSize.Y);
-    return true;
+	Com_DPrintf("System console initialized (%d cols, %d rows).\n", info->dwSize.X, info->dwSize.Y);
+	return true;
 }
 
 void WinConsole::shutdown()
@@ -1308,16 +1312,39 @@ void Sys_SaveHistory(void)
     g_console.saveHistory();
 }
 
+/*
+=============
+Sys_ConsoleCtrlHandler
+
+Handles console control events by requesting an orderly shutdown.
+=============
+*/
 static BOOL WINAPI Sys_ConsoleCtrlHandler(DWORD dwCtrlType)
 {
     if (atomic_load(&errorEntered)) {
         exit(1);
     }
-    atomic_store(&shouldExit, TRUE);
-    Sleep(INFINITE);
-    return TRUE;
+
+    switch (dwCtrlType) {
+    case CTRL_C_EVENT:
+    case CTRL_BREAK_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_LOGOFF_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+        atomic_store(&shouldExit, TRUE);
+        return TRUE;
+    default:
+        return FALSE;
+    }
 }
 
+/*
+=============
+Sys_ConsoleInit
+
+Creates the system console early and wires standard streams before engine startup.
+=============
+*/
 static void Sys_ConsoleInit(void)
 {
 #if USE_WINSVC
@@ -1326,21 +1353,34 @@ static void Sys_ConsoleInit(void)
     }
 #endif
 
+    if (g_consoleInitialized) {
+        return;
+    }
+
 #if USE_CLIENT
     if (!AllocConsole()) {
         Com_EPrintf("Couldn't create system console.\n");
         return;
     }
     g_allocatedConsole = true;
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
 #endif
 
     SetConsoleCtrlHandler(Sys_ConsoleCtrlHandler, TRUE);
 
+#if USE_CLIENT
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+    freopen("CONIN$", "r", stdin);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+#endif
+
     if (!g_console.initialize()) {
         return;
     }
+
+    g_console.setTitle(kConsoleTitle);
+    g_consoleInitialized = true;
 }
 
 #endif // USE_SYSCON
@@ -2096,6 +2136,10 @@ static int Sys_Main(int argc, char **argv)
 #if USE_WINSVC
     if (statusHandle && setjmp(exitBuf))
         return 0;
+#endif
+
+#if USE_SYSCON
+    Sys_ConsoleInit();
 #endif
 
     // fix current directory to point to the basedir
