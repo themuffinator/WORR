@@ -245,22 +245,22 @@ static bool CGC_KeynumToIcon(int keynum, bind_icon_t &icon)
     char pic[MAX_QPATH];
 
     auto set_keyboard_icon = [&](int value) -> bool {
-        Q_snprintf(pic, sizeof(pic), "gfx/controller/keyboard/%d.png", value);
-        int w = 0;
-        int h = 0;
-        cgi.Draw_GetPicSize(&w, &h, pic);
-        if (!w || !h) {
-            return false;
-        }
-        icon.name = pic;
-        icon.width = w;
-        icon.height = h;
-        icon.draw_height = BIND_ICON_TARGET_HEIGHT;
-        icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
-        if (icon.draw_width <= 0) {
-            icon.draw_width = BIND_ICON_TARGET_HEIGHT;
-        }
-        return true;
+	Q_snprintf(pic, sizeof(pic), "gfx/%d.png", value);
+	int w = 0;
+	int h = 0;
+	cgi.Draw_GetPicSize(&w, &h, pic);
+	if (!w || !h) {
+		return false;
+	}
+	icon.name = pic;
+	icon.width = w;
+	icon.height = h;
+	icon.draw_height = BIND_ICON_TARGET_HEIGHT;
+	icon.draw_width = (w * BIND_ICON_TARGET_HEIGHT + h / 2) / h;
+	if (icon.draw_width <= 0) {
+		icon.draw_width = BIND_ICON_TARGET_HEIGHT;
+	}
+	return true;
     };
 
     if (keynum >= 0 && keynum < 256 && keynum != '"') {
@@ -393,35 +393,41 @@ static void CGC_BuildBindSegments(const char *line, size_t line_limit,
         text_buffer.clear();
     };
 
-    while (cursor < line_end) {
-        if ((line_end - cursor) >= 6 && !strncmp(cursor, ":bind:", 6)) {
-            const char *command_start = cursor + 6;
-            const char *command_end = command_start;
-            while (command_end < line_end && *command_end != ':') {
-                ++command_end;
-            }
+	while (cursor < line_end) {
+		if ((line_end - cursor) >= 6 && !strncmp(cursor, ":bind:", 6)) {
+			const char *command_start = cursor + 6;
+			const char *command_end = command_start;
+			while (command_end < line_end && *command_end != ':') {
+				++command_end;
+			}
 
-            if (command_end < line_end && *command_end == ':') {
-                flush_text();
-                std::string command(command_start, command_end - command_start);
-                bind_icon_t icon;
-                std::string fallback;
-                if (CGC_BuildBindIcon(command.c_str(), icon, fallback)) {
-                    bind_segment_t seg;
-                    seg.type = bind_segment_type_t::icon;
-                    seg.icon = std::move(icon);
-                    segments.push_back(std::move(seg));
-                } else if (!fallback.empty()) {
-                    text_buffer.append(fallback);
-                }
-                cursor = command_end + 1;
-                continue;
-            }
-        }
+			if (command_end < line_end && *command_end == ':') {
+				flush_text();
+				std::string command(command_start, command_end - command_start);
+				bind_icon_t icon;
+				std::string fallback;
+				bool add_space = false;
+				if (CGC_BuildBindIcon(command.c_str(), icon, fallback)) {
+					bind_segment_t seg;
+					seg.type = bind_segment_type_t::icon;
+					seg.icon = std::move(icon);
+					segments.push_back(std::move(seg));
+					add_space = true;
+				} else if (!fallback.empty()) {
+					text_buffer.append(fallback);
+				}
+				cursor = command_end + 1;
+				if (add_space && cursor < line_end && *cursor != ' ' && *cursor != '\t') {
+					text_buffer.push_back(' ');
+				}
+				continue;
+			}
+		}
 
-        text_buffer.push_back(*cursor);
-        ++cursor;
-    }
+		text_buffer.push_back(*cursor);
+		++cursor;
+	}
+
 
     flush_text();
 
