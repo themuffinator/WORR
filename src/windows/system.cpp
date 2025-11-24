@@ -1638,6 +1638,35 @@ static void Sys_BlockOnConsoleFailure(void)
 	}
 }
 
+
+/*
+=============
+Sys_BlockOnConsoleExit
+
+Shows a blocking prompt on our dedicated console while preserving the buffer
+for scrollback and copy operations.
+=============
+*/
+static void Sys_BlockOnConsoleExit(void)
+{
+#if USE_SYSCON
+	if (!g_allocatedConsole) {
+		return;
+	}
+
+	DWORD list;
+	if (GetConsoleProcessList(&list, 1) > 1) {
+		return;
+	}
+
+	if (g_consoleInitialized) {
+		Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	}
+
+	Sys_BlockOnConsoleFailure();
+#endif
+}
+
 /*
 ================
 Sys_Error
@@ -1645,49 +1674,46 @@ Sys_Error
 */
 void Sys_Error(const char *error, ...)
 {
-    va_list     argptr;
-    char        text[MAXERRORMSG];
+	va_list	argptr;
+	char		text[MAXERRORMSG];
 
-    va_start(argptr, error);
-    Q_vsnprintf(text, sizeof(text), error, argptr);
-    va_end(argptr);
+	va_start(argptr, error);
+	Q_vsnprintf(text, sizeof(text), error, argptr);
+	va_end(argptr);
 
 #if USE_CLIENT
-    Win_Shutdown();
+	Win_Shutdown();
 #endif
 
 #if USE_SYSCON
-    Sys_SetConsoleColor(COLOR_INDEX_RED);
-    Sys_Printf("********************\n"
-               "FATAL: %s\n"
-               "********************\n", text);
-    Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	Sys_SetConsoleColor(COLOR_INDEX_RED);
+	Sys_Printf("********************\n"
+	           "FATAL: %s\n"
+	           "********************\n", text);
+	Sys_SetConsoleColor(COLOR_INDEX_NONE);
 #endif
 
 #if USE_WINSVC
-    if (statusHandle)
-        longjmp(exitBuf, 1);
+	if (statusHandle)
+		longjmp(exitBuf, 1);
 #endif
 
-    atomic_store(&errorEntered, TRUE);
+	atomic_store(&errorEntered, TRUE);
 
-    if (atomic_load(&shouldExit) || (sys_exitonerror && sys_exitonerror->integer))
-        exit(1);
+	if (atomic_load(&shouldExit) || (sys_exitonerror && sys_exitonerror->integer))
+		exit(1);
 
 #if USE_SYSCON
+	Sys_BlockOnConsoleExit();
 	if (g_allocatedConsole) {
-		DWORD list;
-		if (GetConsoleProcessList(&list, 1) > 1)
-			exit(1);
-		g_console.shutdown();
-		Sys_BlockOnConsoleFailure();
 		exit(1);
 	}
 #endif
 
-    MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
-    exit(1);
+	MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
+	exit(1);
 }
+
 
 /*
 ================
@@ -1706,12 +1732,17 @@ void Sys_Quit(void)
 #if USE_SYSCON
 	if (g_consoleInitialized) {
 		Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	}
+	Sys_BlockOnConsoleExit();
+	if (g_consoleInitialized) {
 		g_console.shutdown();
 	}
 #endif
 
 	exit(0);
 }
+
+
 
 void Sys_DebugBreak(void)
 {
