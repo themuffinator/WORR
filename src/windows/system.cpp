@@ -195,25 +195,42 @@ constexpr wchar_t kPromptPrefix = L']';
 
 class Utf8Converter {
 public:
-    std::wstring fromUtf8(std::string_view text) const
-    {
-        if (text.empty()) {
-            return {};
-        }
+	std::wstring fromUtf8(std::string_view text) const
+	{
+		if (text.empty()) {
+			return {};
+		}
 
-        int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-        if (required <= 0) {
-            std::wstring fallback(text.size(), L'\0');
-            std::transform(text.begin(), text.end(), fallback.begin(), [](unsigned char c) { return static_cast<wchar_t>(c); });
-            return fallback;
-        }
+		int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+		if (required <= 0) {
+			std::wstring fallback(text.size(), L'\0');
+			std::transform(text.begin(), text.end(), fallback.begin(), [](unsigned char c) { return static_cast<wchar_t>(c); });
+			return fallback;
+		}
 
-        std::wstring result(required, L'\0');
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-        return result;
-    }
+		std::wstring result(required, L'\0');
+		MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
+		return result;
+	}
+
+	std::string toUtf8(std::wstring_view text) const
+	{
+		if (text.empty()) {
+			return {};
+		}
+
+		const int required = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+		if (required <= 0) {
+			std::string fallback(text.size(), '\0');
+			std::transform(text.begin(), text.end(), fallback.begin(), [](wchar_t c) { return static_cast<char>(c); });
+			return fallback;
+		}
+
+		std::string result(required, '\0');
+		WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
+		return result;
+	}
 };
-
 class ConsoleFontController {
 public:
     ConsoleFontController()
@@ -325,15 +342,16 @@ private:
     void updateDimensions(const CONSOLE_SCREEN_BUFFER_INFO &info);
     void markInputDirty();
     void hideInput();
-    void showInput();
-    void renderInputLine();
-    void applyFont();
-    void handleWindowEvent(const WINDOW_BUFFER_SIZE_RECORD &record);
-    void handleKeyEvent(const KEY_EVENT_RECORD &record);
-    bool handleCtrlShortcut(WORD key, DWORD controlState);
-    bool handleAltShortcut(WORD key);
-    bool handleCtrlNavigation(WORD key);
-    void handlePrintableCharacter(char ch);
+void showInput();
+void renderInputLine();
+void applyFont();
+void handleWindowEvent(const WINDOW_BUFFER_SIZE_RECORD &record);
+void handleKeyEvent(const KEY_EVENT_RECORD &record);
+void pasteFromClipboard();
+bool handleCtrlShortcut(WORD key, DWORD controlState);
+bool handleAltShortcut(WORD key);
+bool handleCtrlNavigation(WORD key);
+void handlePrintableCharacter(char ch);
     void submitCurrentLine();
     void moveCursorTo(size_t position);
     void moveCursorLeft();
@@ -374,6 +392,7 @@ private:
 static commandPrompt_t sys_con;
 static WinConsole g_console;
 static bool g_allocatedConsole = false;
+static bool g_consoleInitialized = false;
 
 #define FOREGROUND_BLACK    0
 #define FOREGROUND_WHITE    (FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_RED)
@@ -388,6 +407,8 @@ constexpr std::array<WORD, 8> kTextColors = {
     FOREGROUND_RED | FOREGROUND_BLUE,
     FOREGROUND_WHITE
 };
+
+static constexpr const char*kConsoleTitle = PRODUCT " Console";
 
 std::optional<CONSOLE_SCREEN_BUFFER_INFO> WinConsole::queryBufferInfo() const
 {
@@ -518,77 +539,145 @@ void WinConsole::handleWindowEvent(const WINDOW_BUFFER_SIZE_RECORD &record)
     Com_DPrintf("System console resized (%d cols, %d rows).\n", record.dwSize.X, record.dwSize.Y);
 }
 
+/*
+=============
+WinConsole::handleKeyEvent
+
+Processes console key input, honoring navigation, history, and paste
+shortcuts before forwarding printable characters to the prompt.
+=============
+*/
 void WinConsole::handleKeyEvent(const KEY_EVENT_RECORD &record)
 {
-    if (!record.bKeyDown) {
-        return;
-    }
+	if (!record.bKeyDown) {
+		return;
+	}
 
-    const WORD key = record.wVirtualKeyCode;
-    const DWORD state = record.dwControlKeyState;
-    const bool ctrl = (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0;
-    const bool alt = (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0;
-    const bool shift = (state & SHIFT_PRESSED) != 0;
+	const WORD key = record.wVirtualKeyCode;
+	const DWORD state = record.dwControlKeyState;
+	const bool ctrl = (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0;
+	const bool alt = (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0;
+	const bool shift = (state & SHIFT_PRESSED) != 0;
 
-    if (ctrl && handleCtrlShortcut(key, state)) {
-        return;
-    }
+	if ((ctrl && key == 'V') || (shift && key == VK_INSERT)) {
+		pasteFromClipboard();
+		return;
+	}
 
-    if (alt && handleAltShortcut(key)) {
-        return;
-    }
+	if (ctrl && handleCtrlShortcut(key, state)) {
+		return;
+	}
 
-    if (ctrl && handleCtrlNavigation(key)) {
-        return;
-    }
+	if (alt && handleAltShortcut(key)) {
+		return;
+	}
 
-    switch (key) {
-    case VK_UP:
-        historyUp();
-        return;
-    case VK_DOWN:
-        historyDown();
-        return;
-    case VK_PRIOR:
-        scrollPage(-1);
-        return;
-    case VK_NEXT:
-        scrollPage(1);
-        return;
-    case VK_RETURN:
-        submitCurrentLine();
-        return;
-    case VK_BACK:
-        deletePreviousChar();
-        return;
-    case VK_DELETE:
-        deleteCharAtCursor();
-        return;
-    case VK_HOME:
-        moveCursorToStart();
-        return;
-    case VK_END:
-        moveCursorToEnd();
-        return;
-    case VK_LEFT:
-        moveCursorLeft();
-        return;
-    case VK_RIGHT:
-        moveCursorRight();
-        return;
-    case VK_TAB:
-        completeCommand(shift);
-        return;
-    default:
-        break;
-    }
+	if (ctrl && handleCtrlNavigation(key)) {
+		return;
+	}
 
-    const wchar_t ch = record.uChar.UnicodeChar;
-    if (!ctrl && !alt && ch >= 32 && ch < 128) {
-        handlePrintableCharacter(static_cast<char>(ch));
-    }
+	switch (key) {
+	case VK_UP:
+		historyUp();
+		return;
+	case VK_DOWN:
+		historyDown();
+		return;
+	case VK_PRIOR:
+		scrollPage(-1);
+		return;
+	case VK_NEXT:
+		scrollPage(1);
+		return;
+	case VK_RETURN:
+		submitCurrentLine();
+		return;
+	case VK_BACK:
+		deletePreviousChar();
+		return;
+	case VK_DELETE:
+		deleteCharAtCursor();
+		return;
+	case VK_HOME:
+		moveCursorToStart();
+		return;
+	case VK_END:
+		moveCursorToEnd();
+		return;
+	case VK_LEFT:
+		moveCursorLeft();
+		return;
+	case VK_RIGHT:
+		moveCursorRight();
+		return;
+	case VK_TAB:
+		completeCommand(shift);
+		return;
+	default:
+		break;
+	}
+
+	const wchar_t ch = record.uChar.UnicodeChar;
+	if (!ctrl && !alt && ch >= 32 && ch < 128) {
+		handlePrintableCharacter(static_cast<char>(ch));
+	}
 }
 
+/*
+=============
+WinConsole::pasteFromClipboard
+
+Pastes Unicode clipboard text into the input line, submitting buffered
+commands when newlines are encountered.
+=============
+*/
+void WinConsole::pasteFromClipboard()
+{
+	if (!OpenClipboard(nullptr)) {
+		return;
+	}
+
+	HANDLE handle = GetClipboardData(CF_UNICODETEXT);
+	if (!handle) {
+		CloseClipboard();
+		return;
+	}
+
+	LPCWSTR data = static_cast<LPCWSTR>(GlobalLock(handle));
+	if (!data) {
+		CloseClipboard();
+		return;
+	}
+
+	std::wstring content(data);
+	GlobalUnlock(handle);
+	CloseClipboard();
+
+	if (content.empty()) {
+		return;
+	}
+
+	std::string utf8 = utf8_.toUtf8(content);
+	InputScope scope(*this);
+	markInputDirty();
+
+	for (char ch : utf8) {
+		if (ch == '\r') {
+			continue;
+		}
+
+		if (ch == '\n') {
+			submitCurrentLine();
+			continue;
+		}
+
+		if (static_cast<unsigned char>(ch) < 32) {
+			continue;
+		}
+
+		insertCharacter(ch);
+	}
+}
 bool WinConsole::handleCtrlShortcut(WORD key, DWORD controlState)
 {
     switch (key) {
@@ -1026,113 +1115,125 @@ void WinConsole::writeWrapped(std::string_view text)
     writeWrapped(wide);
 }
 
+/*
+=============
+WinConsole::writeWrapped
+
+Wraps wide text to the console width, respecting natural break points to
+mirror Quake III's startup console line folding.
+=============
+*/
 void WinConsole::writeWrapped(const std::wstring &text)
 {
-    if (text.empty()) {
-        return;
-    }
+	if (text.empty()) {
+		return;
+	}
 
-    const size_t width = width_ ? static_cast<size_t>(width_) : 80;
-    size_t index = 0;
-    DWORD written = 0;
+	const size_t wrapWidth = width_ > 1 ? static_cast<size_t>(width_ - 1) : (width_ ? static_cast<size_t>(width_) : 80);
+	size_t index = 0;
+	DWORD written = 0;
 
-    while (index < text.size()) {
-        size_t newline = text.find(L'\n', index);
-        const size_t lineEnd = (newline == std::wstring::npos) ? text.size() : newline;
-        size_t start = index;
+	while (index < text.size()) {
+		size_t newline = text.find(L'
+', index);
+		const size_t lineEnd = (newline == std::wstring::npos) ? text.size() : newline;
+		size_t start = index;
 
-        while (start < lineEnd) {
-            size_t remaining = lineEnd - start;
-            size_t chunk = std::min(remaining, width);
-            if (chunk < remaining) {
-                size_t wrap = chunk;
-                while (wrap > 0 && !std::iswspace(text[start + wrap - 1])) {
-                    --wrap;
-                }
-                if (wrap > 0) {
-                    chunk = wrap;
-                }
-            }
+		while (start < lineEnd) {
+			size_t remaining = lineEnd - start;
+			size_t chunk = std::min(remaining, wrapWidth);
+			if (chunk < remaining) {
+				size_t wrap = chunk;
+				while (wrap > 0 && !std::iswspace(text[start + wrap - 1])) {
+				--wrap;
+				}
+				if (wrap > 0) {
+				chunk = wrap;
+				}
+			}
 
-            if (chunk == 0) {
-                chunk = std::min(remaining, width);
-                if (chunk == 0) {
-                    break;
-                }
-            }
+			if (chunk == 0) {
+				chunk = std::min(remaining, wrapWidth);
+				if (chunk == 0) {
+				break;
+				}
+			}
 
-            WriteConsoleW(output_, text.data() + start, static_cast<DWORD>(chunk), &written, nullptr);
-            start += chunk;
+		WriteConsoleW(output_, text.data() + start, static_cast<DWORD>(chunk), &written, nullptr);
+		start += chunk;
 
-            if (start < lineEnd) {
-                WriteConsoleW(output_, L"\n", 1, &written, nullptr);
-                while (start < lineEnd && std::iswspace(text[start]) && text[start] != L'\n') {
-                    ++start;
-                }
-            }
-        }
+		if (start < lineEnd) {
+		WriteConsoleW(output_, L"
+", 1, &written, nullptr);
+		while (start < lineEnd && std::iswspace(text[start]) && text[start] != L'
+') {
+		++start;
+		}
+		}
+		}
 
-        if (newline != std::wstring::npos) {
-            WriteConsoleW(output_, L"\n", 1, &written, nullptr);
-            index = newline + 1;
-        } else {
-            index = lineEnd;
-        }
-    }
+		if (newline != std::wstring::npos) {
+		WriteConsoleW(output_, L"
+", 1, &written, nullptr);
+		index = newline + 1;
+		} else {
+		index = lineEnd;
+		}
+	}
 }
-
 bool WinConsole::initialize()
 {
-    input_ = GetStdHandle(STD_INPUT_HANDLE);
-    output_ = GetStdHandle(STD_OUTPUT_HANDLE);
+	input_ = GetStdHandle(STD_INPUT_HANDLE);
+	output_ = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    if (input_ == INVALID_HANDLE_VALUE || output_ == INVALID_HANDLE_VALUE) {
-        Com_EPrintf("Couldn't acquire console handles.\n");
-        return false;
-    }
+	if (input_ == INVALID_HANDLE_VALUE || output_ == INVALID_HANDLE_VALUE) {
+		Com_EPrintf("Couldn't acquire console handles.\n");
+		return false;
+	}
 
-    auto info = queryBufferInfo();
-    if (!info) {
-        Com_EPrintf("Couldn't get console buffer info.\n");
-        return false;
-    }
+	auto info = queryBufferInfo();
+	if (!info) {
+		Com_EPrintf("Couldn't get console buffer info.\n");
+		return false;
+	}
 
-    DWORD inputMode = 0;
-    if (!GetConsoleMode(input_, &inputMode)) {
-        Com_EPrintf("Couldn't get console input mode.\n");
-        return false;
-    }
+	DWORD inputMode = 0;
+	if (!GetConsoleMode(input_, &inputMode)) {
+		Com_EPrintf("Couldn't get console input mode.\n");
+		return false;
+	}
 
-    inputMode &= ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-    inputMode |= ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE;
-    if (!SetConsoleMode(input_, inputMode)) {
-        Com_EPrintf("Couldn't set console input mode.\n");
-        return false;
-    }
+	inputMode |= ENABLE_PROCESSED_INPUT;
+	inputMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE);
+	inputMode |= ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE;
+	if (!SetConsoleMode(input_, inputMode)) {
+		Com_EPrintf("Couldn't set console input mode.\n");
+		return false;
+	}
 
-    DWORD outputMode = 0;
-    if (GetConsoleMode(output_, &outputMode)) {
-        outputMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        SetConsoleMode(output_, outputMode);
-    }
+	DWORD outputMode = 0;
+	if (GetConsoleMode(output_, &outputMode)) {
+		outputMode |= ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+		SetConsoleMode(output_, outputMode);
+	}
 
-    applyFont();
+	applyFont();
 
-    SetConsoleTitleA(PRODUCT " console");
+	SetConsoleTitleA(kConsoleTitle);
 
-    sys_con.printf = Sys_Printf;
-    sys_con.widthInChars = info->dwSize.X;
-    IF_Init(&sys_con.inputLine, info->dwSize.X > 0 ? info->dwSize.X - 1 : 0, MAX_FIELD_TEXT - 1);
+	sys_con.printf = Sys_Printf;
+	sys_con.widthInChars = info->dwSize.X;
+	IF_Init(&sys_con.inputLine, info->dwSize.X > 0 ? info->dwSize.X - 1 : 0, MAX_FIELD_TEXT - 1);
 
-    updateDimensions(*info);
+	updateDimensions(*info);
 
-    ready_ = true;
-    hiddenDepth_ = 1;
-    markInputDirty();
-    showInput();
+	ready_ = true;
+	hiddenDepth_ = 1;
+	markInputDirty();
+	showInput();
 
-    Com_DPrintf("System console initialized (%d cols, %d rows).\n", info->dwSize.X, info->dwSize.Y);
-    return true;
+	Com_DPrintf("System console initialized (%d cols, %d rows).\n", info->dwSize.X, info->dwSize.Y);
+	return true;
 }
 
 void WinConsole::shutdown()
@@ -1308,16 +1409,39 @@ void Sys_SaveHistory(void)
     g_console.saveHistory();
 }
 
+/*
+=============
+Sys_ConsoleCtrlHandler
+
+Handles console control events by requesting an orderly shutdown.
+=============
+*/
 static BOOL WINAPI Sys_ConsoleCtrlHandler(DWORD dwCtrlType)
 {
     if (atomic_load(&errorEntered)) {
         exit(1);
     }
-    atomic_store(&shouldExit, TRUE);
-    Sleep(INFINITE);
-    return TRUE;
+
+    switch (dwCtrlType) {
+    case CTRL_C_EVENT:
+    case CTRL_BREAK_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_LOGOFF_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+        atomic_store(&shouldExit, TRUE);
+        return TRUE;
+    default:
+        return FALSE;
+    }
 }
 
+/*
+=============
+Sys_ConsoleInit
+
+Creates the system console early and wires standard streams before engine startup.
+=============
+*/
 static void Sys_ConsoleInit(void)
 {
 #if USE_WINSVC
@@ -1326,21 +1450,34 @@ static void Sys_ConsoleInit(void)
     }
 #endif
 
+    if (g_consoleInitialized) {
+        return;
+    }
+
 #if USE_CLIENT
     if (!AllocConsole()) {
         Com_EPrintf("Couldn't create system console.\n");
         return;
     }
     g_allocatedConsole = true;
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
 #endif
 
     SetConsoleCtrlHandler(Sys_ConsoleCtrlHandler, TRUE);
 
+#if USE_CLIENT
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+    freopen("CONIN$", "r", stdin);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+#endif
+
     if (!g_console.initialize()) {
         return;
     }
+
+    g_console.setTitle(kConsoleTitle);
+    g_consoleInitialized = true;
 }
 
 #endif // USE_SYSCON
@@ -1456,59 +1593,127 @@ MISC
 */
 
 /*
+===============
+Sys_BlockOnConsoleFailure
+
+Blocks until the user acknowledges a fatal error so that the console buffer
+remains available for scrollback and copy operations.
+================
+*/
+static void Sys_BlockOnConsoleFailure(void)
+{
+	HANDLE	input = GetStdHandle(STD_INPUT_HANDLE);
+	DWORD	oldMode = 0;
+	BOOL	hasMode = FALSE;
+
+	if (input != INVALID_HANDLE_VALUE) {
+		hasMode = GetConsoleMode(input, &oldMode);
+	}
+
+	if (hasMode) {
+		SetConsoleMode(input, ENABLE_PROCESSED_INPUT);
+	}
+
+	Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	Sys_Printf("Press any key or close this window to exit.\n");
+
+	if (input == INVALID_HANDLE_VALUE || !hasMode) {
+		Sleep(INFINITE);
+		return;
+	}
+
+	for (;;) {
+		INPUT_RECORD	record;
+		DWORD		read = 0;
+		if (!ReadConsoleInputW(input, &record, 1, &read)) {
+			break;
+		}
+		if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+			break;
+		}
+	}
+
+	if (hasMode) {
+		SetConsoleMode(input, oldMode);
+	}
+}
+
+
+/*
+=============
+Sys_BlockOnConsoleExit
+
+Shows a blocking prompt on our dedicated console while preserving the buffer
+for scrollback and copy operations.
+=============
+*/
+static void Sys_BlockOnConsoleExit(void)
+{
+#if USE_SYSCON
+	if (!g_allocatedConsole) {
+		return;
+	}
+
+	DWORD list;
+	if (GetConsoleProcessList(&list, 1) > 1) {
+		return;
+	}
+
+	if (g_consoleInitialized) {
+		Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	}
+
+	Sys_BlockOnConsoleFailure();
+#endif
+}
+
+/*
 ================
 Sys_Error
 ================
 */
 void Sys_Error(const char *error, ...)
 {
-    va_list     argptr;
-    char        text[MAXERRORMSG];
+	va_list	argptr;
+	char		text[MAXERRORMSG];
 
-    va_start(argptr, error);
-    Q_vsnprintf(text, sizeof(text), error, argptr);
-    va_end(argptr);
+	va_start(argptr, error);
+	Q_vsnprintf(text, sizeof(text), error, argptr);
+	va_end(argptr);
 
 #if USE_CLIENT
-    Win_Shutdown();
+	Win_Shutdown();
 #endif
 
 #if USE_SYSCON
-    Sys_SetConsoleColor(COLOR_INDEX_RED);
-    Sys_Printf("********************\n"
-               "FATAL: %s\n"
-               "********************\n", text);
-    Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	Sys_SetConsoleColor(COLOR_INDEX_RED);
+	Sys_Printf("********************\n"
+	           "FATAL: %s\n"
+	           "********************\n", text);
+	Sys_SetConsoleColor(COLOR_INDEX_NONE);
 #endif
 
 #if USE_WINSVC
-    if (statusHandle)
-        longjmp(exitBuf, 1);
+	if (statusHandle)
+		longjmp(exitBuf, 1);
 #endif
 
-    atomic_store(&errorEntered, TRUE);
+	atomic_store(&errorEntered, TRUE);
 
-    if (atomic_load(&shouldExit) || (sys_exitonerror && sys_exitonerror->integer))
-        exit(1);
+	if (atomic_load(&shouldExit) || (sys_exitonerror && sys_exitonerror->integer))
+		exit(1);
 
 #if USE_SYSCON
-    if (g_allocatedConsole) {
-        DWORD list;
-        if (GetConsoleProcessList(&list, 1) > 1)
-            exit(1);
-        g_console.shutdown();
-        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-        if (input != INVALID_HANDLE_VALUE) {
-            SetConsoleMode(input, ENABLE_PROCESSED_INPUT);
-        }
-        Sys_Printf("Press Ctrl+C to exit.\n");
-        Sleep(INFINITE);
-    }
+	Sys_BlockOnConsoleExit();
+	if (g_allocatedConsole) {
+		exit(1);
+	}
 #endif
 
-    MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
-    exit(1);
+	MessageBoxA(NULL, text, PRODUCT " Fatal Error", MB_ICONERROR | MB_OK);
+	exit(1);
 }
+
 
 /*
 ================
@@ -1520,12 +1725,24 @@ This function never returns.
 void Sys_Quit(void)
 {
 #if USE_WINSVC
-    if (statusHandle)
-        longjmp(exitBuf, 1);
+	if (statusHandle)
+		longjmp(exitBuf, 1);
 #endif
 
-    exit(0);
+#if USE_SYSCON
+	if (g_consoleInitialized) {
+		Sys_SetConsoleColor(COLOR_INDEX_NONE);
+	}
+	Sys_BlockOnConsoleExit();
+	if (g_consoleInitialized) {
+		g_console.shutdown();
+	}
+#endif
+
+	exit(0);
 }
+
+
 
 void Sys_DebugBreak(void)
 {
@@ -2096,6 +2313,10 @@ static int Sys_Main(int argc, char **argv)
 #if USE_WINSVC
     if (statusHandle && setjmp(exitBuf))
         return 0;
+#endif
+
+#if USE_SYSCON
+    Sys_ConsoleInit();
 #endif
 
     // fix current directory to point to the basedir
