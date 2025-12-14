@@ -1,4 +1,5 @@
 #include "client.hpp"
+#include "src/refresh/gl.hpp"
 
 #include "common/files.hpp"
 #include "common/q3colors.hpp"
@@ -6,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdarg>
+#include <cmath>
 #include <string>
 #include <string_view>
 
@@ -26,7 +28,7 @@ namespace {
 	constexpr int kTotalLines = 1024;
 	constexpr int kTotalLinesMask = kTotalLines - 1;
 	constexpr int kLegacyLineWidth = 126;
-	constexpr int kPromptPadding = 2;
+	constexpr int kPromptPadding = 0;
 	constexpr int kScrollLargeStep = 6;
 	constexpr int kScrollSmallStep = 2;
 	constexpr float kMinConsoleHeight = 0.1f;
@@ -142,6 +144,12 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		[[nodiscard]] int charWidth() const noexcept;
 		[[nodiscard]] int availablePixelWidth() const noexcept;
 		[[nodiscard]] int rightScreenEdge() const noexcept;
+		[[nodiscard]] int textScale() const noexcept;
+		[[nodiscard]] vrect_t leftRect() const noexcept;
+		[[nodiscard]] vrect_t rightRect() const noexcept;
+		[[nodiscard]] virtualScreenLayout_t computeLayout() const;
+		void applyLayoutMetrics(const virtualScreenLayout_t& layout);
+		[[nodiscard]] int measureVisiblePixels(std::string_view text) const;
 
 		[[nodiscard]] ConsoleLine& currentLine() noexcept
 		{
@@ -180,6 +188,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		int vidWidth_{ 0 };
 		int vidHeight_{ 0 };
 		float scale_{ 1.0f };
+		virtualScreenLayout_t layout_{};
 
 		color_index_t currentColor_{ COLOR_INDEX_NONE };
 		bool skipNotify_{ false };
@@ -234,17 +243,24 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		if (initialized_)
 			return;
 
-                static const cmdreg_t consoleCommands[] = {
-                        { "toggleconsole", Con_ToggleConsole_f },
-                        { "messagemode", Con_MessageMode_f },
-                        { "messagemode2", Con_MessageMode2_f },
-                        { "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
-                        { "clear", Con_Clear_f },
-                        { "clearnotify", Con_ClearNotify_f },
-                        { "condump", Con_Dump_f, Con_Dump_c },
-                        { nullptr, nullptr }
-                };
+#if USE_DEBUG
+		Sys_DebugBootLog("Con_Init: enter (Console::init)");
+#endif
+
+		static const cmdreg_t consoleCommands[] = {
+			{ "toggleconsole", Con_ToggleConsole_f },
+			{ "messagemode", Con_MessageMode_f },
+			{ "messagemode2", Con_MessageMode2_f },
+			{ "remotemode", Con_RemoteMode_f, CL_RemoteMode_c },
+			{ "clear", Con_Clear_f },
+			{ "clearnotify", Con_ClearNotify_f },
+			{ "condump", Con_Dump_f, Con_Dump_c },
+			{ nullptr, nullptr }
+		};
 		Cmd_Register(consoleCommands);
+#if USE_DEBUG
+		Sys_DebugBootLog("Con_Init: commands registered");
+#endif
 
 		notifyTime_ = Cvar_Get("con_notifytime", "3", 0);
 		notifyTime_->changed = cl_timeout_changed;
@@ -260,11 +276,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 				Console::instance().checkResize();
 			};
 
-#if USE_FREETYPE
 		font_ = Cvar_Get("con_font", "/fonts/RobotoMono-Regular.ttf", 0);
-#else
-		font_ = Cvar_Get("con_font", "conchars.pcx", 0);
-#endif
 		font_->changed = [](cvar_t* self) {
 			if (cls.ref_initialized)
 				Console::instance().registerMedia();
@@ -295,6 +307,9 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			Console::instance().refreshTimestampColor();
 			};
 		refreshTimestampColor();
+#if USE_DEBUG
+		Sys_DebugBootLog("Con_Init: cvars registered");
+#endif
 
 		autoChat_ = Cvar_Get("con_auto_chat", "0", 0);
 
@@ -306,9 +321,24 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		pendingNewline_ = '\r';
 		currentColor_ = COLOR_INDEX_NONE;
 
-		checkResize();
+		if (cls.ref_initialized) {
+			registerMedia();
+			checkResize();
+#if USE_DEBUG
+			Sys_DebugBootLog("Con_Init: after checkResize()");
+#endif
+		} else {
+			registeredFont_ = 0;
+			backgroundImage_ = 0;
+#if USE_DEBUG
+			Sys_DebugBootLog("Con_Init: skipped media/resize (renderer not initialized)");
+#endif
+		}
 
 		initialized_ = true;
+#if USE_DEBUG
+		Sys_DebugBootLog("Con_Init: done (Console::init)");
+#endif
 	}
 
 	void Console::postInit()
@@ -474,7 +504,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		ensureCarriageReturn();
 
 		char text[2] = { ch, 0 };
-		const int charPixels = SCR_MeasureString(1, 0, 1, text, fontHandle());
+		const int charPixels = SCR_MeasureString(textScale(), UI_IGNORECOLOR, 1, text, fontHandle());
 		if (contentPixelWidth_ + charPixels > availablePixelWidth() && contentPixelWidth_ > 0) {
 			lineFeed();
 			ensureCarriageReturn();
@@ -515,12 +545,45 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		}
 	}
 
-	int Console::measureContentPixels(std::string_view text) const
+	int Console::measureVisiblePixels(std::string_view text) const
 	{
 		if (text.empty())
 			return 0;
 
-		return SCR_MeasureString(1, 0, text.size(), text.data(), fontHandle());
+		const char* ptr = text.data();
+		size_t remaining = text.size();
+		int width = 0;
+		color_t ignoredColor;
+
+		while (remaining) {
+			size_t consumed = 0;
+			if (Q3_ParseColorEscape(ptr, remaining, ignoredColor, consumed)) {
+				ptr += consumed;
+				remaining -= consumed;
+				continue;
+			}
+
+			const char* plainStart = ptr;
+			size_t plainLen = 0;
+			do {
+				++plainLen;
+				++ptr;
+				--remaining;
+				if (!remaining)
+					break;
+				if (Q3_ParseColorEscape(ptr, remaining, ignoredColor, consumed))
+					break;
+			} while (remaining);
+
+			width += SCR_MeasureString(textScale(), UI_IGNORECOLOR, plainLen, plainStart, fontHandle());
+		}
+
+		return width;
+	}
+
+	int Console::measureContentPixels(std::string_view text) const
+	{
+		return measureVisiblePixels(text);
 	}
 
 	void Console::updateContentWidth()
@@ -533,7 +596,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		if (word.empty())
 			return false;
 
-		const int wordPixels = SCR_MeasureString(1, 0, word.size(), word.data(), fontHandle());
+		const int wordPixels = measureVisiblePixels(word);
 		if (wordPixels >= availablePixelWidth())
 			return false;
 
@@ -604,6 +667,8 @@ bool getTextInput(const char** msg, bool* is_team) const;
 
 	void Console::drawSolid()
 	{
+		const int scale = textScale();
+		const vrect_t rect = leftRect();
 		const int visibleLines = std::clamp(static_cast<int>(vidHeight_ * currentHeight_), 0, vidHeight_);
 		if (!visibleLines)
 			return;
@@ -627,7 +692,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			const int glyphAdvance = std::max(charWidth(), 1);
 			const int spacing = glyphAdvance * 2;
 			for (int i = 1; i < vidWidth_ / spacing; i += 4) {
-				SCR_DrawGlyph(i * glyphAdvance, y, 1, 0, '^', ColorSetAlpha(COLOR_RED, drawColor.a));
+				SCR_DrawGlyph(i * glyphAdvance, y, scale, 0, '^', ColorSetAlpha(COLOR_RED, drawColor.a));
 			}
 			y -= lineHeight();
 			--rows;
@@ -641,7 +706,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			if (currentIndex_ - row > kTotalLines - 1)
 				break;
 
-			int x = drawLine(y, row, 1.0f, false);
+			drawLine(y, row, 1.0f, false);
 
 			y -= lineHeight();
 			--row;
@@ -672,7 +737,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			buffer.push_back('\x82');
 			buffer.append(suffix);
 
-			SCR_DrawStringStretch(charWidth(), visibleLines - (lineHeight() * 3), 1, 0, buffer.size(), buffer.c_str(), COLOR_WHITE, fontHandle());
+			SCR_DrawStringStretch(rect.x + charWidth(), visibleLines - (lineHeight() * 3), scale, 0, buffer.size(), buffer.c_str(), COLOR_WHITE, fontHandle());
 		}
 		else if (cls.state == ca_loading) {
 			const char* text = nullptr;
@@ -688,7 +753,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			if (text) {
 				char buffer[128];
 				Q_snprintf(buffer, sizeof(buffer), "Loading %s...", text);
-				SCR_DrawStringStretch(charWidth(), visibleLines - (lineHeight() * 3), 1, 0, strlen(buffer), buffer, COLOR_WHITE, fontHandle());
+				SCR_DrawStringStretch(rect.x + charWidth(), visibleLines - (lineHeight() * 3), scale, 0, strlen(buffer), buffer, COLOR_WHITE, fontHandle());
 			}
 		}
 
@@ -697,16 +762,17 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		if (cls.key_dest & KEY_CONSOLE) {
 			const int inputY = baseFooterY;
 			const int promptGlyph = mode_ == ConsoleMode::Remote ? '#' : 17;
-			SCR_DrawGlyph(charWidth(), inputY, 1, 0, promptGlyph, COLOR_YELLOW);
-			const int promptRight = IF_Draw(&prompt_.inputLine, charWidth() * 2, inputY, UI_DRAWCURSOR, fontHandle());
-			const int promptWidth = std::max(0, promptRight - charWidth() * 2);
+			const vrect_t rect = leftRect();
+			SCR_DrawGlyph(rect.x, inputY, scale, 0, promptGlyph, COLOR_YELLOW);
+			const int promptRight = IF_Draw(&prompt_.inputLine, rect.x + charWidth(), inputY, UI_DRAWCURSOR | UI_IGNORECOLOR, fontHandle());
+			const int promptWidth = std::max(0, promptRight - (rect.x + charWidth()));
 
 #ifdef APPNAME
 			constexpr std::string_view appVersion = APPNAME " " VERSION;
 #else
 			constexpr std::string_view appVersion = VERSION;
 #endif
-			const int versionWidth = SCR_MeasureString(1, 0, appVersion.size(), appVersion.data(), fontHandle());
+			const int versionWidth = SCR_MeasureString(scale, 0, appVersion.size(), appVersion.data(), fontHandle());
 			const int rightEdge = rightScreenEdge();
 
 			int footerY = baseFooterY;
@@ -717,12 +783,12 @@ bool getTextInput(const char** msg, bool* is_team) const;
 				char buffer[64];
 				const int len = Com_Time_m(buffer, sizeof(buffer));
 				if (len > 0) {
-					const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
-					SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+					const int width = SCR_MeasureString(scale, 0, len + 1, buffer, fontHandle());
+					SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), scale, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
 				}
 			}
 
-			SCR_DrawStringStretch(rightEdge, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
+			SCR_DrawStringStretch(rightEdge, footerY, scale, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
 			return;
 		}
 
@@ -739,12 +805,12 @@ bool getTextInput(const char** msg, bool* is_team) const;
 			char buffer[64];
 			const int len = Com_Time_m(buffer, sizeof(buffer));
 			if (len > 0) {
-				const int width = SCR_MeasureString(1, 0, len + 1, buffer, fontHandle());
-				SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), 1, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
+				const int width = SCR_MeasureString(scale, 0, len + 1, buffer, fontHandle());
+				SCR_DrawStringStretch(rightEdge, footerY - lineHeight(), scale, UI_RIGHT, len, buffer, COLOR_CYAN, fontHandle());
 			}
 		}
 
-		SCR_DrawStringStretch(rightEdge, footerY, 1, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
+		SCR_DrawStringStretch(rightEdge, footerY, scale, UI_RIGHT, appVersion.size(), appVersion.data(), COLOR_CYAN, fontHandle());
 	}
 
 	void Console::drawNotify()
@@ -782,16 +848,20 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		if (cls.key_dest & KEY_MESSAGE) {
 			const char* label = chatMode_ == ChatMode::Team ? "say_team:" : "say:";
 			const int skip = chatMode_ == ChatMode::Team ? 11 : 5;
-			SCR_DrawStringStretch(charWidth(), y, 1, 0, strlen(label), label, COLOR_WHITE, fontHandle());
+			const int scale = textScale();
+			const vrect_t rect = leftRect();
+			SCR_DrawStringStretch(rect.x, y, scale, 0, strlen(label), label, COLOR_WHITE, fontHandle());
 			chatPrompt_.inputLine.visibleChars = std::max(1, lineWrapColumns_ - skip + 1);
-			IF_Draw(&chatPrompt_.inputLine, skip * charWidth(), y, UI_DRAWCURSOR, fontHandle());
+			IF_Draw(&chatPrompt_.inputLine, rect.x + skip * charWidth(), y, UI_DRAWCURSOR | UI_IGNORECOLOR, fontHandle());
 		}
 	}
 
 	int Console::drawLine(int y, int row, float alpha, bool notify)
 	{
 		const ConsoleLine& line = lineForRow(row);
-		int x = charWidth();
+		const int scale = textScale();
+		const vrect_t rect = leftRect();
+		int x = rect.x;
 		int width = lineWrapColumns_;
 
 		if (notify)
@@ -799,7 +869,7 @@ bool getTextInput(const char** msg, bool* is_team) const;
 
 		if (!line.timestamp.empty() && !notify) {
 			const color_t tsColor = ColorSetAlpha(timestampColor_, alpha);
-			SCR_DrawStringStretch(x, y, 1, 0, line.timestamp.size(), line.timestamp.c_str(), tsColor, fontHandle());
+			SCR_DrawStringStretch(x, y, scale, 0, line.timestamp.size(), line.timestamp.c_str(), tsColor, fontHandle());
 			x += line.timestampPixelWidth;
 			width -= static_cast<int>(line.timestamp.size());
 		}
@@ -822,13 +892,18 @@ bool getTextInput(const char** msg, bool* is_team) const;
 		}
 
 		drawColor.a *= alpha;
-		SCR_DrawStringStretch(x, y, 1, flags, line.content.size(), line.content.c_str(), drawColor, fontHandle());
+		SCR_DrawStringStretch(x, y, scale, flags, line.content.size(), line.content.c_str(), drawColor, fontHandle());
 		return x + measureContentPixels(line.content);
 	}
 
 	void Console::draw()
 	{
-		R_SetScale(scale_);
+		scale_ = R_ClampScale(scaleCvar_);
+
+		checkResize();
+		const int baseW = (r_config.width > 0) ? r_config.width : SCREEN_WIDTH;
+		const int baseH = (r_config.height > 0) ? r_config.height : SCREEN_HEIGHT;
+		R_SetVirtualScale(layout_.uniform_scale, baseW, baseH, SCR_VirtualScreenAnchor());
 		drawSolid();
 		drawNotify();
 		R_SetScale(1.0f);
@@ -895,45 +970,114 @@ Return the current chat input text and whether it is a team message.
 
 	int Console::lineHeight() const noexcept
 	{
-		return SCR_FontLineHeight(1, fontHandle());
+		return SCR_FontLineHeight(textScale(), fontHandle());
 	}
 
 	int Console::charWidth() const noexcept
 	{
-		return std::max(1, SCR_MeasureString(1, UI_IGNORECOLOR, 1, " ", fontHandle()));
+		return std::max(1, SCR_MeasureString(textScale(), UI_IGNORECOLOR, 1, " ", fontHandle()));
 	}
 
 	int Console::availablePixelWidth() const noexcept
 	{
-		return std::max(0, vidWidth_ - charWidth() * kPromptPadding);
+		const vrect_t rect = leftRect();
+		return std::max(0, rect.width - charWidth() * kPromptPadding);
 	}
 
 	int Console::rightScreenEdge() const noexcept
 	{
-		int edge = vidWidth_;
+		return std::max(vidWidth_, charWidth());
+	}
 
-		const float hudScale = scr.hud_scale;
-		if (hudScale > 0.0f) {
-			const vrect_t& right = scr.virtual_screens[RIGHT];
-			if (right.width > 0) {
-				const float ratio = scale_ / hudScale;
-				if (ratio > 0.0f) {
-					edge = std::clamp(Q_rint((right.x + right.width) * ratio), 0, vidWidth_);
-				}
-			}
+	int Console::textScale() const noexcept
+	{
+		const float scale = (layout_.uniform_scale > 0.0f) ? layout_.uniform_scale : 1.0f;
+		const int scaled = Q_rint(16.0f * scale);
+		return std::max(1, scaled);
+	}
+
+	vrect_t Console::leftRect() const noexcept
+	{
+		vrect_t rect{};
+		rect.x = 0;
+		rect.y = 0;
+		rect.width = (layout_.virtual_width > 0.0f) ? Q_rint(layout_.virtual_width) : (vidWidth_ ? vidWidth_ : SCREEN_WIDTH);
+		rect.height = (layout_.virtual_height > 0.0f) ? Q_rint(layout_.virtual_height) : (vidHeight_ ? vidHeight_ : SCREEN_HEIGHT);
+		return rect;
+	}
+
+	vrect_t Console::rightRect() const noexcept
+	{
+		vrect_t rect{};
+		rect.width = (layout_.virtual_width > 0.0f) ? Q_rint(layout_.virtual_width) : (vidWidth_ ? vidWidth_ : SCREEN_WIDTH);
+		rect.height = (layout_.virtual_height > 0.0f) ? Q_rint(layout_.virtual_height) : (vidHeight_ ? vidHeight_ : SCREEN_HEIGHT);
+		rect.x = 0;
+		rect.y = 0;
+		return rect;
+	}
+
+	virtualScreenLayout_t Console::computeLayout() const
+	{
+		virtualScreenLayout_t layout{};
+		const int width = (r_config.width > 0) ? r_config.width : SCREEN_WIDTH;
+		const int height = (r_config.height > 0) ? r_config.height : SCREEN_HEIGHT;
+		layout.uniform_scale = scale_;
+		if (!R_ComputeVirtualScreen(layout.uniform_scale, SCREEN_WIDTH, SCREEN_HEIGHT, SCR_VirtualScreenAnchor(), layout)) {
+			layout.virtual_width = static_cast<float>(width);
+			layout.virtual_height = static_cast<float>(height);
+			layout.uniform_scale = 1.0f;
+			layout.viewport_x = 0;
+			layout.viewport_y = 0;
+			layout.viewport_width = width;
+			layout.viewport_height = height;
 		}
+		return layout;
+	}
 
-		return std::max(edge, charWidth());
+	void Console::applyLayoutMetrics(const virtualScreenLayout_t& layout)
+	{
+		layout_ = layout;
+		vidWidth_ = Q_rint(layout_.virtual_width);
+		vidHeight_ = Q_rint(layout_.virtual_height);
+
+		const int widthInPixels = availablePixelWidth();
+		const int charWidthPixels = std::max(charWidth(), 1);
+		lineWrapColumns_ = (charWidthPixels > 0) ? (widthInPixels / charWidthPixels) : 0;
+
+		const int visibleChars = std::max(lineWrapColumns_, 1);
+		prompt_.inputLine.visibleChars = visibleChars;
+		prompt_.widthInChars = visibleChars;
+		chatPrompt_.inputLine.visibleChars = visibleChars;
+
+		if (timestamps_->integer) {
+			char temp[kLegacyLineWidth];
+			const int timestampLimit = std::min(visibleChars, kLegacyLineWidth);
+			const int timestampChars = Com_FormatLocalTime(temp, timestampLimit, timestampsFormat_->string);
+			prompt_.widthInChars = std::max(1, prompt_.widthInChars - timestampChars);
+		}
 	}
 
 	void Console::registerMedia()
 	{
-		registeredFont_ = SCR_RegisterFontPath(font_->string);
+		auto registerWithDefaultSize = [](const char* path) -> qhandle_t {
+			if (!path || !*path)
+				return 0;
+			const char* extLocal = COM_FileExtension(path);
+			const bool ttf = extLocal && *extLocal && !Q_strcasecmp(extLocal, "ttf");
+			return ttf ? SCR_RegisterFontPathWithSize(path, 16) : SCR_RegisterFontPath(path);
+			};
+
+		registeredFont_ = registerWithDefaultSize(font_->string);
+
 		if (!registeredFont_) {
 			if (strcmp(font_->string, font_->default_string)) {
 				Cvar_Reset(font_);
-				registeredFont_ = SCR_RegisterFontPath(font_->default_string);
+				registeredFont_ = registerWithDefaultSize(font_->default_string);
 			}
+			if (!registeredFont_)
+				registeredFont_ = registerWithDefaultSize("/fonts/RobotoMono-Regular.ttf");
+			if (!registeredFont_)
+				registeredFont_ = registerWithDefaultSize("fonts/RobotoMono-Regular.ttf");
 			if (!registeredFont_)
 				registeredFont_ = SCR_RegisterFontPath("conchars.pcx");
 			if (!registeredFont_)
@@ -951,25 +1095,7 @@ Return the current chat input text and whether it is a team message.
 
 	void Console::checkResize()
 	{
-		scale_ = R_ClampScale(scaleCvar_);
-
-		vidWidth_ = Q_rint(r_config.width * scale_);
-		vidHeight_ = Q_rint(r_config.height * scale_);
-
-		const int widthInPixels = availablePixelWidth();
-		const int charWidthPixels = std::max(charWidth(), 1);
-		lineWrapColumns_ = std::clamp(widthInPixels / charWidthPixels, 0, kLegacyLineWidth);
-
-		const int visibleChars = std::max(lineWrapColumns_, 1);
-		prompt_.inputLine.visibleChars = visibleChars;
-		prompt_.widthInChars = visibleChars;
-		chatPrompt_.inputLine.visibleChars = visibleChars;
-
-		if (timestamps_->integer) {
-			char temp[kLegacyLineWidth];
-			const int timestampChars = Com_FormatLocalTime(temp, lineWrapColumns_, timestampsFormat_->string);
-			prompt_.widthInChars = std::max(1, prompt_.widthInChars - timestampChars);
-		}
+		applyLayoutMetrics(computeLayout());
 	}
 
 	void Console::clearNotify()
