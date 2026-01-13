@@ -1,0 +1,642 @@
+/*
+Copyright (C) 2013 Andrey Nazarov
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+//
+// gtv.c
+//
+
+#include "client.h"
+#include "common/intreadwrite.h"
+#include "server/mvd/protocol.h"
+
+static byte     gtv_recv_buffer[MAX_GTC_MSGLEN];
+static byte     gtv_send_buffer[MAX_GTS_MSGLEN*2];
+
+static byte     gtv_message_buffer[MAX_MSGLEN];
+
+static void drop_client(const char *reason);
+
+static void build_gamestate(void)
+{
+    centity_t *ent;
+    int i;
+
+    memset(cls.gtv.entities, 0, sizeof(cls.gtv.entities));
+
+    // set base player states
+    MSG_PackPlayer(&cls.gtv.ps, &cl.frame.ps, cls.gtv.psFlags);
+
+    // set base entity states
+    for (i = 1; i < cl.csr.max_edicts; i++) {
+        ent = &cl_entities[i];
+
+        if (ent->serverframe != cl.frame.number) {
+            continue;
+        }
+
+        CL_PackEntity(&cls.gtv.entities[i], &ent->current);
+    }
+
+    // set protocol flags
+    cls.gtv.esFlags = MSG_ES_UMASK | MSG_ES_BEAMORIGIN | (cl.esFlags & CL_ES_EXTENDED_MASK_2);
+    cls.gtv.psFlags = MSG_PS_FORCE | MSG_PS_RERELEASE | (cl.psFlags & CL_PS_EXTENDED_MASK_2);
+
+    if (cls.gtv.psFlags & MSG_PS_EXTENSIONS_2)
+        cls.gtv.psFlags |= MSG_PS_MOREBITS;
+}
+
+static void emit_gamestate(void)
+{
+    char        *string;
+    entity_packed_t *es;
+    size_t      length;
+    int         i, flags;
+
+    // send the serverdata
+    flags = MVF_SINGLEPOV;
+    if (cl.csr.extended) {
+        flags |= MVF_EXTLIMITS;
+    MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+    MSG_WriteLong(PROTOCOL_VERSION_MVD);
+    if (cl.is_rerelease_game) {
+        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteLong(PROTOCOL_VERSION_MVD);
+        MSG_WriteShort(PROTOCOL_VERSION_MVD_RERELEASE);
+    } else if (cl.csr.extended) {
+        if (cl.esFlags & MSG_ES_EXTENSIONS_2)
+            flags |= MVF_EXTLIMITS_2;
+        MSG_WriteByte(mvd_serverdata);
+        MSG_WriteLong(PROTOCOL_VERSION_MVD);
+        MSG_WriteShort(PROTOCOL_VERSION_MVD_CURRENT);
+        MSG_WriteShort(flags);
+    } else {
+        MSG_WriteByte(mvd_serverdata | (flags << SVCMD_BITS));
+        MSG_WriteLong(PROTOCOL_VERSION_MVD);
+        MSG_WriteShort(PROTOCOL_VERSION_MVD_DEFAULT);
+    }
+    MSG_WriteLong(cl.servercount);
+    MSG_WriteString(cl.gamedir);
+    MSG_WriteShort(-1);
+
+    // send configstrings
+    for (i = 0; i < cl.csr.end; i++) {
+        string = cl.configstrings[i];
+        if (!string[0]) {
+            continue;
+        }
+        length = Q_strnlen(string, MAX_QPATH);
+        MSG_WriteShort(i);
+        MSG_WriteData(string, length);
+        MSG_WriteByte(0);
+    }
+    MSG_WriteShort(i);
+
+    // send portal bits
+    MSG_WriteByte(0);
+
+    // send player state
+    MSG_WriteDeltaPlayerstate_Packet(NULL, &cls.gtv.ps, cl.clientNum, cls.gtv.psFlags);
+    MSG_WriteByte(CLIENTNUM_NONE);
+
+    // send entity states
+    for (i = 1, es = cls.gtv.entities + 1; i < cl.csr.max_edicts; i++, es++) {
+        if (!es->number) {
+            continue;
+        }
+        MSG_WriteDeltaEntity(NULL, es, cls.gtv.esFlags);
+    }
+    MSG_WriteShort(0);
+}
+
+void CL_GTV_EmitFrame(void)
+{
+    player_packed_t newps;
+    entity_packed_t *oldes, newes;
+    centity_t *ent;
+    msgEsFlags_t flags;
+    int i;
+
+    if (cls.gtv.state != ca_active)
+        return;
+
+    if (!CL_FRAMESYNC)
+        return;
+
+    if (!cl.frame.valid)
+        return;
+
+    MSG_WriteByte(mvd_frame);
+
+    // send portal bits
+    MSG_WriteByte(0);
+
+    // send player state
+    MSG_PackPlayer(&newps, &cl.frame.ps, cl.psFlags);
+
+    MSG_WriteDeltaPlayerstate_Packet(&cls.gtv.ps, &newps, cl.clientNum, cls.gtv.psFlags);
+
+    // shuffle current state to previous
+    cls.gtv.ps = newps;
+
+    MSG_WriteByte(CLIENTNUM_NONE);      // end of packetplayers
+
+    // send entity states
+    for (i = 1; i < cl.csr.max_edicts; i++) {
+        oldes = &cls.gtv.entities[i];
+        ent = &cl_entities[i];
+
+        if (ent->serverframe != cl.frame.number) {
+            if (oldes->number) {
+                // the old entity isn't present in the new message
+                MSG_WriteDeltaEntity(oldes, NULL, MSG_ES_FORCE);
+                oldes->number = 0;
+            }
+            continue;
+        }
+
+        // calculate flags
+        flags = cls.gtv.esFlags;
+
+        if (!oldes->number) {
+            // this is a new entity, send it from the last state
+            flags |= MSG_ES_FORCE | MSG_ES_NEWENTITY;
+        }
+
+        // quantize
+        CL_PackEntity(&newes, &ent->current);
+
+        MSG_WriteDeltaEntity(oldes, &newes, flags);
+
+        // shuffle current state to previous
+        *oldes = newes;
+    }
+
+    MSG_WriteShort(0);      // end of packetentities
+
+    // check for overflow
+    if (msg_write.overflowed) {
+        SZ_Clear(&msg_write);
+        drop_client("frame overflowed");
+        return;
+    }
+
+    SZ_Write(&cls.gtv.message, msg_write.data, msg_write.cursize);
+    SZ_Clear(&msg_write);
+}
+
+static void drop_client(const char *reason)
+{
+    if (reason)
+        Com_Printf("MVD client [%s] dropped: %s\n",
+                   NET_AdrToString(&cls.gtv.stream.address), reason);
+
+    NET_UpdateStream(&cls.gtv.stream);
+
+    NET_Sleep(0);
+
+    NET_RunStream(&cls.gtv.stream);
+    NET_RunStream(&cls.gtv.stream);
+
+    NET_CloseStream(&cls.gtv.stream);
+    cls.gtv.state = ca_disconnected;
+}
+
+static void write_stream(const void *data, size_t len)
+{
+    if (cls.gtv.state <= ca_disconnected) {
+        return;
+    }
+
+    if (FIFO_Write(&cls.gtv.stream.send, data, len) != len) {
+        drop_client("overflowed");
+    }
+}
+
+static void write_message(gtv_serverop_t op)
+{
+    byte header[3];
+
+    WL16(header, msg_write.cursize + 1);
+    header[2] = op;
+    write_stream(header, sizeof(header));
+
+    write_stream(msg_write.data, msg_write.cursize);
+}
+
+void CL_GTV_WriteMessage(const byte *data, size_t len)
+{
+    if (cls.gtv.state != ca_active)
+        return;
+
+    if (cls.state != ca_active)
+        return;
+
+    if (len == 0)
+        return;
+
+    switch (data[0]) {
+    case svc_configstring:
+        SZ_WriteByte(&cls.gtv.message, mvd_configstring);
+        SZ_Write(&cls.gtv.message, data + 1, len - 1);
+        break;
+    case svc_print:
+        SZ_WriteByte(&cls.gtv.message, mvd_print);
+        SZ_Write(&cls.gtv.message, data + 1, len - 1);
+        break;
+    case svc_layout:
+    case svc_stufftext:
+        SZ_WriteByte(&cls.gtv.message, mvd_unicast | (len >> 8 << SVCMD_BITS));
+        SZ_WriteByte(&cls.gtv.message, len & 255);
+        SZ_WriteByte(&cls.gtv.message, cl.clientNum);
+        SZ_Write(&cls.gtv.message, data, len);
+        break;
+    default:
+        SZ_WriteByte(&cls.gtv.message, mvd_multicast_all | (len >> 8 << SVCMD_BITS));
+        SZ_WriteByte(&cls.gtv.message, len & 255);
+        SZ_Write(&cls.gtv.message, data, len);
+        break;
+    }
+}
+
+void CL_GTV_Resume(void)
+{
+    if (cls.gtv.state != ca_active)
+        return;
+
+    SZ_InitWrite(&cls.gtv.message, gtv_message_buffer, sizeof(gtv_message_buffer));
+
+    build_gamestate();
+    emit_gamestate();
+
+    // check for overflow
+    if (msg_write.overflowed) {
+        SZ_Clear(&msg_write);
+        drop_client("gamestate overflowed");
+        return;
+    }
+
+    write_message(GTS_STREAM_DATA);
+    SZ_Clear(&msg_write);
+}
+
+void CL_GTV_Suspend(void)
+{
+    if (cls.gtv.state != ca_active)
+        return;
+
+    // send stream suspend marker
+    write_message(GTS_STREAM_DATA);
+}
+
+void CL_GTV_Transmit(void)
+{
+    byte header[3];
+
+    if (cls.gtv.state != ca_active)
+        return;
+
+    if (cls.state != ca_active)
+        return;
+
+    if (!CL_FRAMESYNC)
+        return;
+
+    if (cls.gtv.message.overflowed) {
+        Com_WPrintf("MVD message overflowed.\n");
+        goto clear;
+    }
+
+    if (!cls.gtv.message.cursize)
+        return;
+
+    // build message header
+    WL16(header, cls.gtv.message.cursize + 1);
+    header[2] = GTS_STREAM_DATA;
+
+    // send frame to client
+    write_stream(header, sizeof(header));
+    write_stream(cls.gtv.message.data, cls.gtv.message.cursize);
+    NET_UpdateStream(&cls.gtv.stream);
+
+clear:
+    // clear datagram
+    SZ_Clear(&cls.gtv.message);
+}
+
+static void parse_hello(void)
+{
+    int protocol;
+
+    if (cls.gtv.state >= ca_precached) {
+        drop_client("duplicated hello message");
+        return;
+    }
+
+    protocol = MSG_ReadWord();
+    if (protocol != GTV_PROTOCOL_VERSION) {
+        write_message(GTS_BADREQUEST);
+        drop_client("bad protocol version");
+        return;
+    }
+
+    MSG_ReadLong();
+    MSG_ReadLong();
+    MSG_ReadString(NULL, 0);
+    MSG_ReadString(NULL, 0);
+    MSG_ReadString(NULL, 0);
+
+    // authorize access
+    if (!NET_IsLanAddress(&cls.gtv.stream.address)) {
+        write_message(GTS_NOACCESS);
+        drop_client("not authorized");
+        return;
+    }
+
+    cls.gtv.state = ca_precached;
+
+    // send hello
+    MSG_WriteLong(0);
+    write_message(GTS_HELLO);
+    SZ_Clear(&msg_write);
+
+    Com_Printf("Accepted MVD client [%s]\n",
+               NET_AdrToString(&cls.gtv.stream.address));
+}
+
+static void parse_ping(void)
+{
+    if (cls.gtv.state < ca_precached) {
+        return;
+    }
+
+    // send ping reply
+    write_message(GTS_PONG);
+}
+
+static void parse_stream_start(void)
+{
+    if (cls.gtv.state != ca_precached) {
+        drop_client("unexpected stream start message");
+        return;
+    }
+
+    // skip maxbuf
+    MSG_ReadShort();
+
+    cls.gtv.state = ca_active;
+
+    // tell the server we are recording
+    CL_UpdateRecordingSetting();
+
+    // send ack to client
+    write_message(GTS_STREAM_START);
+
+    // send gamestate if active
+    if (cls.state == ca_active) {
+        CL_GTV_Resume();
+    } else {
+        // send stream suspend marker
+        write_message(GTS_STREAM_DATA);
+    }
+}
+
+static void parse_stream_stop(void)
+{
+    if (cls.gtv.state != ca_active) {
+        drop_client("unexpected stream stop message");
+        return;
+    }
+
+    cls.gtv.state = ca_precached;
+
+    // tell the server we finished recording
+    CL_UpdateRecordingSetting();
+
+    // send ack to client
+    write_message(GTS_STREAM_STOP);
+}
+
+static bool parse_message(void)
+{
+    uint32_t magic;
+    uint16_t msglen;
+    int cmd;
+
+    if (cls.gtv.state <= ca_disconnected) {
+        return false;
+    }
+
+    // check magic
+    if (cls.gtv.state < ca_connected) {
+        if (!FIFO_TryRead(&cls.gtv.stream.recv, &magic, 4)) {
+            return false;
+        }
+        if (magic != MVD_MAGIC) {
+            drop_client("not a MVD/GTV stream");
+            return false;
+        }
+        cls.gtv.state = ca_connected;
+
+        // send it back
+        write_stream(&magic, 4);
+        return false;
+    }
+
+    // parse msglen
+    if (!cls.gtv.msglen) {
+        if (!FIFO_TryRead(&cls.gtv.stream.recv, &msglen, 2)) {
+            return false;
+        }
+        msglen = LittleShort(msglen);
+        if (!msglen) {
+            drop_client("end of stream");
+            return false;
+        }
+        if (msglen > MAX_GTC_MSGLEN) {
+            drop_client("oversize message");
+            return false;
+        }
+        cls.gtv.msglen = msglen;
+    }
+
+    // read this message
+    if (!FIFO_ReadMessage(&cls.gtv.stream.recv, cls.gtv.msglen)) {
+        return false;
+    }
+
+    cls.gtv.msglen = 0;
+
+    cmd = MSG_ReadByte();
+    switch (cmd) {
+    case GTC_HELLO:
+        parse_hello();
+        break;
+    case GTC_PING:
+        parse_ping();
+        break;
+    case GTC_STREAM_START:
+        parse_stream_start();
+        break;
+    case GTC_STREAM_STOP:
+        parse_stream_stop();
+        break;
+    case GTC_STRINGCMD:
+        break;
+    default:
+        drop_client("unknown command byte");
+        return false;
+    }
+
+    if (msg_read.readcount > msg_read.cursize) {
+        drop_client("read past end of message");
+        return false;
+    }
+
+    return true;
+}
+
+void CL_GTV_Run(void)
+{
+    neterr_t ret;
+
+    if (!cls.gtv.state)
+        return;
+
+    if (cls.gtv.state == ca_disconnected) {
+        ret = NET_Accept(&cls.gtv.stream);
+        if (ret != NET_OK)
+            return;
+
+        Com_DPrintf("TCP client [%s] accepted\n",
+                    NET_AdrToString(&cls.gtv.stream.address));
+
+        cls.gtv.state = ca_connecting;
+        cls.gtv.stream.recv.data = gtv_recv_buffer;
+        cls.gtv.stream.recv.size = sizeof(gtv_recv_buffer);
+        cls.gtv.stream.send.data = gtv_send_buffer;
+        cls.gtv.stream.send.size = sizeof(gtv_send_buffer);
+    }
+
+    ret = NET_RunStream(&cls.gtv.stream);
+    switch (ret) {
+    case NET_AGAIN:
+        break;
+    case NET_OK:
+        // parse the message
+        while (parse_message())
+            ;
+        NET_UpdateStream(&cls.gtv.stream);
+        break;
+    case NET_CLOSED:
+        drop_client("EOF from client");
+        break;
+    case NET_ERROR:
+        drop_client("connection reset by peer");
+        break;
+    }
+}
+
+static void CL_GTV_Start_f(void)
+{
+    neterr_t ret;
+
+    if (cls.gtv.state) {
+        Com_Printf("Client GTV already started.\n");
+        return;
+    }
+
+    ret = NET_Listen(true);
+    if (ret == NET_OK) {
+        Com_Printf("Listening for GTV connections.\n");
+        cls.gtv.state = ca_disconnected;
+    } else if (ret == NET_ERROR) {
+        Com_EPrintf("Error opening client TCP port.\n");
+    } else {
+        Com_EPrintf("Client TCP port already in use.\n");
+    }
+}
+
+static void CL_GTV_Stop_f(void)
+{
+    if (!cls.gtv.state) {
+        Com_Printf("Client GTV already stopped.\n");
+        return;
+    }
+
+    NET_Listen(false);
+
+    write_message(GTS_DISCONNECT);
+    drop_client(NULL);
+
+    memset(&cls.gtv, 0, sizeof(cls.gtv));
+}
+
+static void CL_GTV_Status_f(void)
+{
+    if (!cls.gtv.state) {
+        Com_Printf("Client GTV not running.\n");
+        return;
+    }
+
+    if (cls.gtv.state == ca_disconnected) {
+        Com_Printf("Listening for GTV connections.\n");
+        return;
+    }
+
+    Com_Printf("TCP client [%s] connected (state %d)\n",
+               NET_AdrToString(&cls.gtv.stream.address), cls.gtv.state);
+}
+
+static void CL_GTV_Cmd_g(genctx_t *ctx, int argnum)
+{
+    if (argnum == 1) {
+        Prompt_AddMatch(ctx, "start");
+        Prompt_AddMatch(ctx, "stop");
+        Prompt_AddMatch(ctx, "status");
+    }
+}
+
+static void CL_GTV_Cmd_f(void)
+{
+    const char *cmd = Cmd_Argv(1);
+
+    if (!strcmp(cmd, "start"))
+        CL_GTV_Start_f();
+    else if (!strcmp(cmd, "stop"))
+        CL_GTV_Stop_f();
+    else if (!strcmp(cmd, "status"))
+        CL_GTV_Status_f();
+    else
+        Com_Printf("Usage: %s <start|stop|status>\n", Cmd_Argv(0));
+}
+
+static const cmdreg_t c_gtv[] = {
+    { "gtv", CL_GTV_Cmd_f, CL_GTV_Cmd_g },
+    { NULL }
+};
+
+void CL_GTV_Init(void)
+{
+    Cmd_Register(c_gtv);
+}
+
+void CL_GTV_Shutdown(void)
+{
+    if (cls.gtv.state)
+        CL_GTV_Stop_f();
+}

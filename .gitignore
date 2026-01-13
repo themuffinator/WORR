@@ -1,0 +1,5 @@
+/subprojects/*/
+!/subprojects/packagefiles/
+!/subprojects/rerelease-game/
+/tags
+/TAGS

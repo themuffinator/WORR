@@ -1,0 +1,129 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  MESON_ARGS: >-
+    --fatal-meson-warnings
+    -Dwerror=true
+
+jobs:
+  mingw:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: ["i686", "x86_64"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64 g++-mingw-w64 meson ninja-build
+
+      - name: Build tests
+        run: |
+          meson setup --cross-file=.ci/${{ matrix.arch }}-w64-mingw32.txt \
+            ${{ env.MESON_ARGS }} build-tests tests
+          meson compile -C build-tests
+
+  msvc:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: ["x86", "x64"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Install dependencies
+        run: pip3 install --no-input meson ninja
+
+      - name: Build tests
+        run: |
+          meson setup ${{ env.MESON_ARGS }} build-tests tests
+          meson compile -C build-tests
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson
+
+      - name: Build tests
+        run: |
+          meson setup ${{ env.MESON_ARGS }} build-tests tests
+          meson compile -C build-tests
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install meson
+
+      - name: Build tests
+        run: |
+          meson setup ${{ env.MESON_ARGS }} build-tests tests
+          meson compile -C build-tests
+
+  freebsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tests
+        uses: cross-platform-actions/action@v0.27.0
+        with:
+          operating_system: freebsd
+          architecture: x86-64
+          version: '14.2'
+          run: |
+            sudo pkg update
+            sudo pkg install -y git meson pkgconf
+            meson setup ${{ env.MESON_ARGS }} build-tests tests
+            meson compile -C build-tests
+
+  openbsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tests
+        uses: cross-platform-actions/action@v0.27.0
+        with:
+          operating_system: openbsd
+          architecture: x86-64
+          version: '7.6'
+          run: |
+            sudo pkg_add -u
+            sudo pkg_add git meson $(pkg_info -aqQ gcc|grep gcc-11)
+            CC=egcc meson setup ${{ env.MESON_ARGS }} build-tests tests
+            meson compile -C build-tests
