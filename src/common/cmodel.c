@@ -998,7 +998,7 @@ CM_WriteAreaBits
 Writes a length byte followed by a bit vector of all the areas
 that area in the same flood as the area parameter
 
-This is used by the client refreshes to cull visibility
+This is used by the client renderer to cull visibility
 =================
 */
 int CM_WriteAreaBits(const cm_t *cm, byte *buffer, int area)

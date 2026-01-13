@@ -84,6 +84,11 @@ option('md5',
   value: true,
   description: 'MD5 (re-release) models support')
 
+option('external-renderers',
+  type: 'boolean',
+  value: false,
+  description: 'Build renderers as external shared libraries')
+
 option('memory-traces',
   type: 'boolean',
   value: false,

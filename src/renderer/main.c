@@ -1418,7 +1418,7 @@ bool R_Init(bool total)
 
     GL_ShowErrors(__func__);
 
-    SCR_RegisterStat("refresh", Draw_Stats_s);
+    SCR_RegisterStat("renderer", Draw_Stats_s);
 
     Com_Printf("----------------------\n");
 
@@ -1470,7 +1470,7 @@ void R_Shutdown(bool total)
 
     GL_ShutdownDebugDraw();
 
-    SCR_UnregisterStat("refresh");
+    SCR_UnregisterStat("renderer");
 
     memset(&gl_static, 0, sizeof(gl_static));
     memset(&gl_config, 0, sizeof(gl_config));
@@ -1484,7 +1484,7 @@ R_GetGLConfig
 r_opengl_config_t R_GetGLConfig(void)
 {
 #define GET_CVAR(name, def, min, max) \
-    Cvar_ClampInteger(Cvar_Get(name, def, CVAR_REFRESH), min, max)
+    Cvar_ClampInteger(Cvar_Get(name, def, CVAR_RENDERER), min, max)
 
     r_opengl_config_t cfg = {
         .colorbits    = GET_CVAR("gl_colorbits",    "0", 0, 32),
@@ -1506,7 +1506,7 @@ r_opengl_config_t R_GetGLConfig(void)
     if (cfg.multisamples < 2)
         cfg.multisamples = 0;
 
-    const char *s = Cvar_Get("gl_profile", DEFGLPROFILE, CVAR_REFRESH)->string;
+    const char *s = Cvar_Get("gl_profile", DEFGLPROFILE, CVAR_RENDERER)->string;
 
     if (!Q_stricmpn(s, "gl", 2))
         cfg.profile = QGL_PROFILE_CORE;

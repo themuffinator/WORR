@@ -42,7 +42,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/sizebuf.h"
 #include "common/zone.h"
 
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 #include "server/server.h"
 #include "system/system.h"
 
@@ -776,7 +776,7 @@ void CL_Begin(void);
 void CL_CheckForResend(void);
 void CL_ClearState(void);
 void CL_RestartFilesystem(bool total);
-void CL_RestartRefresh(bool total);
+void CL_RestartRenderer(bool total);
 void CL_ClientCommand(const char *string);
 void CL_SendRcon(const netadr_t *adr, const char *pass, const char *cmd);
 const char *CL_Server_g(const char *partial, int argnum, int state);
@@ -807,7 +807,7 @@ void CL_LoadState(load_state_t state);
 void CL_RegisterSounds(void);
 void CL_RegisterBspModels(void);
 void CL_RegisterVWepModels(void);
-void CL_PrepRefresh(void);
+void CL_PrepRenderer(void);
 void CL_UpdateConfigstring(int index);
 
 //
@@ -1148,11 +1148,11 @@ void Char_Message(int key);
 
 
 //
-// refresh.c
+// renderer.c
 //
-void    CL_InitRefresh(void);
-void    CL_ShutdownRefresh(void);
-void    CL_RunRefresh(void);
+void    CL_InitRenderer(void);
+void    CL_ShutdownRenderer(void);
+void    CL_RunRenderer(void);
 
 
 //

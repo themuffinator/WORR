@@ -27,7 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.h"
 #include "common/zone.h"
 #include "common/error.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 
 #define IMG_AllocPixels(x)  FS_AllocTempMem(x)
 #define IMG_FreePixels(x)   FS_FreeTempMem(x)

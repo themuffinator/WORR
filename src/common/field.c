@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/client.h"
 #include "client/keys.h"
 #include "client/video.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 
 /*
 ================

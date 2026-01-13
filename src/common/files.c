@@ -65,11 +65,11 @@ typedef struct {
     extern const char res_##n[]; \
     extern const size_t res_##n##_size;
 
-FORWARD_EMBEDDED_FILE(q2pro_menu);
+FORWARD_EMBEDDED_FILE(worr_menu);
 
 static const builtin_file_t builtin_files[] = {
 #if USE_CLIENT
-    { "q2repro.menu", res_q2pro_menu, &res_q2pro_menu_size },
+    { "worr.menu", res_worr_menu, &res_worr_menu_size },
 #endif
     { NULL }
 };

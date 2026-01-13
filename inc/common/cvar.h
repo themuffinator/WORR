@@ -42,11 +42,11 @@ interface from being ambiguous.
 #define CVAR_GAME           BIT(11)     // created by game library
 #define CVAR_NOARCHIVE      BIT(12)     // never saved to config
 #define CVAR_FILES          BIT(13)     // r_reload when changed
-#define CVAR_REFRESH        BIT(14)     // vid_restart when changed
+#define CVAR_RENDERER      BIT(14)     // renderer restart when changed
 #define CVAR_SOUND          BIT(15)     // snd_restart when changed
 
 #define CVAR_INFOMASK       (CVAR_USERINFO | CVAR_SERVERINFO)
-#define CVAR_MODIFYMASK     (CVAR_INFOMASK | CVAR_FILES | CVAR_REFRESH | CVAR_SOUND)
+#define CVAR_MODIFYMASK     (CVAR_INFOMASK | CVAR_FILES | CVAR_RENDERER | CVAR_SOUND)
 #define CVAR_NOARCHIVEMASK  (CVAR_NOSET | CVAR_CHEAT | CVAR_PRIVATE | CVAR_ROM | CVAR_NOARCHIVE)
 #define CVAR_EXTENDED_MASK  (~MASK(5))
 

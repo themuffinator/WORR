@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client/keys.h"
 #include "client/video.h"
 #include "client/ui.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 #include "system/system.h"
 #include "keytables/keytables.h"
 

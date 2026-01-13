@@ -936,7 +936,7 @@ void Win_Init(void)
 
     // register variables
     vid_flip_on_switch = Cvar_Get("vid_flip_on_switch", "0", 0);
-    vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_REFRESH);
+    vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_RENDERER);
     win_noalttab = Cvar_Get("win_noalttab", "0", CVAR_ARCHIVE);
     win_noalttab->changed = win_noalttab_changed;
     win_disablewinkey = Cvar_Get("win_disablewinkey", "0", 0);

@@ -29,7 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/sound/sound.h"
 #include "client/client.h"
 #include "client/ui.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 
 #define UI_Malloc(s)        Z_TagMalloc(s, TAG_UI)
 #define UI_Mallocz(s)       Z_TagMallocz(s, TAG_UI)

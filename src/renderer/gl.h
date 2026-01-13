@@ -29,7 +29,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/math.h"
 #include "client/video.h"
 #include "client/client.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
+#if defined(RENDERER_DLL)
+#include "renderer/renderer_api.h"
+#endif
 #include "system/hunk.h"
 #include "images.h"
 #include "qgl.h"

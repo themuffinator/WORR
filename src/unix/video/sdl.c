@@ -30,7 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/keys.h"
 #include "client/ui.h"
 #include "client/video.h"
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 #include "system/system.h"
 #include "../res/q2pro.xbm"
 #include <SDL.h>
@@ -315,7 +315,7 @@ static bool init(void)
         SDL_FreeSurface(icon);
     }
 
-    cvar_t *vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_REFRESH);
+    cvar_t *vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_RENDERER);
     if (vid_hwgamma->integer) {
         Uint16  gamma[3][256];
 

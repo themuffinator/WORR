@@ -37,7 +37,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define DLIGHT_CUTOFF       64
 
 typedef struct entity_s {
-    qhandle_t           model;          // opaque type outside refresh
+    qhandle_t           model;          // opaque type outside renderer
     vec3_t              angles;
 
     /*
@@ -273,7 +273,7 @@ void    R_TileClear(int x, int y, int w, int h, qhandle_t pic);
 void    R_DrawFill8(int x, int y, int w, int h, int c);
 void    R_DrawFill32(int x, int y, int w, int h, color_t color);
 
-// video mode and refresh state management entry points
+// video mode and renderer state management entry points
 void    R_BeginFrame(void);
 void    R_EndFrame(void);
 void    R_ModeChanged(int width, int height, int flags);
@@ -283,3 +283,102 @@ void    GL_ExpireDebugObjects(void);
 bool    R_SupportsPerPixelLighting(void);
 
 r_opengl_config_t R_GetGLConfig(void);
+
+typedef struct renderer_export_s {
+    bool (*Init)(bool total);
+    void (*Shutdown)(bool total);
+
+    void (*BeginRegistration)(const char *map);
+    qhandle_t (*RegisterModel)(const char *name);
+    qhandle_t (*RegisterImage)(const char *name, imagetype_t type, imageflags_t flags);
+    void (*SetSky)(const char *name, float rotate, bool autorotate, const vec3_t axis);
+    void (*EndRegistration)(void);
+
+    void (*RenderFrame)(const refdef_t *fd);
+    void (*LightPoint)(const vec3_t origin, vec3_t light);
+
+    void (*SetClipRect)(const clipRect_t *clip);
+    float (*ClampScale)(cvar_t *var);
+    void (*SetScale)(float scale);
+    void (*DrawChar)(int x, int y, int flags, int ch, color_t color, qhandle_t font);
+    void (*DrawStretchChar)(int x, int y, int w, int h, int flags, int ch,
+                            color_t color, qhandle_t font);
+    int (*DrawStringStretch)(int x, int y, int scale, int flags, size_t maxChars,
+                             const char *string, color_t color, qhandle_t font);
+
+    const kfont_char_t *(*KFontLookup)(const kfont_t *kfont, uint32_t codepoint);
+    void (*LoadKFont)(kfont_t *font, const char *filename);
+    int (*DrawKFontChar)(int x, int y, int scale, int flags, uint32_t codepoint,
+                         color_t color, const kfont_t *kfont);
+
+    bool (*GetPicSize)(int *w, int *h, qhandle_t pic);
+    void (*DrawPic)(int x, int y, color_t color, qhandle_t pic);
+    void (*DrawStretchPic)(int x, int y, int w, int h, color_t color, qhandle_t pic);
+    void (*DrawStretchRotatePic)(int x, int y, int w, int h, color_t color, float angle,
+                                 int pivot_x, int pivot_y, qhandle_t pic);
+    void (*DrawKeepAspectPic)(int x, int y, int w, int h, color_t color, qhandle_t pic);
+    void (*DrawStretchRaw)(int x, int y, int w, int h);
+    void (*UpdateRawPic)(int pic_w, int pic_h, const uint32_t *pic);
+    void (*TileClear)(int x, int y, int w, int h, qhandle_t pic);
+    void (*DrawFill8)(int x, int y, int w, int h, int c);
+    void (*DrawFill32)(int x, int y, int w, int h, color_t color);
+
+    void (*BeginFrame)(void);
+    void (*EndFrame)(void);
+    void (*ModeChanged)(int width, int height, int flags);
+    bool (*VideoSync)(void);
+
+    void (*ExpireDebugObjects)(void);
+    bool (*SupportsPerPixelLighting)(void);
+    r_opengl_config_t (*GetGLConfig)(void);
+
+    refcfg_t *Config;
+} renderer_export_t;
+
+#if USE_EXTERNAL_RENDERERS && !defined(RENDERER_DLL)
+extern renderer_export_t re;
+
+#define R_Init re.Init
+#define R_Shutdown re.Shutdown
+#define R_BeginRegistration re.BeginRegistration
+#define R_RegisterModel re.RegisterModel
+#define R_RegisterImage re.RegisterImage
+#define R_SetSky re.SetSky
+#define R_EndRegistration re.EndRegistration
+
+#define R_RenderFrame re.RenderFrame
+#define R_LightPoint re.LightPoint
+
+#define R_SetClipRect re.SetClipRect
+#define R_ClampScale re.ClampScale
+#define R_SetScale re.SetScale
+#define R_DrawChar re.DrawChar
+#define R_DrawStretchChar re.DrawStretchChar
+#define R_DrawStringStretch re.DrawStringStretch
+
+#define SCR_KFontLookup re.KFontLookup
+#define SCR_LoadKFont re.LoadKFont
+#define R_DrawKFontChar re.DrawKFontChar
+
+#define R_GetPicSize re.GetPicSize
+#define R_DrawPic re.DrawPic
+#define R_DrawStretchPic re.DrawStretchPic
+#define R_DrawStretchRotatePic re.DrawStretchRotatePic
+#define R_DrawKeepAspectPic re.DrawKeepAspectPic
+#define R_DrawStretchRaw re.DrawStretchRaw
+#define R_UpdateRawPic re.UpdateRawPic
+#define R_TileClear re.TileClear
+#define R_DrawFill8 re.DrawFill8
+#define R_DrawFill32 re.DrawFill32
+
+#define R_BeginFrame re.BeginFrame
+#define R_EndFrame re.EndFrame
+#define R_ModeChanged re.ModeChanged
+#define R_VideoSync re.VideoSync
+
+#define GL_ExpireDebugObjects re.ExpireDebugObjects
+#define R_SupportsPerPixelLighting re.SupportsPerPixelLighting
+#define R_GetGLConfig re.GetGLConfig
+
+#define r_config (*re.Config)
+#endif

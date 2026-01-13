@@ -590,12 +590,12 @@ static void CS_LoadShadowLight(int index, const char *s)
 
 /*
 =================
-CL_PrepRefresh
+CL_PrepRenderer
 
 Call before entering a new level, or after changing dlls
 =================
 */
-void CL_PrepRefresh(void)
+void CL_PrepRenderer(void)
 {
     int         i;
     char        *name;

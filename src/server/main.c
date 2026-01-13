@@ -19,7 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server.h"
 #include "client/input.h"
 #if USE_CLIENT
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 #endif
 #include "server/nav.h"
 #include "q2proto/q2proto.h"

@@ -1696,7 +1696,7 @@ void CL_Begin(void)
 
     Cvar_FixCheats();
 
-    CL_PrepRefresh();
+    CL_PrepRenderer();
     CL_LoadState(LOAD_SOUNDS);
     CL_RegisterSounds();
     LOC_LoadLocations();
@@ -1742,7 +1742,7 @@ static void CL_Precache_f(void)
     // demos use different precache sequence
     if (cls.demo.playback) {
         CL_RegisterBspModels();
-        CL_PrepRefresh();
+        CL_PrepRenderer();
         CL_LoadState(LOAD_SOUNDS);
         CL_RegisterSounds();
         CL_LoadState(LOAD_NONE);
@@ -2410,7 +2410,7 @@ void CL_RestartFilesystem(bool total)
         OGG_Play();
     } else if (cls_state >= ca_loading && cls_state <= ca_active) {
         CL_LoadState(LOAD_MAP);
-        CL_PrepRefresh();
+        CL_PrepRenderer();
         CL_LoadState(LOAD_SOUNDS);
         CL_RegisterSounds();
         CL_LoadState(LOAD_NONE);
@@ -2432,7 +2432,7 @@ void CL_RestartFilesystem(bool total)
     cvar_modified &= ~CVAR_FILES;
 }
 
-void CL_RestartRefresh(bool total)
+void CL_RestartRenderer(bool total)
 {
     int cls_state;
 
@@ -2452,8 +2452,8 @@ void CL_RestartRefresh(bool total)
 
     if (total) {
         IN_Shutdown();
-        CL_ShutdownRefresh();
-        CL_InitRefresh();
+        CL_ShutdownRenderer();
+        CL_InitRenderer();
         IN_Init();
     } else {
         UI_Shutdown();
@@ -2469,7 +2469,7 @@ void CL_RestartRefresh(bool total)
         OGG_Play();
     } else if (cls_state >= ca_loading && cls_state <= ca_active) {
         CL_LoadState(LOAD_MAP);
-        CL_PrepRefresh();
+        CL_PrepRenderer();
         CL_LoadState(LOAD_NONE);
     } else if (cls_state == ca_cinematic) {
         SCR_ReloadCinematic();
@@ -2487,24 +2487,24 @@ void CL_RestartRefresh(bool total)
 
 /*
 ====================
-CL_ReloadRefresh
+CL_ReloadRenderer
 
 Flush caches and reload all models and textures.
 ====================
 */
-static void CL_ReloadRefresh_f(void)
+static void CL_ReloadRenderer_f(void)
 {
-    CL_RestartRefresh(false);
+    CL_RestartRenderer(false);
 }
 
 /*
 ====================
-CL_RestartRefresh
+CL_RestartRenderer
 
 Perform complete restart of the renderer subsystem.
 ====================
 */
-static void CL_RestartRefresh_f(void)
+static void CL_RestartRenderer_f(void)
 {
     static bool warned;
 
@@ -2523,7 +2523,7 @@ static void CL_RestartRefresh_f(void)
         warned = true;
         return;
     }
-    CL_RestartRefresh(true);
+    CL_RestartRenderer(true);
 }
 
 static bool allow_stufftext(const char *text)
@@ -2684,8 +2684,8 @@ static const cmdreg_t c_client[] = {
     { "dumpstatusbar", CL_DumpStatusbar_f },
     { "dumplayout", CL_DumpLayout_f },
     { "writeconfig", CL_WriteConfig_f, CL_WriteConfig_c },
-    { "vid_restart", CL_RestartRefresh_f },
-    { "r_reload", CL_ReloadRefresh_f },
+    { "vid_restart", CL_RestartRenderer_f },
+    { "r_reload", CL_ReloadRenderer_f },
 
     //
     // forward to server commands
@@ -3025,7 +3025,7 @@ static void CL_MeasureStats(void)
         cls.measure.ping = k ? ping / k : 0;
     }
 
-    // measure main/refresh frame counts
+    // measure main/renderer frame counts
     for (i = 0; i < 4; i++) {
         cls.measure.fps[i] = cls.measure.frames[i];
         cls.measure.frames[i] = 0;
@@ -3225,7 +3225,7 @@ void CL_UpdateFrameTimes(void)
         main_msec = fps_to_msec(60);
         sync_mode = SYNC_SLEEP_60;
     } else if (cl_async->integer > 0) {
-        // run physics and refresh separately
+        // run physics and renderer separately
         phys_msec = fps_to_clamped_msec(cl_maxfps, MIN_PHYS_HZ, MAX_PHYS_HZ, &cl_maxfps_modified);
         if (cl_async->integer > 1 && r_config.flags & QVF_VIDEOSYNC) {
             sync_mode = ASYNC_VIDEO;
@@ -3234,7 +3234,7 @@ void CL_UpdateFrameTimes(void)
             sync_mode = ASYNC_FULL;
         }
     } else {
-        // everything ticks in sync with refresh
+        // everything ticks in sync with renderer
         main_msec = fps_to_clamped_msec(cl_maxfps, MIN_PHYS_HZ, MAX_PHYS_HZ, &cl_maxfps_modified);
         sync_mode = SYNC_MAXFPS;
     }
@@ -3290,7 +3290,7 @@ unsigned CL_Frame(unsigned msec)
         // timedemo just runs at full speed
         break;
     case SYNC_SLEEP_10:
-        // don't run refresh at all
+        // don't run renderer at all
         ref_frame = false;
         // fall through
     case SYNC_SLEEP_60:
@@ -3301,7 +3301,7 @@ unsigned CL_Frame(unsigned msec)
         break;
     case ASYNC_VIDEO:
     case ASYNC_FULL:
-        // run physics and refresh separately
+        // run physics and renderer separately
         phys_extra += main_extra;
 
         if (phys_extra < phys_msec) {
@@ -3322,7 +3322,7 @@ unsigned CL_Frame(unsigned msec)
         }
         break;
     case SYNC_MAXFPS:
-        // everything ticks in sync with refresh
+        // everything ticks in sync with renderer
         if (main_extra < main_msec) {
             if (!cl.sendPacketNow) {
                 return 0;
@@ -3444,7 +3444,7 @@ bool CL_ProcessEvents(void)
         return false;
     }
 
-    CL_RunRefresh();
+    CL_RunRenderer();
 
     IN_Frame();
 
@@ -3509,7 +3509,7 @@ void CL_Init(void)
     cls.key_dest = KEY_CONSOLE;
 
     CL_InitLocal();
-    CL_InitRefresh();
+    CL_InitRenderer();
 
     OGG_Init();
     S_Init();   // sound must be initialized after window is created
@@ -3581,7 +3581,7 @@ void CL_Shutdown(void)
     S_Shutdown();
     IN_Shutdown();
     Con_Shutdown();
-    CL_ShutdownRefresh();
+    CL_ShutdownRenderer();
     CL_WriteConfig();
     CG_Unload();
     

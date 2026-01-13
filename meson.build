@@ -138,7 +138,7 @@ client_src = [
   'src/client/parse.c',
   'src/client/precache.c',
   'src/client/predict.c',
-  'src/client/refresh.c',
+  'src/client/renderer.c',
   'src/client/screen.c',
   'src/client/sound/main.c',
   'src/client/sound/mem.c',
@@ -189,30 +189,30 @@ ui_src = [
   'src/client/ui/ui.h',
 ]
 
-refresh_src = [
-  'src/refresh/draw.c',
-  'src/refresh/hq2x.c',
-  'src/refresh/images.c',
-  'src/refresh/legacy.c',
-  'src/refresh/main.c',
-  'src/refresh/mesh.c',
-  'src/refresh/models.c',
-  'src/refresh/qgl.c',
-  'src/refresh/shader.c',
-  'src/refresh/sky.c',
-  'src/refresh/state.c',
-  'src/refresh/surf.c',
-  'src/refresh/tess.c',
-  'src/refresh/texture.c',
-  'src/refresh/world.c',
-  'src/refresh/debug.c',
-  'src/refresh/debug_text.c',
-  'src/refresh/arbfp.h',
-  'src/refresh/gl.h',
-  'src/refresh/images.h',
-  'src/refresh/qgl.h',
+renderer_src = [
+  'src/renderer/draw.c',
+  'src/renderer/hq2x.c',
+  'src/renderer/images.c',
+  'src/renderer/legacy.c',
+  'src/renderer/main.c',
+  'src/renderer/mesh.c',
+  'src/renderer/models.c',
+  'src/renderer/qgl.c',
+  'src/renderer/shader.c',
+  'src/renderer/sky.c',
+  'src/renderer/state.c',
+  'src/renderer/surf.c',
+  'src/renderer/tess.c',
+  'src/renderer/texture.c',
+  'src/renderer/world.c',
+  'src/renderer/debug.c',
+  'src/renderer/debug_text.c',
+  'src/renderer/arbfp.h',
+  'src/renderer/gl.h',
+  'src/renderer/images.h',
+  'src/renderer/qgl.h',
 
-  'inc/refresh/refresh.h',
+  'inc/renderer/renderer.h',
 ]
 
 server_src = [
@@ -562,13 +562,13 @@ if get_option('client-ui')
   # embed worr.menu
   prog_embed = find_program('embed.py')
 
-  q2pro_menu_c = custom_target(
+  worr_menu_c = custom_target(
       'worr.menu.c',
       output : 'worr.menu.c',
       input : 'src/client/ui/worr.menu',
-      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_q2pro_menu'],
+      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_worr_menu'],
   )
-  client_src += q2pro_menu_c
+  client_src += worr_menu_c
 
   client_src += ui_src
   config.set10('USE_UI', true)
@@ -624,8 +624,37 @@ if get_option('tests')
   config.set10('USE_TESTS', true)
 endif
 
-if get_option('debug')
-  refresh_src += 'src/refresh/debug.c'
+renderer_engine_src = renderer_src
+renderer_lib = []
+
+if get_option('external-renderers')
+  renderer_engine_src = []
+  renderer_lib_src = renderer_src + ['src/renderer/renderer_api.c']
+  renderer_lib_name = meson.project_name() + '_opengl_' + cpu
+
+  renderer_deps = []
+  if zlib.found()
+    renderer_deps += zlib
+  endif
+  if png.found()
+    renderer_deps += png
+  endif
+  if jpeg.found()
+    renderer_deps += jpeg
+  endif
+
+  renderer_c_args = ['-DUSE_CLIENT=1', '-DUSE_REF=1', '-DRENDERER_DLL'] + engine_args
+
+  renderer_lib = shared_library(renderer_lib_name, renderer_lib_src,
+    dependencies:          renderer_deps,
+    include_directories:   ['inc', 'q2proto/inc'],
+    gnu_symbol_visibility: 'hidden',
+    link_args:             dll_link_args,
+    c_args:                renderer_c_args,
+    name_prefix:           '',
+    install:               true,
+    install_dir:           libdir,
+  )
 endif
 
 if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_argument('-mstackrealign')).allowed()
@@ -633,7 +662,7 @@ if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_a
   engine_args += '-mstackrealign'
 endif
 
-executable('worr', common_src, client_src, refresh_src,
+executable('worr', common_src, client_src, renderer_engine_src,
   dependencies:          common_deps + client_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
@@ -704,6 +733,7 @@ config.set10('USE_DEBUG',         get_option('debug'))
 config.set10('USE_FPS',           get_option('variable-fps'))
 config.set10('USE_GLES',          get_option('opengl-es1'))
 config.set10('USE_ICMP',          get_option('icmp-errors').require(win32 or cc.has_header('linux/errqueue.h')).allowed())
+config.set10('USE_EXTERNAL_RENDERERS', get_option('external-renderers'))
 config.set10('USE_MD3',           get_option('md3'))
 config.set10('USE_MD5',           get_option('md5'))
 config.set10('USE_MEMORY_TRACES', get_option('memory-traces'))

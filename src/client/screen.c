@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
-// cl_scrn.c -- master for refresh, status bar, console, chat, notify, etc
+// cl_scrn.c -- master for renderer, status bar, console, chat, notify, etc
 
 #include "client.h"
 
@@ -1089,10 +1089,10 @@ static void SCR_Sky_f(void)
 
 /*
 ================
-SCR_TimeRefresh_f
+SCR_TimeRenderer_f
 ================
 */
-static void SCR_TimeRefresh_f(void)
+static void SCR_TimeRenderer_f(void)
 {
     int     i;
     unsigned    start, stop;
@@ -1425,7 +1425,7 @@ static void SCR_Stat_f(void)
 }
 
 static const cmdreg_t scr_cmds[] = {
-    { "timerefresh", SCR_TimeRefresh_f },
+    { "timerenderer", SCR_TimeRenderer_f },
     { "sizeup", SCR_SizeUp_f },
     { "sizedown", SCR_SizeDown_f },
     { "sky", SCR_Sky_f },
@@ -2116,7 +2116,7 @@ void SCR_UpdateScreen(void)
 
     R_BeginFrame();
 
-    // do 3D refresh drawing
+    // do 3D renderer drawing
     SCR_DrawActive();
 
     // draw main menu

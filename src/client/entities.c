@@ -945,7 +945,7 @@ static void CL_AddPacketEntities(void)
 
         VectorSet(ent.scale, s1->scale, s1->scale, s1->scale);
 
-        // add to refresh list
+        // add to renderer list
         V_AddEntity(&ent);
 
         // color shells generate a separate entity for the main model
@@ -1618,7 +1618,7 @@ void CL_CalcViewValues(void)
 ===============
 CL_AddEntities
 
-Emits all entities, particles, and lights to the refresh
+Emits all entities, particles, and lights to the renderer
 ===============
 */
 void CL_AddEntities(void)

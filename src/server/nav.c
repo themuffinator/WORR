@@ -21,10 +21,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server/nav.h"
 #include "common/error.h"
 #if USE_REF
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 // ugly but necessary to hook into nav system without
 // exposing this into a mess of spaghetti
-#include "../refresh/gl.h"
+#include "../renderer/gl.h"
 
 static cvar_t *nav_debug;
 static cvar_t *nav_debug_range;

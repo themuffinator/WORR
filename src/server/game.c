@@ -832,7 +832,7 @@ static void PF_Loc_Print(edict_t* ent, int level, const char* base, const char**
 }
 
 #if USE_REF
-#include "refresh/refresh.h"
+#include "renderer/renderer.h"
 
 static void PF_Draw_Line(const vec3_t start, const vec3_t end, const rgba_t* color, const float lifeTime, const bool depthTest)
 {

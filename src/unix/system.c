@@ -514,7 +514,7 @@ static const char* check_paths_classic[] = {
     NULL
     };
 static const char* check_paths_rr[] = {
-    DEFAULT_PREFIX "/share/q2repro",
+    DEFAULT_PREFIX "/share/worr",
     NULL
     };
 

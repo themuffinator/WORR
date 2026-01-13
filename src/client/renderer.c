@@ -18,10 +18,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // Main windowed and fullscreen graphics interface module. This module
 // is used for both the software and OpenGL rendering versions of the
-// Quake refresh engine.
+// Quake renderer engine.
 
 
 #include "client.h"
+#if USE_EXTERNAL_RENDERERS
+#include "renderer/renderer_api.h"
+#endif
 
 // Console variables that we need to access from this module
 cvar_t      *vid_geometry;
@@ -30,6 +33,14 @@ cvar_t      *vid_fullscreen;
 cvar_t      *_vid_fullscreen;
 
 const vid_driver_t  *vid;
+
+#if USE_EXTERNAL_RENDERERS
+static refcfg_t renderer_stub_config;
+renderer_export_t re = { .Config = &renderer_stub_config };
+static void *renderer_handle;
+static const renderer_export_t *(*renderer_get_api)(const renderer_import_t *import);
+static cvar_t *r_renderer;
+#endif
 
 #define MODE_GEOMETRY   1
 #define MODE_FULLSCREEN 2
@@ -258,12 +269,283 @@ static const vid_driver_t *const vid_drivers[] = {
     NULL
 };
 
+#if USE_EXTERNAL_RENDERERS
+static const char *R_NormalizeRendererName(const char *name)
+{
+    if (!name || !name[0]) {
+        return "opengl";
+    }
+
+    if (!Q_strcasecmp(name, "gl")) {
+        return "opengl";
+    }
+
+    return name;
+}
+
+static void R_BuildRendererLibName(char *buffer, size_t size, const char *renderer_name)
+{
+    char product[MAX_QPATH];
+
+    Q_strlcpy(product, PRODUCT, sizeof(product));
+    Q_strlwr(product);
+
+    if (Q_snprintf(buffer, size, "%s_%s_%s%s", product, renderer_name, CPUSTRING, LIBSUFFIX) >= size) {
+        Com_Error(ERR_FATAL, "Renderer library name too long.");
+    }
+}
+
+static renderer_import_t R_BuildRendererImports(void)
+{
+    renderer_import_t import = {
+        .Com_LPrintf = Com_LPrintf,
+        .Com_Error = Com_Error,
+        .Com_SetLastError = Com_SetLastError,
+        .Com_GetLastError = Com_GetLastError,
+        .Com_MakePrintable = Com_MakePrintable,
+        .Com_QueueAsyncWork = Com_QueueAsyncWork,
+        .Com_WildCmpEx = Com_WildCmpEx,
+        .Com_Color_g = Com_Color_g,
+        .Com_PageInMemory = Com_PageInMemory,
+        .Com_SlowRand = Com_SlowRand,
+        .Com_HashStringLen = Com_HashStringLen,
+
+        .Cvar_Get = Cvar_Get,
+        .Cvar_Reset = Cvar_Reset,
+        .Cvar_Set = Cvar_Set,
+        .Cvar_VariableInteger = Cvar_VariableInteger,
+        .Cvar_ClampValue = Cvar_ClampValue,
+        .Cvar_ClampInteger = Cvar_ClampInteger,
+        .Cvar_FindVar = Cvar_FindVar,
+
+        .Cmd_AddCommand = Cmd_AddCommand,
+        .Cmd_RemoveCommand = Cmd_RemoveCommand,
+        .Cmd_AddMacro = Cmd_AddMacro,
+        .Cmd_Register = Cmd_Register,
+        .Cmd_Deregister = Cmd_Deregister,
+        .Cmd_Argc = Cmd_Argc,
+        .Cmd_Argv = Cmd_Argv,
+        .Cmd_ParseOptions = Cmd_ParseOptions,
+        .Cmd_PrintHelp = Cmd_PrintHelp,
+        .Cmd_PrintUsage = Cmd_PrintUsage,
+        .Cmd_Option_c = Cmd_Option_c,
+
+        .FS_LoadFileEx = FS_LoadFileEx,
+        .FS_OpenFile = FS_OpenFile,
+        .FS_Read = FS_Read,
+        .FS_CloseFile = FS_CloseFile,
+        .FS_NormalizePathBuffer = FS_NormalizePathBuffer,
+        .FS_CleanupPath = FS_CleanupPath,
+        .FS_CreatePath = FS_CreatePath,
+
+        .Z_TagMalloc = Z_TagMalloc,
+        .Z_TagMallocz = Z_TagMallocz,
+        .Z_TagCopyString = Z_TagCopyString,
+        .Z_Malloc = Z_Malloc,
+        .Z_Mallocz = Z_Mallocz,
+        .Z_Free = Z_Free,
+
+        .Hunk_Begin = Hunk_Begin,
+        .Hunk_TryAlloc = Hunk_TryAlloc,
+        .Hunk_Free = Hunk_Free,
+        .Hunk_End = Hunk_End,
+        .Hunk_FreeToWatermark = Hunk_FreeToWatermark,
+
+        .HashMap_CreateImpl = HashMap_CreateImpl,
+        .HashMap_Destroy = HashMap_Destroy,
+        .HashMap_Reserve = HashMap_Reserve,
+        .HashMap_InsertImpl = HashMap_InsertImpl,
+        .HashMap_LookupImpl = HashMap_LookupImpl,
+        .HashMap_GetKeyImpl = HashMap_GetKeyImpl,
+        .HashMap_GetValueImpl = HashMap_GetValueImpl,
+        .HashMap_Size = HashMap_Size,
+
+        .BSP_Load = BSP_Load,
+        .BSP_Free = BSP_Free,
+        .BSP_ErrorString = BSP_ErrorString,
+        .BSP_LightPoint = BSP_LightPoint,
+        .BSP_TransformedLightPoint = BSP_TransformedLightPoint,
+        .BSP_LookupLightgrid = BSP_LookupLightgrid,
+        .BSP_ClusterVis = BSP_ClusterVis,
+        .BSP_PointLeaf = BSP_PointLeaf,
+
+        .Prompt_AddMatch = Prompt_AddMatch,
+
+        .SCR_DrawStats = SCR_DrawStats,
+        .SCR_RegisterStat = SCR_RegisterStat,
+        .SCR_UnregisterStat = SCR_UnregisterStat,
+        .SCR_StatActive = SCR_StatActive,
+        .SCR_StatKeyValue = SCR_StatKeyValue,
+        .SCR_ParseColor = SCR_ParseColor,
+
+        .CL_SetSky = CL_SetSky,
+
+        .COM_ParseEx = COM_ParseEx,
+        .COM_ParseToken = COM_ParseToken,
+        .COM_StripExtension = COM_StripExtension,
+        .COM_DefaultExtension = COM_DefaultExtension,
+        .COM_FileExtension = COM_FileExtension,
+        .COM_SplitPath = COM_SplitPath,
+
+        .AngleVectors = AngleVectors,
+        .VectorNormalize = VectorNormalize,
+        .VectorNormalize2 = VectorNormalize2,
+        .ClearBounds = ClearBounds,
+        .UnionBounds = UnionBounds,
+        .RadiusFromBounds = RadiusFromBounds,
+
+        .vectoangles2 = vectoangles2,
+        .MakeNormalVectors = MakeNormalVectors,
+        .SetPlaneSignbits = SetPlaneSignbits,
+        .BoxOnPlaneSide = BoxOnPlaneSide,
+        .SetupRotationMatrix = SetupRotationMatrix,
+        .RotatePointAroundVector = RotatePointAroundVector,
+        .Matrix_Frustum = Matrix_Frustum,
+        .Matrix_FromOriginAxis = Matrix_FromOriginAxis,
+#if USE_MD5
+        .Quat_ComputeW = Quat_ComputeW,
+        .Quat_SLerp = Quat_SLerp,
+        .Quat_Normalize = Quat_Normalize,
+        .Quat_MultiplyQuat = Quat_MultiplyQuat,
+        .Quat_Conjugate = Quat_Conjugate,
+        .Quat_RotatePoint = Quat_RotatePoint,
+        .Quat_ToAxis = Quat_ToAxis,
+#endif
+
+        .SZ_Init = SZ_Init,
+        .SZ_InitRead = SZ_InitRead,
+        .SZ_ReadData = SZ_ReadData,
+        .SZ_ReadByte = SZ_ReadByte,
+        .SZ_ReadWord = SZ_ReadWord,
+        .SZ_Clear = SZ_Clear,
+        .SZ_GetSpace = SZ_GetSpace,
+
+        .strnatcasecmp = strnatcasecmp,
+        .strnatcasencmp = strnatcasencmp,
+
+#ifdef HAVE_MEMCCPY
+        .Q_memccpy = memccpy,
+#else
+        .Q_memccpy = Q_memccpy,
+#endif
+        .Q_atoi = Q_atoi,
+
+        .Q_strcasecmp = Q_strcasecmp,
+        .Q_strncasecmp = Q_strncasecmp,
+        .Q_strcasestr = Q_strcasestr,
+        .Q_strchrnul = Q_strchrnul,
+        .Q_strlcpy = Q_strlcpy,
+        .Q_strlcat = Q_strlcat,
+        .Q_concat_array = Q_concat_array,
+        .Q_vsnprintf = Q_vsnprintf,
+        .Q_snprintf = Q_snprintf,
+        .Q_fopen = Q_fopen,
+        .Q_ErrorString = Q_ErrorString,
+        .va = va,
+
+        .fs_gamedir = fs_gamedir,
+        .vid = &vid,
+        .com_eventTime = &com_eventTime,
+        .com_linenum = &com_linenum,
+        .com_env_suf = com_env_suf,
+#if USE_DEBUG
+        .developer = developer,
+#else
+        .developer = NULL,
+#endif
+    };
+
+    return import;
+}
+
+static void R_UnloadExternalRenderer(void);
+
+static bool R_UseRendererAPI(const char *renderer_name)
+{
+    renderer_import_t import = R_BuildRendererImports();
+    const renderer_export_t *exports = renderer_get_api(&import);
+
+    if (!exports) {
+        Com_SetLastError("Renderer_GetAPI returned no exports");
+        R_UnloadExternalRenderer();
+        return false;
+    }
+
+    re = *exports;
+    Com_Printf("Loaded renderer '%s'.\n", renderer_name);
+    return true;
+}
+
+static bool R_LoadExternalRenderer(const char *renderer_name)
+{
+    char libname[MAX_QPATH];
+    char path[MAX_OSPATH];
+    bool attempted = false;
+    const char *search_dirs[] = {
+        sys_libdir ? sys_libdir->string : "",
+        sys_basedir ? sys_basedir->string : "",
+        NULL
+    };
+
+    R_BuildRendererLibName(libname, sizeof(libname), renderer_name);
+
+    for (int i = 0; search_dirs[i]; i++) {
+        if (!search_dirs[i][0]) {
+            continue;
+        }
+
+        if (Q_concat(path, sizeof(path), search_dirs[i], PATH_SEP_STRING, libname) >= sizeof(path)) {
+            continue;
+        }
+
+        if (os_access(path, X_OK)) {
+            continue;
+        }
+
+        renderer_get_api = (const renderer_export_t *(*)(const renderer_import_t *))
+            Sys_LoadLibrary(path, "Renderer_GetAPI", &renderer_handle);
+        attempted |= renderer_get_api != NULL;
+        if (renderer_get_api && R_UseRendererAPI(renderer_name)) {
+            return true;
+        }
+    }
+
+    renderer_get_api = (const renderer_export_t *(*)(const renderer_import_t *))
+        Sys_LoadLibrary(libname, "Renderer_GetAPI", &renderer_handle);
+    attempted |= renderer_get_api != NULL;
+    if (renderer_get_api && R_UseRendererAPI(renderer_name)) {
+        return true;
+    }
+
+    if (!attempted) {
+        Com_SetLastError(va("Renderer library '%s' not found", libname));
+    }
+    return false;
+}
+
+static void R_UnloadExternalRenderer(void)
+{
+    if (renderer_handle) {
+        Sys_FreeLibrary(renderer_handle);
+        renderer_handle = NULL;
+    }
+    renderer_get_api = NULL;
+    memset(&re, 0, sizeof(re));
+    re.Config = &renderer_stub_config;
+}
+
+static void r_renderer_g(genctx_t *ctx)
+{
+    Prompt_AddMatch(ctx, "opengl");
+}
+#endif
+
 /*
 ============
-CL_RunResfresh
+CL_RunRenderer
 ============
 */
-void CL_RunRefresh(void)
+void CL_RunRenderer(void)
 {
     if (!cls.ref_initialized) {
         return;
@@ -291,11 +573,11 @@ void CL_RunRefresh(void)
         mode_changed = 0;
     }
 
-    if (cvar_modified & CVAR_REFRESH) {
-        CL_RestartRefresh(true);
-        cvar_modified &= ~CVAR_REFRESH;
+    if (cvar_modified & CVAR_RENDERER) {
+        CL_RestartRenderer(true);
+        cvar_modified &= ~CVAR_RENDERER;
     } else if (cvar_modified & CVAR_FILES) {
-        CL_RestartRefresh(false);
+        CL_RestartRenderer(false);
         cvar_modified &= ~CVAR_FILES;
     }
 }
@@ -323,10 +605,10 @@ static void vid_driver_g(genctx_t *ctx)
 
 /*
 ============
-CL_InitRefresh
+CL_InitRenderer
 ============
 */
-void CL_InitRefresh(void)
+void CL_InitRenderer(void)
 {
     char *modelist;
     int i;
@@ -335,10 +617,20 @@ void CL_InitRefresh(void)
         return;
     }
 
-    Cvar_Get("vid_ref", "gl", CVAR_ROM);
+#if USE_EXTERNAL_RENDERERS
+    r_renderer = Cvar_Get("r_renderer", "opengl", CVAR_RENDERER);
+    r_renderer->generator = r_renderer_g;
+    const char *renderer_name = R_NormalizeRendererName(r_renderer->string);
+    if (!R_LoadExternalRenderer(renderer_name)) {
+        Com_Error(ERR_FATAL, "Couldn't load renderer '%s': %s", renderer_name, Com_GetLastError());
+    }
+    Cvar_Get("vid_ref", renderer_name, CVAR_ROM);
+#else
+    Cvar_Get("vid_ref", "opengl", CVAR_ROM);
+#endif
 
     // Create the video variables so we know how to start the graphics drivers
-    cvar_t *vid_driver = Cvar_Get("vid_driver", "", CVAR_REFRESH);
+    cvar_t *vid_driver = Cvar_Get("vid_driver", "", CVAR_RENDERER);
     vid_driver->generator = vid_driver_g;
     vid_fullscreen = Cvar_Get("vid_fullscreen", "0", CVAR_ARCHIVE);
     _vid_fullscreen = Cvar_Get("_vid_fullscreen", "1", CVAR_ARCHIVE);
@@ -387,7 +679,7 @@ void CL_InitRefresh(void)
     }
 
     if (!ok)
-        Com_Error(ERR_FATAL, "Couldn't initialize refresh: %s", Com_GetLastError());
+        Com_Error(ERR_FATAL, "Couldn't initialize renderer: %s", Com_GetLastError());
 
     modelist = vid->get_mode_list();
     vid_modelist = Cvar_Get("vid_modelist", modelist, 0);
@@ -412,15 +704,15 @@ void CL_InitRefresh(void)
     SCR_RegisterMedia();
     Con_RegisterMedia();
 
-    cvar_modified &= ~(CVAR_FILES | CVAR_REFRESH);
+    cvar_modified &= ~(CVAR_FILES | CVAR_RENDERER);
 }
 
 /*
 ============
-CL_ShutdownRefresh
+CL_ShutdownRenderer
 ============
 */
-void CL_ShutdownRefresh(void)
+void CL_ShutdownRenderer(void)
 {
     if (!cls.ref_initialized) {
         return;
@@ -436,6 +728,9 @@ void CL_ShutdownRefresh(void)
     vid_modelist->changed = NULL;
 
     R_Shutdown(true);
+#if USE_EXTERNAL_RENDERERS
+    R_UnloadExternalRenderer();
+#endif
 
     vid = NULL;
 

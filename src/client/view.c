@@ -541,7 +541,7 @@ void V_RenderView(void)
     if (cl.frame.valid) {
         V_ClearScene();
 
-        // build a refresh entity list and calc cl.sim*
+        // build a renderer entity list and calc cl.sim*
         // this also calls CL_CalcViewValues which loads
         // v_forward, etc.
         CL_AddEntities();
