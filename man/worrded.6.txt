@@ -1,26 +1,26 @@
-Q2PRO(6)
-========
+WORR(6)
+=======
 :doctype: manpage
 
 
 NAME
 ----
-q2proded - enhanced Quake 2 dedicated server
+worrded - enhanced Quake 2 dedicated server
 
 
 SYNOPSIS
 --------
-*q2proded* [*+command* 'arguments']
+*worrded* [*+command* 'arguments']
 
 
 DESCRIPTION
 -----------
-This manual page documents briefly the *q2proded* program.
+This manual page documents briefly the *worrded* program.
 
-Q2PRO is an enhanced Quake 2 dedicated server, fully compatible with original
+WORR is an enhanced Quake 2 dedicated server, fully compatible with original
 Quake 2 clients.
 
-Q2PRO dedicated server features multiview demo recording capabilities, game
+WORR dedicated server features multiview demo recording capabilities, game
 television support, network protocol optimizations, improved security and
 overall performance.
 
@@ -29,7 +29,7 @@ OPTIONS
 -------
 Commands given on the command line start with a ‘+’, and continue until another
 ‘+’ or end of line. After command is parsed, it is merely passed to the
-internal Q2PRO interpreter, just like if typed directly at the console or read
+internal WORR interpreter, just like if typed directly at the console or read
 from config file.
 
 Console variables set on the command line override those given in normal
@@ -37,7 +37,7 @@ configuration files. If the variable does not exist as the time it is set, it
 is created for future use. User defined variables are permitted.
 
 Some examples of possible commands follow. Complete description of available
-internal commands and console variables is given in supplimentary Q2PRO
+internal commands and console variables is given in supplimentary WORR
 documentation, and is out of scope of this manual page.
 
 *+set deathmatch 1*::
@@ -55,28 +55,31 @@ documentation, and is out of scope of this manual page.
 
 FILES
 -----
-*/etc/default/q2pro*::
+*/etc/default/worr*::
     System wide configuration file. The first one to be executed.
 
-*/usr/share/games/q2pro/*::
+*/usr/share/games/worr/*::
     Root of the static Quake 2 game data hierarchy. Non-executable game media
     like textures, models and maps are installed here, either as individual
     files, or in form of uncompressed *.pak* or ZIP compressed *.pkz*
     packfiles.
 
-*/usr/lib/games/q2pro/*::
+*/usr/lib/games/worr/*::
     Quake 2 game mod shared libraries are installed here.
 
-*~/.q2pro/*::
+*~/.worr/*::
     User's local data hierarchy. Files placed there take precedence over files
-    in the system hierarchy. This directory should be writable by Q2PRO user.
-    Any dynamic data Q2PRO produces (savegames, demos) are written here.
+    in the system hierarchy. This directory should be writable by WORR user.
+    Any dynamic data WORR produces (savegames, demos) are written here.
 
 
 AUTHOR
 ------
 Quake 2 is Copyright (C) 1997-2001 Id Software, Inc.  Q2PRO is Copyright (C)
 2003-2011 Andrey Nazarov <skuller@skuller.net>.
+
+WORR is derived from Q2REPRO (https://github.com/themuffinator/WORR-2) and Q2PRO
+(https://github.com/Paril/q2pro, https://github.com/skullernet/q2pro).
 
 This manual page was written by Andrey Nazarov <skuller@skuller.net> for the
 *Debian* system (but may be used by others).  Permission is granted to

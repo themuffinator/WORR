@@ -343,6 +343,8 @@ endif
 common_link_args = []
 exe_link_args = []
 dll_link_args = []
+win_subsystem_client = 'windows'
+win_subsystem_server = 'console'
 
 if cc.get_argument_syntax() == 'gcc'
   if x86
@@ -366,6 +368,9 @@ if cc.get_argument_syntax() == 'gcc'
 
   if win32
     common_args += '-D__USE_MINGW_ANSI_STDIO=1'
+    if cc.get_id() == 'clang'
+      common_link_args += '-fuse-ld=lld'
+    endif
     common_link_args += '-Wl,--nxcompat,--dynamicbase'
 
     if cpu == 'x86_64'
@@ -377,6 +382,11 @@ if cc.get_argument_syntax() == 'gcc'
   endif
 elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/wd4267', '/wd4018']
+endif
+
+if win32 and cc.get_argument_syntax() == 'msvc'
+  win_subsystem_client += ',6.0'
+  win_subsystem_server += ',6.0'
 endif
 
 add_project_arguments(common_args, language: 'c')
@@ -425,6 +435,11 @@ sdl2 = dependency('sdl2', required: get_option('sdl2'))
 if sdl2.found()
   client_src += 'src/unix/video/sdl.c'
   config.set('USE_SDL', 'USE_CLIENT')
+endif
+
+khr_headers_dep = []
+if win32
+  khr_headers_dep = [subproject('khr-headers').get_variable('khr_headers_dep')]
 endif
 
 common_deps = [zlib]
@@ -642,6 +657,7 @@ if get_option('external-renderers')
   if jpeg.found()
     renderer_deps += jpeg
   endif
+  renderer_deps += khr_headers_dep
 
   renderer_c_args = ['-DUSE_CLIENT=1', '-DUSE_REF=1', '-DRENDERER_DLL'] + engine_args
 
@@ -666,7 +682,7 @@ executable('worr', common_src, client_src, renderer_engine_src,
   dependencies:          common_deps + client_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
-  win_subsystem:         'windows,6.0',
+  win_subsystem:         win_subsystem_client,
   link_args:             exe_link_args,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
   install:               true,
@@ -677,7 +693,7 @@ executable('worr.ded', common_src, server_src,
   dependencies:          common_deps + server_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
-  win_subsystem:         'console,6.0',
+  win_subsystem:         win_subsystem_server,
   link_args:             exe_link_args,
   c_args:                ['-DUSE_SERVER=1', engine_args],
   install:               true,

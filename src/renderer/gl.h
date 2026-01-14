@@ -982,7 +982,7 @@ void GL_DrawParticles(void);
 void GL_DrawBeams(void);
 void GL_DrawFlares(void);
 
-void GL_BindArrays(glVertexArray_t va);
+void GL_BindArrays(glVertexArray_t va_type);
 void GL_LockArrays(GLsizei count);
 void GL_UnlockArrays(void);
 void GL_DrawIndexed(showtris_t showtris);

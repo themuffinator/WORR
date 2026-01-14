@@ -534,16 +534,16 @@ static const glVaDesc_t arraydescs[VA_TOTAL][VERT_ATTR_COUNT] = {
     },
 };
 
-void GL_BindArrays(glVertexArray_t va)
+void GL_BindArrays(glVertexArray_t va_type)
 {
-    if (gls.currentva == va)
+    if (gls.currentva == va_type)
         return;
 
-    if (va != VA_NONE) {
+    if (va_type != VA_NONE) {
         const GLfloat *ptr = tess.vertices;
         GLuint buffer = 0;
 
-        if (va == VA_3D && !gl_static.world.vertices) {
+        if (va_type == VA_3D && !gl_static.world.vertices) {
             buffer = gl_static.world.buffer;
             ptr = NULL;
         } else if (!(gl_config.caps & QGL_CAP_CLIENT_VA)) {
@@ -552,10 +552,10 @@ void GL_BindArrays(glVertexArray_t va)
         }
 
         GL_BindBuffer(GL_ARRAY_BUFFER, buffer);
-        gl_backend->array_pointers(arraydescs[va], ptr);
+        gl_backend->array_pointers(arraydescs[va_type], ptr);
     }
 
-    gls.currentva = va;
+    gls.currentva = va_type;
     c.vertexArrayBinds++;
 }
 

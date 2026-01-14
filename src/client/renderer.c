@@ -35,8 +35,30 @@ cvar_t      *_vid_fullscreen;
 const vid_driver_t  *vid;
 
 #if USE_EXTERNAL_RENDERERS
+extern cvar_t *cl_async;
+extern cvar_t *cl_gunfov;
+extern cvar_t *cl_adjustfov;
+extern cvar_t *cl_gun;
+extern cvar_t *info_hand;
+
 static refcfg_t renderer_stub_config;
-renderer_export_t re = { .Config = &renderer_stub_config };
+static float R_ClampScaleStub(cvar_t *var)
+{
+    if (!var) {
+        return 1.0f;
+    }
+
+    if (var->value) {
+        return 1.0f / Cvar_ClampValue(var, 1.0f, 10.0f);
+    }
+
+    return 1.0f;
+}
+
+renderer_export_t re = {
+    .ClampScale = R_ClampScaleStub,
+    .Config = &renderer_stub_config
+};
 static void *renderer_handle;
 static const renderer_export_t *(*renderer_get_api)(const renderer_import_t *import);
 static cvar_t *r_renderer;
@@ -295,6 +317,110 @@ static void R_BuildRendererLibName(char *buffer, size_t size, const char *render
     }
 }
 
+static void R_Cvar_Reset(cvar_t *var)
+{
+    Cvar_Reset(var);
+}
+
+static void R_Cvar_Set(const char *name, const char *value)
+{
+    (void)Cvar_Set(name, value);
+}
+
+static int R_Q_atoi(const char *s)
+{
+    return Q_atoi(s);
+}
+
+void R_ClearDebugLines(void)
+{
+    if (re.ClearDebugLines) {
+        re.ClearDebugLines();
+    }
+}
+
+void R_AddDebugLine(const vec3_t start, const vec3_t end, color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugLine) {
+        re.AddDebugLine(start, end, color, time, depth_test);
+    }
+}
+
+void R_AddDebugPoint(const vec3_t point, float size, color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugPoint) {
+        re.AddDebugPoint(point, size, color, time, depth_test);
+    }
+}
+
+void R_AddDebugAxis(const vec3_t origin, const vec3_t angles, float size, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugAxis) {
+        re.AddDebugAxis(origin, angles, size, time, depth_test);
+    }
+}
+
+void R_AddDebugBounds(const vec3_t mins, const vec3_t maxs, color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugBounds) {
+        re.AddDebugBounds(mins, maxs, color, time, depth_test);
+    }
+}
+
+void R_AddDebugSphere(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugSphere) {
+        re.AddDebugSphere(origin, radius, color, time, depth_test);
+    }
+}
+
+void R_AddDebugCircle(const vec3_t origin, float radius, color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugCircle) {
+        re.AddDebugCircle(origin, radius, color, time, depth_test);
+    }
+}
+
+void R_AddDebugCylinder(const vec3_t origin, float half_height, float radius, color_t color,
+                        uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugCylinder) {
+        re.AddDebugCylinder(origin, half_height, radius, color, time, depth_test);
+    }
+}
+
+void R_DrawArrowCap(const vec3_t apex, const vec3_t dir, float size, color_t color,
+                    uint32_t time, qboolean depth_test)
+{
+    if (re.DrawArrowCap) {
+        re.DrawArrowCap(apex, dir, size, color, time, depth_test);
+    }
+}
+
+void R_AddDebugArrow(const vec3_t start, const vec3_t end, float size, color_t line_color,
+                     color_t arrow_color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugArrow) {
+        re.AddDebugArrow(start, end, size, line_color, arrow_color, time, depth_test);
+    }
+}
+
+void R_AddDebugCurveArrow(const vec3_t start, const vec3_t ctrl, const vec3_t end, float size,
+                          color_t line_color, color_t arrow_color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugCurveArrow) {
+        re.AddDebugCurveArrow(start, ctrl, end, size, line_color, arrow_color, time, depth_test);
+    }
+}
+
+void R_AddDebugText(const vec3_t origin, const vec3_t angles, const char *text, float size,
+                    color_t color, uint32_t time, qboolean depth_test)
+{
+    if (re.AddDebugText) {
+        re.AddDebugText(origin, angles, text, size, color, time, depth_test);
+    }
+}
+
 static renderer_import_t R_BuildRendererImports(void)
 {
     renderer_import_t import = {
@@ -311,9 +437,10 @@ static renderer_import_t R_BuildRendererImports(void)
         .Com_HashStringLen = Com_HashStringLen,
 
         .Cvar_Get = Cvar_Get,
-        .Cvar_Reset = Cvar_Reset,
-        .Cvar_Set = Cvar_Set,
+        .Cvar_Reset = R_Cvar_Reset,
+        .Cvar_Set = R_Cvar_Set,
         .Cvar_VariableInteger = Cvar_VariableInteger,
+        .Cvar_VariableValue = Cvar_VariableValue,
         .Cvar_ClampValue = Cvar_ClampValue,
         .Cvar_ClampInteger = Cvar_ClampInteger,
         .Cvar_FindVar = Cvar_FindVar,
@@ -387,6 +514,15 @@ static renderer_import_t R_BuildRendererImports(void)
         .COM_FileExtension = COM_FileExtension,
         .COM_SplitPath = COM_SplitPath,
 
+        .mdfour_begin = mdfour_begin,
+        .mdfour_update = mdfour_update,
+        .mdfour_result = mdfour_result,
+
+        .jsmn_init = jsmn_init,
+        .jsmn_parse = jsmn_parse,
+
+        .V_CalcFov = V_CalcFov,
+
         .AngleVectors = AngleVectors,
         .VectorNormalize = VectorNormalize,
         .VectorNormalize2 = VectorNormalize2,
@@ -428,7 +564,7 @@ static renderer_import_t R_BuildRendererImports(void)
 #else
         .Q_memccpy = Q_memccpy,
 #endif
-        .Q_atoi = Q_atoi,
+        .Q_atoi = R_Q_atoi,
 
         .Q_strcasecmp = Q_strcasecmp,
         .Q_strncasecmp = Q_strncasecmp,
@@ -448,6 +584,13 @@ static renderer_import_t R_BuildRendererImports(void)
         .com_eventTime = &com_eventTime,
         .com_linenum = &com_linenum,
         .com_env_suf = com_env_suf,
+        .cmd_optind = &cmd_optind,
+        .bytedirs = bytedirs,
+        .cl_async = cl_async,
+        .cl_gunfov = cl_gunfov,
+        .cl_adjustfov = cl_adjustfov,
+        .cl_gun = cl_gun,
+        .info_hand = info_hand,
 #if USE_DEBUG
         .developer = developer,
 #else
@@ -531,6 +674,7 @@ static void R_UnloadExternalRenderer(void)
     }
     renderer_get_api = NULL;
     memset(&re, 0, sizeof(re));
+    re.ClampScale = R_ClampScaleStub;
     re.Config = &renderer_stub_config;
 }
 

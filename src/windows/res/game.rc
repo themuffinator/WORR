@@ -13,9 +13,9 @@
 #endif
 
 #ifdef _WIN64
-#define VER_FILEDESCRIPTION_STR     "Q2PRO game module (64-bit)"
+#define VER_FILEDESCRIPTION_STR     "WORR game module (64-bit)"
 #else
-#define VER_FILEDESCRIPTION_STR     "Q2PRO game module"
+#define VER_FILEDESCRIPTION_STR     "WORR game module"
 #endif
 
 #define VER_ORIGINALFILENAME_STR    "game" CPUSTRING ".dll"
@@ -35,14 +35,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments", "https://github.com/skullernet/q2pro"
+            VALUE "Comments", "https://github.com/themuffinator/WORR-2"
             VALUE "CompanyName", "skuller.net"
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR
             VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
             VALUE "FileVersion", VERSION
             VALUE "InternalName", "game"
-            VALUE "LegalCopyright", "Copyright © 2023 skuller.net"
-            VALUE "ProductName", "Q2PRO"
+            VALUE "LegalCopyright", "Copyright (C) 2023 skuller.net"
+            VALUE "ProductName", "WORR"
             VALUE "ProductVersion", VERSION
         END
     END

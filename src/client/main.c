@@ -100,9 +100,50 @@ cvar_t  *info_gender;
 cvar_t  *info_uf;
 
 #if USE_REF
+#if USE_EXTERNAL_RENDERERS
+static void CL_SetRendererCheatFlags(bool enable)
+{
+    cvar_t *modulate_world = Cvar_FindVar("gl_modulate_world");
+    cvar_t *modulate_entities = Cvar_FindVar("gl_modulate_entities");
+    cvar_t *brightness = Cvar_FindVar("gl_brightness");
+
+    if (modulate_world) {
+        if (enable)
+            modulate_world->flags |= CVAR_CHEAT;
+        else
+            modulate_world->flags &= ~CVAR_CHEAT;
+    }
+    if (modulate_entities) {
+        if (enable)
+            modulate_entities->flags |= CVAR_CHEAT;
+        else
+            modulate_entities->flags &= ~CVAR_CHEAT;
+    }
+    if (brightness) {
+        if (enable)
+            brightness->flags |= CVAR_CHEAT;
+        else
+            brightness->flags &= ~CVAR_CHEAT;
+    }
+}
+#else
 extern cvar_t *gl_modulate_world;
 extern cvar_t *gl_modulate_entities;
 extern cvar_t *gl_brightness;
+
+static void CL_SetRendererCheatFlags(bool enable)
+{
+    if (enable) {
+        gl_modulate_world->flags |= CVAR_CHEAT;
+        gl_modulate_entities->flags |= CVAR_CHEAT;
+        gl_brightness->flags |= CVAR_CHEAT;
+    } else {
+        gl_modulate_world->flags &= ~CVAR_CHEAT;
+        gl_modulate_entities->flags &= ~CVAR_CHEAT;
+        gl_brightness->flags &= ~CVAR_CHEAT;
+    }
+}
+#endif
 #endif
 
 static cvar_t   *cl_hit_markers; // 1 = sound + pic, 2 = pic
@@ -702,9 +743,7 @@ void CL_ClearState(void)
 
 #if USE_REF
     // unprotect our custom modulate cvars
-    gl_modulate_world->flags &= ~CVAR_CHEAT;
-    gl_modulate_entities->flags &= ~CVAR_CHEAT;
-    gl_brightness->flags &= ~CVAR_CHEAT;
+    CL_SetRendererCheatFlags(false);
 #endif
 }
 
@@ -1688,9 +1727,7 @@ void CL_Begin(void)
 #if USE_REF
     if (!Q_stricmp(cl.gamedir, "gloom")) {
         // cheat protect our custom modulate cvars
-        gl_modulate_world->flags |= CVAR_CHEAT;
-        gl_modulate_entities->flags |= CVAR_CHEAT;
-        gl_brightness->flags |= CVAR_CHEAT;
+        CL_SetRendererCheatFlags(true);
     }
 #endif
 

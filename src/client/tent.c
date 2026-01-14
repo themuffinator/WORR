@@ -858,7 +858,7 @@ void CL_DrawBeam(const vec3_t start, const vec3_t end, float model_length, qhand
     }
 
     // nb: re-release randomizes the frames but we can't
-    // access the model frame count here in q2pro...
+    // access the model frame count here in WORR...
     ent.flags |= EF_ANIM_ALLFAST;
 
     VectorCopy(start, ent.origin);

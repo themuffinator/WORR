@@ -16,12 +16,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "gl.h"
 #include "../client/client.h"
 #include "../server/server.h"
 #include "shared/list.h"
 #include "common/prompt.h"
 #include <assert.h>
+
+#include "gl.h"
 
 #define DEBUG_VERTEX_SIZE   4 // 3*float coord + 1 u32 color
 #define MAX_DEBUG_VERTICES  (q_countof(tess.vertices) / DEBUG_VERTEX_SIZE)
@@ -72,7 +73,11 @@ void R_ClearDebugLines(void)
 
 static inline uint32_t R_DebugCurrentTime(void)
 {
+#if defined(RENDERER_DLL)
+    return com_eventTime;
+#else
     return sv.framenum * sv.frametime.time;
+#endif
 }
 
 static inline bool R_DebugTimeExpired(const uint32_t time)

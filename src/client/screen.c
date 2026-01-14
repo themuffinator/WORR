@@ -1849,7 +1849,9 @@ void SCR_AddPOI(int id, int time, const vec3_t p, int image, int color, int flag
     poi->flags = flags;
 }
 
+#if !USE_EXTERNAL_RENDERERS
 extern uint32_t d_8to24table[256];
+#endif
 
 typedef enum
 {
@@ -1861,6 +1863,12 @@ static void SCR_DrawPOIs(color_t base_color)
 {
     if (!scr_pois->integer)
         return;
+#if USE_EXTERNAL_RENDERERS
+    const uint32_t *palette = re.PaletteTable;
+    if (!palette) {
+        return;
+    }
+#endif
 
     float projection_matrix[16];
     Matrix_Frustum(cl.refdef.fov_x, cl.refdef.fov_y, 1.0f, 0.01f, 8192.f, projection_matrix);
@@ -1942,7 +1950,11 @@ static void SCR_DrawPOIs(color_t base_color)
         sp[0] = Q_clipf(sp[0], 0, scr.hud_width - hw);
         sp[1] = Q_clipf(sp[1], 0, scr.hud_height - hh);
 
+#if USE_EXTERNAL_RENDERERS
+        color_t c = { .u32 = palette[poi->color] };
+#else
         color_t c = { .u32 = d_8to24table[poi->color] };
+#endif
 
         // calculate alpha if necessary
         if (poi->flags & POI_FLAG_HIDE_ON_AIM) {

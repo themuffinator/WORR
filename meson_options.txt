@@ -51,7 +51,7 @@ option('game-new-api',
 
 option('homedir',
   type: 'string',
-  value: '~/.q2pro',
+  value: '~/.worr',
   description: 'Default value for "homedir" console variable')
 
 option('icmp-errors',
@@ -86,7 +86,7 @@ option('md5',
 
 option('external-renderers',
   type: 'boolean',
-  value: false,
+  value: true,
   description: 'Build renderers as external shared libraries')
 
 option('memory-traces',

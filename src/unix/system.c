@@ -106,7 +106,7 @@ void Sys_Quit(void)
     exit(EXIT_SUCCESS);
 }
 
-#define SYS_SITE_CFG    "/etc/default/q2pro"
+#define SYS_SITE_CFG    "/etc/default/worr"
 
 void Sys_AddDefaultConfig(void)
 {
@@ -509,7 +509,7 @@ GAME PATH DETECTION
 #if defined(DEFAULT_PREFIX)
 
 static const char* check_paths_classic[] = {
-    DEFAULT_PREFIX "/share/q2pro",
+    DEFAULT_PREFIX "/share/worr",
     // TODO: consider other default data locations
     NULL
     };

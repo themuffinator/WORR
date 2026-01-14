@@ -665,7 +665,7 @@ void SV_CheckForEnhancedSavegames(void)
         return;
 
     if (g_features->integer & GMF_ENHANCED_SAVEGAMES)
-        Com_Printf("Game supports Q2PRO enhanced savegames.\n");
+        Com_Printf("Game supports WORR enhanced savegames (Q2PRO format).\n");
     else if (svs.gamedetecthack == 4)
         Com_Printf("Game supports YQ2 enhanced savegames.\n");
     else if (sys_allow_unsafe_savegames->integer)

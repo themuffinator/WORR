@@ -1,10 +1,10 @@
 Prerequisities
 --------------
 
-Q2PRO can be built on Linux, BSD and similar platfroms using a recent version
+WORR can be built on Linux, BSD and similar platfroms using a recent version
 of GCC or Clang.
 
-Q2PRO client requires either SDL2 or OpenAL for sound output. For video output,
+WORR client requires either SDL2 or OpenAL for sound output. For video output,
 native X11 and Wayland backends are available, as well as generic SDL2 backend.
 
 Note that SDL2 is optional if using native X11 and Wayland backends and OpenAL,
@@ -22,7 +22,7 @@ OpenAL sound backend requires OpenAL Soft development headers for compilation.
 At runtime, OpenAL library from any vendor can be used (but OpenAL Soft is
 strongly recommended).
 
-To install the *full* set of dependencies for building Q2PRO on Debian or
+To install the *full* set of dependencies for building WORR on Debian or
 Ubuntu use the following command:
 
     apt-get install meson gcc libc6-dev libsdl2-dev libopenal-dev \
@@ -44,7 +44,7 @@ and install them.
 Building
 --------
 
-Q2PRO uses Meson build system for its build process.
+WORR uses Meson build system for its build process.
 
 Setup build directory (arbitrary name can be used instead of `builddir`):
 
@@ -54,7 +54,7 @@ Review and configure options:
 
     meson configure builddir
 
-Q2PRO specific options are listed in `Project options` section. They are
+WORR-specific options are listed in `Project options` section. They are
 defined in `meson_options.txt` file.
 
 E.g. to install to different prefix:
@@ -74,26 +74,26 @@ Installation
 You need to have either full version of Quake 2 unpacked somewhere, or a demo.
 Both should be patched to 3.20 point release.
 
-Run `sudo ninja -C builddir install` to install Q2PRO system-wide into
+Run `sudo ninja -C builddir install` to install WORR system-wide into
 configured prefix (`/usr/local` by default).
 
 Copy `baseq2/pak*.pak` files and `baseq2/players` directory from unpacked
-Quake 2 data into `/usr/local/share/q2pro/baseq2` to complete the
+Quake 2 data into `/usr/local/share/worr/baseq2` to complete the
 installation.
 
 Alternatively, configure with `-Dsystem-wide=false` to build a ‘portable’
 version that expects to be launched from the root of Quake 2 data tree (this
 is default when building for Windows).
 
-On Windows, Q2PRO automatically sets current directory to the directory Q2PRO
+On Windows, WORR automatically sets current directory to the directory WORR
 executable is in. On other platforms current directory must be set before
-launching Q2PRO executable if portable version is built.
+launching WORR executable if portable version is built.
 
 
 Music support
 -------------
 
-Q2PRO supports playback of background music ripped off original CD in Ogg
+WORR supports playback of background music ripped off original CD in Ogg
 Vorbis format. Music files should be placed in `music` subdirectory of the game
 directory in format `music/trackNN.ogg`, where `NN` corresponds to CD track
 number. `NN` should be typically in range 02-11 (track 01 is data track on
@@ -109,7 +109,7 @@ MinGW-w64
 MinGW-w64 cross-compiler is available in recent versions of all major Linux
 distributions.
 
-Library dependencies that Q2PRO uses have been prepared as Meson subprojects
+Library dependencies that WORR uses have been prepared as Meson subprojects
 and will be automatically downloaded and built by Meson.
 
 To install MinGW-w64 on Debian or Ubuntu, use the following command:
@@ -140,7 +140,7 @@ Build:
 Visual Studio
 -------------
 
-It is possible to build Q2PRO on Windows using Visual Studio 2022 and Meson.
+It is possible to build WORR on Windows using Visual Studio 2022 and Meson.
 
 Install Visual Studio and Meson using official installers.
 
@@ -150,9 +150,13 @@ into PATH is to put it into `Program Files/Meson`.
 The build needs to be launched from appropriate Visual Studio command line
 shell, e.g. `x64 Native Tools Command Prompt`.
 
-Change to Q2PRO source directory, then setup build directory:
+Change to WORR source directory, then setup build directory:
 
-    meson setup -Dwrap_mode=forcefallback builddir
+    meson setup --native-file meson.native.ini -Dwrap_mode=forcefallback builddir
+
+If Meson reports that it cannot find a Windows resource compiler, the
+`meson.native.ini` file points `rc` to `tools/rc.cmd`, which locates
+`llvm-rc.exe` for you.
 
 Build:
 

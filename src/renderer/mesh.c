@@ -914,18 +914,41 @@ static void draw_alias_skeleton(const md5_model_t *model)
 // existing RF_WEAPONMODEL flag, we do it here.
 static void setup_weaponmodel(void)
 {
+#if defined(RENDERER_DLL)
+    float gunfov = 0.0f;
+    int adjustfov = 0;
+    int gun = 0;
+    int hand = 0;
+#else
     extern cvar_t   *info_hand;
     extern cvar_t   *cl_adjustfov;
     extern cvar_t   *cl_gunfov;
     extern cvar_t   *cl_gun;
+#endif
 
     float fov_x = glr.fd.fov_x;
     float fov_y = glr.fd.fov_y;
     float reflect_x = 1.0f;
 
-    if (cl_gunfov->value > 0) {
-        fov_x = Cvar_ClampValue(cl_gunfov, 30, 160);
-        if (cl_adjustfov->integer) {
+#if defined(RENDERER_DLL)
+    if (Cvar_VariableValue)
+        gunfov = Cvar_VariableValue("cl_gunfov");
+    else if (Cvar_VariableInteger)
+        gunfov = (float)Cvar_VariableInteger("cl_gunfov");
+
+    if (Cvar_VariableInteger) {
+        adjustfov = Cvar_VariableInteger("cl_adjustfov");
+        gun = Cvar_VariableInteger("cl_gun");
+        hand = Cvar_VariableInteger("hand");
+    }
+
+    if (gunfov > 0.0f) {
+        if (gunfov < 30.0f)
+            gunfov = 30.0f;
+        else if (gunfov > 160.0f)
+            gunfov = 160.0f;
+        fov_x = gunfov;
+        if (adjustfov) {
             fov_y = V_CalcFov(fov_x, 4, 3);
             fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
         } else {
@@ -933,10 +956,27 @@ static void setup_weaponmodel(void)
         }
     }
 
-    if ((info_hand->integer == 1 && cl_gun->integer == 1) || cl_gun->integer == 3) {
+    if ((hand == 1 && gun == 1) || gun == 3) {
         reflect_x = -1.0f;
         qglFrontFace(GL_CCW);
     }
+#else
+    if (cl_gunfov && cl_gunfov->value > 0) {
+        fov_x = Cvar_ClampValue(cl_gunfov, 30, 160);
+        if (cl_adjustfov && cl_adjustfov->integer) {
+            fov_y = V_CalcFov(fov_x, 4, 3);
+            fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
+        } else {
+            fov_y = V_CalcFov(fov_x, glr.fd.width, glr.fd.height);
+        }
+    }
+
+    if (cl_gun && info_hand &&
+        ((info_hand->integer == 1 && cl_gun->integer == 1) || cl_gun->integer == 3)) {
+        reflect_x = -1.0f;
+        qglFrontFace(GL_CCW);
+    }
+#endif
 
     GL_Frustum(fov_x, fov_y, reflect_x);
 }

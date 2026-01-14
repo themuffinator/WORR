@@ -1,12 +1,12 @@
-Q2PRO Server Manual
+WORR Server Manual
 ===================
 Andrey Nazarov <skuller@skuller.net>
 
 About
 -----
-Q2PRO is an enhanced, multiplayer oriented Quake 2 server, compatible
+WORR is an enhanced, multiplayer oriented Quake 2 server, compatible
 with existing Quake 2 ports and licensed under GPLv2. This document provides
-descriptions of console variables and commands added to or modified by Q2PRO
+descriptions of console variables and commands added to or modified by WORR
 since the original Quake 2 release. Cvars and commands inherited from original
 Quake 2 are not described here (yet).
 
@@ -281,7 +281,7 @@ sv_trunc_packet_entities::
     dropping client frame. This does not break delta compression and should be
     generally safe to use. Some negative effects like entities temporary
     freezing, or delayed spawning can be observed. Only relevant for legacy
-    clients not using Q2PRO network channel implementation. Default value is 1
+    clients not using WORR network channel implementation. Default value is 1
     (enabled).
 
 sv_prioritize_entities::
@@ -332,7 +332,7 @@ sv_max_download_size::
     Maximum size of UDP download in bytes. Value of 0 disables the limit.
     Default value is 8388608 (8 MiB).
 
-TIP: Q2PRO clients can stream compressed downloads directly from .pkz archives
+TIP: WORR clients can stream compressed downloads directly from .pkz archives
 on the server. Thus it is advisable to keep all data in .pkz for optimal
 download speeds.
 
@@ -341,7 +341,7 @@ MVD/GTV server
 
 .Server modes
 *************
-Q2PRO server can run in either MVD/GTV ‘server’ or ‘client’ mode. ‘Server’ mode
+WORR server can run in either MVD/GTV ‘server’ or ‘client’ mode. ‘Server’ mode
 is just a regular game server mode. In this mode, server functions as a primary
 source of MVD data, which can be either locally recorded to disk in form of a
 demo file, or sent to GTV clients over the network.  ‘Client’ mode is more
@@ -504,7 +504,7 @@ Quake 2 player movement code contains a bug that causes surfacing velocity
 produced by holding the jump button underwater to be severely limited,
 comparing to movement in other directions. Even worse, resulting velocity is
 calculated differently on client and server sides and that causes prediction
-errors and jerky movement.  Q2PRO is able to work around this bug and make
+errors and jerky movement.  WORR is able to work around this bug and make
 player movement speed equal in all directions underwater.
 ***************
 
@@ -522,7 +522,7 @@ sys_console::
 
 sys_history::
     Specifies how many lines to save into system console history file before
-    exiting Q2PRO, to be reloaded on next startup. Maximum number of history
+    exiting WORR, to be reloaded on next startup. Maximum number of history
     lines is 128. Default value is 128.
 
 .System console key bindings
@@ -680,7 +680,7 @@ pickclient <address:port>::
     Send ‘passive_connect’ packet to the client at specified _address_ and
     _port_.  This is useful if the server is behind NAT or firewall and can not
     accept remote connections. Remote client must support passive connections
-    (R1Q2 and Q2PRO clients do), must be in passive connection mode and the
+    (R1Q2 and WORR clients do), must be in passive connection mode and the
     specified _port_ must be reachable. See ‘passive’ [[client]] command for
     more details.
 
@@ -960,7 +960,7 @@ mvdrecord [-hz] <filename> [channel]::
         -h | --help::: display help message
         -z | --compress::: compress file with gzip
 
-TIP: With Q2PRO it is possible to record a demo while playing back another one.
+TIP: With WORR it is possible to record a demo while playing back another one.
 
 mvdstop [channel]::
     Stop MVD recording on the specified channel. There is no need to specify
@@ -969,7 +969,7 @@ mvdstop [channel]::
 .Record commands
 ****************
 As you have probably noticed, the same ‘mvdrecord’ and ‘mvdstop’ commands
-introduced in the previous section are used here. This is possible since Q2PRO
+introduced in the previous section are used here. This is possible since WORR
 server may be either in the MVD/GTV server or client mode, but not both at the
 same time.
 ****************
@@ -992,12 +992,12 @@ mvdservers::
 Incompatibilities
 -----------------
 
-Q2PRO server tries to be compatible with other Quake 2 ports, including
+WORR server tries to be compatible with other Quake 2 ports, including
 original Quake 2 release. Compatibility, however, is defined in terms of full
-file format and network protocol compatibility. Q2PRO is not meant to be a
+file format and network protocol compatibility. WORR is not meant to be a
 direct replacement of your regular Quake 2 server. Some features are
-implemented differently in Q2PRO, some may be not implemented at all. You may
-need to review your config and adapt it for Q2PRO. This section tries to
+implemented differently in WORR, some may be not implemented at all. You may
+need to review your config and adapt it for WORR. This section tries to
 document most of these incompatibilities so that when something doesn't work as
 it used to be you know where to look. The following list may be incomplete.
 
@@ -1013,7 +1013,7 @@ it used to be you know where to look. The following list may be incomplete.
   loading the game DLL.  If you need this for loading some sort of a game mod
   proxy, use ‘sys_forcegamelib’ variable.
 
-- Q2PRO works only with virtual paths constrained to the quake file system.
+- WORR works only with virtual paths constrained to the quake file system.
   All paths are normalized before use so that it is impossible to go past virtual
   filesystem root using ‘../’ components.  This means commands like these are
   equivalent and all reference the same file: ‘exec ../global.cfg’, ‘exec
@@ -1023,4 +1023,5 @@ it used to be you know where to look. The following list may be incomplete.
 
 - Likewise, ‘link’ command syntax has been changed to work with virtual paths
   constrained to the quake file system. All arguments to ‘link’ are normalized.
+
 

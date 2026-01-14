@@ -918,7 +918,13 @@ void R_BeginFrame(void)
 
 void R_EndFrame(void)
 {
+#if defined(RENDERER_DLL)
+    int async = 0;
+    if (Cvar_VariableInteger)
+        async = Cvar_VariableInteger("cl_async");
+#else
     extern cvar_t *cl_async;
+#endif
 
     if (SCR_StatActive()) {
         GL_Flush2D();
@@ -939,7 +945,11 @@ void R_EndFrame(void)
 
     vid->swap_buffers();
 
+#if defined(RENDERER_DLL)
+    if (qglFenceSync && async > 1 && !gl_static.sync)
+#else
     if (qglFenceSync && cl_async->integer > 1 && !gl_static.sync)
+#endif
         gl_static.sync = qglFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 

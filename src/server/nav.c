@@ -21,10 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server/nav.h"
 #include "common/error.h"
 #if USE_REF
-#include "renderer/renderer.h"
-// ugly but necessary to hook into nav system without
-// exposing this into a mess of spaghetti
-#include "../renderer/gl.h"
+#include "../client/client.h"
 
 static cvar_t *nav_debug;
 static cvar_t *nav_debug_range;
@@ -1162,10 +1159,10 @@ static void Nav_RenderLinkEdict(const vec3_t start, const vec3_t end, const nav_
     R_AddDebugSphere(e, 8.0f, COLOR_RED, SV_FRAMETIME, true);
 
     vec3_t d;
-    VectorSubtract(glr.fd.vieworg, e, d);
+    VectorSubtract(cl.refdef.vieworg, e, d);
     VectorNormalize(d);
 
-    if (DotProduct(d, glr.viewaxis[0]) < -0.99f) {
+    if (DotProduct(d, cl.v_forward) < -0.99f) {
         
         vec3_t org;
 
@@ -1265,7 +1262,7 @@ static void Nav_Debug(void)
 
     for (int i = 0; i < nav_data.num_nodes; i++) {
         const nav_node_t *node = &nav_data.nodes[i];
-        const float len = VectorDistance(node->origin, glr.fd.vieworg);
+        const float len = VectorDistance(node->origin, cl.refdef.vieworg);
 
         if (len > nav_debug_range->value)
             continue;

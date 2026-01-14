@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/video.h"
 #include "renderer/renderer.h"
 #include "system/system.h"
-#include "../res/q2pro.xbm"
+#include "../res/worr.xbm"
 #include <SDL.h>
 
 static struct {

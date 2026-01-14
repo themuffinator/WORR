@@ -1,12 +1,12 @@
-Q2PRO Client Manual
+WORR Client Manual
 ===================
 Andrey Nazarov <skuller@skuller.net>
 
 About
 -----
-Q2PRO is an enhanced, multiplayer oriented Quake 2 client, compatible
+WORR is an enhanced, multiplayer oriented Quake 2 client, compatible
 with existing Quake 2 ports and licensed under GPLv2. This document provides
-descriptions of console variables and commands added to or modified by Q2PRO
+descriptions of console variables and commands added to or modified by WORR
 since the original Quake 2 release. Cvars and commands inherited from original
 Quake 2 are not described here (yet).
 
@@ -16,15 +16,15 @@ Variables
 Netcode
 ~~~~~~~
 
-Q2PRO client supports separation of outgoing packet rate, physics frame rate
+WORR client supports separation of outgoing packet rate, physics frame rate
 and rendering frame rate. Separation of physics and rendering frame rates is
 accomplished in R1Q2 ‘cl_async’ style and is enabled by default.
 
-In addition to this, Q2PRO network protocol is able to pack several input
+In addition to this, WORR uses the Q2PRO network protocol to pack several input
 commands into the single network packet for outgoing packet rate reduction.
 This is very useful for some types of network links like Wi-Fi that can't deal
-with large number of small packets and cause packet delay or loss. Q2PRO
-protocol is only in use when connected to a Q2PRO server.
+with large number of small packets and cause packet delay or loss. The Q2PRO
+protocol is only in use when connected to a server that supports it.
 
 For the default Quake 2 protocol and R1Q2 protocol a hacky solution exists,
 which exploits dropped packet recovery mechanism for the purpose of packet
@@ -37,7 +37,7 @@ cl_protocol::
         - 0 — automatically select the highest protocol version supported
         - 34 — use default Quake 2 protocol
         - 35 — use enhanced R1Q2 protocol
-        - 36 — use enhanced Q2PRO protocol
+        - 36 - use enhanced Q2PRO protocol
 
 cl_maxpackets::
     Number of packets client sends per second. 0 means no particular limit.
@@ -92,17 +92,17 @@ cl_maxfps::
     60.
 
 cl_gibs::
-    Controls rendering of entities with ‘EF_GIB’ flag set. When using Q2PRO
+    Controls rendering of entities with ‘EF_GIB’ flag set. When using WORR
     protocol, disabling this saves some bandwidth since the server stops
     sending these entities at all. Default value is 1 (enabled).
 
 cl_flares::
-    Controls rendering of entities with ‘RF_FLARE’ flag set. When using Q2PRO
+    Controls rendering of entities with ‘RF_FLARE’ flag set. When using WORR
     protocol, disabling this saves some bandwidth since the server stops
     sending these entities at all. Default value is 1 (enabled).
 
 cl_gun::
-    Controls rendering of the player's own gun model. When using R1Q2 or Q2PRO
+    Controls rendering of the player's own gun model. When using R1Q2 or WORR
     protocol, disabling this saves some bandwidth since the server stops
     sending gun updates at all. Default value is 1.
       - 0 — don't draw gun
@@ -119,7 +119,7 @@ cl_footsteps::
       - 2 — use default footstep sound
 
 cl_updaterate::
-    Specifies the perferred update rate requested from Q2PRO servers. Only used
+    Specifies the perferred update rate requested from WORR servers. Only used
     when server is running in variable FPS mode, otherwise default rate of 10
     packets per second is used. Specified rate should evenly divide native
     server frame rate.  Default value is 0, which means to use the highest
@@ -169,7 +169,7 @@ net_maxmsglen::
 
 net_chantype::
     Specifies if enhanced Q2PRO network channel implementation is enabled when
-    connecting to Q2PRO servers. Q2PRO netchan supports application-level
+    connecting to servers that support it. Q2PRO netchan supports application-level
     fragmentation of datagrams that results is better gamestate compression
     ratio and faster map load times.  Default value is 1 (enabled).
 
@@ -325,7 +325,7 @@ s_underwater_gain_hf::
     Specifies HF gain value for lowpass sound filter. Default value is 0.25.
 
 s_auto_focus::
-    Specifies the minimum focus level main Q2PRO window should have for sound
+    Specifies the minimum focus level main WORR window should have for sound
     to be activated.  Default value is 0.
       - 0 — sound is always activated
       - 1 — sound is activated when main window is visible, and deactivated
@@ -423,7 +423,7 @@ con_notifylines::
 
 con_history::
     Specifies how many lines to save into console history file before exiting
-    Q2PRO, to be reloaded on next startup. Maximum number of history lines is 128.
+    WORR, to be reloaded on next startup. Maximum number of history lines is 128.
     Default value is 128.
 
 con_scroll::
@@ -588,7 +588,7 @@ scr_hit_marker_time::
 Video Modes
 ~~~~~~~~~~~
 
-Hard coded list of the fullscreen video modes is gone from Q2PRO, you can
+Hard coded list of the fullscreen video modes is gone from WORR, you can
 specify your own list in configuration files. Vertical refresh frequency _freq_
 and bit depth _bpp_ can be specified individually for each mode.
 
@@ -613,7 +613,7 @@ vid_geometry::
 
 vid_flip_on_switch::
     On Windows, specifies if original video mode is automatically restored when
-    switching from fullscreen Q2PRO to another application or desktop.  Default
+    switching from fullscreen WORR to another application or desktop.  Default
     value is 0 (don't switch video modes).
 
 vid_hwgamma::
@@ -644,7 +644,7 @@ The following lines define 2 video modes: 640x480 and 800x600 at 75 Hz vertical 
 Windows Specific
 ~~~~~~~~~~~~~~~~
 
-The following variables are specific to the Windows port of Q2PRO.
+The following variables are specific to the Windows port of WORR.
 
 win_noalttab::
     Disables the Alt-Tab key combination to prevent it from interfering with
@@ -774,7 +774,7 @@ gl_partshape::
 
 gl_beamstyle::
     Specifies drawing style of laser beams. Default value is 0.
-      - 0 — textured billboard-type beam (Q2PRO style, very fast to draw)
+      - 0 — textured billboard-type beam (WORR style, very fast to draw)
       - 1 — flat color polygonal beam (original Quake 2 style)
 
 gl_celshading::
@@ -844,7 +844,7 @@ gl_modulate_entities::
 TIP: An old trick to make entities look brighter in Quake 2 was setting
 ‘gl_modulate’ to a high value without issuing ‘vid_restart’ afterwards. This
 way it was possible to keep ‘gl_modulate’ from applying to world lightmaps, but
-only until the next map was loaded. In Q2PRO this trick is no longer needed
+only until the next map was loaded. In WORR this trick is no longer needed
 (and it won't work, since ‘gl_modulate’ is applied dynamically). To get the
 similar effect, set the legacy ‘gl_modulate’ variable to 1, and configure
 ‘gl_modulate_world’ and ‘gl_modulate_entities’ to suit your needs.
@@ -1004,7 +1004,7 @@ r_texture_overrides::
 
 .MD2 model overrides
 ********************
-When Q2PRO attempts to load an alias model from disk, it determines actual
+When WORR attempts to load an alias model from disk, it determines actual
 model format by file contents, rather than by filename extension. Therefore, if
 you wish to override MD2 model with MD3 replacement, simply rename the MD3
 model to ‘tris.md2’ and place it in appropriate packfile to make sure it gets
@@ -1178,7 +1178,7 @@ cl_ignore_stufftext::
     exist or is empty, ‘cmd’ command (with arbitrary arguments) is allowed.
     This allows the server to query any console variable on the client. If
     there is at least one entry in whitelist, then ‘cmd’ needs to be explicitly
-    whitelisted. Q2PRO server will not allow the client in if it can't query
+    whitelisted. WORR server will not allow the client in if it can't query
     version cvar, for example. When set to 2 and higher also issues a warning
     when stufftext command is ignored. Default value is 0 (don't filter
     stufftext commands).
@@ -1189,8 +1189,8 @@ problems with mods/servers.
 cl_rollhack::
     Default OpenGL renderer in Quake 2 contained a bug that caused ‘roll’ angle
     of 3D models to be inverted during rotation.  Due to this bug, player
-    models did lean in the opposite direction when strafing. New Q2PRO renderer
-    doesn't have this bug, but since many players got used to it, Q2PRO is able
+    models did lean in the opposite direction when strafing. New WORR renderer
+    doesn't have this bug, but since many players got used to it, WORR is able
     to simulate original behavior. This cvar chooses in which direction player
     models will lean. Default value is 1 (invert ‘roll’ angle).
 
@@ -1359,11 +1359,11 @@ demo [/]<filename[.ext]>::
     MVD file type is detected, it will be automatically passed to the server
     subsystem. To stop demo playback, type ‘disconnect’.
 
-NOTE: By default, during demo playback, Q2PRO overrides FOV value stored in
+NOTE: By default, during demo playback, WORR overrides FOV value stored in
 demo file with value of local ‘fov’ variable, unless stored FOV value is less
 than 90. This behavior can be changed with ‘uf’ variable (see above).
 
-NOTE: Recommened way to play demos in Q2PRO is the ‘demo’ command, but
+NOTE: Recommened way to play demos in WORR is the ‘demo’ command, but
 ‘demomap’ is still supported for compatibility. Playing demos using ‘demomap’
 enables some compatibility options, such as hiding player gun in wide angle
 view.
@@ -1411,7 +1411,7 @@ record [-hzes] <filename>::
         -e | --extended::: use extended packet size (4086 bytes)
         -s | --standard::: use standard packet size (1390 bytes)
 
-TIP: With Q2PRO it is possible to record a demo while playing back another one.
+TIP: With WORR it is possible to record a demo while playing back another one.
 
 stop::
     Stops demo recording and prints some statistics about recorded demo.
@@ -1425,7 +1425,7 @@ resume::
 
 .Demo packet sizes
 ******************
-When Q2PRO or R1Q2 protocols are in use, demo written to disk is automatically
+When WORR or R1Q2 protocols are in use, demo written to disk is automatically
 downgraded to protocol 34. This can result in dropping of large frames that
 don't fit into standard protocol 34 limit. Demo packet size can be extended to
 overcome this, but this may render demo unplayable by other Quake 2 clients
@@ -1439,7 +1439,7 @@ per demo by ‘record’ command options.
 |=================
 | Quake 2 | 1390
 | R1Q2    | 4086
-| Q2PRO   | 32768
+| WORR   | 32768
 |=================
 
 
@@ -1647,7 +1647,7 @@ r_reload::
     Flush and reload all media registered by the renderer (textures and models).
     Weaker form of ‘fs_restart’.
 
-TIP: In Q2PRO, you don't have to issue ‘vid_restart’ after changing graphics
+TIP: In WORR, you don't have to issue ‘vid_restart’ after changing graphics
 settings. Changes to console variables are detected, and appropriate subsystem
 is restarted automatically.
 
@@ -1701,24 +1701,24 @@ softunlink [-ah] <name>::
 Incompatibilities
 -----------------
 
-Q2PRO client tries to be compatible with other Quake 2 ports, including
+WORR client tries to be compatible with other Quake 2 ports, including
 original Quake 2 release. Compatibility, however, is defined in terms of full
-file format and network protocol compatibility. Q2PRO is not meant to be a
+file format and network protocol compatibility. WORR is not meant to be a
 direct replacement of your regular Quake 2 client. Some features are
-implemented differently in Q2PRO, some may be not implemented at all. You may
-need to review your config and adapt it for Q2PRO. This section tries to
+implemented differently in WORR, some may be not implemented at all. You may
+need to review your config and adapt it for WORR. This section tries to
 document most of these incompatibilities so that when something doesn't work as
 it used to be you know where to look. The following list may be incomplete.
 
-- Q2PRO has a built-in OpenGL renderer and doesn't support dynamic loading of
+- WORR has a built-in OpenGL renderer and doesn't support dynamic loading of
   external renderers. Thus, ‘vid_ref’ cvar has been made read-only and exists
   only for compatibility with tools like Q2Admin.
 
-- Q2PRO supports loading system OpenGL library only. Thus, ‘gl_driver’ cvar has
+- WORR supports loading system OpenGL library only. Thus, ‘gl_driver’ cvar has
   been made read-only and exists only for compatibility with tools like
   Q2Admin.
 
-- Changes to ‘gl_modulate’ variable in Q2PRO take effect immediately. To set
+- Changes to ‘gl_modulate’ variable in WORR take effect immediately. To set
   separate modulation factors for world lightmaps and entities please use
   ‘gl_modulate_world’ and ‘gl_modulate_entities’ variables.
 
@@ -1727,7 +1727,7 @@ it used to be you know where to look. The following list may be incomplete.
 
 - ‘gl_particle_*’ series of variables are gone, as well as
   ‘gl_ext_pointparameters’. For controlling size of particles, which are always
-  drawn as textured triangles, Q2PRO supports its own ‘gl_partscale’ variable.
+  drawn as textured triangles, WORR supports its own ‘gl_partscale’ variable.
 
 - ‘ip’ variable has been renamed to ‘net_ip’.
 
@@ -1738,7 +1738,7 @@ it used to be you know where to look. The following list may be incomplete.
   client side demo playback is started. Otherwise ‘demomap’ command is equivalent
   to ‘gamemap’ (attract loop mode is not supported).
 
-- Q2PRO works only with virtual paths constrained to the quake file system.
+- WORR works only with virtual paths constrained to the quake file system.
   All paths are normalized before use so that it is impossible to go past virtual
   filesystem root using ‘../’ components.  This means commands like these are
   equivalent and all reference the same file: ‘exec ../global.cfg’, ‘exec
@@ -1754,7 +1754,8 @@ it used to be you know where to look. The following list may be incomplete.
 - Joysticks are not supported.
 
 - Single player savegame format has been rewritten from scratch for better
-  robustness and portability. Only the ‘baseq2’ game library included in Q2PRO
-  distribution has been converted to use the new improved savegame format. Q2PRO
+  robustness and portability. Only the ‘baseq2’ game library included in WORR
+  distribution has been converted to use the new improved savegame format. WORR
   will refuse to load and save games in old format for security reasons, unless
   ‘sys_allow_unsafe_savegames’ is set to 1 from the command line (not recommended).
+

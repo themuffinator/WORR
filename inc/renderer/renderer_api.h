@@ -28,9 +28,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.h"
 #include "common/hash_map.h"
 #include "common/math.h"
+#include "common/mdfour.h"
 #include "common/prompt.h"
 #include "common/sizebuf.h"
 #include "common/utils.h"
+#ifdef JSMN_HEADER
+#include "common/jsmn.h"
+#else
+#define JSMN_HEADER
+#include "common/jsmn.h"
+#undef JSMN_HEADER
+#endif
 #include "system/hunk.h"
 #include "client/video.h"
 #include "client/client.h"
@@ -61,6 +69,7 @@ typedef struct renderer_import_s {
     void (*Cvar_Reset)(cvar_t *var);
     void (*Cvar_Set)(const char *name, const char *value);
     int (*Cvar_VariableInteger)(const char *name);
+    float (*Cvar_VariableValue)(const char *name);
     float (*Cvar_ClampValue)(cvar_t *var, float min, float max);
     int (*Cvar_ClampInteger)(cvar_t *var, int min, int max);
     cvar_t *(*Cvar_FindVar)(const char *name);
@@ -142,6 +151,16 @@ typedef struct renderer_import_s {
     void (*COM_SplitPath)(const char *in, char *name, size_t name_size,
                           char *path, size_t path_size, bool strip_ext);
 
+    void (*mdfour_begin)(mdfour_t *md);
+    void (*mdfour_update)(mdfour_t *md, const uint8_t *in, size_t n);
+    void (*mdfour_result)(mdfour_t *md, uint8_t *out);
+
+    void (*jsmn_init)(jsmn_parser *parser);
+    int (*jsmn_parse)(jsmn_parser *parser, const char *js, size_t len,
+                      jsmntok_t *tokens, const unsigned int num_tokens);
+
+    float (*V_CalcFov)(float fov_x, float width, float height);
+
     void (*AngleVectors)(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
     vec_t (*VectorNormalize)(vec3_t v);
     vec_t (*VectorNormalize2)(const vec3_t v, vec3_t out);
@@ -199,6 +218,13 @@ typedef struct renderer_import_s {
     unsigned *com_eventTime;
     unsigned *com_linenum;
     const char (*com_env_suf)[3];
+    int *cmd_optind;
+    const vec3_t *bytedirs;
+    cvar_t *cl_async;
+    cvar_t *cl_gunfov;
+    cvar_t *cl_adjustfov;
+    cvar_t *cl_gun;
+    cvar_t *info_hand;
     cvar_t *developer;
 } renderer_import_t;
 
@@ -223,6 +249,7 @@ extern renderer_import_t ri;
 #define Cvar_Reset ri.Cvar_Reset
 #define Cvar_Set ri.Cvar_Set
 #define Cvar_VariableInteger ri.Cvar_VariableInteger
+#define Cvar_VariableValue ri.Cvar_VariableValue
 #define Cvar_ClampValue ri.Cvar_ClampValue
 #define Cvar_ClampInteger ri.Cvar_ClampInteger
 #define Cvar_FindVar ri.Cvar_FindVar
@@ -296,6 +323,15 @@ extern renderer_import_t ri;
 #define COM_FileExtension ri.COM_FileExtension
 #define COM_SplitPath ri.COM_SplitPath
 
+#define mdfour_begin ri.mdfour_begin
+#define mdfour_update ri.mdfour_update
+#define mdfour_result ri.mdfour_result
+
+#define jsmn_init ri.jsmn_init
+#define jsmn_parse ri.jsmn_parse
+
+#define V_CalcFov ri.V_CalcFov
+
 #define VectorNormalize ri.VectorNormalize
 #define VectorNormalize2 ri.VectorNormalize2
 #define ClearBounds ri.ClearBounds
@@ -356,6 +392,13 @@ extern renderer_import_t ri;
 #define com_eventTime (*ri.com_eventTime)
 #define com_linenum (*ri.com_linenum)
 #define com_env_suf ri.com_env_suf
+#define cmd_optind (*ri.cmd_optind)
+#define bytedirs ri.bytedirs
+#define cl_async ri.cl_async
+#define cl_gunfov ri.cl_gunfov
+#define cl_adjustfov ri.cl_adjustfov
+#define cl_gun ri.cl_gun
+#define info_hand ri.info_hand
 #if USE_DEBUG
 #define developer ri.developer
 #endif

@@ -16,10 +16,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "renderer/renderer.h"
 #include "renderer/renderer_api.h"
 
 renderer_import_t ri;
+extern uint32_t d_8to24table[256];
 
 void AngleVectors(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
@@ -72,6 +72,19 @@ static const renderer_export_t renderer_exports = {
     .ExpireDebugObjects     = GL_ExpireDebugObjects,
     .SupportsPerPixelLighting = R_SupportsPerPixelLighting,
     .GetGLConfig            = R_GetGLConfig,
+    .ClearDebugLines        = R_ClearDebugLines,
+    .AddDebugLine           = R_AddDebugLine,
+    .AddDebugPoint          = R_AddDebugPoint,
+    .AddDebugAxis           = R_AddDebugAxis,
+    .AddDebugBounds         = R_AddDebugBounds,
+    .AddDebugSphere         = R_AddDebugSphere,
+    .AddDebugCircle         = R_AddDebugCircle,
+    .AddDebugCylinder       = R_AddDebugCylinder,
+    .DrawArrowCap           = R_DrawArrowCap,
+    .AddDebugArrow          = R_AddDebugArrow,
+    .AddDebugCurveArrow     = R_AddDebugCurveArrow,
+    .AddDebugText           = R_AddDebugText,
+    .PaletteTable           = d_8to24table,
     .Config                 = &r_config,
 };
 

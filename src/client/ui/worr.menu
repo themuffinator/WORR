@@ -1,5 +1,5 @@
 /*
-This is example menu definition file for Q2PRO.
+This is example menu definition file for WORR.
 
 File format is line based, whitespace is ignored.  C and C++ style comments are
 supported.  Long lines can be broken into multiple ones by escaping linefeed

@@ -700,9 +700,9 @@ static void wrap_Init(void)
 {
     game3_export->Init();
 
-    // Games with Q2PRO extensions use different limits/configstring IDs
+    // Games with WORR (Q2PRO) extensions use different limits/configstring IDs
     if (g_features->integer & GMF_PROTOCOL_EXTENSIONS) {
-        Com_Printf("Game supports Q2PRO protocol extensions.\n");
+        Com_Printf("Game supports WORR protocol extensions (Q2PRO-compatible).\n");
         game_csr = &cs_remap_q2pro_new;
     } else
         game_csr = &cs_remap_old;
@@ -1142,7 +1142,8 @@ game_export_t *GetGame3Proxy(game_import_t *import, void *game3_entry, void *gam
         if (game3_export_ex && game3_export_ex->apiversion < GAME3_API_VERSION_EX_MINIMUM)
             game3_export_ex = NULL;
         else
-            Com_DPrintf("Game supports Q2PRO extended API version %d.\n", game3_export_ex->apiversion);
+            Com_DPrintf("Game supports WORR extended API version %d (Q2PRO-compatible).\n",
+                        game3_export_ex->apiversion);
     }
     else
         game3_export_ex = NULL;

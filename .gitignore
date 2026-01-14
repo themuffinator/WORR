@@ -1,5 +1,6 @@
 /subprojects/*/
 !/subprojects/packagefiles/
 !/subprojects/rerelease-game/
+.vscode/
 /tags
 /TAGS
