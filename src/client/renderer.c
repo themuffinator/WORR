@@ -150,7 +150,7 @@ bool VID_GetFullscreen(vrect_t *rc, int *freq_p, int *depth_p)
     }
 
     // sanity check
-    if (w < 320 || w > 8192 || h < 240 || h > 8192 || freq > 1000 || depth > 32) {
+    if (w < VIRTUAL_SCREEN_WIDTH || w > 8192 || h < VIRTUAL_SCREEN_HEIGHT || h > 8192 || freq > 1000 || depth > 32) {
         Com_DPrintf("Mode %lux%lu@%lu:%lu doesn't look sane\n", w, h, freq, depth);
         return false;
     }
@@ -204,7 +204,7 @@ bool VID_GetGeometry(vrect_t *rc)
     }
 
     // sanity check
-    if (w < 320 || w > 8192 || h < 240 || h > 8192) {
+    if (w < VIRTUAL_SCREEN_WIDTH || w > 8192 || h < VIRTUAL_SCREEN_HEIGHT || h > 8192) {
         Com_DPrintf("Geometry %lux%lu doesn't look sane\n", w, h);
         return false;
     }

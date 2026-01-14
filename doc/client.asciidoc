@@ -572,8 +572,12 @@ images.
 ch_alpha::
     Opacity level of crosshair image. Default value is 1 (fully opaque).
 
+crosshairscale::
+    Scaling factor applied after UI scaling to the crosshair image. Default
+    value is 0.5.
+
 ch_scale::
-    Scaling factor of the crosshair image. Default value is 1 (original size).
+    Scaling factor of the hit marker image. Default value is 1 (original size).
 
 ch_x::
 ch_y::

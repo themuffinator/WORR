@@ -695,6 +695,26 @@ static void GL_PostProcess(glStateBits_t bits, int x, int y, int w, int h)
     GL_UnlockArrays();
 }
 
+static inline void gl_pixel_rect_to_virtual(int x, int y, int w, int h,
+                                            int *out_x, int *out_y,
+                                            int *out_w, int *out_h)
+{
+    float inv_base = draw.base_scale > 0.0f ? (1.0f / draw.base_scale) : 1.0f;
+    int x0 = Q_rint(x * inv_base);
+    int y0 = Q_rint(y * inv_base);
+    int x1 = Q_rint((x + w) * inv_base);
+    int y1 = Q_rint((y + h) * inv_base);
+
+    if (out_x)
+        *out_x = x0;
+    if (out_y)
+        *out_y = y0;
+    if (out_w)
+        *out_w = max(0, x1 - x0);
+    if (out_h)
+        *out_h = max(0, y1 - y0);
+}
+
 static void GL_DrawBloom(bool waterwarp)
 {
     int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
@@ -739,7 +759,10 @@ static void GL_DrawBloom(bool waterwarp)
 
     // upscale & add
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    GL_PostProcess(bits, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+    int vx, vy, vw, vh;
+    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                             &vx, &vy, &vw, &vh);
+    GL_PostProcess(bits, vx, vy, vw, vh);
 }
 
 static int32_t gl_waterwarp_modified = 0;
@@ -880,7 +903,10 @@ void R_RenderFrame(const refdef_t *fd)
         GL_DrawBloom(pp_flags & PP_WATERWARP);
     } else if (pp_flags & PP_WATERWARP) {
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        GL_PostProcess(GLS_WARP_ENABLE, glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height);
+        int vx, vy, vw, vh;
+        gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                                 &vx, &vy, &vw, &vh);
+        GL_PostProcess(GLS_WARP_ENABLE, vx, vy, vw, vh);
     }
 
     if (gl_polyblend->integer)

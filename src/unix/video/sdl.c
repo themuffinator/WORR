@@ -221,6 +221,8 @@ static char *get_mode_list(void)
             break;
         if (mode.refresh_rate == 0)
             continue;
+        if (mode.w < VIRTUAL_SCREEN_WIDTH || mode.h < VIRTUAL_SCREEN_HEIGHT)
+            continue;
         len += Q_scnprintf(buf + len, size - len, "%dx%d@%d ",
                            mode.w, mode.h, mode.refresh_rate);
     }
@@ -300,7 +302,7 @@ static bool init(void)
         }
     }
 
-    SDL_SetWindowMinimumSize(sdl.window, 320, 240);
+    SDL_SetWindowMinimumSize(sdl.window, VIRTUAL_SCREEN_WIDTH, VIRTUAL_SCREEN_HEIGHT);
 
     SDL_Surface *icon = SDL_CreateRGBSurfaceWithFormatFrom(q2icon_bits, q2icon_width, q2icon_height,
                                                            1, q2icon_width / 8, SDL_PIXELFORMAT_INDEX1LSB);

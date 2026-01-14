@@ -347,8 +347,8 @@ static bool init(void)
 
     XSizeHints hints = {
         .flags = PMinSize,
-        .min_width = 320 * x11.dpi_scale,
-        .min_height = 240 * x11.dpi_scale,
+        .min_width = VIRTUAL_SCREEN_WIDTH * x11.dpi_scale,
+        .min_height = VIRTUAL_SCREEN_HEIGHT * x11.dpi_scale,
     };
 
     XSetWMNormalHints(x11.dpy, x11.win, &hints);

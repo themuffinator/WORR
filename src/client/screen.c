@@ -61,6 +61,7 @@ static cvar_t   *ch_blue;
 static cvar_t   *ch_alpha;
 
 static cvar_t   *ch_scale;
+static cvar_t   *crosshairscale;
 static cvar_t   *ch_x;
 static cvar_t   *ch_y;
 
@@ -91,6 +92,59 @@ UTILS
 
 ===============================================================================
 */
+
+static void SCR_UpdateVirtualScreen(void)
+{
+    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int = (int)base_scale;
+
+    if (base_scale_int < 1)
+        base_scale_int = 1;
+
+    scr.virtual_width = r_config.width / base_scale_int;
+    scr.virtual_height = r_config.height / base_scale_int;
+    if (scr.virtual_width < 1)
+        scr.virtual_width = 1;
+    if (scr.virtual_height < 1)
+        scr.virtual_height = 1;
+
+    scr.virtual_scale = (float)base_scale_int;
+}
+
+static int SCR_GetBaseScaleInt(void)
+{
+    int base_scale_int = (int)scr.virtual_scale;
+
+    if (base_scale_int < 1) {
+        float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+        float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+        float base_scale = max(scale_x, scale_y);
+        base_scale_int = (int)base_scale;
+    }
+
+    if (base_scale_int < 1)
+        base_scale_int = 1;
+
+    return base_scale_int;
+}
+
+static int SCR_GetUiScaleInt(void)
+{
+    int base_scale_int = SCR_GetBaseScaleInt();
+    float extra_scale = 1.0f;
+
+    if (scr_scale && scr_scale->value)
+        extra_scale = Cvar_ClampValue(scr_scale, 0.25f, 10.0f);
+
+    int ui_scale_int = (int)((float)base_scale_int * extra_scale);
+
+    if (ui_scale_int < 1)
+        ui_scale_int = 1;
+
+    return ui_scale_int;
+}
 
 /*
 ==============
@@ -1010,11 +1064,11 @@ static void SCR_CalcVrect(void)
     // bound viewsize
     size = Cvar_ClampInteger(scr_viewsize, 40, 100);
 
-    scr.vrect.width = scr.hud_width * size / 100;
-    scr.vrect.height = scr.hud_height * size / 100;
+    scr.vrect.width = scr.canvas_width * size / 100;
+    scr.vrect.height = scr.canvas_height * size / 100;
 
-    scr.vrect.x = (scr.hud_width - scr.vrect.width) / 2;
-    scr.vrect.y = (scr.hud_height - scr.vrect.height) / 2;
+    scr.vrect.x = (scr.canvas_width - scr.vrect.width) / 2;
+    scr.vrect.y = (scr.canvas_height - scr.vrect.height) / 2;
 }
 
 /*
@@ -1135,18 +1189,16 @@ static void SCR_TimeRenderer_f(void)
 static void ch_scale_changed(cvar_t *self)
 {
     int w, h;
-    float scale;
+    float hit_marker_scale = 1.0f;
 
-    scale = Cvar_ClampValue(self, 0.1f, 9.0f);
+    (void)self;
 
-    // prescale
-    R_GetPicSize(&w, &h, scr.crosshair_pic);
-    scr.crosshair_width = Q_rint(w * scale);
-    scr.crosshair_height = Q_rint(h * scale);
+    if (ch_scale)
+        hit_marker_scale = Cvar_ClampValue(ch_scale, 0.1f, 9.0f);
 
     R_GetPicSize(&w, &h, scr.hit_marker_pic);
-    scr.hit_marker_width = Q_rint(w * scale);
-    scr.hit_marker_height = Q_rint(h * scale);
+    scr.hit_marker_width = Q_rint(w * hit_marker_scale);
+    scr.hit_marker_height = Q_rint(h * hit_marker_scale);
 }
 
 static void ch_color_changed(cvar_t *self)
@@ -1210,6 +1262,9 @@ void SCR_SetCrosshairColor(void)
 void SCR_ModeChanged(void)
 {
     IN_Activate();
+    SCR_UpdateVirtualScreen();
+    scr.canvas_width = r_config.width;
+    scr.canvas_height = r_config.height;
     Con_CheckResize();
     UI_ModeChanged();
     cls.disable_screen = 0;
@@ -1481,6 +1536,8 @@ void SCR_Init(void)
 
     ch_scale = Cvar_Get("ch_scale", "1", 0);
     ch_scale->changed = ch_scale_changed;
+    crosshairscale = Cvar_Get("crosshairscale", "0.5", 0);
+    crosshairscale->changed = ch_scale_changed;
     ch_x = Cvar_Get("ch_x", "0", 0);
     ch_y = Cvar_Get("ch_y", "0", 0);
 
@@ -1576,6 +1633,7 @@ void SCR_EndLoadingPlaque(void)
 static void SCR_TileClear(void)
 {
     int top, bottom, left, right;
+    float inv_scale;
 
     //if (con.currentHeight == 1)
     //  return;     // full screen console
@@ -1583,10 +1641,12 @@ static void SCR_TileClear(void)
     if (scr_viewsize->integer == 100)
         return;     // full screen rendering
 
-    top = scr.vrect.y;
-    bottom = top + scr.vrect.height;
-    left = scr.vrect.x;
-    right = left + scr.vrect.width;
+    inv_scale = scr.virtual_scale > 0.0f ? (1.0f / scr.virtual_scale) : 1.0f;
+
+    top = Q_rint(scr.vrect.y * inv_scale);
+    bottom = Q_rint((scr.vrect.y + scr.vrect.height) * inv_scale);
+    left = Q_rint(scr.vrect.x * inv_scale);
+    right = Q_rint((scr.vrect.x + scr.vrect.width) * inv_scale);
 
     // clear above view screen
     R_TileClear(0, 0, scr.hud_width, top, scr.backtile_pic);
@@ -1596,11 +1656,11 @@ static void SCR_TileClear(void)
                 scr.hud_height - bottom, scr.backtile_pic);
 
     // clear left of view screen
-    R_TileClear(0, top, left, scr.vrect.height, scr.backtile_pic);
+    R_TileClear(0, top, left, bottom - top, scr.backtile_pic);
 
     // clear right of view screen
     R_TileClear(right, top, scr.hud_width - right,
-                scr.vrect.height, scr.backtile_pic);
+                bottom - top, scr.backtile_pic);
 }
 
 //=============================================================================
@@ -1635,8 +1695,8 @@ static void SCR_DrawLoading(void)
     R_SetScale(scr.hud_scale);
 
     R_GetPicSize(&w, &h, scr.loading_pic);
-    x = (r_config.width * scr.hud_scale - w) / 2;
-    y = (r_config.height * scr.hud_scale - h) / 2;
+    x = (Q_rint(scr.virtual_width * scr.hud_scale) - w) / 2;
+    y = (Q_rint(scr.virtual_height * scr.hud_scale) - h) / 2;
 
     R_DrawPic(x, y, COLOR_WHITE, scr.loading_pic);
 
@@ -1973,6 +2033,9 @@ static void SCR_DrawPOIs(color_t base_color)
 static void SCR_DrawCrosshair(color_t base_color)
 {
     int x, y;
+    int w, h;
+    int ui_scale;
+    float crosshair_scale;
 
     if (!scr_crosshair->integer)
         return;
@@ -1981,18 +2044,35 @@ static void SCR_DrawCrosshair(color_t base_color)
 
     SCR_DrawPOIs(base_color);
 
-    x = (scr.hud_width - scr.crosshair_width) / 2;
-    y = (scr.hud_height - scr.crosshair_height) / 2;
+    ui_scale = SCR_GetUiScaleInt();
+    crosshair_scale = crosshairscale ? Cvar_ClampValue(crosshairscale, 0.1f, 9.0f) : 1.0f;
+
+    R_GetPicSize(&w, &h, scr.crosshair_pic);
+    w = (int)((float)(w * ui_scale) * crosshair_scale);
+    h = (int)((float)(h * ui_scale) * crosshair_scale);
+
+    if (w < 1)
+        w = 1;
+    if (h < 1)
+        h = 1;
+
+    scr.crosshair_width = w / ui_scale;
+    scr.crosshair_height = h / ui_scale;
+
+    if (scr.crosshair_width < 1)
+        scr.crosshair_width = 1;
+    if (scr.crosshair_height < 1)
+        scr.crosshair_height = 1;
+
+    x = (r_config.width - w) / 2 + (ch_x->integer * ui_scale);
+    y = (r_config.height - h) / 2 + (ch_y->integer * ui_scale);
 
     color_t crosshair_color = scr.crosshair_color;
     crosshair_color.a = (crosshair_color.a * base_color.a) / 255;
 
-    R_DrawStretchPic(x + ch_x->integer,
-                     y + ch_y->integer,
-                     scr.crosshair_width,
-                     scr.crosshair_height,
-                     crosshair_color,
-                     scr.crosshair_pic);
+    R_SetScale((float)SCR_GetBaseScaleInt());
+    R_DrawStretchPic(x, y, w, h, crosshair_color, scr.crosshair_pic);
+    R_SetScale(scr.hud_scale);
 
     SCR_DrawHitMarker(crosshair_color);
 
@@ -2009,8 +2089,8 @@ static void SCR_Draw2D(void)
 
     R_SetScale(scr.hud_scale);
 
-    scr.hud_height = Q_rint(scr.hud_height * scr.hud_scale);
-    scr.hud_width = Q_rint(scr.hud_width * scr.hud_scale);
+    scr.hud_height = Q_rint(scr.virtual_height * scr.hud_scale);
+    scr.hud_width = Q_rint(scr.virtual_width * scr.hud_scale);
     
     // the rest of 2D elements share common alpha
     color_t color = COLOR_SETA_F(COLOR_WHITE, Cvar_ClampValue(scr_alpha, 0, 1));
@@ -2024,11 +2104,10 @@ static void SCR_Draw2D(void)
     if (scr_debuggraph->integer || scr_timegraph->integer || scr_netgraph->integer)
         SCR_DrawDebugGraph();
 
-    /* Draw cgame HUD elements
-     * Note: a scaling factor of 1 is fine, we're passing a "pre-scale" HUD rect
-     * and the drawing functions do the scaling */
+    /* Draw cgame HUD elements */
     vrect_t hud_rect = {0, 0, scr.hud_width, scr.hud_height};
-    vrect_t hud_safe = {scr.hud_width * scr_safe_zone->value, scr.hud_height * scr_safe_zone->value};
+    vrect_t hud_safe = {hud_rect.width * scr_safe_zone->value,
+                        hud_rect.height * scr_safe_zone->value};
     cgame->DrawHUD(0, &cl.cgame_data, hud_rect, hud_safe, 1, 0, &cl.frame.ps);
 
     CL_Carousel_Draw();
@@ -2061,9 +2140,17 @@ static void SCR_DrawActive(void)
     if (!UI_IsTransparent())
         return;
 
+    // setup virtual HUD canvas for any 2D draws
+    scr.canvas_width = r_config.width;
+    scr.canvas_height = r_config.height;
+    if (scr.virtual_width == 0 || scr.virtual_height == 0)
+        SCR_UpdateVirtualScreen();
+    scr.hud_height = scr.virtual_height;
+    scr.hud_width = scr.virtual_width;
+
     // draw black background if not active
     if (cls.state < ca_active) {
-        R_DrawFill8(0, 0, r_config.width, r_config.height, 0);
+        R_DrawFill8(0, 0, scr.hud_width, scr.hud_height, 0);
         return;
     }
 
@@ -2071,10 +2158,6 @@ static void SCR_DrawActive(void)
         SCR_DrawCinematic();
         return;
     }
-
-    // start with full screen HUD
-    scr.hud_height = r_config.height;
-    scr.hud_width = r_config.width;
 
     SCR_DrawDemo();
 

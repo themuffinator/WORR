@@ -218,6 +218,8 @@ char *Win_GetModeList(void)
         // completely ignore non-desktop bit depths for now
         if (dm.dmBitsPerPel != desktop.dmBitsPerPel)
             continue;
+        if (dm.dmPelsWidth < VIRTUAL_SCREEN_WIDTH || dm.dmPelsHeight < VIRTUAL_SCREEN_HEIGHT)
+            continue;
 
         // skip duplicate modes
         for (j = 0; j < num_modes; j++)
@@ -754,8 +756,8 @@ static void pos_changing_event(HWND wnd, WINDOWPOS *pos)
     // calculate size of non-client area
     rc.left = 0;
     rc.top = 0;
-    rc.right = MulDiv(320, dpi, USER_DEFAULT_SCREEN_DPI);
-    rc.bottom = MulDiv(240, dpi, USER_DEFAULT_SCREEN_DPI);
+    rc.right = MulDiv(VIRTUAL_SCREEN_WIDTH, dpi, USER_DEFAULT_SCREEN_DPI);
+    rc.bottom = MulDiv(VIRTUAL_SCREEN_HEIGHT, dpi, USER_DEFAULT_SCREEN_DPI);
 
     AdjustWindowRect(&rc, style, FALSE);
 

@@ -930,6 +930,9 @@ void GL_ShutdownState(void);
 typedef struct {
     bool        scissor;
     float       scale;
+    float       base_scale;
+    float       virtual_width;
+    float       virtual_height;
 } drawStatic_t;
 
 extern drawStatic_t draw;

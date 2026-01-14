@@ -1214,6 +1214,9 @@ typedef struct {
     qhandle_t   net_pic;
     qhandle_t   font_pic;
 
+    int         canvas_width, canvas_height;
+    float       virtual_scale;
+    int         virtual_width, virtual_height;
     int         hud_width, hud_height;
     float       hud_scale;
     vrect_t     vrect;        // position of render window

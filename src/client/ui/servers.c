@@ -106,7 +106,7 @@ static void UpdateSelection(void)
         m_servers.status_c = "No servers found; Press Space to refresh";
     }
 
-    if (s && s->status == SLOT_VALID && s->numRules && uis.width >= 640) {
+    if (s && s->status == SLOT_VALID && s->numRules && uis.canvas_width >= 640) {
         m_servers.info.generic.flags &= ~QMF_HIDDEN;
         if (m_servers.info.items != (void **)s->rules || m_servers.info.numItems != s->numRules) {
             m_servers.info.items = (void **)s->rules;
@@ -965,7 +965,7 @@ static void SizeFull(void)
 
 static void Size(menuFrameWork_t *self)
 {
-    if (uis.width >= 640)
+    if (uis.canvas_width >= 640)
         SizeFull();
     else
         SizeCompact();
@@ -1023,7 +1023,7 @@ static void DrawStatus(void)
     if (m_servers.status_c)
         UI_DrawString(uis.width / 2, uis.height - CONCHAR_HEIGHT, UI_CENTER, COLOR_WHITE, m_servers.status_c);
 
-    if (uis.width < 800)
+    if (uis.canvas_width < 800)
         return;
 
     if (m_servers.list.numItems)

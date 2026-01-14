@@ -207,11 +207,33 @@ void GL_Ortho(GLfloat xmin, GLfloat xmax, GLfloat ymin, GLfloat ymax, GLfloat zn
     gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 
+static void GL_Update2DView(void)
+{
+    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int = (int)base_scale;
+
+    if (base_scale_int < 1)
+        base_scale_int = 1;
+
+    draw.virtual_width = r_config.width / base_scale_int;
+    draw.virtual_height = r_config.height / base_scale_int;
+    if (draw.virtual_width <= 0.0f)
+        draw.virtual_width = 1.0f;
+    if (draw.virtual_height <= 0.0f)
+        draw.virtual_height = 1.0f;
+
+    draw.base_scale = (float)base_scale_int;
+}
+
 void GL_Setup2D(void)
 {
     qglViewport(0, 0, r_config.width, r_config.height);
 
-    GL_Ortho(0, r_config.width, r_config.height, 0, -1, 1);
+    GL_Update2DView();
+
+    GL_Ortho(0, draw.virtual_width, draw.virtual_height, 0, -1, 1);
     draw.scale = 1;
 
     if (draw.scissor) {

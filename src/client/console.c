@@ -369,8 +369,11 @@ void Con_CheckResize(void)
 {
     con.scale = R_ClampScale(con_scale);
 
-    con.vidWidth = Q_rint(r_config.width * con.scale);
-    con.vidHeight = Q_rint(r_config.height * con.scale);
+    int base_width = scr.virtual_width ? scr.virtual_width : r_config.width;
+    int base_height = scr.virtual_height ? scr.virtual_height : r_config.height;
+
+    con.vidWidth = Q_rint(base_width * con.scale);
+    con.vidHeight = Q_rint(base_height * con.scale);
 
     con.linewidth = Q_clip(con.vidWidth / CONCHAR_WIDTH - 2, 0, CON_LINEWIDTH);
     con.prompt.inputLine.visibleChars = con.linewidth;

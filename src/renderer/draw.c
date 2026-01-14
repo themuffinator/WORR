@@ -20,6 +20,26 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 drawStatic_t draw;
 
+static inline void draw_pixel_rect_to_virtual(int x, int y, int w, int h,
+                                              int *out_x, int *out_y,
+                                              int *out_w, int *out_h)
+{
+    float inv_base = draw.base_scale > 0.0f ? (1.0f / draw.base_scale) : 1.0f;
+    int x0 = Q_rint(x * inv_base);
+    int y0 = Q_rint(y * inv_base);
+    int x1 = Q_rint((x + w) * inv_base);
+    int y1 = Q_rint((y + h) * inv_base);
+
+    if (out_x)
+        *out_x = x0;
+    if (out_y)
+        *out_y = y0;
+    if (out_w)
+        *out_w = max(0, x1 - x0);
+    if (out_h)
+        *out_h = max(0, y1 - y0);
+}
+
 // the final process in drawing any pic
 static inline void GL_DrawPic(
     vec2_t vertices[4], vec2_t texcoords[4],
@@ -141,8 +161,8 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 
     tess.texnum[TMU_TEXTURE] = TEXNUM_WHITE;
 
-    int x = 0, y = 0;
-    int w = glr.fd.width, h = glr.fd.height;
+    int x, y, w, h;
+    draw_pixel_rect_to_virtual(0, 0, glr.fd.width, glr.fd.height, &x, &y, &w, &h);
     int distance = min(w, h) * frac;
 
     // outer vertices
@@ -194,6 +214,8 @@ static void GL_DrawVignette(float frac, color_t outer, color_t inner)
 
 void GL_Blend(void)
 {
+    int x, y, w, h;
+
     if (glr.fd.screen_blend[3]) {
         color_t color;
 
@@ -202,7 +224,9 @@ void GL_Blend(void)
         color.b = glr.fd.screen_blend[2] * 255;
         color.a = glr.fd.screen_blend[3] * 255;
 
-        GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
+        draw_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                                   &x, &y, &w, &h);
+        GL_StretchPic_(x, y, w, h, 0, 0, 1, 1,
                        color, TEXNUM_WHITE, 0);
     }
 
@@ -218,16 +242,19 @@ void GL_Blend(void)
 
         if (gl_damageblend_frac->value > 0)
             GL_DrawVignette(Cvar_ClampValue(gl_damageblend_frac, 0, 0.5f), outer, inner);
-        else
-            GL_StretchPic_(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height, 0, 0, 1, 1,
+        else {
+            draw_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                                       &x, &y, &w, &h);
+            GL_StretchPic_(x, y, w, h, 0, 0, 1, 1,
                            outer, TEXNUM_WHITE, 0);
+        }
     }
 }
 
 void R_SetClipRect(const clipRect_t *clip)
 {
     clipRect_t rc;
-    float scale;
+    float pixel_scale;
 
     GL_Flush2D();
 
@@ -240,12 +267,12 @@ clear:
         return;
     }
 
-    scale = 1 / draw.scale;
+    pixel_scale = draw.base_scale / draw.scale;
 
-    rc.left = clip->left * scale;
-    rc.top = clip->top * scale;
-    rc.right = clip->right * scale;
-    rc.bottom = clip->bottom * scale;
+    rc.left = Q_rint(clip->left * pixel_scale);
+    rc.top = Q_rint(clip->top * pixel_scale);
+    rc.right = Q_rint(clip->right * pixel_scale);
+    rc.bottom = Q_rint(clip->bottom * pixel_scale);
 
     if (rc.left < 0)
         rc.left = 0;
@@ -266,28 +293,32 @@ clear:
     draw.scissor = true;
 }
 
-static int get_auto_scale(void)
+static int get_base_scale_int(void)
 {
-    int scale = 1;
+    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int = (int)base_scale;
 
-    if (r_config.height < r_config.width) {
-        if (r_config.height >= 2160)
-            scale = 4;
-        else if (r_config.height >= 720)
-            scale = 2;
-    } else {
-        if (r_config.width >= 3840)
-            scale = 4;
-        else if (r_config.width >= 1920)
-            scale = 2;
-    }
+    if (base_scale_int < 1)
+        base_scale_int = 1;
 
-    if (vid && vid->get_dpi_scale) {
-        int min_scale = vid->get_dpi_scale();
-        return max(scale, min_scale);
-    }
+    return base_scale_int;
+}
 
-    return scale;
+static int get_ui_scale_int(int base_scale_int, cvar_t *var)
+{
+    float extra_scale = 1.0f;
+
+    if (var && var->value)
+        extra_scale = Cvar_ClampValue(var, 0.25f, 10.0f);
+
+    int ui_scale_int = (int)((float)base_scale_int * extra_scale);
+
+    if (ui_scale_int < 1)
+        ui_scale_int = 1;
+
+    return ui_scale_int;
 }
 
 float R_ClampScale(cvar_t *var)
@@ -295,10 +326,10 @@ float R_ClampScale(cvar_t *var)
     if (!var)
         return 1.0f;
 
-    if (var->value)
-        return 1.0f / Cvar_ClampValue(var, 1.0f, 10.0f);
+    int base_scale_int = get_base_scale_int();
+    int ui_scale_int = get_ui_scale_int(base_scale_int, var);
 
-    return 1.0f / get_auto_scale();
+    return (float)base_scale_int / (float)ui_scale_int;
 }
 
 void R_SetScale(float scale)
@@ -308,8 +339,8 @@ void R_SetScale(float scale)
 
     GL_Flush2D();
 
-    GL_Ortho(0, Q_rint(r_config.width * scale),
-             Q_rint(r_config.height * scale), 0, -1, 1);
+    GL_Ortho(0, draw.virtual_width * scale,
+             draw.virtual_height * scale, 0, -1, 1);
 
     draw.scale = scale;
 }

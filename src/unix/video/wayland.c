@@ -803,7 +803,7 @@ static bool init(void)
     CHECK_UNK(wl.frame = libdecor_decorate(wl.libdecor, wl.surface, &frame_interface, NULL), "libdecor_decorate");
     libdecor_frame_set_title(wl.frame, PRODUCT);
     libdecor_frame_set_app_id(wl.frame, APPLICATION);
-    libdecor_frame_set_min_content_size(wl.frame, 320, 240);
+    libdecor_frame_set_min_content_size(wl.frame, VIRTUAL_SCREEN_WIDTH, VIRTUAL_SCREEN_HEIGHT);
 
     CHECK_ERR(wl.cursor_surface = wl_compositor_create_surface(wl.compositor), "wl_compositor_create_surface");
     reload_cursor();

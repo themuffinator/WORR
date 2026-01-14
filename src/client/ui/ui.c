@@ -30,6 +30,34 @@ static cvar_t    *ui_scale;
 
 // ===========================================================================
 
+static void UI_GetVirtualScreen(int *width, int *height, float *pixel_scale)
+{
+    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int = (int)base_scale;
+
+    if (base_scale_int < 1)
+        base_scale_int = 1;
+
+    int virtual_width = r_config.width / base_scale_int;
+    int virtual_height = r_config.height / base_scale_int;
+
+    if (virtual_width < 1)
+        virtual_width = 1;
+    if (virtual_height < 1)
+        virtual_height = 1;
+
+    float scale = (float)base_scale_int;
+
+    if (width)
+        *width = virtual_width;
+    if (height)
+        *height = virtual_height;
+    if (pixel_scale)
+        *pixel_scale = scale;
+}
+
 /*
 =================
 UI_PushMenu
@@ -77,7 +105,10 @@ void UI_PushMenu(menuFrameWork_t *menu)
 
     if (!uis.activeMenu) {
         // opening menu moves cursor to the nice location
-        IN_WarpMouse(menu->mins[0] / uis.scale, menu->mins[1] / uis.scale);
+        float pixel_scale = 1.0f;
+        UI_GetVirtualScreen(NULL, NULL, &pixel_scale);
+        IN_WarpMouse(Q_rint((menu->mins[0] / uis.scale) * pixel_scale),
+                     Q_rint((menu->mins[1] / uis.scale) * pixel_scale));
 
         uis.mouseCoords[0] = menu->mins[0];
         uis.mouseCoords[1] = menu->mins[1];
@@ -98,9 +129,15 @@ static void UI_Resize(void)
 {
     int i;
 
+    int base_width = r_config.width;
+    int base_height = r_config.height;
+    UI_GetVirtualScreen(&base_width, &base_height, NULL);
+
     uis.scale = R_ClampScale(ui_scale);
-    uis.width = Q_rint(r_config.width * uis.scale);
-    uis.height = Q_rint(r_config.height * uis.scale);
+    uis.width = Q_rint(base_width * uis.scale);
+    uis.height = Q_rint(base_height * uis.scale);
+    uis.canvas_width = r_config.width;
+    uis.canvas_height = r_config.height;
 
     for (i = 0; i < uis.menuDepth; i++) {
         Menu_Init(uis.layers[i]);
@@ -389,8 +426,11 @@ void UI_MouseEvent(int x, int y)
     x = Q_clip(x, 0, r_config.width - 1);
     y = Q_clip(y, 0, r_config.height - 1);
 
-    uis.mouseCoords[0] = Q_rint(x * uis.scale);
-    uis.mouseCoords[1] = Q_rint(y * uis.scale);
+    float pixel_scale = 1.0f;
+    UI_GetVirtualScreen(NULL, NULL, &pixel_scale);
+    float inv_scale = (pixel_scale > 0.0f) ? (1.0f / pixel_scale) : 1.0f;
+    uis.mouseCoords[0] = Q_rint((x * inv_scale) * uis.scale);
+    uis.mouseCoords[1] = Q_rint((y * inv_scale) * uis.scale);
 
     UI_DoHitTest();
 }

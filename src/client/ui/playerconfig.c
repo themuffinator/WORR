@@ -150,7 +150,7 @@ static void Size(menuFrameWork_t *self)
     m_player.refdef.fov_y = V_CalcFov(m_player.refdef.fov_x,
                                       m_player.refdef.width, m_player.refdef.height);
 
-    if (uis.width < 800 && uis.width >= 640) {
+    if (uis.canvas_width < 800 && uis.canvas_width >= 640) {
         x -= CONCHAR_WIDTH * 10;
     }
 
@@ -161,7 +161,7 @@ static void Size(menuFrameWork_t *self)
         y += h / 2;
     }
 
-    if (uis.width < 640) {
+    if (uis.canvas_width < 640) {
         x -= CONCHAR_WIDTH * 10;
         m_player.hand.generic.name = "hand";
     } else {

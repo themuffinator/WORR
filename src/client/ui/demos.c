@@ -578,7 +578,7 @@ static menuSound_t Keydown(menuFrameWork_t *self, int key)
 static void Draw(menuFrameWork_t *self)
 {
     Menu_Draw(self);
-    if (uis.width >= 640) {
+    if (uis.canvas_width >= 640) {
         UI_DrawString(uis.width, uis.height - CONCHAR_HEIGHT,
                       UI_RIGHT, COLOR_WHITE, m_demos.status);
     }

@@ -478,17 +478,17 @@ SCR_DrawCinematic
 */
 void SCR_DrawCinematic(void)
 {
-    R_DrawFill8(0, 0, r_config.width, r_config.height, 0);
+    R_DrawFill8(0, 0, scr.hud_width, scr.hud_height, 0);
 
     if (cin.width > 0 && cin.height > cin.crop && !cin.video.eof) {
-        float scale_w = (float)r_config.width / cin.width;
-        float scale_h = (float)r_config.height / (cin.height - cin.crop);
+        float scale_w = (float)scr.hud_width / cin.width;
+        float scale_h = (float)scr.hud_height / (cin.height - cin.crop);
         float scale = min(scale_w, scale_h);
 
         int w = Q_rint(cin.width * scale);
         int h = Q_rint(cin.height * scale);
-        int x = (r_config.width - w) / 2;
-        int y = (r_config.height - h) / 2;
+        int x = (scr.hud_width - w) / 2;
+        int y = (scr.hud_height - h) / 2;
 
         if (cin.video.frame)
             R_DrawStretchRaw(x, y, w, h);

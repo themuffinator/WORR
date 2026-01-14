@@ -297,6 +297,7 @@ void ImageSpinControl_Init(menuSpinControl_t *s);
 typedef struct {
     bool initialized;
     unsigned realtime;
+    int canvas_width, canvas_height;
     int width, height; // scaled
     float scale;
     int menuDepth;
