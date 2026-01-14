@@ -2102,6 +2102,9 @@ qhandle_t R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags
         len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
     } else if (*name == '/' || *name == '\\') {
         len = FS_NormalizePathBuffer(fullname, name + 1, sizeof(fullname));
+        if (type == IT_PIC && len < sizeof(fullname)) {
+            len = COM_DefaultExtension(fullname, ".pcx", sizeof(fullname));
+        }
     } else {
         len = Q_concat(fullname, sizeof(fullname), "pics/", name);
         if (len < sizeof(fullname)) {

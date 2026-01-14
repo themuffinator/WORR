@@ -214,8 +214,9 @@ void    R_Shutdown(bool total);
 //
 // Skins and images need to be differentiated, because skins
 // are flood filled to eliminate mip map edge errors, and pics have
-// an implicit "pics/" prepended to the name. (a pic name that starts with a
-// slash will not use the "pics/" prefix or the ".pcx" postfix)
+// an implicit "pics/" prepended to the name. A pic name that starts with a
+// slash is treated as a rooted path (no "pics/" prefix), but still uses the
+// default ".pcx" extension unless one is supplied.
 void    R_BeginRegistration(const char *map);
 qhandle_t R_RegisterModel(const char *name);
 qhandle_t R_RegisterImage(const char *name, imagetype_t type,

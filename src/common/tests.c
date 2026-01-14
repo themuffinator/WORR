@@ -25,6 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/tests.h"
 #include "common/utils.h"
 #include "renderer/renderer.h"
+#include "renderer/images.h"
 #include "system/system.h"
 #include "client/client.h"
 #include "client/sound/sound.h"
@@ -600,7 +601,7 @@ static void Com_TestImages_f(void)
             R_EndRegistration();
             R_BeginRegistration(NULL);
         }
-        if (!R_RegisterImage(va("/%s", (char *)list[i]), IT_PIC, IF_KEEP_EXTENSION)) {
+        if (IMG_Find((char *)list[i], IT_PIC, IF_KEEP_EXTENSION) == R_NOTEXTURE) {
             errors++;
             continue;
         }
