@@ -666,7 +666,7 @@ void UI_Init(void)
     uis.color.selection     = COLOR_RGBA(15,  128, 235, 100);
     uis.color.disabled      = COLOR_RGBA(127, 127, 127, 255);
 
-    strcpy(uis.weaponModel, "w_railgun.md2");
+    Q_strlcpy(uis.weaponModel, "w_railgun.md2", sizeof(uis.weaponModel));
 
     // load mapdb
     UI_MapDB_Init();

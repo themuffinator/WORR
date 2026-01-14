@@ -81,8 +81,8 @@ static void BuildName(const file_info_t *info, char **cache)
     size_t len;
 
     memset(&demo, 0, sizeof(demo));
-    strcpy(demo.map, "???");
-    strcpy(demo.pov, "???");
+    Q_strlcpy(demo.map, "???", sizeof(demo.map));
+    Q_strlcpy(demo.pov, "???", sizeof(demo.pov));
 
     if (cache) {
         char *s = *cache;
@@ -103,7 +103,7 @@ static void BuildName(const file_info_t *info, char **cache)
         Q_concat(buffer, sizeof(buffer), m_demos.browse, "/", info->name);
         CL_GetDemoInfo(buffer, &demo);
         if (demo.mvd) {
-            strcpy(demo.pov, DEMO_MVD_POV);
+            Q_strlcpy(demo.pov, DEMO_MVD_POV, sizeof(demo.pov));
         }
     }
 
@@ -131,7 +131,7 @@ static void BuildName(const file_info_t *info, char **cache)
         }
     }
     if (!len) {
-        strcpy(date, "???");
+        Q_strlcpy(date, "???", sizeof(date));
     }
 
     Com_FormatSize(buffer, sizeof(buffer), info->size);
@@ -385,7 +385,7 @@ static menuSound_t LeaveDirectory(void)
     }
 
     if (s == m_demos.browse) {
-        strcpy(m_demos.browse, "/");
+        Q_strlcpy(m_demos.browse, "/", sizeof(m_demos.browse));
     } else {
         *s = 0;
     }
@@ -604,7 +604,7 @@ static void Expose(menuFrameWork_t *self)
     if (strcmp(m_demos.browse, "/")
         && ui_listalldemos->integer == 0
         && os_access(va("%s%s", fs_gamedir, m_demos.browse), F_OK)) {
-        strcpy(m_demos.browse, "/");
+        Q_strlcpy(m_demos.browse, "/", sizeof(m_demos.browse));
     }
 
     BuildList();
@@ -652,7 +652,7 @@ void M_Menu_Demos(void)
     m_demos.menu.name = "demos";
     m_demos.menu.title = "Demo Browser";
 
-    strcpy(m_demos.browse, "/demos");
+    Q_strlcpy(m_demos.browse, "/demos", sizeof(m_demos.browse));
 
     m_demos.menu.draw       = Draw;
     m_demos.menu.expose     = Expose;

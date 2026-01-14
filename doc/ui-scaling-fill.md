@@ -23,11 +23,11 @@ while keeping all HUD and UI elements on the same virtual scaling path.
   - This keeps pixels-per-unit equal to `ui_scale`.
 
 ## Crosshair Scaling
-- `crosshairscale` adds an extra multiplier for crosshair sizing.
-- Default: `crosshairscale = 0.5`.
-- Crosshair size applies `crosshairscale` after the integer UI scale is
+- `cl_crosshairSize` sets a pixel size target for crosshair sizing.
+- Default: `cl_crosshairSize = 32`.
+- Crosshair size applies `cl_crosshairSize` after the integer UI scale is
   calculated, using pixel-space sizing to avoid double-scaling.
-- `ch_scale` now only affects hit marker sizing.
+- `cl_crosshairSize` also scales hit marker sizing via `cl_crosshairSize / 32`.
 
 ## Files
 - `src/renderer/draw.c`

@@ -802,6 +802,33 @@ tent_params_t   te;
 mz_params_t     mz;
 q2proto_sound_t snd;
 
+static bool CL_IsPickupSoundName(const char *name)
+{
+    if (!name || !name[0])
+        return false;
+
+    if (Q_stristr(name, "pkup.wav"))
+        return true;
+
+    return Q_stristr(name, "_health.wav") != NULL;
+}
+
+static void CL_CheckPickupPulseSound(void)
+{
+    if (!snd.has_entity_channel || cl.clientNum < 0)
+        return;
+
+    if ((snd.channel & CHAN_AUX3) != CHAN_ITEM)
+        return;
+
+    if (snd.entity != cl.clientNum + 1)
+        return;
+
+    const char *sound_name = cl.configstrings[cl.csr.sounds + snd.index];
+    if (CL_IsPickupSoundName(sound_name))
+        SCR_NotifyPickupPulse();
+}
+
 static void CL_ParseTEntPacket(const q2proto_svc_temp_entity_t *temp_entity)
 {
     te.type = temp_entity->type;
@@ -831,6 +858,7 @@ static void CL_ParseStartSoundPacket(const q2proto_svc_sound_t* sound)
     if (snd.entity >= cl.csr.max_edicts)
         Com_Error(ERR_DROP, "%s: bad entity: %d", __func__, snd.entity);
     SHOWNET(3, "    %s\n", cl.configstrings[cl.csr.sounds + snd.index]);
+    CL_CheckPickupPulseSound();
 }
 
 static void CL_ParseReconnect(void)
@@ -886,7 +914,11 @@ static void CL_CheckForIP(const char *s)
     int n;
 
     while (*s) {
+#if defined(_WIN32)
+        n = sscanf_s(s, "%3u.%3u.%3u.%3u:%u", &b1, &b2, &b3, &b4, &port);
+#else
         n = sscanf(s, "%3u.%3u.%3u.%3u:%u", &b1, &b2, &b3, &b4, &port);
+#endif
         if (n >= 4 && (b1 | b2 | b3 | b4) < 256) {
             if (n == 5) {
                 if (port < 1024 || port > 65535) {

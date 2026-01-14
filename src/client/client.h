@@ -380,6 +380,8 @@ typedef struct {
     int hit_marker_frame;
     unsigned hit_marker_time;
     int hit_marker_count;
+    unsigned crosshair_hit_time;
+    int crosshair_hit_damage;
 
     // data for view weapon
     struct {
@@ -748,6 +750,7 @@ extern cvar_t   *info_msg;
 extern cvar_t   *info_hand;
 extern cvar_t   *info_gender;
 extern cvar_t   *info_uf;
+extern cvar_t   *info_bobskip;
 
 //=============================================================================
 
@@ -782,7 +785,7 @@ void CL_SendRcon(const netadr_t *adr, const char *pass, const char *cmd);
 const char *CL_Server_g(const char *partial, int argnum, int state);
 void CL_CheckForPause(void);
 void CL_UpdateFrameTimes(void);
-void CL_AddHitMarker(void);
+void CL_AddHitMarker(int damage);
 bool CL_CheckForIgnore(const char *s);
 void CL_LoadFilterList(string_entry_t **list, const char *name, const char *comments, size_t maxlen);
 
@@ -1244,6 +1247,7 @@ void    SCR_ModeChanged(void);
 void    SCR_LagSample(void);
 void    SCR_LagClear(void);
 void    SCR_SetCrosshairColor(void);
+void    SCR_NotifyPickupPulse(void);
 void    SCR_AddNetgraph(void);
 
 float   SCR_FadeAlpha(unsigned startTime, unsigned visTime, unsigned fadeTime);

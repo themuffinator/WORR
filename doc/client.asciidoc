@@ -555,29 +555,46 @@ scr_chathud_y::
     counted in pixels from the screen edge. Negative values align graph to the bottom
     edge of the screen intead of the top edge. Default value is -64.
 
-ch_health::
-    Enables dynamic crosshair coloring based on the health statistic seen in
-    the player's HUD.  Default value is 0 (use static color).
+cl_crosshairBrightness::
+    Brightness of the crosshair. 0.0 = darkest, 1.0 = brightest. Default value
+    is 1.0.
 
-ch_red::
-ch_green::
-ch_blue::
-    These variables specify the intensity levels of crosshair image color
-    channels. Default values are 1 (use original color). Ignored if
-    ‘ch_health’ is enabled.
+cl_crosshairColor::
+    Crosshair color index (1-26) using the Quake Live palette. Default value
+    is 25. See `doc/quake-live-crosshair-cvars.md` for the palette chart.
 
-NOTE: Crosshair coloring only works as expected for monochrome crosshair
-images.
+cl_crosshairHealth::
+    Colors the crosshair based on the health statistic. This overrides
+    `cl_crosshairColor`. Default value is 0 (use static color).
 
-ch_alpha::
-    Opacity level of crosshair image. Default value is 1 (fully opaque).
+cl_crosshairHitColor::
+    Crosshair hit color index (1-26) used by hit styles 2, 5, and 8. Default
+    value is 1.
 
-crosshairscale::
-    Scaling factor applied after UI scaling to the crosshair image. Default
-    value is 0.5.
+cl_crosshairHitStyle::
+    Controls crosshair hit feedback. Default value is 2.
+      - 0 - off
+      - 1 - colorize based on damage dealt
+      - 2 - colorize to `cl_crosshairHitColor`
+      - 3 - pulse (large pulse)
+      - 4 - damage color + pulse (large)
+      - 5 - hit color + pulse (large)
+      - 6 - pulse (small, matches `cl_crosshairPulse`)
+      - 7 - damage color + pulse (small)
+      - 8 - hit color + pulse (small)
 
-ch_scale::
-    Scaling factor of the hit marker image. Default value is 1 (original size).
+cl_crosshairHitTime::
+    Time, in milliseconds, the crosshair hit effect is displayed. Default
+    value is 200.
+
+cl_crosshairPulse::
+    Enables crosshair pulsing when items are picked up. Default value is 1.
+
+cl_crosshairSize::
+    Size of crosshair, measured in pixels. Also scales hit marker sizing.
+    Default value is 32.
+
+NOTE: Crosshair coloring works best with monochrome crosshair images.
 
 ch_x::
 ch_y::

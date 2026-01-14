@@ -371,14 +371,21 @@ if cc.get_argument_syntax() == 'gcc'
     if cc.get_id() == 'clang'
       common_link_args += '-fuse-ld=lld'
     endif
-    common_link_args += '-Wl,--nxcompat,--dynamicbase'
-
-    if cpu == 'x86_64'
-      exe_link_args += '-Wl,--high-entropy-va,--image-base=0x140000000'
-      dll_link_args += '-Wl,--high-entropy-va,--image-base=0x180000000'
+    linker_id = cc.get_linker_id()
+    if linker_id == 'link' or linker_id == 'lld-link'
+      common_link_args += ['-Wl,/NXCOMPAT', '-Wl,/DYNAMICBASE']
+      if cpu == 'x86_64'
+        exe_link_args += ['-Wl,/HIGHENTROPYVA', '-Wl,/BASE:0x140000000']
+        dll_link_args += ['-Wl,/HIGHENTROPYVA', '-Wl,/BASE:0x180000000']
+      endif
+    else
+      common_link_args += '-Wl,--nxcompat,--dynamicbase'
+      if cpu == 'x86_64'
+        exe_link_args += '-Wl,--high-entropy-va,--image-base=0x140000000'
+        dll_link_args += '-Wl,--high-entropy-va,--image-base=0x180000000'
+      endif
+      dll_link_args += '-static-libgcc'
     endif
-
-    dll_link_args += '-static-libgcc'
   endif
 elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/wd4267', '/wd4018']

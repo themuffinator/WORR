@@ -148,12 +148,16 @@ begin crosshair
     title "Crosshair Setup"
     //values "crosshair type" crosshair none cross dot angle
     imagevalues "crosshair type" crosshair "pics" "ch*" 64 64
-    pairs "crosshair scale" crosshairscale 0.5x 0.5 1x 1 2x 2
-    toggle "color by health" ch_health
-    range "red channel" ch_red 0 1
-    range "green channel" ch_green 0 1
-    range "blue channel" ch_blue 0 1
-    range "alpha channel" ch_alpha 0 1
+    range "crosshair size" cl_crosshairSize 4 64 1
+    range "crosshair brightness" cl_crosshairBrightness 0 1 0.05
+    range "crosshair color" cl_crosshairColor 1 26 1
+    toggle "color by health" cl_crosshairHealth
+    values "hit style" cl_crosshairHitStyle \
+        off "damage color" "hit color" "pulse (large)" "damage + pulse" \
+        "hit color + pulse" "pulse (small)" "damage + small pulse" "hit color + small pulse"
+    range "hit color" cl_crosshairHitColor 1 26 1
+    range "hit time (ms)" cl_crosshairHitTime 0 1000 10
+    toggle "pickup pulse" cl_crosshairPulse
 end
 
 begin screen

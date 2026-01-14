@@ -249,9 +249,10 @@ static bool start_download(dlqueue_t *entry, dlhandle_t *dl)
         }
 
         //don't bother with http resume... too annoying if server doesn't support it.
-        dl->file = fopen(dl->path, "wb");
+        dl->file = Q_fopen(dl->path, "wb");
         if (!dl->file) {
-            Com_EPrintf("[HTTP] Couldn't open '%s' for writing: %s\n", dl->path, strerror(errno));
+            Com_EPrintf("[HTTP] Couldn't open '%s' for writing: %s\n",
+                        dl->path, Q_ErrorString(Q_ERRNO));
             goto fail;
         }
     }
@@ -856,7 +857,7 @@ fail2:
 
             if (rename(dl->path, temp))
                 Com_EPrintf("[HTTP] Failed to rename '%s' to '%s': %s\n",
-                            dl->path, dl->queue->path, strerror(errno));
+                            dl->path, dl->queue->path, Q_ErrorString(Q_ERRNO));
             dl->path[0] = 0;
 
             //a pak file is very special...

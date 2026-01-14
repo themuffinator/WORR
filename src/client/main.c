@@ -98,6 +98,7 @@ cvar_t  *info_msg;
 cvar_t  *info_hand;
 cvar_t  *info_gender;
 cvar_t  *info_uf;
+cvar_t  *info_bobskip;
 
 #if USE_REF
 #if USE_EXTERNAL_RENDERERS
@@ -453,7 +454,7 @@ void CL_CheckForResend(void)
     // if the local server is running and we aren't
     // then connect
     if (cls.state < ca_connecting && sv_running->integer > ss_loading) {
-        strcpy(cls.servername, "localhost");
+        Q_strlcpy(cls.servername, "localhost", sizeof(cls.servername));
         cls.serverAddress.type = NA_LOOPBACK;
         cls.serverProtocol = cl_protocol->integer;
         if (cls.serverProtocol != PROTOCOL_VERSION_RERELEASE) {
@@ -919,7 +920,7 @@ static void CL_ParseStatusResponse(serverStatus_t *status, const char *string)
     status->infostring[infolen] = 0;
 
     if (!Info_Validate(status->infostring))
-        strcpy(status->infostring, "\\hostname\\badinfo");
+        Q_strlcpy(status->infostring, "\\hostname\\badinfo", sizeof(status->infostring));
 
     // parse optional player list
     status->numPlayers = 0;
@@ -2881,6 +2882,7 @@ static void CL_InitLocal(void)
     info_gender = Cvar_Get("gender", "male", CVAR_USERINFO | CVAR_ARCHIVE);
     info_gender->modified_count = 0; // clear this so we know when user sets it manually
     info_uf = Cvar_Get("uf", "", CVAR_USERINFO);
+    info_bobskip = Cvar_Get("bobskip", "0", CVAR_USERINFO | CVAR_ARCHIVE);
 
 
     //
@@ -3280,8 +3282,17 @@ void CL_UpdateFrameTimes(void)
                  __func__, sync_names[sync_mode], main_msec, ref_msec, phys_msec);
 }
 
-void CL_AddHitMarker(void)
+void CL_AddHitMarker(int damage)
 {
+    if (damage <= 0)
+        return;
+
+    cl.crosshair_hit_time = cls.realtime;
+    cl.crosshair_hit_damage = damage;
+
+    if (!cl_hit_markers->integer)
+        return;
+
     if (cl.hit_marker_frame != cl.frame.number) {
         cl.hit_marker_frame = cl.frame.number;
         cl.hit_marker_time = cls.realtime;
@@ -3294,11 +3305,12 @@ void CL_AddHitMarker(void)
 
 static void CL_UpdateHitMarkers(void)
 {
-    if (cl.game_api != Q2PROTO_GAME_RERELEASE || !cl_hit_markers->integer)
+    if (cl.game_api != Q2PROTO_GAME_RERELEASE)
         return;
 
-    if (cgame->GetHitMarkerDamage(&cl.frame.ps))
-        CL_AddHitMarker();
+    int damage = cgame->GetHitMarkerDamage(&cl.frame.ps);
+    if (damage > 0)
+        CL_AddHitMarker(damage);
 }
 
 /*

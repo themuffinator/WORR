@@ -1218,6 +1218,7 @@ static void CL_AddViewWeapon(void)
     const player_state_t *ps, *ops;
     entity_t    gun;        // view model
     int         i, flags;
+    bool        skip_bob;
 
     // allow the gun to be completely removed
     if (cl_gun->integer < 1) {
@@ -1251,12 +1252,19 @@ static void CL_AddViewWeapon(void)
         return;
     }
 
+    skip_bob = info_bobskip->integer != 0;
+
     // set up gun position
-    for (i = 0; i < 3; i++) {
-        gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i] +
-                        CL_KEYLERPFRAC * (ps->gunoffset[i] - ops->gunoffset[i]);
-        gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle(ops->gunangles[i],
-                        ps->gunangles[i], CL_KEYLERPFRAC);
+    if (skip_bob) {
+        VectorCopy(cl.refdef.vieworg, gun.origin);
+        VectorCopy(cl.refdef.viewangles, gun.angles);
+    } else {
+        for (i = 0; i < 3; i++) {
+            gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i] +
+                            CL_KEYLERPFRAC * (ps->gunoffset[i] - ops->gunoffset[i]);
+            gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle(ops->gunangles[i],
+                            ps->gunangles[i], CL_KEYLERPFRAC);
+        }
     }
 
     VectorMA(gun.origin, cl_gun_y->value, cl.v_forward, gun.origin);
@@ -1352,7 +1360,7 @@ static void CL_AddViewWeapon(void)
 static void CL_SetupFirstPersonView(void)
 {
     // add kick angles
-    if (cl_kickangles->integer) {
+    if (cl_kickangles->integer && !info_bobskip->integer) {
         vec3_t kickangles;
         LerpAngles(CL_OLDKEYPS->kick_angles, CL_KEYPS->kick_angles, CL_KEYLERPFRAC, kickangles);
         VectorAdd(cl.refdef.viewangles, kickangles, cl.refdef.viewangles);
@@ -1573,6 +1581,9 @@ void CL_CalcViewValues(void)
         LerpVector(cl.predicted_screen_blend, cl.refdef.screen_blend, a3, cl.refdef.screen_blend);
         cl.refdef.screen_blend[3] = a2;
     }
+    if (info_bobskip->integer) {
+        Vector4Clear(cl.refdef.damage_blend);
+    }
 
 
 #if USE_FPS
@@ -1587,6 +1598,9 @@ void CL_CalcViewValues(void)
     cl.fov_y = V_CalcFov(cl.fov_x, 4, 3);
 
     LerpVector(ops->viewoffset, ps->viewoffset, lerp, viewoffset);
+    if (info_bobskip->integer) {
+        VectorClear(viewoffset);
+    }
 
     AngleVectors(cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
 

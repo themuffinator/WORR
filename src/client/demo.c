@@ -1257,7 +1257,7 @@ static void CL_Seek_f(void)
                     continue;
 
                 Q_SetBit(cl.dcs, i);
-                strcpy(to, from);
+                Q_strlcpy(to, from, sizeof(cl.configstrings[i]));
             }
 
             SZ_InitRead(&msg_read, snap->data, snap->msglen);

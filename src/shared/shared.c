@@ -1437,10 +1437,10 @@ void Info_Print(const char *infostring)
             break;
 
         if (!key[0])
-            strcpy(key, "<MISSING KEY>");
+            Q_strlcpy(key, "<MISSING KEY>", sizeof(key));
 
         if (!value[0])
-            strcpy(value, "<MISSING VALUE>");
+            Q_strlcpy(value, "<MISSING VALUE>", sizeof(value));
 
         Com_Printf("%-20s %s\n", key, value);
     }

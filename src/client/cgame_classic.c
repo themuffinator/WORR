@@ -54,7 +54,7 @@ static int max_stats;
 static cvar_t   *scr_centertime;
 static cvar_t   *scr_draw2d;
 
-static cvar_t   *ch_scale;
+static cvar_t   *cl_crosshair_size;
 static cvar_t   *ch_x;
 static cvar_t   *ch_y;
 
@@ -74,7 +74,7 @@ static void CGC_Init(void)
     scr_centertime = cgi.cvar("scr_centertime", "2.5", 0);
     scr_draw2d = cgi.cvar("scr_draw2d", "2", 0);
 
-    ch_scale = cgi.cvar("ch_scale", "1", 0);
+    cl_crosshair_size = cgi.cvar("cl_crosshairSize", "32", 0);
     ch_x = cgi.cvar("ch_x", "0", 0);
     ch_y = cgi.cvar("ch_y", "0", 0);
 
@@ -84,7 +84,7 @@ static void CGC_Init(void)
 static void CGC_Shutdown(void)
 {
     scr_draw2d = NULL;
-    ch_scale = NULL;
+    cl_crosshair_size = NULL;
     ch_x = NULL;
     ch_y = NULL;
 }
@@ -305,8 +305,12 @@ static void layout_pic(vrect_t hud_vrect, const char **s, const player_state_t *
             y == hud_vrect.height / 2 - 120 &&
             Com_WildCmp("scope?x", pic))
         {
-            int w = 320 * ch_scale->value;
-            int h = 240 * ch_scale->value;
+            float scale = 1.0f;
+            if (cl_crosshair_size) {
+                scale = Q_clipf(cl_crosshair_size->value / 32.0f, 0.1f, 9.0f);
+            }
+            int w = 320 * scale;
+            int h = 240 * scale;
             cgi.SCR_DrawPic((hud_vrect.width  - w) / 2 + ch_x->integer,
                             (hud_vrect.height - h) / 2 + ch_y->integer,
                             w, h, pic);

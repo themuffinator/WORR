@@ -246,7 +246,7 @@ static void Keybind_Draw(menuKeybind_t *k)
     } else if (k->binding[0]) {
         Q_strlcpy(string, k->binding, sizeof(string));
     } else {
-        strcpy(string, "???");
+        Q_strlcpy(string, "???", sizeof(string));
     }
 
     UI_DrawString(k->generic.x + RCOLUMN_OFFSET, k->generic.y,
@@ -259,7 +259,7 @@ static void Keybind_Push(menuKeybind_t *k)
 
     k->altbinding[0] = 0;
     if (key == -1) {
-        strcpy(k->binding, "???");
+        Q_strlcpy(k->binding, "???", sizeof(k->binding));
     } else {
         Q_strlcpy(k->binding, Key_KeynumToString(key), sizeof(k->binding));
         key = Key_EnumBindings(key + 1, k->cmd);

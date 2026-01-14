@@ -954,9 +954,14 @@ static void CL_AddPlayerBeams(void)
             ps = CL_KEYPS;
             ops = CL_OLDKEYPS;
 
-            for (j = 0; j < 3; j++)
-                b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
-                    CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
+            if (info_bobskip->integer) {
+                VectorCopy(cl.refdef.vieworg, b->start);
+            } else {
+                for (j = 0; j < 3; j++) {
+                    b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
+                        CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
+                }
+            }
 
             x = b->offset[0];
             y = b->offset[1];
@@ -1695,7 +1700,7 @@ void CL_ParseTEnt(void)
 
     case TE_DAMAGE_DEALT:
         if (te.count > 0)
-            CL_AddHitMarker();
+            CL_AddHitMarker(te.count);
         break;
 
     default:

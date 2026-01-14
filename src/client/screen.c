@@ -54,14 +54,15 @@ static cvar_t   *scr_chathud_time;
 static cvar_t   *scr_chathud_x;
 static cvar_t   *scr_chathud_y;
 
-static cvar_t   *ch_health;
-static cvar_t   *ch_red;
-static cvar_t   *ch_green;
-static cvar_t   *ch_blue;
-static cvar_t   *ch_alpha;
+static cvar_t   *cl_crosshair_brightness;
+static cvar_t   *cl_crosshair_color;
+static cvar_t   *cl_crosshair_health;
+static cvar_t   *cl_crosshair_hit_color;
+static cvar_t   *cl_crosshair_hit_style;
+static cvar_t   *cl_crosshair_hit_time;
+static cvar_t   *cl_crosshair_pulse;
+static cvar_t   *cl_crosshair_size;
 
-static cvar_t   *ch_scale;
-static cvar_t   *crosshairscale;
 static cvar_t   *ch_x;
 static cvar_t   *ch_y;
 
@@ -81,6 +82,43 @@ static cvar_t   *scr_safe_zone;
 const color_t colorTable[8] = {
     { .u32 = COLOR_U32_BLACK }, { .u32 = COLOR_U32_RED }, { .u32 = COLOR_U32_GREEN }, { .u32 = COLOR_U32_YELLOW },
     { .u32 = COLOR_U32_BLUE }, { .u32 = COLOR_U32_CYAN }, { .u32 = COLOR_U32_MAGENTA }, { .u32 = COLOR_U32_WHITE }
+};
+
+#define CROSSHAIR_PULSE_TIME_MS 200
+#define CROSSHAIR_PULSE_SMALL   0.25f
+#define CROSSHAIR_PULSE_LARGE   0.5f
+
+static unsigned scr_crosshair_pulse_time;
+static int scr_last_pickup_icon;
+static int scr_last_pickup_string;
+
+static const color_t ql_crosshair_colors[26] = {
+    COLOR_RGBA(255, 0, 0, 255),
+    COLOR_RGBA(255, 64, 0, 255),
+    COLOR_RGBA(255, 128, 0, 255),
+    COLOR_RGBA(255, 192, 0, 255),
+    COLOR_RGBA(255, 255, 0, 255),
+    COLOR_RGBA(192, 255, 0, 255),
+    COLOR_RGBA(128, 255, 0, 255),
+    COLOR_RGBA(64, 255, 0, 255),
+    COLOR_RGBA(0, 255, 0, 255),
+    COLOR_RGBA(0, 255, 64, 255),
+    COLOR_RGBA(0, 255, 128, 255),
+    COLOR_RGBA(0, 255, 192, 255),
+    COLOR_RGBA(0, 255, 255, 255),
+    COLOR_RGBA(0, 192, 255, 255),
+    COLOR_RGBA(0, 128, 255, 255),
+    COLOR_RGBA(0, 64, 255, 255),
+    COLOR_RGBA(0, 0, 255, 255),
+    COLOR_RGBA(64, 0, 255, 255),
+    COLOR_RGBA(128, 0, 255, 255),
+    COLOR_RGBA(192, 0, 255, 255),
+    COLOR_RGBA(255, 0, 255, 255),
+    COLOR_RGBA(255, 0, 192, 255),
+    COLOR_RGBA(255, 0, 128, 255),
+    COLOR_RGBA(255, 0, 64, 255),
+    COLOR_RGBA(255, 255, 255, 255),
+    COLOR_RGBA(128, 128, 128, 255)
 };
 
 cl_scr_t scr;
@@ -318,6 +356,90 @@ bool SCR_ParseColor(const char *s, color_t *color)
 
     *color = colorTable[i];
     return true;
+}
+
+static color_t SCR_ApplyCrosshairBrightness(color_t color)
+{
+    float brightness = 1.0f;
+
+    if (cl_crosshair_brightness) {
+        brightness = Cvar_ClampValue(cl_crosshair_brightness, 0.0f, 1.0f);
+    }
+
+    color.r = Q_clip(Q_rint(color.r * brightness), 0, 255);
+    color.g = Q_clip(Q_rint(color.g * brightness), 0, 255);
+    color.b = Q_clip(Q_rint(color.b * brightness), 0, 255);
+
+    return color;
+}
+
+static color_t SCR_GetCrosshairPaletteColor(int index)
+{
+    index = Q_clip(index, 1, (int)q_countof(ql_crosshair_colors));
+    return ql_crosshair_colors[index - 1];
+}
+
+static color_t SCR_GetCrosshairDamageColor(int damage)
+{
+    float t = Q_clipf((float)damage / 100.0f, 0.0f, 1.0f);
+
+    return COLOR_RGBA(
+        Q_rint(255.0f * t),
+        Q_rint(255.0f * (1.0f - t)),
+        0,
+        255);
+}
+
+static float SCR_CalcPickupPulseScale(unsigned start_time, unsigned duration_ms)
+{
+    if (!start_time || !duration_ms)
+        return 1.0f;
+    if (cls.realtime <= start_time)
+        return 1.0f;
+
+    unsigned delta = cls.realtime - start_time;
+    if (delta >= duration_ms)
+        return 1.0f;
+
+    float frac = (float)delta / (float)duration_ms;
+    return 1.0f + frac;
+}
+
+static float SCR_CalcCrosshairPulseScale(unsigned start_time, unsigned duration_ms, float amplitude)
+{
+    if (!start_time || !duration_ms || amplitude <= 0.0f)
+        return 1.0f;
+    if (cls.realtime <= start_time)
+        return 1.0f;
+
+    unsigned delta = cls.realtime - start_time;
+    if (delta >= duration_ms)
+        return 1.0f;
+
+    float frac = (float)delta / (float)duration_ms;
+    float falloff = 1.0f - (frac * frac);
+    return 1.0f + (amplitude * falloff);
+}
+
+void SCR_NotifyPickupPulse(void)
+{
+    if (!cl_crosshair_pulse || !cl_crosshair_pulse->integer)
+        return;
+
+    scr_crosshair_pulse_time = cls.realtime;
+}
+
+static void SCR_UpdateCrosshairPickupPulse(void)
+{
+    int pickup_icon = cl.frame.ps.stats[STAT_PICKUP_ICON];
+    int pickup_string = cl.frame.ps.stats[STAT_PICKUP_STRING];
+
+    if (pickup_icon != scr_last_pickup_icon || pickup_string != scr_last_pickup_string) {
+        if (pickup_icon)
+            SCR_NotifyPickupPulse();
+        scr_last_pickup_icon = pickup_icon;
+        scr_last_pickup_string = pickup_string;
+    }
 }
 
 /*
@@ -1186,38 +1308,28 @@ static void SCR_TimeRenderer_f(void)
 
 //============================================================================
 
-static void ch_scale_changed(cvar_t *self)
+static void cl_crosshair_size_changed(cvar_t *self)
 {
     int w, h;
     float hit_marker_scale = 1.0f;
 
     (void)self;
 
-    if (ch_scale)
-        hit_marker_scale = Cvar_ClampValue(ch_scale, 0.1f, 9.0f);
+    if (cl_crosshair_size) {
+        float size = Cvar_ClampValue(cl_crosshair_size, 1.0f, 512.0f);
+        hit_marker_scale = Q_clipf(size / 32.0f, 0.1f, 9.0f);
+    }
 
     R_GetPicSize(&w, &h, scr.hit_marker_pic);
     scr.hit_marker_width = Q_rint(w * hit_marker_scale);
     scr.hit_marker_height = Q_rint(h * hit_marker_scale);
 }
 
-static void ch_color_changed(cvar_t *self)
-{
-    if (ch_health->integer) {
-        SCR_SetCrosshairColor();
-    } else {
-        scr.crosshair_color.r = Cvar_ClampValue(ch_red, 0, 1) * 255;
-        scr.crosshair_color.g = Cvar_ClampValue(ch_green, 0, 1) * 255;
-        scr.crosshair_color.b = Cvar_ClampValue(ch_blue, 0, 1) * 255;
-    }
-    scr.crosshair_color.a = Cvar_ClampValue(ch_alpha, 0, 1) * 255;
-}
-
 static void scr_crosshair_changed(cvar_t *self)
 {
     if (self->integer > 0) {
         scr.crosshair_pic = R_RegisterPic(va("ch%i", self->integer));
-        ch_scale_changed(ch_scale);
+        cl_crosshair_size_changed(cl_crosshair_size);
     } else {
         scr.crosshair_pic = 0;
     }
@@ -1225,38 +1337,39 @@ static void scr_crosshair_changed(cvar_t *self)
 
 void SCR_SetCrosshairColor(void)
 {
-    int health;
+    color_t color = COLOR_RGBA(255, 255, 255, 255);
 
-    if (!ch_health->integer) {
-        return;
+    if (cl_crosshair_health && cl_crosshair_health->integer) {
+        int health = cl.frame.ps.stats[STAT_HEALTH];
+        if (health <= 0) {
+            color = COLOR_RGBA(0, 0, 0, 255);
+        } else {
+            color.r = 255;
+
+            if (health >= 66) {
+                color.g = 255;
+            } else if (health < 33) {
+                color.g = 0;
+            } else {
+                color.g = (255 * (health - 33)) / 33;
+            }
+
+            if (health >= 99) {
+                color.b = 255;
+            } else if (health < 66) {
+                color.b = 0;
+            } else {
+                color.b = (255 * (health - 66)) / 33;
+            }
+        }
+    } else if (cl_crosshair_color) {
+        int index = Cvar_ClampInteger(cl_crosshair_color, 1, (int)q_countof(ql_crosshair_colors));
+        color = SCR_GetCrosshairPaletteColor(index);
     }
 
-    health = cl.frame.ps.stats[STAT_HEALTH];
-    if (health <= 0) {
-        VectorSet(scr.crosshair_color.u8, 0, 0, 0);
-        return;
-    }
-
-    // red
-    scr.crosshair_color.r = 255;
-
-    // green
-    if (health >= 66) {
-        scr.crosshair_color.g = 255;
-    } else if (health < 33) {
-        scr.crosshair_color.g = 0;
-    } else {
-        scr.crosshair_color.g = (255 * (health - 33)) / 33;
-    }
-
-    // blue
-    if (health >= 99) {
-        scr.crosshair_color.b = 255;
-    } else if (health < 66) {
-        scr.crosshair_color.b = 0;
-    } else {
-        scr.crosshair_color.b = (255 * (health - 66)) / 33;
-    }
+    color = SCR_ApplyCrosshairBrightness(color);
+    color.a = 255;
+    scr.crosshair_color = color;
 }
 
 void SCR_ModeChanged(void)
@@ -1290,6 +1403,9 @@ void SCR_Clear(void)
 {
     memset(scr.damage_entries, 0, sizeof(scr.damage_entries));
     memset(scr.pois, 0, sizeof(scr.pois));
+    scr_crosshair_pulse_time = 0;
+    scr_last_pickup_icon = 0;
+    scr_last_pickup_string = 0;
 }
 
 /*
@@ -1523,21 +1639,15 @@ void SCR_Init(void)
     scr_chathud_x = Cvar_Get("scr_chathud_x", "8", 0);
     scr_chathud_y = Cvar_Get("scr_chathud_y", "-64", 0);
 
-    ch_health = Cvar_Get("ch_health", "0", 0);
-    ch_health->changed = ch_color_changed;
-    ch_red = Cvar_Get("ch_red", "1", 0);
-    ch_red->changed = ch_color_changed;
-    ch_green = Cvar_Get("ch_green", "1", 0);
-    ch_green->changed = ch_color_changed;
-    ch_blue = Cvar_Get("ch_blue", "1", 0);
-    ch_blue->changed = ch_color_changed;
-    ch_alpha = Cvar_Get("ch_alpha", "1", 0);
-    ch_alpha->changed = ch_color_changed;
-
-    ch_scale = Cvar_Get("ch_scale", "1", 0);
-    ch_scale->changed = ch_scale_changed;
-    crosshairscale = Cvar_Get("crosshairscale", "0.5", 0);
-    crosshairscale->changed = ch_scale_changed;
+    cl_crosshair_brightness = Cvar_Get("cl_crosshairBrightness", "1.0", CVAR_ARCHIVE);
+    cl_crosshair_color = Cvar_Get("cl_crosshairColor", "25", CVAR_ARCHIVE);
+    cl_crosshair_health = Cvar_Get("cl_crosshairHealth", "0", CVAR_ARCHIVE);
+    cl_crosshair_hit_color = Cvar_Get("cl_crosshairHitColor", "1", CVAR_ARCHIVE);
+    cl_crosshair_hit_style = Cvar_Get("cl_crosshairHitStyle", "2", CVAR_ARCHIVE);
+    cl_crosshair_hit_time = Cvar_Get("cl_crosshairHitTime", "200", CVAR_ARCHIVE);
+    cl_crosshair_pulse = Cvar_Get("cl_crosshairPulse", "1", CVAR_ARCHIVE);
+    cl_crosshair_size = Cvar_Get("cl_crosshairSize", "32", CVAR_ARCHIVE);
+    cl_crosshair_size->changed = cl_crosshair_size_changed;
     ch_x = Cvar_Get("ch_x", "0", 0);
     ch_y = Cvar_Get("ch_y", "0", 0);
 
@@ -1567,7 +1677,7 @@ void SCR_Init(void)
     Cmd_Register(scr_cmds);
 
     scr_scale_changed(scr_scale);
-    ch_color_changed(NULL);
+    SCR_SetCrosshairColor();
 
     scr.initialized = true;
 }
@@ -2033,9 +2143,11 @@ static void SCR_DrawPOIs(color_t base_color)
 static void SCR_DrawCrosshair(color_t base_color)
 {
     int x, y;
+    int raw_w, raw_h;
+    int base_w, base_h;
     int w, h;
     int ui_scale;
-    float crosshair_scale;
+    float pulse_scale = 1.0f;
 
     if (!scr_crosshair->integer)
         return;
@@ -2043,31 +2155,87 @@ static void SCR_DrawCrosshair(color_t base_color)
         return;
 
     SCR_DrawPOIs(base_color);
+    SCR_UpdateCrosshairPickupPulse();
 
     ui_scale = SCR_GetUiScaleInt();
-    crosshair_scale = crosshairscale ? Cvar_ClampValue(crosshairscale, 0.1f, 9.0f) : 1.0f;
 
-    R_GetPicSize(&w, &h, scr.crosshair_pic);
-    w = (int)((float)(w * ui_scale) * crosshair_scale);
-    h = (int)((float)(h * ui_scale) * crosshair_scale);
+    R_GetPicSize(&raw_w, &raw_h, scr.crosshair_pic);
+    if (raw_w < 1 || raw_h < 1)
+        return;
 
-    if (w < 1)
-        w = 1;
-    if (h < 1)
-        h = 1;
+    float crosshair_size = cl_crosshair_size ? Cvar_ClampValue(cl_crosshair_size, 1.0f, 512.0f) : 32.0f;
+    int max_dim = max(raw_w, raw_h);
+    float scale = (float)max_dim > 0 ? (crosshair_size / (float)max_dim) : 1.0f;
 
-    scr.crosshair_width = w / ui_scale;
-    scr.crosshair_height = h / ui_scale;
+    base_w = Q_rint((float)raw_w * ui_scale * scale);
+    base_h = Q_rint((float)raw_h * ui_scale * scale);
+
+    if (base_w < 1)
+        base_w = 1;
+    if (base_h < 1)
+        base_h = 1;
+
+    scr.crosshair_width = base_w / ui_scale;
+    scr.crosshair_height = base_h / ui_scale;
 
     if (scr.crosshair_width < 1)
         scr.crosshair_width = 1;
     if (scr.crosshair_height < 1)
         scr.crosshair_height = 1;
 
+    int hit_style = cl_crosshair_hit_style ? Cvar_ClampInteger(cl_crosshair_hit_style, 0, 8) : 0;
+    int hit_time = cl_crosshair_hit_time ? Cvar_ClampInteger(cl_crosshair_hit_time, 0, 10000) : 0;
+    bool hit_active = false;
+
+    if (hit_style > 0 && hit_time > 0 && cl.crosshair_hit_time && cls.realtime >= cl.crosshair_hit_time) {
+        unsigned delta = cls.realtime - cl.crosshair_hit_time;
+        if (delta <= (unsigned)hit_time)
+            hit_active = true;
+    }
+
+    if (cl_crosshair_pulse && cl_crosshair_pulse->integer) {
+        pulse_scale = max(pulse_scale, SCR_CalcPickupPulseScale(
+            scr_crosshair_pulse_time, CROSSHAIR_PULSE_TIME_MS));
+    }
+
+    if (hit_active && (hit_style == 3 || hit_style == 4 || hit_style == 5 ||
+                       hit_style == 6 || hit_style == 7 || hit_style == 8)) {
+        float amplitude = (hit_style >= 6) ? CROSSHAIR_PULSE_SMALL : CROSSHAIR_PULSE_LARGE;
+        pulse_scale = max(pulse_scale, SCR_CalcCrosshairPulseScale(
+            cl.crosshair_hit_time, (unsigned)hit_time, amplitude));
+    }
+
+    w = Q_rint(base_w * pulse_scale);
+    h = Q_rint(base_h * pulse_scale);
+
+    if (w < 1)
+        w = 1;
+    if (h < 1)
+        h = 1;
+
     x = (r_config.width - w) / 2 + (ch_x->integer * ui_scale);
     y = (r_config.height - h) / 2 + (ch_y->integer * ui_scale);
 
     color_t crosshair_color = scr.crosshair_color;
+    if (hit_active) {
+        color_t hit_color;
+        bool override_color = false;
+
+        if (hit_style == 1 || hit_style == 4 || hit_style == 7) {
+            hit_color = SCR_GetCrosshairDamageColor(cl.crosshair_hit_damage);
+            override_color = true;
+        } else if (hit_style == 2 || hit_style == 5 || hit_style == 8) {
+            int index = cl_crosshair_hit_color ? Cvar_ClampInteger(
+                cl_crosshair_hit_color, 1, (int)q_countof(ql_crosshair_colors)) : 1;
+            hit_color = SCR_GetCrosshairPaletteColor(index);
+            override_color = true;
+        }
+
+        if (override_color) {
+            crosshair_color = SCR_ApplyCrosshairBrightness(hit_color);
+        }
+    }
+
     crosshair_color.a = (crosshair_color.a * base_color.a) / 255;
 
     R_SetScale((float)SCR_GetBaseScaleInt());

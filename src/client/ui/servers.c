@@ -288,10 +288,10 @@ void UI_StatusEvent(const serverStatus_t *status)
             break;
 
         if (!key[0])
-            strcpy(key, "<MISSING KEY>");
+            Q_strlcpy(key, "<MISSING KEY>", sizeof(key));
 
         if (!value[0])
-            strcpy(value, "<MISSING VALUE>");
+            Q_strlcpy(value, "<MISSING VALUE>", sizeof(value));
 
         slot->rules[slot->numRules++] =
             UI_FormatColumns(0, key, value, NULL);

@@ -183,8 +183,8 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
              "players/", model_name, "/tris.md2");
     ci->model = R_RegisterModel(model_filename);
     if (!ci->model && Q_stricmp(model_name, "male")) {
-        strcpy(model_name, "male");
-        strcpy(model_filename, "players/male/tris.md2");
+        Q_strlcpy(model_name, "male", sizeof(model_name));
+        Q_strlcpy(model_filename, "players/male/tris.md2", sizeof(model_filename));
         ci->model = R_RegisterModel(model_filename);
     }
 
@@ -196,8 +196,8 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
     // if we don't have the skin and the model was female,
     // see if athena skin exists
     if (!ci->skin && !Q_stricmp(model_name, "female")) {
-        strcpy(skin_name, "athena");
-        strcpy(skin_filename, "players/female/athena.pcx");
+        Q_strlcpy(skin_name, "athena", sizeof(skin_name));
+        Q_strlcpy(skin_filename, "players/female/athena.pcx", sizeof(skin_filename));
         ci->skin = R_RegisterSkin(skin_filename);
     }
 
@@ -205,8 +205,8 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
     // see if the male has it (this is for CTF's skins)
     if (!ci->skin && Q_stricmp(model_name, "male")) {
         // change model to male
-        strcpy(model_name, "male");
-        strcpy(model_filename, "players/male/tris.md2");
+        Q_strlcpy(model_name, "male", sizeof(model_name));
+        Q_strlcpy(model_filename, "players/male/tris.md2", sizeof(model_filename));
         ci->model = R_RegisterModel(model_filename);
 
         // see if the skin exists for the male model
@@ -219,8 +219,8 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
     // didn't have it, so default to grunt
     if (!ci->skin) {
         // see if the skin exists for the male model
-        strcpy(skin_name, "grunt");
-        strcpy(skin_filename, "players/male/grunt.pcx");
+        Q_strlcpy(skin_name, "grunt", sizeof(skin_name));
+        Q_strlcpy(skin_filename, "players/male/grunt.pcx", sizeof(skin_filename));
         ci->skin = R_RegisterSkin(skin_filename);
     }
 
@@ -242,8 +242,8 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
              "/players/", model_name, "/", skin_name, "_i.pcx");
     Q_strlcpy(ci->icon_name, icon_filename, sizeof(ci->icon_name));
 
-    strcpy(ci->model_name, model_name);
-    strcpy(ci->skin_name, skin_name);
+    Q_strlcpy(ci->model_name, model_name, sizeof(ci->model_name));
+    Q_strlcpy(ci->skin_name, skin_name, sizeof(ci->skin_name));
     Q_concat(dogtag_filename, sizeof(dogtag_filename), dogtag_name, ".pcx");
     Q_strlcpy(ci->dogtag_name, dogtag_filename, sizeof(ci->dogtag_name));
 
@@ -340,7 +340,7 @@ void CL_RegisterVWepModels(void)
     char        *name;
 
     cl.numWeaponModels = 1;
-    strcpy(cl.weaponModels[0], "weapon.md2");
+    Q_strlcpy(cl.weaponModels[0], "weapon.md2", sizeof(cl.weaponModels[0]));
 
     // only default model when vwep is off
     if (!cl_vwep->integer) {
@@ -378,12 +378,21 @@ void CL_SetSky(void)
     vec3_t      axis;
 
     if (cl.csr.extended)
+#if defined(_WIN32)
+        sscanf_s(cl.configstrings[CS_SKYROTATE], "%f %d", &rotate, &autorotate);
+#else
         sscanf(cl.configstrings[CS_SKYROTATE], "%f %d", &rotate, &autorotate);
+#endif
     else
         rotate = Q_atof(cl.configstrings[CS_SKYROTATE]);
 
+#if defined(_WIN32)
+    if (sscanf_s(cl.configstrings[CS_SKYAXIS], "%f %f %f",
+                 &axis[0], &axis[1], &axis[2]) != 3) {
+#else
     if (sscanf(cl.configstrings[CS_SKYAXIS], "%f %f %f",
                &axis[0], &axis[1], &axis[2]) != 3) {
+#endif
         Com_DPrintf("Couldn't parse CS_SKYAXIS\n");
         VectorClear(axis);
     }

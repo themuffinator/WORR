@@ -891,11 +891,11 @@ static void Con_DrawSolidConsole(void)
             y = x - i - n - 3;
             memcpy(buffer, text, i);
             buffer[i] = 0;
-            strcat(buffer, "...");
+            Q_strlcat(buffer, "...", sizeof(buffer));
         } else {
-            strcpy(buffer, text);
+            Q_strlcpy(buffer, text, sizeof(buffer));
         }
-        strcat(buffer, ": ");
+        Q_strlcat(buffer, ": ", sizeof(buffer));
         i = strlen(buffer);
         buffer[i++] = '\x80';
         // where's the dot go?

@@ -1078,7 +1078,7 @@ CL_SendBatchedCmd
 static void CL_SendBatchedCmd(void)
 {
     int i, j, seq, numCmds, numDups;
-    q_unused int totalCmds, totalMsec, cursize, bits;
+    q_unused int totalCmds, totalMsec, cursize;
     usercmd_t *cmd, *oldcmd;
     client_history_t *history, *oldest;
 

@@ -246,6 +246,9 @@ extern renderer_import_t ri;
 #define Com_HashStringLen ri.Com_HashStringLen
 
 #define Cvar_Get ri.Cvar_Get
+#ifdef Cvar_Reset
+#undef Cvar_Reset
+#endif
 #define Cvar_Reset ri.Cvar_Reset
 #define Cvar_Set ri.Cvar_Set
 #define Cvar_VariableInteger ri.Cvar_VariableInteger
