@@ -28,6 +28,21 @@ game_src += windows.compile_resources('res/game.rc',
 
 client_deps += khr_headers_dep
 
+if get_option('bootstrapper')
+  updater_src += windows.compile_resources('res/worrupdater.rc',
+    args:                rc_args,
+    depend_files:        ['res/worr.ico', 'res/worrupdater.exe.manifest'],
+    include_directories: rc_inc,
+  )
+  updater_deps += [
+    cc.find_library('winhttp'),
+    cc.find_library('comctl32'),
+    cc.find_library('shlwapi'),
+    cc.find_library('bcrypt'),
+    cc.find_library('version'),
+  ]
+endif
+
 if get_option('software-sound').allowed()
   client_src += files('wave.c', 'dsound.c')
   client_deps += cc.find_library('winmm')

@@ -146,6 +146,11 @@ option('system-console',
   value: true,
   description: 'Enhanced system console support')
 
+option('bootstrapper',
+  type: 'boolean',
+  value: true,
+  description: 'Build update bootstrapper')
+
 option('system-wide',
   type: 'boolean',
   value: false,

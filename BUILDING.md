@@ -153,11 +153,11 @@ shell, e.g. `x64 Native Tools Command Prompt`.
 
 Change to WORR source directory, then setup build directory:
 
-    meson setup --native-file meson.native.ini -Dwrap_mode=forcefallback builddir
+    tools\meson_setup.cmd setup --native-file meson.native.ini -Dwrap_mode=forcefallback builddir
 
 If Meson reports that it cannot find a Windows resource compiler, the
-`meson.native.ini` file points `rc` to `tools/rc.cmd`, which locates
-`llvm-rc.exe` for you.
+wrapper sets `WINDRES` to `tools/rc.cmd`, which locates `llvm-rc.exe`
+for you.
 
 Build:
 

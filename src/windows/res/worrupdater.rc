@@ -13,11 +13,11 @@
 #endif
 
 #ifdef _WIN64
-#define VER_FILEDESCRIPTION_STR     "WORR dedicated server (64-bit)"
-#define VER_ORIGINALFILENAME_STR    "worr.ded.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR updater (64-bit)"
+#define VER_ORIGINALFILENAME_STR    "worr_updater.exe"
 #else
-#define VER_FILEDESCRIPTION_STR     "WORR dedicated server"
-#define VER_ORIGINALFILENAME_STR    "worr.ded.exe"
+#define VER_FILEDESCRIPTION_STR     "WORR updater"
+#define VER_ORIGINALFILENAME_STR    "worr_updater.exe"
 #endif
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
@@ -40,7 +40,7 @@ BEGIN
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR
             VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
             VALUE "FileVersion", VERSION
-            VALUE "InternalName", "worr.ded"
+            VALUE "InternalName", "worr_updater"
             VALUE "LegalCopyright", "Copyright (C) 2026 DarkMatter Productions"
             VALUE "ProductName", "WORR"
             VALUE "ProductVersion", VERSION
@@ -54,5 +54,5 @@ END
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_DEFAULT
 
-100 ICON "worrded.ico"
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "worrded.exe.manifest"
+100 ICON "worr.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "worrupdater.exe.manifest"

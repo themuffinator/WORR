@@ -1,6 +1,6 @@
 project('worr', 'c',
   license: 'GPL-2.0-or-later',
-  version: run_command(find_program('python3'), 'version.py', check: true).stdout().strip(),
+  version: run_command(find_program('python3'), 'version.py', '--version', check: true).stdout().strip(),
   meson_version: '>= 0.60.0',
   default_options: [
     meson.version().version_compare('>=1.3.0') ? 'c_std=gnu11,c11' : 'c_std=gnu11',
@@ -41,29 +41,6 @@ common_src = [
   'src/common/features.h',
   'src/common/mapdb.c',
   'src/shared/shared.c',
-
-  'q2proto/src/q2proto_client.c',
-  'q2proto/src/q2proto_coords.c',
-  'q2proto/src/q2proto_crc.c',
-  'q2proto/src/q2proto_error.c',
-  'q2proto/src/q2proto_internal_common.c',
-  'q2proto/src/q2proto_internal_debug.c',
-  'q2proto/src/q2proto_internal_download.c',
-  'q2proto/src/q2proto_internal_fmt.c',
-  'q2proto/src/q2proto_internal_maybe_zpacket.c',
-  'q2proto/src/q2proto_internal_packing.c',
-  'q2proto/src/q2proto_multicast.c',
-  'q2proto/src/q2proto_proto_kex.c',
-  'q2proto/src/q2proto_proto_q2pro_extdemo.c',
-  'q2proto/src/q2proto_proto_q2pro.c',
-  'q2proto/src/q2proto_proto_q2repro.c',
-  'q2proto/src/q2proto_proto_r1q2.c',
-  'q2proto/src/q2proto_proto_vanilla.c',
-  'q2proto/src/q2proto_protocol.c',
-  'q2proto/src/q2proto_server.c',
-  'q2proto/src/q2proto_solid.c',
-  'q2proto/src/q2proto_sound.c',
-  'q2proto/src/q2proto_string.c',
 
   'src/common/q2proto-glue.c',
   'src/common/q2proto-packing.c',
@@ -119,6 +96,31 @@ common_src = [
   'inc/system/hunk.h',
   'inc/system/pthread.h',
   'inc/system/system.h',
+]
+
+q2proto_src = [
+  'q2proto/src/q2proto_client.c',
+  'q2proto/src/q2proto_coords.c',
+  'q2proto/src/q2proto_crc.c',
+  'q2proto/src/q2proto_error.c',
+  'q2proto/src/q2proto_internal_common.c',
+  'q2proto/src/q2proto_internal_debug.c',
+  'q2proto/src/q2proto_internal_download.c',
+  'q2proto/src/q2proto_internal_fmt.c',
+  'q2proto/src/q2proto_internal_maybe_zpacket.c',
+  'q2proto/src/q2proto_internal_packing.c',
+  'q2proto/src/q2proto_multicast.c',
+  'q2proto/src/q2proto_proto_kex.c',
+  'q2proto/src/q2proto_proto_q2pro_extdemo.c',
+  'q2proto/src/q2proto_proto_q2pro.c',
+  'q2proto/src/q2proto_proto_q2repro.c',
+  'q2proto/src/q2proto_proto_r1q2.c',
+  'q2proto/src/q2proto_proto_vanilla.c',
+  'q2proto/src/q2proto_protocol.c',
+  'q2proto/src/q2proto_server.c',
+  'q2proto/src/q2proto_solid.c',
+  'q2proto/src/q2proto_sound.c',
+  'q2proto/src/q2proto_string.c',
 ]
 
 client_src = [
@@ -294,6 +296,9 @@ game_src = [
   'src/shared/shared.c',
 ]
 
+updater_src = []
+updater_deps = []
+
 cc = meson.get_compiler('c')
 
 win32 = host_machine.system() == 'windows'
@@ -375,6 +380,8 @@ if cc.get_argument_syntax() == 'gcc'
 
   if win32
     common_args += '-D__USE_MINGW_ANSI_STDIO=1'
+    common_args += '-D_CRT_SECURE_NO_WARNINGS'
+    common_args += '-D_CRT_NONSTDC_NO_WARNINGS'
     if cc.get_id() == 'clang'
       common_link_args += '-fuse-ld=lld'
     endif
@@ -395,7 +402,7 @@ if cc.get_argument_syntax() == 'gcc'
     endif
   endif
 elif cc.get_id() == 'msvc'
-  common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/wd4267', '/wd4018']
+  common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS', '/wd4267', '/wd4018']
 endif
 
 if win32 and cc.get_argument_syntax() == 'msvc'
@@ -710,12 +717,23 @@ if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_a
   engine_args += '-mstackrealign'
 endif
 
+q2proto_c_args = engine_args + []
+if cc.get_argument_syntax() == 'gcc'
+  q2proto_c_args += cc.get_supported_arguments(['-Wno-unused-function'])
+endif
+
+q2proto_lib = static_library('q2proto', q2proto_src,
+  include_directories: ['inc', 'q2proto/inc'],
+  c_args:              q2proto_c_args,
+)
+
 executable('worr', common_src, client_src, renderer_engine_src,
   dependencies:          common_deps + client_deps,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
   win_subsystem:         win_subsystem_client,
   link_args:             exe_link_args,
+  link_with:             q2proto_lib,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
   install:               true,
   install_dir:           bindir,
@@ -727,10 +745,39 @@ executable('worr.ded', common_src, server_src,
   gnu_symbol_visibility: 'hidden',
   win_subsystem:         win_subsystem_server,
   link_args:             exe_link_args,
+  link_with:             q2proto_lib,
   c_args:                ['-DUSE_SERVER=1', engine_args],
   install:               true,
   install_dir:           bindir,
 )
+
+if win32 and get_option('bootstrapper')
+  updater_src += [
+    'src/updater/worr_updater.c',
+    'src/updater/third_party/miniz.c',
+    'src/updater/third_party/miniz_tdef.c',
+    'src/updater/third_party/miniz_tinfl.c',
+    'src/updater/third_party/miniz_zip.c',
+  ]
+
+  updater_c_args = [
+    '-DMINIZ_NO_ARCHIVE_WRITING_APIS',
+    '-DMINIZ_NO_ZLIB_COMPATIBLE_NAMES',
+  ]
+  if cc.get_argument_syntax() == 'gcc'
+    updater_c_args += cc.get_supported_arguments(['-Wno-unused-function'])
+  endif
+
+  executable('worr_updater', updater_src,
+    dependencies:        updater_deps,
+    include_directories: ['inc', 'src/updater/third_party'],
+    win_subsystem:       win_subsystem_client,
+    link_args:           exe_link_args,
+    c_args:              updater_c_args,
+    install:             true,
+    install_dir:         bindir,
+  )
+endif
 
 shared_library('game' + cpu, game_src,
   name_prefix:           '',
@@ -758,8 +805,21 @@ custom_target(
     install_tag: 'runtime',
 )
 
-config.set('REVISION',            meson.project_version().substring(1).split('~')[0].to_int())
+version_prog = find_program('python3')
+version_revision = run_command(version_prog, 'version.py', '--revision', check: true).stdout().strip()
+version_semver = run_command(version_prog, 'version.py', '--semver', check: true).stdout().strip()
+version_major = run_command(version_prog, 'version.py', '--major', check: true).stdout().strip()
+version_minor = run_command(version_prog, 'version.py', '--minor', check: true).stdout().strip()
+version_patch = run_command(version_prog, 'version.py', '--patch', check: true).stdout().strip()
+version_prerelease = run_command(version_prog, 'version.py', '--prerelease', check: true).stdout().strip()
+
+config.set('REVISION',            version_revision.to_int())
+config.set('VERSION_MAJOR',       version_major.to_int())
+config.set('VERSION_MINOR',       version_minor.to_int())
+config.set('VERSION_PATCH',       version_patch.to_int())
 config.set_quoted('VERSION',      meson.project_version())
+config.set_quoted('VERSION_SEMVER', version_semver)
+config.set_quoted('VERSION_PRERELEASE', version_prerelease)
 config.set_quoted('CPUSTRING',    cpu)
 config.set_quoted('BUILDSTRING',  sys)
 config.set_quoted('BASEGAME',     get_option('base-game'))

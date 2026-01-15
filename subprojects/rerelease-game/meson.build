@@ -1,6 +1,6 @@
 project('quake2-rerelease-dll', 'cpp',
   license: 'GPL-2.0-or-later',
-  version: run_command(find_program('python3'), 'version.py', check: true).stdout().strip(),
+  version: run_command(find_program('python3'), 'version.py', '--version', check: true).stdout().strip(),
   default_options: [
     'cpp_std=c++17',
     'buildtype=debugoptimized',
@@ -237,8 +237,21 @@ game_dll = shared_library('game_' + cpu, src,
 )
 
 config = configuration_data()
-config.set('REVISION',         meson.project_version().substring(1).split('~')[0].to_int())
+version_prog = find_program('python3')
+version_revision = run_command(version_prog, 'version.py', '--revision', check: true).stdout().strip()
+version_semver = run_command(version_prog, 'version.py', '--semver', check: true).stdout().strip()
+version_major = run_command(version_prog, 'version.py', '--major', check: true).stdout().strip()
+version_minor = run_command(version_prog, 'version.py', '--minor', check: true).stdout().strip()
+version_patch = run_command(version_prog, 'version.py', '--patch', check: true).stdout().strip()
+version_prerelease = run_command(version_prog, 'version.py', '--prerelease', check: true).stdout().strip()
+
+config.set('REVISION',         version_revision.to_int())
+config.set('VERSION_MAJOR',    version_major.to_int())
+config.set('VERSION_MINOR',    version_minor.to_int())
+config.set('VERSION_PATCH',    version_patch.to_int())
 config.set_quoted('VERSION',   meson.project_version())
+config.set_quoted('VERSION_SEMVER', version_semver)
+config.set_quoted('VERSION_PRERELEASE', version_prerelease)
 config.set_quoted('CPUSTRING', cpu)
 
 configure_file(output: 'config.h', configuration: config)

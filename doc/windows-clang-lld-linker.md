@@ -7,7 +7,7 @@
 ## Fix
 - Force clang to use lld-link for both C and C++ links.
 - Current build uses Meson options:
-  - meson setup builddir --reconfigure --native-file meson.native.ini -Dc_link_args=-fuse-ld=lld -Dcpp_link_args=-fuse-ld=lld
+  - tools\meson_setup.cmd setup builddir --reconfigure --native-file meson.native.ini -Dc_link_args=-fuse-ld=lld -Dcpp_link_args=-fuse-ld=lld
 - The native file now carries the same intent for fresh build directories.
 - Rebuild: meson compile -C builddir
 

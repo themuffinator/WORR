@@ -212,6 +212,7 @@ static q_noreturn void wrap_error(const char *fmt, ...)
         Com_WPrintf("%s: overflow\n", __func__);
     }
     game_import.Com_Error(msg);
+    q_unreachable();
 }
 
 

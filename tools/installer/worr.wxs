@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <?define ProductName="WORR" ?>
+  <?define Manufacturer="DarkMatter Productions" ?>
+  <?define ProductVersion="$(var.ProductVersion)" ?>
+  <?define UpgradeCode="$(var.UpgradeCode)" ?>
+
+  <Product Id="*" Name="$(var.ProductName)" Manufacturer="$(var.Manufacturer)"
+           Version="$(var.ProductVersion)" UpgradeCode="$(var.UpgradeCode)">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="$(var.ProductName)" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <UIRef Id="WixUI_Minimal" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="WORR" />
+      </Directory>
+    </Directory>
+  </Fragment>
+</Wix>

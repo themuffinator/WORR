@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      WORR_RELEASE: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-cmake
+
+      - name: Configure
+        shell: msys2 {0}
+        run: |
+          meson setup build --wrap-mode=forcefallback --buildtype=release -Dbootstrapper=true -Dtests=false
+
+      - name: Build
+        shell: msys2 {0}
+        run: meson compile -C build
+
+      - name: Install
+        shell: msys2 {0}
+        run: meson install -C build --destdir dist
+
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          VERSION=$(python3 version.py --semver)
+          mkdir -p release
+          python3 tools/package_release.py --input-dir dist --output-dir release \
+            --package-name worr-client-win64.zip --manifest-name worr-client-win64.json \
+            --version "$VERSION" --repo "${{ github.repository }}" --channel stable \
+            --launch-exe worr.exe --write-config
+          python3 tools/package_release.py --input-dir dist --output-dir release \
+            --package-name worr-server-win64.zip --manifest-name worr-server-win64.json \
+            --version "$VERSION" --repo "${{ github.repository }}" --channel stable \
+            --launch-exe worr.ded.exe --write-config
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Add WiX Toolset to PATH
+        shell: powershell
+        run: |
+          $wixRoot = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v*" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixRoot) { throw "WiX Toolset install not found." }
+          "$($wixRoot.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build MSI
+        shell: powershell
+        run: |
+          $version = (python version.py --semver).Trim()
+          .\tools\build_msi.ps1 -SourceDir dist -OutputDir release -Version $version -MsiName worr-win64.msi
+
+      - name: Release Version
+        id: version
+        shell: msys2 {0}
+        run: |
+          echo "version=$(python3 version.py --semver)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            release/worr-client-win64.zip
+            release/worr-client-win64.json
+            release/worr-server-win64.zip
+            release/worr-server-win64.json
+            release/worr-win64.msi
