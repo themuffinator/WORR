@@ -33,11 +33,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "renderer/renderer.h"
 #include "system/system.h"
 #include "../res/worr.xbm"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 static struct {
     SDL_Window      *window;
-    SDL_GLContext   *context;
+    SDL_GLContext   context;
     vidFlags_t      flags;
 
     int             width;
@@ -46,7 +46,7 @@ static struct {
     int             win_height;
 
     bool            wayland;
-    int             focus_hack;
+    SDL_WindowFlags focus_hack;
 } sdl;
 
 /*
@@ -95,12 +95,13 @@ static void *get_proc_addr(const char *sym)
 
 static void swap_buffers(void)
 {
-    SDL_GL_SwapWindow(sdl.window);
+    if (!SDL_GL_SwapWindow(sdl.window))
+        Com_EPrintf("Couldn't swap buffers: %s\n", SDL_GetError());
 }
 
 static void swap_interval(int val)
 {
-    if (SDL_GL_SetSwapInterval(val) < 0)
+    if (!SDL_GL_SetSwapInterval(val))
         Com_EPrintf("Couldn't set swap interval %d: %s\n", val, SDL_GetError());
 }
 
@@ -114,11 +115,17 @@ VIDEO
 
 static void mode_changed(void)
 {
-    SDL_GetWindowSize(sdl.window, &sdl.win_width, &sdl.win_height);
+    if (!SDL_GetWindowSize(sdl.window, &sdl.win_width, &sdl.win_height)) {
+        sdl.win_width = 0;
+        sdl.win_height = 0;
+    }
 
-    SDL_GL_GetDrawableSize(sdl.window, &sdl.width, &sdl.height);
+    if (!SDL_GetWindowSizeInPixels(sdl.window, &sdl.width, &sdl.height)) {
+        sdl.width = sdl.win_width;
+        sdl.height = sdl.win_height;
+    }
 
-    Uint32 flags = SDL_GetWindowFlags(sdl.window);
+    SDL_WindowFlags flags = SDL_GetWindowFlags(sdl.window);
     if (flags & SDL_WINDOW_FULLSCREEN)
         sdl.flags |= QVF_FULLSCREEN;
     else
@@ -130,41 +137,51 @@ static void mode_changed(void)
 
 static void set_mode(void)
 {
-    Uint32 flags;
     vrect_t rc;
     int freq;
 
+    SDL_DisplayID display_id = SDL_GetDisplayForWindow(sdl.window);
+    if (!display_id)
+        display_id = SDL_GetPrimaryDisplay();
+
     if (vid_fullscreen->integer) {
         if (VID_GetFullscreen(&rc, &freq, NULL)) {
-            SDL_DisplayMode mode = {
-                .format         = SDL_PIXELFORMAT_UNKNOWN,
-                .w              = rc.width,
-                .h              = rc.height,
-                .refresh_rate   = freq,
-                .driverdata     = NULL
-            };
-            SDL_SetWindowDisplayMode(sdl.window, &mode);
-            flags = SDL_WINDOW_FULLSCREEN;
+            SDL_DisplayMode mode = {0};
+
+            mode.displayID = display_id;
+            mode.format = SDL_PIXELFORMAT_UNKNOWN;
+            mode.w = rc.width;
+            mode.h = rc.height;
+            mode.refresh_rate = (float)freq;
+
+            if (!SDL_SetWindowFullscreenMode(sdl.window, &mode)) {
+                Com_EPrintf("Couldn't set fullscreen mode: %s\n", SDL_GetError());
+                SDL_SetWindowFullscreenMode(sdl.window, NULL);
+            }
         } else {
-            flags = SDL_WINDOW_FULLSCREEN_DESKTOP;
+            SDL_SetWindowFullscreenMode(sdl.window, NULL);
         }
+
+        if (!SDL_SetWindowFullscreen(sdl.window, true))
+            Com_EPrintf("Couldn't enter fullscreen: %s\n", SDL_GetError());
     } else {
         if (VID_GetGeometry(&rc)) {
             SDL_SetWindowSize(sdl.window, rc.width, rc.height);
             SDL_SetWindowPosition(sdl.window, rc.x, rc.y);
         }
-        flags = 0;
+        if (!SDL_SetWindowFullscreen(sdl.window, false))
+            Com_EPrintf("Couldn't leave fullscreen: %s\n", SDL_GetError());
+        SDL_SetWindowFullscreenMode(sdl.window, NULL);
     }
 
-    SDL_SetWindowFullscreen(sdl.window, flags);
     mode_changed();
 }
 
 static void fatal_shutdown(void)
 {
-    SDL_SetWindowGrab(sdl.window, SDL_FALSE);
-    SDL_SetRelativeMouseMode(SDL_FALSE);
-    SDL_ShowCursor(SDL_ENABLE);
+    SDL_SetWindowMouseGrab(sdl.window, false);
+    SDL_SetWindowRelativeMouseMode(sdl.window, false);
+    SDL_ShowCursor();
     SDL_Quit();
 }
 
@@ -183,33 +200,35 @@ static void set_clipboard_data(const char *data)
 
 static void update_gamma(const byte *table)
 {
-    Uint16 ramp[256];
-    int i;
-
-    if (sdl.flags & QVF_GAMMARAMP) {
-        for (i = 0; i < 256; i++) {
-            ramp[i] = table[i] << 8;
-        }
-        SDL_SetWindowGammaRamp(sdl.window, ramp, ramp, ramp);
-    }
+    (void)table;
 }
 
-static int my_event_filter(void *userdata, SDL_Event *event)
+static bool my_event_filter(void *userdata, SDL_Event *event)
 {
     // SDL uses relative time, we need absolute
-    event->common.timestamp = Sys_Milliseconds();
-    return 1;
+    event->common.timestamp = SDL_MS_TO_NS(Sys_Milliseconds());
+    return true;
+}
+
+static int get_refresh_rate(const SDL_DisplayMode *mode)
+{
+    if (mode->refresh_rate_numerator > 0 && mode->refresh_rate_denominator > 0)
+        return (mode->refresh_rate_numerator + mode->refresh_rate_denominator / 2) / mode->refresh_rate_denominator;
+    if (mode->refresh_rate > 0.0f)
+        return (int)(mode->refresh_rate + 0.5f);
+    return 0;
 }
 
 static char *get_mode_list(void)
 {
-    SDL_DisplayMode mode;
+    SDL_DisplayMode **modes;
     size_t size, len;
     char *buf;
     int i, num_modes;
 
-    num_modes = SDL_GetNumDisplayModes(0);
-    if (num_modes < 1)
+    SDL_DisplayID display_id = SDL_GetPrimaryDisplay();
+    modes = SDL_GetFullscreenDisplayModes(display_id, &num_modes);
+    if (!modes || num_modes < 1)
         return Z_CopyString(VID_MODELIST);
 
     size = 8 + num_modes * 32 + 1;
@@ -217,16 +236,21 @@ static char *get_mode_list(void)
 
     len = Q_strlcpy(buf, "desktop ", size);
     for (i = 0; i < num_modes; i++) {
-        if (SDL_GetDisplayMode(0, i, &mode) < 0)
+        const SDL_DisplayMode *mode = modes[i];
+        int refresh;
+
+        if (!mode)
             break;
-        if (mode.refresh_rate == 0)
+        refresh = get_refresh_rate(mode);
+        if (refresh == 0)
             continue;
-        if (mode.w < VIRTUAL_SCREEN_WIDTH || mode.h < VIRTUAL_SCREEN_HEIGHT)
+        if (mode->w < VIRTUAL_SCREEN_WIDTH || mode->h < VIRTUAL_SCREEN_HEIGHT)
             continue;
         len += Q_scnprintf(buf + len, size - len, "%dx%d@%d ",
-                           mode.w, mode.h, mode.refresh_rate);
+                           mode->w, mode->h, refresh);
     }
     buf[len - 1] = 0;
+    SDL_free(modes);
 
     return buf;
 }
@@ -246,7 +270,7 @@ static int get_dpi_scale(void)
 static void shutdown(void)
 {
     if (sdl.context)
-        SDL_GL_DeleteContext(sdl.context);
+        SDL_GL_DestroyContext(sdl.context);
 
     if (sdl.window)
         SDL_DestroyWindow(sdl.window);
@@ -257,12 +281,15 @@ static void shutdown(void)
 
 static bool create_window_and_context(const vrect_t *rc)
 {
-    sdl.window = SDL_CreateWindow(PRODUCT, rc->x, rc->y, rc->width, rc->height,
-                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI);
+    sdl.window = SDL_CreateWindow(PRODUCT, rc->width, rc->height,
+                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!sdl.window) {
         Com_EPrintf("Couldn't create SDL window: %s\n", SDL_GetError());
         return false;
     }
+
+    if (!SDL_WINDOWPOS_ISUNDEFINED(rc->x) && !SDL_WINDOWPOS_ISUNDEFINED(rc->y))
+        SDL_SetWindowPosition(sdl.window, rc->x, rc->y);
 
     sdl.context = SDL_GL_CreateContext(sdl.window);
     if (!sdl.context) {
@@ -279,7 +306,7 @@ static bool init(void)
 {
     vrect_t rc;
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) == -1) {
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         Com_EPrintf("Couldn't initialize SDL video: %s\n", SDL_GetError());
         return false;
     }
@@ -304,31 +331,25 @@ static bool init(void)
 
     SDL_SetWindowMinimumSize(sdl.window, VIRTUAL_SCREEN_WIDTH, VIRTUAL_SCREEN_HEIGHT);
 
-    SDL_Surface *icon = SDL_CreateRGBSurfaceWithFormatFrom(q2icon_bits, q2icon_width, q2icon_height,
-                                                           1, q2icon_width / 8, SDL_PIXELFORMAT_INDEX1LSB);
+    SDL_Surface *icon = SDL_CreateSurfaceFrom(q2icon_width, q2icon_height, SDL_PIXELFORMAT_INDEX1LSB,
+                                              (void *)q2icon_bits, q2icon_width / 8);
     if (icon) {
+        SDL_Palette *palette = SDL_GetSurfacePalette(icon);
         SDL_Color colors[2] = {
             { 255, 255, 255 },
             {   0, 128, 128 }
         };
-        SDL_SetPaletteColors(icon->format->palette, colors, 0, 2);
-        SDL_SetColorKey(icon, SDL_TRUE, 0);
+        if (palette)
+            SDL_SetPaletteColors(palette, colors, 0, 2);
+        SDL_SetSurfaceColorKey(icon, true, 0);
         SDL_SetWindowIcon(sdl.window, icon);
-        SDL_FreeSurface(icon);
+        SDL_DestroySurface(icon);
     }
 
     cvar_t *vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_RENDERER);
     if (vid_hwgamma->integer) {
-        Uint16  gamma[3][256];
-
-        if (SDL_GetWindowGammaRamp(sdl.window, gamma[0], gamma[1], gamma[2]) == 0 &&
-            SDL_SetWindowGammaRamp(sdl.window, gamma[0], gamma[1], gamma[2]) == 0) {
-            Com_Printf("...enabling hardware gamma\n");
-            sdl.flags |= QVF_GAMMARAMP;
-        } else {
-            Com_Printf("...hardware gamma not supported\n");
-            Cvar_Reset(vid_hwgamma);
-        }
+        Com_Printf("...hardware gamma not supported by SDL3\n");
+        Cvar_Reset(vid_hwgamma);
     }
 
     Com_Printf("Using SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
@@ -349,32 +370,32 @@ EVENTS
 
 static void window_event(SDL_WindowEvent *event)
 {
-    Uint32 flags = SDL_GetWindowFlags(sdl.window);
+    SDL_WindowFlags flags = SDL_GetWindowFlags(sdl.window);
     active_t active;
     vrect_t rc;
 
     // wayland doesn't set SDL_WINDOW_*_FOCUS flags
     if (sdl.wayland) {
-        switch (event->event) {
-        case SDL_WINDOWEVENT_FOCUS_GAINED:
+        switch (event->type) {
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
             sdl.focus_hack = SDL_WINDOW_INPUT_FOCUS;
             break;
-        case SDL_WINDOWEVENT_FOCUS_LOST:
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
             sdl.focus_hack = 0;
             break;
         }
         flags |= sdl.focus_hack;
     }
 
-    switch (event->event) {
-    case SDL_WINDOWEVENT_MINIMIZED:
-    case SDL_WINDOWEVENT_RESTORED:
-    case SDL_WINDOWEVENT_ENTER:
-    case SDL_WINDOWEVENT_LEAVE:
-    case SDL_WINDOWEVENT_FOCUS_GAINED:
-    case SDL_WINDOWEVENT_FOCUS_LOST:
-    case SDL_WINDOWEVENT_SHOWN:
-    case SDL_WINDOWEVENT_HIDDEN:
+    switch (event->type) {
+    case SDL_EVENT_WINDOW_MINIMIZED:
+    case SDL_EVENT_WINDOW_RESTORED:
+    case SDL_EVENT_WINDOW_MOUSE_ENTER:
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+    case SDL_EVENT_WINDOW_FOCUS_GAINED:
+    case SDL_EVENT_WINDOW_FOCUS_LOST:
+    case SDL_EVENT_WINDOW_SHOWN:
+    case SDL_EVENT_WINDOW_HIDDEN:
         if (flags & (SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS)) {
             active = ACT_ACTIVATED;
         } else if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) {
@@ -384,8 +405,11 @@ static void window_event(SDL_WindowEvent *event)
         }
         CL_Activate(active);
         break;
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+        Com_Quit(NULL, ERR_DISCONNECT);
+        break;
 
-    case SDL_WINDOWEVENT_MOVED:
+    case SDL_EVENT_WINDOW_MOVED:
         if (!(flags & SDL_WINDOW_FULLSCREEN)) {
             SDL_GetWindowSize(sdl.window, &rc.width, &rc.height);
             rc.x = event->data1;
@@ -394,13 +418,16 @@ static void window_event(SDL_WindowEvent *event)
         }
         break;
 
-    case SDL_WINDOWEVENT_RESIZED:
+    case SDL_EVENT_WINDOW_RESIZED:
         if (!(flags & SDL_WINDOW_FULLSCREEN)) {
             SDL_GetWindowPosition(sdl.window, &rc.x, &rc.y);
             rc.width = event->data1;
             rc.height = event->data2;
             VID_SetGeometry(&rc);
         }
+        mode_changed();
+        break;
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         mode_changed();
         break;
     }
@@ -414,9 +441,22 @@ static const byte scantokey2[] = {
     K_LCTRL, K_LSHIFT, K_LALT, K_LWINKEY, K_RCTRL, K_RSHIFT, K_RALT, K_RWINKEY
 };
 
+static unsigned sdl_event_time(Uint64 timestamp)
+{
+    return (unsigned)SDL_NS_TO_MS(timestamp);
+}
+
+static void set_cursor_visible(bool visible)
+{
+    if (visible)
+        SDL_ShowCursor();
+    else
+        SDL_HideCursor();
+}
+
 static void key_event(SDL_KeyboardEvent *event)
 {
-    unsigned key = event->keysym.scancode;
+    unsigned key = event->scancode;
 
     if (key < q_countof(scantokey))
         key = scantokey[key];
@@ -426,11 +466,11 @@ static void key_event(SDL_KeyboardEvent *event)
         key = 0;
 
     if (!key) {
-        Com_DPrintf("%s: unknown scancode %d\n", __func__, event->keysym.scancode);
+        Com_DPrintf("%s: unknown scancode %d\n", __func__, event->scancode);
         return;
     }
 
-    Key_Event2(key, event->state, event->timestamp);
+    Key_Event2(key, event->down, sdl_event_time(event->timestamp));
 }
 
 static void mouse_button_event(SDL_MouseButtonEvent *event)
@@ -458,25 +498,34 @@ static void mouse_button_event(SDL_MouseButtonEvent *event)
         return;
     }
 
-    Key_Event(key, event->state, event->timestamp);
+    Key_Event(key, event->down, sdl_event_time(event->timestamp));
 }
 
 static void mouse_wheel_event(SDL_MouseWheelEvent *event)
 {
-    if (event->x > 0) {
-        Key_Event(K_MWHEELRIGHT, true, event->timestamp);
-        Key_Event(K_MWHEELRIGHT, false, event->timestamp);
-    } else if (event->x < 0) {
-        Key_Event(K_MWHEELLEFT, true, event->timestamp);
-        Key_Event(K_MWHEELLEFT, false, event->timestamp);
+    float x = event->x;
+    float y = event->y;
+    unsigned time = sdl_event_time(event->timestamp);
+
+    if (event->direction == SDL_MOUSEWHEEL_FLIPPED) {
+        x = -x;
+        y = -y;
     }
 
-    if (event->y > 0) {
-        Key_Event(K_MWHEELUP, true, event->timestamp);
-        Key_Event(K_MWHEELUP, false, event->timestamp);
-    } else if (event->y < 0) {
-        Key_Event(K_MWHEELDOWN, true, event->timestamp);
-        Key_Event(K_MWHEELDOWN, false, event->timestamp);
+    if (x > 0) {
+        Key_Event(K_MWHEELRIGHT, true, time);
+        Key_Event(K_MWHEELRIGHT, false, time);
+    } else if (x < 0) {
+        Key_Event(K_MWHEELLEFT, true, time);
+        Key_Event(K_MWHEELLEFT, false, time);
+    }
+
+    if (y > 0) {
+        Key_Event(K_MWHEELUP, true, time);
+        Key_Event(K_MWHEELUP, false, time);
+    } else if (y < 0) {
+        Key_Event(K_MWHEELDOWN, true, time);
+        Key_Event(K_MWHEELDOWN, false, time);
     }
 }
 
@@ -485,27 +534,29 @@ static void pump_events(void)
     SDL_Event    event;
 
     while (SDL_PollEvent(&event)) {
+        if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) {
+            window_event(&event.window);
+            continue;
+        }
+
         switch (event.type) {
-        case SDL_QUIT:
+        case SDL_EVENT_QUIT:
             Com_Quit(NULL, ERR_DISCONNECT);
             break;
-        case SDL_WINDOWEVENT:
-            window_event(&event.window);
-            break;
-        case SDL_KEYDOWN:
-        case SDL_KEYUP:
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
             key_event(&event.key);
             break;
-        case SDL_MOUSEMOTION:
+        case SDL_EVENT_MOUSE_MOTION:
             if (sdl.win_width && sdl.win_height)
-                UI_MouseEvent(event.motion.x * sdl.width / sdl.win_width,
-                              event.motion.y * sdl.height / sdl.win_height);
+                UI_MouseEvent((int)(event.motion.x * sdl.width / sdl.win_width),
+                              (int)(event.motion.y * sdl.height / sdl.win_height));
             break;
-        case SDL_MOUSEBUTTONDOWN:
-        case SDL_MOUSEBUTTONUP:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
             mouse_button_event(&event.button);
             break;
-        case SDL_MOUSEWHEEL:
+        case SDL_EVENT_MOUSE_WHEEL:
             mouse_wheel_event(&event.wheel);
             break;
         }
@@ -522,24 +573,29 @@ MOUSE
 
 static bool get_mouse_motion(int *dx, int *dy)
 {
-    if (!SDL_GetRelativeMouseMode()) {
+    float fx = 0.0f;
+    float fy = 0.0f;
+
+    if (!SDL_GetWindowRelativeMouseMode(sdl.window)) {
         return false;
     }
-    SDL_GetRelativeMouseState(dx, dy);
+    SDL_GetRelativeMouseState(&fx, &fy);
+    *dx = (int)fx;
+    *dy = (int)fy;
     return true;
 }
 
 static void warp_mouse(int x, int y)
 {
-    SDL_WarpMouseInWindow(sdl.window, x, y);
+    SDL_WarpMouseInWindow(sdl.window, (float)x, (float)y);
     SDL_GetRelativeMouseState(NULL, NULL);
 }
 
 static void shutdown_mouse(void)
 {
-    SDL_SetWindowGrab(sdl.window, SDL_FALSE);
-    SDL_SetRelativeMouseMode(SDL_FALSE);
-    SDL_ShowCursor(SDL_ENABLE);
+    SDL_SetWindowMouseGrab(sdl.window, false);
+    SDL_SetWindowRelativeMouseMode(sdl.window, false);
+    set_cursor_visible(true);
 }
 
 static bool init_mouse(void)
@@ -554,10 +610,10 @@ static bool init_mouse(void)
 
 static void grab_mouse(bool grab)
 {
-    SDL_SetWindowGrab(sdl.window, grab);
-    SDL_SetRelativeMouseMode(grab && !(Key_GetDest() & KEY_MENU));
+    SDL_SetWindowMouseGrab(sdl.window, grab);
+    SDL_SetWindowRelativeMouseMode(sdl.window, grab && !(Key_GetDest() & KEY_MENU));
     SDL_GetRelativeMouseState(NULL, NULL);
-    SDL_ShowCursor(!(sdl.flags & QVF_FULLSCREEN));
+    set_cursor_visible(!(sdl.flags & QVF_FULLSCREEN));
 }
 
 static bool probe(void)

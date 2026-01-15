@@ -23,22 +23,39 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/shared.h"
 #include "common/zone.h"
 #include "client/sound/dma.h"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
-static void Filler(void *userdata, Uint8 *stream, int len)
+static SDL_AudioStream *sdl_stream;
+static SDL_AudioDeviceID sdl_device;
+
+static void SDLCALL StreamCallback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount)
 {
-    int size = dma.samples << 1;
-    int pos = dma.samplepos << 1;
-    int wrapped = pos + len - size;
+    int bytes_per_sample = dma.samplebits / 8;
+    int buffer_bytes = dma.samples * bytes_per_sample;
+    int remaining = additional_amount;
 
-    if (wrapped < 0) {
-        memcpy(stream, dma.buffer + pos, len);
-        dma.samplepos += len >> 1;
-    } else {
-        int remaining = size - pos;
-        memcpy(stream, dma.buffer + pos, remaining);
-        memcpy(stream + remaining, dma.buffer, wrapped);
-        dma.samplepos = wrapped >> 1;
+    (void)userdata;
+    (void)total_amount;
+
+    if (!dma.buffer || buffer_bytes <= 0)
+        return;
+
+    while (remaining > 0) {
+        int chunk = min(remaining, buffer_bytes);
+        int pos = dma.samplepos * bytes_per_sample;
+        int wrapped = pos + chunk - buffer_bytes;
+
+        if (wrapped < 0) {
+            SDL_PutAudioStreamData(stream, dma.buffer + pos, chunk);
+            dma.samplepos += chunk / bytes_per_sample;
+        } else {
+            int head = buffer_bytes - pos;
+            SDL_PutAudioStreamData(stream, dma.buffer + pos, head);
+            SDL_PutAudioStreamData(stream, dma.buffer, wrapped);
+            dma.samplepos = wrapped / bytes_per_sample;
+        }
+
+        remaining -= chunk;
     }
 }
 
@@ -46,7 +63,11 @@ static void Shutdown(void)
 {
     Com_Printf("Shutting down SDL audio.\n");
 
-    SDL_CloseAudio();
+    if (sdl_stream) {
+        SDL_DestroyAudioStream(sdl_stream);
+        sdl_stream = NULL;
+    }
+    sdl_device = 0;
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 
     Z_Freep(&dma.buffer);
@@ -54,11 +75,9 @@ static void Shutdown(void)
 
 static sndinitstat_t Init(void)
 {
-    SDL_AudioSpec desired, obtained;
-    int ret;
+    SDL_AudioSpec desired;
 
-    ret = SDL_InitSubSystem(SDL_INIT_AUDIO);
-    if (ret == -1) {
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         Com_EPrintf("Couldn't initialize SDL audio: %s\n", SDL_GetError());
         return SIS_FAILURE;
     }
@@ -79,29 +98,23 @@ static sndinitstat_t Init(void)
         break;
     }
 
-    desired.format = AUDIO_S16LSB;
-    desired.samples = 512;
+    desired.format = SDL_AUDIO_S16LE;
     desired.channels = 2;
-    desired.callback = Filler;
-    ret = SDL_OpenAudio(&desired, &obtained);
-    if (ret == -1) {
+    sdl_stream = SDL_OpenAudioDeviceStream(0, &desired, StreamCallback, NULL);
+    if (!sdl_stream) {
         Com_EPrintf("Couldn't open SDL audio: %s\n", SDL_GetError());
         goto fail1;
     }
 
-    if (obtained.format != AUDIO_S16LSB) {
-        Com_EPrintf("SDL audio format %d unsupported.\n", obtained.format);
+    sdl_device = SDL_GetAudioStreamDevice(sdl_stream);
+    if (!sdl_device) {
+        Com_EPrintf("Couldn't get SDL audio device: %s\n", SDL_GetError());
         goto fail2;
     }
 
-    if (obtained.channels != 1 && obtained.channels != 2) {
-        Com_EPrintf("SDL audio channels %d unsupported.\n", obtained.channels);
-        goto fail2;
-    }
-
-    dma.speed = obtained.freq;
-    dma.channels = obtained.channels;
-    dma.samples = 0x8000 * obtained.channels;
+    dma.speed = desired.freq;
+    dma.channels = desired.channels;
+    dma.samples = 0x8000 * desired.channels;
     dma.submission_chunk = 1;
     dma.samplebits = 16;
     dma.buffer = Z_Mallocz(dma.samples * 2);
@@ -109,12 +122,19 @@ static sndinitstat_t Init(void)
 
     Com_Printf("Using SDL audio driver: %s\n", SDL_GetCurrentAudioDriver());
 
-    SDL_PauseAudio(0);
+    if (!SDL_ResumeAudioDevice(sdl_device)) {
+        Com_EPrintf("Couldn't start SDL audio: %s\n", SDL_GetError());
+        goto fail3;
+    }
 
     return SIS_SUCCESS;
 
+fail3:
+    Z_Freep(&dma.buffer);
 fail2:
-    SDL_CloseAudio();
+    SDL_DestroyAudioStream(sdl_stream);
+    sdl_stream = NULL;
+    sdl_device = 0;
 fail1:
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     return SIS_FAILURE;
@@ -122,21 +142,25 @@ fail1:
 
 static void BeginPainting(void)
 {
-    SDL_LockAudio();
+    if (sdl_stream)
+        SDL_LockAudioStream(sdl_stream);
 }
 
 static void Submit(void)
 {
-    SDL_UnlockAudio();
+    if (sdl_stream)
+        SDL_UnlockAudioStream(sdl_stream);
 }
 
 static void Activate(bool active)
 {
-    if (active) {
-        SDL_PauseAudio(0);
-    } else {
-        SDL_PauseAudio(1);
-    }
+    if (!sdl_device)
+        return;
+
+    if (active)
+        SDL_ResumeAudioDevice(sdl_device);
+    else
+        SDL_PauseAudioDevice(sdl_device);
 }
 
 const snddma_driver_t snddma_sdl = {
