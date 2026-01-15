@@ -43,6 +43,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <jpeglib.h>
 #endif
 
+#include <fcntl.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <setjmp.h>
 
 #define R_COLORMAP_PCX    "pics/colormap.pcx"
@@ -1194,6 +1201,32 @@ static int parse_template(cvar_t *var, char *buffer, size_t size)
     return 3;
 }
 
+static FILE *IMG_OpenExclusive(const char *path)
+{
+#ifdef _WIN32
+    int flags = _O_WRONLY | _O_CREAT | _O_EXCL | _S_IREAD | _S_IWRITE | _O_BINARY;
+    int fd = _open(path, flags);
+    if (fd == -1)
+        return NULL;
+
+    FILE *fp = _fdopen(fd, "wb");
+    if (!fp)
+        _close(fd);
+
+    return fp;
+#else
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+    if (fd == -1)
+        return NULL;
+
+    FILE *fp = fdopen(fd, "wb");
+    if (!fp)
+        close(fd);
+
+    return fp;
+#endif
+}
+
 static int create_screenshot(char *buffer, size_t size, FILE **f,
                              const char *name, const char *ext)
 {
@@ -1237,7 +1270,7 @@ static int create_screenshot(char *buffer, size_t size, FILE **f,
         if (Q_snprintf(buffer, size, "%s/screenshots/%s%0*d%s", fs_gamedir, temp, width, i, ext) >= size)
             return Q_ERR(ENAMETOOLONG);
 
-        if ((*f = Q_fopen(buffer, "wxb")))
+        if ((*f = IMG_OpenExclusive(buffer)))
             return Q_ERR_SUCCESS;
 
         ret = Q_ERRNO;
