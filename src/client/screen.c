@@ -276,6 +276,249 @@ void SCR_DrawKStringMultiStretch(int x, int y, int scale, int flags, size_t maxl
         R_DrawKFontChar(last_x, last_y, scale, flags, 11, color, kfont);
 }
 
+typedef struct {
+    qhandle_t pic;
+    int w;
+    int h;
+    bool tried;
+} bind_icon_cache_t;
+
+static bind_icon_cache_t scr_bind_icon_cache[256];
+
+static int SCR_MapKeynumToMouseIcon(int keynum)
+{
+    switch (keynum) {
+    case K_MOUSE1:
+        return 1;
+    case K_MOUSE2:
+        return 2;
+    case K_MOUSE3:
+        return 0;
+    case K_MOUSE4:
+        return 5;
+    case K_MOUSE5:
+        return 6;
+    case K_MOUSE6:
+        return 7;
+    case K_MOUSE7:
+        return 8;
+    case K_MOUSE8:
+        return 9;
+    case K_MWHEELUP:
+        return 3;
+    case K_MWHEELDOWN:
+        return 4;
+    default:
+        return -1;
+    }
+}
+
+static int SCR_MapKeynumToKeyboardIcon(int keynum)
+{
+    switch (keynum) {
+    case K_BACKSPACE:
+        return 8;
+    case K_TAB:
+        return 9;
+    case K_ENTER:
+        return 13;
+    case K_PAUSE:
+        return 271;
+    case K_ESCAPE:
+        return 27;
+    case K_SPACE:
+        return 32;
+    case K_DEL:
+        return 275;
+    case K_CAPSLOCK:
+        return 256;
+    case K_F1:
+        return 257;
+    case K_F2:
+        return 258;
+    case K_F3:
+        return 259;
+    case K_F4:
+        return 260;
+    case K_F5:
+        return 261;
+    case K_F6:
+        return 262;
+    case K_F7:
+        return 263;
+    case K_F8:
+        return 264;
+    case K_F9:
+        return 265;
+    case K_F10:
+        return 266;
+    case K_F11:
+        return 267;
+    case K_F12:
+        return 268;
+    case K_PRINTSCREEN:
+        return 269;
+    case K_SCROLLOCK:
+        return 270;
+    case K_INS:
+        return 272;
+    case K_HOME:
+        return 273;
+    case K_PGUP:
+        return 274;
+    case K_END:
+        return 276;
+    case K_PGDN:
+        return 277;
+    case K_RIGHTARROW:
+        return 278;
+    case K_LEFTARROW:
+        return 279;
+    case K_DOWNARROW:
+        return 280;
+    case K_UPARROW:
+        return 281;
+    case K_NUMLOCK:
+        return 282;
+    case K_KP_SLASH:
+        return 283;
+    case K_KP_MULTIPLY:
+        return 42;
+    case K_KP_MINUS:
+        return 285;
+    case K_KP_PLUS:
+        return 286;
+    case K_KP_ENTER:
+        return 287;
+    case K_KP_END:
+        return 288;
+    case K_KP_DOWNARROW:
+        return 289;
+    case K_KP_PGDN:
+        return 290;
+    case K_KP_LEFTARROW:
+        return 291;
+    case K_KP_5:
+        return 292;
+    case K_KP_RIGHTARROW:
+        return 293;
+    case K_KP_HOME:
+        return 294;
+    case K_KP_UPARROW:
+        return 295;
+    case K_KP_PGUP:
+        return 296;
+    case K_KP_INS:
+        return 297;
+    case K_KP_DEL:
+        return 298;
+    case K_CTRL:
+    case K_LCTRL:
+        return 299;
+    case K_SHIFT:
+    case K_LSHIFT:
+        return 300;
+    case K_ALT:
+    case K_LALT:
+        return 301;
+    case K_RCTRL:
+        return 302;
+    case K_RSHIFT:
+        return 303;
+    case K_RALT:
+        return 304;
+    default:
+        break;
+    }
+
+    if (keynum >= K_ASCIIFIRST && keynum <= K_ASCIILAST)
+        return keynum;
+
+    return -1;
+}
+
+static bool SCR_BuildBindIconPath(int keynum, char *out_path, size_t out_size)
+{
+    int mouse_icon = SCR_MapKeynumToMouseIcon(keynum);
+    if (mouse_icon >= 0) {
+        Q_snprintf(out_path, out_size, "/gfx/controller/mouse/f000%i.png", mouse_icon);
+        return true;
+    }
+
+    int key_icon = SCR_MapKeynumToKeyboardIcon(keynum);
+    if (key_icon >= 0) {
+        Q_snprintf(out_path, out_size, "/gfx/controller/keyboard/%i.png", key_icon);
+        return true;
+    }
+
+    return false;
+}
+
+bool SCR_GetBindIconForKey(int keynum, qhandle_t *pic, int *w, int *h)
+{
+    if (keynum < 0 || keynum > 255)
+        return false;
+
+    bind_icon_cache_t *entry = &scr_bind_icon_cache[keynum];
+    if (!entry->tried) {
+        entry->tried = true;
+        char path[MAX_QPATH];
+
+        if (SCR_BuildBindIconPath(keynum, path, sizeof(path))) {
+            entry->pic = R_RegisterPic(path);
+            if (entry->pic) {
+                R_GetPicSize(&entry->w, &entry->h, entry->pic);
+            }
+        }
+
+        if (!entry->pic || entry->w <= 0 || entry->h <= 0) {
+            entry->pic = 0;
+            entry->w = 0;
+            entry->h = 0;
+        }
+    }
+
+    if (!entry->pic)
+        return false;
+
+    if (pic)
+        *pic = entry->pic;
+    if (w)
+        *w = entry->w;
+    if (h)
+        *h = entry->h;
+
+    return true;
+}
+
+int SCR_DrawBindIcon(const char *binding, int x, int y, int size, color_t color, const char **out_keyname)
+{
+    if (out_keyname)
+        *out_keyname = NULL;
+
+    if (!binding || !*binding)
+        return 0;
+
+    int keynum = Key_EnumBindings(0, binding);
+    if (keynum < 0)
+        return 0;
+
+    if (out_keyname)
+        *out_keyname = Key_KeynumToString(keynum);
+
+    qhandle_t pic;
+    int w, h;
+    if (!SCR_GetBindIconForKey(keynum, &pic, &w, &h))
+        return 0;
+
+    int draw_h = max(1, size);
+    float scale = h > 0 ? ((float)draw_h / (float)h) : 1.0f;
+    int draw_w = max(1, Q_rint(w * scale));
+
+    R_DrawStretchPic(x, y, draw_w, draw_h, color, pic);
+    return draw_w;
+}
+
 
 /*
 =================

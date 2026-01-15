@@ -353,15 +353,48 @@ static int32_t CG_SCR_DrawBind(int32_t isplit, const char *binding, const char *
      * - 'purpose' is a string describing what that action/key does. Needs localization.
      * - Rerelease has some fancy graphics for keys and such. We ... don't ¯\_(ツ)_/¯
      */
-    const char *key = Key_GetBinding(binding);
+    const char *key_name = NULL;
+    color_t draw_color = apply_scr_alpha(rgba_white);
+    int line_height = max(1, Q_rint(CG_SCR_FontLineHeight(scale)));
+    int icon_size = max(1, Q_rint(line_height * 3.0f));
+    int padding = max(2, icon_size / 6);
+    int keynum = Key_EnumBindings(0, binding);
+    qhandle_t icon = 0;
+    int icon_w = 0;
+    int icon_h = 0;
 
+    if (keynum >= 0) {
+        key_name = Key_KeynumToString(keynum);
+        if (SCR_GetBindIconForKey(keynum, &icon, &icon_w, &icon_h)) {
+            float icon_scale = icon_h > 0 ? ((float)icon_size / (float)icon_h) : 1.0f;
+            icon_w = max(1, Q_rint(icon_w * icon_scale));
+        } else {
+            icon = 0;
+            icon_w = 0;
+        }
+    }
+
+    const char *purpose_text = CG_Localize(purpose, NULL, 0);
     char str[MAX_STRING_CHARS];
-    if (!*key)
-        Q_snprintf(str, sizeof(str), "<unbound> %s", CG_Localize(purpose, NULL, 0));
+    if (!key_name || !*key_name)
+        Q_snprintf(str, sizeof(str), "<unbound> %s", purpose_text);
+    else if (icon_w > 0)
+        Q_snprintf(str, sizeof(str), "%s", purpose_text);
     else
-        Q_snprintf(str, sizeof(str), "[%s] %s", key, CG_Localize(purpose, NULL, 0));
-    CG_SCR_DrawFontString(str, x, y, scale, &rgba_white, false, CENTER);
-    return CONCHAR_HEIGHT;
+        Q_snprintf(str, sizeof(str), "[%s] %s", key_name, purpose_text);
+
+    int text_w = CG_SCR_MeasureFontString(str, scale).x;
+    int total_w = text_w + (icon_w > 0 ? icon_w + padding : 0);
+    int start_x = x - (total_w / 2);
+    int text_x = start_x + (icon_w > 0 ? icon_w + padding : 0);
+
+    if (icon_w > 0) {
+        int icon_y = y - ((icon_size - line_height) / 2);
+        R_DrawStretchPic(start_x, icon_y, icon_w, icon_size, draw_color, icon);
+    }
+
+    CG_SCR_DrawFontString(str, text_x, y, scale, &rgba_white, false, LEFT);
+    return max(line_height, icon_size);
 }
 
 static bool CG_CL_InAutoDemoLoop(void)

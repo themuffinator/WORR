@@ -201,6 +201,8 @@ typedef struct {
     const cl_wheel_icon_t *icons;
 
     // cached data
+    float   popout;
+    float   icon_scale;
     float   angle;
     vec2_t  dir;
     float   dot;
@@ -444,6 +446,7 @@ typedef struct {
 
         int         selected; // -1 = no selection
         int         deselect_time; // if non-zero, deselect after < com_localTime
+        int         input_block_until; // ignore input until < com_localTime
     } wheel;
 
     int weapon_lock_time; // don't allow BUTTON_ATTACK within this time
@@ -932,6 +935,9 @@ void CL_Wheel_Precache(void);
 void CL_Wheel_Init(void);
 void CL_Wheel_Open(bool powerup);
 void CL_Wheel_Close(bool released);
+bool CL_Wheel_Attack(void);
+bool CL_Wheel_DropWeapon(void);
+bool CL_Wheel_DropAmmo(void);
 void CL_Wheel_Input(int x, int y);
 void CL_Wheel_Draw(void);
 void CL_Wheel_Update(void);
@@ -1254,6 +1260,8 @@ float   SCR_FadeAlpha(unsigned startTime, unsigned visTime, unsigned fadeTime);
 int     SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawKStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, const kfont_t *kfont);
+bool    SCR_GetBindIconForKey(int keynum, qhandle_t *pic, int *w, int *h);
+int     SCR_DrawBindIcon(const char *binding, int x, int y, int size, color_t color, const char **out_keyname);
 
 #define SCR_DrawString(x, y, flags, color, string) \
     SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string, color, scr.font_pic)

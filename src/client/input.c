@@ -385,6 +385,9 @@ static void IN_StrafeUp(void) { KeyUp(&in_strafe); }
 
 static void IN_AttackDown(void)
 {
+    if (CL_Wheel_Attack())
+        return;
+
     KeyDown(&in_attack);
     CL_CheckInstantPacket();
 }
@@ -815,7 +818,7 @@ void CL_FinalizeCmd(void)
 //
 // figure button bits
 //
-    if (in_attack.state & 3 && cl.weapon_lock_time <= cl.time)
+    if (in_attack.state & 3 && cl.weapon_lock_time <= cl.time && cl.wheel.state != WHEEL_OPEN)
         cl.cmd.buttons |= BUTTON_ATTACK;
     if (in_use.state & 3)
         cl.cmd.buttons |= BUTTON_USE;
