@@ -148,9 +148,8 @@ static bool Loc_Parse(loc_string_t *loc)
                 arg->end = arg_end + 1;
                 break;
             }
-        }
-
-        arg_rover++;
+        } else
+            arg_rover++;
     }
 
     if (loc->num_arguments) {
