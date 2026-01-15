@@ -33,6 +33,7 @@ cvar_t  *cl_gunfov;
 cvar_t  *cl_gun_x;
 cvar_t  *cl_gun_y;
 cvar_t  *cl_gun_z;
+cvar_t  *cl_weaponBar;
 cvar_t  *cl_warn_on_fps_rounding;
 cvar_t  *cl_maxfps;
 cvar_t  *cl_async;
@@ -2763,6 +2764,7 @@ static void CL_InitLocal(void)
     CL_InitEffects();
     CL_InitTEnts();
     CL_InitDownloads();
+    CL_WeaponBar_Init();
     CL_Wheel_Init();
     CL_GTV_Init();
 
@@ -2783,6 +2785,7 @@ static void CL_InitLocal(void)
     cl_gun_x = Cvar_Get("cl_gun_x", "0", 0);
     cl_gun_y = Cvar_Get("cl_gun_y", "0", 0);
     cl_gun_z = Cvar_Get("cl_gun_z", "0", 0);
+    cl_weaponBar = Cvar_Get("cl_weaponBar", "5", CVAR_ARCHIVE);
     cl_footsteps = Cvar_Get("cl_footsteps", "1", 0);
     cl_footsteps->changed = cl_footsteps_changed;
     cl_noskins = Cvar_Get("cl_noskins", "0", 0);

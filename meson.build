@@ -146,6 +146,7 @@ client_src = [
   'src/client/sound/sound.h',
   'src/client/tent.c',
   'src/client/view.c',
+  'src/client/weapon_bar.c',
   'src/client/wheel.c',
   'src/client/client.h',
   'src/client/cgame_classic.h',

@@ -415,7 +415,7 @@ typedef struct {
         int                num_powerups;
     } wheel_data;
 
-    // carousel state
+    // weapon bar state
     struct {
         cl_wheel_state_t state;
         int              close_time; // time when we will close
@@ -427,7 +427,7 @@ typedef struct {
             int     item_index;
         } slots[MAX_WHEEL_ITEMS * 2];
         size_t      num_slots;
-    } carousel;
+    } weapon_bar;
 
     // weapon wheel state
     struct {
@@ -685,6 +685,7 @@ extern cvar_t   *cl_gunfov;
 extern cvar_t   *cl_gun_x;
 extern cvar_t   *cl_gun_y;
 extern cvar_t   *cl_gun_z;
+extern cvar_t   *cl_weaponBar;
 extern cvar_t   *cl_predict;
 extern cvar_t   *cl_footsteps;
 extern cvar_t   *cl_noskins;
@@ -925,12 +926,17 @@ void V_AddLightStyle(int style, float value);
 void CL_UpdateBlendSetting(void);
 void V_FogParamsChanged(unsigned bits, unsigned color_bits, unsigned hf_start_color_bits, unsigned hf_end_color_bits, const cl_fog_params_t *params, int time);
 
+// weapon_bar.c
+void CL_WeaponBar_Draw(void);
+void CL_WeaponBar_Input(void);
+void CL_WeaponBar_ClearInput(void);
+void CL_WeaponBar_Cycle(int offset);
+void CL_WeaponBar_Precache(void);
+void CL_WeaponBar_Init(void);
+
 // wheel.c
 void CL_Wheel_WeapNext(void);
 void CL_Wheel_WeapPrev(void);
-void CL_Carousel_Draw(void);
-void CL_Carousel_Input(void);
-void CL_Carousel_ClearInput(void);
 void CL_Wheel_Precache(void);
 void CL_Wheel_Init(void);
 void CL_Wheel_Open(bool powerup);
@@ -1232,7 +1238,7 @@ typedef struct {
     
     kfont_t     kfont;
 
-    qhandle_t   carousel_selected;
+    qhandle_t   weapon_bar_selected;
     qhandle_t   wheel_circle;
     int         wheel_size;
     qhandle_t   wheel_button;

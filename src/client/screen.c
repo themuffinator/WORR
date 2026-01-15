@@ -2521,7 +2521,7 @@ static void SCR_Draw2D(void)
                         hud_rect.height * scr_safe_zone->value};
     cgame->DrawHUD(0, &cl.cgame_data, hud_rect, hud_safe, 1, 0, &cl.frame.ps);
 
-    CL_Carousel_Draw();
+    CL_WeaponBar_Draw();
 
     CL_Wheel_Draw();
 

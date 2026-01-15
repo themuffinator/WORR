@@ -643,6 +643,7 @@ void CL_PrepRenderer(void)
     
     cgame->TouchPics();
 
+    CL_WeaponBar_Precache();
     CL_Wheel_Precache();
 
     CL_LoadState(LOAD_CLIENTS);

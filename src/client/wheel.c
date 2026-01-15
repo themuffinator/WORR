@@ -19,25 +19,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include "common/loc.h"
 
-/* Draw item/ammo count for carousel and weapons/items wheel.
- * Notably, the count should be drawn a bit smaller than usual
- * text, but never below 100% */
-static void draw_count(int x, int y, float scale, int flags, color_t color, int value)
-{
-    // Compute an integer text scale factor
-    int scale_factor = ((1.f / scr.hud_scale) * scale) + 0.5f;
-    if (scale_factor < 1)
-        scale_factor = 1;
-
-    // Scale manually, as SCR_DrawStringStretch() can't scale below 100%
-    R_SetScale(1.f / scale_factor);
-
-    float coord_scale = 1.f / (scale_factor * scr.hud_scale);
-    SCR_DrawString(x * coord_scale, y * coord_scale, flags, color, va("%i", value));
-
-    R_SetScale(scr.hud_scale);
-}
-
 static void draw_scaled_string(int x, int y, float scale, int flags, color_t color, const char *text)
 {
     if (!text || !*text)
@@ -105,203 +86,11 @@ static void draw_wheel_sb_number(int x, int y, float height, float alpha, int va
     }
 }
 
-static cvar_t *wc_screen_frac_y;
-static cvar_t *wc_timeout;
-static cvar_t *wc_lock_time;
-static cvar_t *wc_ammo_scale;
-
-static void CL_Carousel_Close(void)
-{
-    cl.carousel.state = WHEEL_CLOSED;
-}
-
-// populate slot list with stuff we own.
-// runs every frame and when we open the carousel.
-static bool CL_Carousel_Populate(void)
-{
-    int i;
-
-    cl.carousel.num_slots = 0;
-
-    int owned = cgame->GetOwnedWeaponWheelWeapons(&cl.frame.ps);
-
-    for (i = 0; i < cl.wheel_data.num_weapons; i++) {
-        if (!(owned & BIT(i)))
-            continue;
-
-        cl.carousel.slots[cl.carousel.num_slots].data_id = i;
-        cl.carousel.slots[cl.carousel.num_slots].has_ammo = cl.wheel_data.weapons[i].ammo_index == -1 || cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, cl.wheel_data.weapons[i].ammo_index);
-        cl.carousel.slots[cl.carousel.num_slots].item_index = cl.wheel_data.weapons[i].item_index;
-        cl.carousel.num_slots++;
-    }
-
-    // todo: sort by sort_id
-
-    // todo: cl.wheel.powerups
-
-    if (!cl.carousel.num_slots)
-        return false;
-
-    // check that we still have the item being selected
-    if (cl.carousel.selected == -1) {
-        cl.carousel.selected = cl.carousel.slots[0].item_index;
-    } else {
-        for (i = 0; i < cl.carousel.num_slots; i++)
-            if (cl.carousel.slots[i].item_index == cl.carousel.selected)
-                break;
-    }
-
-    if (i == cl.carousel.num_slots) {
-        // TODO: maybe something smarter?
-        return false;
-    }
-
-    return true;
-}
-
-static void CL_Carousel_Open(void)
-{
-    if (cl.carousel.state == WHEEL_CLOSED) {
-        cl.carousel.selected = (cl.frame.ps.stats[STAT_ACTIVE_WEAPON] == -1) ? -1 : cl.wheel_data.weapons[cl.frame.ps.stats[STAT_ACTIVE_WEAPON]].item_index;
-    }
-
-    cl.carousel.state = WHEEL_OPEN;
-
-    if (!CL_Carousel_Populate()) {
-        CL_Carousel_Close();
-    }
-}
-
-#define CAROUSEL_ICON_SIZE (24 + 2)
-#define CAROUSEL_PAD       2
-
 static void R_DrawStretchPicShadowAlpha(int x, int y, int w, int h, qhandle_t pic, int shadow_offset, float alpha)
 {
     R_DrawStretchPic(x + shadow_offset, y + shadow_offset, w, h, COLOR_SETA_F(COLOR_BLACK, alpha), pic);
     R_DrawStretchPic(x, y, w, h, COLOR_SETA_F(COLOR_WHITE, alpha), pic);
 }
-
-static void R_DrawPicShadow(int x, int y, qhandle_t pic, int shadow_offset)
-{
-    R_DrawPic(x + shadow_offset, y + shadow_offset, COLOR_BLACK, pic);
-    R_DrawPic(x, y, COLOR_WHITE, pic);
-}
-
-void CL_Carousel_Draw(void)
-{
-    if (cl.carousel.state != WHEEL_OPEN)
-        return;
-
-    int carousel_w = cl.carousel.num_slots * (CAROUSEL_ICON_SIZE + CAROUSEL_PAD);
-    int center_x = scr.hud_width / 2;
-    int carousel_x = center_x - (carousel_w / 2);
-    int carousel_y = (int) (scr.hud_height * wc_screen_frac_y->value);
-    
-    for (int i = 0; i < cl.carousel.num_slots; i++, carousel_x += CAROUSEL_ICON_SIZE + CAROUSEL_PAD) {
-        bool selected = cl.carousel.selected == cl.carousel.slots[i].item_index;
-        const cl_wheel_weapon_t *weap = &cl.wheel_data.weapons[cl.carousel.slots[i].data_id];
-        const cl_wheel_icon_t *icons = &weap->icons;
-
-        R_DrawPicShadow(carousel_x, carousel_y, selected ? icons->selected : icons->wheel, 2);
-        
-        if (selected) {
-            R_DrawPic(carousel_x - 1, carousel_y - 1, COLOR_WHITE, scr.carousel_selected);
-            
-            char localized[CS_MAX_STRING_LENGTH];
-
-            // TODO: cache localized item names in cl somewhere.
-            // make sure they get reset of language is changed.
-            Loc_Localize(cl.configstrings[cl.csr.items + cl.carousel.slots[i].item_index], false, NULL, 0, localized, sizeof(localized));
-
-            SCR_DrawString(center_x, carousel_y - 16, UI_CENTER | UI_DROPSHADOW, COLOR_WHITE, localized);
-        }
-
-        if (weap->ammo_index >= 0) {
-            int count = cgame->GetWeaponWheelAmmoCount(&cl.frame.ps, weap->ammo_index);
-            color_t color;
-            if (count <= weap->quantity_warn)
-                color = selected ? COLOR_RGB(255, 83, 83) : COLOR_RED;
-            else
-                color = selected ? COLOR_RGB(255, 255, 83) : COLOR_WHITE;
-
-            draw_count(carousel_x + (CAROUSEL_ICON_SIZE / 2), carousel_y + CAROUSEL_ICON_SIZE + 2, wc_ammo_scale->value, UI_DROPSHADOW | UI_CENTER, color, count);
-        }
-    }
-}
-
-void CL_Carousel_ClearInput(void)
-{
-    if (cl.carousel.state == WHEEL_CLOSING) {
-        cl.carousel.state = WHEEL_CLOSED;
-        cl.carousel.close_time = com_localTime3 + (cl.frametime.time * 2);
-    }
-}
-
-void CL_Carousel_Input(void)
-{
-    if (cl.carousel.state != WHEEL_OPEN) {
-        if (cl.carousel.state == WHEEL_CLOSING && com_localTime3 >= cl.carousel.close_time)
-            cl.carousel.state = WHEEL_CLOSED;
-
-        return;
-    }
-
-    if (!CL_Carousel_Populate()) {
-        CL_Carousel_Close();
-        return;
-    }
-
-    // always holster while open
-    cl.cmd.buttons |= BUTTON_HOLSTER;
-
-    if (com_localTime3 >= cl.carousel.close_time || (cl.cmd.buttons & BUTTON_ATTACK)) {
-
-        // already using this weapon
-        if (cl.carousel.selected == cl.wheel_data.weapons[cl.frame.ps.stats[STAT_ACTIVE_WEAPON]].item_index) {
-            CL_Carousel_Close();
-            return;
-        }
-
-        // switch
-        CL_ClientCommand(va("use_index_only %i\n", cl.carousel.selected));
-        cl.carousel.state = WHEEL_CLOSING;
-
-        cl.weapon_lock_time = cl.time + wc_lock_time->integer;
-    }
-}
-
-static void CL_Wheel_Cycle(int offset)
-{
-    if (cl.wheel.state != WHEEL_OPEN) {
-        CL_Carousel_Open();
-    } else if (!CL_Carousel_Populate()) {
-        CL_Carousel_Close();
-        return;
-    }
-
-    // TODO this is ugly :(
-    for (int i = 0; i < cl.carousel.num_slots; i++)
-        if (cl.carousel.slots[i].item_index == cl.carousel.selected) {
-
-            for (int n = 0, o = i + offset; n < cl.carousel.num_slots - 1; n++, o += offset) {
-                if (o < 0)
-                    o = cl.carousel.num_slots - 1;
-                else if (o >= cl.carousel.num_slots)
-                    o = 0;
-
-                if (!cl.carousel.slots[o].has_ammo)
-                    continue;
-
-                cl.carousel.selected = cl.carousel.slots[o].item_index;
-                break;
-            }
-
-            break;
-        }
-
-    cl.carousel.close_time = com_localTime3 + wc_timeout->integer;
-}
-
 static const cl_wheel_slot_t *CL_Wheel_GetSelectedSlot(void)
 {
     if (cl.wheel.selected < 0 || cl.wheel.selected >= (int)cl.wheel.num_slots)
@@ -442,7 +231,7 @@ void CL_Wheel_WeapNext(void)
     if (CL_Wheel_DropWeapon())
         return;
 
-    CL_Wheel_Cycle(1);
+    CL_WeaponBar_Cycle(1);
 }
 
 void CL_Wheel_WeapPrev(void)
@@ -450,7 +239,7 @@ void CL_Wheel_WeapPrev(void)
     if (CL_Wheel_DropAmmo())
         return;
 
-    CL_Wheel_Cycle(-1);
+    CL_WeaponBar_Cycle(-1);
 }
 
 static cvar_t *ww_ammo_size;
@@ -1288,7 +1077,6 @@ void CL_Wheel_Draw(void)
 
 void CL_Wheel_Precache(void)
 {
-    scr.carousel_selected = R_RegisterPic("carousel/selected");
     scr.wheel_circle = R_RegisterPic("/gfx/weaponwheel.png");
     R_GetPicSize(&scr.wheel_size, &scr.wheel_size, scr.wheel_circle);
     scr.wheel_button = R_RegisterPic("/gfx/wheelbutton.png");
@@ -1299,11 +1087,6 @@ void CL_Wheel_Precache(void)
 
 void CL_Wheel_Init(void)
 {
-    wc_screen_frac_y = Cvar_Get("wc_screen_frac_y", "0.72", 0);
-    wc_timeout = Cvar_Get("wc_timeout", "400", 0);
-    wc_lock_time = Cvar_Get("wc_lock_time", "300", 0);
-    wc_ammo_scale = Cvar_Get("wc_ammo_scale", "0.66", 0);
-
     ww_ammo_size = Cvar_Get("ww_ammo_size", "24.0", CVAR_SERVERINFO);
     ww_arrow_offset = Cvar_Get("ww_arrow_offset", "102.0", CVAR_SERVERINFO);
     ww_controller_exit_timeout = Cvar_Get("ww_controller_exit_timeout", "150", CVAR_USERINFO);

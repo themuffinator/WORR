@@ -855,7 +855,7 @@ void CL_FinalizeCmd(void)
     cl.cmd.sidemove = move[1];
 
     // update wheels before we save it off
-    CL_Carousel_Input();
+    CL_WeaponBar_Input();
 
     // save this command off for prediction
     cl.cmdNumber++;
@@ -1278,7 +1278,7 @@ void CL_SendCmd(void)
         CL_SendDefaultCmd();
     }
     
-    CL_Carousel_ClearInput();
+    CL_WeaponBar_ClearInput();
     CL_Wheel_ClearInput();
 
     cl.sendPacketNow = false;
