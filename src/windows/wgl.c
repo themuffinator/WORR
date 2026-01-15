@@ -393,6 +393,18 @@ static void wgl_swap_interval(int val)
         print_error("wglSwapIntervalEXT");
 }
 
+static bool wgl_get_native_window(vid_native_window_t *out)
+{
+    if (!out)
+        return false;
+
+    out->platform = VID_NATIVE_WIN32;
+    out->handle.win32.hinstance = hGlobalInstance;
+    out->handle.win32.hwnd = win.wnd;
+    out->handle.win32.hdc = win.dc;
+    return true;
+}
+
 static bool wgl_probe(void)
 {
     return true;
@@ -423,4 +435,5 @@ const vid_driver_t vid_win32wgl = {
     .grab_mouse = Win_GrabMouse,
     .warp_mouse = Win_WarpMouse,
     .get_mouse_motion = Win_GetMouseMotion,
+    .get_native_window = wgl_get_native_window,
 };

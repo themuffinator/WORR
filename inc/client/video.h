@@ -18,6 +18,38 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <stdint.h>
+
+typedef enum {
+    VID_NATIVE_NONE = 0,
+    VID_NATIVE_WIN32,
+    VID_NATIVE_X11,
+    VID_NATIVE_WAYLAND,
+    VID_NATIVE_SDL,
+} vid_native_platform_t;
+
+typedef struct vid_native_window_s {
+    vid_native_platform_t platform;
+    union {
+        struct {
+            void *hinstance;
+            void *hwnd;
+            void *hdc;
+        } win32;
+        struct {
+            void *display;
+            uintptr_t window;
+        } x11;
+        struct {
+            void *display;
+            void *surface;
+        } wayland;
+        struct {
+            void *window;
+        } sdl;
+    } handle;
+} vid_native_window_t;
+
 typedef struct {
     const char *name;
 
@@ -45,6 +77,7 @@ typedef struct {
     void (*grab_mouse)(bool grab);
     void (*warp_mouse)(int x, int y);
     bool (*get_mouse_motion)(int *dx, int *dy);
+    bool (*get_native_window)(vid_native_window_t *out);
 } vid_driver_t;
 
 extern cvar_t       *vid_geometry;

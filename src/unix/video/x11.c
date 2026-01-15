@@ -923,6 +923,17 @@ static void set_clipboard_data(const char *data)
         x11.clipboard_data = Z_CopyString(data);
 }
 
+static bool x11_get_native_window(vid_native_window_t *out)
+{
+    if (!out)
+        return false;
+
+    out->platform = VID_NATIVE_X11;
+    out->handle.x11.display = x11.dpy;
+    out->handle.x11.window = (uintptr_t)x11.win;
+    return true;
+}
+
 static bool probe(void)
 {
     Display *dpy = XOpenDisplay(NULL);
@@ -961,4 +972,5 @@ const vid_driver_t vid_x11 = {
     .grab_mouse = grab_mouse,
     .warp_mouse = warp_mouse,
     .get_mouse_motion = get_mouse_motion,
+    .get_native_window = x11_get_native_window,
 };

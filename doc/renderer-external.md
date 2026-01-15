@@ -9,6 +9,7 @@
 - Meson option: `-Dexternal-renderers=true`.
 - Output name format: `<product>_<graphics_api>_<cpu><libsuffix>`.
 - Example (Windows x86_64): `worr_opengl_x86_64.dll`.
+- Vulkan example (Windows x86_64): `worr_vulkan_x86_64.dll` (requires `-Dvulkan=enabled`).
 
 ## Runtime Selection and Loading
 - New cvar: `r_renderer` (default `opengl`) chooses the renderer library name.
@@ -25,7 +26,7 @@
 - Renderer-side builds define `RENDERER_DLL` and include `renderer/renderer_api.h` for import shims.
 
 ## Renderer Rename Notes
-- Subsystem paths are now `src/renderer/` and `inc/renderer/`.
+- Subsystem paths are now `src/renderer/` (shared), `src/rend_gl/` (OpenGL), and `inc/renderer/`.
 - Refresh-specific names were updated to renderer-oriented naming (for example, `timerenderer`).
 
 ## WORR Branding

@@ -30,7 +30,7 @@ while keeping all HUD and UI elements on the same virtual scaling path.
 - `cl_crosshairSize` also scales hit marker sizing via `cl_crosshairSize / 32`.
 
 ## Files
-- `src/renderer/draw.c`
-- `src/renderer/state.c`
+- `src/rend_gl/draw.c`
+- `src/rend_gl/state.c`
 - `src/client/screen.c`
 - `src/client/ui/ui.c`

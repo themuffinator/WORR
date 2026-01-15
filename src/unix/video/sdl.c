@@ -621,6 +621,16 @@ static bool probe(void)
     return true;
 }
 
+static bool sdl_get_native_window(vid_native_window_t *out)
+{
+    if (!out)
+        return false;
+
+    out->platform = VID_NATIVE_SDL;
+    out->handle.sdl.window = sdl.window;
+    return true;
+}
+
 const vid_driver_t vid_sdl = {
     .name = "sdl",
 
@@ -647,4 +657,5 @@ const vid_driver_t vid_sdl = {
     .grab_mouse = grab_mouse,
     .warp_mouse = warp_mouse,
     .get_mouse_motion = get_mouse_motion,
+    .get_native_window = sdl_get_native_window,
 };

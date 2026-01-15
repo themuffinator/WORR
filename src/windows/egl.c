@@ -172,6 +172,18 @@ static void egl_swap_interval(int val)
         print_error("eglSwapInterval");
 }
 
+static bool egl_get_native_window(vid_native_window_t *out)
+{
+    if (!out)
+        return false;
+
+    out->platform = VID_NATIVE_WIN32;
+    out->handle.win32.hinstance = hGlobalInstance;
+    out->handle.win32.hwnd = win.wnd;
+    out->handle.win32.hdc = win.dc;
+    return true;
+}
+
 static bool egl_probe(void)
 {
     return os_access("libEGL.dll", X_OK) == 0;
@@ -202,4 +214,5 @@ const vid_driver_t vid_win32egl = {
     .grab_mouse = Win_GrabMouse,
     .warp_mouse = Win_WarpMouse,
     .get_mouse_motion = Win_GetMouseMotion,
+    .get_native_window = egl_get_native_window,
 };

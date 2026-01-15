@@ -302,6 +302,10 @@ static const char *R_NormalizeRendererName(const char *name)
         return "opengl";
     }
 
+    if (!Q_strcasecmp(name, "vk")) {
+        return "vulkan";
+    }
+
     return name;
 }
 
@@ -681,6 +685,9 @@ static void R_UnloadExternalRenderer(void)
 static void r_renderer_g(genctx_t *ctx)
 {
     Prompt_AddMatch(ctx, "opengl");
+#if USE_VULKAN
+    Prompt_AddMatch(ctx, "vulkan");
+#endif
 }
 #endif
 

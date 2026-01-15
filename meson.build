@@ -191,28 +191,34 @@ ui_src = [
 ]
 
 renderer_src = [
-  'src/renderer/draw.c',
-  'src/renderer/hq2x.c',
-  'src/renderer/images.c',
-  'src/renderer/legacy.c',
-  'src/renderer/main.c',
-  'src/renderer/mesh.c',
-  'src/renderer/models.c',
-  'src/renderer/qgl.c',
-  'src/renderer/shader.c',
-  'src/renderer/sky.c',
-  'src/renderer/state.c',
-  'src/renderer/surf.c',
-  'src/renderer/tess.c',
-  'src/renderer/texture.c',
-  'src/renderer/world.c',
-  'src/renderer/debug.c',
-  'src/renderer/debug_text.c',
-  'src/renderer/arbfp.h',
-  'src/renderer/gl.h',
-  'src/renderer/images.h',
-  'src/renderer/qgl.h',
+  'src/rend_gl/draw.c',
+  'src/rend_gl/hq2x.c',
+  'src/rend_gl/images.c',
+  'src/rend_gl/legacy.c',
+  'src/rend_gl/main.c',
+  'src/rend_gl/mesh.c',
+  'src/rend_gl/models.c',
+  'src/rend_gl/qgl.c',
+  'src/rend_gl/shader.c',
+  'src/rend_gl/sky.c',
+  'src/rend_gl/state.c',
+  'src/rend_gl/surf.c',
+  'src/rend_gl/tess.c',
+  'src/rend_gl/texture.c',
+  'src/rend_gl/world.c',
+  'src/rend_gl/debug.c',
+  'src/rend_gl/debug_text.c',
+  'src/rend_gl/arbfp.h',
+  'src/rend_gl/gl.h',
+  'src/rend_gl/images.h',
+  'src/rend_gl/qgl.h',
 
+  'inc/renderer/renderer.h',
+]
+
+renderer_vk_src = [
+  'src/rend_vk/vk_main.c',
+  'src/rend_vk/vk_local.h',
   'inc/renderer/renderer.h',
 ]
 
@@ -450,6 +456,8 @@ if win32
   khr_headers_dep = [subproject('khr-headers').get_variable('khr_headers_dep')]
 endif
 
+vulkan = dependency('vulkan', required: get_option('vulkan'))
+
 common_deps = [zlib]
 client_deps = [png, curl, sdl3]
 server_deps = []
@@ -648,12 +656,11 @@ if get_option('tests')
 endif
 
 renderer_engine_src = renderer_src
-renderer_lib = []
+renderer_gl_lib = []
+renderer_vk_lib = []
 
 if get_option('external-renderers')
   renderer_engine_src = []
-  renderer_lib_src = renderer_src + ['src/renderer/renderer_api.c']
-  renderer_lib_name = meson.project_name() + '_opengl_' + cpu
 
   renderer_deps = []
   if zlib.found()
@@ -669,7 +676,9 @@ if get_option('external-renderers')
 
   renderer_c_args = ['-DUSE_CLIENT=1', '-DUSE_REF=1', '-DRENDERER_DLL'] + engine_args
 
-  renderer_lib = shared_library(renderer_lib_name, renderer_lib_src,
+  renderer_gl_lib_src = renderer_src + ['src/renderer/renderer_api.c']
+  renderer_gl_lib_name = meson.project_name() + '_opengl_' + cpu
+  renderer_gl_lib = shared_library(renderer_gl_lib_name, renderer_gl_lib_src,
     dependencies:          renderer_deps,
     include_directories:   ['inc', 'q2proto/inc'],
     gnu_symbol_visibility: 'hidden',
@@ -679,6 +688,21 @@ if get_option('external-renderers')
     install:               true,
     install_dir:           libdir,
   )
+
+  if vulkan.found()
+    renderer_vk_lib_src = renderer_vk_src + ['src/renderer/renderer_api.c']
+    renderer_vk_lib_name = meson.project_name() + '_vulkan_' + cpu
+    renderer_vk_lib = shared_library(renderer_vk_lib_name, renderer_vk_lib_src,
+      dependencies:          renderer_deps + [vulkan],
+      include_directories:   ['inc', 'q2proto/inc'],
+      gnu_symbol_visibility: 'hidden',
+      link_args:             dll_link_args,
+      c_args:                renderer_c_args + ['-DRENDERER_VULKAN'],
+      name_prefix:           '',
+      install:               true,
+      install_dir:           libdir,
+    )
+  endif
 endif
 
 if get_option('game-abi-hack').require(x86 and cc.get_id() == 'gcc' and cc.has_argument('-mstackrealign')).allowed()
@@ -756,6 +780,7 @@ config.set10('USE_AUTOREPLY',     get_option('auto-reply'))
 config.set10('USE_DEBUG',         get_option('debug'))
 config.set10('USE_FPS',           get_option('variable-fps'))
 config.set10('USE_GLES',          get_option('opengl-es1'))
+config.set10('USE_VULKAN',        vulkan.found())
 config.set10('USE_ICMP',          get_option('icmp-errors').require(win32 or cc.has_header('linux/errqueue.h')).allowed())
 config.set10('USE_EXTERNAL_RENDERERS', get_option('external-renderers'))
 config.set10('USE_MD3',           get_option('md3'))

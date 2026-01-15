@@ -1,7 +1,7 @@
 # External Renderer Build Fixes
 
 ## Windows OpenGL Headers
-- The external renderer uses `src/renderer/qgl.h`, which includes `GL/glext.h`.
+- The external renderer uses `src/rend_gl/qgl.h`, which includes `GL/glext.h`.
 - On Windows, the engine target already pulled `khr-headers`, but the external renderer target did not, so the DLL build failed with missing OpenGL headers.
 
 ### Change
@@ -44,7 +44,7 @@
 - Import macros in `renderer_api.h` can rewrite common header declarations if included too early.
 
 ### Change
-- Moved the `renderer/renderer_api.h` include in `src/renderer/images.c` after common headers.
+- Moved the `renderer/renderer_api.h` include in `src/rend_gl/images.c` after common headers.
 
 ### Impact
 - Prevents macro expansion in `common/common.h` while still mapping imports for the renderer DLL.

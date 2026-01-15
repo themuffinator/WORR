@@ -1173,6 +1173,17 @@ ENTRY POINT
 ===============================================================================
 */
 
+static bool wl_get_native_window(vid_native_window_t *out)
+{
+    if (!out)
+        return false;
+
+    out->platform = VID_NATIVE_WAYLAND;
+    out->handle.wayland.display = wl.display;
+    out->handle.wayland.surface = wl.surface;
+    return true;
+}
+
 static bool probe(void)
 {
     struct wl_display *dpy = wl_display_connect(NULL);
@@ -1210,4 +1221,5 @@ const vid_driver_t vid_wayland = {
     .grab_mouse = grab_mouse,
     .warp_mouse = warp_mouse,
     .get_mouse_motion = get_mouse_motion,
+    .get_native_window = wl_get_native_window,
 };

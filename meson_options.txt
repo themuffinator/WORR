@@ -116,6 +116,11 @@ option('opengl-es1',
   value: false,
   description: 'Build OpenGL ES 1 compatible renderer')
 
+option('vulkan',
+  type: 'feature',
+  value: 'auto',
+  description: 'Build Vulkan renderer')
+
 option('packetdup-hack',
   type: 'boolean',
   value: false,

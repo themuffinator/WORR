@@ -25,7 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/tests.h"
 #include "common/utils.h"
 #include "renderer/renderer.h"
-#include "renderer/images.h"
+#include "../rend_gl/images.h"
 #include "system/system.h"
 #include "client/client.h"
 #include "client/sound/sound.h"

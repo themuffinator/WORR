@@ -76,6 +76,9 @@ static const char *Com_GetFeatures(void)
 #if USE_SDL
     "sdl3 "
 #endif
+#if USE_VULKAN
+    "vulkan "
+#endif
 #if USE_SNDDMA
     "software-sound "
 #endif
