@@ -327,6 +327,9 @@ R_DrawSkyBox
 */
 void R_DrawSkyBox(void)
 {
+    if (r_fastsky && r_fastsky->integer)
+        return;
+
     // check for no sky at all
     if (!skyfaces)
         return; // nothing visible

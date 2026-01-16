@@ -75,7 +75,7 @@ void GL_ForceCubemap(GLuint texnum)
 
 void GL_BindCubemap(GLuint texnum)
 {
-    if (!gl_drawsky->integer)
+    if (!gl_drawsky->integer || (r_fastsky && r_fastsky->integer))
         texnum = TEXNUM_CUBEMAP_BLACK;
 
     if (gls.texnumcube == texnum)

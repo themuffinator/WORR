@@ -198,6 +198,7 @@ static void add_light_styles(mface_t *surf)
     const byte *src;
     float *bl;
     int i, j, size = surf->lm_width * surf->lm_height;
+    int shift = gl_static.lightmap_shift;
 
     if (!surf->numstyles) {
         // should this ever happen?
@@ -210,12 +211,23 @@ static void add_light_styles(mface_t *surf)
 
     src = surf->lightmap;
     bl = blocklights;
-    if (style->white == 1) {
-        for (j = 0; j < size; j++, bl += 3, src += 3)
-            VectorCopy(src, bl);
+    if (!shift) {
+        if (style->white == 1) {
+            for (j = 0; j < size; j++, bl += 3, src += 3)
+                VectorCopy(src, bl);
+        } else {
+            for (j = 0; j < size; j++, bl += 3, src += 3)
+                VectorScale(src, style->white, bl);
+        }
     } else {
-        for (j = 0; j < size; j++, bl += 3, src += 3)
-            VectorScale(src, style->white, bl);
+        for (j = 0; j < size; j++, bl += 3, src += 3) {
+            vec3_t shifted;
+            GL_ShiftLightmapBytes(src, shifted);
+            if (style->white == 1)
+                VectorCopy(shifted, bl);
+            else
+                VectorScale(shifted, style->white, bl);
+        }
     }
 
     surf->stylecache[0] = style->white;
@@ -225,8 +237,16 @@ static void add_light_styles(mface_t *surf)
         style = LIGHT_STYLE(surf->styles[i]);
 
         bl = blocklights;
-        for (j = 0; j < size; j++, bl += 3, src += 3)
-            VectorMA(bl, style->white, src, bl);
+        if (!shift) {
+            for (j = 0; j < size; j++, bl += 3, src += 3)
+                VectorMA(bl, style->white, src, bl);
+        } else {
+            for (j = 0; j < size; j++, bl += 3, src += 3) {
+                vec3_t shifted;
+                GL_ShiftLightmapBytes(src, shifted);
+                VectorMA(bl, style->white, shifted, bl);
+            }
+        }
 
         surf->stylecache[i] = style->white;
     }

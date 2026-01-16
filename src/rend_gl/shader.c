@@ -1118,7 +1118,7 @@ static void shader_setup_fog(void)
 static void shader_setup_3d(void)
 {
     gls.u_block.time = glr.fd.time;
-    gls.u_block.modulate = gl_modulate->value * gl_modulate_world->value;
+    gls.u_block.modulate = gl_modulate->value * gl_modulate_world->value * gl_static.identity_light;
     gls.u_block.add = gl_brightness->value;
     gls.u_block.intensity = gl_intensity->value;
     gls.u_block.intensity2 = gl_intensity->value * gl_glowmap_intensity->value;

@@ -124,6 +124,11 @@ typedef struct {
     uint32_t        inverse_intensity_33;
     uint32_t        inverse_intensity_66;
     uint32_t        inverse_intensity_100;
+    int             overbright_bits;
+    int             map_overbright_bits;
+    int             map_overbright_cap;
+    int             lightmap_shift;
+    float           identity_light;
     int             nolm_mask;
     int             hunk_align;
     float           sintab[256];
@@ -256,6 +261,9 @@ extern cvar_t *gl_modulate;
 extern cvar_t *gl_modulate_world;
 extern cvar_t *gl_coloredlightmaps;
 extern cvar_t *gl_lightmap_bits;
+extern cvar_t *r_overBrightBits;
+extern cvar_t *r_mapOverBrightBits;
+extern cvar_t *r_mapOverBrightCap;
 extern cvar_t *gl_brightness;
 extern cvar_t *gl_dynamic;
 extern cvar_t *gl_dlight_falloff;
@@ -277,6 +285,7 @@ extern cvar_t *gl_bloom_height;
 // development variables
 extern cvar_t *gl_znear;
 extern cvar_t *gl_drawsky;
+extern cvar_t *r_fastsky;
 extern cvar_t *gl_showtris;
 #if USE_DEBUG
 extern cvar_t *gl_nobind;
@@ -290,6 +299,7 @@ extern cvar_t *gl_clear;
 extern cvar_t *gl_novis;
 extern cvar_t *gl_lockpvs;
 extern cvar_t *gl_lightmap;
+extern cvar_t *r_lightmap;
 extern cvar_t *gl_fullbright;
 extern cvar_t *gl_vertexlight;
 extern cvar_t *gl_lightgrid;
@@ -297,6 +307,9 @@ extern cvar_t *gl_showerrors;
 extern cvar_t *gl_per_pixel_lighting; // use_shaders only
 
 extern int32_t gl_shaders_modified;
+
+void GL_UpdateOverbright(void);
+void GL_RebuildGammaTables(void);
 
 typedef enum {
     CULL_OUT,
@@ -310,6 +323,53 @@ glCullResult_t GL_CullLocalBox(const vec3_t origin, const vec3_t bounds[2]);
 
 bool GL_AllocBlock(int width, int height, uint16_t *inuse,
                    int w, int h, int *s, int *t);
+
+static inline void GL_ShiftLightmapBytes(const byte in[3], float out[3])
+{
+    int shift = gl_static.lightmap_shift;
+    int cap = gl_static.map_overbright_cap;
+
+    if (!shift) {
+        out[0] = in[0];
+        out[1] = in[1];
+        out[2] = in[2];
+        return;
+    }
+
+    int r, g, b;
+
+    if (shift > 0) {
+        r = in[0] << shift;
+        g = in[1] << shift;
+        b = in[2] << shift;
+
+        if ((r | g | b) > 255) {
+            int max = r > g ? r : g;
+            if (b > max)
+                max = b;
+            r = r * 255 / max;
+            g = g * 255 / max;
+            b = b * 255 / max;
+        }
+    } else {
+        r = in[0] >> -shift;
+        g = in[1] >> -shift;
+        b = in[2] >> -shift;
+    }
+
+    if (cap < 255) {
+        if (r > cap)
+            r = cap;
+        if (g > cap)
+            g = cap;
+        if (b > cap)
+            b = cap;
+    }
+
+    out[0] = r;
+    out[1] = g;
+    out[2] = b;
+}
 
 void GL_MultMatrix(GLfloat *restrict out, const GLfloat *restrict a, const GLfloat *restrict b);
 void GL_SetEntityAxis(void);

@@ -55,9 +55,15 @@ void GL_SampleLightPoint(vec3_t color)
         b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
         b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
 
-        temp[0] = w1 * b1[0] + w2 * b2[0] + w3 * b3[0] + w4 * b4[0];
-        temp[1] = w1 * b1[1] + w2 * b2[1] + w3 * b3[1] + w4 * b4[1];
-        temp[2] = w1 * b1[2] + w2 * b2[2] + w3 * b3[2] + w4 * b4[2];
+        vec3_t c1, c2, c3, c4;
+        GL_ShiftLightmapBytes(b1, c1);
+        GL_ShiftLightmapBytes(b2, c2);
+        GL_ShiftLightmapBytes(b3, c3);
+        GL_ShiftLightmapBytes(b4, c4);
+
+        temp[0] = w1 * c1[0] + w2 * c2[0] + w3 * c3[0] + w4 * c4[0];
+        temp[1] = w1 * c1[1] + w2 * c2[1] + w3 * c3[1] + w4 * c4[1];
+        temp[2] = w1 * c1[2] + w2 * c2[2] + w3 * c3[2] + w4 * c4[2];
 
         style = LIGHT_STYLE(surf->styles[i]);
         VectorMA(color, style->white, temp, color);
@@ -98,7 +104,9 @@ static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_
 
         for (j = 0; j < grid->numstyles && s->style != 255; j++, s++) {
             const lightstyle_t *style = LIGHT_STYLE(s->style);
-            VectorMA(samples[i], style->white, s->rgb, samples[i]);
+            vec3_t shifted;
+            GL_ShiftLightmapBytes(s->rgb, shifted);
+            VectorMA(samples[i], style->white, shifted, samples[i]);
         }
 
         // count non-occluded samples
@@ -427,7 +435,7 @@ void GL_DrawBspModel(mmodel_t *model)
 
     GL_RotateForEntity();
 
-    skymask = gl_static.use_bmodel_skies ? GLS_SKY_MASK : 0;
+    skymask = (gl_static.use_bmodel_skies && !(r_fastsky && r_fastsky->integer)) ? GLS_SKY_MASK : 0;
 
     GL_BindArrays(VA_3D);
 

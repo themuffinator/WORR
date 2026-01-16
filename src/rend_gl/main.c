@@ -45,6 +45,9 @@ cvar_t *gl_modulate;
 cvar_t *gl_modulate_world;
 cvar_t *gl_coloredlightmaps;
 cvar_t *gl_lightmap_bits;
+cvar_t *r_overBrightBits;
+cvar_t *r_mapOverBrightBits;
+cvar_t *r_mapOverBrightCap;
 cvar_t *gl_brightness;
 cvar_t *gl_dynamic;
 cvar_t *gl_dlight_falloff;
@@ -69,6 +72,7 @@ cvar_t *gl_znear;
 cvar_t *gl_drawworld;
 cvar_t *gl_drawentities;
 cvar_t *gl_drawsky;
+cvar_t *r_fastsky;
 cvar_t *gl_draworder;
 cvar_t *gl_showtris;
 cvar_t *gl_showorigins;
@@ -89,6 +93,7 @@ cvar_t *gl_finish;
 cvar_t *gl_novis;
 cvar_t *gl_lockpvs;
 cvar_t *gl_lightmap;
+cvar_t *r_lightmap;
 cvar_t *gl_fullbright;
 cvar_t *gl_vertexlight;
 cvar_t *gl_lightgrid;
@@ -97,6 +102,7 @@ cvar_t *gl_showerrors;
 cvar_t *gl_damageblend_frac;
 
 int32_t gl_shaders_modified;
+static bool gl_lightmap_syncing;
 
 // ==============================================================================
 
@@ -807,7 +813,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
     glr.framebuffer_bound = true;
 
-    if (gl_clear->integer) {
+    if (gl_clear->integer || (r_fastsky && r_fastsky->integer)) {
         if (flags & PP_BLOOM) {
             static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
             static const vec4_t black = { 0, 0, 0, 1 };
@@ -935,7 +941,7 @@ void R_BeginFrame(void)
 
     GL_Setup2D();
 
-    if (gl_clear->integer)
+    if (gl_clear->integer || (r_fastsky && r_fastsky->integer))
         qglClear(GL_COLOR_BUFFER_BIT);
 
     if (gl_showerrors->integer > 1)
@@ -1071,6 +1077,7 @@ static void gl_lightmap_changed(cvar_t *self)
     lm.add = 255 * Cvar_ClampValue(gl_brightness, -1, 1);
     lm.modulate = Cvar_ClampValue(gl_modulate, 0, 1e6f);
     lm.modulate *= Cvar_ClampValue(gl_modulate_world, 0, 1e6f);
+    lm.modulate *= gl_static.identity_light;
     if (gl_static.use_shaders && (self == gl_brightness || self == gl_modulate || self == gl_modulate_world) && !gl_vertexlight->integer)
         return;
     lm.dirty = true; // rebuild all lightmaps next frame
@@ -1080,12 +1087,70 @@ static void gl_modulate_entities_changed(cvar_t *self)
 {
     gl_static.entity_modulate = Cvar_ClampValue(gl_modulate, 0, 1e6f);
     gl_static.entity_modulate *= Cvar_ClampValue(gl_modulate_entities, 0, 1e6f);
+    gl_static.entity_modulate *= gl_static.identity_light;
 }
 
 static void gl_modulate_changed(cvar_t *self)
 {
     gl_lightmap_changed(self);
     gl_modulate_entities_changed(self);
+}
+
+static void gl_lightmap_sync(cvar_t *self)
+{
+    if (gl_lightmap_syncing)
+        return;
+
+    gl_lightmap_syncing = true;
+    if (self == r_lightmap && gl_lightmap)
+        Cvar_SetByVar(gl_lightmap, r_lightmap->string, FROM_CODE);
+    else if (self == gl_lightmap && r_lightmap)
+        Cvar_SetByVar(r_lightmap, gl_lightmap->string, FROM_CODE);
+    gl_lightmap_syncing = false;
+
+    gl_lightmap_changed(self);
+}
+
+static void gl_sync_lightmap_defaults(void)
+{
+    if (!r_lightmap || !gl_lightmap)
+        return;
+
+    if (!(r_lightmap->flags & CVAR_MODIFIED) && (gl_lightmap->flags & CVAR_MODIFIED))
+        Cvar_SetByVar(r_lightmap, gl_lightmap->string, FROM_CODE);
+    else
+        Cvar_SetByVar(gl_lightmap, r_lightmap->string, FROM_CODE);
+}
+
+void GL_UpdateOverbright(void)
+{
+    int requested = r_overBrightBits ? r_overBrightBits->integer : 0;
+    int overbright = requested < 0 ? -requested : requested;
+    int max_bits = gl_config.colorbits > 16 ? 2 : 1;
+
+    if (!(r_config.flags & QVF_GAMMARAMP))
+        overbright = 0;
+
+    if (!(r_config.flags & QVF_FULLSCREEN) && requested >= 0)
+        overbright = 0;
+
+    if (overbright > max_bits)
+        overbright = max_bits;
+
+    gl_static.overbright_bits = overbright;
+    gl_static.identity_light = 1.0f / (float)(1 << gl_static.overbright_bits);
+
+    if (r_mapOverBrightBits)
+        gl_static.map_overbright_bits = Cvar_ClampInteger(r_mapOverBrightBits, 0, 4);
+    else
+        gl_static.map_overbright_bits = 0;
+
+    if (r_mapOverBrightCap)
+        gl_static.map_overbright_cap = Cvar_ClampInteger(r_mapOverBrightCap, 0, 255);
+    else
+        gl_static.map_overbright_cap = 255;
+
+    gl_static.lightmap_shift = gl_static.map_overbright_bits - gl_static.overbright_bits;
 }
 
 // ugly hack to reset sky
@@ -1142,6 +1207,9 @@ static void GL_Register(void)
     gl_coloredlightmaps->changed = gl_lightmap_changed;
     gl_lightmap_bits = Cvar_Get("gl_lightmap_bits", "0", 0);
     gl_lightmap_bits->changed = gl_lightmap_changed;
+    r_overBrightBits = Cvar_Get("r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_FILES);
+    r_mapOverBrightBits = Cvar_Get("r_mapOverBrightBits", "0", CVAR_ARCHIVE | CVAR_FILES);
+    r_mapOverBrightCap = Cvar_Get("r_mapOverBrightCap", "255", CVAR_ARCHIVE | CVAR_FILES);
     gl_brightness = Cvar_Get("gl_brightness", "0", 0);
     gl_brightness->changed = gl_lightmap_changed;
     gl_dynamic = Cvar_Get("gl_dynamic", "1", 0);
@@ -1171,6 +1239,7 @@ static void GL_Register(void)
     gl_drawentities = Cvar_Get("gl_drawentities", "1", CVAR_CHEAT);
     gl_drawsky = Cvar_Get("gl_drawsky", "1", 0);
     gl_drawsky->changed = gl_drawsky_changed;
+    r_fastsky = Cvar_Get("r_fastsky", "0", CVAR_ARCHIVE);
     gl_draworder = Cvar_Get("gl_draworder", "1", 0);
     gl_showtris = Cvar_Get("gl_showtris", "0", CVAR_CHEAT);
     gl_showorigins = Cvar_Get("gl_showorigins", "0", CVAR_CHEAT);
@@ -1194,6 +1263,9 @@ static void GL_Register(void)
     gl_novis->changed = gl_novis_changed;
     gl_lockpvs = Cvar_Get("gl_lockpvs", "0", CVAR_CHEAT);
     gl_lightmap = Cvar_Get("gl_lightmap", "0", CVAR_CHEAT);
+    r_lightmap = Cvar_Get("r_lightmap", gl_lightmap->string, CVAR_CHEAT);
+    gl_lightmap->changed = gl_lightmap_sync;
+    r_lightmap->changed = gl_lightmap_sync;
     gl_fullbright = Cvar_Get("r_fullbright", "0", CVAR_CHEAT);
     gl_fullbright->changed = gl_lightmap_changed;
     gl_vertexlight = Cvar_Get("gl_vertexlight", "0", 0);
@@ -1203,6 +1275,8 @@ static void GL_Register(void)
     gl_showerrors = Cvar_Get("gl_showerrors", "1", 0);
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
 
+    GL_UpdateOverbright();
+    gl_sync_lightmap_defaults();
     gl_lightmap_changed(NULL);
     gl_modulate_entities_changed(NULL);
     gl_swapinterval_changed(gl_swapinterval);
@@ -1338,6 +1412,11 @@ static void GL_PostInit(void)
         gl_shaders_modified = gl_shaders->modified_count;
     }
     GL_ClearState();
+    if (r_overBrightBits) {
+        GL_UpdateOverbright();
+        gl_lightmap_changed(NULL);
+        gl_modulate_entities_changed(NULL);
+    }
     GL_InitImages();
     GL_InitQueries();
     MOD_Init();
@@ -1612,4 +1691,11 @@ void R_ModeChanged(int width, int height, int flags)
     r_config.width = width;
     r_config.height = height;
     r_config.flags = flags;
+
+    if (r_overBrightBits) {
+        GL_UpdateOverbright();
+        GL_RebuildGammaTables();
+        gl_lightmap_changed(NULL);
+        gl_modulate_entities_changed(NULL);
+    }
 }

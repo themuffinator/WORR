@@ -251,6 +251,7 @@ extern renderer_import_t ri;
 #endif
 #define Cvar_Reset ri.Cvar_Reset
 #define Cvar_Set ri.Cvar_Set
+#define Cvar_SetByVar(var, value, from) Cvar_Set((var)->name, (value))
 #define Cvar_VariableInteger ri.Cvar_VariableInteger
 #define Cvar_VariableValue ri.Cvar_VariableValue
 #define Cvar_ClampValue ri.Cvar_ClampValue
