@@ -437,11 +437,35 @@ static int SCR_MapKeynumToKeyboardIcon(int keynum)
     return -1;
 }
 
+static bool SCR_BuildGamepadIconPath(int keynum, char *out_path, size_t out_size)
+{
+    if (keynum < K_GAMEPAD_FIRST || keynum > K_GAMEPAD_LAST)
+        return false;
+
+    const char *keyname = Key_KeynumToString(keynum);
+    if (!keyname || !*keyname || keyname[0] == '<')
+        return false;
+
+    char name[MAX_QPATH];
+    Q_strlcpy(name, keyname, sizeof(name));
+    size_t len = strlen(name);
+    for (size_t i = 0; i < len; i++) {
+        name[i] = (char)Q_tolower(name[i]);
+    }
+
+    Q_snprintf(out_path, out_size, "/gfx/controller/gamepad/%s.png", name);
+    return true;
+}
+
 static bool SCR_BuildBindIconPath(int keynum, char *out_path, size_t out_size)
 {
     int mouse_icon = SCR_MapKeynumToMouseIcon(keynum);
     if (mouse_icon >= 0) {
         Q_snprintf(out_path, out_size, "/gfx/controller/mouse/f000%i.png", mouse_icon);
+        return true;
+    }
+
+    if (SCR_BuildGamepadIconPath(keynum, out_path, out_size)) {
         return true;
     }
 

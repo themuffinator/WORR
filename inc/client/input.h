@@ -25,3 +25,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 void IN_Frame(void);
 void IN_Activate(void);
 void IN_WarpMouse(int x, int y);
+
+typedef enum {
+    IN_GAMEPAD_AXIS_LEFTX,
+    IN_GAMEPAD_AXIS_LEFTY,
+    IN_GAMEPAD_AXIS_RIGHTX,
+    IN_GAMEPAD_AXIS_RIGHTY,
+    IN_GAMEPAD_AXIS_LEFT_TRIGGER,
+    IN_GAMEPAD_AXIS_RIGHT_TRIGGER,
+    IN_GAMEPAD_AXIS_COUNT
+} in_gamepad_axis_t;
+
+void IN_GamepadAxisEvent(in_gamepad_axis_t axis, int value, unsigned time);
+void IN_GamepadReset(unsigned time);
+bool IN_GamepadEnabled(void);

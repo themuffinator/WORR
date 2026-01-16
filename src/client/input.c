@@ -52,6 +52,16 @@ static cvar_t    *m_yaw;
 static cvar_t    *m_forward;
 static cvar_t    *m_side;
 
+static cvar_t    *in_gamepad;
+static cvar_t    *in_gamepad_deadzone;
+static cvar_t    *in_gamepad_look_deadzone;
+static cvar_t    *in_gamepad_trigger_threshold;
+static cvar_t    *in_gamepad_yaw;
+static cvar_t    *in_gamepad_pitch;
+static cvar_t    *in_gamepad_look_sensitivity;
+static cvar_t    *in_gamepad_invert_y;
+static cvar_t    *in_gamepad_wheel_speed;
+
 /*
 ===============================================================================
 
@@ -67,6 +77,13 @@ typedef struct {
 } in_state_t;
 
 static in_state_t   input;
+
+typedef struct {
+    float       axis[IN_GAMEPAD_AXIS_COUNT];
+    bool        trigger_down[2];
+} in_gamepad_state_t;
+
+static in_gamepad_state_t gamepad;
 
 static cvar_t    *in_enable;
 static cvar_t    *in_grab;
@@ -160,6 +177,8 @@ void IN_Shutdown(void)
         in_grab->changed = NULL;
     }
 
+    IN_GamepadReset(com_eventTime);
+
     if (vid && vid->shutdown_mouse) {
         vid->shutdown_mouse();
     }
@@ -175,6 +194,13 @@ static void in_changed_hard(cvar_t *self)
 static void in_changed_soft(cvar_t *self)
 {
     IN_Activate();
+}
+
+static void in_gamepad_changed(cvar_t *self)
+{
+    if (!self->integer) {
+        IN_GamepadReset(com_eventTime);
+    }
 }
 
 /*
@@ -200,6 +226,89 @@ void IN_Init(void)
     in_grab->changed = in_changed_soft;
 
     IN_Activate();
+}
+
+static float IN_NormalizeGamepadAxis(int value)
+{
+    if (value >= 0)
+        return (float)value / 32767.0f;
+    return (float)value / 32768.0f;
+}
+
+static float IN_NormalizeGamepadTrigger(int value)
+{
+    if (value <= 0)
+        return 0.0f;
+    return (float)value / 32767.0f;
+}
+
+static void IN_ApplyRadialDeadzone(float *x, float *y, float deadzone)
+{
+    float mag = sqrtf((*x * *x) + (*y * *y));
+
+    if (mag <= deadzone) {
+        *x = 0.0f;
+        *y = 0.0f;
+        return;
+    }
+
+    float scale = (mag - deadzone) / (1.0f - deadzone);
+    if (mag > 0.0f) {
+        scale /= mag;
+    }
+
+    *x *= scale;
+    *y *= scale;
+}
+
+static void IN_GamepadUpdateTrigger(in_gamepad_axis_t axis, unsigned time)
+{
+    if (!in_gamepad_trigger_threshold)
+        return;
+
+    float threshold = Cvar_ClampValue(in_gamepad_trigger_threshold, 0.0f, 1.0f);
+    int index = (axis == IN_GAMEPAD_AXIS_LEFT_TRIGGER) ? 0 : 1;
+    bool down = gamepad.axis[axis] >= threshold;
+
+    if (down == gamepad.trigger_down[index])
+        return;
+
+    gamepad.trigger_down[index] = down;
+    Key_Event(index == 0 ? K_LEFT_TRIGGER : K_RIGHT_TRIGGER, down, time);
+}
+
+void IN_GamepadAxisEvent(in_gamepad_axis_t axis, int value, unsigned time)
+{
+    if (!in_gamepad || !in_gamepad->integer)
+        return;
+    if (axis < 0 || axis >= IN_GAMEPAD_AXIS_COUNT)
+        return;
+
+    float normalized;
+    if (axis == IN_GAMEPAD_AXIS_LEFT_TRIGGER || axis == IN_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+        normalized = IN_NormalizeGamepadTrigger(value);
+        gamepad.axis[axis] = Q_clipf(normalized, 0.0f, 1.0f);
+        IN_GamepadUpdateTrigger(axis, time);
+        return;
+    }
+
+    normalized = IN_NormalizeGamepadAxis(value);
+    gamepad.axis[axis] = Q_clipf(normalized, -1.0f, 1.0f);
+}
+
+void IN_GamepadReset(unsigned time)
+{
+    if (gamepad.trigger_down[0])
+        Key_Event(K_LEFT_TRIGGER, false, time);
+    if (gamepad.trigger_down[1])
+        Key_Event(K_RIGHT_TRIGGER, false, time);
+
+    memset(&gamepad, 0, sizeof(gamepad));
+}
+
+bool IN_GamepadEnabled(void)
+{
+    return in_gamepad && in_gamepad->integer;
 }
 
 
@@ -495,6 +604,80 @@ static float CL_KeyState(const kbutton_t *key)
 static float autosens_x;
 static float autosens_y;
 
+static bool IN_GamepadActive(void)
+{
+    if (!in_gamepad || !in_gamepad->integer)
+        return false;
+    if (cls.key_dest & (KEY_MENU | KEY_CONSOLE | KEY_MESSAGE))
+        return false;
+    return true;
+}
+
+static void CL_GamepadMove(void)
+{
+    if (!IN_GamepadActive())
+        return;
+
+    float lx = gamepad.axis[IN_GAMEPAD_AXIS_LEFTX];
+    float ly = gamepad.axis[IN_GAMEPAD_AXIS_LEFTY];
+    float deadzone = in_gamepad_deadzone ? Cvar_ClampValue(in_gamepad_deadzone, 0.0f, 0.95f) : 0.2f;
+
+    IN_ApplyRadialDeadzone(&lx, &ly, deadzone);
+
+    float forward = -ly;
+    float side = lx;
+
+    cl.gamepadmove[0] = forward * cl_forwardspeed->value;
+    cl.gamepadmove[1] = side * cl_sidespeed->value;
+
+    if ((in_speed.state & 1) ^ cl_run->integer) {
+        cl.gamepadmove[0] *= 2.0f;
+        cl.gamepadmove[1] *= 2.0f;
+    }
+
+    cl.localmove[0] += cl.gamepadmove[0];
+    cl.localmove[1] += cl.gamepadmove[1];
+}
+
+static void CL_GamepadLook(int msec)
+{
+    if (!IN_GamepadActive())
+        return;
+    if (msec <= 0)
+        return;
+
+    float rx = gamepad.axis[IN_GAMEPAD_AXIS_RIGHTX];
+    float ry = gamepad.axis[IN_GAMEPAD_AXIS_RIGHTY];
+    float deadzone = in_gamepad_look_deadzone ? Cvar_ClampValue(in_gamepad_look_deadzone, 0.0f, 0.95f) : 0.15f;
+
+    IN_ApplyRadialDeadzone(&rx, &ry, deadzone);
+
+    if (!rx && !ry)
+        return;
+
+    bool wheel_open = cgame && cgame->Wheel_IsOpen && cgame->Wheel_IsOpen();
+    if (wheel_open && cgame->Wheel_Input) {
+        float wheel_speed = in_gamepad_wheel_speed ? Cvar_ClampValue(in_gamepad_wheel_speed, 0.0f, 10000.0f) : 0.0f;
+        if (wheel_speed > 0.0f) {
+            float frame = (float)msec * 0.001f;
+            int dx = Q_rint(rx * wheel_speed * frame);
+            int dy = Q_rint(ry * wheel_speed * frame);
+            if (dx || dy)
+                cgame->Wheel_Input(dx, dy);
+        }
+        return;
+    }
+
+    float look_scale = in_gamepad_look_sensitivity ? Cvar_ClampValue(in_gamepad_look_sensitivity, 0.0f, 10.0f) : 1.0f;
+    float yaw_speed = in_gamepad_yaw ? Cvar_ClampValue(in_gamepad_yaw, 0.0f, 1000.0f) : 140.0f;
+    float pitch_speed = in_gamepad_pitch ? Cvar_ClampValue(in_gamepad_pitch, 0.0f, 1000.0f) : 150.0f;
+    float invert = (in_gamepad_invert_y && in_gamepad_invert_y->integer) ? -1.0f : 1.0f;
+    float frame = (float)msec * 0.001f;
+
+    cl.viewangles[YAW] -= rx * yaw_speed * look_scale * frame;
+    cl.viewangles[PITCH] += ry * pitch_speed * look_scale * frame * invert;
+}
+
 /*
 ================
 CL_MouseMove
@@ -657,6 +840,7 @@ Doesn't touch command forward/side/upmove, these are filled by CL_FinalizeCmd.
 void CL_UpdateCmd(int msec)
 {
     Vector2Clear(cl.localmove);
+    Vector2Clear(cl.gamepadmove);
 
     if (sv_paused->integer) {
         return;
@@ -670,6 +854,8 @@ void CL_UpdateCmd(int msec)
 
     // get basic movement from keyboard, including jump/crouch
     CL_BaseMove(cl.localmove);
+    CL_GamepadMove();
+    CL_GamepadLook(msec);
     if (in_up.state & 3)
         cl.cmd.buttons |= BUTTON_JUMP;
     if (in_down.state & 3)
@@ -794,6 +980,17 @@ void CL_RegisterInput(void)
     m_autosens = Cvar_Get("m_autosens", "0", 0);
     m_autosens->changed = m_autosens_changed;
     m_autosens_changed(m_autosens);
+
+    in_gamepad = Cvar_Get("in_gamepad", "1", CVAR_ARCHIVE);
+    in_gamepad->changed = in_gamepad_changed;
+    in_gamepad_deadzone = Cvar_Get("in_gamepad_deadzone", "0.2", CVAR_ARCHIVE);
+    in_gamepad_look_deadzone = Cvar_Get("in_gamepad_look_deadzone", "0.15", CVAR_ARCHIVE);
+    in_gamepad_trigger_threshold = Cvar_Get("in_gamepad_trigger_threshold", "0.2", CVAR_ARCHIVE);
+    in_gamepad_yaw = Cvar_Get("in_gamepad_yaw", "140", CVAR_ARCHIVE);
+    in_gamepad_pitch = Cvar_Get("in_gamepad_pitch", "150", CVAR_ARCHIVE);
+    in_gamepad_look_sensitivity = Cvar_Get("in_gamepad_look_sensitivity", "1.0", CVAR_ARCHIVE);
+    in_gamepad_invert_y = Cvar_Get("in_gamepad_invert_y", "0", CVAR_ARCHIVE);
+    in_gamepad_wheel_speed = Cvar_Get("in_gamepad_wheel_speed", "1200", CVAR_ARCHIVE);
 }
 
 /*
@@ -854,6 +1051,10 @@ void CL_FinalizeCmd(void)
     // get basic movement from keyboard
     CL_BaseMove(move);
 
+    // add gamepad forward/side movement
+    move[0] += cl.gamepadmove[0];
+    move[1] += cl.gamepadmove[1];
+
     // add mouse forward/side movement
     move[0] += cl.mousemove[0];
     move[1] += cl.mousemove[1];
@@ -880,6 +1081,8 @@ clear:
     // clear all states
     cl.mousemove[0] = 0;
     cl.mousemove[1] = 0;
+    cl.gamepadmove[0] = 0;
+    cl.gamepadmove[1] = 0;
 
     in_attack.state &= ~2;
     in_use.state &= ~2;

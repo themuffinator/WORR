@@ -112,6 +112,38 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define K_MWHEELLEFT    213
 #define K_MOUSELAST     213
 
+// gamepad buttons generate virtual keys
+#define K_GAMEPAD_FIRST 214
+#define K_A_BUTTON      214
+#define K_B_BUTTON      215
+#define K_X_BUTTON      216
+#define K_Y_BUTTON      217
+#define K_BACK_BUTTON   218
+#define K_GUIDE_BUTTON  219
+#define K_START_BUTTON  220
+#define K_LEFT_STICK    221
+#define K_RIGHT_STICK   222
+#define K_LEFT_SHOULDER 223
+#define K_RIGHT_SHOULDER 224
+#define K_DPAD_UP       225
+#define K_DPAD_DOWN     226
+#define K_DPAD_LEFT     227
+#define K_DPAD_RIGHT    228
+#define K_LEFT_TRIGGER  229
+#define K_RIGHT_TRIGGER 230
+#define K_RIGHT_PADDLE1 231
+#define K_LEFT_PADDLE1  232
+#define K_RIGHT_PADDLE2 233
+#define K_LEFT_PADDLE2  234
+#define K_TOUCHPAD      235
+#define K_MISC1         236
+#define K_MISC2         237
+#define K_MISC3         238
+#define K_MISC4         239
+#define K_MISC5         240
+#define K_MISC6         241
+#define K_GAMEPAD_LAST  241
+
 typedef enum {
     KEY_GAME    = 0,
     KEY_CONSOLE = BIT(0),

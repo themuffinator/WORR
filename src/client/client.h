@@ -251,6 +251,10 @@ typedef struct {
     // localmove and pending cmd, cleared each time cmd is finalized
     vec2_t      mousemove;
 
+    // accumulated gamepad forward/side movement, added to both
+    // localmove and pending cmd, cleared each time cmd is finalized
+    vec2_t      gamepadmove;
+
     int         time;           // this is the time value that the client
                                 // is rendering at.  always <= cl.servertime
     float       lerpfrac;       // between oldframe and frame

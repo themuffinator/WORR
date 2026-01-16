@@ -131,6 +131,35 @@ static const keyname_t keynames[] = {
     K(MWHEELRIGHT),
     K(MWHEELLEFT),
 
+    K(A_BUTTON),
+    K(B_BUTTON),
+    K(X_BUTTON),
+    K(Y_BUTTON),
+    K(BACK_BUTTON),
+    K(GUIDE_BUTTON),
+    K(START_BUTTON),
+    K(LEFT_STICK),
+    K(RIGHT_STICK),
+    K(LEFT_SHOULDER),
+    K(RIGHT_SHOULDER),
+    K(LEFT_TRIGGER),
+    K(RIGHT_TRIGGER),
+    K(DPAD_UP),
+    K(DPAD_DOWN),
+    K(DPAD_LEFT),
+    K(DPAD_RIGHT),
+    K(RIGHT_PADDLE1),
+    K(LEFT_PADDLE1),
+    K(RIGHT_PADDLE2),
+    K(LEFT_PADDLE2),
+    K(TOUCHPAD),
+    K(MISC1),
+    K(MISC2),
+    K(MISC3),
+    K(MISC4),
+    K(MISC5),
+    K(MISC6),
+
     {"SEMICOLON", ';'}, // because a raw semicolon separates commands
 
     {NULL, 0}
@@ -599,6 +628,26 @@ void Key_Init(void)
     Cmd_Register(c_keys);
 }
 
+static int Key_MapGamepadToUi(int key)
+{
+    switch (key) {
+    case K_DPAD_UP:
+        return K_UPARROW;
+    case K_DPAD_DOWN:
+        return K_DOWNARROW;
+    case K_DPAD_LEFT:
+        return K_LEFTARROW;
+    case K_DPAD_RIGHT:
+        return K_RIGHTARROW;
+    case K_A_BUTTON:
+        return K_ENTER;
+    case K_B_BUTTON:
+        return K_ESCAPE;
+    default:
+        return key;
+    }
+}
+
 /*
 ===================
 Key_Event
@@ -620,6 +669,10 @@ void Key_Event(unsigned key, bool down, unsigned time)
     // hack for menu key binding
     if (key_wait_cb && down && !key_wait_cb(key_wait_arg, key)) {
         return;
+    }
+
+    if (cls.key_dest & (KEY_CONSOLE | KEY_MENU)) {
+        key = Key_MapGamepadToUi(key);
     }
 
     // update key down and auto-repeat status

@@ -49,6 +49,14 @@ static struct {
     SDL_WindowFlags focus_hack;
 } sdl;
 
+typedef struct {
+    SDL_Gamepad     *pad;
+    SDL_JoystickID  instance_id;
+    bool            buttons[SDL_GAMEPAD_BUTTON_COUNT];
+} sdl_gamepad_t;
+
+static sdl_gamepad_t sdl_gamepad;
+
 /*
 ===============================================================================
 
@@ -179,6 +187,7 @@ static void set_mode(void)
 
 static void fatal_shutdown(void)
 {
+    sdl_gamepad_close(Sys_Milliseconds());
     SDL_SetWindowMouseGrab(sdl.window, false);
     SDL_SetWindowRelativeMouseMode(sdl.window, false);
     SDL_ShowCursor();
@@ -269,6 +278,9 @@ static int get_dpi_scale(void)
 
 static void shutdown(void)
 {
+    sdl_gamepad_close(Sys_Milliseconds());
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+
     if (sdl.context)
         SDL_GL_DestroyContext(sdl.context);
 
@@ -309,6 +321,13 @@ static bool init(void)
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         Com_EPrintf("Couldn't initialize SDL video: %s\n", SDL_GetError());
         return false;
+    }
+
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+        Com_WPrintf("Couldn't initialize SDL gamepad: %s\n", SDL_GetError());
+    } else {
+        SDL_SetGamepadEventsEnabled(true);
+        sdl_gamepad_open_first();
     }
 
     set_gl_attributes();
@@ -446,6 +465,155 @@ static unsigned sdl_event_time(Uint64 timestamp)
     return (unsigned)SDL_NS_TO_MS(timestamp);
 }
 
+static int sdl_gamepad_button_to_key(SDL_GamepadButton button)
+{
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_SOUTH:
+        return K_A_BUTTON;
+    case SDL_GAMEPAD_BUTTON_EAST:
+        return K_B_BUTTON;
+    case SDL_GAMEPAD_BUTTON_WEST:
+        return K_X_BUTTON;
+    case SDL_GAMEPAD_BUTTON_NORTH:
+        return K_Y_BUTTON;
+    case SDL_GAMEPAD_BUTTON_BACK:
+        return K_BACK_BUTTON;
+    case SDL_GAMEPAD_BUTTON_GUIDE:
+        return K_GUIDE_BUTTON;
+    case SDL_GAMEPAD_BUTTON_START:
+        return K_START_BUTTON;
+    case SDL_GAMEPAD_BUTTON_LEFT_STICK:
+        return K_LEFT_STICK;
+    case SDL_GAMEPAD_BUTTON_RIGHT_STICK:
+        return K_RIGHT_STICK;
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+        return K_LEFT_SHOULDER;
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+        return K_RIGHT_SHOULDER;
+    case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        return K_DPAD_UP;
+    case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+        return K_DPAD_DOWN;
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        return K_DPAD_LEFT;
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+        return K_DPAD_RIGHT;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:
+        return K_RIGHT_PADDLE1;
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1:
+        return K_LEFT_PADDLE1;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2:
+        return K_RIGHT_PADDLE2;
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:
+        return K_LEFT_PADDLE2;
+    case SDL_GAMEPAD_BUTTON_TOUCHPAD:
+        return K_TOUCHPAD;
+    case SDL_GAMEPAD_BUTTON_MISC1:
+        return K_MISC1;
+    case SDL_GAMEPAD_BUTTON_MISC2:
+        return K_MISC2;
+    case SDL_GAMEPAD_BUTTON_MISC3:
+        return K_MISC3;
+    case SDL_GAMEPAD_BUTTON_MISC4:
+        return K_MISC4;
+    case SDL_GAMEPAD_BUTTON_MISC5:
+        return K_MISC5;
+    case SDL_GAMEPAD_BUTTON_MISC6:
+        return K_MISC6;
+    default:
+        return 0;
+    }
+}
+
+static bool sdl_gamepad_axis_to_input(SDL_GamepadAxis axis, in_gamepad_axis_t *out_axis)
+{
+    switch (axis) {
+    case SDL_GAMEPAD_AXIS_LEFTX:
+        *out_axis = IN_GAMEPAD_AXIS_LEFTX;
+        return true;
+    case SDL_GAMEPAD_AXIS_LEFTY:
+        *out_axis = IN_GAMEPAD_AXIS_LEFTY;
+        return true;
+    case SDL_GAMEPAD_AXIS_RIGHTX:
+        *out_axis = IN_GAMEPAD_AXIS_RIGHTX;
+        return true;
+    case SDL_GAMEPAD_AXIS_RIGHTY:
+        *out_axis = IN_GAMEPAD_AXIS_RIGHTY;
+        return true;
+    case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
+        *out_axis = IN_GAMEPAD_AXIS_LEFT_TRIGGER;
+        return true;
+    case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER:
+        *out_axis = IN_GAMEPAD_AXIS_RIGHT_TRIGGER;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static void sdl_gamepad_release_buttons(unsigned time)
+{
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; i++) {
+        if (!sdl_gamepad.buttons[i])
+            continue;
+        int key = sdl_gamepad_button_to_key((SDL_GamepadButton)i);
+        if (key)
+            Key_Event(key, false, time);
+        sdl_gamepad.buttons[i] = false;
+    }
+}
+
+static void sdl_gamepad_close(unsigned time)
+{
+    if (!sdl_gamepad.pad)
+        return;
+
+    sdl_gamepad_release_buttons(time);
+    IN_GamepadReset(time);
+    SDL_CloseGamepad(sdl_gamepad.pad);
+    memset(&sdl_gamepad, 0, sizeof(sdl_gamepad));
+}
+
+static void sdl_gamepad_open(SDL_JoystickID instance_id)
+{
+    if (sdl_gamepad.pad)
+        return;
+
+    SDL_Gamepad *pad = SDL_OpenGamepad(instance_id);
+    if (!pad) {
+        Com_EPrintf("Couldn't open SDL gamepad: %s\n", SDL_GetError());
+        return;
+    }
+
+    sdl_gamepad.pad = pad;
+    sdl_gamepad.instance_id = instance_id;
+    memset(sdl_gamepad.buttons, 0, sizeof(sdl_gamepad.buttons));
+
+    const char *name = SDL_GetGamepadName(pad);
+    if (name && *name)
+        Com_Printf("Opened SDL gamepad: %s\n", name);
+    else
+        Com_Printf("Opened SDL gamepad.\n");
+}
+
+static void sdl_gamepad_open_first(void)
+{
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&count);
+    if (!ids || count <= 0) {
+        SDL_free(ids);
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        sdl_gamepad_open(ids[i]);
+        if (sdl_gamepad.pad)
+            break;
+    }
+
+    SDL_free(ids);
+}
+
 static void set_cursor_visible(bool visible)
 {
     if (visible)
@@ -558,6 +726,43 @@ static void pump_events(void)
             break;
         case SDL_EVENT_MOUSE_WHEEL:
             mouse_wheel_event(&event.wheel);
+            break;
+        case SDL_EVENT_GAMEPAD_ADDED:
+            if (!sdl_gamepad.pad)
+                sdl_gamepad_open(event.gdevice.which);
+            break;
+        case SDL_EVENT_GAMEPAD_REMOVED:
+            if (sdl_gamepad.pad && event.gdevice.which == sdl_gamepad.instance_id) {
+                sdl_gamepad_close(sdl_event_time(event.gdevice.timestamp));
+                sdl_gamepad_open_first();
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+            if (sdl_gamepad.pad && event.gbutton.which == sdl_gamepad.instance_id) {
+                int key = sdl_gamepad_button_to_key((SDL_GamepadButton)event.gbutton.button);
+                if (key) {
+                    if (event.gbutton.down) {
+                        if (!IN_GamepadEnabled())
+                            break;
+                        sdl_gamepad.buttons[event.gbutton.button] = true;
+                        Key_Event(key, true, sdl_event_time(event.gbutton.timestamp));
+                    } else {
+                        if (!sdl_gamepad.buttons[event.gbutton.button])
+                            break;
+                        sdl_gamepad.buttons[event.gbutton.button] = false;
+                        Key_Event(key, false, sdl_event_time(event.gbutton.timestamp));
+                    }
+                }
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+            if (sdl_gamepad.pad && event.gaxis.which == sdl_gamepad.instance_id) {
+                in_gamepad_axis_t axis;
+                if (sdl_gamepad_axis_to_input((SDL_GamepadAxis)event.gaxis.axis, &axis)) {
+                    IN_GamepadAxisEvent(axis, event.gaxis.value, sdl_event_time(event.gaxis.timestamp));
+                }
+            }
             break;
         }
     }
