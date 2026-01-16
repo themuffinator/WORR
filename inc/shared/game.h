@@ -560,7 +560,7 @@ typedef struct {
 
 //===============================================================
 
-#define CGAME_API_VERSION   2022
+#define CGAME_API_VERSION   2026
 
 typedef enum
 {
@@ -659,6 +659,12 @@ typedef struct
 
     // [Paril-KEX]
     bool (*CL_InAutoDemoLoop) (void);
+
+    // [WORR] additional client helpers for cgame
+    uint64_t (*CL_ClientRealTimeUnscaled) (void);
+    void (*SCR_DrawCharStretch)(int x, int y, int w, int h, int flags, int ch, const rgba_t *color);
+    void (*SCR_WarpMouse)(int x, int y);
+    int32_t (*SCR_DrawBindIcon)(const char *binding, int x, int y, int size, const rgba_t *color, const char **out_keyname);
 } cgame_import_t;
 
 //
@@ -716,6 +722,21 @@ typedef struct
 
     // [Paril-KEX]
     void (*GetMonsterFlashOffset)(monster_muzzleflash_id_t id, vec3_t offset);
+
+    // [WORR] weapon wheel / weapon bar integration
+    void (*Wheel_Open)(bool powerup);
+    void (*Wheel_Close)(bool released);
+    void (*Wheel_Input)(int dx, int dy);
+    void (*Wheel_WeapNext)(void);
+    void (*Wheel_WeapPrev)(void);
+    void (*Wheel_ApplyButtons)(button_t *cmd_buttons);
+    void (*Wheel_ClearInput)(void);
+    bool (*Wheel_IsOpen)(void);
+    float (*Wheel_TimeScale)(void);
+    bool (*Wheel_AllowAttack)(void);
+    void (*Wheel_Update)(const player_state_t *ps);
+    void (*WeaponBar_Input)(const player_state_t *ps, button_t *cmd_buttons);
+    void (*WeaponBar_ClearInput)(void);
 
     // Fetch named extension from cgame DLL.
     void *(*GetExtension)(const char *name);

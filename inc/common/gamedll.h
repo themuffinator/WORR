@@ -22,4 +22,5 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // gamedll.h -- locate & load game DLL/shared object
 //
 
-void *GameDll_Load(void);
+void *SGameDll_Load(void);
+void *CGameDll_Load(void);

@@ -17,7 +17,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "ui.h"
-#include "../client.h"
 
 /*
 =============================================================================
@@ -355,7 +354,9 @@ void M_Menu_PlayerConfig(void)
     m_player.dogtag.generic.name = "dogtag";
     m_player.dogtag.generic.width = 192;
     m_player.dogtag.generic.height = 32;
-    m_player.dogtag.cvar = info_dogtag;
+    m_player.dogtag.cvar = Cvar_FindVar("dogtag");
+    if (!m_player.dogtag.cvar)
+        m_player.dogtag.cvar = Cvar_Get("dogtag", "default", CVAR_USERINFO | CVAR_ARCHIVE);
     m_player.dogtag.path = "tags";
     m_player.dogtag.filter = "*";
 

@@ -221,6 +221,9 @@ void UI_StatusEvent(const serverStatus_t *status)
     char value[MAX_INFO_STRING];
     int i;
 
+    UI_Sys_UpdateTimes();
+    UI_Sys_UpdateNetFrom();
+
     // ignore unless menu is up
     if (!m_servers.args) {
         return;
@@ -331,6 +334,8 @@ void UI_ErrorEvent(const netadr_t *from)
     char *hostname;
     unsigned timestamp, ping;
     int i;
+
+    UI_Sys_UpdateTimes();
 
     // ignore unless menu is up
     if (!m_servers.args)
@@ -667,14 +672,17 @@ static void FinishPingStage(void)
 
 static void CalcPingRate(void)
 {
-    extern cvar_t *info_rate;
+    cvar_t *info_rate = Cvar_FindVar("rate");
 
     // don't allow more than 100 packets/sec
     int rate = Cvar_ClampInteger(ui_pingrate, 0, 100);
 
     // assume average 450 bytes per reply packet
-    if (!rate)
+    if (!rate) {
+        if (!info_rate)
+            info_rate = Cvar_Get("rate", "15000", CVAR_USERINFO | CVAR_ARCHIVE);
         rate = Q_clip(info_rate->integer / 450, 1, 100);
+    }
 
     // drop rate by stage
     m_servers.pingtime = (1000 * PING_STAGES) / (rate * m_servers.pingstage);
@@ -689,6 +697,8 @@ UI_Frame
 void UI_Frame(int msec)
 {
     serverslot_t *slot;
+
+    UI_Sys_UpdateTimes();
 
     if (!m_servers.pingstage)
         return;

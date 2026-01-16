@@ -49,6 +49,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/platform.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define q_countof(a)        (sizeof(a) / sizeof(a[0]))
 
 #define BIT(n)          (1U << (n))
@@ -1834,3 +1838,7 @@ typedef struct {
 #define GUNINDEX_MASK       MASK(GUNINDEX_BITS)
 
 #endif // !defined(GAME3_INCLUDE)
+
+#ifdef __cplusplus
+}
+#endif

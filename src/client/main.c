@@ -2764,8 +2764,6 @@ static void CL_InitLocal(void)
     CL_InitEffects();
     CL_InitTEnts();
     CL_InitDownloads();
-    CL_WeaponBar_Init();
-    CL_Wheel_Init();
     CL_GTV_Init();
 
     Cmd_Register(c_client);
@@ -3440,7 +3438,8 @@ unsigned CL_Frame(unsigned msec)
     CL_PredictMovement();
 
     // update weapon wheel stuff
-    CL_Wheel_Update();
+    if (cgame && cgame->Wheel_Update)
+        cgame->Wheel_Update(&cl.frame.ps);
 
     SCR_RunCinematic();
 

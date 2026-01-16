@@ -961,6 +961,20 @@ cgame_export_t cgame_classic = {
     .ParseCenterPrint = CGC_ParseCenterPrint,
     .ClearCenterprint = CGC_ClearCenterprint,
     .NotifyMessage = CGC_NotifyMessage,
+
+    .Wheel_Open = NULL,
+    .Wheel_Close = NULL,
+    .Wheel_Input = NULL,
+    .Wheel_WeapNext = NULL,
+    .Wheel_WeapPrev = NULL,
+    .Wheel_ApplyButtons = NULL,
+    .Wheel_ClearInput = NULL,
+    .Wheel_IsOpen = NULL,
+    .Wheel_TimeScale = NULL,
+    .Wheel_AllowAttack = NULL,
+    .Wheel_Update = NULL,
+    .WeaponBar_Input = NULL,
+    .WeaponBar_ClearInput = NULL,
 };
 
 cgame_export_t *GetClassicCGameAPI(cgame_import_t *import)

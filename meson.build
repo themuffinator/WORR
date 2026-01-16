@@ -1,4 +1,4 @@
-project('worr', 'c',
+project('worr', 'c', 'cpp',
   license: 'GPL-2.0-or-later',
   version: run_command(find_program('python3'), 'version.py', '--version', check: true).stdout().strip(),
   meson_version: '>= 0.60.0',
@@ -147,9 +147,8 @@ client_src = [
   'src/client/sound/qal.h',
   'src/client/sound/sound.h',
   'src/client/tent.c',
+  'src/client/ui_bridge.c',
   'src/client/view.c',
-  'src/client/weapon_bar.c',
-  'src/client/wheel.c',
   'src/client/client.h',
   'src/client/cgame_classic.h',
   'src/common/async.c',
@@ -243,63 +242,178 @@ server_src = [
   'inc/server/server.h',
 ]
 
-game_src = [
-  'src/game/g_ai.c',
-  'src/game/g_chase.c',
-  'src/game/g_cmds.c',
-  'src/game/g_combat.c',
-  'src/game/g_func.c',
-  'src/game/g_items.c',
-  'src/game/g_main.c',
-  'src/game/g_misc.c',
-  'src/game/g_monster.c',
-  'src/game/g_phys.c',
-  'src/game/g_ptrs.c',
-  'src/game/g_save.c',
-  'src/game/g_spawn.c',
-  'src/game/g_svcmds.c',
-  'src/game/g_target.c',
-  'src/game/g_trigger.c',
-  'src/game/g_turret.c',
-  'src/game/g_utils.c',
-  'src/game/g_weapon.c',
-  'src/game/m_actor.c',
-  'src/game/m_berserk.c',
-  'src/game/m_boss2.c',
-  'src/game/m_boss31.c',
-  'src/game/m_boss32.c',
-  'src/game/m_boss3.c',
-  'src/game/m_brain.c',
-  'src/game/m_chick.c',
-  'src/game/m_flipper.c',
-  'src/game/m_float.c',
-  'src/game/m_flyer.c',
-  'src/game/m_gladiator.c',
-  'src/game/m_gunner.c',
-  'src/game/m_hover.c',
-  'src/game/m_infantry.c',
-  'src/game/m_insane.c',
-  'src/game/m_medic.c',
-  'src/game/m_move.c',
-  'src/game/m_mutant.c',
-  'src/game/m_parasite.c',
-  'src/game/m_soldier.c',
-  'src/game/m_supertank.c',
-  'src/game/m_tank.c',
-  'src/game/p_client.c',
-  'src/game/p_hud.c',
-  'src/game/p_trail.c',
-  'src/game/p_view.c',
-  'src/game/p_weapon.c',
-  'src/shared/base85.c',
-  'src/shared/m_flash.c',
-  'src/shared/shared.c',
+bgame_src = [
+  'src/game/bgame/bg_local.h',
+  'src/game/bgame/game.h',
+  'src/game/bgame/m_flash.h',
+  'src/game/bgame/p_move.cpp',
+  'src/game/bgame/q_std.h',
+  'src/game/bgame/q_vec3.h',
+]
+
+sgame_src = bgame_src + [
+  'src/game/sgame/g_ai.cpp',
+  'src/game/sgame/g_chase.cpp',
+  'src/game/sgame/g_cmds.cpp',
+  'src/game/sgame/g_combat.cpp',
+  'src/game/sgame/g_func.cpp',
+  'src/game/sgame/g_items.cpp',
+  'src/game/sgame/g_local.h',
+  'src/game/sgame/g_main.cpp',
+  'src/game/sgame/g_misc.cpp',
+  'src/game/sgame/g_monster.cpp',
+  'src/game/sgame/g_phys.cpp',
+  'src/game/sgame/g_save.cpp',
+  'src/game/sgame/g_spawn.cpp',
+  'src/game/sgame/g_statusbar.h',
+  'src/game/sgame/g_svcmds.cpp',
+  'src/game/sgame/g_target.cpp',
+  'src/game/sgame/g_trigger.cpp',
+  'src/game/sgame/g_turret.cpp',
+  'src/game/sgame/g_utils.cpp',
+  'src/game/sgame/g_weapon.cpp',
+  'src/game/sgame/m_actor.cpp',
+  'src/game/sgame/m_actor.h',
+  'src/game/sgame/m_arachnid.cpp',
+  'src/game/sgame/m_arachnid.h',
+  'src/game/sgame/m_berserk.cpp',
+  'src/game/sgame/m_berserk.h',
+  'src/game/sgame/m_boss2.cpp',
+  'src/game/sgame/m_boss2.h',
+  'src/game/sgame/m_boss3.cpp',
+  'src/game/sgame/m_boss31.cpp',
+  'src/game/sgame/m_boss31.h',
+  'src/game/sgame/m_boss32.cpp',
+  'src/game/sgame/m_boss32.h',
+  'src/game/sgame/m_brain.cpp',
+  'src/game/sgame/m_brain.h',
+  'src/game/sgame/m_chick.cpp',
+  'src/game/sgame/m_chick.h',
+  'src/game/sgame/m_flipper.cpp',
+  'src/game/sgame/m_flipper.h',
+  'src/game/sgame/m_float.cpp',
+  'src/game/sgame/m_float.h',
+  'src/game/sgame/m_flyer.cpp',
+  'src/game/sgame/m_flyer.h',
+  'src/game/sgame/m_gladiator.cpp',
+  'src/game/sgame/m_gladiator.h',
+  'src/game/sgame/m_guardian.cpp',
+  'src/game/sgame/m_guardian.h',
+  'src/game/sgame/m_guncmdr.cpp',
+  'src/game/sgame/m_gunner.cpp',
+  'src/game/sgame/m_gunner.h',
+  'src/game/sgame/m_hover.cpp',
+  'src/game/sgame/m_hover.h',
+  'src/game/sgame/m_infantry.cpp',
+  'src/game/sgame/m_infantry.h',
+  'src/game/sgame/m_insane.cpp',
+  'src/game/sgame/m_insane.h',
+  'src/game/sgame/m_medic.cpp',
+  'src/game/sgame/m_medic.h',
+  'src/game/sgame/m_move.cpp',
+  'src/game/sgame/m_mutant.cpp',
+  'src/game/sgame/m_mutant.h',
+  'src/game/sgame/m_parasite.cpp',
+  'src/game/sgame/m_parasite.h',
+  'src/game/sgame/m_player.h',
+  'src/game/sgame/m_rider.h',
+  'src/game/sgame/m_shambler.cpp',
+  'src/game/sgame/m_shambler.h',
+  'src/game/sgame/m_soldier.cpp',
+  'src/game/sgame/m_soldier.h',
+  'src/game/sgame/m_supertank.cpp',
+  'src/game/sgame/m_supertank.h',
+  'src/game/sgame/m_tank.cpp',
+  'src/game/sgame/m_tank.h',
+  'src/game/sgame/p_client.cpp',
+  'src/game/sgame/p_hud.cpp',
+  'src/game/sgame/p_trail.cpp',
+  'src/game/sgame/p_view.cpp',
+  'src/game/sgame/p_weapon.cpp',
+  'src/game/sgame/q_std.cpp',
+]
+
+sgame_src += [
+  'src/game/sgame/bots/bot_debug.cpp',
+  'src/game/sgame/bots/bot_debug.h',
+  'src/game/sgame/bots/bot_exports.cpp',
+  'src/game/sgame/bots/bot_exports.h',
+  'src/game/sgame/bots/bot_includes.h',
+  'src/game/sgame/bots/bot_think.cpp',
+  'src/game/sgame/bots/bot_think.h',
+  'src/game/sgame/bots/bot_utils.cpp',
+  'src/game/sgame/bots/bot_utils.h',
+]
+
+sgame_src += [
+  'src/game/sgame/ctf/g_ctf.cpp',
+  'src/game/sgame/ctf/g_ctf.h',
+  'src/game/sgame/ctf/p_ctf_menu.cpp',
+  'src/game/sgame/ctf/p_ctf_menu.h',
+]
+
+sgame_src += [
+  'src/game/sgame/rogue/g_rogue_combat.cpp',
+  'src/game/sgame/rogue/g_rogue_func.cpp',
+  'src/game/sgame/rogue/g_rogue_items.cpp',
+  'src/game/sgame/rogue/g_rogue_misc.cpp',
+  'src/game/sgame/rogue/g_rogue_monster.cpp',
+  'src/game/sgame/rogue/g_rogue_newai.cpp',
+  'src/game/sgame/rogue/g_rogue_newdm.cpp',
+  'src/game/sgame/rogue/g_rogue_newfnc.cpp',
+  'src/game/sgame/rogue/g_rogue_newtarg.cpp',
+  'src/game/sgame/rogue/g_rogue_newtrig.cpp',
+  'src/game/sgame/rogue/g_rogue_newweap.cpp',
+  'src/game/sgame/rogue/g_rogue_phys.cpp',
+  'src/game/sgame/rogue/g_rogue_spawn.cpp',
+  'src/game/sgame/rogue/g_rogue_sphere.cpp',
+  'src/game/sgame/rogue/g_rogue_utils.cpp',
+  'src/game/sgame/rogue/m_rogue_carrier.cpp',
+  'src/game/sgame/rogue/m_rogue_carrier.h',
+  'src/game/sgame/rogue/m_rogue_stalker.cpp',
+  'src/game/sgame/rogue/m_rogue_stalker.h',
+  'src/game/sgame/rogue/m_rogue_turret.cpp',
+  'src/game/sgame/rogue/m_rogue_turret.h',
+  'src/game/sgame/rogue/m_rogue_widow.cpp',
+  'src/game/sgame/rogue/m_rogue_widow.h',
+  'src/game/sgame/rogue/m_rogue_widow2.cpp',
+  'src/game/sgame/rogue/m_rogue_widow2.h',
+  'src/game/sgame/rogue/p_rogue_weapon.cpp',
+  'src/game/sgame/rogue/rogue_dm_ball.cpp',
+  'src/game/sgame/rogue/rogue_dm_tag.cpp',
+]
+
+sgame_src += [
+  'src/game/sgame/xatrix/g_xatrix_func.cpp',
+  'src/game/sgame/xatrix/g_xatrix_items.cpp',
+  'src/game/sgame/xatrix/g_xatrix_misc.cpp',
+  'src/game/sgame/xatrix/g_xatrix_monster.cpp',
+  'src/game/sgame/xatrix/g_xatrix_target.cpp',
+  'src/game/sgame/xatrix/g_xatrix_weapon.cpp',
+  'src/game/sgame/xatrix/m_xatrix_fixbot.cpp',
+  'src/game/sgame/xatrix/m_xatrix_fixbot.h',
+  'src/game/sgame/xatrix/m_xatrix_gekk.cpp',
+  'src/game/sgame/xatrix/m_xatrix_gekk.h',
+  'src/game/sgame/xatrix/p_xatrix_weapon.cpp',
+]
+
+cgame_src = bgame_src + [
+  'src/game/cgame/cg_local.h',
+  'src/game/cgame/cg_main.cpp',
+  'src/game/cgame/cg_screen.cpp',
+  'src/game/cgame/cg_ui_export.c',
+  'src/game/cgame/cg_ui_sys.c',
+  'src/game/cgame/cg_fmt.cpp',
+  'src/game/cgame/cg_parse.cpp',
+  'src/game/cgame/cg_std.cpp',
+  'src/game/cgame/cg_wheel.cpp',
 ]
 
 updater_src = []
 updater_deps = []
 
 cc = meson.get_compiler('c')
+cpp = meson.get_compiler('cpp')
 
 win32 = host_machine.system() == 'windows'
 x86 = host_machine.cpu_family() == 'x86'
@@ -405,6 +519,60 @@ elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS', '/wd4267', '/wd4018']
 endif
 
+game_cpp_args = [
+  '-DHAVE_CONFIG_H',
+  '-DNO_FMT_SOURCE',
+]
+
+game_c_args = [
+  '-DHAVE_CONFIG_H',
+]
+
+game_link_args = []
+
+if cpp.get_argument_syntax() == 'gcc'
+  if x86
+    game_cpp_args += cpp.get_supported_arguments(['-msse2', '-mfpmath=sse'])
+  endif
+
+  game_warn_args = [
+    '-Wformat-security',
+    '-Wno-class-memaccess',
+    '-Wno-narrowing',
+    '-Wno-sign-compare',
+    '-Wpointer-arith',
+    '-Wno-array-bounds',
+  ]
+
+  game_cpp_args += cpp.get_supported_arguments(game_warn_args)
+
+  if win32
+    game_cpp_args += ['-D_CRT_SECURE_NO_WARNINGS', '-D_CRT_NONSTDC_NO_WARNINGS']
+    linker_id = cpp.get_linker_id()
+    if linker_id == 'link' or linker_id == 'lld-link'
+      game_link_args += ['-Wl,/NXCOMPAT', '-Wl,/DYNAMICBASE']
+      if cpu == 'x86_64'
+        game_link_args += ['-Wl,/HIGHENTROPYVA', '-Wl,/BASE:0x180000000']
+      endif
+    else
+      game_link_args += [
+        '-Wl,--nxcompat,--dynamicbase',
+        '-static-libgcc',
+        '-static-libstdc++',
+      ]
+      if cpu == 'x86_64'
+        game_link_args += '-Wl,--high-entropy-va,--image-base=0x180000000'
+      endif
+    endif
+  endif
+elif cpp.get_id() == 'msvc'
+  game_cpp_args += '/wd4244'
+
+  d = get_option('buildtype') == 'debug' ? 'd' : ''
+  game_link_args += f'/nodefaultlib:libucrt@d@.lib'
+  game_link_args += f'/defaultlib:ucrt@d@.lib'
+endif
+
 if win32 and cc.get_argument_syntax() == 'msvc'
   win_subsystem_client += ',6.0'
   win_subsystem_server += ',6.0'
@@ -418,6 +586,14 @@ config = configuration_data()
 texture_formats = []
 
 fallback_opt = ['default_library=static']
+
+game_fallback_opt = fallback_opt + [
+  'b_vscrt=static_from_buildtype',
+  'buildtype=' + get_option('buildtype'),
+]
+
+fmt_dep = dependency('fmt', default_options: game_fallback_opt)
+jsoncpp_dep = dependency('jsoncpp', default_options: game_fallback_opt)
 
 zlib = dependency('zlib',
   fallback:        'zlib-ng',
@@ -468,7 +644,7 @@ vulkan = dependency('vulkan', required: get_option('vulkan'))
 common_deps = [zlib]
 client_deps = [png, curl, sdl3]
 server_deps = []
-game_deps = [zlib]
+game_deps = [fmt_dep, jsoncpp_dep]
 
 jpeg = dependency('libjpeg',
   required:        get_option('libjpeg'),
@@ -608,7 +784,6 @@ if get_option('client-ui')
   )
   client_src += worr_menu_c
 
-  client_src += ui_src
   config.set10('USE_UI', true)
 endif
 
@@ -779,30 +954,71 @@ if win32 and get_option('bootstrapper')
   )
 endif
 
-shared_library('game' + cpu, game_src,
+sgame_inc = include_directories('src/game/sgame', 'src/game/bgame')
+cgame_inc = include_directories('src/game/cgame', 'src/game/bgame')
+
+cgame_defines = [
+  '-DUSE_CLIENT=1',
+  '-DUSE_REF=1',
+  '-DUSE_UI=1',
+  '-DRENDERER_DLL',
+]
+
+sgame_dll = shared_library('sgame' + cpu, sgame_src,
   name_prefix:           '',
-  dependencies:          game_deps,
-  include_directories:   'inc',
   gnu_symbol_visibility: 'hidden',
-  link_args:             dll_link_args,
-  install:               true,
-  install_dir:           libdir / get_option('base-game'),
-  override_options:      get_option('game-build-options'),
+  dependencies:          game_deps,
+  include_directories:   sgame_inc,
+  c_args:                game_c_args,
+  cpp_args:              game_cpp_args,
+  link_args:             dll_link_args + game_link_args,
+  install:              true,
+  install_dir:          libdir / get_option('base-game'),
+  install_tag:          'runtime',
+  override_options:      ['b_vscrt=static_from_buildtype'],
 )
 
-rr_game_subproject = subproject('rerelease-game')
-rr_game_dll = rr_game_subproject.get_variable('game_dll')
+cgame_all_src = cgame_src + ui_src + [
+  'src/common/field.c',
+  'src/common/jsmn.c',
+  'src/common/mapdb.c',
+  'src/common/mdfour.c',
+  'src/shared/shared.c',
+]
+
+cgame_inc = [
+  include_directories('inc', 'q2proto/inc'),
+  cgame_inc,
+]
+
+cgame_dll = shared_library('cgame' + cpu, cgame_all_src,
+  name_prefix:           '',
+  gnu_symbol_visibility: 'hidden',
+  dependencies:          game_deps,
+  include_directories:   cgame_inc,
+  c_args:                game_c_args + cgame_defines,
+  cpp_args:              game_cpp_args + cgame_defines,
+  link_args:             dll_link_args + game_link_args,
+  install:              true,
+  install_dir:          libdir / get_option('base-game'),
+  install_tag:          'runtime',
+  override_options:     ['b_vscrt=static_from_buildtype'],
+)
 
 prog_copy_game_dll = find_program('copy-game-dll.py')
 custom_target(
-    'copy_game_dll',
+    'copy_sgame_dll',
     build_by_default: true,
-    input : rr_game_dll,
-    output: '@PLAINNAME@',
-    command : [prog_copy_game_dll, '@OUTPUT@', '@INPUT@'],
-    install: true,
-    install_dir: libdir / get_option('base-game'),
-    install_tag: 'runtime',
+    input : sgame_dll,
+    output: '@PLAINNAME@.stamp',
+    command : [prog_copy_game_dll, '@OUTPUT@', '@INPUT@', '--copy-dir', meson.current_build_dir() / get_option('base-game'), '--stamp'],
+)
+custom_target(
+    'copy_cgame_dll',
+    build_by_default: true,
+    input : cgame_dll,
+    output: '@PLAINNAME@.stamp',
+    command : [prog_copy_game_dll, '@OUTPUT@', '@INPUT@', '--copy-dir', meson.current_build_dir() / get_option('base-game'), '--stamp'],
 )
 
 version_prog = find_program('python3')

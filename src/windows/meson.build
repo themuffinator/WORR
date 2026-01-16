@@ -21,7 +21,12 @@ server_src += windows.compile_resources('res/worrded.rc',
   include_directories: rc_inc,
 )
 
-game_src += windows.compile_resources('res/game.rc',
+sgame_src += windows.compile_resources('res/sgame.rc',
+  args:                rc_args,
+  include_directories: rc_inc,
+)
+
+cgame_src += windows.compile_resources('res/cgame.rc',
   args:                rc_args,
   include_directories: rc_inc,
 )

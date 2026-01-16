@@ -25,13 +25,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 extern cvar_t   *fs_game;
 
-#if defined(_WIN64)
-// Official remaster game DLL is named "game_x64.dll"
-#define RERELEASE_CPUSTRING     "_x64"
-#else
-#define RERELEASE_CPUSTRING     "_" CPUSTRING
-#endif
-
 static void *LoadGameLibraryFrom(const char *path)
 {
     void *gamelib;
@@ -45,13 +38,14 @@ static void *LoadGameLibraryFrom(const char *path)
     return gamelib;
 }
 
-static void *TryLoadGameLibrary(const char *libdir, const char *gamedir, const char *cpustring)
+static void *TryLoadGameLibrary(const char *libdir, const char *gamedir,
+                                const char *module, const char *cpustring)
 {
     char path[MAX_OSPATH];
 
     if (Q_concat(path, sizeof(path), libdir,
                  PATH_SEP_STRING, gamedir, PATH_SEP_STRING,
-                 "game", cpustring, LIBSUFFIX) >= sizeof(path)) {
+                 module, cpustring, LIBSUFFIX) >= sizeof(path)) {
         Com_EPrintf("Game library path length exceeded\n");
         return NULL;
     }
@@ -64,18 +58,22 @@ static void *TryLoadGameLibrary(const char *libdir, const char *gamedir, const c
     return LoadGameLibraryFrom(path);
 }
 
-static void *LoadGameLibrary(const char *libdir, const char *gamedir)
+static void *LoadModuleLibrary(const char *libdir, const char *gamedir, const char *module)
 {
-    // Try rerelease game first
-    void *rerelease_game = TryLoadGameLibrary(libdir, gamedir, RERELEASE_CPUSTRING);
-    if (rerelease_game)
-        return rerelease_game;
-    // Fallback to vanilla game
-    return TryLoadGameLibrary(libdir, gamedir, CPUSTRING);
+    return TryLoadGameLibrary(libdir, gamedir, module, CPUSTRING);
 }
 
+static void *LoadSGameLibrary(const char *libdir, const char *gamedir)
+{
+    return LoadModuleLibrary(libdir, gamedir, "sgame");
+}
 
-void *GameDll_Load(void)
+static void *LoadCGameLibrary(const char *libdir, const char *gamedir)
+{
+    return LoadModuleLibrary(libdir, gamedir, "cgame");
+}
+
+void *SGameDll_Load(void)
 {
     void *gamelib = NULL;
 
@@ -85,18 +83,52 @@ void *GameDll_Load(void)
 
     // try game first
     if (!gamelib && fs_game->string[0]) {
-        if (sys_homedir->string[0])
-            gamelib = LoadGameLibrary(sys_homedir->string, fs_game->string);
+#ifdef _WIN32
+        gamelib = LoadSGameLibrary(".", fs_game->string);
+#endif
+        if (!gamelib && sys_basedir->string[0] && strcmp(sys_basedir->string, "."))
+            gamelib = LoadSGameLibrary(sys_basedir->string, fs_game->string);
         if (!gamelib)
-            gamelib = LoadGameLibrary(sys_libdir->string, fs_game->string);
+            gamelib = LoadSGameLibrary(sys_libdir->string, fs_game->string);
+        if (!gamelib && sys_homedir->string[0])
+            gamelib = LoadSGameLibrary(sys_homedir->string, fs_game->string);
     }
 
     // then try baseq2
     if (!gamelib) {
-        if (sys_homedir->string[0])
-            gamelib = LoadGameLibrary(sys_homedir->string, BASEGAME);
+#ifdef _WIN32
+        gamelib = LoadSGameLibrary(".", BASEGAME);
+#endif
+        if (!gamelib && sys_basedir->string[0] && strcmp(sys_basedir->string, "."))
+            gamelib = LoadSGameLibrary(sys_basedir->string, BASEGAME);
         if (!gamelib)
-            gamelib = LoadGameLibrary(sys_libdir->string, BASEGAME);
+            gamelib = LoadSGameLibrary(sys_libdir->string, BASEGAME);
+        if (!gamelib && sys_homedir->string[0])
+            gamelib = LoadSGameLibrary(sys_homedir->string, BASEGAME);
+    }
+
+    return gamelib;
+}
+
+void *CGameDll_Load(void)
+{
+    void *gamelib = NULL;
+
+    // for debugging or `proxy' mods
+    if (sys_forcegamelib->string[0])
+        gamelib = LoadGameLibraryFrom(sys_forcegamelib->string);
+
+    // cgame is always loaded from basedir (prefer current exe dir on Windows)
+    if (!gamelib) {
+#ifdef _WIN32
+        gamelib = LoadCGameLibrary(".", BASEGAME);
+#endif
+        if (!gamelib && sys_basedir->string[0] && strcmp(sys_basedir->string, "."))
+            gamelib = LoadCGameLibrary(sys_basedir->string, BASEGAME);
+        if (!gamelib)
+            gamelib = LoadCGameLibrary(sys_libdir->string, BASEGAME);
+        if (!gamelib && sys_homedir->string[0])
+            gamelib = LoadCGameLibrary(sys_homedir->string, BASEGAME);
     }
 
     return gamelib;

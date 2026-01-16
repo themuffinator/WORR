@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct mdfour {
     uint32_t A, B, C, D;
     uint64_t count;
@@ -29,3 +33,7 @@ void mdfour_update(struct mdfour *md, const uint8_t *in, size_t n);
 void mdfour_result(struct mdfour *md, uint8_t *out);
 
 uint32_t Com_BlockChecksum(const void *buffer, size_t len);
+
+#ifdef __cplusplus
+}
+#endif

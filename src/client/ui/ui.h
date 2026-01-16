@@ -381,3 +381,8 @@ void UI_MapDB_FetchEpisodes(char ***items, int *num_items);
 void UI_MapDB_FetchUnits(char ***items, int **item_indices, int *num_items);
 void UI_MapDB_Init(void);
 void UI_MapDB_Shutdown(void);
+
+void UI_Sys_UpdateTimes(void);
+void UI_Sys_UpdateNetFrom(void);
+void UI_Sys_UpdateRefConfig(void);
+void UI_Sys_UpdateGameDir(void);

@@ -1094,7 +1094,7 @@ void SV_InitGameProgs(void)
     // unload anything we have now
     SV_ShutdownGameProgs();
 
-    game_library = GameDll_Load();
+    game_library = SGameDll_Load();
     if (game_library)
         entry = Sys_GetProcAddress(game_library, "GetGameAPI");
     if (!entry)

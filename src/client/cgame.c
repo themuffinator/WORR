@@ -18,11 +18,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.h"
 #include "cgame_classic.h"
+#include "client/cgame_ui.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
 
 static cvar_t   *scr_alpha;
 static cvar_t   *scr_font;
+
+static void CG_AddCommandString(const char *string);
 
 static void scr_font_changed(cvar_t *self)
 {
@@ -65,6 +68,274 @@ static cgame_q2pro_extended_support_ext_t cgame_q2pro_extended_support = {
     .GetMaxStats = CGX_GetMaxStats,
     .DrawCharEx = CGX_DrawCharEx,
     .GetPmoveParams = CGX_GetPmoveParams,
+};
+
+static void CG_UI_GetNetFrom(netadr_t *out)
+{
+    if (out)
+        *out = net_from;
+}
+
+static const char *CG_UI_GetGameDir(void)
+{
+    return fs_gamedir;
+}
+
+static void CG_UI_GetConfig(refcfg_t *out)
+{
+    if (out)
+        *out = r_config;
+}
+
+static void CG_UI_SetClipboardData(const char *text)
+{
+    if (vid && vid->set_clipboard_data)
+        vid->set_clipboard_data(text);
+}
+
+static unsigned CG_UI_GetEventTime(void)
+{
+    return com_eventTime;
+}
+
+static unsigned CG_UI_GetLocalTime(void)
+{
+    return com_localTime;
+}
+
+static void CG_UI_SendStatusRequest(const netadr_t *address)
+{
+#if USE_UI
+    CL_SendStatusRequest(address);
+#else
+    (void)address;
+#endif
+}
+
+static void CG_UI_Com_Print(print_type_t type, const char *fmt, va_list args)
+{
+    char buffer[MAX_STRING_CHARS];
+
+    Q_vsnprintf(buffer, sizeof(buffer), fmt, args);
+    Com_LPrintf(type, "%s", buffer);
+}
+
+static void CG_UI_Com_Printf(const char *fmt, ...) q_printf(1, 2);
+static void CG_UI_Com_Printf(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    CG_UI_Com_Print(PRINT_ALL, fmt, args);
+    va_end(args);
+}
+
+static void CG_UI_Com_DPrintf(const char *fmt, ...) q_printf(1, 2);
+static void CG_UI_Com_DPrintf(const char *fmt, ...)
+{
+    va_list args;
+
+    if (!developer || developer->integer < 1)
+        return;
+
+    va_start(args, fmt);
+    CG_UI_Com_Print(PRINT_DEVELOPER, fmt, args);
+    va_end(args);
+}
+
+static void CG_UI_Com_WPrintf(const char *fmt, ...) q_printf(1, 2);
+static void CG_UI_Com_WPrintf(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    CG_UI_Com_Print(PRINT_WARNING, fmt, args);
+    va_end(args);
+}
+
+static void CG_UI_Com_EPrintf(const char *fmt, ...) q_printf(1, 2);
+static void CG_UI_Com_EPrintf(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    CG_UI_Com_Print(PRINT_ERROR, fmt, args);
+    va_end(args);
+}
+
+static qhandle_t CG_UI_RegisterModel(const char *name)
+{
+    return R_RegisterModel(name);
+}
+
+static qhandle_t CG_UI_RegisterImage(const char *name, imagetype_t type, imageflags_t flags)
+{
+    return R_RegisterImage(name, type, flags);
+}
+
+static bool CG_UI_GetPicSize(int *w, int *h, qhandle_t pic)
+{
+    return R_GetPicSize(w, h, pic);
+}
+
+static void CG_UI_RenderFrame(const refdef_t *fd)
+{
+    R_RenderFrame(fd);
+}
+
+static void CG_UI_SetClipRect(const clipRect_t *clip)
+{
+    R_SetClipRect(clip);
+}
+
+static void CG_UI_SetScale(float scale)
+{
+    R_SetScale(scale);
+}
+
+static float CG_UI_ClampScale(cvar_t *var)
+{
+    return R_ClampScale(var);
+}
+
+static void CG_UI_DrawChar(int x, int y, int flags, int ch, color_t color, qhandle_t font)
+{
+    R_DrawChar(x, y, flags, ch, color, font);
+}
+
+static int CG_UI_DrawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
+                                   const char *string, color_t color, qhandle_t font)
+{
+    return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font);
+}
+
+static void CG_UI_DrawPic(int x, int y, color_t color, qhandle_t pic)
+{
+    R_DrawPic(x, y, color, pic);
+}
+
+static void CG_UI_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
+{
+    R_DrawKeepAspectPic(x, y, w, h, color, pic);
+}
+
+static void CG_UI_DrawFill8(int x, int y, int w, int h, int c)
+{
+    R_DrawFill8(x, y, w, h, c);
+}
+
+static void CG_UI_DrawFill32(int x, int y, int w, int h, color_t color)
+{
+    R_DrawFill32(x, y, w, h, color);
+}
+
+static cgame_ui_import_t cg_ui_import = {
+    .api_version = CGAME_UI_API_VERSION,
+
+    .Com_Printf = CG_UI_Com_Printf,
+    .Com_DPrintf = CG_UI_Com_DPrintf,
+    .Com_WPrintf = CG_UI_Com_WPrintf,
+    .Com_EPrintf = CG_UI_Com_EPrintf,
+    .Com_Error = Com_Error,
+    .Com_FormatSize = Com_FormatSize,
+    .Com_FormatSizeLong = Com_FormatSizeLong,
+    .Q_ErrorString = Q_ErrorString,
+
+    .Sys_Milliseconds = Sys_Milliseconds,
+
+    .AddCommandString = CG_AddCommandString,
+    .Cmd_Argc = Cmd_Argc,
+    .Cmd_Argv = Cmd_Argv,
+    .Cmd_ArgvBuffer = Cmd_ArgvBuffer,
+    .Cmd_ArgsFrom = Cmd_ArgsFrom,
+    .Cmd_RawArgsFrom = Cmd_RawArgsFrom,
+    .Cmd_TokenizeString = Cmd_TokenizeString,
+    .Cmd_Register = Cmd_Register,
+    .Cmd_Deregister = Cmd_Deregister,
+    .Cmd_AddCommand = Cmd_AddCommand,
+    .Cmd_RemoveCommand = Cmd_RemoveCommand,
+    .Cmd_FindMacro = Cmd_FindMacro,
+
+    .Cvar_Get = Cvar_Get,
+    .Cvar_WeakGet = Cvar_WeakGet,
+    .Cvar_FindVar = Cvar_FindVar,
+    .Cvar_Set = Cvar_Set,
+    .Cvar_SetEx = Cvar_SetEx,
+    .Cvar_SetByVar = Cvar_SetByVar,
+    .Cvar_SetInteger = Cvar_SetInteger,
+    .Cvar_SetValue = Cvar_SetValue,
+    .Cvar_UserSet = Cvar_UserSet,
+    .Cvar_ClampInteger = Cvar_ClampInteger,
+    .Cvar_ClampValue = Cvar_ClampValue,
+    .Cvar_VariableString = Cvar_VariableString,
+    .Cvar_VariableInteger = Cvar_VariableInteger,
+
+    .Z_TagMalloc = Z_TagMalloc,
+    .Z_TagMallocz = Z_TagMallocz,
+    .Z_TagCopyString = Z_TagCopyString,
+    .Z_Free = Z_Free,
+    .Z_Freep = Z_Freep,
+    .Z_Realloc = Z_Realloc,
+    .Z_ReallocArray = Z_ReallocArray,
+    .Z_FreeTags = Z_FreeTags,
+    .Z_LeakTest = Z_LeakTest,
+
+    .FS_LoadFileEx = FS_LoadFileEx,
+    .FS_ListFiles = FS_ListFiles,
+    .FS_FreeList = FS_FreeList,
+    .FS_OpenFile = FS_OpenFile,
+    .FS_CloseFile = FS_CloseFile,
+    .FS_FPrintf = FS_FPrintf,
+    .FS_GetGameDir = CG_UI_GetGameDir,
+    .SV_GetSaveInfo = SV_GetSaveInfo,
+
+    .NET_IsEqualBaseAdr = NET_IsEqualBaseAdr,
+    .NET_AdrToString = NET_AdrToString,
+    .NET_StringToAdr = NET_StringToAdr,
+    .NET_GetLastAddress = CG_UI_GetNetFrom,
+
+    .Key_GetDest = Key_GetDest,
+    .Key_SetDest = Key_SetDest,
+    .Key_IsDown = Key_IsDown,
+    .Key_EnumBindings = Key_EnumBindings,
+    .Key_KeynumToString = Key_KeynumToString,
+    .Key_WaitKey = Key_WaitKey,
+    .Key_SetBinding = Key_SetBinding,
+    .Key_GetOverstrikeMode = Key_GetOverstrikeMode,
+    .Key_SetOverstrikeMode = Key_SetOverstrikeMode,
+
+    .IN_WarpMouse = IN_WarpMouse,
+
+    .SCR_UpdateScreen = SCR_UpdateScreen,
+    .SCR_ParseColor = SCR_ParseColor,
+    .V_CalcFov = V_CalcFov,
+
+    .CL_GetDemoInfo = CL_GetDemoInfo,
+    .CL_SendStatusRequest = CG_UI_SendStatusRequest,
+    .HTTP_FetchFile = HTTP_FetchFile,
+
+    .S_StartLocalSound = S_StartLocalSound,
+    .S_StopAllSounds = S_StopAllSounds,
+
+    .Re_RegisterModel = CG_UI_RegisterModel,
+    .Re_RegisterImage = CG_UI_RegisterImage,
+    .Re_GetPicSize = CG_UI_GetPicSize,
+    .Re_RenderFrame = CG_UI_RenderFrame,
+    .Re_SetClipRect = CG_UI_SetClipRect,
+    .Re_SetScale = CG_UI_SetScale,
+    .Re_ClampScale = CG_UI_ClampScale,
+    .Re_DrawChar = CG_UI_DrawChar,
+    .Re_DrawStringStretch = CG_UI_DrawStringStretch,
+    .Re_DrawPic = CG_UI_DrawPic,
+    .Re_DrawKeepAspectPic = CG_UI_DrawKeepAspectPic,
+    .Re_DrawFill8 = CG_UI_DrawFill8,
+    .Re_DrawFill32 = CG_UI_DrawFill32,
+    .Re_GetConfig = CG_UI_GetConfig,
+
+    .SetClipboardData = CG_UI_SetClipboardData,
+    .GetEventTime = CG_UI_GetEventTime,
+    .GetLocalTime = CG_UI_GetLocalTime,
+    .Con_Close = Con_Close,
 };
 
 void CG_Init(void)
@@ -128,8 +399,13 @@ static void CG_AddCommandString(const char *string)
 
 static void * CG_GetExtension(const char *name)
 {
+    if (!name)
+        return NULL;
     if (strcmp(name, cgame_q2pro_extended_support_ext) == 0) {
         return &cgame_q2pro_extended_support;
+    }
+    if (strcmp(name, CGAME_UI_IMPORT_EXT) == 0) {
+        return &cg_ui_import;
     }
     return NULL;
 }
@@ -152,6 +428,11 @@ static uint64_t CG_CL_ClientTime(void)
 static uint64_t CG_CL_ClientRealTime(void)
 {
     return com_localTime;
+}
+
+static uint64_t CG_CL_ClientRealTimeUnscaled(void)
+{
+    return com_localTime3;
 }
 
 static int32_t CG_CL_ServerFrame(void)
@@ -220,6 +501,12 @@ static void CG_SCR_DrawChar(int x, int y, int scale, int num, bool shadow)
                       draw_flags, num, apply_scr_alpha(COLOR_WHITE), scr.font_pic);
 }
 
+static void CG_SCR_DrawCharStretch(int x, int y, int w, int h, int flags, int ch, const rgba_t *color)
+{
+    color_t draw_color = apply_scr_alpha(color ? *color : COLOR_WHITE);
+    R_DrawStretchChar(x, y, w, h, flags, ch, draw_color, scr.font_pic);
+}
+
 static void CG_SCR_DrawPic (int x, int y, int w, int h, const char *name)
 {
     qhandle_t img = R_RegisterImage(name, IT_PIC, IF_NONE);
@@ -240,6 +527,15 @@ static void CG_SCR_DrawColorPic(int x, int y, int w, int h, const char* name, co
     R_DrawStretchPic(x, y,
                      w, h,
                      apply_scr_alpha(*color), img);
+}
+
+static void CG_SCR_WarpMouse(int x, int y)
+{
+    float pixel_scale = scr.hud_scale > 0.0f ? (scr.virtual_scale / scr.hud_scale) : scr.virtual_scale;
+    if (pixel_scale <= 0.0f)
+        pixel_scale = 1.0f;
+
+    IN_WarpMouse(Q_rint(x * pixel_scale), Q_rint(y * pixel_scale));
 }
 
 static void CG_SCR_SetAltTypeface(bool enabled)
@@ -329,7 +625,7 @@ static bool CG_CL_GetTextInput(const char **msg, bool *is_team)
 
 static int32_t CG_CL_GetWarnAmmoCount(int32_t weapon_id)
 {
-    return cl.wheel_data.weapons[weapon_id].quantity_warn;
+    return 0;
 }
 
 #define NUM_LOC_STRINGS     8
@@ -397,6 +693,12 @@ static int32_t CG_SCR_DrawBind(int32_t isplit, const char *binding, const char *
     return max(line_height, icon_size);
 }
 
+static int32_t CG_SCR_DrawBindIcon(const char *binding, int x, int y, int size, const rgba_t *color, const char **out_keyname)
+{
+    color_t draw_color = apply_scr_alpha(color ? *color : COLOR_WHITE);
+    return SCR_DrawBindIcon(binding, x, y, size, draw_color, out_keyname);
+}
+
 static bool CG_CL_InAutoDemoLoop(void)
 {
     // FIXME: implement
@@ -406,75 +708,133 @@ static bool CG_CL_InAutoDemoLoop(void)
 const cgame_export_t *cgame = NULL;
 static char *current_game = NULL;
 static bool current_rerelease_server;
+static const cgame_ui_export_t *cgame_ui;
 static void *cgame_library;
 
 typedef cgame_export_t *(*cgame_entry_t)(cgame_import_t *);
 
+static void CG_FillImports(cgame_import_t *imports)
+{
+    // cl.frametime.time is unset during early UI boot; avoid divide-by-zero.
+    const uint32_t frame_time_ms = CL_FRAMETIME ? (uint32_t)CL_FRAMETIME : BASE_FRAMETIME;
+
+    *imports = (cgame_import_t) {
+        .tick_rate = 1000 / frame_time_ms,
+        .frame_time_s = frame_time_ms * 0.001f,
+        .frame_time_ms = frame_time_ms,
+
+        .Com_Print = CG_Print,
+
+        .get_configstring = CG_get_configstring,
+
+        .Com_Error = CG_Com_Error,
+
+        .TagMalloc = CG_TagMalloc,
+        .TagFree = Z_Free,
+        .FreeTags = CG_FreeTags,
+
+        .cvar = CG_cvar,
+        .cvar_set = Cvar_UserSet,
+        .cvar_forceset = Cvar_Set,
+
+        .AddCommandString = CG_AddCommandString,
+
+        .GetExtension = CG_GetExtension,
+
+        .CL_FrameValid = CG_CL_FrameValid,
+
+        .CL_FrameTime = CG_CL_FrameTime,
+
+        .CL_ClientTime = CG_CL_ClientTime,
+        .CL_ClientRealTime = CG_CL_ClientRealTime,
+        .CL_ClientRealTimeUnscaled = CG_CL_ClientRealTimeUnscaled,
+        .CL_ServerFrame = CG_CL_ServerFrame,
+        .CL_ServerProtocol = CG_CL_ServerProtocol,
+        .CL_GetClientName = CG_CL_GetClientName,
+        .CL_GetClientPic = CG_CL_GetClientPic,
+        .CL_GetClientDogtag = CG_CL_GetClientDogtag,
+        .CL_GetKeyBinding = CG_CL_GetKeyBinding,
+        .Draw_RegisterPic = CG_Draw_RegisterPic,
+        .Draw_GetPicSize = CG_Draw_GetPicSize,
+        .SCR_DrawChar = CG_SCR_DrawChar,
+        .SCR_DrawCharStretch = CG_SCR_DrawCharStretch,
+        .SCR_DrawPic = CG_SCR_DrawPic,
+        .SCR_DrawColorPic = CG_SCR_DrawColorPic,
+
+        .SCR_SetAltTypeface = CG_SCR_SetAltTypeface,
+        .SCR_DrawFontString = CG_SCR_DrawFontString,
+        .SCR_MeasureFontString = CG_SCR_MeasureFontString,
+        .SCR_FontLineHeight = CG_SCR_FontLineHeight,
+        .SCR_WarpMouse = CG_SCR_WarpMouse,
+
+        .CL_GetTextInput = CG_CL_GetTextInput,
+
+        .CL_GetWarnAmmoCount = CG_CL_GetWarnAmmoCount,
+
+        .Localize = CG_Localize,
+
+        .SCR_DrawBind = CG_SCR_DrawBind,
+        .SCR_DrawBindIcon = CG_SCR_DrawBindIcon,
+
+        .CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop,
+    };
+}
+
+static const cgame_ui_export_t *CG_LoadUI(void)
+{
+    static bool warned_missing;
+    static bool warned_version;
+
+    if (cgame_ui)
+        return cgame_ui;
+
+    if (!cgame_library)
+        cgame_library = CGameDll_Load();
+    if (!cgame_library)
+        return NULL;
+
+    cgame_entry_t entry = Sys_GetProcAddress(cgame_library, "GetCGameAPI");
+    if (!entry) {
+        if (!warned_missing) {
+            Com_WPrintf("cgame UI export not available\n");
+            warned_missing = true;
+        }
+        return NULL;
+    }
+
+    cgame_import_t cgame_imports;
+    CG_FillImports(&cgame_imports);
+    const cgame_export_t *exports = entry(&cgame_imports);
+    if (!exports || !exports->GetExtension)
+        return NULL;
+
+    cgame_ui = exports->GetExtension(CGAME_UI_EXPORT_EXT);
+    if (cgame_ui && cgame_ui->api_version != CGAME_UI_API_VERSION) {
+        if (!warned_version) {
+            Com_WPrintf("cgame UI API version mismatch\n");
+            warned_version = true;
+        }
+        cgame_ui = NULL;
+    }
+
+    return cgame_ui;
+}
+
+const cgame_ui_export_t *CG_UI_GetExport(void)
+{
+    return CG_LoadUI();
+}
+
 void CG_Load(const char* new_game, bool is_rerelease_server)
 {
     if (!current_game || strcmp(current_game, new_game) != 0 || current_rerelease_server != is_rerelease_server) {
-        cgame_import_t cgame_imports = {
-            .tick_rate = 1000 / CL_FRAMETIME,
-            .frame_time_s = CL_FRAMETIME * 0.001f,
-            .frame_time_ms = CL_FRAMETIME,
-
-            .Com_Print = CG_Print,
-
-            .get_configstring = CG_get_configstring,
-
-            .Com_Error = CG_Com_Error,
-
-            .TagMalloc = CG_TagMalloc,
-            .TagFree = Z_Free,
-            .FreeTags = CG_FreeTags,
-
-            .cvar = CG_cvar,
-            .cvar_set = Cvar_UserSet,
-            .cvar_forceset = Cvar_Set,
-
-            .AddCommandString = CG_AddCommandString,
-
-            .GetExtension = CG_GetExtension,
-
-            .CL_FrameValid = CG_CL_FrameValid,
-
-            .CL_FrameTime = CG_CL_FrameTime,
-
-            .CL_ClientTime = CG_CL_ClientTime,
-            .CL_ClientRealTime = CG_CL_ClientRealTime,
-            .CL_ServerFrame = CG_CL_ServerFrame,
-            .CL_ServerProtocol = CG_CL_ServerProtocol,
-            .CL_GetClientName = CG_CL_GetClientName,
-            .CL_GetClientPic = CG_CL_GetClientPic,
-            .CL_GetClientDogtag = CG_CL_GetClientDogtag,
-            .CL_GetKeyBinding = CG_CL_GetKeyBinding,
-            .Draw_RegisterPic = CG_Draw_RegisterPic,
-            .Draw_GetPicSize = CG_Draw_GetPicSize,
-            .SCR_DrawChar = CG_SCR_DrawChar,
-            .SCR_DrawPic = CG_SCR_DrawPic,
-            .SCR_DrawColorPic = CG_SCR_DrawColorPic,
-
-            .SCR_SetAltTypeface = CG_SCR_SetAltTypeface,
-            .SCR_DrawFontString = CG_SCR_DrawFontString,
-            .SCR_MeasureFontString = CG_SCR_MeasureFontString,
-            .SCR_FontLineHeight = CG_SCR_FontLineHeight,
-
-            .CL_GetTextInput = CG_CL_GetTextInput,
-
-            .CL_GetWarnAmmoCount = CG_CL_GetWarnAmmoCount,
-
-            .Localize = CG_Localize,
-
-            .SCR_DrawBind = CG_SCR_DrawBind,
-
-            .CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop,
-        };
+        cgame_import_t cgame_imports;
+        CG_FillImports(&cgame_imports);
 
         cgame_entry_t entry = NULL;
         if (is_rerelease_server) {
-            if (cgame_library)
-                Sys_FreeLibrary(cgame_library);
-            cgame_library = GameDll_Load();
+            if (!cgame_library)
+                cgame_library = CGameDll_Load();
             if (cgame_library)
                 entry = Sys_GetProcAddress(cgame_library, "GetCGameAPI");
         } else {
@@ -490,6 +850,10 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
         }
 
         cgame = entry(&cgame_imports);
+        if (!cgame || cgame->apiversion != CGAME_API_VERSION) {
+            Com_Error(ERR_DROP, "cgame API version mismatch (got %d, expected %d)",
+                      cgame ? cgame->apiversion : -1, CGAME_API_VERSION);
+        }
         Z_Freep(&current_game);
         current_game = Z_CopyString(new_game);
         current_rerelease_server = is_rerelease_server;
@@ -499,8 +863,17 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
 void CG_Unload(void)
 {
     cgame = NULL;
+    cgame_ui = NULL;
     Z_Freep(&current_game);
 
     Sys_FreeLibrary(cgame_library);
     cgame_library = NULL;
+}
+
+float CL_Wheel_TimeScale(void)
+{
+    if (cgame && cgame->Wheel_TimeScale)
+        return cgame->Wheel_TimeScale();
+
+    return 1.0f;
 }

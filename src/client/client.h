@@ -155,60 +155,6 @@ typedef struct {
 #define STEP_TIME       100
 
 typedef struct {
-    int         main;
-    int         wheel;
-    int         selected;
-} cl_wheel_icon_t;
-
-typedef struct {
-    int             item_index;
-    cl_wheel_icon_t icons;
-    int             ammo_index;
-    int             min_ammo;
-    int             sort_id;
-    int             quantity_warn;
-    bool            is_powerup;
-    bool            can_drop;
-} cl_wheel_weapon_t;
-
-typedef struct {
-    int             item_index;
-    cl_wheel_icon_t icons;
-} cl_wheel_ammo_t;
-
-typedef struct {
-    int             item_index;
-    cl_wheel_icon_t icons;
-    int             sort_id;
-    int             ammo_index;
-    bool            is_toggle;
-    bool            can_drop;
-} cl_wheel_powerup_t;
-
-typedef enum {
-    WHEEL_CLOSED,   // release holster
-    WHEEL_CLOSING,  // do not draw or process, but keep holster held
-    WHEEL_OPEN      // draw & process + holster
-} cl_wheel_state_t;
-
-typedef struct {
-    bool                  has_item;
-    bool                  is_powerup;
-    bool                  has_ammo;
-    int                   data_id;
-    int                   item_index;
-    int                   sort_id;
-    const cl_wheel_icon_t *icons;
-
-    // cached data
-    float   popout;
-    float   icon_scale;
-    float   angle;
-    vec2_t  dir;
-    float   dot;
-} cl_wheel_slot_t;
-
-typedef struct {
     player_fog_t linear;
     player_heightfog_t height;
 } cl_fog_params_t;
@@ -402,54 +348,6 @@ typedef struct {
         cl_fog_params_t     start, end;
         int                 lerp_time, lerp_time_start;
     } fog;
-
-    // data for weapon wheel stuff
-    struct {
-        cl_wheel_weapon_t weapons[MAX_WHEEL_ITEMS];
-        int               num_weapons;
-
-        cl_wheel_ammo_t ammo[MAX_WHEEL_ITEMS];
-        int             num_ammo;
-
-        cl_wheel_powerup_t powerups[MAX_WHEEL_ITEMS];
-        int                num_powerups;
-    } wheel_data;
-
-    // weapon bar state
-    struct {
-        cl_wheel_state_t state;
-        int              close_time; // time when we will close
-        int              selected; // selected item index
-
-        struct {
-            bool    has_ammo;
-            int     data_id;
-            int     item_index;
-        } slots[MAX_WHEEL_ITEMS * 2];
-        size_t      num_slots;
-    } weapon_bar;
-
-    // weapon wheel state
-    struct {
-        cl_wheel_state_t state;
-        vec2_t           position;
-        float            distance;
-        vec2_t           dir;
-        bool             is_powerup_wheel;
-        float            timer, timescale;
-
-        cl_wheel_slot_t slots[MAX_WHEEL_ITEMS * 2];
-        size_t          num_slots;
-
-        float       slice_deg;
-        float       slice_sin;
-
-        int         selected; // -1 = no selection
-        int         deselect_time; // if non-zero, deselect after < com_localTime
-        int         input_block_until; // ignore input until < com_localTime
-    } wheel;
-
-    int weapon_lock_time; // don't allow BUTTON_ATTACK within this time
 
     // shadow lights
     struct {
@@ -926,28 +824,6 @@ void V_AddLightStyle(int style, float value);
 void CL_UpdateBlendSetting(void);
 void V_FogParamsChanged(unsigned bits, unsigned color_bits, unsigned hf_start_color_bits, unsigned hf_end_color_bits, const cl_fog_params_t *params, int time);
 
-// weapon_bar.c
-void CL_WeaponBar_Draw(void);
-void CL_WeaponBar_Input(void);
-void CL_WeaponBar_ClearInput(void);
-void CL_WeaponBar_Cycle(int offset);
-void CL_WeaponBar_Precache(void);
-void CL_WeaponBar_Init(void);
-
-// wheel.c
-void CL_Wheel_WeapNext(void);
-void CL_Wheel_WeapPrev(void);
-void CL_Wheel_Precache(void);
-void CL_Wheel_Init(void);
-void CL_Wheel_Open(bool powerup);
-void CL_Wheel_Close(bool released);
-bool CL_Wheel_Attack(void);
-bool CL_Wheel_DropWeapon(void);
-bool CL_Wheel_DropAmmo(void);
-void CL_Wheel_Input(int x, int y);
-void CL_Wheel_Draw(void);
-void CL_Wheel_Update(void);
-void CL_Wheel_ClearInput(void);
 float CL_Wheel_TimeScale(void);
 
 //
@@ -1238,11 +1114,6 @@ typedef struct {
     
     kfont_t     kfont;
 
-    qhandle_t   weapon_bar_selected;
-    qhandle_t   wheel_circle;
-    int         wheel_size;
-    qhandle_t   wheel_button;
-    int         wheel_button_size;
 } cl_scr_t;
 
 extern cl_scr_t scr;

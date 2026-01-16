@@ -600,6 +600,8 @@ static void Expose(menuFrameWork_t *self)
         m_demos.year = tm->tm_year;
     }
 
+    UI_Sys_UpdateGameDir();
+
     // check that target directory exists
     if (strcmp(m_demos.browse, "/")
         && ui_listalldemos->integer == 0

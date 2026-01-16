@@ -129,6 +129,8 @@ static void UI_Resize(void)
 {
     int i;
 
+    UI_Sys_UpdateRefConfig();
+
     int base_width = r_config.width;
     int base_height = r_config.height;
     UI_GetVirtualScreen(&base_width, &base_height, NULL);
@@ -423,6 +425,8 @@ UI_MouseEvent
 */
 void UI_MouseEvent(int x, int y)
 {
+    UI_Sys_UpdateRefConfig();
+
     x = Q_clip(x, 0, r_config.width - 1);
     y = Q_clip(y, 0, r_config.height - 1);
 
@@ -443,6 +447,8 @@ UI_Draw
 void UI_Draw(unsigned realtime)
 {
     int i;
+
+    UI_Sys_UpdateRefConfig();
 
     uis.realtime = realtime;
 
@@ -566,10 +572,7 @@ void UI_CharEvent(int key)
 
 static void UI_Menu_g(genctx_t *ctx)
 {
-    menuFrameWork_t *menu;
-
-    LIST_FOR_EACH(menuFrameWork_t, menu, &ui_menus, entry)
-        Prompt_AddMatch(ctx, menu->name);
+    (void)ctx;
 }
 
 static void UI_PushMenu_c(genctx_t *ctx, int argnum)

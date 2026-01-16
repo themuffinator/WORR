@@ -385,7 +385,7 @@ static void IN_StrafeUp(void) { KeyUp(&in_strafe); }
 
 static void IN_AttackDown(void)
 {
-    if (CL_Wheel_Attack())
+    if (cgame && cgame->Wheel_IsOpen && cgame->Wheel_IsOpen())
         return;
 
     KeyDown(&in_attack);
@@ -433,10 +433,10 @@ static void IN_MLookUp(void)
 
 static void IN_HolsterDown(void) { KeyDown(&in_holster); }
 static void IN_HolsterUp(void) { KeyUp(&in_holster); }
-static void IN_WheelDown(void) { CL_Wheel_Open(false); }
-static void IN_WheelUp(void) { CL_Wheel_Close(true); }
-static void IN_Wheel2Down(void) { CL_Wheel_Open(true); }
-static void IN_Wheel2Up(void) { CL_Wheel_Close(true); }
+static void IN_WheelDown(void) { if (cgame && cgame->Wheel_Open) cgame->Wheel_Open(false); }
+static void IN_WheelUp(void) { if (cgame && cgame->Wheel_Close) cgame->Wheel_Close(true); }
+static void IN_Wheel2Down(void) { if (cgame && cgame->Wheel_Open) cgame->Wheel_Open(true); }
+static void IN_Wheel2Up(void) { if (cgame && cgame->Wheel_Close) cgame->Wheel_Close(true); }
 
 static void IN_WeapNext(void)
 {
@@ -445,7 +445,10 @@ static void IN_WeapNext(void)
         return;
     }
 
-    CL_Wheel_WeapNext();
+    if (cgame && cgame->Wheel_WeapNext)
+        cgame->Wheel_WeapNext();
+    else
+        Cbuf_AddText(&cmd_buffer, "weapnext\n");
 }
 
 static void IN_WeapPrev(void)
@@ -455,7 +458,10 @@ static void IN_WeapPrev(void)
         return;
     }
 
-    CL_Wheel_WeapPrev();
+    if (cgame && cgame->Wheel_WeapPrev)
+        cgame->Wheel_WeapPrev();
+    else
+        Cbuf_AddText(&cmd_buffer, "weapprev\n");
 }
 
 /*
@@ -521,10 +527,9 @@ static void CL_MouseMove(void)
     input.old_dx = dx;
     input.old_dy = dy;
 
-    // always send input to wheel even if we didn't move
-    if (cl.wheel.state == WHEEL_OPEN) {
-        CL_Wheel_Input(dx, dy);
-    }
+    bool wheel_open = cgame && cgame->Wheel_IsOpen && cgame->Wheel_IsOpen();
+    if (wheel_open && cgame->Wheel_Input)
+        cgame->Wheel_Input(dx, dy);
 
     if (!mx && !my) {
         return;
@@ -546,12 +551,12 @@ static void CL_MouseMove(void)
 // add mouse X/Y movement
     if ((in_strafe.state & 1) || (lookstrafe->integer && !in_mlooking)) {
         cl.mousemove[1] += m_side->value * mx;
-    } else if (cl.wheel.state != WHEEL_OPEN) {
+    } else if (!wheel_open) {
         cl.viewangles[YAW] -= m_yaw->value * mx;
     }
 
     if ((in_mlooking || freelook->integer) && !(in_strafe.state & 1)) {
-        if (cl.wheel.state != WHEEL_OPEN) {
+        if (!wheel_open) {
             cl.viewangles[PITCH] += m_pitch->value * my;
         }
     } else {
@@ -818,7 +823,10 @@ void CL_FinalizeCmd(void)
 //
 // figure button bits
 //
-    if (in_attack.state & 3 && cl.weapon_lock_time <= cl.time && cl.wheel.state != WHEEL_OPEN)
+    bool allow_attack = true;
+    if (cgame && cgame->Wheel_AllowAttack)
+        allow_attack = cgame->Wheel_AllowAttack();
+    if (in_attack.state & 3 && allow_attack)
         cl.cmd.buttons |= BUTTON_ATTACK;
     if (in_use.state & 3)
         cl.cmd.buttons |= BUTTON_USE;
@@ -828,6 +836,9 @@ void CL_FinalizeCmd(void)
         cl.cmd.buttons |= BUTTON_JUMP;
     if (in_down.state & 3)
         cl.cmd.buttons |= BUTTON_CROUCH;
+
+    if (cgame && cgame->Wheel_ApplyButtons)
+        cgame->Wheel_ApplyButtons(&cl.cmd.buttons);
 
     if (cls.key_dest == KEY_GAME && Key_AnyKeyDown()) {
         cl.cmd.buttons |= BUTTON_ANY;
@@ -855,7 +866,8 @@ void CL_FinalizeCmd(void)
     cl.cmd.sidemove = move[1];
 
     // update wheels before we save it off
-    CL_WeaponBar_Input();
+    if (cgame && cgame->WeaponBar_Input)
+        cgame->WeaponBar_Input(&cl.frame.ps, &cl.cmd.buttons);
 
     // save this command off for prediction
     cl.cmdNumber++;
@@ -1278,8 +1290,10 @@ void CL_SendCmd(void)
         CL_SendDefaultCmd();
     }
     
-    CL_WeaponBar_ClearInput();
-    CL_Wheel_ClearInput();
+    if (cgame && cgame->WeaponBar_ClearInput)
+        cgame->WeaponBar_ClearInput();
+    if (cgame && cgame->Wheel_ClearInput)
+        cgame->Wheel_ClearInput();
 
     cl.sendPacketNow = false;
 }

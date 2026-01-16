@@ -17,8 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "ui.h"
-#include "server/server.h"
 #include "common/files.h"
+#include "server/server.h"
 
 /*
 ===================================================================

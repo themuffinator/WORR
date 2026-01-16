@@ -425,111 +425,6 @@ static qhandle_t CL_RegisterImage(const char *s)
     return R_RegisterTempPic(s);
 }
 
-#define MAX_WHEEL_VALUES 8
-
-/*
-=================
-CL_LoadWheelIcons
-=================
-*/
-static cl_wheel_icon_t CL_LoadWheelIcons(int icon_index)
-{
-    cl_wheel_icon_t icons = { .main = cl.image_precache[icon_index] };
-
-    char path[MAX_QPATH];
-    Q_snprintf(path, sizeof(path), "wheel/%s", cl.configstrings[cl.csr.images + icon_index]);
-
-    icons.wheel = R_RegisterTempPic(path);
-
-    if (!icons.wheel) {
-        icons.wheel = icons.selected = icons.main;
-    } else {
-        Q_snprintf(path, sizeof(path), "wheel/%s_selected", cl.configstrings[cl.csr.images + icon_index]);
-
-        icons.selected = R_RegisterTempPic(path);
-
-        if (!icons.selected) {
-            icons.selected = icons.wheel;
-        }
-    }
-
-    return icons;
-}
-
-/*
-=================
-CL_LoadWheelEntry
-=================
-*/
-static void CL_LoadWheelEntry(int index, const char *s)
-{
-    configstring_t entry;
-    Q_strlcpy(entry, s, sizeof(entry));
-    int values[MAX_WHEEL_VALUES];
-    size_t num_values = 0;
-
-    for (char *start = entry; num_values < MAX_WHEEL_VALUES && start && *start; ) {
-        char *end = strchr(start, '|');
-
-        if (end) {
-            *end = '\0';
-        }
-
-        char *endptr;
-        values[num_values++] = strtol(start, &endptr, 10);
-
-        // sanity
-        if (endptr == start) {
-            return;
-        }
-
-        start = end ? (end + 1) : NULL;
-    }
-
-    // parse & sanity check
-    if (index >= cl.csr.wheelammo + MAX_WHEEL_ITEMS) {
-        if (num_values != 6) {
-            return;
-        }
-
-        index = index - cl.csr.wheelpowerups;
-        
-        cl.wheel_data.powerups[index].item_index = values[0];
-        cl.wheel_data.powerups[index].icons = CL_LoadWheelIcons(values[1]);
-        cl.wheel_data.powerups[index].is_toggle = values[2];
-        cl.wheel_data.powerups[index].sort_id = values[3];
-        cl.wheel_data.powerups[index].can_drop = values[4];
-        cl.wheel_data.powerups[index].ammo_index = values[5];
-        cl.wheel_data.num_powerups = max(index + 1, cl.wheel_data.num_powerups);
-    } else if (index >= cl.csr.wheelweapons + MAX_WHEEL_ITEMS) {
-        if (num_values != 2) {
-            return;
-        }
-
-        index = index - cl.csr.wheelammo;
-        
-        cl.wheel_data.ammo[index].item_index = values[0];
-        cl.wheel_data.ammo[index].icons = CL_LoadWheelIcons(values[1]);
-        cl.wheel_data.num_ammo = max(index + 1, cl.wheel_data.num_ammo);
-    } else {
-        if (num_values != 8) {
-            return;
-        }
-
-        index = index - cl.csr.wheelweapons;
-        
-        cl.wheel_data.weapons[index].item_index = values[0];
-        cl.wheel_data.weapons[index].icons = CL_LoadWheelIcons(values[1]);
-        cl.wheel_data.weapons[index].ammo_index = values[2];
-        cl.wheel_data.weapons[index].min_ammo = values[3];
-        cl.wheel_data.weapons[index].is_powerup = values[4];
-        cl.wheel_data.weapons[index].sort_id = values[5];
-        cl.wheel_data.weapons[index].quantity_warn = values[6];
-        cl.wheel_data.weapons[index].can_drop = values[7];
-        cl.wheel_data.num_weapons = max(index + 1, cl.wheel_data.num_weapons);
-    }
-}
-
 /*
 =================
 CS_LoadShadowLight
@@ -643,9 +538,6 @@ void CL_PrepRenderer(void)
     
     cgame->TouchPics();
 
-    CL_WeaponBar_Precache();
-    CL_Wheel_Precache();
-
     CL_LoadState(LOAD_CLIENTS);
     for (i = 0; i < MAX_CLIENTS; i++) {
         name = cl.configstrings[cl.csr.playerskins + i];
@@ -660,15 +552,8 @@ void CL_PrepRenderer(void)
     // set sky textures and speed
     CL_SetSky();
 
-    // load wheel data
-    int n;
-    for (n = cl.csr.wheelweapons, i = 0; i < MAX_WHEEL_ITEMS * 3; i++, n++) {
-        if (*cl.configstrings[n]) {
-            CL_LoadWheelEntry(n, cl.configstrings[n]);
-        }
-    }
-
     // load shadow lights
+    int n;
     for (n = cl.csr.shadowlights, i = 0; i < MAX_SHADOW_LIGHTS; i++, n++) {
         if (*cl.configstrings[n]) {
             CS_LoadShadowLight(n, cl.configstrings[n]);
@@ -750,11 +635,6 @@ static void update_configstring(int index)
 
     if (index == CS_SKYROTATE || index == CS_SKYAXIS) {
         CL_SetSky();
-        return;
-    }
-
-    if (index >= cl.csr.wheelweapons && index < cl.csr.wheelpowerups + cl.csr.max_wheelitems) {
-        CL_LoadWheelEntry(index, s);
         return;
     }
 
