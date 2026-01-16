@@ -400,7 +400,7 @@ sgame_src += [
 cgame_src = bgame_src + [
   'src/game/cgame/cg_local.h',
   'src/game/cgame/cg_main.cpp',
-  'src/game/cgame/cg_screen.cpp',
+  'src/game/cgame/cg_draw.cpp',
   'src/game/cgame/cg_ui_export.c',
   'src/game/cgame/cg_ui_sys.c',
   'src/game/cgame/cg_fmt.cpp',

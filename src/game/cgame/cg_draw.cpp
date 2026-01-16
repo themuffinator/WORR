@@ -1,5 +1,6 @@
 // Copyright (c) ZeniMax Media Inc.
 // Licensed under the GNU General Public License 2.0.
+// cg_draw.cpp -- HUD/screen drawing (Quake 3-style layout)
 #include "cg_local.h"
 #include "cg_wheel.h"
 
