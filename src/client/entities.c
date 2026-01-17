@@ -533,6 +533,56 @@ static float lerp_entity_alpha(const centity_t *ent)
     return curr ? curr : 1.0f;
 }
 
+static bool CL_IsPlayerEntity(const entity_state_t *state)
+{
+    return state->modelindex == MODELINDEX_PLAYER && state->number <= cl.maxclients;
+}
+
+static bool CL_GetPlayerTeamInfo(const entity_state_t *state, uint8_t *team_index, bool *is_dead)
+{
+    if (team_index)
+        *team_index = 0;
+    if (is_dead)
+        *is_dead = false;
+
+    if (cl.game_api != Q2PROTO_GAME_RERELEASE || !cl.csr.extended)
+        return false;
+
+    player_skinnum_t unpacked = { .skinnum = state->skinnum };
+
+    if (team_index)
+        *team_index = unpacked.team_index;
+    if (is_dead)
+        *is_dead = unpacked.poi_icon != 0;
+
+    return true;
+}
+
+static color_t CL_PlayerTeamColor(uint8_t team_index)
+{
+    switch (team_index) {
+    case 1:
+        return COLOR_RED;
+    case 2:
+        return COLOR_BLUE;
+    default:
+        return COLOR_RED;
+    }
+}
+
+static color_t CL_PlayerEffectColor(bool teamplay, uint8_t team_index)
+{
+    if (teamplay && team_index)
+        return CL_PlayerTeamColor(team_index);
+
+    return COLOR_RED;
+}
+
+static bool CL_IsThirdPersonSelf(const entity_state_t *state)
+{
+    return cl.thirdPersonView && state->number == cl.frame.clientNum + 1;
+}
+
 /*
 ===============
 CL_AddPacketEntities
@@ -553,7 +603,17 @@ static void CL_AddPacketEntities(void)
     renderfx_t              renderfx;
     bool                    has_alpha, has_trail;
     float                   custom_alpha;
+    float                   entity_alpha;
     uint64_t                custom_flags;
+    bool                    enemy_outline_enabled;
+    float                   self_outline_alpha;
+    bool                    self_outline_enabled;
+    float                   enemy_rim_alpha;
+    bool                    enemy_rim_enabled;
+    float                   self_rim_alpha;
+    bool                    self_rim_enabled;
+    uint8_t                 my_team;
+    bool                    teamplay;
 
     // bonus items rotate at a fixed rate
     autorotate = anglemod(cl.time * 0.1f);
@@ -562,6 +622,16 @@ static void CL_AddPacketEntities(void)
     autoanim = cl.time / 500;
 
     autobob = 5 * sinf(cl.time / 400.0f);
+
+    enemy_outline_enabled = Cvar_ClampValue(cl_enemy_outline, 0.0f, 1.0f) > 0.0f;
+    self_outline_alpha = Cvar_ClampValue(cl_enemy_outline_self, 0.0f, 1.0f);
+    self_outline_enabled = self_outline_alpha > 0.0f && cl.thirdPersonView;
+    enemy_rim_alpha = Cvar_ClampValue(cl_enemy_rimlight, 0.0f, 1.0f);
+    enemy_rim_enabled = enemy_rim_alpha > 0.0f;
+    self_rim_alpha = Cvar_ClampValue(cl_enemy_rimlight_self, 0.0f, 1.0f);
+    self_rim_enabled = self_rim_alpha > 0.0f && cl.thirdPersonView;
+    my_team = cl.frame.ps.team_id;
+    teamplay = my_team != 0;
 
     memset(&ent, 0, sizeof(ent));
 
@@ -936,6 +1006,7 @@ static void CL_AddPacketEntities(void)
                 ent.flags |= RF_TRANSLUCENT;
             custom_flags = ent.flags & RF_TRANSLUCENT;
         }
+        entity_alpha = (ent.flags & RF_TRANSLUCENT) ? ent.alpha : 1.0f;
 
         // tracker effect is duplicated for linked models
         if (IS_TRACKER(effects)) {
@@ -944,6 +1015,54 @@ static void CL_AddPacketEntities(void)
         }
 
         VectorSet(ent.scale, s1->scale, s1->scale, s1->scale);
+
+        if (enemy_outline_enabled || self_outline_enabled || enemy_rim_enabled || self_rim_enabled) {
+            bool is_self = CL_IsThirdPersonSelf(s1);
+            bool is_player = CL_IsPlayerEntity(s1);
+            uint8_t other_team = 0;
+            bool is_dead = false;
+            bool has_team_info = is_player && CL_GetPlayerTeamInfo(s1, &other_team, &is_dead);
+            bool is_enemy = false;
+            bool is_ally = false;
+            bool valid_player = is_player && !is_dead;
+
+            if (valid_player && !is_self) {
+                if (teamplay && has_team_info) {
+                    if (other_team) {
+                        if (other_team == my_team)
+                            is_ally = true;
+                        else
+                            is_enemy = true;
+                    }
+                } else {
+                    is_enemy = true;
+                }
+            }
+
+            bool outline_enemy = enemy_outline_enabled && is_enemy;
+            bool outline_ally = enemy_outline_enabled && is_ally;
+            bool outline_self = self_outline_enabled && is_self && valid_player;
+
+            if (outline_enemy || outline_ally || outline_self) {
+                uint8_t team_index = outline_self ? my_team : other_team;
+                color_t outline_color = CL_PlayerEffectColor(teamplay, team_index);
+                ent.rgba = COLOR_SETA_F(outline_color, entity_alpha);
+                ent.flags |= RF_OUTLINE;
+                if (outline_ally)
+                    ent.flags |= RF_OUTLINE_NODEPTH;
+            }
+
+            if ((enemy_rim_enabled && (is_enemy || is_ally)) || (self_rim_enabled && is_self && valid_player)) {
+                float rim_scale = is_self ? self_rim_alpha : enemy_rim_alpha;
+                uint8_t team_index = is_self ? my_team : other_team;
+                color_t rim_color = CL_PlayerEffectColor(teamplay, team_index);
+                entity_t rim = ent;
+                rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
+                rim.alpha = entity_alpha * rim_scale;
+                rim.rgba = rim_color;
+                V_AddEntity(&rim);
+            }
+        }
 
         // add to renderer list
         V_AddEntity(&ent);

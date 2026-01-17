@@ -45,6 +45,10 @@ cvar_t  *cl_rollhack;
 cvar_t  *cl_noglow;
 cvar_t  *cl_nobob;
 cvar_t  *cl_nolerp;
+cvar_t  *cl_enemy_outline;
+cvar_t  *cl_enemy_outline_self;
+cvar_t  *cl_enemy_rimlight;
+cvar_t  *cl_enemy_rimlight_self;
 
 #if USE_DEBUG
 cvar_t  *cl_shownet;
@@ -2804,6 +2808,10 @@ static void CL_InitLocal(void)
     cl_nobob = Cvar_Get("cl_nobob", "0", 0);
     cl_nolerp = Cvar_Get("cl_nolerp", "0", 0);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
+    cl_enemy_outline = Cvar_Get("cl_enemy_outline", "0", CVAR_ARCHIVE);
+    cl_enemy_outline_self = Cvar_Get("cl_enemy_outline_self", "0", CVAR_ARCHIVE);
+    cl_enemy_rimlight = Cvar_Get("cl_enemy_rimlight", "0", CVAR_ARCHIVE);
+    cl_enemy_rimlight_self = Cvar_Get("cl_enemy_rimlight_self", "0", CVAR_ARCHIVE);
 
     // hack for timedemo
     com_timedemo->changed = cl_sync_changed;

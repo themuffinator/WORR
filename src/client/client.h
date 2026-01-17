@@ -597,6 +597,10 @@ extern cvar_t   *cl_noglow;
 extern cvar_t   *cl_nobob;
 extern cvar_t   *cl_nolerp;
 extern cvar_t   *cl_shadowlights;
+extern cvar_t   *cl_enemy_outline;
+extern cvar_t   *cl_enemy_outline_self;
+extern cvar_t   *cl_enemy_rimlight;
+extern cvar_t   *cl_enemy_rimlight_self;
 
 #if USE_DEBUG
 #define SHOWNET(level, ...) \

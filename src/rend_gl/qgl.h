@@ -67,6 +67,7 @@ QGLAPI void (APIENTRYP qglPolygonOffset)(GLfloat factor, GLfloat units);
 QGLAPI void (APIENTRYP qglReadPixels)(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels);
 QGLAPI void (APIENTRYP qglScissor)(GLint x, GLint y, GLsizei width, GLsizei height);
 QGLAPI void (APIENTRYP qglStencilFunc)(GLenum func, GLint ref, GLuint mask);
+QGLAPI void (APIENTRYP qglStencilMask)(GLuint mask);
 QGLAPI void (APIENTRYP qglStencilOp)(GLenum fail, GLenum zfail, GLenum zpass);
 QGLAPI void (APIENTRYP qglTexImage2D)(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
 QGLAPI void (APIENTRYP qglTexParameterf)(GLenum target, GLenum pname, GLfloat param);

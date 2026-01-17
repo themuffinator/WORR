@@ -71,6 +71,7 @@ static const glsection_t sections[] = {
             QGL_FN(ReadPixels),
             QGL_FN(Scissor),
             QGL_FN(StencilFunc),
+            QGL_FN(StencilMask),
             QGL_FN(StencilOp),
             QGL_FN(TexImage2D),
             QGL_FN(TexParameterf),

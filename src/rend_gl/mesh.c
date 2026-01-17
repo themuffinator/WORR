@@ -48,6 +48,9 @@ static mat4_t       m_shadow_model;     // fog hack
 
 static const model_t *m_model;
 
+#define OUTLINE_SCALE 1.02f
+#define OUTLINE_STENCIL_REF 1
+
 #if USE_MD5
 static md5_joint_t  temp_skeleton[MD5_MAX_JOINTS];
 #endif
@@ -62,7 +65,7 @@ static void setup_dotshading(void)
     if (!gl_dotshading->integer || (gl_static.use_shaders && gl_per_pixel_lighting->integer))
         return;
 
-    if (glr.ent->flags & (RF_SHELL_MASK | RF_TRACKER))
+    if (glr.ent->flags & (RF_SHELL_MASK | RF_TRACKER | RF_RIMLIGHT))
         return;
 
     if (drawshadow == SHADOW_ONLY)
@@ -368,7 +371,12 @@ static void setup_color(void)
 
     memset(&glr.lightpoint, 0, sizeof(glr.lightpoint));
 
-    if (flags & RF_SHELL_MASK) {
+    if (flags & RF_RIMLIGHT) {
+        color_t rim = glr.ent->rgba.u32 ? glr.ent->rgba : COLOR_RED;
+        color[0] = rim.r * (1.0f / 255.0f);
+        color[1] = rim.g * (1.0f / 255.0f);
+        color[2] = rim.b * (1.0f / 255.0f);
+    } else if (flags & RF_SHELL_MASK) {
         VectorClear(color);
         if (flags & RF_SHELL_LITE_GREEN)
             VectorSet(color, 0.56f, 0.93f, 0.56f);
@@ -436,6 +444,35 @@ static void uniform_mesh_color(float r, float g, float b, float a)
         Vector4Set(gls.u_block.mesh.color, r, g, b, a);
         gls.u_block_dirty = true;
     }
+}
+
+static void build_outline_matrix(mat4_t matrix, float scale)
+{
+    vec3_t axis[3];
+
+    VectorScale(glr.entaxis[0], scale, axis[0]);
+    VectorScale(glr.entaxis[1], scale, axis[1]);
+    VectorScale(glr.entaxis[2], scale, axis[2]);
+
+    matrix[ 0] = axis[0][0];
+    matrix[ 4] = axis[1][0];
+    matrix[ 8] = axis[2][0];
+    matrix[12] = glr.ent->origin[0];
+
+    matrix[ 1] = axis[0][1];
+    matrix[ 5] = axis[1][1];
+    matrix[ 9] = axis[2][1];
+    matrix[13] = glr.ent->origin[1];
+
+    matrix[ 2] = axis[0][2];
+    matrix[ 6] = axis[1][2];
+    matrix[10] = axis[2][2];
+    matrix[14] = glr.ent->origin[2];
+
+    matrix[ 3] = 0;
+    matrix[ 7] = 0;
+    matrix[11] = 0;
+    matrix[15] = 1;
 }
 
 static void draw_celshading(const uint16_t *indices, int num_indices)
@@ -647,6 +684,12 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
 {
     glStateBits_t state;
     const image_t *skin;
+    const bool outline = (glr.ent->flags & RF_OUTLINE) && gl_config.stencilbits;
+    const bool outline_no_depth = outline && (glr.ent->flags & RF_OUTLINE_NODEPTH);
+    glStateBits_t outline_bits = 0;
+    glStateBits_t outline_meshbits = 0;
+    color_t outline_color = COLOR_RED;
+    float outline_alpha = 1.0f;
 
     c.trisDrawn += num_indices / 3;
 
@@ -664,6 +707,28 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     uniform_mesh_color(color[0], color[1], color[2], color[3]);
     GL_LoadUniforms();
     GL_LoadLights();
+
+    if (outline) {
+        outline_meshbits = meshbits & ~(GLS_MESH_SHADE | GLS_MESH_SHELL | GLS_RIMLIGHT);
+        outline_bits = glr.fog_bits | GLS_DEPTHMASK_FALSE;
+        if (!gls.currentva)
+            outline_bits |= outline_meshbits;
+
+        outline_color = glr.ent->rgba.u32 ? glr.ent->rgba : COLOR_RED;
+        outline_alpha = outline_color.a * (1.0f / 255.0f);
+        if (outline_alpha < 0.999f)
+            outline_bits |= GLS_BLEND_BLEND;
+        if (outline_no_depth)
+            outline_bits |= GLS_DEPTHTEST_DISABLE;
+    }
+
+    if (outline && !outline_no_depth) {
+        qglEnable(GL_STENCIL_TEST);
+        qglStencilMask(0xff);
+        qglStencilFunc(GL_ALWAYS, OUTLINE_STENCIL_REF, 0xff);
+        qglStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        gl_static.stencil_buffer_bit |= GL_STENCIL_BUFFER_BIT;
+    }
 
     // avoid drawing hidden faces by pre-filling depth buffer, but not for
     // explosions and muzzleflashes
@@ -690,8 +755,12 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     else if (dotshading)
         state |= GLS_SHADE_SMOOTH;
 
-    if (glr.ent->flags & RF_TRANSLUCENT)
-        state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
+    if (glr.ent->flags & RF_TRANSLUCENT) {
+        if (glr.ent->flags & RF_RIMLIGHT)
+            state |= GLS_BLEND_ADD | GLS_DEPTHMASK_FALSE;
+        else
+            state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
+    }
 
     skin = skin_for_mesh(skins, num_skins);
     if (skin->texnum2)
@@ -699,11 +768,11 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
 
     if (glr.framebuffer_bound && gl_bloom->integer) {
         state |= GLS_BLOOM_GENERATE;
-        if (glr.ent->flags & RF_SHELL_MASK)
+        if (glr.ent->flags & (RF_SHELL_MASK | RF_RIMLIGHT))
             state |= GLS_BLOOM_SHELL;
     }
 
-    if (!(state & GLS_MESH_SHELL) && glr.ppl_dlight_bits)
+    if (!(state & (GLS_MESH_SHELL | GLS_RIMLIGHT)) && glr.ppl_dlight_bits)
         state |= glr.ppl_bits;
 
     GL_StateBits(state);
@@ -725,10 +794,78 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
 
     qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
 
+    if (outline_no_depth) {
+        if (gls.currentva) {
+            GL_ArrayBits(GLA_VERTEX | GLA_TC);
+            gl_backend->tex_coord_pointer((const GLfloat *)tcoords);
+        }
+
+        GL_StateBits(outline_bits);
+        GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+        uniform_mesh_color(0.0f, 0.0f, 0.0f, 0.0f);
+        GL_LoadUniforms();
+
+        qglEnable(GL_STENCIL_TEST);
+        qglStencilMask(0xff);
+        qglStencilFunc(GL_ALWAYS, OUTLINE_STENCIL_REF, 0xff);
+        qglStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        gl_static.stencil_buffer_bit |= GL_STENCIL_BUFFER_BIT;
+
+        qglColorMask(0, 0, 0, 0);
+        qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+        qglColorMask(1, 1, 1, 1);
+
+        qglDisable(GL_STENCIL_TEST);
+    } else if (outline) {
+        qglDisable(GL_STENCIL_TEST);
+    }
+
     draw_celshading(indices, num_indices);
 
     if (gl_showtris->integer & SHOWTRIS_MESH)
         GL_DrawOutlines(num_indices, GL_UNSIGNED_SHORT, indices);
+
+    if (outline) {
+        mat4_t outline_matrix;
+        float outline_r = outline_color.r * (1.0f / 255.0f);
+        float outline_g = outline_color.g * (1.0f / 255.0f);
+        float outline_b = outline_color.b * (1.0f / 255.0f);
+
+        build_outline_matrix(outline_matrix, OUTLINE_SCALE);
+        GL_LoadMatrix(outline_matrix, glr.viewmatrix);
+        GL_StateBits(outline_bits);
+
+        if (gls.currentva) {
+            GL_ArrayBits(GLA_VERTEX | GLA_TC);
+            gl_backend->tex_coord_pointer((const GLfloat *)tcoords);
+        }
+
+        uniform_mesh_color(outline_r, outline_g, outline_b, outline_alpha);
+        GL_LoadUniforms();
+
+        GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+
+        // Stencil outline: draw where the model isn't, then clear the stencil mask.
+        qglEnable(GL_STENCIL_TEST);
+        qglStencilMask(0x00);
+        qglStencilFunc(GL_NOTEQUAL, OUTLINE_STENCIL_REF, 0xff);
+        qglStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+        qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+
+        qglStencilMask(0xff);
+        qglStencilFunc(GL_EQUAL, OUTLINE_STENCIL_REF, 0xff);
+        qglStencilOp(GL_ZERO, GL_ZERO, GL_ZERO);
+        qglColorMask(0, 0, 0, 0);
+        GL_LoadMatrix(glr.entmatrix, glr.viewmatrix);
+        GL_LoadUniforms();
+        qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+        qglColorMask(1, 1, 1, 1);
+
+        qglDisable(GL_STENCIL_TEST);
+        GL_LoadMatrix(glr.entmatrix, glr.viewmatrix);
+        GL_LoadUniforms();
+    }
 
     // FIXME: unlock arrays before changing matrix?
     draw_shadow(indices, num_indices);
@@ -1088,6 +1225,8 @@ void GL_DrawAliasModel(const model_t *model)
             meshbits |= GLS_MESH_SHELL;
         else if (dotshading)
             meshbits |= GLS_MESH_SHADE;
+        if (ent->flags & RF_RIMLIGHT)
+            meshbits |= GLS_RIMLIGHT;
 
         VectorCopy(oldscale, gls.u_block.mesh.oldscale);
         VectorCopy(newscale, gls.u_block.mesh.newscale);
