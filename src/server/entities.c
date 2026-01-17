@@ -650,6 +650,11 @@ void SV_BuildClientFrame(client_t *client)
     CM_FatPVS(client->cm, &clientpvs, org);
     BSP_ClusterVis(client->cm->cache, &clientphs, clientcluster, DVIS_PHS);
 
+    bool client_is_spectator = clent->client->ps.pmove.pm_type == PM_SPECTATOR
+        || clent->client->ps.pmove.pm_type == PM_FREEZE;
+    bool client_is_dead = clent->client->ps.pmove.pm_type == PM_DEAD
+        || clent->client->ps.pmove.pm_type == PM_GIB;
+
     // build up the list of visible entities
     frame->num_entities = 0;
     frame->first_entity = client->next_entity;
@@ -679,12 +684,21 @@ void SV_BuildClientFrame(client_t *client)
                 continue;
         }
 
+        bool force_visible = false;
+        if (ent != clent && ent->client && clent->client) {
+            uint8_t my_team = clent->client->ps.team_id;
+            if (my_team && ent->client->ps.team_id == my_team)
+                force_visible = true;
+            if (client_is_spectator || client_is_dead)
+                force_visible = true;
+        }
+
         // ignore flares if client says so
         if (client->csr->extended && ent->s.renderfx & RF_FLARE && client->settings[CLS_NOFLARES])
             continue;
 
         // ignore if not touching a PV leaf
-        if (ent != clent && !sv_novis->integer && !(ent->svflags & SVF_NOCULL)) {
+        if (ent != clent && !sv_novis->integer && !(ent->svflags & SVF_NOCULL) && !force_visible) {
             // check area
             if (!CM_AreasConnected(client->cm, clientarea, ent->areanum)) {
                 // doors can legally straddle two areas, so
