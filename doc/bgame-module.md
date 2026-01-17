@@ -6,8 +6,8 @@
 - `bgame` sources are compiled into both `sgame` and `cgame`.
 
 ## Layout
-- `src/game/bgame/`: shared headers and movement code (`bg_local.h`, `game.h`,
-  `m_flash.h`, `p_move.cpp`, `q_std.h`, `q_vec3.h`).
+- `src/game/bgame/`: shared headers and movement code (`bg_local.hpp`,
+  `game.hpp`, `m_flash.hpp`, `p_move.cpp`, `q_std.hpp`, `q_vec3.hpp`).
 - `src/game/sgame/`: server game implementation.
 - `src/game/cgame/`: client game implementation.
 

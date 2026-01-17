@@ -128,7 +128,10 @@ enum {
     SVFL_TRAP_DANGER        = BIT_ULL(27),
     SVFL_ACTIVE             = BIT_ULL(28),
     SVFL_IS_SPECTATOR       = BIT_ULL(29),
-    SVFL_IN_TEAM            = BIT_ULL(30)
+    SVFL_IN_TEAM            = BIT_ULL(30),
+    SVFL_OBJECTIVE_AT_BASE  = BIT_ULL(31),
+    SVFL_OBJECTIVE_TAKEN    = BIT_ULL(32),
+    SVFL_OBJECTIVE_DROPPED  = BIT_ULL(33)
 };
 
 #define MAX_NETNAME         32

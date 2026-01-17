@@ -274,18 +274,18 @@ void CL_RegisterTEntSounds(void)
 }
 
 static const char *const muzzlenames[MFLASH_TOTAL] = {
-    [MFLASH_MACHN]     = "v_machn",
-    [MFLASH_SHOTG2]    = "v_shotg2",
-    [MFLASH_SHOTG]     = "v_shotg",
-    [MFLASH_ROCKET]    = "v_rocket",
-    [MFLASH_RAIL]      = "v_rail",
-    [MFLASH_LAUNCH]    = "v_launch",
-    [MFLASH_ETF_RIFLE] = "v_etf_rifle",
-    [MFLASH_DIST]      = "v_dist",
-    [MFLASH_BOOMER]    = "v_boomer",
-    [MFLASH_BLAST]     = "v_blast",
-    [MFLASH_BFG]       = "v_bfg",
-    [MFLASH_BEAMER]    = "v_beamer",
+    "v_machn",
+    "v_shotg2",
+    "v_shotg",
+    "v_rocket",
+    "v_rail",
+    "v_launch",
+    "v_etf_rifle",
+    "v_dist",
+    "v_boomer",
+    "v_blast",
+    "v_bfg",
+    "v_beamer",
 };
 
 /*

@@ -747,7 +747,6 @@ static void CG_FillImports(cgame_import_t *imports)
 
         .CL_ClientTime = CG_CL_ClientTime,
         .CL_ClientRealTime = CG_CL_ClientRealTime,
-        .CL_ClientRealTimeUnscaled = CG_CL_ClientRealTimeUnscaled,
         .CL_ServerFrame = CG_CL_ServerFrame,
         .CL_ServerProtocol = CG_CL_ServerProtocol,
         .CL_GetClientName = CG_CL_GetClientName,
@@ -757,7 +756,6 @@ static void CG_FillImports(cgame_import_t *imports)
         .Draw_RegisterPic = CG_Draw_RegisterPic,
         .Draw_GetPicSize = CG_Draw_GetPicSize,
         .SCR_DrawChar = CG_SCR_DrawChar,
-        .SCR_DrawCharStretch = CG_SCR_DrawCharStretch,
         .SCR_DrawPic = CG_SCR_DrawPic,
         .SCR_DrawColorPic = CG_SCR_DrawColorPic,
 
@@ -765,7 +763,6 @@ static void CG_FillImports(cgame_import_t *imports)
         .SCR_DrawFontString = CG_SCR_DrawFontString,
         .SCR_MeasureFontString = CG_SCR_MeasureFontString,
         .SCR_FontLineHeight = CG_SCR_FontLineHeight,
-        .SCR_WarpMouse = CG_SCR_WarpMouse,
 
         .CL_GetTextInput = CG_CL_GetTextInput,
 
@@ -774,9 +771,12 @@ static void CG_FillImports(cgame_import_t *imports)
         .Localize = CG_Localize,
 
         .SCR_DrawBind = CG_SCR_DrawBind,
-        .SCR_DrawBindIcon = CG_SCR_DrawBindIcon,
 
         .CL_InAutoDemoLoop = CG_CL_InAutoDemoLoop,
+        .CL_ClientRealTimeUnscaled = CG_CL_ClientRealTimeUnscaled,
+        .SCR_DrawCharStretch = CG_SCR_DrawCharStretch,
+        .SCR_WarpMouse = CG_SCR_WarpMouse,
+        .SCR_DrawBindIcon = CG_SCR_DrawBindIcon,
     };
 }
 

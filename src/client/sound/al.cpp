@@ -477,7 +477,7 @@ static void AL_SetReverbStepIDs(void)
 
 static void AL_LoadReverbEnvironments(void)
 {
-    json_parse_t parser = {0};
+    json_parse_t parser{};
     al_reverb_environment_t *environments = NULL;
     size_t n = 0;
 
@@ -762,6 +762,7 @@ static sfxcache_t *AL_UploadSfx(sfx_t *s)
     ALsizei size = s_info.samples * s_info.width * s_info.channels;
     ALenum format = AL_GetSampleFormat(s_info.width, s_info.channels);
     ALuint buffer = 0;
+    sfxcache_t *sc = nullptr;
 
     if (!format) {
         Com_SetLastError("Unsupported sample format");
@@ -789,7 +790,7 @@ static sfxcache_t *AL_UploadSfx(sfx_t *s)
     }
 
     // allocate placeholder sfxcache
-    sfxcache_t *sc = s->cache = static_cast<sfxcache_t *>(S_Malloc(sizeof(*sc)));
+    sc = s->cache = static_cast<sfxcache_t *>(S_Malloc(sizeof(*sc)));
     sc->length = s_info.samples * 1000LL / s_info.rate; // in msec
     sc->loopstart = s_info.loopstart;
     sc->width = s_info.width;
@@ -1352,6 +1353,6 @@ const sndapi_t snd_openal = {
     .play_channel = AL_PlayChannel,
     .stop_channel = AL_StopChannel,
     .stop_all_sounds = AL_StopAllSounds,
-    .end_registration = AL_EndRegistration,
     .get_sample_rate = QAL_GetSampleRate,
+    .end_registration = AL_EndRegistration,
 };

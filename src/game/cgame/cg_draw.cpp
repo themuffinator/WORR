@@ -1209,7 +1209,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (value >= MAX_IMAGES)
                     cgi.Com_Error("Pic >= MAX_IMAGES");
 
-                const char *const pic = cgi.get_configstring(CS_IMAGES + value);
+                const char *const pic = cgi.get_configString(CS_IMAGES + value);
 
                 if (pic && *pic)
                 {
@@ -1461,9 +1461,9 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
                 if (!scr_usekfont->integer)
-                    CG_DrawString (x, y, scale, cgi.get_configstring(index));
+                    CG_DrawString (x, y, scale, cgi.get_configString(index));
                 else
-                    cgi.SCR_DrawFontString(cgi.get_configstring(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
+                    cgi.SCR_DrawFontString(cgi.get_configString(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
             }
             continue;
         }
@@ -1575,9 +1575,9 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
                 if (!scr_usekfont->integer)
-                    CG_DrawString (x, y, scale, cgi.Localize(cgi.get_configstring(index), nullptr, 0));
+                    CG_DrawString (x, y, scale, cgi.Localize(cgi.get_configString(index), nullptr, 0));
                 else
-                    cgi.SCR_DrawFontString(cgi.Localize(cgi.get_configstring(index), nullptr, 0), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
+                    cgi.SCR_DrawFontString(cgi.Localize(cgi.get_configString(index), nullptr, 0), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
             }
             continue;
         }
@@ -1598,7 +1598,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                const char *s = cgi.Localize(cgi.get_configstring(index), nullptr, 0);
+                const char *s = cgi.Localize(cgi.get_configString(index), nullptr, 0);
                 if (!scr_usekfont->integer)
                     CG_DrawString (x - (strlen(s) * CONCHAR_WIDTH * scale), y, scale, s);
                 else
@@ -1626,7 +1626,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                CG_DrawHUDString (cgi.Localize(cgi.get_configstring(index), nullptr, 0), x, y, hx*2*scale, 0, scale);
+                CG_DrawHUDString (cgi.Localize(cgi.get_configString(index), nullptr, 0), x, y, hx*2*scale, 0, scale);
             }
             continue;
         }
@@ -1647,7 +1647,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                CG_DrawHUDString (cgi.Localize(cgi.get_configstring(index), nullptr, 0), x, y, hx*2*scale, 0x80, scale);
+                CG_DrawHUDString (cgi.Localize(cgi.get_configString(index), nullptr, 0), x, y, hx*2*scale, 0x80, scale);
             }
             continue;
         }
@@ -1784,7 +1784,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (end_frame < cgi.CL_ServerFrame())
                     continue;
 
-                uint64_t remaining_ms = (end_frame - cgi.CL_ServerFrame()) * cgi.frame_time_ms;
+                uint64_t remaining_ms = (end_frame - cgi.CL_ServerFrame()) * cgi.frameTimeMs;
 
                 const bool green = true;
                 arg_buffers[0] = G_Fmt("{:02}:{:02}", (remaining_ms / 1000) / 60, (remaining_ms / 1000) % 60).data();
@@ -1925,7 +1925,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 continue;
 
             const byte *stat = reinterpret_cast<const byte *>(&ps->stats[STAT_HEALTH_BARS]);
-            const char *name = cgi.Localize(cgi.get_configstring(CONFIG_HEALTH_BAR_NAME), nullptr, 0);
+            const char *name = cgi.Localize(cgi.get_configString(CONFIG_HEALTH_BAR_NAME), nullptr, 0);
 
             CG_DrawHUDString(name, (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
 
@@ -1957,7 +1957,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
         if (!strcmp(token, "story"))
         {
-            const char *story_str = cgi.get_configstring(CONFIG_STORY);
+            const char *story_str = cgi.get_configString(CONFIG_STORY);
 
             if (!*story_str)
                 continue;
@@ -2044,7 +2044,7 @@ static void CG_DrawInventory(const player_state_t *ps, const std::array<int16_t,
         {
             CG_DrawString(x, y, scale,
                 G_Fmt("{:3} {}", inventory[item],
-                    cgi.Localize(cgi.get_configstring(CS_ITEMS + item), nullptr, 0)).data(),
+                    cgi.Localize(cgi.get_configString(CS_ITEMS + item), nullptr, 0)).data(),
                 item == selected, false);
         }
         else
@@ -2052,7 +2052,7 @@ static void CG_DrawInventory(const player_state_t *ps, const std::array<int16_t,
             const char *string = G_Fmt("{}", inventory[item]).data();
             cgi.SCR_DrawFontString(string, x + (216 * scale) - (16 * scale), y - (font_y_offset * scale), scale, (item == selected) ? alt_color : rgba_white, true, text_align_t::RIGHT);
 
-            string = cgi.Localize(cgi.get_configstring(CS_ITEMS + item), nullptr, 0);
+            string = cgi.Localize(cgi.get_configString(CS_ITEMS + item), nullptr, 0);
             cgi.SCR_DrawFontString(string, x + (16 * scale), y - (font_y_offset * scale), scale, (item == selected) ? alt_color : rgba_white, true, text_align_t::LEFT);
         }
             
@@ -2077,7 +2077,7 @@ void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect
 
     // draw HUD
     if (!cl_skipHud->integer && !(ps->stats[STAT_LAYOUTS] & LAYOUTS_HIDE_HUD))
-        CG_ExecuteLayoutString(cgi.get_configstring(CS_STATUSBAR), hud_vrect, hud_safe, scale, playernum, ps);
+        CG_ExecuteLayoutString(cgi.get_configString(CS_STATUSBAR), hud_vrect, hud_safe, scale, playernum, ps);
 
     // draw centerprint string
     CG_CheckDrawCenterString(ps, hud_vrect, hud_safe, isplit, scale);

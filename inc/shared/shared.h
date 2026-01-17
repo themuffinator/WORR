@@ -1056,6 +1056,7 @@ typedef enum {
 #define PMF_NO_ANGULAR_PREDICTION       BIT(8)  // temporary disables angular prediction
 #define PMF_IGNORE_PLAYER_COLLISION     BIT(9)  // don't collide with other players
 #define PMF_TIME_TRICK                  BIT(10) // pm_time is trick jump time
+#define PMF_HASTE                       BIT(11) // haste powerup active
 #define PMF_TELEPORT_BIT                BIT(15) // used by Q2PRO (non-extended servers)
 
 typedef uint16_t pmflags_t;
@@ -1076,6 +1077,7 @@ typedef struct {
     vec3_t      delta_angles;   // add to command angles to get view direction
                                 // changed by spawns, rotating objects, and teleporters
     int8_t      viewheight; // view height, added to origin[2] + viewoffset[2], for crouching
+    bool        haste;
 } pmove_state_t;
 #endif // !defined(GAME3_INCLUDE)
 
@@ -1100,6 +1102,14 @@ typedef struct {
     float   forwardmove, sidemove;
     uint32_t server_frame;
 } usercmd_t;
+
+typedef uint8_t water_level_t;
+enum {
+    WATER_NONE,
+    WATER_FEET,
+    WATER_WAIST,
+    WATER_UNDER
+};
 
 // For RDF_xxx values
 typedef uint8_t refdef_flags_t;
@@ -1132,7 +1142,7 @@ typedef struct {
     struct edict_s  *groundentity;
     cplane_t    groundplane;
     contents_t  watertype;
-    int         waterlevel;
+    water_level_t waterlevel;
 
     struct edict_s *player; // opaque handle
 
@@ -1448,7 +1458,45 @@ typedef uint8_t soundchan_t;
 // 3 is the max you'll ever hold, and for some
 // (flashlight) it's to indicate on/off state
 #define NUM_BITS_PER_POWERUP 2
-#define POWERUP_MAX 23
+typedef enum powerup_e {
+    POWERUP_NONE,
+    POWERUP_SCREEN,
+    POWERUP_SHIELD,
+
+    POWERUP_AM_BOMB,
+
+    POWERUP_QUAD,
+    POWERUP_HASTE,
+    POWERUP_BATTLESUIT,
+    POWERUP_INVISIBILITY,
+    POWERUP_SILENCER,
+    POWERUP_REBREATHER,
+    POWERUP_ENVIROSUIT,
+    POWERUP_ADRENALINE,
+    POWERUP_IR_GOGGLES,
+    POWERUP_DOUBLE,
+    POWERUP_SPHERE_VENGEANCE,
+    POWERUP_SPHERE_HUNTER,
+    POWERUP_SPHERE_DEFENDER,
+    POWERUP_DOPPELGANGER,
+
+    POWERUP_FLASHLIGHT,
+    POWERUP_COMPASS,
+
+    POWERUP_TECH_DISRUPTOR_SHIELD,
+    POWERUP_TECH_POWER_AMP,
+    POWERUP_TECH_TIME_ACCEL,
+    POWERUP_TECH_AUTODOC,
+
+    POWERUP_REGENERATION,
+    POWERUP_EMPATHY_SHIELD,
+    POWERUP_ANTIGRAV_BELT,
+    POWERUP_SPAWN_PROTECTION,
+
+    POWERUP_BALL,
+
+    POWERUP_MAX
+} powerup_t;
 #define NUM_POWERUP_STATS num_of_type_for_bits(uint16_t, NUM_BITS_PER_POWERUP * POWERUP_MAX)
 #endif // !defined(GAME3_INCLUDE)
 
@@ -1463,19 +1511,32 @@ enum {
     STAT_SELECTED_ICON,
     STAT_PICKUP_ICON,
     STAT_PICKUP_STRING,
-    STAT_TIMER_ICON,
-    STAT_TIMER,
+    STAT_POWERUP_ICON,
+    STAT_POWERUP_TIME,
     STAT_HELPICON,
     STAT_SELECTED_ITEM,
     STAT_LAYOUTS,
-    STAT_FRAGS,
+    STAT_SCORE,
     STAT_FLASHES,           // cleared each frame, 1 = health, 2 = armor
-    STAT_CHASE,
+    STAT_FOLLOWING,
     STAT_SPECTATOR,
 
-#if !defined(GAME3_INCLUDE)
-    MAX_STATS = 64, // KEX
+    STAT_MINISCORE_FIRST_PIC,
+    STAT_MINISCORE_FIRST_SCORE,
+    STAT_MINISCORE_SECOND_PIC,
+    STAT_MINISCORE_SECOND_SCORE,
+    STAT_CTF_FLAG_PIC,
+    STAT_MINISCORE_FIRST_POS,
+    STAT_MINISCORE_SECOND_POS,
+    STAT_TEAM_RED_HEADER,
+    STAT_TEAM_BLUE_HEADER,
+    STAT_TECH,
+    STAT_CROSSHAIR_ID_VIEW,
+    STAT_MATCH_STATE,
+    STAT_CROSSHAIR_ID_VIEW_COLOR,
+    STAT_TEAMPLAY_INFO,
 
+#if !defined(GAME3_INCLUDE)
     // [Kex] More stats for weapon wheel
     STAT_WEAPONS_OWNED_1 = 32,
     STAT_WEAPONS_OWNED_2 = 33,
@@ -1490,7 +1551,7 @@ enum {
     STAT_KEY_C,
 
     // [Paril-KEX] currently active wheel weapon (or one we're switching to)
-    STAT_ACTIVE_WHEEL_WEAPON = 47,
+    STAT_ACTIVE_WHEEL_WEAPON,
 	// [Paril-KEX] top of screen coop respawn state
 	STAT_COOP_RESPAWN,
 	// [Paril-KEX] respawns remaining
@@ -1503,8 +1564,34 @@ enum {
 	STAT_HEALTH_BARS, // two health bar values; 7 bits for value, 1 bit for active
 	// [Paril-KEX]
 	STAT_ACTIVE_WEAPON,
+
+    STAT_SCORELIMIT,
+    STAT_DUEL_HEADER,
+
+    STAT_SHOW_STATUSBAR,
+
+    STAT_COUNTDOWN,
+
+    STAT_MINISCORE_FIRST_VAL,
+    STAT_MINISCORE_SECOND_VAL,
+
+    STAT_MONSTER_COUNT,
+    STAT_ROUND_NUMBER,
+
+    STAT_GAMEPLAY_CARRIED,
+
+    STAT_LAST
 #endif // !defined(GAME3_INCLUDE)
 };
+
+#if !defined(GAME3_INCLUDE)
+enum { MAX_STATS = STAT_LAST };
+#endif // !defined(GAME3_INCLUDE)
+
+#define STAT_TIMER_ICON STAT_POWERUP_ICON
+#define STAT_TIMER STAT_POWERUP_TIME
+#define STAT_FRAGS STAT_SCORE
+#define STAT_CHASE STAT_FOLLOWING
 
 #define MAX_STATS_OLD   32
 #define MAX_STATS_NEW   64

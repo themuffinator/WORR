@@ -55,6 +55,11 @@ typedef struct {
 #define QALC_FN(x)  { "alc"#x, &qalc##x, alc##x }
 #define QAL_FN(x)   { "al"#x, &qal##x, al##x }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmicrosoft-cast"
+#endif
+
 static const alsection_t sections[] = {
     {
         .functions = (const alfunction_t []) {
@@ -117,6 +122,10 @@ static const alsection_t sections[] = {
         }
     },
 };
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 static cvar_t   *al_device;
 static cvar_t   *al_hrtf;

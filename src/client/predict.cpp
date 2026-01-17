@@ -263,10 +263,12 @@ void CL_PredictMovement(void)
     pm.s = cl.frame.ps.pmove;
     VectorCopy(cl.frame.ps.viewoffset, pm.viewoffset);
     pm.snapinitial = qtrue;
+    const bool haste = (pm.s.pm_flags & PMF_HASTE) != 0;
 
     // run framesgit 
     while (++ack <= current) {
         pm.cmd = cl.cmds[ack & CMD_MASK];
+        pm.s.haste = haste;
         cgame->Pmove(&pm);
         pm.snapinitial = qfalse;
 
@@ -279,6 +281,7 @@ void CL_PredictMovement(void)
         pm.cmd = cl.cmd;
         pm.cmd.forwardmove = cl.localmove[0];
         pm.cmd.sidemove = cl.localmove[1];
+        pm.s.haste = haste;
         cgame->Pmove(&pm);
         frame = current;
 

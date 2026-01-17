@@ -162,9 +162,9 @@ static void Size(menuFrameWork_t *self)
 
     if (uis.canvas_width < 640) {
         x -= CONCHAR_WIDTH * 10;
-        m_player.hand.generic.name = "hand";
+        m_player.hand.generic.name = const_cast<char *>("hand");
     } else {
-        m_player.hand.generic.name = "handedness";
+        m_player.hand.generic.name = const_cast<char *>("handedness");
     }
 
     m_player.name.generic.x     = x;
@@ -283,7 +283,7 @@ static bool Push(menuFrameWork_t *self)
                      &m_player.menu.banner_rc.height, m_player.menu.banner);
         m_player.menu.title = NULL;
     } else {
-        m_player.menu.title = "Player Setup";
+        m_player.menu.title = const_cast<char *>("Player Setup");
     }
 
     ReloadMedia();
@@ -307,7 +307,7 @@ void M_Menu_PlayerConfig(void)
     static const vec3_t origin = { 40.0f, 0.0f, 0.0f };
     static const vec3_t angles = { 0.0f, 260.0f, 0.0f };
 
-    m_player.menu.name = "players";
+    m_player.menu.name = const_cast<char *>("players");
     m_player.menu.push = Push;
     m_player.menu.pop = Pop;
     m_player.menu.size = Size;
@@ -333,32 +333,32 @@ void M_Menu_PlayerConfig(void)
 
     m_player.name.generic.type = MTYPE_FIELD;
     m_player.name.generic.flags = QMF_HASFOCUS;
-    m_player.name.generic.name = "name";
+    m_player.name.generic.name = const_cast<char *>("name");
     m_player.name.width = MAX_CLIENT_NAME - 1;
 
     m_player.model.generic.type = MTYPE_SPINCONTROL;
     m_player.model.generic.id = ID_MODEL;
-    m_player.model.generic.name = "model";
+    m_player.model.generic.name = const_cast<char *>("model");
     m_player.model.generic.change = Change;
 
     m_player.skin.generic.type = MTYPE_SPINCONTROL;
     m_player.skin.generic.id = ID_SKIN;
-    m_player.skin.generic.name = "skin";
+    m_player.skin.generic.name = const_cast<char *>("skin");
     m_player.skin.generic.change = Change;
 
     m_player.hand.generic.type = MTYPE_SPINCONTROL;
-    m_player.hand.generic.name = "handedness";
+    m_player.hand.generic.name = const_cast<char *>("handedness");
     m_player.hand.itemnames = const_cast<char **>(handedness);
 
     m_player.dogtag.generic.type = MTYPE_IMAGESPINCONTROL;
-    m_player.dogtag.generic.name = "dogtag";
+    m_player.dogtag.generic.name = const_cast<char *>("dogtag");
     m_player.dogtag.generic.width = 192;
     m_player.dogtag.generic.height = 32;
     m_player.dogtag.cvar = Cvar_FindVar("dogtag");
     if (!m_player.dogtag.cvar)
         m_player.dogtag.cvar = Cvar_Get("dogtag", "default", CVAR_USERINFO | CVAR_ARCHIVE);
-    m_player.dogtag.path = "tags";
-    m_player.dogtag.filter = "*";
+    m_player.dogtag.path = const_cast<char *>("tags");
+    m_player.dogtag.filter = const_cast<char *>("*");
 
     Menu_AddItem(&m_player.menu, &m_player.name);
     Menu_AddItem(&m_player.menu, &m_player.model);

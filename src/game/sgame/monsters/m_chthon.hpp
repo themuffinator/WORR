@@ -1,0 +1,130 @@
+#pragma once
+
+#include "../g_local.hpp"
+
+/*
+===============
+Chthon Frames (matches models/monsters/chthon/tris.md2)
+===============
+*/
+enum {
+        FRAME_rise01 = 0,
+        FRAME_rise02,
+        FRAME_rise03,
+        FRAME_rise04,
+        FRAME_rise05,
+        FRAME_rise06,
+        FRAME_rise07,
+        FRAME_rise08,
+        FRAME_rise09,
+        FRAME_rise10,
+        FRAME_rise11,
+        FRAME_rise12,
+        FRAME_rise13,
+        FRAME_rise14,
+        FRAME_rise15,
+        FRAME_rise16,
+        FRAME_rise17,
+
+        FRAME_walk01,
+        FRAME_walk02,
+        FRAME_walk03,
+        FRAME_walk04,
+        FRAME_walk05,
+        FRAME_walk06,
+        FRAME_walk07,
+        FRAME_walk08,
+        FRAME_walk09,
+        FRAME_walk10,
+        FRAME_walk11,
+        FRAME_walk12,
+        FRAME_walk13,
+        FRAME_walk14,
+        FRAME_walk15,
+        FRAME_walk16,
+        FRAME_walk17,
+        FRAME_walk18,
+        FRAME_walk19,
+        FRAME_walk20,
+        FRAME_walk21,
+        FRAME_walk22,
+        FRAME_walk23,
+        FRAME_walk24,
+        FRAME_walk25,
+        FRAME_walk26,
+        FRAME_walk27,
+        FRAME_walk28,
+        FRAME_walk29,
+        FRAME_walk30,
+        FRAME_walk31,
+
+        FRAME_death01,
+        FRAME_death02,
+        FRAME_death03,
+        FRAME_death04,
+        FRAME_death05,
+        FRAME_death06,
+        FRAME_death07,
+        FRAME_death08,
+        FRAME_death09,
+
+        FRAME_attack01,
+        FRAME_attack02,
+        FRAME_attack03,
+        FRAME_attack04,
+        FRAME_attack05,
+        FRAME_attack06,
+        FRAME_attack07,
+        FRAME_attack08,
+        FRAME_attack09,
+        FRAME_attack10,
+        FRAME_attack11,
+        FRAME_attack12,
+        FRAME_attack13,
+        FRAME_attack14,
+        FRAME_attack15,
+        FRAME_attack16,
+        FRAME_attack17,
+        FRAME_attack18,
+        FRAME_attack19,
+        FRAME_attack20,
+        FRAME_attack21,
+        FRAME_attack22,
+        FRAME_attack23,
+
+        FRAME_shocka01,
+        FRAME_shocka02,
+        FRAME_shocka03,
+        FRAME_shocka04,
+        FRAME_shocka05,
+        FRAME_shocka06,
+        FRAME_shocka07,
+        FRAME_shocka08,
+        FRAME_shocka09,
+        FRAME_shocka10,
+
+        FRAME_shockb01,
+        FRAME_shockb02,
+        FRAME_shockb03,
+        FRAME_shockb04,
+        FRAME_shockb05,
+        FRAME_shockb06,
+
+        FRAME_shockc01,
+        FRAME_shockc02,
+        FRAME_shockc03,
+        FRAME_shockc04,
+        FRAME_shockc05,
+        FRAME_shockc06,
+        FRAME_shockc07,
+        FRAME_shockc08,
+        FRAME_shockc09,
+        FRAME_shockc10
+};
+
+// Script helper: strikes Chthon with lightning and briefly makes him vulnerable.
+// Keys:
+// - target: targetName of the monster_chthon
+// - dmg: damage to apply immediately (default 200)
+// - wait: vulnerability duration seconds (default 1.5)
+void SP_target_chthon_lightning(gentity_t* self);

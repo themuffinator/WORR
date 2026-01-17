@@ -94,6 +94,10 @@ static bool OGG_Load(sizebuf_t *sz)
     AVStream *st;
     bool res = false;
     int ret, sample_rate;
+    int64_t nb_samples = 0;
+    int bufsize = 0;
+    int offset = 0;
+    bool eof = false;
 
     const AVInputFormat *fmt = av_find_input_format("ogg");
     if (!fmt) {
@@ -208,14 +212,14 @@ static bool OGG_Load(sizebuf_t *sz)
         goto fail;
     }
 
-    int64_t nb_samples = st->duration;
+    nb_samples = st->duration;
 
     if (out->sample_rate != dec_ctx->sample_rate)
         nb_samples = av_rescale_rnd(st->duration + 2, out->sample_rate, dec_ctx->sample_rate, AV_ROUND_UP) + 2;
 
-    int bufsize = nb_samples << out->ch_layout.nb_channels;
-    int offset = 0;
-    bool eof = false;
+    bufsize = nb_samples << out->ch_layout.nb_channels;
+    offset = 0;
+    eof = false;
 
     s_info.channels = out->ch_layout.nb_channels;
     s_info.rate = out->sample_rate;

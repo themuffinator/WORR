@@ -434,7 +434,7 @@ static void CG_Wheel_LoadIcons(int icon_index, cg_wheel_icon_t *icons)
 
     memset(icons, 0, sizeof(*icons));
 
-    const char *base = cgi.get_configstring(CS_IMAGES + icon_index);
+    const char *base = cgi.get_configString(CS_IMAGES + icon_index);
     if (!base || !*base)
         return;
 
@@ -603,7 +603,7 @@ void CG_Wheel_Init(void)
     ww_unavailable_shade_value = cgi.cvar("ww_unavailable_shade_value", "80", CVAR_USERINFO);
     ww_underpic_nudge_amount = cgi.cvar("ww_underpic_nudge_amount", "4.0", CVAR_SERVERINFO);
 
-    cg_wheel = {};
+    cg_wheel = cg_wheel_state_global_t{};
     cg_wheel.wheel.state = WHEEL_CLOSED;
     cg_wheel.weapon_bar.state = WHEEL_CLOSED;
     cg_wheel.wheel.timescale = 1.0f;
@@ -620,7 +620,7 @@ static bool CG_Wheel_GetItemDropName(int item_index, char *out_name, size_t out_
     if (item_index < 0 || item_index >= MAX_ITEMS)
         return false;
 
-    const char *raw = cgi.get_configstring(CS_ITEMS + item_index);
+    const char *raw = cgi.get_configString(CS_ITEMS + item_index);
     if (!raw || !*raw)
         return false;
 
@@ -646,7 +646,7 @@ static int16_t CG_Wheel_GetAmmoCount(const player_state_t *ps, int32_t ammo_id)
     if (!ps || ammo_id < 0)
         return 0;
 
-    uint16_t ammo = G_GetAmmoStat((uint16_t *)&ps->stats[STAT_AMMO_INFO_START], ammo_id);
+    uint16_t ammo = GetAmmoStat((uint16_t *)&ps->stats[STAT_AMMO_INFO_START], ammo_id);
     if (ammo == AMMO_VALUE_INFINITE)
         return -1;
 
@@ -658,7 +658,7 @@ static int16_t CG_Wheel_GetPowerupCount(const player_state_t *ps, int32_t poweru
     if (!ps || powerup_id < 0)
         return 0;
 
-    return G_GetPowerupStat((uint16_t *)&ps->stats[STAT_POWERUP_INFO_START], powerup_id);
+    return GetPowerupStat((uint16_t *)&ps->stats[STAT_POWERUP_INFO_START], powerup_id);
 }
 
 static const cg_wheel_slot_t *CG_Wheel_GetSelectedSlot(void)
@@ -1576,7 +1576,7 @@ void CG_Wheel_Draw(const player_state_t *ps, const vrect_t &hud_vrect, const vre
 
         const cg_wheel_slot_t *slot = &cg_wheel.wheel.slots[cg_wheel.wheel.selected];
         if (slot->has_item) {
-            const char *localized = cgi.Localize(cgi.get_configstring(CS_ITEMS + slot->item_index), nullptr, 0);
+            const char *localized = cgi.Localize(cgi.get_configString(CS_ITEMS + slot->item_index), nullptr, 0);
             int name_y = CG_Rint(center_y - (wheel_draw_size * 0.125f) + (CONCHAR_HEIGHT * 3));
             CG_DrawScaledString(CG_Rint(center_x), name_y, (float)scale, UI_CENTER | UI_DROPSHADOW, base_color, localized);
 
@@ -2165,7 +2165,7 @@ static void CG_WeaponBar_DrawQ2RTimed(const player_state_t *ps)
         if (selected) {
             CG_WeaponBar_DrawSelectionScaled(bar_x, bar_y, icon_w, icon_h, 1.0f);
 
-            const char *localized = cgi.Localize(cgi.get_configstring(CS_ITEMS + cg_wheel.weapon_bar.slots[i].item_index), nullptr, 0);
+            const char *localized = cgi.Localize(cgi.get_configString(CS_ITEMS + cg_wheel.weapon_bar.slots[i].item_index), nullptr, 0);
             if (localized && *localized) {
                 int name_y = max(safe_y, bar_y - 16);
                 CG_WeaponBar_DrawScaledString(center_x, name_y, 1.0f, UI_CENTER | UI_DROPSHADOW, rgba_white, localized);
@@ -2200,7 +2200,7 @@ static void CG_WeaponBar_DrawQ3Timed(const player_state_t *ps, int selected_item
     CG_WeaponBar_DrawHorizontalScaled(ps, bar_y, selected_item, false, false, 1.0f);
 
     if (selected_item >= 0) {
-        const char *localized = cgi.Localize(cgi.get_configstring(CS_ITEMS + selected_item), nullptr, 0);
+        const char *localized = cgi.Localize(cgi.get_configString(CS_ITEMS + selected_item), nullptr, 0);
         if (localized && *localized) {
             int name_y = max(safe_y, bar_y - WEAPON_BAR_NAME_OFFSET);
             CG_WeaponBar_DrawScaledString(center_x, name_y, 1.0f, UI_CENTER | UI_DROPSHADOW, rgba_white, localized);
@@ -2328,7 +2328,7 @@ void CG_WeaponBar_ClearInput(void)
 
     if (cg_wheel.weapon_bar.state == WHEEL_CLOSING) {
         cg_wheel.weapon_bar.state = WHEEL_CLOSED;
-        float frame_time = cgi.CL_FrameTime ? cgi.CL_FrameTime() : cgi.frame_time_s;
+        float frame_time = cgi.CL_FrameTime ? cgi.CL_FrameTime() : cgi.frameTimeSec;
         uint64_t delay = (uint64_t)CG_Rint(max(0.0f, frame_time) * 2000.0f);
         cg_wheel.weapon_bar.close_time = CG_Wheel_Now() + delay;
     }

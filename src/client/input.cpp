@@ -1004,6 +1004,7 @@ and angles are already set for this frame by CL_UpdateCmd.
 void CL_FinalizeCmd(void)
 {
     vec2_t move;
+    bool allow_attack = true;
 
     // command buffer ticks in sync with cl_maxfps
     Cbuf_Frame(&cmd_buffer);
@@ -1020,7 +1021,6 @@ void CL_FinalizeCmd(void)
 //
 // figure button bits
 //
-    bool allow_attack = true;
     if (cgame && cgame->Wheel_AllowAttack)
         allow_attack = cgame->Wheel_AllowAttack();
     if (in_attack.state & 3 && allow_attack)

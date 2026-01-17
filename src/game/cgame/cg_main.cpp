@@ -3,8 +3,8 @@
 
 #include "cg_local.h"
 #include "cg_wheel.h"
-#include "m_flash.h"
 #include "client/cgame_ui_ext.h"
+#include "m_flash.hpp"
 
 cgame_import_t cgi;
 cgame_export_t cglobals;
@@ -35,8 +35,8 @@ static void InitCGame()
 
 	cgame_init_time = cgi.CL_ClientRealTime();
 
-	pm_config.n64_physics = !!atoi(cgi.get_configstring(CONFIG_N64_PHYSICS));
-	pm_config.airaccel = atoi(cgi.get_configstring(CS_AIRACCEL));
+	pm_config.n64Physics = !!atoi(cgi.get_configString(CONFIG_N64_PHYSICS));
+	pm_config.airAccel = atoi(cgi.get_configString(CS_AIRACCEL));
 }
 
 static void ShutdownCGame()
@@ -59,7 +59,7 @@ uint32_t CG_GetOwnedWeaponWheelWeapons(const player_state_t *ps)
 
 int16_t CG_GetWeaponWheelAmmoCount(const player_state_t *ps, int32_t ammo_id)
 {
-	uint16_t ammo = G_GetAmmoStat((uint16_t *) &ps->stats[STAT_AMMO_INFO_START], ammo_id);
+    uint16_t ammo = GetAmmoStat((uint16_t *) &ps->stats[STAT_AMMO_INFO_START], ammo_id);
 
 	if (ammo == AMMO_VALUE_INFINITE)
 		return -1;
@@ -69,7 +69,7 @@ int16_t CG_GetWeaponWheelAmmoCount(const player_state_t *ps, int32_t ammo_id)
 
 int16_t CG_GetPowerupWheelCount(const player_state_t *ps, int32_t powerup_id)
 {
-	return G_GetPowerupStat((uint16_t *) &ps->stats[STAT_POWERUP_INFO_START], powerup_id);
+    return GetPowerupStat((uint16_t *) &ps->stats[STAT_POWERUP_INFO_START], powerup_id);
 }
 
 int16_t CG_GetHitMarkerDamage(const player_state_t *ps)
@@ -80,9 +80,9 @@ int16_t CG_GetHitMarkerDamage(const player_state_t *ps)
 static void CG_ParseConfigString(int32_t i, const char *s)
 {
 	if (i == CONFIG_N64_PHYSICS)
-		pm_config.n64_physics = !!atoi(s);
+		pm_config.n64Physics = !!atoi(s);
 	else if (i == CS_AIRACCEL)
-		pm_config.airaccel = atoi(s);
+		pm_config.airAccel = atoi(s);
 
 	CG_Wheel_ParseConfigString(i, s);
 }
@@ -92,7 +92,7 @@ void CG_ClearNotify(int32_t isplit);
 void CG_ClearCenterprint(int32_t isplit);
 void CG_NotifyMessage(int32_t isplit, const char *msg, bool is_chat);
 
-void CG_GetMonsterFlashOffset(monster_muzzleflash_id_t id, gvec3_ref_t offset)
+void CG_GetMonsterFlashOffset(MonsterMuzzleFlashID id, gvec3_ref_t offset)
 {
 	if (id >= q_countof(monster_flash_offset))
 		cgi.Com_Error("Bad muzzle flash offset");
@@ -117,7 +117,7 @@ Q2GAME_API cgame_export_t *GetCGameAPI(cgame_import_t *import)
 		CG_UI_SetImport(ui_import);
 	}
 
-	cglobals.apiversion = CGAME_API_VERSION;
+	cglobals.apiVersion = CGAME_API_VERSION;
 	cglobals.Init = InitCGame;
 	cglobals.Shutdown = ShutdownCGame;
 

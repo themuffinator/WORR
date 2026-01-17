@@ -288,6 +288,7 @@ static void apply_playerstate(const q2proto_svc_playerstate_t *playerstate,
         else
             to->pmove.pm_flags = pmflags_from_game3(playerstate->pm_flags, cls.q2proto_ctx.features.server_game_api != Q2PROTO_GAME_VANILLA);
     }
+    to->pmove.haste = (to->pmove.pm_flags & PMF_HASTE) != 0;
 
     if (playerstate->delta_bits & Q2P_PSD_PM_GRAVITY)
         to->pmove.gravity = playerstate->pm_gravity;

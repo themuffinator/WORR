@@ -1,20 +1,27 @@
-// Copyright (c) ZeniMax Media Inc.
-// Licensed under the GNU General Public License 2.0.
+/*Copyright (c) 2024 ZeniMax Media Inc.
+Licensed under the GNU General Public License 2.0.
 
-// standard library stuff for game DLL
+q_std.cpp (Quake Standard Library Implementation) This file provides the implementation for the
+custom standard library functions declared in `q_std.hpp`. It contains low-level utility
+functions for string manipulation and parsing. Key Responsibilities: - String Parsing:
+Implements `COM_Parse` and `COM_ParseEx`, the core functions used throughout the codebase to
+parse tokenized strings from entity definitions, configuration files, and commands. - Safe
+String Copying: Provides implementations for `Q_strlcpy` and `Q_strlcat`, which are safer
+alternatives to the standard C library's `strcpy` and `strcat` because they prevent buffer
+overflows by accepting the destination buffer size. - String Comparison: Implements
+case-insensitive string comparison functions like `Q_strcasecmp` and `Q_strncasecmp`.*/
 
-#include "g_local.h"
+#include "../sgame/g_local.hpp"
 
 //====================================================================================
 
 g_fmt_data_t g_fmt_data;
 
-bool COM_IsSeparator(char c, const char *seps)
-{
+static bool COM_IsSeparator(char c, const char* seps) {
 	if (!c)
 		return true;
 
-	for (const char *sep = seps; *sep; sep++)
+	for (const char* sep = seps; *sep; sep++)
 		if (*sep == c)
 			return true;
 
@@ -28,36 +35,38 @@ COM_ParseEx
 Parse a token out of a string
 ==============
 */
-char *COM_ParseEx(const char **data_p, const char *seps, char *buffer, size_t buffer_size)
-{
-	static char com_token[MAX_TOKEN_CHARS];
+char* COM_ParseEx(const char** data_p, const char* seps, char* buffer, size_t buffer_size, bool* truncated) {
+	thread_local char	com_token[MAX_TOKEN_CHARS];
+	bool			local_truncated = false;
 
-	if (!buffer)
-	{
+	if (truncated)
+		*truncated = false;
+
+	if (!buffer) {
 		buffer = com_token;
 		buffer_size = MAX_TOKEN_CHARS;
 	}
 
+	if (!buffer_size)
+		gi.Com_ErrorFmt("{}: called with zero buffer size.\n", __FUNCTION__);
+
 	int			c;
 	int			len;
-	const char *data;
+	const char* data;
 
 	data = *data_p;
 	len = 0;
 	buffer[0] = '\0';
 
-	if (!data)
-	{
+	if (!data) {
 		*data_p = nullptr;
 		return buffer;
 	}
 
-// skip whitespace
+	// skip whitespace
 skipwhite:
-	while (COM_IsSeparator(c = *data, seps))
-	{
-		if (c == '\0')
-		{
+	while (COM_IsSeparator(c = *data, seps)) {
+		if (c == '\0') {
 			*data_p = nullptr;
 			return buffer;
 		}
@@ -65,58 +74,65 @@ skipwhite:
 	}
 
 	// skip // comments
-	if (c == '/' && data[1] == '/')
-	{
+	if (c == '/' && data[1] == '/') {
 		while (*data && *data != '\n')
 			data++;
 		goto skipwhite;
 	}
 
 	// handle quoted strings specially
-	if (c == '\"')
-	{
+	if (c == '\"') {
 		data++;
-		while (1)
-		{
+		while (1) {
 			c = *data++;
-			if (c == '\"' || !c)
-			{
-				const size_t endpos = std::min<size_t>(len, buffer_size - 1); // [KEX] avoid overflow
-				buffer[endpos] = '\0';
+			if (c == '\"' || !c) {
+				const size_t end_pos = std::min<size_t>(static_cast<size_t>(len), buffer_size - 1);
+				buffer[end_pos] = '\0';
+
+				if (local_truncated) {
+					gi.Com_PrintFmt("Token exceeded {} chars, truncated.\n", buffer_size - 1);
+					if (truncated)
+						*truncated = true;
+				}
+
 				*data_p = data;
 				return buffer;
 			}
-			if (len < buffer_size)
-			{
+			if (static_cast<size_t>(len + 1) < buffer_size) {
 				buffer[len] = c;
-				len++;
 			}
+			else {
+				local_truncated = true;
+			}
+			len++;
 		}
 	}
 
 	// parse a regular word
-	do
-	{
-		if (len < buffer_size)
-		{
+	do {
+		if (static_cast<size_t>(len + 1) < buffer_size) {
 			buffer[len] = c;
-			len++;
 		}
+		else {
+			local_truncated = true;
+		}
+		len++;
 		data++;
 		c = *data;
 	} while (!COM_IsSeparator(c, seps));
 
-	if (len == buffer_size)
-	{
-		gi.Com_PrintFmt("Token exceeded {} chars, discarded.\n", buffer_size);
-		len = 0;
+	const size_t end_pos = std::min<size_t>(static_cast<size_t>(len), buffer_size - 1);
+	buffer[end_pos] = '\0';
+
+	if (local_truncated) {
+		gi.Com_PrintFmt("Token exceeded {} chars, truncated.\n", buffer_size - 1);
+		if (truncated)
+			*truncated = true;
 	}
-	buffer[len] = '\0';
 
 	*data_p = data;
 	return buffer;
 }
-
 /*
 ============================================================================
 
@@ -124,19 +140,15 @@ skipwhite:
 
 ============================================================================
 */
-// NB: these funcs are duplicated in the engine; this define gates us for
-// static compilation.
-int Q_strcasecmp(const char *s1, const char *s2)
-{
+// NB: these funcs are duplicated in the engine; the DLL keeps its own copies.
+int Q_strcasecmp(const char* s1, const char* s2) {
 	int c1, c2;
 
-	do
-	{
+	do {
 		c1 = *s1++;
 		c2 = *s2++;
 
-		if (c1 != c2)
-		{
+		if (c1 != c2) {
 			if (c1 >= 'a' && c1 <= 'z')
 				c1 -= ('a' - 'A');
 			if (c2 >= 'a' && c2 <= 'z')
@@ -149,20 +161,17 @@ int Q_strcasecmp(const char *s1, const char *s2)
 	return 0; // strings are equal
 }
 
-int Q_strncasecmp(const char *s1, const char *s2, size_t n)
-{
+int Q_strncasecmp(const char* s1, const char* s2, size_t n) {
 	int c1, c2;
 
-	do
-	{
+	do {
 		c1 = *s1++;
 		c2 = *s2++;
 
 		if (!n--)
 			return 0; // strings are equal until end point
 
-		if (c1 != c2)
-		{
+		if (c1 != c2) {
 			if (c1 >= 'a' && c1 <= 'z')
 				c1 -= ('a' - 'A');
 			if (c2 >= 'a' && c2 <= 'z')
@@ -209,38 +218,33 @@ int Q_strncasecmp(const char *s1, const char *s2, size_t n)
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Copy src to string dst of size siz.  At most siz-1 characters
- * will be copied.  Always NUL terminates (unless siz == 0).
- * Returns strlen(src); if retval >= siz, truncation occurred.
- */
-size_t Q_strlcpy(char *dst, const char *src, size_t siz)
-{
-    char *d = dst;
-    const char *s = src;
-    size_t n = siz;
+ /*
+  * Copy src to string dst of size siz.  At most siz-1 characters
+  * will be copied.  Always NUL terminates (unless siz == 0).
+  * Returns strlen(src); if retval >= siz, truncation occurred.
+  */
+size_t Q_strlcpy(char* dst, const char* src, size_t siz) {
+	char* d = dst;
+	const char* s = src;
+	size_t n = siz;
 
-    /* Copy as many bytes as will fit */
-    if(n != 0 && --n != 0)
-    {
-        do
-        {
-            if((*d++ = *s++) == 0)
-                break;
-        }
-        while(--n != 0);
-    }
+	/* Copy as many bytes as will fit */
+	if (n != 0 && --n != 0) {
+		do {
+			if ((*d++ = *s++) == 0)
+				break;
+		} while (--n != 0);
+	}
 
-    /* Not enough room in dst, add NUL and traverse rest of src */
-    if(n == 0)
-    {
-        if(siz != 0)
-            *d = '\0'; /* NUL-terminate dst */
-        while(*s++)
-            ; // counter loop
-    }
+	/* Not enough room in dst, add NUL and traverse rest of src */
+	if (n == 0) {
+		if (siz != 0)
+			*d = '\0'; /* NUL-terminate dst */
+		while (*s++)
+			; // counter loop
+	}
 
-    return (s - src - 1); /* count does not include NUL */
+	return (s - src - 1); /* count does not include NUL */
 }
 
 /*
@@ -249,37 +253,29 @@ size_t Q_strlcpy(char *dst, const char *src, size_t siz)
  * will be copied.  Always NUL terminates (unless siz == 0).
  * Returns strlen(src); if retval >= siz, truncation occurred.
  */
-size_t Q_strlcat(char *dst, const char *src, size_t siz)
-{
-    char *d = dst;
-    const char *s = src;
-    size_t n = siz;
-    size_t dlen;
+size_t Q_strlcat(char* dst, const char* src, size_t siz) {
+	char* d = dst;
+	const char* s = src;
+	size_t n = siz;
+	size_t dlen;
 
-    /* Find the end of dst and adjust bytes left but don't go past end */
-    while(*d != '\0' && n-- != 0)
-        d++;
-    dlen = d - dst;
-    n = siz - dlen;
+	/* FindEntity the end of dst and adjust bytes left but don't go past end */
+	while (*d != '\0' && n-- != 0)
+		d++;
+	dlen = d - dst;
+	n = siz - dlen;
 
-    if(n == 0)
-        return(dlen + strlen(s));
-    while(*s != '\0')
-    {
-        if(n != 1)
-        {
-            *d++ = *s;
-            n--;
-        }
-        s++;
-    }
-    *d = '\0';
+	if (n == 0)
+		return(dlen + strlen(s));
+	while (*s != '\0') {
+		if (n != 1) {
+			*d++ = *s;
+			n--;
+		}
+		s++;
+	}
+	*d = '\0';
 
-    return (dlen + (s - src)); /* count does not include NUL */
+	return (dlen + (s - src)); /* count does not include NUL */
 }
-
-#if !defined(USE_CPP20_FORMAT) && !defined(NO_FMT_SOURCE)
-// fmt ugliness because we haven't figured out FMT_INCLUDE_ONLY
-#include "../src/format.cc"
-#endif
 //====================================================================

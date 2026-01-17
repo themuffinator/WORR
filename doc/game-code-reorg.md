@@ -6,8 +6,8 @@
 - Removed the rerelease-game submodule from the build and repo tree.
 
 ## New Layout
-- `src/game/bgame/`: shared headers and movement code (`bg_local.h`, `game.h`,
-  `m_flash.h`, `p_move.cpp`, `q_std.h`, `q_vec3.h`).
+- `src/game/bgame/`: shared headers and movement code (`bg_local.hpp`,
+  `game.hpp`, `m_flash.hpp`, `p_move.cpp`, `q_std.hpp`, `q_vec3.hpp`).
 - `src/game/sgame/`: server game implementation, including `bots/`, `ctf/`,
   `rogue/`, and `xatrix/`.
 - `src/game/cgame/`: client game implementation and UI bridge (`cg_*`, `cg_ui_*`).
@@ -18,7 +18,7 @@
 - `copy_sgame_dll` and `copy_cgame_dll` continue to stage DLLs into `builddir/baseq2`.
 
 ## Source Adjustments
-- Updated `m_flash.h` includes in rogue/xatrix sources to use the shared header path.
+- Updated `m_flash.hpp` includes in rogue/xatrix sources to use the bgame header path.
 - cgame UI implementation now lives under `src/game/cgame`, with engine UI sources still
   compiled into cgame.
 
