@@ -652,13 +652,17 @@ size_t FindEndOfUTF8Codepoint(const std::string &str, size_t pos)
 
 void CG_NotifyMessage(int32_t isplit, const char *msg, bool is_chat)
 {
+    bool is_obituary = false;
     if (!is_chat) {
         cl_obituary_t obit;
-        if (CG_ParseObituaryMessage(msg, obit))
+        if (CG_ParseObituaryMessage(msg, obit)) {
             CG_AddObituary(hud_data[isplit], obit);
+            is_obituary = true;
+        }
     }
 
-    CG_AddNotify(hud_data[isplit], msg, is_chat);
+    if (!is_obituary)
+        CG_AddNotify(hud_data[isplit], msg, is_chat);
 }
 
 // centerprint stuff
