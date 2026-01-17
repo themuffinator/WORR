@@ -103,11 +103,32 @@ struct cl_notify_t {
     uint64_t        time; // rotate us when < CL_Time()
 };
 
+constexpr size_t MAX_OBITUARY = 4;
+constexpr uint64_t OBITUARY_LIFETIME_MS = 3000;
+constexpr uint64_t OBITUARY_FADE_MS = 200;
+
+struct cl_obituary_t {
+    std::string killer;
+    std::string victim;
+    std::string icon;
+    std::string label;
+    uint64_t    time = 0;
+    bool        has_killer = false;
+};
+
+struct obituary_template_t {
+    const char *key;
+    const char *icon;
+    const char *label;
+    int args;
+};
+
 // per-splitscreen client hud storage
 struct hud_data_t {
     std::array<cl_centerprint_t, MAX_CENTER_PRINTS> centers; // list of centers
     std::optional<size_t> center_index; // current index we're drawing, or unset if none left
     std::array<cl_notify_t, MAX_NOTIFY> notify; // list of notifies
+    std::array<cl_obituary_t, MAX_OBITUARY> obituaries; // kill feed entries
 };
 
 static std::array<hud_data_t, MAX_SPLIT_PLAYERS> hud_data;
@@ -165,6 +186,220 @@ static void CG_AddNotify(hud_data_t &data, const char *msg, bool is_chat)
     data.notify[i].time = cgi.CL_ClientTime() + (cl_notifytime->value * 1000);
 }
 
+static void CG_TrimTrailingNewlines(std::string &text)
+{
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
+        text.pop_back();
+}
+
+static bool CG_MatchObituaryArgs(const std::string &pattern, const std::string &message, int args,
+                                 std::string &out_victim, std::string &out_killer)
+{
+    constexpr const char *victim_token = "__OBIT_VICTIM__";
+    constexpr const char *killer_token = "__OBIT_KILLER__";
+
+    if (args == 1) {
+        const size_t pos = pattern.find(victim_token);
+        if (pos == std::string::npos)
+            return false;
+
+        const std::string prefix = pattern.substr(0, pos);
+        const std::string suffix = pattern.substr(pos + strlen(victim_token));
+        if (message.size() < prefix.size() + suffix.size())
+            return false;
+        if (message.compare(0, prefix.size(), prefix) != 0)
+            return false;
+        if (message.compare(message.size() - suffix.size(), suffix.size(), suffix) != 0)
+            return false;
+
+        out_victim = message.substr(prefix.size(), message.size() - prefix.size() - suffix.size());
+        return !out_victim.empty();
+    }
+
+    if (args != 2)
+        return false;
+
+    const size_t pos_victim = pattern.find(victim_token);
+    const size_t pos_killer = pattern.find(killer_token);
+    if (pos_victim == std::string::npos || pos_killer == std::string::npos || pos_victim == pos_killer)
+        return false;
+
+    const bool victim_first = pos_victim < pos_killer;
+    const size_t first_pos = victim_first ? pos_victim : pos_killer;
+    const size_t second_pos = victim_first ? pos_killer : pos_victim;
+    const char *first_token = victim_first ? victim_token : killer_token;
+    const char *second_token = victim_first ? killer_token : victim_token;
+
+    const std::string prefix = pattern.substr(0, first_pos);
+    const size_t first_end = first_pos + strlen(first_token);
+    const std::string between = pattern.substr(first_end, second_pos - first_end);
+    const std::string suffix = pattern.substr(second_pos + strlen(second_token));
+
+    if (between.empty())
+        return false;
+    if (message.size() < prefix.size() + suffix.size())
+        return false;
+    if (message.compare(0, prefix.size(), prefix) != 0)
+        return false;
+    if (message.compare(message.size() - suffix.size(), suffix.size(), suffix) != 0)
+        return false;
+
+    const std::string remaining = message.substr(prefix.size(), message.size() - prefix.size() - suffix.size());
+    const size_t split_pos = remaining.find(between);
+    if (split_pos == std::string::npos)
+        return false;
+
+    const std::string first_value = remaining.substr(0, split_pos);
+    const std::string second_value = remaining.substr(split_pos + between.size());
+    if (first_value.empty() || second_value.empty())
+        return false;
+
+    if (victim_first) {
+        out_victim = first_value;
+        out_killer = second_value;
+    } else {
+        out_killer = first_value;
+        out_victim = second_value;
+    }
+
+    return true;
+}
+
+static const obituary_template_t obituary_templates[] = {
+    { "$g_mod_generic_suicide", nullptr, "SUICIDE", 1 },
+    { "$g_mod_generic_falling", nullptr, "FALL", 1 },
+    { "$g_mod_generic_crush", nullptr, "CRUSH", 1 },
+    { "$g_mod_generic_water", nullptr, "WATER", 1 },
+    { "$g_mod_generic_slime", nullptr, "SLIME", 1 },
+    { "$g_mod_generic_lava", nullptr, "LAVA", 1 },
+    { "$g_mod_generic_explosive", nullptr, "BOOM", 1 },
+    { "$g_mod_generic_exit", nullptr, "EXIT", 1 },
+    { "$g_mod_generic_laser", nullptr, "LASER", 1 },
+    { "$g_mod_generic_blaster", "w_blaster", "BLASTER", 1 },
+    { "$g_mod_generic_hurt", nullptr, "HURT", 1 },
+    { "$g_mod_generic_gekk", nullptr, "GEKK", 1 },
+    { "$g_mod_generic_died", nullptr, "DIED", 1 },
+    { "$g_mod_self_held_grenade", "a_grenades", "GRENADE", 1 },
+    { "$g_mod_self_grenade_splash", "a_grenades", "GRENADE", 1 },
+    { "$g_mod_self_rocket_splash", "w_rlauncher", "ROCKET", 1 },
+    { "$g_mod_self_bfg_blast", "w_bfg", "BFG", 1 },
+    { "$g_mod_self_trap", "a_trap", "TRAP", 1 },
+    { "$g_mod_self_dopple_explode", "p_doppleganger", "DOPPLE", 1 },
+    { "$g_mod_self_default", nullptr, "SUICIDE", 1 },
+    { "$g_mod_kill_blaster", "w_blaster", "BLASTER", 2 },
+    { "$g_mod_kill_shotgun", "w_shotgun", "SHOTGUN", 2 },
+    { "$g_mod_kill_sshotgun", "w_sshotgun", "SSG", 2 },
+    { "$g_mod_kill_machinegun", "w_machinegun", "MG", 2 },
+    { "$g_mod_kill_chaingun", "w_chaingun", "CHAINGUN", 2 },
+    { "$g_mod_kill_grenade", "a_grenades", "GRENADE", 2 },
+    { "$g_mod_kill_grenade_splash", "a_grenades", "GRENADE", 2 },
+    { "$g_mod_kill_rocket", "w_rlauncher", "ROCKET", 2 },
+    { "$g_mod_kill_rocket_splash", "w_rlauncher", "ROCKET", 2 },
+    { "$g_mod_kill_hyperblaster", "w_hyperblaster", "HYPER", 2 },
+    { "$g_mod_kill_railgun", "w_railgun", "RAIL", 2 },
+    { "$g_mod_kill_bfg_laser", "w_bfg", "BFG", 2 },
+    { "$g_mod_kill_bfg_blast", "w_bfg", "BFG", 2 },
+    { "$g_mod_kill_bfg_effect", "w_bfg", "BFG", 2 },
+    { "$g_mod_kill_handgrenade", "a_grenades", "GRENADE", 2 },
+    { "$g_mod_kill_handgrenade_splash", "a_grenades", "GRENADE", 2 },
+    { "$g_mod_kill_held_grenade", "a_grenades", "GRENADE", 2 },
+    { "$g_mod_kill_telefrag", nullptr, "TELEFRAG", 2 },
+    { "$g_mod_kill_ripper", "w_ripper", "RIPPER", 2 },
+    { "$g_mod_kill_phalanx", "w_phallanx", "PHALANX", 2 },
+    { "$g_mod_kill_trap", "a_trap", "TRAP", 2 },
+    { "$g_mod_kill_chainfist", "w_chainfist", "CHAINFIST", 2 },
+    { "$g_mod_kill_disintegrator", "w_disintegrator", "DISRUPT", 2 },
+    { "$g_mod_kill_etf_rifle", "w_etf_rifle", "ETF", 2 },
+    { "$g_mod_kill_heatbeam", "w_heatbeam", "HEATBEAM", 2 },
+    { "$g_mod_kill_tesla", "a_tesla", "TESLA", 2 },
+    { "$g_mod_kill_prox", "a_prox", "PROX", 2 },
+    { "$g_mod_kill_nuke", "p_nuke", "NUKE", 2 },
+    { "$g_mod_kill_vengeance_sphere", "p_vengeance", "VENGEANCE", 2 },
+    { "$g_mod_kill_defender_sphere", "p_defender", "DEFENDER", 2 },
+    { "$g_mod_kill_hunter_sphere", "p_hunter", "HUNTER", 2 },
+    { "$g_mod_kill_tracker", nullptr, "TRACKER", 2 },
+    { "$g_mod_kill_dopple_explode", "p_doppleganger", "DOPPLE", 2 },
+    { "$g_mod_kill_dopple_vengeance", "p_doppleganger", "DOPPLE", 2 },
+    { "$g_mod_kill_dopple_hunter", "p_doppleganger", "DOPPLE", 2 },
+    { "$g_mod_kill_grapple", "w_grapple", "GRAPPLE", 2 },
+    { "$g_mod_kill_generic", nullptr, "KILL", 2 },
+};
+
+static bool CG_ParseObituaryMessage(const char *msg, cl_obituary_t &out)
+{
+    std::string message = msg ? msg : "";
+    CG_TrimTrailingNewlines(message);
+    if (message.empty())
+        return false;
+
+    constexpr const char *victim_token = "__OBIT_VICTIM__";
+    constexpr const char *killer_token = "__OBIT_KILLER__";
+    const char *args[2] = { victim_token, killer_token };
+
+    for (const auto &templ : obituary_templates) {
+        std::string pattern = cgi.Localize(templ.key, args, templ.args);
+        CG_TrimTrailingNewlines(pattern);
+        if (pattern.empty())
+            continue;
+
+        std::string victim;
+        std::string killer;
+        if (!CG_MatchObituaryArgs(pattern, message, templ.args, victim, killer))
+            continue;
+
+        out = {};
+        out.victim = victim;
+        out.killer = killer;
+        out.has_killer = templ.args > 1 && !killer.empty();
+        if (templ.icon)
+            out.icon = templ.icon;
+        if (templ.label)
+            out.label = templ.label;
+        out.time = cgi.CL_ClientRealTime();
+        return true;
+    }
+
+    return false;
+}
+
+static void CG_Obituary_Compact(hud_data_t &data)
+{
+    const uint64_t now = cgi.CL_ClientRealTime();
+    size_t write_index = 0;
+
+    for (size_t i = 0; i < MAX_OBITUARY; i++) {
+        auto &entry = data.obituaries[i];
+        if (entry.victim.empty())
+            continue;
+        if (now >= entry.time + OBITUARY_LIFETIME_MS)
+            continue;
+
+        if (write_index != i)
+            data.obituaries[write_index] = entry;
+        write_index++;
+    }
+
+    for (size_t i = write_index; i < MAX_OBITUARY; i++)
+        data.obituaries[i] = {};
+}
+
+static void CG_AddObituary(hud_data_t &data, const cl_obituary_t &entry)
+{
+    CG_Obituary_Compact(data);
+
+    size_t count = 0;
+    while (count < MAX_OBITUARY && !data.obituaries[count].victim.empty())
+        count++;
+
+    if (count == MAX_OBITUARY) {
+        for (size_t i = 1; i < MAX_OBITUARY; i++)
+            data.obituaries[i - 1] = data.obituaries[i];
+        count = MAX_OBITUARY - 1;
+    }
+
+    data.obituaries[count] = entry;
+}
+
 // draw notifies
 static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
 {
@@ -212,6 +447,77 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
 
         if (cgi.CL_GetTextInput(&input_msg, &input_team))
             cgi.SCR_DrawFontString(G_Fmt("{}: {}", input_team ? "say_team" : "say", input_msg).data(), (hud_vrect.x * scale) + hud_safe.x, y, scale, rgba_white, true, text_align_t::LEFT);
+    }
+}
+
+static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
+{
+    auto &data = hud_data[isplit];
+    CG_Obituary_Compact(data);
+
+    const int line_height = max(1, static_cast<int>(std::lround(cgi.SCR_FontLineHeight(scale))));
+    const int icon_size = max(1, line_height);
+    const int padding = max(2, 4 * scale);
+    const int spacing = max(1, 2 * scale);
+
+    int x = (hud_vrect.x * scale) + hud_safe.x;
+    int y = (hud_vrect.y * scale) + hud_safe.y;
+    if (scr_maxlines->integer > 0)
+        y += scr_maxlines->integer * (10 * scale);
+
+    const uint64_t now = cgi.CL_ClientRealTime();
+
+    for (const auto &entry : data.obituaries)
+    {
+        if (entry.victim.empty())
+            break;
+
+        const uint64_t age = now - entry.time;
+        if (age >= OBITUARY_LIFETIME_MS)
+            continue;
+
+        float fade = 1.0f;
+        if (age >= (OBITUARY_LIFETIME_MS - OBITUARY_FADE_MS))
+            fade = (float)(OBITUARY_LIFETIME_MS - age) / (float)OBITUARY_FADE_MS;
+
+        rgba_t color = rgba_white;
+        color.a = static_cast<uint8_t>(std::lround(255.0f * fade));
+
+        int draw_x = x;
+
+        if (entry.has_killer)
+        {
+            cgi.SCR_DrawFontString(entry.killer.c_str(), draw_x, y, scale, color, true, text_align_t::LEFT);
+            draw_x += cgi.SCR_MeasureFontString(entry.killer.c_str(), scale).x + padding;
+        }
+
+        bool drew_icon = false;
+        if (!entry.icon.empty())
+        {
+            int icon_w = 0;
+            int icon_h = 0;
+            cgi.Draw_GetPicSize(&icon_w, &icon_h, entry.icon.c_str());
+            if (icon_w > 0 && icon_h > 0)
+            {
+                const float icon_scale = (float)icon_size / (float)icon_h;
+                const int draw_w = max(1, static_cast<int>(std::lround(icon_w * icon_scale)));
+                const int draw_h = max(1, static_cast<int>(std::lround(icon_h * icon_scale)));
+                const int icon_y = y + (line_height - draw_h) / 2;
+
+                cgi.SCR_DrawColorPic(draw_x, icon_y, draw_w, draw_h, entry.icon.c_str(), color);
+                draw_x += draw_w + padding;
+                drew_icon = true;
+            }
+        }
+
+        if (!drew_icon && !entry.label.empty())
+        {
+            cgi.SCR_DrawFontString(entry.label.c_str(), draw_x, y, scale, color, true, text_align_t::LEFT);
+            draw_x += cgi.SCR_MeasureFontString(entry.label.c_str(), scale).x + padding;
+        }
+
+        cgi.SCR_DrawFontString(entry.victim.c_str(), draw_x, y, scale, color, true, text_align_t::LEFT);
+        y += line_height + spacing;
     }
 }
 
@@ -346,6 +652,12 @@ size_t FindEndOfUTF8Codepoint(const std::string &str, size_t pos)
 
 void CG_NotifyMessage(int32_t isplit, const char *msg, bool is_chat)
 {
+    if (!is_chat) {
+        cl_obituary_t obit;
+        if (CG_ParseObituaryMessage(msg, obit))
+            CG_AddObituary(hud_data[isplit], obit);
+    }
+
     CG_AddNotify(hud_data[isplit], msg, is_chat);
 }
 
@@ -1743,6 +2055,9 @@ void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect
     // draw notify
     CG_DrawNotify(isplit, hud_vrect, hud_safe, scale);
 
+    // draw obituaries
+    CG_DrawObituaries(isplit, hud_vrect, hud_safe, scale);
+
     // svc_layout still drawn with hud off
     if (ps->stats[STAT_LAYOUTS] & LAYOUTS_LAYOUT)
         CG_ExecuteLayoutString(data->layout, hud_vrect, hud_safe, scale, playernum, ps);
@@ -1768,6 +2083,10 @@ void CG_TouchPics()
             cgi.Draw_RegisterPic(str);
 
     cgi.Draw_RegisterPic("inventory");
+    for (const auto &templ : obituary_templates) {
+        if (templ.icon)
+            cgi.Draw_RegisterPic(templ.icon);
+    }
     CG_WeaponBar_Precache();
     CG_Wheel_Precache();
 
