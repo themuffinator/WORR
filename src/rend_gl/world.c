@@ -431,7 +431,8 @@ void GL_DrawBspModel(mmodel_t *model)
         VectorSubtract(glr.fd.vieworg, ent->origin, transformed);
     }
 
-    GL_TransformLights(model);
+    if (!glr.shadow_pass)
+        GL_TransformLights(model);
 
     GL_RotateForEntity();
 
@@ -455,10 +456,12 @@ void GL_DrawBspModel(mmodel_t *model)
             continue;
         }
 
-        if (gl_dynamic->integer)
+        if (!glr.shadow_pass && gl_dynamic->integer)
             GL_PushLights(face);
 
         if (face->drawflags & SURF_TRANS_MASK) {
+            if (glr.shadow_pass)
+                continue;
             if (model->drawframe != glr.drawframe)
                 GL_AddAlphaFace(face);
             continue;
@@ -467,7 +470,7 @@ void GL_DrawBspModel(mmodel_t *model)
         GL_AddSolidFace(face);
     }
 
-    if (gl_dynamic->integer)
+    if (!glr.shadow_pass && gl_dynamic->integer)
         GL_UploadLightmaps();
 
     GL_DrawSolidFaces();
@@ -530,19 +533,22 @@ static inline void GL_DrawNode(const mnode_t *node)
             continue;
 
         if (face->drawflags & SURF_SKY && !(face->statebits & GLS_SKY_MASK)) {
-            R_AddSkySurface(face);
+            if (!glr.shadow_pass)
+                R_AddSkySurface(face);
             continue;
         }
 
         if (face->drawflags & SURF_NODRAW)
             continue;
 
-        if (gl_dynamic->integer)
+        if (!glr.shadow_pass && gl_dynamic->integer)
             GL_PushLights(face);
 
-        if (face->drawflags & SURF_TRANS_MASK)
+        if (face->drawflags & SURF_TRANS_MASK) {
+            if (glr.shadow_pass)
+                continue;
             GL_AddAlphaFace(face);
-        else
+        } else
             GL_AddSolidFace(face);
     }
 
@@ -587,9 +593,11 @@ void GL_DrawWorld(void)
 
     GL_MarkLeaves();
 
-    GL_MarkLights();
+    if (!glr.shadow_pass)
+        GL_MarkLights();
 
-    R_ClearSkyBox();
+    if (!glr.shadow_pass)
+        R_ClearSkyBox();
 
     GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
@@ -600,12 +608,13 @@ void GL_DrawWorld(void)
     GL_WorldNode_r(gl_static.world.cache->nodes,
                    gl_cull_nodes->integer ? NODE_CLIPPED : NODE_UNCLIPPED);
 
-    if (gl_dynamic->integer)
+    if (!glr.shadow_pass && gl_dynamic->integer)
         GL_UploadLightmaps();
 
     GL_DrawSolidFaces();
 
     GL_Flush3D();
 
-    R_DrawSkyBox();
+    if (!glr.shadow_pass)
+        R_DrawSkyBox();
 }

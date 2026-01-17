@@ -19,7 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gl.h"
 #include "common/sizebuf.h"
 
-#define MAX_SHADER_CHARS    4096
+#define MAX_SHADER_CHARS    16384
 
 #define GLSL(x)     SZ_Write(buf, CONST_STR_LEN(#x "\n"));
 #define GLSF(x)     SZ_Write(buf, CONST_STR_LEN(x))
@@ -118,6 +118,8 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         float pad_5;
         float pad_4;
         vec4 u_vieworg;
+        vec4 u_shadow_params;
+        vec4 u_shadow_params2;
     )
     GLSF("};\n");
 }
@@ -131,6 +133,7 @@ static void write_dynamic_light_block(sizebuf_t *buf)
             float   radius;
             vec4    color;
             vec4    cone;
+            vec4    shadow;
         };
     )
     GLSF("#define DLIGHT_CUTOFF 64\n");
@@ -148,39 +151,154 @@ static void write_dynamic_light_block(sizebuf_t *buf)
 
 static void write_dynamic_lights(sizebuf_t *buf)
 {
-    GLSL(vec3 calc_dynamic_lights() {
-        vec3 shade = vec3(0);
-
-        for (int i = 0; i < num_dlights; i++) {
-            vec3 light_pos = dlights[i].position;
-            float light_cone = dlights[i].cone.w;
-
-            if (light_cone == 0.0)
-                light_pos += v_norm * 16.0;
-
-            vec3 light_dir   = light_pos - v_world_pos;
-            float dist       = length(light_dir);
-            float radius     = dlights[i].radius + DLIGHT_CUTOFF;
-            float len        = max(radius - dist - DLIGHT_CUTOFF, 0.0) / radius;
-            vec3 dir         = light_dir / max(dist, 1.0);
-            float lambert;
-            
-            if (dlights[i].color.r < 0.0f)
-                lambert = 1.0f;
-            else
-                lambert = max(dot(v_norm, dir), 0.0);
-            vec3 result      = ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
-
-            if (light_cone != 0.0) {
-                float mag = -dot(dir, dlights[i].cone.xyz);
-                result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - light_cone)), 0.0);
-            }
-
-            shade += result;
+    GLSL(
+        float shadow_compare(vec2 uv, float layer, float depth, float bias) {
+            float stored = texture(u_shadowmap, vec3(uv, layer)).r;
+            return depth - bias <= stored ? 1.0 : 0.0;
         }
 
-        return shade;
-    })
+        float shadow_vcm(vec2 uv, float layer, float depth, float bias, float bleed, float min_var) {
+            vec2 moments = texture(u_shadowmap, vec3(uv, layer)).rg;
+            float mean = moments.x;
+            float mean2 = moments.y;
+            float depth_bias = depth - bias;
+            float d = depth_bias - mean;
+            float variance = max(mean2 - mean * mean, min_var);
+            float p = variance / (variance + d * d);
+            float result = depth_bias <= mean ? 1.0 : p;
+            if (bleed > 0.0)
+                result = clamp((result - bleed) / (1.0 - bleed), 0.0, 1.0);
+            return result;
+        }
+
+        float shadow_pcf(vec2 uv, float layer, float depth, float bias, float texel, int quality) {
+            if (texel <= 0.0 || quality <= 0)
+                return shadow_compare(uv, layer, depth, bias);
+
+            if (quality == 1) {
+                vec2 o = vec2(texel);
+                float shadow = 0.0;
+                shadow += shadow_compare(uv + vec2(-o.x, -o.y), layer, depth, bias);
+                shadow += shadow_compare(uv + vec2( o.x, -o.y), layer, depth, bias);
+                shadow += shadow_compare(uv + vec2(-o.x,  o.y), layer, depth, bias);
+                shadow += shadow_compare(uv + vec2( o.x,  o.y), layer, depth, bias);
+                return shadow * 0.25;
+            }
+
+            if (quality == 2) {
+                float shadow = 0.0;
+                for (int y = -1; y <= 1; y++) {
+                    for (int x = -1; x <= 1; x++) {
+                        shadow += shadow_compare(uv + vec2(float(x), float(y)) * texel, layer, depth, bias);
+                    }
+                }
+                return shadow / 9.0;
+            }
+
+            float shadow = 0.0;
+            for (int y = 0; y < 4; y++) {
+                float oy = float(y) - 1.5;
+                for (int x = 0; x < 4; x++) {
+                    float ox = float(x) - 1.5;
+                    shadow += shadow_compare(uv + vec2(ox, oy) * texel, layer, depth, bias);
+                }
+            }
+            return shadow * 0.0625;
+        }
+
+        vec2 shadow_cube_uv(vec3 dir, out float face) {
+            vec3 adir = abs(dir);
+            vec2 uv;
+            if (adir.x >= adir.y && adir.x >= adir.z) {
+                if (dir.x > 0.0) {
+                    face = 0.0;
+                    uv = vec2(-dir.z, dir.y) / adir.x;
+                } else {
+                    face = 1.0;
+                    uv = vec2(dir.z, dir.y) / adir.x;
+                }
+            } else if (adir.y >= adir.x && adir.y >= adir.z) {
+                if (dir.y > 0.0) {
+                    face = 2.0;
+                    uv = vec2(dir.x, -dir.z) / adir.y;
+                } else {
+                    face = 3.0;
+                    uv = vec2(dir.x, dir.z) / adir.y;
+                }
+            } else {
+                if (dir.z > 0.0) {
+                    face = 4.0;
+                    uv = vec2(dir.x, dir.y) / adir.z;
+                } else {
+                    face = 5.0;
+                    uv = vec2(-dir.x, dir.y) / adir.z;
+                }
+            }
+            return uv * 0.5 + 0.5;
+        }
+
+        float shadow_point(vec3 light_dir, float dist, float radius, float shadow_index) {
+            if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
+                return 1.0;
+
+            float face;
+            vec2 uv = shadow_cube_uv(light_dir / max(dist, 1.0), face);
+            float layer = shadow_index * 6.0 + face;
+            float depth = dist / radius;
+            float bias = u_shadow_params.y;
+            float texel = u_shadow_params.x * max(u_shadow_params.z, 0.0);
+            int method = int(u_shadow_params2.x + 0.5);
+            int quality = int(u_shadow_params2.y + 0.5);
+
+            if (method == 2)
+                return shadow_vcm(uv, layer, depth, bias, u_shadow_params2.z, u_shadow_params2.w);
+
+            if (method == 1)
+                return shadow_pcf(uv, layer, depth, bias, texel, quality);
+
+            return shadow_compare(uv, layer, depth, bias);
+        }
+
+        vec3 calc_dynamic_lights() {
+            vec3 shade = vec3(0);
+
+            for (int i = 0; i < num_dlights; i++) {
+                vec3 base_light_pos = dlights[i].position;
+                float light_cone = dlights[i].cone.w;
+
+                vec3 shadow_vec = v_world_pos - base_light_pos;
+                float shadow_dist = length(shadow_vec);
+
+                vec3 light_pos = base_light_pos;
+                if (light_cone == 0.0)
+                    light_pos += v_norm * 16.0;
+
+                vec3 light_dir   = light_pos - v_world_pos;
+                float dist       = length(light_dir);
+                float radius     = dlights[i].radius + DLIGHT_CUTOFF;
+                float len        = max(radius - dist - DLIGHT_CUTOFF, 0.0) / radius;
+                vec3 dir         = light_dir / max(dist, 1.0);
+                float lambert;
+                
+                if (dlights[i].color.r < 0.0f)
+                    lambert = 1.0f;
+                else
+                    lambert = max(dot(v_norm, dir), 0.0);
+                vec3 result      = ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
+
+                if (light_cone != 0.0) {
+                    float mag = -dot(dir, dlights[i].cone.xyz);
+                    result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - light_cone)), 0.0);
+                }
+
+                result *= shadow_point(shadow_vec, shadow_dist, dlights[i].radius, dlights[i].shadow.x);
+
+                shade += result;
+            }
+
+            return shade;
+        }
+    )
 }
 
 static void write_shadedot(sizebuf_t *buf)
@@ -198,6 +316,8 @@ static void write_shadedot(sizebuf_t *buf)
 #if USE_MD5
 static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
 {
+    const bool shadow = bits & GLS_SHADOWMAP;
+
     GLSL(
         struct Joint {
             vec4 pos;
@@ -226,17 +346,21 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
     }
 
     GLSL(
-        in vec2 a_tc;
         in vec3 a_norm;
         in uvec2 a_vert;
-
-        out vec2 v_tc;
-        out vec4 v_color;
     )
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+    if (!shadow) {
+        GLSL(
+            in vec2 a_tc;
+            out vec2 v_tc;
+            out vec4 v_color;
+        )
+    }
+
+    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
         GLSL(out vec3 v_world_pos;)
-    if (bits & GLS_DYNAMIC_LIGHTS)
+    if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         GLSL(out vec3 v_norm;)
 
     if (bits & GLS_MESH_SHADE)
@@ -276,19 +400,22 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits)
         )
     GLSF("}\n");
 
-    GLSL(v_tc = a_tc;)
+    if (!shadow)
+        GLSL(v_tc = a_tc;)
 
-    if (bits & GLS_MESH_SHADE)
-        GLSL(v_color = vec4(u_color.rgb * shadedot(out_norm), u_color.a);)
-    else
-        GLSL(v_color = u_color;)
+    if (!shadow) {
+        if (bits & GLS_MESH_SHADE)
+            GLSL(v_color = vec4(u_color.rgb * shadedot(out_norm), u_color.a);)
+        else
+            GLSL(v_color = u_color;)
+    }
 
     if (bits & GLS_MESH_SHELL)
         GLSL(out_pos += out_norm * u_shellscale;)
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
         GLSL(v_world_pos = (m_model * vec4(out_pos, 1.0)).xyz;)
-    if (bits & GLS_DYNAMIC_LIGHTS)
+    if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         GLSL(v_norm = normalize((mat3(m_model) * out_norm).xyz);)
     GLSL(gl_Position = m_proj * m_view * m_model * vec4(out_pos, 1.0);)
     GLSF("}\n");
@@ -314,35 +441,40 @@ static void write_getnormal(sizebuf_t *buf)
 
 static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits)
 {
+    const bool shadow = bits & GLS_SHADOWMAP;
+
     GLSL(
-        in vec2 a_tc;
         in ivec4 a_new_pos;
     )
 
     if (bits & GLS_MESH_LERP)
         GLSL(in ivec4 a_old_pos;)
 
-    GLSL(
-        out vec2 v_tc;
-        out vec4 v_color;
-    )
+    if (!shadow) {
+        GLSL(
+            in vec2 a_tc;
+            out vec2 v_tc;
+            out vec4 v_color;
+        )
+    }
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
         GLSL(out vec3 v_world_pos;)
-    if (bits & GLS_DYNAMIC_LIGHTS)
+    if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         GLSL(out vec3 v_norm;)
 
-    if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS))
+    if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         write_getnormal(buf);
 
     if (bits & GLS_MESH_SHADE)
         write_shadedot(buf);
 
     GLSF("void main() {\n");
-    GLSL(v_tc = a_tc;)
+    if (!shadow)
+        GLSL(v_tc = a_tc;)
 
     if (bits & GLS_MESH_LERP) {
-        if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS))
+        if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
             GLSL(
                 vec3 old_norm = get_normal(a_old_pos.w);
                 vec3 new_norm = get_normal(a_new_pos.w);
@@ -354,15 +486,17 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_MESH_SHELL)
             GLSL(pos += norm * u_shellscale;)
 
-        if (bits & GLS_MESH_SHADE)
-            GLSL(v_color = vec4(u_color.rgb * (shadedot(old_norm) * u_backlerp + shadedot(new_norm) * u_frontlerp), u_color.a);)
-        else
-            GLSL(v_color = u_color;)
+        if (!shadow) {
+            if (bits & GLS_MESH_SHADE)
+                GLSL(v_color = vec4(u_color.rgb * (shadedot(old_norm) * u_backlerp + shadedot(new_norm) * u_frontlerp), u_color.a);)
+            else
+                GLSL(v_color = u_color;)
+        }
 
-        if (bits & GLS_DYNAMIC_LIGHTS)
+        if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
             GLSL(v_norm = normalize((mat3(m_model) * norm).xyz);)
     } else {
-        if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS))
+        if (bits & (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
             GLSL(vec3 norm = get_normal(a_new_pos.w);)
 
         GLSL(vec3 pos = vec3(a_new_pos.xyz) * u_new_scale + u_translate;)
@@ -370,16 +504,18 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_MESH_SHELL)
             GLSL(pos += norm * u_shellscale;)
 
-        if (bits & GLS_MESH_SHADE)
-            GLSL(v_color = vec4(u_color.rgb * shadedot(norm), u_color.a);)
-        else
-            GLSL(v_color = u_color;)
+        if (!shadow) {
+            if (bits & GLS_MESH_SHADE)
+                GLSL(v_color = vec4(u_color.rgb * shadedot(norm), u_color.a);)
+            else
+                GLSL(v_color = u_color;)
+        }
 
-        if (bits & GLS_DYNAMIC_LIGHTS)
+        if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
             GLSL(v_norm = normalize((mat3(m_model) * norm).xyz);)
     }
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
         GLSL(v_world_pos = (m_model * vec4(pos, 1.0)).xyz;)
 
     GLSL(gl_Position = m_proj * m_view * m_model * vec4(pos, 1.0);)
@@ -400,6 +536,16 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits)
 
     if (bits & GLS_MESH_MD2) {
         write_mesh_shader(buf, bits);
+        return;
+    }
+
+    if (bits & GLS_SHADOWMAP) {
+        GLSL(in vec4 a_pos;)
+        GLSL(out vec3 v_world_pos;)
+        GLSF("void main() {\n");
+        GLSL(v_world_pos = (m_model * a_pos).xyz;)
+        GLSL(gl_Position = m_proj * m_view * m_model * a_pos;)
+        GLSF("}\n");
         return;
     }
 
@@ -568,6 +714,20 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_UNIFORM_MASK)
         write_block(buf, bits);
 
+    if (bits & GLS_SHADOWMAP) {
+        GLSL(in vec3 v_world_pos;)
+        if (gl_config.ver_es)
+            GLSL(layout(location = 0))
+        GLSL(out vec4 o_color;)
+
+        GLSF("void main() {\n");
+        GLSL(float dist = length(v_world_pos - u_vieworg.xyz);)
+        GLSL(float depth = dist * u_shadow_params.w;)
+        GLSL(o_color = vec4(depth, depth * depth, 0.0, 1.0);)
+        GLSF("}\n");
+        return;
+    }
+
     if (bits & GLS_DYNAMIC_LIGHTS)
         write_dynamic_light_block(buf);
 
@@ -597,6 +757,9 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_GLOWMAP_ENABLE)
         GLSL(uniform sampler2D u_glowmap;)
 
+    if (bits & GLS_DYNAMIC_LIGHTS)
+        GLSL(uniform sampler2DArray u_shadowmap;)
+
     if (!(bits & GLS_TEXTURE_REPLACE))
         GLSL(in vec4 v_color;)
 
@@ -610,13 +773,14 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(out vec4 o_bloom;)
     }
 
-    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
+    if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         GLSL(in vec3 v_world_pos;)
 
-    if (bits & GLS_DYNAMIC_LIGHTS) {
+    if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
         GLSL(in vec3 v_norm;)
+
+    if (bits & GLS_DYNAMIC_LIGHTS)
         write_dynamic_lights(buf);
-    }
 
     if (bits & GLS_BLUR_GAUSS)
         write_gaussian_blur(buf);
@@ -707,6 +871,15 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
             if (bits & GLS_INTENSITY_ENABLE)
                 GLSL(bloom.rgb *= u_intensity2;)
         }
+    }
+
+    if (bits & GLS_RIMLIGHT) {
+        GLSL(
+            vec3 view_dir = normalize(u_vieworg.xyz - v_world_pos);
+            float rim = 1.0 - max(dot(normalize(v_norm), view_dir), 0.0);
+            rim = pow(rim, 2.0);
+            diffuse = vec4(v_color.rgb * rim, v_color.a * rim);
+        )
     }
 
     if (bits & GLS_BLOOM_GENERATE) {
@@ -913,20 +1086,25 @@ static GLuint create_and_use_program(glStateBits_t bits)
     }
 #endif
 
-    if (bits & GLS_CLASSIC_SKY) {
-        bind_texture_unit(program, "u_texture1", TMU_TEXTURE);
-        bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
-    } else {
-        bind_texture_unit(program, "u_texture", TMU_TEXTURE);
-        if (bits & GLS_BLOOM_OUTPUT)
-            bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
+    if (!(bits & GLS_SHADOWMAP)) {
+        if (bits & GLS_CLASSIC_SKY) {
+            bind_texture_unit(program, "u_texture1", TMU_TEXTURE);
+            bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
+        } else {
+            bind_texture_unit(program, "u_texture", TMU_TEXTURE);
+            if (bits & GLS_BLOOM_OUTPUT)
+                bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
+        }
+
+        if (bits & GLS_LIGHTMAP_ENABLE)
+            bind_texture_unit(program, "u_lightmap", TMU_LIGHTMAP);
+
+        if (bits & GLS_GLOWMAP_ENABLE)
+            bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
+
+        if (bits & GLS_DYNAMIC_LIGHTS)
+            bind_texture_unit(program, "u_shadowmap", TMU_SHADOWMAP);
     }
-
-    if (bits & GLS_LIGHTMAP_ENABLE)
-        bind_texture_unit(program, "u_lightmap", TMU_LIGHTMAP);
-
-    if (bits & GLS_GLOWMAP_ENABLE)
-        bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
     
     return program;
 
@@ -1052,6 +1230,10 @@ static void shader_load_lights(void)
             VectorCopy(dl->cone, gls.u_dlights.lights[i].cone);
         }
         gls.u_dlights.lights[i].cone[3] = dl->conecos;
+        gls.u_dlights.lights[i].shadow[0] = (float)glr.shadowmap_index[n];
+        gls.u_dlights.lights[i].shadow[1] = 0.0f;
+        gls.u_dlights.lights[i].shadow[2] = 0.0f;
+        gls.u_dlights.lights[i].shadow[3] = 0.0f;
 
         i++;
     }
@@ -1139,10 +1321,64 @@ static void shader_setup_3d(void)
     memcpy(gls.u_block.m_model, gl_identity, sizeof(gls.u_block.m_model));
     
     VectorCopy(glr.fd.vieworg, gls.u_block.vieworg);
+    if (gl_shadowmaps->integer && gl_static.shadowmap_ok && gl_static.shadowmap_size > 0) {
+        gls.u_block.shadow_params[0] = 1.0f / (float)gl_static.shadowmap_size;
+        gls.u_block.shadow_params[1] = gl_shadowmap_bias->value;
+        gls.u_block.shadow_params[2] = gl_shadowmap_softness->value;
+    } else {
+        gls.u_block.shadow_params[0] = 0.0f;
+        gls.u_block.shadow_params[1] = 0.0f;
+        gls.u_block.shadow_params[2] = 0.0f;
+    }
+    gls.u_block.shadow_params[3] = 0.0f;
+
+    if (gl_shadowmaps->integer && gl_static.shadowmap_ok && gl_static.shadowmap_size > 0) {
+        int method = (int)Cvar_ClampValue(gl_shadowmap_filter, 0, 2);
+        int quality = (int)Cvar_ClampValue(gl_shadowmap_quality, 0, 3);
+        float vcm_bleed = 0.2f;
+        float vcm_min_var = 0.001f;
+
+        switch (quality) {
+        case 0:
+            vcm_bleed = 0.3f;
+            vcm_min_var = 0.005f;
+            break;
+        case 1:
+            vcm_bleed = 0.2f;
+            vcm_min_var = 0.001f;
+            break;
+        case 2:
+            vcm_bleed = 0.1f;
+            vcm_min_var = 0.0005f;
+            break;
+        default:
+            vcm_bleed = 0.05f;
+            vcm_min_var = 0.0002f;
+            break;
+        }
+
+        gls.u_block.shadow_params2[0] = (float)method;
+        gls.u_block.shadow_params2[1] = (float)quality;
+        gls.u_block.shadow_params2[2] = vcm_bleed;
+        gls.u_block.shadow_params2[3] = vcm_min_var;
+    } else {
+        gls.u_block.shadow_params2[0] = 0.0f;
+        gls.u_block.shadow_params2[1] = 0.0f;
+        gls.u_block.shadow_params2[2] = 0.0f;
+        gls.u_block.shadow_params2[3] = 0.0f;
+    }
+
+    if (gl_shadowmaps->integer && gl_static.shadowmap_ok && gl_static.shadowmap_tex)
+        GL_BindTexture(TMU_SHADOWMAP, gl_static.shadowmap_tex);
+    else if (gls.texnums[TMU_SHADOWMAP])
+        GL_BindTexture(TMU_SHADOWMAP, 0);
 }
 
 static void shader_disable_state(void)
 {
+    qglActiveTexture(GL_TEXTURE0 + TMU_SHADOWMAP);
+    qglBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+
     qglActiveTexture(GL_TEXTURE2);
     qglBindTexture(GL_TEXTURE_2D, 0);
 
@@ -1272,7 +1508,10 @@ static void shader_shutdown(void)
 
 static bool shader_use_per_pixel_lighting(void)
 {
-    return !!gl_per_pixel_lighting->integer;
+    if (gl_per_pixel_lighting->integer)
+        return true;
+
+    return gl_shadowmaps && gl_shadowmaps->integer;
 }
 
 const glbackend_t backend_shader = {

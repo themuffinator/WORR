@@ -51,6 +51,14 @@ cvar_t *r_mapOverBrightCap;
 cvar_t *gl_brightness;
 cvar_t *gl_dynamic;
 cvar_t *gl_dlight_falloff;
+cvar_t *gl_shadowmaps;
+cvar_t *gl_shadowmap_size;
+cvar_t *gl_shadowmap_lights;
+cvar_t *gl_shadowmap_dynamic;
+cvar_t *gl_shadowmap_bias;
+cvar_t *gl_shadowmap_softness;
+cvar_t *gl_shadowmap_filter;
+cvar_t *gl_shadowmap_quality;
 cvar_t *gl_modulate_entities;
 cvar_t *gl_glowmap_intensity;
 cvar_t *gl_flarespeed;
@@ -584,6 +592,9 @@ static void GL_DrawEntities(entity_t *ent)
     for (; ent; ent = ent->next) {
         glr.ent = ent;
 
+        if (glr.shadow_pass && (ent->flags & (RF_WEAPONMODEL | RF_NOSHADOW)))
+            continue;
+
         // convert angles to axis
         GL_SetEntityAxis();
 
@@ -606,7 +617,8 @@ static void GL_DrawEntities(entity_t *ent)
 
         model = MOD_ForHandle(ent->model);
         if (!model) {
-            GL_DrawNullModel();
+            if (!glr.shadow_pass)
+                GL_DrawNullModel();
             continue;
         }
 
@@ -615,7 +627,8 @@ static void GL_DrawEntities(entity_t *ent)
             GL_DrawAliasModel(model);
             break;
         case MOD_SPRITE:
-            GL_DrawSpriteModel(model);
+            if (!glr.shadow_pass)
+                GL_DrawSpriteModel(model);
             break;
         case MOD_EMPTY:
             break;
@@ -623,7 +636,7 @@ static void GL_DrawEntities(entity_t *ent)
             Q_assert(!"bad model type");
         }
 
-        if (gl_showorigins->integer)
+        if (!glr.shadow_pass && gl_showorigins->integer)
             GL_DrawNullModel();
     }
 }
@@ -829,6 +842,247 @@ static pp_flags_t GL_BindFramebuffer(void)
     return flags;
 }
 
+static bool GL_ShadowmapsSupported(void)
+{
+    if (!gl_static.use_shaders)
+        return false;
+    if (!qglTexImage3D || !qglFramebufferTextureLayer)
+        return false;
+    if (gl_config.ver_gl < QGL_VER(3, 0) && gl_config.ver_es < QGL_VER(3, 0))
+        return false;
+    return true;
+}
+
+static int GL_ShadowmapClampSize(int size)
+{
+    int min_size = 64;
+    int max_size = gl_config.max_texture_size;
+
+    if (size < min_size)
+        size = min_size;
+    if (size > max_size)
+        size = max_size;
+
+    return size;
+}
+
+static int GL_ShadowmapClampLights(int lights)
+{
+    if (lights < 0)
+        lights = 0;
+    if (lights > MAX_SHADOWMAP_LIGHTS)
+        lights = MAX_SHADOWMAP_LIGHTS;
+
+    if (lights > 0) {
+        GLint max_layers = 0;
+        if (qglGetIntegerv)
+            qglGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_layers);
+        if (max_layers > 0) {
+            int max_lights = max_layers / SHADOWMAP_FACE_COUNT;
+            if (lights > max_lights)
+                lights = max_lights;
+        }
+    }
+
+    return lights;
+}
+
+static void GL_EnsureShadowmaps(void)
+{
+    if (!gl_shadowmaps->integer || !GL_ShadowmapsSupported()) {
+        if (gl_static.shadowmap_ok)
+            GL_ShutdownShadowmaps();
+        return;
+    }
+
+    int size = GL_ShadowmapClampSize(gl_shadowmap_size->integer);
+    int lights = GL_ShadowmapClampLights(gl_shadowmap_lights->integer);
+    int layers = lights * SHADOWMAP_FACE_COUNT;
+
+    if (lights <= 0) {
+        if (gl_static.shadowmap_ok)
+            GL_ShutdownShadowmaps();
+        return;
+    }
+
+    if (!gl_static.shadowmap_ok || size != gl_static.shadowmap_size || layers != gl_static.shadowmap_layers) {
+        if (!GL_InitShadowmaps(size, layers))
+            gl_static.shadowmap_ok = false;
+    }
+}
+
+static const vec3_t gl_shadow_face_axis[SHADOWMAP_FACE_COUNT][3] = {
+    { { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0} }, // +X
+    { {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0} }, // -X
+    { { 0,  1,  0}, {-1,  0,  0}, { 0,  0, -1} }, // +Y
+    { { 0, -1,  0}, {-1,  0,  0}, { 0,  0,  1} }, // -Y
+    { { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0} }, // +Z
+    { { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0} }  // -Z
+};
+
+static void GL_ShadowmapFrustum(float radius)
+{
+    mat4_t matrix;
+    float znear = gl_znear->value;
+    float zfar = max(radius, znear + 1.0f);
+
+    Matrix_Frustum(glr.fd.fov_x, glr.fd.fov_y, 1.0f, znear, zfar, matrix);
+    gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
+}
+
+static void GL_SetupShadowView(const vec3_t origin, const vec3_t axis[3], float radius)
+{
+    glr.fd.fov_x = 90.0f;
+    glr.fd.fov_y = 90.0f;
+    VectorCopy(origin, glr.fd.vieworg);
+
+    VectorCopy(axis[0], glr.viewaxis[0]);
+    VectorCopy(axis[1], glr.viewaxis[1]);
+    VectorCopy(axis[2], glr.viewaxis[2]);
+
+    Matrix_FromOriginAxis(glr.fd.vieworg, glr.viewaxis, glr.viewmatrix);
+    GL_ForceMatrix(gl_identity, glr.viewmatrix);
+
+    GL_ShadowmapFrustum(radius);
+
+    VectorCopy(glr.fd.vieworg, gls.u_block.vieworg);
+    gls.u_block.vieworg[3] = 0.0f;
+    gls.u_block.shadow_params[3] = radius > 0.0f ? 1.0f / radius : 0.0f;
+    gls.u_block_dirty = true;
+
+    GL_SetupFrustum();
+}
+
+static void GL_SelectShadowLights(void)
+{
+    glr.shadow_light_count = 0;
+    for (int i = 0; i < MAX_DLIGHTS; i++)
+        glr.shadowmap_index[i] = -1;
+
+    if (!gl_shadowmaps->integer || !gl_static.shadowmap_ok)
+        return;
+
+    int max_lights = min(gl_static.shadowmap_max_lights, MAX_SHADOWMAP_LIGHTS);
+    if (max_lights <= 0)
+        return;
+
+    int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
+
+    for (int i = 0; i < total && glr.shadow_light_count < max_lights; i++) {
+        const dlight_t *dl = &glr.fd.dlights[i];
+
+        if (dl->shadow != DL_SHADOW_LIGHT)
+            continue;
+        if (dl->conecos != 0.0f || dl->radius <= 0.0f || dl->intensity <= 0.0f)
+            continue;
+
+        glr.shadowmap_index[i] = glr.shadow_light_count;
+        glr.shadow_light_indices[glr.shadow_light_count++] = i;
+    }
+
+    if (!gl_shadowmap_dynamic->integer)
+        return;
+
+    for (int i = 0; i < total && glr.shadow_light_count < max_lights; i++) {
+        const dlight_t *dl = &glr.fd.dlights[i];
+
+        if (dl->shadow != DL_SHADOW_DYNAMIC)
+            continue;
+        if (dl->conecos != 0.0f || dl->radius <= 0.0f || dl->intensity <= 0.0f)
+            continue;
+        if (glr.shadowmap_index[i] >= 0)
+            continue;
+
+        glr.shadowmap_index[i] = glr.shadow_light_count;
+        glr.shadow_light_indices[glr.shadow_light_count++] = i;
+    }
+}
+
+static void GL_RenderShadowMaps(void)
+{
+    GL_EnsureShadowmaps();
+    GL_SelectShadowLights();
+
+    if (glr.fd.rdflags & RDF_NOWORLDMODEL) {
+        glr.shadow_light_count = 0;
+        for (int i = 0; i < MAX_DLIGHTS; i++)
+            glr.shadowmap_index[i] = -1;
+        return;
+    }
+
+    if (!gl_static.shadowmap_ok || !glr.shadow_light_count)
+        return;
+
+    refdef_t saved_fd = glr.fd;
+    vec3_t saved_viewaxis[3];
+    mat4_t saved_viewmatrix;
+    bool saved_shadow_pass = glr.shadow_pass;
+    bool saved_framebuffer_bound = glr.framebuffer_bound;
+
+    VectorCopy(glr.viewaxis[0], saved_viewaxis[0]);
+    VectorCopy(glr.viewaxis[1], saved_viewaxis[1]);
+    VectorCopy(glr.viewaxis[2], saved_viewaxis[2]);
+    memcpy(saved_viewmatrix, glr.viewmatrix, sizeof(saved_viewmatrix));
+
+    glr.shadow_pass = true;
+    glr.framebuffer_bound = true;
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadowmap_fbo);
+    qglViewport(0, 0, gl_static.shadowmap_size, gl_static.shadowmap_size);
+    qglColorMask(1, 1, 1, 1);
+
+    static const vec4_t clear_color = { 1, 1, 1, 1 };
+
+    for (int light_slot = 0; light_slot < glr.shadow_light_count; light_slot++) {
+        int light_index = glr.shadow_light_indices[light_slot];
+        const dlight_t *dl = &saved_fd.dlights[light_index];
+        float radius = dl->radius;
+
+        if (radius <= 0.0f)
+            continue;
+
+        for (int face = 0; face < SHADOWMAP_FACE_COUNT; face++) {
+            int layer = light_slot * SHADOWMAP_FACE_COUNT + face;
+
+            glr.drawframe++;
+
+            qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.shadowmap_tex, 0, layer);
+
+            GL_StateBits(GLS_DEFAULT);
+            gls.dlight_bits = glr.ppl_dlight_bits = 0;
+
+            GL_SetupShadowView(dl->origin, gl_shadow_face_axis[face], radius);
+
+            qglClearBufferfv(GL_COLOR, 0, clear_color);
+            qglClear(GL_DEPTH_BUFFER_BIT);
+
+            if (gl_drawworld->integer)
+                GL_DrawWorld();
+
+            GL_DrawEntities(glr.ents.bmodels);
+            GL_DrawEntities(glr.ents.opaque);
+
+            GL_Flush3D();
+        }
+    }
+
+    glr.drawframe++;
+
+    glr.shadow_pass = saved_shadow_pass;
+    glr.framebuffer_bound = saved_framebuffer_bound;
+    glr.fd = saved_fd;
+
+    VectorCopy(saved_viewaxis[0], glr.viewaxis[0]);
+    VectorCopy(saved_viewaxis[1], glr.viewaxis[1]);
+    VectorCopy(saved_viewaxis[2], glr.viewaxis[2]);
+    memcpy(glr.viewmatrix, saved_viewmatrix, sizeof(glr.viewmatrix));
+
+    if (saved_framebuffer_bound)
+        qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
+    else
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void R_RenderFrame(const refdef_t *fd)
 {
     GL_Flush2D();
@@ -840,7 +1094,8 @@ void R_RenderFrame(const refdef_t *fd)
     glr.fd = *fd;
     glr.ppl_bits  = 0;
 
-    if (gl_dynamic->integer != 1 || gl_vertexlight->integer)
+    bool shadowmaps_active = gl_shadowmaps->integer && GL_ShadowmapsSupported();
+    if ((gl_dynamic->integer != 1 || gl_vertexlight->integer) && !shadowmaps_active)
         glr.fd.num_dlights = 0;
 
     glr.fog_bits = glr.fog_bits_sky = 0;
@@ -855,7 +1110,10 @@ void R_RenderFrame(const refdef_t *fd)
                 glr.fog_bits_sky |= GLS_FOG_SKY;
         }
 
-        if (gl_per_pixel_lighting->integer > 0)
+        bool use_ppl = gl_per_pixel_lighting->integer > 0;
+        if (!use_ppl && gl_shadowmaps->integer && GL_ShadowmapsSupported())
+            use_ppl = true;
+        if (use_ppl)
             glr.ppl_bits |= GLS_DYNAMIC_LIGHTS;
     }
 
@@ -866,14 +1124,16 @@ void R_RenderFrame(const refdef_t *fd)
 
     pp_flags_t pp_flags = GL_BindFramebuffer();
 
+    GL_ClassifyEntities();
+
+    GL_RenderShadowMaps();
+
     GL_Setup3D();
 
     GL_SetupFrustum();
 
     if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_drawworld->integer)
         GL_DrawWorld();
-
-    GL_ClassifyEntities();
 
     GL_DrawEntities(glr.ents.bmodels);
 
@@ -1215,6 +1475,14 @@ static void GL_Register(void)
     gl_dynamic = Cvar_Get("gl_dynamic", "1", 0);
     gl_dynamic->changed = gl_lightmap_changed;
     gl_dlight_falloff = Cvar_Get("gl_dlight_falloff", "1", 0);
+    gl_shadowmaps = Cvar_Get("gl_shadowmaps", "1", CVAR_ARCHIVE);
+    gl_shadowmap_size = Cvar_Get("gl_shadowmap_size", "512", CVAR_ARCHIVE);
+    gl_shadowmap_lights = Cvar_Get("gl_shadowmap_lights", "2", CVAR_ARCHIVE);
+    gl_shadowmap_dynamic = Cvar_Get("gl_shadowmap_dynamic", "1", CVAR_ARCHIVE);
+    gl_shadowmap_bias = Cvar_Get("gl_shadowmap_bias", "0.005", CVAR_ARCHIVE);
+    gl_shadowmap_softness = Cvar_Get("gl_shadowmap_softness", "1", CVAR_ARCHIVE);
+    gl_shadowmap_filter = Cvar_Get("gl_shadowmap_filter", "1", CVAR_ARCHIVE);
+    gl_shadowmap_quality = Cvar_Get("gl_shadowmap_quality", "1", CVAR_ARCHIVE);
     gl_modulate_entities = Cvar_Get("gl_modulate_entities", "1", 0);
     gl_modulate_entities->changed = gl_modulate_entities_changed;
     gl_glowmap_intensity = Cvar_Get("gl_glowmap_intensity", "1", 0);

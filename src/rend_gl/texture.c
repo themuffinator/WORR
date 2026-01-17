@@ -1341,6 +1341,117 @@ bool GL_InitFramebuffers(void)
     return true;
 }
 
+typedef struct {
+    GLenum internal_format;
+    GLenum format;
+    GLenum type;
+    const char *label;
+} shadowmap_format_t;
+
+static bool GL_InitShadowmapsFormat(int size, int layers, const shadowmap_format_t *fmt)
+{
+    GL_ClearErrors();
+
+    GL_ShutdownShadowmaps();
+
+    qglGenTextures(1, &gl_static.shadowmap_tex);
+    qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.shadowmap_tex);
+    qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, fmt->internal_format, size, size, layers, 0, fmt->format, fmt->type, NULL);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (gl_config.caps & QGL_CAP_TEXTURE_MAX_LEVEL)
+        qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 0);
+
+    qglGenFramebuffers(1, &gl_static.shadowmap_fbo);
+    qglGenRenderbuffers(1, &gl_static.shadowmap_depth);
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadowmap_fbo);
+    qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.shadowmap_tex, 0, 0);
+
+    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.shadowmap_depth);
+    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
+    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
+    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gl_static.shadowmap_depth);
+
+    {
+        static const GLenum draw_buffers[1] = { GL_COLOR_ATTACHMENT0 };
+        qglDrawBuffers(1, draw_buffers);
+    }
+
+    if (!GL_CheckFramebufferStatus(true, "FBO_SHADOWMAP")) {
+        GL_ShutdownShadowmaps();
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return false;
+    }
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    gl_static.shadowmap_size = size;
+    gl_static.shadowmap_layers = layers;
+    gl_static.shadowmap_max_lights = layers / SHADOWMAP_FACE_COUNT;
+    gl_static.shadowmap_ok = true;
+
+    return true;
+}
+
+bool GL_InitShadowmaps(int size, int layers)
+{
+    if (!gl_static.use_shaders || !qglTexImage3D || !qglFramebufferTextureLayer)
+        return false;
+
+    if (size <= 0 || layers <= 0)
+        return false;
+
+    static const shadowmap_format_t formats[] = {
+        { GL_RG16F, GL_RG, GL_HALF_FLOAT, "RG16F" },
+        { GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, "RGBA16F" },
+        { GL_RG16, GL_RG, GL_UNSIGNED_SHORT, "RG16" },
+        { GL_RG8, GL_RG, GL_UNSIGNED_BYTE, "RG8" },
+        { GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, "RGBA8" }
+    };
+
+    for (size_t i = 0; i < q_countof(formats); i++) {
+        if (GL_InitShadowmapsFormat(size, layers, &formats[i])) {
+            if (i > 0) {
+                Com_WPrintf("Shadowmap format %s unavailable, using %s.\n",
+                            formats[0].label, formats[i].label);
+            }
+            return true;
+        }
+    }
+
+    Com_WPrintf("Shadowmap formats unavailable, disabling shadowmaps.\n");
+    return false;
+}
+
+void GL_ShutdownShadowmaps(void)
+{
+    if (gls.texnums[TMU_SHADOWMAP] == gl_static.shadowmap_tex)
+        gls.texnums[TMU_SHADOWMAP] = 0;
+
+    if (gl_static.shadowmap_tex) {
+        qglDeleteTextures(1, &gl_static.shadowmap_tex);
+        gl_static.shadowmap_tex = 0;
+    }
+
+    if (gl_static.shadowmap_fbo) {
+        qglDeleteFramebuffers(1, &gl_static.shadowmap_fbo);
+        gl_static.shadowmap_fbo = 0;
+    }
+
+    if (gl_static.shadowmap_depth) {
+        qglDeleteRenderbuffers(1, &gl_static.shadowmap_depth);
+        gl_static.shadowmap_depth = 0;
+    }
+
+    gl_static.shadowmap_size = 0;
+    gl_static.shadowmap_layers = 0;
+    gl_static.shadowmap_max_lights = 0;
+    gl_static.shadowmap_ok = false;
+}
+
 static void gl_partshape_changed(cvar_t *self)
 {
     GL_InitParticleTexture();
@@ -1463,6 +1574,8 @@ void GL_ShutdownImages(void)
     gl_anisotropy->changed = NULL;
     gl_gamma->changed = NULL;
     gl_partshape->changed = NULL;
+
+    GL_ShutdownShadowmaps();
 
     // delete auto textures
     qglDeleteTextures(NUM_AUTO_TEXTURES, gl_static.texnums);

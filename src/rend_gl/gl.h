@@ -76,6 +76,9 @@ typedef uint64_t glStateBits_t;
 #define TEXNUM_PP_BLUR_0        AUTO_TEX(11)
 #define TEXNUM_PP_BLUR_1        AUTO_TEX(12)
 
+#define MAX_SHADOWMAP_LIGHTS    4
+#define SHADOWMAP_FACE_COUNT    6
+
 // framebuffers
 #define FBO_COUNT   3
 #define FBO_SCENE   gl_static.framebuffers[0]
@@ -114,6 +117,9 @@ typedef struct {
     GLuint          array_object;
     GLuint          index_buffer;
     GLuint          vertex_buffer;
+    GLuint          shadowmap_fbo;
+    GLuint          shadowmap_tex;
+    GLuint          shadowmap_depth;
     GLuint          warp_program;
     GLuint          texnums[NUM_AUTO_TEXTURES];
     GLenum          samples_passed;
@@ -131,12 +137,16 @@ typedef struct {
     float           identity_light;
     int             nolm_mask;
     int             hunk_align;
+    int             shadowmap_size;
+    int             shadowmap_layers;
+    int             shadowmap_max_lights;
     float           sintab[256];
     byte            latlngtab[NUMVERTEXNORMALS][2];
     byte            lightstylemap[MAX_LIGHTSTYLES];
     vec4_t          clearcolor;
     hash_map_t      *queries;
     hash_map_t      *programs;
+    bool            shadowmap_ok;
 } glStatic_t;
 
 typedef struct {
@@ -172,6 +182,10 @@ typedef struct {
     int             framebuffer_height;
     bool            framebuffer_ok;
     bool            framebuffer_bound;
+    bool            shadow_pass;
+    int             shadow_light_count;
+    int             shadow_light_indices[MAX_SHADOWMAP_LIGHTS];
+    int             shadowmap_index[MAX_DLIGHTS];
 } glRefdef_t;
 
 typedef enum {
@@ -272,6 +286,14 @@ extern cvar_t *gl_glowmap_intensity;
 extern cvar_t *gl_flarespeed;
 extern cvar_t *gl_fontshadow;
 extern cvar_t *gl_shaders;
+extern cvar_t *gl_shadowmaps;
+extern cvar_t *gl_shadowmap_size;
+extern cvar_t *gl_shadowmap_lights;
+extern cvar_t *gl_shadowmap_dynamic;
+extern cvar_t *gl_shadowmap_bias;
+extern cvar_t *gl_shadowmap_softness;
+extern cvar_t *gl_shadowmap_filter;
+extern cvar_t *gl_shadowmap_quality;
 #if USE_MD5
 extern cvar_t *gl_md5_load;
 extern cvar_t *gl_md5_use;
@@ -371,6 +393,13 @@ static inline void GL_ShiftLightmapBytes(const byte in[3], float out[3])
     out[2] = b;
 }
 
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict
+#define Q_RESTRICT_UNDEF_GL
+#endif
+#endif
+
 void GL_MultMatrix(GLfloat *restrict out, const GLfloat *restrict a, const GLfloat *restrict b);
 void GL_SetEntityAxis(void);
 void GL_RotationMatrix(GLfloat *matrix);
@@ -396,6 +425,13 @@ static inline void GL_AdvanceValue(float *restrict val, float target, float spee
             *val = target;
     }
 }
+
+#ifdef __cplusplus
+#ifdef Q_RESTRICT_UNDEF_GL
+#undef restrict
+#undef Q_RESTRICT_UNDEF_GL
+#endif
+#endif
 
 /*
  * gl_model.c
@@ -637,6 +673,8 @@ void GL_LoadWorld(const char *name);
 #define GLS_BLUR_BOX            BIT_ULL(33)
 
 #define GLS_DYNAMIC_LIGHTS      BIT_ULL(34)
+#define GLS_RIMLIGHT            BIT_ULL(35)
+#define GLS_SHADOWMAP           BIT_ULL(36)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
@@ -649,9 +687,11 @@ void GL_LoadWorld(const char *name);
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
-                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS)
+                                 GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
+                                 GLS_RIMLIGHT | GLS_SHADOWMAP)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS)
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
+                                 GLS_RIMLIGHT | GLS_SHADOWMAP)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -712,6 +752,7 @@ typedef enum {
     TMU_TEXTURE,
     TMU_LIGHTMAP,
     TMU_GLOWMAP,
+    TMU_SHADOWMAP,
     MAX_TMUS,
 
     // MD5
@@ -735,6 +776,7 @@ typedef struct {
     float     radius;
     vec4_t    color; // a = intensity
     vec4_t    cone; // a = angle
+    vec4_t    shadow; // x = shadow map index, yzw reserved
 } glDlight_t;
 
 typedef struct {
@@ -779,6 +821,8 @@ typedef struct {
     GLfloat     pad;
     GLfloat     pad2;
     vec4_t      vieworg;
+    vec4_t      shadow_params; // x = 1/size, y = bias, z = softness, w = shadow depth scale
+    vec4_t      shadow_params2; // x = method, y = quality, z = vcm bleed, w = vcm min variance
 } glUniformBlock_t;
 
 typedef struct {
@@ -1018,6 +1062,8 @@ void GL_InitImages(void);
 void GL_ShutdownImages(void);
 
 bool GL_InitFramebuffers(void);
+bool GL_InitShadowmaps(int size, int layers);
+void GL_ShutdownShadowmaps(void);
 
 extern cvar_t *gl_intensity;
 

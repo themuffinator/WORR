@@ -298,8 +298,10 @@ static const glsection_t sections[] = {
             QGL_FN(BindVertexArray),
             QGL_FN(ClearBufferfv),
             QGL_FN(DeleteVertexArrays),
+            QGL_FN(FramebufferTextureLayer),
             QGL_FN(GenVertexArrays),
             QGL_FN(GetStringi),
+            QGL_FN(TexImage3D),
             QGL_FN(VertexAttribIPointer),
             { NULL }
         }

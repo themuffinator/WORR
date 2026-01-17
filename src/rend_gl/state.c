@@ -24,6 +24,11 @@ const glbackend_t *gl_backend;
 
 const mat4_t gl_identity = { [0] = 1, [5] = 1, [10] = 1, [15] = 1 };
 
+static inline GLenum GL_TextureTarget(glTmu_t tmu)
+{
+    return (tmu == TMU_SHADOWMAP) ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
+}
+
 // for uploading
 void GL_ForceTexture(glTmu_t tmu, GLuint texnum)
 {
@@ -32,7 +37,7 @@ void GL_ForceTexture(glTmu_t tmu, GLuint texnum)
     if (gls.texnums[tmu] == texnum)
         return;
 
-    qglBindTexture(GL_TEXTURE_2D, texnum);
+    qglBindTexture(GL_TextureTarget(tmu), texnum);
     gls.texnums[tmu] = texnum;
 
     c.texSwitches++;
@@ -53,7 +58,7 @@ void GL_BindTexture(glTmu_t tmu, GLuint texnum)
         qglBindTextureUnit(tmu, texnum);
     } else {
         GL_ActiveTexture(tmu);
-        qglBindTexture(GL_TEXTURE_2D, texnum);
+        qglBindTexture(GL_TextureTarget(tmu), texnum);
     }
     gls.texnums[tmu] = texnum;
 

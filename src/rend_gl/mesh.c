@@ -693,6 +693,21 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
 
     c.trisDrawn += num_indices / 3;
 
+    if (glr.shadow_pass) {
+        glStateBits_t state = GLS_SHADOWMAP | meshbits;
+
+        GL_StateBits(state);
+        GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
+        if (gls.currentva)
+            GL_ArrayBits(GLA_VERTEX);
+
+        GL_LoadUniforms();
+        GL_LockArrays(num_verts);
+        qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+        GL_UnlockArrays();
+        return;
+    }
+
     // if the model was culled, just draw the shadow
     if (drawshadow == SHADOW_ONLY) {
         GL_LockArrays(num_verts);
@@ -1182,7 +1197,10 @@ void GL_DrawAliasModel(const model_t *model)
     VectorCopy(ent->origin, origin);
 
     // cull the shadow
-    drawshadow = cull_shadow(model);
+    if (glr.shadow_pass)
+        drawshadow = SHADOW_NO;
+    else
+        drawshadow = cull_shadow(model);
 
     // cull the model
     if (newframenum == oldframenum)
@@ -1196,11 +1214,16 @@ void GL_DrawAliasModel(const model_t *model)
     }
 
     // setup parameters common for all meshes
-    if (!drawshadow)
-        setup_color();
-    setup_celshading();
-    setup_dotshading();
-    setup_shadow();
+    if (!glr.shadow_pass) {
+        if (!drawshadow)
+            setup_color();
+        setup_celshading();
+        setup_dotshading();
+        setup_shadow();
+    } else {
+        dotshading = false;
+        celscale = 0.0f;
+    }
 
     // setup scale and translate vectors
     setup_frame_scale(model);
@@ -1221,12 +1244,14 @@ void GL_DrawAliasModel(const model_t *model)
         meshbits = GLS_MESH_MD2;
         if (oldframenum != newframenum)
             meshbits |= GLS_MESH_LERP;
-        if (glr.ent->flags & RF_SHELL_MASK)
-            meshbits |= GLS_MESH_SHELL;
-        else if (dotshading)
-            meshbits |= GLS_MESH_SHADE;
-        if (ent->flags & RF_RIMLIGHT)
-            meshbits |= GLS_RIMLIGHT;
+        if (!glr.shadow_pass) {
+            if (glr.ent->flags & RF_SHELL_MASK)
+                meshbits |= GLS_MESH_SHELL;
+            else if (dotshading)
+                meshbits |= GLS_MESH_SHADE;
+            if (ent->flags & RF_RIMLIGHT)
+                meshbits |= GLS_RIMLIGHT;
+        }
 
         VectorCopy(oldscale, gls.u_block.mesh.oldscale);
         VectorCopy(newscale, gls.u_block.mesh.newscale);
@@ -1243,7 +1268,10 @@ void GL_DrawAliasModel(const model_t *model)
         meshbits = 0;
 
         // select proper tessfunc
-        if (ent->flags & RF_SHELL_MASK) {
+        if (glr.shadow_pass) {
+            tessfunc = newframenum == oldframenum ?
+                tess_static_plain : tess_lerped_plain;
+        } else if (ent->flags & RF_SHELL_MASK) {
             tessfunc = newframenum == oldframenum ?
                 tess_static_shell : tess_lerped_shell;
         } else if (dotshading) {
@@ -1260,11 +1288,11 @@ void GL_DrawAliasModel(const model_t *model)
     if (ent->flags & RF_WEAPONMODEL)
         setup_weaponmodel();
 
-    if (ent->flags & RF_DEPTHHACK)
+    if ((ent->flags & RF_DEPTHHACK) && !glr.shadow_pass)
         GL_DepthRange(0, 0.25f);
 
     // set up lights
-    if (drawshadow != SHADOW_ONLY)
+    if (drawshadow != SHADOW_ONLY && !glr.shadow_pass)
         setup_lights();
 
     // draw all the meshes
@@ -1283,7 +1311,7 @@ void GL_DrawAliasModel(const model_t *model)
                         mesh->skins, mesh->numskins);
     }
 
-    if (ent->flags & RF_DEPTHHACK)
+    if ((ent->flags & RF_DEPTHHACK) && !glr.shadow_pass)
         GL_DepthRange(0, 1);
 
     if (ent->flags & RF_WEAPONMODEL) {

@@ -645,7 +645,9 @@ void GL_Flush3D(void)
     if (!tess.numindices)
         return;
 
-    if (q_unlikely(state & GLS_SKY_MASK)) {
+    if (state & GLS_SHADOWMAP) {
+        array = GLA_VERTEX;
+    } else if (q_unlikely(state & GLS_SKY_MASK)) {
         array = GLA_VERTEX;
     } else {
         if (q_likely(tess.texnum[TMU_LIGHTMAP])) {
@@ -666,15 +668,15 @@ void GL_Flush3D(void)
         array |= GLA_NORMAL;
     }
 
-    if (glr.framebuffer_bound && gl_bloom->integer)
+    if (!(state & GLS_SHADOWMAP) && glr.framebuffer_bound && gl_bloom->integer)
         state |= GLS_BLOOM_GENERATE;
 
-    if (!(state & GLS_TEXTURE_REPLACE))
+    if (!(state & GLS_TEXTURE_REPLACE) && !(state & GLS_SHADOWMAP))
         array |= GLA_COLOR;
 
-    if (state & GLS_SKY_MASK)
+    if (!(state & GLS_SHADOWMAP) && (state & GLS_SKY_MASK))
         state |= glr.fog_bits_sky;
-    else
+    else if (!(state & GLS_SHADOWMAP))
         state |= glr.fog_bits;
 
     GL_StateBits(state);
@@ -742,13 +744,45 @@ static const image_t *GL_TextureAnimation(const mtexinfo_t *tex)
 
 static void GL_DrawFace(const mface_t *surf)
 {
-    const image_t *image = GL_TextureAnimation(surf->texinfo);
     const int numtris = surf->numsurfedges - 2;
     const int numindices = numtris * 3;
-    glStateBits_t state = surf->statebits;
-    GLuint texnum[MAX_TMUS] = { 0 };
     glIndex_t *dst_indices;
     int i, j;
+
+    if (glr.shadow_pass) {
+        glStateBits_t state = GLS_SHADOWMAP;
+
+        if (tess.flags != state ||
+            tess.numindices + numindices > TESS_MAX_INDICES) {
+            GL_Flush3D();
+            memset(tess.texnum, 0, sizeof(tess.texnum));
+            tess.texnum[TMU_TEXTURE] = TEXNUM_WHITE;
+        }
+
+        if (q_unlikely(gl_static.world.vertices))
+            j = GL_CopyVerts(surf);
+        else
+            j = surf->firstvert;
+
+        dst_indices = tess.indices + tess.numindices;
+        for (i = 0; i < numtris; i++) {
+            dst_indices[0] = j;
+            dst_indices[1] = j + (i + 1);
+            dst_indices[2] = j + (i + 2);
+            dst_indices += 3;
+        }
+        tess.numindices += numindices;
+
+        tess.flags = state;
+
+        c.facesTris += numtris;
+        c.facesDrawn++;
+        return;
+    }
+
+    const image_t *image = GL_TextureAnimation(surf->texinfo);
+    glStateBits_t state = surf->statebits;
+    GLuint texnum[MAX_TMUS] = { 0 };
 
     texnum[TMU_TEXTURE] = image->texnum;
     if (q_likely(surf->light_m)) {
