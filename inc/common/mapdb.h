@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
 	char		id[32];
 	char		command[32];
@@ -51,3 +55,7 @@ typedef struct {
 const mapdb_t *MapDB_Get(void);
 void MapDB_Init(void);
 void MapDB_Shutdown(void);
+
+#ifdef __cplusplus
+}
+#endif

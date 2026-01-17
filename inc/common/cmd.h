@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 //
 // cmd.h -- command text buffering and command execution
 //
@@ -220,3 +223,8 @@ int Cmd_ParseOptions(const cmd_option_t *opt);
 void Cmd_PrintHelp(const cmd_option_t *opt);
 void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix);
 void Cmd_PrintHint(void);
+
+#ifdef __cplusplus
+}
+#endif
+

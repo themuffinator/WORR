@@ -20,6 +20,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "common/zone.h"
 
 typedef struct hash_map_s hash_map_t;
@@ -154,3 +158,7 @@ static inline bool HashCaseStrCmp(const void *const a, const void *const b)
     const char *str_b = *(const char **)b;
     return Q_stricmp(str_a, str_b) == 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

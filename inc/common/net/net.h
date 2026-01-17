@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/fifo.h"
 
 // net.h -- quake's interface to the networking layer
@@ -223,3 +226,8 @@ extern cvar_t       *net_ip;
 extern cvar_t       *net_port;
 
 extern netadr_t     net_from;
+
+#ifdef __cplusplus
+}
+#endif
+

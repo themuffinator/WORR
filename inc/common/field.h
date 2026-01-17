@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 //
 // field.h -- line editing
 //
@@ -37,3 +40,8 @@ void        IF_Init(inputField_t *field, size_t visibleChars, size_t maxChars);
 void        IF_Clear(inputField_t *field);
 void        IF_Replace(inputField_t *field, const char *text);
 int         IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font);
+
+#ifdef __cplusplus
+}
+#endif
+

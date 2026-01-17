@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 //
 // intreadwrite.h -- macros for fast unaligned integer R/W.
 //
@@ -50,9 +53,9 @@ struct unaligned64 { uint64_t u; } __attribute__((packed, may_alias));
 
 #else
 
-#define WN16(p, v) memcpy(p, &(uint16_t){ v }, sizeof(uint16_t))
-#define WN32(p, v) memcpy(p, &(uint32_t){ v }, sizeof(uint32_t))
-#define WN64(p, v) memcpy(p, &(uint64_t){ v }, sizeof(uint64_t))
+#define WN16(p, v) do { uint16_t _v = (v); memcpy(p, &_v, sizeof(_v)); } while (0)
+#define WN32(p, v) do { uint32_t _v = (v); memcpy(p, &_v, sizeof(_v)); } while (0)
+#define WN64(p, v) do { uint64_t _v = (v); memcpy(p, &_v, sizeof(_v)); } while (0)
 
 #endif
 
@@ -150,3 +153,8 @@ struct unaligned64 { uint64_t u; } __attribute__((packed, may_alias));
         ((uint8_t *)p)[7] = (_v >> 56) & 0xff;  \
     } while (0)
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+

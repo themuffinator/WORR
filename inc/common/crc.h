@@ -18,8 +18,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint16_t CRC_Block(const byte *start, size_t count);
 
 #if USE_CLIENT
 byte COM_BlockSequenceCRCByte(const byte *base, size_t length, int sequence);
+#endif
+
+#ifdef __cplusplus
+}
 #endif

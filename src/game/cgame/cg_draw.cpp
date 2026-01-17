@@ -32,6 +32,8 @@ static cvar_t *scr_centertime;
 static cvar_t *scr_printspeed;
 static cvar_t *cl_notifytime;
 static cvar_t *scr_maxlines;
+static cvar_t *con_notifytime;
+static cvar_t *con_notifylines;
 static cvar_t *ui_acc_contrast;
 static cvar_t* ui_acc_alttypeface;
 
@@ -158,15 +160,32 @@ static void CG_Notify_CheckExpire(hud_data_t &data)
     }
 }
 
+static int CG_GetEffectiveNotifyLines(void)
+{
+    if (con_notifylines && con_notifylines->integer <= 0)
+        return 0;
+    if (con_notifytime && con_notifytime->value <= 0.0f)
+        return 0;
+    if (!scr_maxlines || scr_maxlines->integer <= 0)
+        return 0;
+
+    int max_lines = min((int)MAX_NOTIFY, scr_maxlines->integer);
+    if (con_notifylines && con_notifylines->integer > 0)
+        max_lines = min(max_lines, con_notifylines->integer);
+
+    return max(0, max_lines);
+}
+
 // add notify to list
 static void CG_AddNotify(hud_data_t &data, const char *msg, bool is_chat)
 {
     size_t i = 0;
 
-    if (scr_maxlines->integer <= 0)
+    const int max_lines = CG_GetEffectiveNotifyLines();
+    if (max_lines <= 0)
         return;
 
-    const int max = min(MAX_NOTIFY, (size_t)scr_maxlines->integer);
+    const int max = min(MAX_NOTIFY, (size_t)max_lines);
 
     for (; i < max; i++)
         if (!data.notify[i].is_active)
@@ -404,6 +423,12 @@ static void CG_AddObituary(hud_data_t &data, const cl_obituary_t &entry)
 static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
 {
     auto &data = hud_data[isplit];
+    const int max_lines = CG_GetEffectiveNotifyLines();
+
+    if (max_lines <= 0 || !cl_notifytime || cl_notifytime->value <= 0.0f) {
+        CG_ClearNotify(isplit);
+        return;
+    }
 
     CG_Notify_CheckExpire(data);
 
@@ -453,6 +478,7 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
 static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
 {
     auto &data = hud_data[isplit];
+    const int max_lines = CG_GetEffectiveNotifyLines();
     CG_Obituary_Compact(data);
 
     const int line_height = max(1, static_cast<int>(std::lround(cgi.SCR_FontLineHeight(scale))));
@@ -462,8 +488,8 @@ static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_saf
 
     int x = (hud_vrect.x * scale) + hud_safe.x;
     int y = (hud_vrect.y * scale) + hud_safe.y;
-    if (scr_maxlines->integer > 0)
-        y += scr_maxlines->integer * (10 * scale);
+    if (max_lines > 0)
+        y += max_lines * (10 * scale);
 
     const uint64_t now = cgi.CL_ClientRealTime();
 
@@ -2107,6 +2133,8 @@ void CG_InitScreen()
     scr_printspeed  = cgi.cvar ("scr_printspeed", "0.04", CVAR_NOFLAGS); // [Sam-KEX] Changed from 8
     cl_notifytime   = cgi.cvar ("cl_notifytime", "5.0",   CVAR_ARCHIVE);
     scr_maxlines    = cgi.cvar ("scr_maxlines", "4",      CVAR_ARCHIVE);
+    con_notifytime  = cgi.cvar ("con_notifytime", "0",    CVAR_NOFLAGS);
+    con_notifylines = cgi.cvar ("con_notifylines", "4",   CVAR_NOFLAGS);
     ui_acc_contrast = cgi.cvar ("ui_acc_contrast", "0",   CVAR_NOFLAGS);
     ui_acc_alttypeface = cgi.cvar("ui_acc_alttypeface", "0", CVAR_NOFLAGS);
 

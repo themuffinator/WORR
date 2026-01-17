@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     int         channels;
     int         samples;                // mono samples in buffer
@@ -47,3 +51,7 @@ extern dma_t    dma;
 extern int      s_paintedtime;
 
 extern cvar_t   *s_khz;
+
+#ifdef __cplusplus
+}
+#endif

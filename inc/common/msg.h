@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/protocol.h"
 #include "common/sizebuf.h"
 
@@ -310,3 +313,8 @@ static inline void MSG_UnpackSolid32_Ver2(uint32_t solid, vec3_t mins, vec3_t ma
     VectorSet(mins, -x, -y, -zd);
     VectorSet(maxs,  x,  y,  zu);
 }
+
+#ifdef __cplusplus
+}
+#endif
+

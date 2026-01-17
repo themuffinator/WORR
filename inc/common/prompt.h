@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/field.h"
 #include "common/cmd.h"
 
@@ -52,3 +55,8 @@ void Prompt_HistoryDown(commandPrompt_t *prompt);
 void Prompt_Clear(commandPrompt_t *prompt);
 void Prompt_SaveHistory(const commandPrompt_t *prompt, const char *filename, int lines);
 void Prompt_LoadHistory(commandPrompt_t *prompt, const char *filename);
+
+#ifdef __cplusplus
+}
+#endif
+

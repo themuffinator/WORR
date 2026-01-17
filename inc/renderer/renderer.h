@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "common/cvar.h"
 #include "common/error.h"
 
@@ -33,11 +37,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define WEAPONSHELL_SCALE   0.5f
 
 #define RF_TRACKER          BIT_ULL(32)
+#define RF_RIMLIGHT         BIT_ULL(33)
+#define RF_OUTLINE          BIT_ULL(34)
+#define RF_OUTLINE_NODEPTH  BIT_ULL(35)
 
 #define RF_SHELL_MASK       (RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | \
                              RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM | RF_SHELL_LITE_GREEN)
 
 #define DLIGHT_CUTOFF       64
+
+typedef enum {
+    DL_SHADOW_NONE = 0,
+    DL_SHADOW_LIGHT = 1,
+    DL_SHADOW_DYNAMIC = 2
+} dlight_shadow_t;
 
 typedef struct entity_s {
     qhandle_t           model;          // opaque type outside renderer
@@ -87,6 +100,7 @@ typedef struct {
     // for culling, calculated at add time
     vec4_t  sphere;
     float   conecos;
+    uint32_t shadow;
 } dlight_t;
 
 typedef struct {
@@ -412,3 +426,7 @@ static inline int R_DrawString(int x, int y, int flags, size_t maxChars,
 {
     return R_DrawStringStretch(x, y, 1, flags, maxChars, string, color, font);
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct {
     bool        allowoverflow;
     bool        allowunderflow;
@@ -64,3 +67,8 @@ int SZ_ReadShort(sizebuf_t *sb);
 int SZ_ReadWord(sizebuf_t *sb);
 int SZ_ReadLong(sizebuf_t *sb);
 float SZ_ReadFloat(sizebuf_t *sb);
+
+#ifdef __cplusplus
+}
+#endif
+

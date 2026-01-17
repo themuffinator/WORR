@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct {
     byte *data;
     size_t size;
@@ -118,3 +121,8 @@ static inline bool FIFO_TryWrite(fifo_t *fifo, void *buffer, size_t len)
 }
 
 bool FIFO_ReadMessage(fifo_t *fifo, size_t msglen);
+
+#ifdef __cplusplus
+}
+#endif
+

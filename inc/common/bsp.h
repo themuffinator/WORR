@@ -19,6 +19,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "shared/list.h"
 #include "common/error.h"
 #include "system/hunk.h"
@@ -346,3 +349,8 @@ const mleaf_t *BSP_PointLeaf(const mnode_t *node, const vec3_t p);
 const mmodel_t *BSP_InlineModel(const bsp_t *bsp, const char *name);
 
 void BSP_Init(void);
+
+#ifdef __cplusplus
+}
+#endif
+

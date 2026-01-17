@@ -816,7 +816,7 @@ static bool init_mouse(void)
 static void grab_mouse(bool grab)
 {
     SDL_SetWindowMouseGrab(sdl.window, grab);
-    SDL_SetWindowRelativeMouseMode(sdl.window, grab && !(Key_GetDest() & KEY_MENU));
+    SDL_SetWindowRelativeMouseMode(sdl.window, grab && !(Key_GetDest() & (KEY_MENU | KEY_MESSAGE)));
     SDL_GetRelativeMouseState(NULL, NULL);
     set_cursor_visible(!(sdl.flags & QVF_FULLSCREEN));
 }

@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/bsp.h"
 
 // bitmasks communicated by server
@@ -108,3 +111,8 @@ int         CM_WriteAreaBits(const cm_t *cm, byte *buffer, int area);
 int         CM_WritePortalBits(const cm_t *cm, byte *buffer);
 void        CM_SetPortalStates(const cm_t *cm, const byte *buffer, int bytes);
 bool        CM_HeadnodeVisible(const mnode_t *headnode, const byte *visbits);
+
+#ifdef __cplusplus
+}
+#endif
+

@@ -20,6 +20,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "shared/shared.h"
 #include "shared/list.h"
 #include "shared/game.h"
@@ -664,6 +668,13 @@ extern cvar_t   *info_bobskip;
 
 //=============================================================================
 
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict
+#define Q_RESTRICT_UNDEF_CLIENT_H
+#endif
+#endif
+
 static inline void CL_AdvanceValue(float *restrict val, float target, float speed)
 {
     if (*val < target) {
@@ -676,6 +687,13 @@ static inline void CL_AdvanceValue(float *restrict val, float target, float spee
             *val = target;
     }
 }
+
+#ifdef __cplusplus
+#ifdef Q_RESTRICT_UNDEF_CLIENT_H
+#undef restrict
+#undef Q_RESTRICT_UNDEF_CLIENT_H
+#endif
+#endif
 
 //
 // main.c
@@ -1039,6 +1057,8 @@ void Con_Popup(bool force);
 void Con_SkipNotify(bool skip);
 void Con_RegisterMedia(void);
 void Con_CheckResize(void);
+const char *Con_GetChatPromptText(int *skip_chars);
+inputField_t *Con_GetChatInputField(void);
 
 void Key_Console(int key);
 void Key_Message(int key);
@@ -1153,6 +1173,10 @@ int     SCR_DrawBindIcon(const char *binding, int x, int y, int size, color_t co
 
 void    SCR_ClearChatHUD_f(void);
 void    SCR_AddToChatHUD(const char *text);
+void    SCR_AddToNotifyHUD(const char *text, bool is_chat);
+void    SCR_NotifyScrollLines(float delta);
+void    SCR_NotifyMouseEvent(int x, int y);
+void    SCR_NotifyMouseDown(int button);
 
 void    SCR_AddToDamageDisplay(int damage, const vec3_t color, const vec3_t dir);
 void    SCR_RemovePOI(int id);
@@ -1254,3 +1278,7 @@ extern const cgame_export_t *cgame;
 void CG_Init(void);
 void CG_Load(const char* new_game, bool is_rerelease_server);
 void CG_Unload(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/msg.h"
 #include "common/net/net.h"
 #include "common/sizebuf.h"
@@ -90,3 +93,8 @@ static inline bool Netchan_SeqTooBig(const netchan_t *chan)
 
 #define OOB_PRINT(sock, addr, data) \
     NET_SendPacket(sock, CONST_STR_LEN("\xff\xff\xff\xff" data), addr)
+
+#ifdef __cplusplus
+}
+#endif
+

@@ -800,9 +800,9 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define COLOR_U32_WHITE   COLOR_U32_RGB(255, 255, 255)
 
 // basic construction from rgba/rgb or alpha u8
-#define COLOR_RGBA(ur, ug, ub, ua) ((color_t) { .r = (ur), .g = (ug), .b = (ub), .a = (ua) })
-#define COLOR_RGB(ur, ug, ub)      ((color_t) { .r = (ur), .g = (ug), .b = (ub), .a = 255  })
-#define COLOR_A(ua)                ((color_t) { .r = 0, .g = 0, .b = 0, .a = (ua)  })
+#define COLOR_RGBA(ur, ug, ub, ua) ((color_t) { .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = (uint8_t)(ua) })
+#define COLOR_RGB(ur, ug, ub)      ((color_t) { .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = 255  })
+#define COLOR_A(ua)                ((color_t) { .r = 0, .g = 0, .b = 0, .a = (uint8_t)(ua)  })
 
 // color mask macros
 #define COLOR_MASK_ALPHA   COLOR_A(255)

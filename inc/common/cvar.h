@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/cmd.h"
 
 /*
@@ -123,3 +126,8 @@ const char *Cvar_VariableString(const char *var_name);
     Q_strlcpy(buffer, Cvar_VariableString(name), size)
 
 void Cvar_Set_f(void);
+
+#ifdef __cplusplus
+}
+#endif
+

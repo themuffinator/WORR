@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /*
 ==============================================================
 
@@ -52,3 +55,8 @@ void Pmove(pmove_t *pmove, const pmoveParams_t *params);
 void PmoveInit(pmoveParams_t *pmp);
 void PmoveEnableQW(pmoveParams_t *pmp);
 void PmoveEnableExt(pmoveParams_t *pmp);
+
+#ifdef __cplusplus
+}
+#endif
+

@@ -699,7 +699,6 @@ static const std::initializer_list<field_t> entity_fields = {
 	FIELD_AUTO(count),
 	FIELD_AUTO(health),
 	FIELD_AUTO(sounds),
-	{ "light" },
 	FIELD_AUTO(dmg),
 	FIELD_AUTO(mass),
 	FIELD_AUTO(volume),
@@ -819,6 +818,7 @@ static const std::initializer_list<temp_field_t> temp_fields = {
 	FIELD_AUTO(music),  // [Edward-KEX]
 	FIELD_AUTO(instantitems),
 	FIELD_AUTO(radius), // [Paril-KEX]
+	FIELD_AUTO(light),
 	FIELD_AUTO(hub_map),
 	FIELD_AUTO(achievement),
 

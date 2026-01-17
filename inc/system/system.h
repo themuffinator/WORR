@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/utils.h"
 
 typedef struct {
@@ -97,3 +100,8 @@ extern cvar_t   *sys_homedir;
 #ifdef _WIN32
 bool Sys_GetRereleaseHomeDir(char *path, size_t path_length);
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+

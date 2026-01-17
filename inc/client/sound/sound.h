@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void S_Init(void);
 void S_Shutdown(void);
 
@@ -68,3 +72,7 @@ extern vec3_t   listener_forward;
 extern vec3_t   listener_right;
 extern vec3_t   listener_up;
 extern int      listener_entnum;
+
+#ifdef __cplusplus
+}
+#endif

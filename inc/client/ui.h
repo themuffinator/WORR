@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "common/net/net.h"
 #include "client/client.h"
 
@@ -54,4 +58,8 @@ bool        UI_IsTransparent(void);
 #define     UI_ErrorEvent(from)     (void)0
 #define     UI_MouseEvent(x, y)     (void)0
 #define     UI_IsTransparent()      true
+#endif
+
+#ifdef __cplusplus
+}
 #endif

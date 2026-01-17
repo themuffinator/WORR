@@ -48,7 +48,7 @@ typedef struct {
 
 static unsigned __stdcall thread_func(void *arg)
 {
-    pthread_t t = arg;
+    pthread_t t = (pthread_t)arg;
     t->ret = t->func(t->arg);
     return 0;
 }
@@ -56,7 +56,7 @@ static unsigned __stdcall thread_func(void *arg)
 static inline int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                                  void *(*start_routine)(void *), void *arg)
 {
-    pthread_t t = calloc(1, sizeof(*t));
+    pthread_t t = (pthread_t)calloc(1, sizeof(*t));
     if (!t)
         return EAGAIN;
     t->func = start_routine;

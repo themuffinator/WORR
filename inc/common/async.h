@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #if USE_CLIENT
 
 typedef struct asyncwork_s {
@@ -38,3 +41,8 @@ void Com_ShutdownAsyncWork(void);
 #define Com_ShutdownAsyncWork()     (void)0
 
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+

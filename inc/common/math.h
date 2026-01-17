@@ -18,6 +18,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict
+#define Q_RESTRICT_UNDEF_MATH
+#endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define NUMVERTEXNORMALS    162
 
 void vectoangles2(const vec3_t value1, vec3_t angles);
@@ -90,3 +100,12 @@ void Quat_ToAxis(const quat_t q, vec3_t axis[3]);
 #endif
 
 #endif  // USE_REF
+
+#ifdef __cplusplus
+}
+#ifdef Q_RESTRICT_UNDEF_MATH
+#undef restrict
+#undef Q_RESTRICT_UNDEF_MATH
+#endif
+#endif
+

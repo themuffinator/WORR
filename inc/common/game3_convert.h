@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "shared/shared.h"
 #include "shared/game3_shared.h"
 
@@ -37,3 +41,7 @@ void ConvertFromGame3_pmove_state_new(pmove_state_t *pmove_state, const game3_pm
 
 // Convert usercmd_t to game3_usercmd_t
 void ConvertToGame3_usercmd(game3_usercmd_t *game_cmd, const usercmd_t *server_cmd);
+
+#ifdef __cplusplus
+}
+#endif

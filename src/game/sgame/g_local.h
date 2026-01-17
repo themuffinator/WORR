@@ -1292,6 +1292,7 @@ struct spawn_temp_t
 	const char* music; // [Edward-KEX]
 	int instantitems;
 	float radius; // [Paril-KEX]
+	float light; // [Sam-KEX] dynamic light fallback
 	bool hub_map; // [Paril-KEX]
 	const char *achievement; // [Paril-KEX]
 

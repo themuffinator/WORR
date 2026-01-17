@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/cmd.h"
 #include "common/error.h"
 #include "common/zone.h"
@@ -131,3 +134,8 @@ FILE *Q_fopen(const char *path, const char *mode);
 extern cvar_t   *fs_game;
 
 extern char     fs_gamedir[];
+
+#ifdef __cplusplus
+}
+#endif
+

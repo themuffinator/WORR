@@ -52,6 +52,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define RENDERER_API
 #endif
 
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict
+#define Q_RESTRICT_UNDEF_RENDERER_API
+#endif
+#endif
+
 typedef struct renderer_import_s {
     void (*Com_LPrintf)(print_type_t type, const char *fmt, ...);
     void (*Com_Error)(error_type_t type, const char *fmt, ...);
@@ -227,6 +234,13 @@ typedef struct renderer_import_s {
     cvar_t *info_hand;
     cvar_t *developer;
 } renderer_import_t;
+
+#ifdef __cplusplus
+#ifdef Q_RESTRICT_UNDEF_RENDERER_API
+#undef restrict
+#undef Q_RESTRICT_UNDEF_RENDERER_API
+#endif
+#endif
 
 RENDERER_API const renderer_export_t *Renderer_GetAPI(const renderer_import_t *import);
 

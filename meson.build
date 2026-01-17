@@ -124,31 +124,31 @@ q2proto_src = [
 ]
 
 client_src = [
-  'src/client/ascii.c',
-  'src/client/cgame.c',
-  'src/client/cgame_classic.c',
-  'src/client/console.c',
-  'src/client/demo.c',
-  'src/client/download.c',
-  'src/client/effects.c',
-  'src/client/entities.c',
-  'src/client/input.c',
-  'src/client/keys.c',
-  'src/client/locs.c',
-  'src/client/main.c',
-  'src/client/newfx.c',
-  'src/client/parse.c',
-  'src/client/precache.c',
-  'src/client/predict.c',
-  'src/client/renderer.c',
-  'src/client/screen.c',
-  'src/client/sound/main.c',
-  'src/client/sound/mem.c',
+  'src/client/ascii.cpp',
+  'src/client/cgame.cpp',
+  'src/client/cgame_classic.cpp',
+  'src/client/console.cpp',
+  'src/client/demo.cpp',
+  'src/client/download.cpp',
+  'src/client/effects.cpp',
+  'src/client/entities.cpp',
+  'src/client/input.cpp',
+  'src/client/keys.cpp',
+  'src/client/locs.cpp',
+  'src/client/main.cpp',
+  'src/client/newfx.cpp',
+  'src/client/parse.cpp',
+  'src/client/precache.cpp',
+  'src/client/predict.cpp',
+  'src/client/renderer.cpp',
+  'src/client/screen.cpp',
+  'src/client/sound/main.cpp',
+  'src/client/sound/mem.cpp',
   'src/client/sound/qal.h',
   'src/client/sound/sound.h',
-  'src/client/tent.c',
-  'src/client/ui_bridge.c',
-  'src/client/view.c',
+  'src/client/tent.cpp',
+  'src/client/ui_bridge.cpp',
+  'src/client/view.cpp',
   'src/client/client.h',
   'src/client/cgame_classic.h',
   'src/common/async.c',
@@ -180,14 +180,14 @@ client_src = [
 ]
 
 ui_src = [
-  'src/client/ui/demos.c',
-  'src/client/ui/menu.c',
-  'src/client/ui/playerconfig.c',
-  'src/client/ui/playermodels.c',
-  'src/client/ui/script.c',
-  'src/client/ui/servers.c',
-  'src/client/ui/mapdb.c',
-  'src/client/ui/ui.c',
+  'src/client/ui/demos.cpp',
+  'src/client/ui/menu.cpp',
+  'src/client/ui/playerconfig.cpp',
+  'src/client/ui/playermodels.cpp',
+  'src/client/ui/script.cpp',
+  'src/client/ui/servers.cpp',
+  'src/client/ui/mapdb.cpp',
+  'src/client/ui/ui.cpp',
   'src/client/ui/ui.h',
 ]
 
@@ -401,8 +401,8 @@ cgame_src = bgame_src + [
   'src/game/cgame/cg_local.h',
   'src/game/cgame/cg_main.cpp',
   'src/game/cgame/cg_draw.cpp',
-  'src/game/cgame/cg_ui_export.c',
-  'src/game/cgame/cg_ui_sys.c',
+  'src/game/cgame/cg_ui_export.cpp',
+  'src/game/cgame/cg_ui_sys.cpp',
   'src/game/cgame/cg_fmt.cpp',
   'src/game/cgame/cg_parse.cpp',
   'src/game/cgame/cg_std.cpp',
@@ -519,6 +519,54 @@ elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS', '/wd4267', '/wd4018']
 endif
 
+client_cpp_args = [
+  '-DHAVE_CONFIG_H',
+  '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
+  '-DUSE_CLIENT=1',
+  '-DUSE_REF=1',
+]
+if win32
+  client_cpp_args += '-D_USE_MATH_DEFINES'
+else
+  client_cpp_args += '-D_GNU_SOURCE'
+endif
+client_cpp_args += engine_args
+
+if cpp.get_argument_syntax() == 'gcc'
+  if x86
+    client_cpp_args += cpp.get_supported_arguments(['-msse2', '-mfpmath=sse'])
+  endif
+
+  client_cpp_warn_args = [
+    '-Wformat-security',
+    '-Wno-microsoft-anon-tag',
+    '-Wpointer-arith',
+    '-fms-extensions',
+    '-fno-math-errno',
+    '-fno-trapping-math',
+    '-fsigned-char',
+  ]
+  client_cpp_args += cpp.get_supported_arguments(client_cpp_warn_args)
+
+  client_cpp_std_args = cpp.get_supported_arguments([
+    '-std=gnu++2b',
+    '-std=c++2b',
+    '-std=gnu++23',
+    '-std=c++23',
+    '-std=gnu++20',
+    '-std=c++20',
+  ])
+  if client_cpp_std_args.length() > 0
+    client_cpp_args += client_cpp_std_args[0]
+  endif
+
+  if win32
+    client_cpp_args += ['-D_CRT_SECURE_NO_WARNINGS', '-D_CRT_NONSTDC_NO_WARNINGS']
+  endif
+elif cpp.get_id() == 'msvc'
+  client_cpp_args += ['/std:c++latest', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS']
+endif
+
 game_cpp_args = [
   '-DHAVE_CONFIG_H',
   '-DNO_FMT_SOURCE',
@@ -624,7 +672,7 @@ curl = dependency('libcurl',
 )
 
 if curl.found()
-  client_src += 'src/client/http.c'
+  client_src += 'src/client/http.cpp'
   config.set10('USE_CURL', true)
 endif
 
@@ -676,7 +724,7 @@ openal = dependency('openal',
   default_options: fallback_opt,
 )
 if openal.found()
-  client_src += [ 'src/client/sound/al.c', 'src/client/sound/qal.c', 'inc/common/jsmn.h' ]
+  client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.h' ]
   client_deps += openal
   config.set10('USE_OPENAL', true)
 endif
@@ -755,7 +803,7 @@ avutil = dependency('libavutil', version: '>= 57.28.100', default_options: ffmpe
 swresample = dependency('libswresample', version: '>= 4.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 swscale = dependency('libswscale', version: '>= 6.7.100', default_options: ffmpeg_defaults, required: avcodec_opt)
 if avcodec.found() and avformat.found() and avutil.found() and swresample.found() and swscale.found()
-  client_src += ['src/client/cin.c', 'src/client/sound/ogg.c']
+  client_src += ['src/client/cin.cpp', 'src/client/sound/ogg.cpp']
   client_deps += [avcodec, avformat, avutil, swresample, swscale]
   config.set10('USE_AVCODEC', true)
 endif
@@ -767,7 +815,7 @@ else
 endif
 
 if get_option('client-gtv')
-  client_src += 'src/client/gtv.c'
+  client_src += 'src/client/gtv.cpp'
   config.set10('USE_CLIENT_GTV', true)
 endif
 
@@ -788,7 +836,7 @@ if get_option('client-ui')
 endif
 
 if get_option('software-sound').require(win32 or sdl3.found()).allowed()
-  client_src += 'src/client/sound/dma.c'
+  client_src += 'src/client/sound/dma.cpp'
   if sdl3.found()
     client_src += 'src/unix/sound/sdl.c'
   endif
@@ -910,6 +958,7 @@ executable('worr', common_src, client_src, renderer_engine_src,
   link_args:             exe_link_args,
   link_with:             q2proto_lib,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
+  cpp_args:              client_cpp_args,
   install:               true,
   install_dir:           bindir,
 )
@@ -1002,7 +1051,7 @@ cgame_dll = shared_library('cgame' + cpu, cgame_all_src,
   install:              true,
   install_dir:          libdir / get_option('base-game'),
   install_tag:          'runtime',
-  override_options:     ['b_vscrt=static_from_buildtype'],
+  override_options:     ['b_vscrt=static_from_buildtype', 'cpp_std=c++23'],
 )
 
 prog_copy_game_dll = find_program('copy-game-dll.py')

@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 typedef enum {
@@ -91,3 +95,7 @@ bool VID_GetFullscreen(vrect_t *rc, int *freq_p, int *depth_p);
 bool VID_GetGeometry(vrect_t *rc);
 void VID_SetGeometry(const vrect_t *rc);
 void VID_ToggleFullscreen(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //
 // input.h -- external (non-keyboard) input devices
 //
@@ -39,3 +43,7 @@ typedef enum {
 void IN_GamepadAxisEvent(in_gamepad_axis_t axis, int value, unsigned time);
 void IN_GamepadReset(unsigned time);
 bool IN_GamepadEnabled(void);
+
+#ifdef __cplusplus
+}
+#endif

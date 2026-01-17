@@ -18,9 +18,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //
 // gamedll.h -- locate & load game DLL/shared object
 //
 
 void *SGameDll_Load(void);
 void *CGameDll_Load(void);
+
+#ifdef __cplusplus
+}
+#endif

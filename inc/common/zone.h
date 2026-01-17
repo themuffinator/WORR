@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define Z_CopyString(string)    Z_TagCopyString(string, TAG_GENERAL)
 #define Z_CopyStruct(ptr)       memcpy(Z_Malloc(sizeof(*ptr)), ptr, sizeof(*ptr))
 
@@ -64,3 +67,8 @@ void    Z_Stats_f(void);
 
 // may return pointer to static memory
 char    *Z_CvarCopyString(const char *in);
+
+#ifdef __cplusplus
+}
+#endif
+

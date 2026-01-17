@@ -104,7 +104,7 @@ static inline void Json_Load(const char *filename, json_parse_t *parser)
     jsmn_init(&p);
 
     parser->num_tokens = jsmn_parse(&p, parser->buffer, parser->buffer_len, NULL, 0);
-    parser->tokens = Z_Malloc(sizeof(jsmntok_t) * (parser->num_tokens));
+    parser->tokens = (jsmntok_t *)Z_Malloc(sizeof(jsmntok_t) * (parser->num_tokens));
 
     if (!parser->tokens)
         Json_Errorno(parser, parser->pos, Q_ERR(ENOMEM));

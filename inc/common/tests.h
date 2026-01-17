@@ -18,8 +18,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #if USE_TESTS
 void TST_Init(void);
 #else
 #define TST_Init() (void)0
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+

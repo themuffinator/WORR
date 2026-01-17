@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #if USE_CLIENT
 extern const char com_env_suf[6][3];
 #endif
@@ -124,5 +127,12 @@ typedef struct {
 static inline frametime_t Com_ComputeFrametime(int rate)
 {
     int framediv = Q_clip(rate / BASE_FRAMERATE, 1, MAX_FRAMEDIV);
-    return (frametime_t){ .time = BASE_FRAMETIME / framediv, .div = framediv };
+    frametime_t result;
+    result.time = BASE_FRAMETIME / framediv;
+    result.div = framediv;
+    return result;
 }
+
+#ifdef __cplusplus
+}
+#endif

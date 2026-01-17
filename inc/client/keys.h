@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //
 // these are the key numbers that should be passed to Key_Event
 //
@@ -176,3 +180,7 @@ int     Key_EnumBindings(int key, const char *binding);
 void    Key_WriteBindings(qhandle_t f);
 
 void    Key_WaitKey(keywaitcb_t wait, void *arg);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1310,6 +1310,15 @@ struct configstring_remap_t
     size_t  length;
 };
 
+constexpr int32_t CS_AIRACCEL_OFFSET = static_cast<int32_t>(CS_AIRACCEL) - static_cast<int32_t>(CS_AIRACCEL_OLD);
+constexpr int32_t CS_MODELS_OFFSET = static_cast<int32_t>(CS_MODELS) - static_cast<int32_t>(CS_MODELS_OLD);
+constexpr int32_t CS_SOUNDS_OFFSET = static_cast<int32_t>(CS_SOUNDS) - static_cast<int32_t>(CS_SOUNDS_OLD);
+constexpr int32_t CS_IMAGES_OFFSET = static_cast<int32_t>(CS_IMAGES) - static_cast<int32_t>(CS_IMAGES_OLD);
+constexpr int32_t CS_LIGHTS_OFFSET = static_cast<int32_t>(CS_LIGHTS) - static_cast<int32_t>(CS_LIGHTS_OLD);
+constexpr int32_t CS_ITEMS_OFFSET = static_cast<int32_t>(CS_ITEMS) - static_cast<int32_t>(CS_ITEMS_OLD);
+constexpr int32_t CS_PLAYERSKINS_OFFSET = static_cast<int32_t>(CS_PLAYERSKINS) - static_cast<int32_t>(CS_PLAYERSKINS_OLD);
+constexpr int32_t CS_GENERAL_OFFSET = static_cast<int32_t>(CS_GENERAL) - static_cast<int32_t>(CS_GENERAL_OLD);
+
 constexpr configstring_remap_t CS_REMAP(int32_t id)
 {
     // direct mapping
@@ -1321,23 +1330,23 @@ constexpr configstring_remap_t CS_REMAP(int32_t id)
         return { (CS_STATUSBAR * CS_MAX_STRING_LENGTH) + ((id - CS_STATUSBAR_OLD) * CS_MAX_STRING_LENGTH_OLD), (CS_AIRACCEL - CS_STATUSBAR) * CS_MAX_STRING_LENGTH };
     // offset
     else if (id < CS_MODELS_OLD)
-        return { (id + (CS_AIRACCEL - CS_AIRACCEL_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_AIRACCEL_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_SOUNDS_OLD)
-        return { (id + (CS_MODELS - CS_MODELS_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_MODELS_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_IMAGES_OLD)
-        return { (id + (CS_SOUNDS - CS_SOUNDS_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_SOUNDS_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_LIGHTS_OLD)
-        return { (id + (CS_IMAGES - CS_IMAGES_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_IMAGES_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_ITEMS_OLD)
-        return { (id + (CS_LIGHTS - CS_LIGHTS_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_LIGHTS_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_PLAYERSKINS_OLD)
-        return { (id + (CS_ITEMS - CS_ITEMS_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_ITEMS_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
     else if (id < CS_GENERAL_OLD)
-        return { (id + (CS_PLAYERSKINS - CS_PLAYERSKINS_OLD)) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
+        return { (id + CS_PLAYERSKINS_OFFSET) * CS_MAX_STRING_LENGTH, CS_MAX_STRING_LENGTH };
 
     // general also needs some special handling because it's both
     // offset *and* allowed to overflow
-    return { (id + (CS_GENERAL - CS_GENERAL_OLD)) * CS_MAX_STRING_LENGTH_OLD, (MAX_CONFIGSTRINGS - CS_GENERAL) * CS_MAX_STRING_LENGTH };
+    return { (id + CS_GENERAL_OFFSET) * CS_MAX_STRING_LENGTH_OLD, (MAX_CONFIGSTRINGS - CS_GENERAL) * CS_MAX_STRING_LENGTH };
 }
 
 static_assert(CS_REMAP(CS_MODELS_OLD).start == (CS_MODELS * 96), "check CS_REMAP");

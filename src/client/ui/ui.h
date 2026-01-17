@@ -18,12 +18,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "shared/shared.h"
 #include "shared/list.h"
 #include "common/cmd.h"
 #include "common/common.h"
 #include "common/cvar.h"
 #include "common/field.h"
+#include "common/mapdb.h"
 #include "common/zone.h"
 #include "client/keys.h"
 #include "client/sound/sound.h"
@@ -386,3 +391,7 @@ void UI_Sys_UpdateTimes(void);
 void UI_Sys_UpdateNetFrom(void);
 void UI_Sys_UpdateRefConfig(void);
 void UI_Sys_UpdateGameDir(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -19,6 +19,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "shared/shared.h"
 #include "system/system.h"
 
@@ -29,3 +32,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 bool Steam_GetInstallationPath(char *out_dir, size_t out_dir_length);
 // Locate Quake 2 Steam install
 bool Steam_FindQuake2Path(rerelease_mode_t rr_mode, char *out_dir, size_t out_dir_length);
+
+#ifdef __cplusplus
+}
+#endif
+

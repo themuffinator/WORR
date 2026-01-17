@@ -891,7 +891,7 @@ static void handle_relative_motion(void *data, struct zwp_relative_pointer_v1 *z
                                    uint32_t utime_hi, uint32_t utime_lo, wl_fixed_t dx, wl_fixed_t dy,
                                    wl_fixed_t dx_unaccel, wl_fixed_t dy_unaccel)
 {
-    if (Key_GetDest() & KEY_MENU) {
+    if (Key_GetDest() & (KEY_MENU | KEY_MESSAGE)) {
         wl.abs_mouse_x = Q_clip(wl.abs_mouse_x + dx, 0, wl_fixed_from_int(wl.width * wl.scale_factor) - 1);
         wl.abs_mouse_y = Q_clip(wl.abs_mouse_y + dy, 0, wl_fixed_from_int(wl.height * wl.scale_factor) - 1);
         UI_MouseEvent(wl_fixed_to_int(wl.abs_mouse_x), wl_fixed_to_int(wl.abs_mouse_y));

@@ -69,6 +69,7 @@ cvar_t *sv_cheats;
 
 cvar_t *g_debug_monster_paths;
 cvar_t *g_debug_monster_kills;
+static cvar_t *g_show_entity_bounds;
 
 cvar_t *bot_debug_follow_actor;
 cvar_t *bot_debug_move_to_point;
@@ -259,6 +260,7 @@ void InitGame()
 
 	g_debug_monster_paths = gi.cvar("g_debug_monster_paths", "0", CVAR_NOFLAGS);
 	g_debug_monster_kills = gi.cvar("g_debug_monster_kills", "0", CVAR_LATCH);
+	g_show_entity_bounds = gi.cvar("g_show_entity_bounds", "0", CVAR_NOFLAGS);
 
 	bot_debug_follow_actor = gi.cvar("bot_debug_follow_actor", "0", CVAR_NOFLAGS);
 	bot_debug_move_to_point = gi.cvar("bot_debug_move_to_point", "0", CVAR_NOFLAGS);
@@ -804,6 +806,30 @@ static void G_CheckCvars()
 		level.gravity = sv_gravity->value;
 }
 
+static void G_DebugDrawEntityBounds()
+{
+	if (!g_show_entity_bounds || !g_show_entity_bounds->integer)
+		return;
+
+	bool show_bounds = (g_show_entity_bounds->integer & 1) != 0;
+	bool show_origin = (g_show_entity_bounds->integer & 2) != 0;
+
+	if (!show_bounds && !show_origin)
+		return;
+
+	for (uint32_t i = 1; i < globals.num_edicts; i++)
+	{
+		edict_t *ent = &g_edicts[i];
+		if (!ent->inuse || ent->client)
+			continue;
+
+		if (show_bounds && ent->linked)
+			gi.Draw_Bounds(ent->absmin, ent->absmax, rgba_yellow, gi.frame_time_s, false);
+		if (show_origin)
+			gi.Draw_Point(ent->s.origin, 6.0f, rgba_cyan, gi.frame_time_s, false);
+	}
+}
+
 static bool G_AnyDeadPlayersWithoutLives()
 {
 	for (auto player : active_players())
@@ -995,6 +1021,8 @@ inline void G_RunFrame_(bool main_loop)
 
 		M_ProcessPain(e);
 	}
+
+	G_DebugDrawEntityBounds();
 
 	level.in_frame = false;
 }

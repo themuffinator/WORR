@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "common/cmd.h"
 #include "common/net/net.h"
 #include "common/utils.h"
@@ -187,4 +191,8 @@ void R_AddDebugText(const vec3_t origin, const vec3_t angles, const char *text,
                     float size, color_t color, uint32_t time, qboolean depth_test);
 #else
 #define R_ClearDebugLines() (void)0
+#endif
+
+#ifdef __cplusplus
+}
 #endif

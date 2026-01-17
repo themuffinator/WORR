@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <errno.h>
 
 #define ERRNO_MAX       0x5000
@@ -59,3 +62,8 @@ static inline int Q_ErrorNumber(void)
 }
 
 const char *Q_ErrorString(int error);
+
+#ifdef __cplusplus
+}
+#endif
+

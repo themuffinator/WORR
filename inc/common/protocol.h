@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 //
 // protocol.h -- communications protocols
 //
@@ -469,3 +472,8 @@ typedef enum {
 #define FF_CLIENTDROP   BIT(1)
 #define FF_CLIENTPRED   BIT(2)
 #define FF_RESERVED     BIT(3)
+
+#ifdef __cplusplus
+}
+#endif
+

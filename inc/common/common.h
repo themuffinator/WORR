@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common/cmd.h"
 #include "common/utils.h"
 
@@ -210,3 +213,8 @@ extern time_t       com_startTime;
 
 void Qcommon_Init(int argc, char **argv);
 void Qcommon_Frame(void);
+
+#ifdef __cplusplus
+}
+#endif
+

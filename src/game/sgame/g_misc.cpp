@@ -625,20 +625,47 @@ void G_LoadShadowLights()
 static void setup_dynamic_light(edict_t* self)
 {
 	// [Sam-KEX] Shadow stuff
-	if (st.sl.data.radius > 0)
+	float shadow_radius = st.sl.data.radius;
+	if (shadow_radius <= 0.0f && !st.was_key_specified("shadowlightradius"))
 	{
-		self->s.renderfx = RF_CASTSHADOW;
-		self->itemtarget = st.sl.lightstyletarget;
-
-		shadowlightinfo[level.shadow_light_count].entity_number = self->s.number;
-		shadowlightinfo[level.shadow_light_count].shadowlight = st.sl.data;
-		level.shadow_light_count++;
-
-		self->mins[0] = self->mins[1] = self->mins[2] = 0;
-		self->maxs[0] = self->maxs[1] = self->maxs[2] = 0;
-
-		gi.linkentity(self);
+		if (st.was_key_specified("radius"))
+			shadow_radius = st.radius;
+		else if (st.was_key_specified("light"))
+			shadow_radius = st.light;
 	}
+
+	if (shadow_radius <= 0.0f)
+		return;
+
+	if (level.shadow_light_count >= MAX_SHADOW_LIGHTS)
+	{
+		gi.Com_PrintFmt("Shadow light limit hit (max {}): {}\n", MAX_SHADOW_LIGHTS, *self);
+		return;
+	}
+
+	st.sl.data.radius = shadow_radius;
+
+	if (st.sl.data.intensity <= 0.0f && !st.was_key_specified("shadowlightintensity"))
+		st.sl.data.intensity = 1.0f;
+
+	if (st.sl.data.resolution <= 0 && !st.was_key_specified("shadowlightresolution"))
+		st.sl.data.resolution = 1;
+
+	if (st.sl.data.lightstyle < 0 && st.was_key_specified("style"))
+		st.sl.data.lightstyle = self->style;
+
+	self->s.renderfx |= RF_CASTSHADOW;
+	self->svflags &= ~SVF_NOCLIENT;
+	self->itemtarget = st.sl.lightstyletarget;
+
+	shadowlightinfo[level.shadow_light_count].entity_number = self->s.number;
+	shadowlightinfo[level.shadow_light_count].shadowlight = st.sl.data;
+	level.shadow_light_count++;
+
+	self->mins[0] = self->mins[1] = self->mins[2] = 0;
+	self->maxs[0] = self->maxs[1] = self->maxs[2] = 0;
+
+	gi.linkentity(self);
 }
 
 USE(dynamic_light_use) (edict_t *self, edict_t *other, edict_t *activator) -> void
