@@ -1,0 +1,437 @@
+#include "ui/ui_internal.h"
+
+namespace ui {
+
+Menu::Menu(std::string name)
+    : name_(std::move(name))
+{
+    backgroundColor_ = uis.color.background;
+    transparent_ = uis.transparent;
+}
+
+void Menu::SetBackground(color_t color)
+{
+    backgroundImage_ = 0;
+    backgroundColor_ = color;
+    transparent_ = color.a != 255;
+}
+
+void Menu::SetBackgroundImage(qhandle_t image, bool transparent)
+{
+    backgroundImage_ = image;
+    transparent_ = transparent;
+}
+
+void Menu::SetBanner(qhandle_t banner, const vrect_t &rc)
+{
+    banner_ = banner;
+    bannerRect_ = rc;
+}
+
+void Menu::SetPlaque(qhandle_t plaque, const vrect_t &rc)
+{
+    plaque_ = plaque;
+    plaqueRect_ = rc;
+}
+
+void Menu::SetLogo(qhandle_t logo, const vrect_t &rc)
+{
+    logo_ = logo;
+    logoRect_ = rc;
+}
+
+void Menu::AddWidget(std::unique_ptr<Widget> widget)
+{
+    if (!widget)
+        return;
+    widget->SetOwner(this);
+    widgets_.push_back(std::move(widget));
+}
+
+Widget *Menu::FocusedWidget()
+{
+    if (focusedIndex_ < 0 || focusedIndex_ >= static_cast<int>(widgets_.size()))
+        return nullptr;
+    return widgets_[focusedIndex_].get();
+}
+
+const Widget *Menu::FocusedWidget() const
+{
+    if (focusedIndex_ < 0 || focusedIndex_ >= static_cast<int>(widgets_.size()))
+        return nullptr;
+    return widgets_[focusedIndex_].get();
+}
+
+int Menu::FindNextSelectable(int start, int dir) const
+{
+    if (widgets_.empty())
+        return -1;
+
+    int index = start;
+    for (;;) {
+        index += dir;
+        if (index < 0)
+            index = static_cast<int>(widgets_.size()) - 1;
+        else if (index >= static_cast<int>(widgets_.size()))
+            index = 0;
+
+        const Widget *widget = widgets_[index].get();
+        if (widget && widget->IsSelectable())
+            return index;
+
+        if (index == start)
+            break;
+    }
+
+    return start;
+}
+
+void Menu::UpdateStatusFromFocus()
+{
+    const Widget *widget = FocusedWidget();
+    if (widget && !widget->Status().empty())
+        status_ = widget->Status();
+}
+
+void Menu::Layout()
+{
+    lineHeight_ = GenericSpacing(CONCHAR_HEIGHT);
+    itemYs_.assign(widgets_.size(), 0);
+    itemHeights_.assign(widgets_.size(), 0);
+
+    int total = 0;
+    int banner_spacing = 0;
+    if (banner_) {
+        banner_spacing = GenericSpacing(bannerRect_.height);
+        total += banner_spacing;
+    }
+
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        Widget *widget = widgets_[i].get();
+        if (!widget || widget->IsHidden())
+            continue;
+        int h = widget->Height(lineHeight_);
+        itemHeights_[i] = h;
+        total += h;
+    }
+
+    contentHeight_ = total;
+    contentTop_ = (uis.height - contentHeight_) / 2;
+    if (contentTop_ < 0)
+        contentTop_ = 0;
+    contentBottom_ = contentTop_ + contentHeight_;
+
+    int y = contentTop_;
+    if (banner_) {
+        bannerRect_.x = (uis.width - bannerRect_.width) / 2;
+        bannerRect_.y = y;
+        y += banner_spacing;
+    }
+
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        Widget *widget = widgets_[i].get();
+        if (!widget || widget->IsHidden())
+            continue;
+        itemYs_[i] = y;
+        y += itemHeights_[i];
+    }
+
+    int widest_bitmap = 0;
+    for (const auto &widget : widgets_) {
+        const auto *bitmap = dynamic_cast<const BitmapWidget *>(widget.get());
+        if (bitmap)
+            widest_bitmap = max(widest_bitmap, bitmap->ImageWidth());
+    }
+
+    if (plaque_) {
+        int total_plaque = plaqueRect_.height + (logo_ ? (logoRect_.height + 5) : 0);
+        plaqueRect_.x = (uis.width / 2) - widest_bitmap - CURSOR_WIDTH - plaqueRect_.width;
+        plaqueRect_.y = (uis.height - total_plaque) / 2;
+    }
+    if (logo_) {
+        int total_plaque = (plaque_ ? plaqueRect_.height : 0) + logoRect_.height + 5;
+        logoRect_.x = (uis.width / 2) - widest_bitmap - CURSOR_WIDTH - logoRect_.width;
+        logoRect_.y = (uis.height + total_plaque) / 2 - logoRect_.height;
+    }
+
+    EnsureVisible(focusedIndex_);
+}
+
+int Menu::HitTest(int x, int y)
+{
+    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
+    if (leftX < 0)
+        leftX = 0;
+    int centerX = uis.width / 2;
+    int contentWidth = uis.width - (leftX * 2);
+    if (contentWidth < 0)
+        contentWidth = 0;
+
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        Widget *widget = widgets_[i].get();
+        if (!widget || widget->IsHidden() || !widget->IsSelectable())
+            continue;
+
+        int draw_y = itemYs_[i] - scrollY_;
+        int height = itemHeights_[i];
+        if (draw_y + height < contentTop_ || draw_y > contentBottom_)
+            continue;
+
+        int draw_x = leftX;
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            draw_x = centerX;
+            bitmap->Layout(draw_x, draw_y, contentWidth, lineHeight_);
+        } else if (auto *action = dynamic_cast<ActionWidget *>(widget)) {
+            draw_x = action->AlignLeft() ? leftX : centerX;
+            action->Layout(draw_x, draw_y, contentWidth, lineHeight_);
+        } else if (auto *field = dynamic_cast<FieldWidget *>(widget)) {
+            draw_x = field->Center() ? centerX : leftX;
+            field->Layout(draw_x, draw_y, contentWidth, lineHeight_);
+        } else {
+            widget->Layout(draw_x, draw_y, contentWidth, lineHeight_);
+        }
+
+        if (RectContains(widget->Rect(), x, y))
+            return static_cast<int>(i);
+    }
+
+    return -1;
+}
+
+void Menu::EnsureVisible(int index)
+{
+    if (index < 0 || index >= static_cast<int>(itemYs_.size()))
+        return;
+
+    int viewTop = contentTop_;
+    int viewBottom = contentBottom_;
+    int itemTop = itemYs_[index];
+    int itemBottom = itemTop + itemHeights_[index];
+
+    if (itemTop - scrollY_ < viewTop)
+        scrollY_ = itemTop - viewTop;
+    else if (itemBottom - scrollY_ > viewBottom)
+        scrollY_ = itemBottom - viewBottom;
+
+    scrollY_ = max(scrollY_, 0);
+    int maxScroll = max(0, contentHeight_ - (viewBottom - viewTop));
+    scrollY_ = min(scrollY_, maxScroll);
+}
+
+void Menu::OnOpen()
+{
+    for (auto &widget : widgets_)
+        widget->OnOpen();
+
+    focusedIndex_ = -1;
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        if (widgets_[i]->IsSelectable()) {
+            focusedIndex_ = static_cast<int>(i);
+            break;
+        }
+    }
+    scrollY_ = 0;
+    Layout();
+    UpdateStatusFromFocus();
+}
+
+void Menu::OnClose()
+{
+    for (auto &widget : widgets_)
+        widget->OnClose();
+}
+
+static void DrawStatusText(const std::string &text)
+{
+    if (text.empty())
+        return;
+
+    int linewidth = uis.width / CONCHAR_WIDTH;
+    int count = 0;
+    int lens[8]{};
+    const char *ptrs[8]{};
+
+    const char *txt = text.c_str();
+    ptrs[0] = txt;
+
+    while (*txt) {
+        const char *p = txt;
+        while (*p > 32)
+            p++;
+        int len = static_cast<int>(p - txt);
+
+        if (count >= 8)
+            break;
+
+        if (lens[count] + len > linewidth) {
+            count++;
+            if (count >= 8)
+                break;
+            lens[count] = 0;
+            ptrs[count] = txt;
+        }
+
+        lens[count] += len;
+        txt = p;
+        while (*txt <= 32 && *txt)
+            txt++;
+        lens[count] += static_cast<int>(txt - p);
+    }
+
+    count++;
+    for (int l = 0; l < count; l++) {
+        int x = (uis.width - lens[l] * CONCHAR_WIDTH) / 2;
+        int y = uis.height - (count - l) * CONCHAR_HEIGHT;
+        R_DrawString(x, y, 0, lens[l], ptrs[l], COLOR_WHITE, uis.fontHandle);
+    }
+}
+
+void Menu::Draw()
+{
+    Layout();
+
+    int menuTop = compact_ ? max(0, contentTop_ - lineHeight_) : 0;
+    int menuBottom = compact_ ? min(uis.height, contentBottom_ + lineHeight_) : uis.height;
+
+    if (backgroundImage_) {
+        R_DrawKeepAspectPic(0, menuTop, uis.width, menuBottom - menuTop, COLOR_WHITE, backgroundImage_);
+    } else {
+        R_DrawFill32(0, menuTop, uis.width, menuBottom - menuTop, backgroundColor_);
+    }
+
+    if (!title_.empty()) {
+        UI_DrawString(uis.width / 2, menuTop, UI_CENTER | UI_ALTCOLOR, COLOR_WHITE, title_.c_str());
+    }
+
+    if (banner_)
+        R_DrawPic(bannerRect_.x, bannerRect_.y, COLOR_WHITE, banner_);
+    if (plaque_)
+        R_DrawPic(plaqueRect_.x, plaqueRect_.y, COLOR_WHITE, plaque_);
+    if (logo_)
+        R_DrawPic(logoRect_.x, logoRect_.y, COLOR_WHITE, logo_);
+
+    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
+    if (leftX < 0)
+        leftX = 0;
+    int centerX = uis.width / 2;
+    int contentWidth = uis.width - (leftX * 2);
+    if (contentWidth < 0)
+        contentWidth = 0;
+
+    int viewTop = contentTop_;
+    int viewBottom = contentBottom_;
+
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        Widget *widget = widgets_[i].get();
+        if (!widget || widget->IsHidden())
+            continue;
+
+        int draw_y = itemYs_[i] - scrollY_;
+        int height = itemHeights_[i];
+
+        if (draw_y + height < viewTop || draw_y > viewBottom)
+            continue;
+
+        int x = leftX;
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            x = centerX;
+            bitmap->Layout(x, draw_y, contentWidth, lineHeight_);
+        } else if (auto *action = dynamic_cast<ActionWidget *>(widget)) {
+            x = action->AlignLeft() ? leftX : centerX;
+            action->Layout(x, draw_y, contentWidth, lineHeight_);
+        } else if (auto *field = dynamic_cast<FieldWidget *>(widget)) {
+            x = field->Center() ? centerX : leftX;
+            field->Layout(x, draw_y, contentWidth, lineHeight_);
+        } else {
+            widget->Layout(leftX, draw_y, contentWidth, lineHeight_);
+        }
+
+        widget->Draw(static_cast<int>(i) == focusedIndex_);
+    }
+
+    DrawStatusText(status_);
+}
+
+Sound Menu::KeyEvent(int key)
+{
+    if (widgets_.empty())
+        return Sound::NotHandled;
+
+    if (key == K_ESCAPE || key == K_MOUSE2) {
+        GetMenuSystem().Pop();
+        return Sound::Out;
+    }
+
+    if (key == K_UPARROW || key == K_KP_UPARROW || key == K_MWHEELUP) {
+        focusedIndex_ = FindNextSelectable(focusedIndex_ < 0 ? 0 : focusedIndex_, -1);
+        EnsureVisible(focusedIndex_);
+        UpdateStatusFromFocus();
+        return Sound::Move;
+    }
+
+    if (key == K_DOWNARROW || key == K_KP_DOWNARROW || key == K_MWHEELDOWN) {
+        focusedIndex_ = FindNextSelectable(focusedIndex_ < 0 ? 0 : focusedIndex_, 1);
+        EnsureVisible(focusedIndex_);
+        UpdateStatusFromFocus();
+        return Sound::Move;
+    }
+
+    if (key == K_PGUP) {
+        scrollY_ = max(0, scrollY_ - (contentBottom_ - contentTop_));
+        return Sound::Move;
+    }
+
+    if (key == K_PGDN) {
+        int maxScroll = max(0, contentHeight_ - (contentBottom_ - contentTop_));
+        scrollY_ = min(maxScroll, scrollY_ + (contentBottom_ - contentTop_));
+        return Sound::Move;
+    }
+
+    if (key == K_MOUSE1) {
+        int hit = HitTest(uis.mouseCoords[0], uis.mouseCoords[1]);
+        if (hit < 0)
+            return Sound::NotHandled;
+        focusedIndex_ = hit;
+        UpdateStatusFromFocus();
+    }
+
+    Widget *widget = FocusedWidget();
+    if (!widget)
+        return Sound::NotHandled;
+
+    Sound sound = widget->KeyEvent(key);
+    if (sound != Sound::NotHandled)
+        return sound;
+
+    if (key == K_MOUSE1 || key == K_ENTER || key == K_KP_ENTER) {
+        sound = widget->Activate();
+        if (sound != Sound::NotHandled)
+            return sound;
+        return Sound::In;
+    }
+
+    return Sound::NotHandled;
+}
+
+Sound Menu::CharEvent(int ch)
+{
+    Widget *widget = FocusedWidget();
+    if (!widget)
+        return Sound::NotHandled;
+    return widget->CharEvent(ch);
+}
+
+void Menu::MouseEvent(int x, int y, bool down)
+{
+    (void)down;
+    if (uis.keywait)
+        return;
+
+    int hit = HitTest(x, y);
+    if (hit >= 0) {
+        focusedIndex_ = hit;
+        UpdateStatusFromFocus();
+    }
+}
+
+} // namespace ui

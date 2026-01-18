@@ -1009,7 +1009,9 @@ static float CG_Wheel_GetScaleForItem(const cg_wheel_slot_t *slots, size_t num_s
 
 static float CG_Wheel_GetHoverScale(void)
 {
-    return 2.0f;
+    if (!ww_hover_scale)
+        return 2.0f;
+    return max(0.0f, ww_hover_scale->value);
 }
 
 static float CG_Wheel_GetHoverSpeed(float selected_scale)
@@ -1578,6 +1580,11 @@ void CG_Wheel_Draw(const player_state_t *ps, const vrect_t &hud_vrect, const vre
         if (slot->has_item) {
             const char *localized = cgi.Localize(cgi.get_configString(CS_ITEMS + slot->item_index), nullptr, 0);
             int name_y = CG_Rint(center_y - (wheel_draw_size * 0.125f) + (CONCHAR_HEIGHT * 3));
+            if (!cg_wheel.wheel.is_powerup_wheel) {
+                float text_scale = (scale > 0) ? (float)scale : 1.0f;
+                int text_height = max(1, CG_Rint(CONCHAR_HEIGHT * text_scale));
+                name_y -= text_height;
+            }
             CG_DrawScaledString(CG_Rint(center_x), name_y, (float)scale, UI_CENTER | UI_DROPSHADOW, base_color, localized);
 
             float arrow_offset = (ww_arrow_offset ? ww_arrow_offset->value : 102.0f) * wheel_scale;
@@ -2219,6 +2226,9 @@ void CG_WeaponBar_Draw(const player_state_t *ps, const vrect_t &hud_vrect, const
 
     int mode = CG_WeaponBar_GetMode();
     CG_WeaponBar_ApplyMode(mode);
+
+    if (cg_wheel.wheel.state != WHEEL_CLOSED || cg_wheel.wheel.timer > 0.0f)
+        return;
 
     if (mode == WEAPON_BAR_DISABLED)
         return;

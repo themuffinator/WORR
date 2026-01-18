@@ -23,4 +23,4 @@
 ## Loader Behavior
 - `SGameDll_Load` uses `sgame` only (no legacy `game` fallback).
 - `CGameDll_Load` follows the client DLL search order and starts from the executable basedir.
-- `worr.menu` remains embedded in the engine filesystem for UI script loading.
+- `worr.json` is embedded in the engine filesystem for UI JSON loading.

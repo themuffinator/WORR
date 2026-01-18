@@ -52,7 +52,7 @@ extern "C" {
 
 static char cmd_null_string[] = "";
 
-static void UI_SetClipboardData(const char *text)
+void UI_SetClipboardData(const char *text)
 {
     if (uii && uii->SetClipboardData)
         uii->SetClipboardData(text);
@@ -777,6 +777,15 @@ extern "C" void R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, q
 {
     if (uii && uii->Re_DrawKeepAspectPic)
         uii->Re_DrawKeepAspectPic(x, y, w, h, color, pic);
+}
+
+extern "C" void R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
+{
+    if (uii && uii->Re_DrawKeepAspectPic) {
+        uii->Re_DrawKeepAspectPic(x, y, w, h, color, pic);
+    } else if (uii && uii->Re_DrawPic) {
+        uii->Re_DrawPic(x, y, color, pic);
+    }
 }
 
 extern "C" void R_DrawFill8(int x, int y, int w, int h, int c)

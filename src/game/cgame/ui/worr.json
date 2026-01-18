@@ -1,0 +1,556 @@
+{
+  "globals": {
+    "background": "black",
+    "font": "conchars",
+    "cursor": "ch1",
+    "weapon": "w_railgun.md2",
+    "colors": {
+      "normal": "#0f90eb64",
+      "active": "#0f90ff64",
+      "selection": "#0f90eb64",
+      "disabled": "#7f7f7f"
+    }
+  },
+  "menus": [
+    {
+      "name": "video",
+      "banner": "m_banner_video",
+      "items": [
+        {
+          "type": "values",
+          "label": "video mode",
+          "cvar": "vid_fullscreen",
+          "items": ["windowed", "$$vid_modelist"]
+        },
+        {
+          "type": "values",
+          "label": "fov scaling",
+          "cvar": "cl_adjustfov",
+          "items": ["vert-", "hor+"]
+        },
+        { "type": "toggle", "label": "vertical sync", "cvar": "gl_swapinterval" },
+        {
+          "type": "pairs",
+          "label": "anti-aliasing",
+          "cvar": "gl_multisamples",
+          "pairs": [
+            { "label": "no", "value": "0" },
+            { "label": "2x MSAA", "value": "2" },
+            { "label": "4x MSAA", "value": "4" },
+            { "label": "8x MSAA", "value": "8" }
+          ]
+        },
+        { "type": "range", "label": "texture gamma", "cvar": "vid_gamma", "min": 1.3, "max": 0.3 },
+        { "type": "toggle", "label": "hardware gamma", "cvar": "vid_hwgamma" },
+        { "type": "range", "label": "texture quality", "cvar": "gl_picmip", "min": 3, "max": 0, "step": -1 },
+        {
+          "type": "pairs",
+          "label": "texture filter",
+          "cvar": "gl_texturemode",
+          "pairs": [
+            { "label": "nearest", "value": "GL_NEAREST" },
+            { "label": "linear", "value": "GL_LINEAR" },
+            { "label": "bilinear", "value": "GL_LINEAR_MIPMAP_NEAREST" },
+            { "label": "trilinear", "value": "GL_LINEAR_MIPMAP_LINEAR" }
+          ]
+        },
+        {
+          "type": "pairs",
+          "label": "anisotropic filter",
+          "cvar": "gl_anisotropy",
+          "pairs": [
+            { "label": "no", "value": "1" },
+            { "label": "2x", "value": "2" },
+            { "label": "4x", "value": "4" },
+            { "label": "8x", "value": "8" },
+            { "label": "16x", "value": "16" }
+          ]
+        },
+        { "type": "range", "label": "texture saturation", "cvar": "gl_saturation", "min": 0, "max": 1 },
+        {
+          "type": "pairs",
+          "label": "texture intensity",
+          "cvar": "intensity",
+          "pairs": [
+            { "label": "1x", "value": "1" },
+            { "label": "2x", "value": "2" },
+            { "label": "3x", "value": "3" }
+          ]
+        },
+        { "type": "range", "label": "lightmap saturation", "cvar": "gl_coloredlightmaps", "min": 0, "max": 1 },
+        { "type": "range", "label": "lightmap brightness", "cvar": "gl_brightness", "min": 0, "max": 0.3 },
+        {
+          "type": "values",
+          "label": "rendering backend",
+          "cvar": "gl_shaders",
+          "items": ["legacy", "shaders"]
+        }
+      ]
+    },
+    {
+      "name": "options",
+      "banner": "m_banner_options",
+      "items": [
+        { "type": "action", "label": "player setup", "command": "pushmenu players" },
+        { "type": "action", "label": "input setup", "command": "pushmenu input" },
+        { "type": "action", "label": "key bindings", "command": "pushmenu keys" },
+        { "type": "action", "label": "weapon bindings", "command": "pushmenu weapons" },
+        { "type": "action", "label": "video setup", "command": "pushmenu video" },
+        { "type": "action", "label": "sound setup", "command": "pushmenu sound" },
+        { "type": "action", "label": "effects setup", "command": "pushmenu effects" },
+        { "type": "action", "label": "screen setup", "command": "pushmenu screen" },
+        { "type": "action", "label": "download options", "command": "pushmenu downloads" },
+        { "type": "action", "label": "address book", "command": "pushmenu addressbook" }
+      ]
+    },
+    {
+      "name": "sound",
+      "title": "Sound Setup",
+      "items": [
+        {
+          "type": "values",
+          "label": "sound engine",
+          "cvar": "s_enable",
+          "items": ["no sound", "software", "OpenAL"]
+        },
+        { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.2 },
+        { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1 },
+        { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1 },
+        { "type": "toggle", "label": "enable music", "cvar": "ogg_enable" },
+        { "type": "toggle", "label": "shuffle tracks", "cvar": "ogg_shuffle" },
+        { "type": "toggle", "label": "underwater effect", "cvar": "s_underwater" },
+        {
+          "type": "values",
+          "label": "ambient sounds",
+          "cvar": "s_ambient",
+          "items": ["no", "yes", "only player's own"]
+        },
+        {
+          "type": "values",
+          "label": "chat beep",
+          "cvar": "cl_chat_sound",
+          "items": ["disabled", "default", "alternative"]
+        }
+      ]
+    },
+    {
+      "name": "railtrail",
+      "title": "Railgun Trail Setup",
+      "items": [
+        {
+          "type": "values",
+          "label": "rail trail type",
+          "cvar": "cl_railtrail_type",
+          "items": ["default", "core only", "core and spiral"]
+        },
+        { "type": "range", "label": "rail trail duration", "cvar": "cl_railtrail_time", "min": 0.1, "max": 3.0, "step": 0.1 },
+        { "type": "range", "label": "core width", "cvar": "cl_railcore_width", "min": 1, "max": 6, "step": 1 },
+        { "type": "range", "label": "spiral radius", "cvar": "cl_railspiral_radius", "min": 1, "max": 6, "step": 1 },
+        {
+          "type": "strings",
+          "label": "core color",
+          "cvar": "cl_railcore_color",
+          "items": ["black", "red", "green", "yellow", "blue", "cyan", "magenta", "white"]
+        },
+        {
+          "type": "strings",
+          "label": "spiral color",
+          "cvar": "cl_railspiral_color",
+          "items": ["black", "red", "green", "yellow", "blue", "cyan", "magenta", "white"]
+        }
+      ]
+    },
+    {
+      "name": "effects",
+      "title": "Effects Setup",
+      "items": [
+        {
+          "type": "values",
+          "label": "dynamic lighting",
+          "cvar": "gl_dynamic",
+          "items": ["no", "yes", "only switchable"]
+        },
+        {
+          "type": "values",
+          "label": "entity cel-shading",
+          "cvar": "gl_celshading",
+          "items": ["no", "1x", "2x", "3x"]
+        },
+        { "type": "toggle", "label": "entity glowing", "cvar": "cl_noglow", "negate": true },
+        {
+          "type": "values",
+          "label": "ground shadows",
+          "cvar": "gl_shadows",
+          "items": ["no", "yes", "fade"]
+        },
+        { "type": "toggle", "label": "screen blending", "cvar": "gl_polyblend" },
+        { "type": "toggle", "label": "screen warping", "cvar": "gl_waterwarp" },
+        { "type": "toggle", "label": "grenade explosions", "cvar": "cl_disable_explosions", "bit": 0, "negate": true },
+        { "type": "toggle", "label": "rocket explosions", "cvar": "cl_disable_explosions", "bit": 1, "negate": true },
+        { "type": "blank" },
+        { "type": "action", "label": "railgun trail setup...", "align": "left", "command": "pushmenu railtrail" }
+      ]
+    },
+    {
+      "name": "crosshair",
+      "title": "Crosshair Setup",
+      "items": [
+        {
+          "type": "imagevalues",
+          "label": "crosshair type",
+          "cvar": "crosshair",
+          "path": "pics",
+          "filter": "ch*",
+          "imageWidth": 64,
+          "imageHeight": 64
+        },
+        { "type": "range", "label": "crosshair size", "cvar": "cl_crosshairSize", "min": 4, "max": 64, "step": 1 },
+        { "type": "range", "label": "crosshair brightness", "cvar": "cl_crosshairBrightness", "min": 0, "max": 1, "step": 0.05 },
+        { "type": "range", "label": "crosshair color", "cvar": "cl_crosshairColor", "min": 1, "max": 26, "step": 1 },
+        { "type": "toggle", "label": "color by health", "cvar": "cl_crosshairHealth" },
+        {
+          "type": "values",
+          "label": "hit style",
+          "cvar": "cl_crosshairHitStyle",
+          "items": [
+            "off",
+            "damage color",
+            "hit color",
+            "pulse (large)",
+            "damage + pulse",
+            "hit color + pulse",
+            "pulse (small)",
+            "damage + small pulse",
+            "hit color + small pulse"
+          ]
+        },
+        { "type": "range", "label": "hit color", "cvar": "cl_crosshairHitColor", "min": 1, "max": 26, "step": 1 },
+        { "type": "range", "label": "hit time (ms)", "cvar": "cl_crosshairHitTime", "min": 0, "max": 1000, "step": 10 },
+        { "type": "toggle", "label": "pickup pulse", "cvar": "cl_crosshairPulse" }
+      ]
+    },
+    {
+      "name": "screen",
+      "title": "Screen Setup",
+      "items": [
+        { "type": "range", "label": "screen size", "cvar": "viewsize", "min": 40, "max": 100, "step": 10 },
+        { "type": "toggle", "label": "ping graph", "cvar": "scr_lag_draw" },
+        {
+          "type": "values",
+          "label": "demo bar",
+          "cvar": "scr_demobar",
+          "items": ["no", "yes", "verbose"]
+        },
+        { "type": "range", "label": "HUD opacity", "cvar": "scr_alpha", "min": 0, "max": 1 },
+        { "type": "range", "label": "console opacity", "cvar": "con_alpha", "min": 0, "max": 1 },
+        {
+          "type": "pairs",
+          "label": "HUD scale",
+          "cvar": "scr_scale",
+          "pairs": [
+            { "label": "auto", "value": "0" },
+            { "label": "1x", "value": "1" },
+            { "label": "2x", "value": "2" },
+            { "label": "4x", "value": "4" }
+          ]
+        },
+        {
+          "type": "pairs",
+          "label": "console scale",
+          "cvar": "con_scale",
+          "pairs": [
+            { "label": "auto", "value": "0" },
+            { "label": "1x", "value": "1" },
+            { "label": "2x", "value": "2" },
+            { "label": "4x", "value": "4" }
+          ]
+        },
+        {
+          "type": "pairs",
+          "label": "menu scale",
+          "cvar": "ui_scale",
+          "pairs": [
+            { "label": "auto", "value": "0" },
+            { "label": "1x", "value": "1" },
+            { "label": "2x", "value": "2" },
+            { "label": "4x", "value": "4" }
+          ]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "crosshair setup...", "align": "left", "command": "pushmenu crosshair" }
+      ]
+    },
+    {
+      "name": "downloads",
+      "title": "Download Options",
+      "items": [
+        { "type": "toggle", "label": "allow downloading", "cvar": "allow_download" },
+        { "type": "toggle", "label": "maps", "cvar": "allow_download_maps" },
+        { "type": "toggle", "label": "player models/skins", "cvar": "allow_download_players" },
+        { "type": "toggle", "label": "models", "cvar": "allow_download_models" },
+        { "type": "toggle", "label": "sounds", "cvar": "allow_download_sounds" },
+        { "type": "toggle", "label": "textures", "cvar": "allow_download_textures" },
+        { "type": "toggle", "label": "pics", "cvar": "allow_download_pics" },
+        { "type": "blank" },
+        { "type": "toggle", "label": "HTTP downloads", "cvar": "cl_http_downloads" }
+      ]
+    },
+    {
+      "name": "gameflags",
+      "title": "Deathmatch Flags",
+      "items": [
+        { "type": "toggle", "label": "falling damage", "cvar": "dmflags", "bit": 3, "negate": true },
+        { "type": "toggle", "label": "weapons stay", "cvar": "dmflags", "bit": 2 },
+        { "type": "toggle", "label": "instant powerups", "cvar": "dmflags", "bit": 4 },
+        { "type": "toggle", "label": "allow powerups", "cvar": "dmflags", "bit": 1, "negate": true },
+        { "type": "toggle", "label": "allow health", "cvar": "dmflags", "bit": 0, "negate": true },
+        { "type": "toggle", "label": "allow armor", "cvar": "dmflags", "bit": 11, "negate": true },
+        { "type": "toggle", "label": "spawn farthest", "cvar": "dmflags", "bit": 9 },
+        { "type": "toggle", "label": "same map", "cvar": "dmflags", "bit": 5 },
+        { "type": "toggle", "label": "force respawn", "cvar": "dmflags", "bit": 10 },
+        { "type": "toggle", "label": "infinite ammo", "cvar": "dmflags", "bit": 13 },
+        { "type": "toggle", "label": "fixed FOV", "cvar": "dmflags", "bit": 15 },
+        { "type": "toggle", "label": "quad drop", "cvar": "dmflags", "bit": 14 }
+      ]
+    },
+    {
+      "name": "startserver",
+      "banner": "m_banner_start_server",
+      "items": [
+        {
+          "type": "strings",
+          "label": "initial map",
+          "cvar": "_ui_nextserver",
+          "items": ["$$com_maplist"]
+        },
+        {
+          "type": "values",
+          "label": "rules",
+          "cvar": "coop",
+          "items": ["deathmatch", "cooperative"]
+        },
+        {
+          "type": "field",
+          "label": "time limit",
+          "cvar": "timelimit",
+          "integer": true,
+          "width": 3,
+          "status": "0 - no time limit"
+        },
+        {
+          "type": "field",
+          "label": "frag limit",
+          "cvar": "fraglimit",
+          "integer": true,
+          "width": 3,
+          "status": "0 - no frag limit"
+        },
+        { "type": "field", "label": "max players", "cvar": "maxclients", "integer": true, "width": 3 },
+        { "type": "field", "label": "host name", "cvar": "hostname", "width": 16 },
+        { "type": "blank" },
+        { "type": "action", "label": "deathmatch flags...", "align": "left", "command": "pushmenu gameflags" },
+        {
+          "type": "action",
+          "label": "begin game!",
+          "align": "left",
+          "command": "forcemenuoff; if $coop == 1 then deathmatch 0 else deathmatch 1; map $_ui_nextserver force"
+        }
+      ]
+    },
+    {
+      "name": "multiplayer",
+      "banner": "m_banner_multiplayer",
+      "items": [
+        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+http://q2servers.com/?raw=2\"" },
+        { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
+        { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
+        { "type": "action", "label": "start server", "command": "pushmenu startserver" }
+      ]
+    },
+    {
+      "name": "skill_select",
+      "banner": "m_banner_game",
+      "items": [
+        { "type": "action", "label": "easy", "command": "forcemenuoff; skill 0; deathmatch 0; coop 0; maxclients 1; _mapdb_run" },
+        { "type": "action", "label": "medium", "command": "forcemenuoff; skill 1; deathmatch 0; coop 0; maxclients 1; _mapdb_run" },
+        { "type": "action", "label": "hard", "command": "forcemenuoff; skill 2; deathmatch 0; coop 0; maxclients 1; _mapdb_run" },
+        { "type": "action", "label": "nightmare", "command": "forcemenuoff; skill 3; deathmatch 0; coop 0; maxclients 1; _mapdb_run" }
+      ]
+    },
+    {
+      "name": "singleplayer",
+      "banner": "m_banner_game",
+      "items": [
+        { "type": "episode_selector", "label": "episode", "cvar": "_mapdb_episode" },
+        { "type": "action", "label": "start episode", "align": "left", "command": "set _mapdb_type episode; pushmenu skill_select" },
+        { "type": "blank" },
+        { "type": "unit_selector", "label": "level", "cvar": "_mapdb_level" },
+        { "type": "blank" },
+        { "type": "action", "label": "start level", "align": "left", "command": "set _mapdb_type level; pushmenu skill_select" },
+        { "type": "blank" },
+        { "type": "action", "label": "load game...", "command": "pushmenu loadgame" },
+        { "type": "action", "label": "save game...", "command": "pushmenu savegame" }
+      ]
+    },
+    {
+      "name": "loadgame",
+      "banner": "m_banner_load_game",
+      "items": [
+        { "type": "loadgame", "slot": "save0" },
+        { "type": "blank" },
+        { "type": "loadgame", "slot": "save1" },
+        { "type": "loadgame", "slot": "save2" },
+        { "type": "loadgame", "slot": "save3" },
+        { "type": "loadgame", "slot": "save4" },
+        { "type": "loadgame", "slot": "save5" },
+        { "type": "loadgame", "slot": "save6" },
+        { "type": "loadgame", "slot": "save7" },
+        { "type": "loadgame", "slot": "save8" },
+        { "type": "loadgame", "slot": "save9" },
+        { "type": "loadgame", "slot": "save10" },
+        { "type": "loadgame", "slot": "save11" },
+        { "type": "loadgame", "slot": "save12" },
+        { "type": "loadgame", "slot": "save13" },
+        { "type": "loadgame", "slot": "save14" },
+        { "type": "loadgame", "slot": "save15" }
+      ]
+    },
+    {
+      "name": "savegame",
+      "banner": "m_banner_save_game",
+      "items": [
+        { "type": "savegame", "slot": "save1" },
+        { "type": "savegame", "slot": "save2" },
+        { "type": "savegame", "slot": "save3" },
+        { "type": "savegame", "slot": "save4" },
+        { "type": "savegame", "slot": "save5" },
+        { "type": "savegame", "slot": "save6" },
+        { "type": "savegame", "slot": "save7" },
+        { "type": "savegame", "slot": "save8" },
+        { "type": "savegame", "slot": "save9" },
+        { "type": "savegame", "slot": "save10" },
+        { "type": "savegame", "slot": "save11" },
+        { "type": "savegame", "slot": "save12" },
+        { "type": "savegame", "slot": "save13" },
+        { "type": "savegame", "slot": "save14" },
+        { "type": "savegame", "slot": "save15" }
+      ]
+    },
+    {
+      "name": "main",
+      "plaque": { "image": "m_main_plaque", "logo": "m_main_logo" },
+      "items": [
+        { "type": "bitmap", "image": "m_main_game", "command": "pushmenu singleplayer" },
+        { "type": "bitmap", "image": "m_main_multiplayer", "command": "pushmenu multiplayer" },
+        { "type": "bitmap", "image": "m_main_options", "command": "pushmenu options" },
+        { "type": "bitmap", "image": "m_main_video", "command": "pushmenu video" },
+        { "type": "bitmap", "image": "m_main_quit", "command": "quit" }
+      ]
+    },
+    {
+      "name": "game",
+      "background": "#0000ff20",
+      "style": { "compact": true },
+      "items": [
+        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+http://q2servers.com/?raw=2\"" },
+        { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
+        { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
+        { "type": "action", "label": "single player", "command": "pushmenu singleplayer" },
+        { "type": "action", "label": "options", "command": "pushmenu options" },
+        { "type": "action", "label": "disconnect", "command": "disconnect" },
+        { "type": "action", "label": "quit", "command": "quit" }
+      ]
+    },
+    {
+      "name": "addressbook",
+      "banner": "m_banner_addressbook",
+      "items": [
+        { "type": "field", "label": "", "cvar": "adr0", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr1", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr2", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr3", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr4", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr5", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr6", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr7", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr8", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr9", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr10", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr11", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr12", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr13", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr14", "width": 32, "center": true },
+        { "type": "field", "label": "", "cvar": "adr15", "width": 32, "center": true }
+      ]
+    },
+    {
+      "name": "input",
+      "title": "Input Setup",
+      "items": [
+        { "type": "field", "label": "mouse sens", "cvar": "sensitivity", "numeric": true, "width": 8 },
+        { "type": "toggle", "label": "auto sens", "cvar": "m_autosens" },
+        { "type": "toggle", "label": "mouse filter", "cvar": "m_filter" },
+        { "type": "toggle", "label": "free look", "cvar": "freelook" },
+        { "type": "toggle", "label": "always run", "cvar": "cl_run" }
+      ]
+    },
+    {
+      "name": "keys",
+      "title": "Key Bindings",
+      "items": [
+        { "type": "bind", "label": "attack", "command": "+attack" },
+        { "type": "bind", "label": "next weapon", "command": "weapnext" },
+        { "type": "bind", "label": "previous weapon", "command": "weapprev" },
+        { "type": "bind", "label": "walk forward", "command": "+forward" },
+        { "type": "bind", "label": "backpedal", "command": "+back" },
+        { "type": "bind", "label": "run", "command": "+speed" },
+        { "type": "bind", "label": "step left", "command": "+moveleft" },
+        { "type": "bind", "label": "step right", "command": "+moveright" },
+        { "type": "bind", "label": "up / jump", "command": "+moveup" },
+        { "type": "bind", "label": "down / crouch", "command": "+movedown" },
+        { "type": "bind", "label": "inventory", "command": "inven" },
+        { "type": "bind", "label": "use item", "command": "invuse" },
+        { "type": "bind", "label": "drop item", "command": "invdrop" },
+        { "type": "bind", "label": "prev item", "command": "invprev" },
+        { "type": "bind", "label": "next item", "command": "invnext" },
+        { "type": "bind", "label": "help computer", "command": "help" },
+        { "type": "bind", "label": "pause game", "command": "pause" },
+        { "type": "bind", "label": "scoreboard", "command": "score" },
+        { "type": "bind", "label": "chat", "command": "messagemode" },
+        { "type": "blank" },
+        { "type": "action", "label": "legacy keys...", "align": "left", "command": "pushmenu legacykeys" }
+      ]
+    },
+    {
+      "name": "legacykeys",
+      "title": "Legacy Key Bindings",
+      "items": [
+        { "type": "bind", "label": "turn left", "command": "+left" },
+        { "type": "bind", "label": "turn right", "command": "+right" },
+        { "type": "bind", "label": "sidestep", "command": "+strafe" },
+        { "type": "bind", "label": "look up", "command": "+lookup" },
+        { "type": "bind", "label": "look down", "command": "+lookdown" },
+        { "type": "bind", "label": "center view", "command": "centerview" },
+        { "type": "bind", "label": "mouse look", "command": "+mlook" },
+        { "type": "bind", "label": "keyboard look", "command": "+klook" }
+      ]
+    },
+    {
+      "name": "weapons",
+      "title": "Weapon Bindings",
+      "items": [
+        { "type": "bind", "label": "blaster", "command": "use Blaster" },
+        { "type": "bind", "label": "shotgun", "command": "use Shotgun" },
+        { "type": "bind", "label": "super shotgun", "command": "use Super Shotgun" },
+        { "type": "bind", "label": "machinegun", "command": "use Machinegun" },
+        { "type": "bind", "label": "chaingun", "command": "use Chaingun" },
+        { "type": "bind", "label": "grenade launcher", "command": "use Grenade Launcher" },
+        { "type": "bind", "label": "rocket launcher", "command": "use Rocket Launcher" },
+        { "type": "bind", "label": "hyperblaster", "command": "use HyperBlaster" },
+        { "type": "bind", "label": "railgun", "command": "use Railgun" },
+        { "type": "bind", "label": "bfg10k", "command": "use BFG10K" },
+        { "type": "bind", "label": "grenades", "command": "use Grenades" }
+      ]
+    }
+  ]
+}
