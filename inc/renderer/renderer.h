@@ -126,6 +126,7 @@ typedef struct {
     player_heightfog_t  heightfog;
     float       frametime;          // seconds since last video frame
     float       time;               // time is used to auto animate
+    float       dof_strength;       // depth-of-field transition strength [0..1]
     int         rdflags;            // RDF_UNDERWATER, etc
     bool        extended;
 

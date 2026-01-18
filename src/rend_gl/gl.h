@@ -59,7 +59,7 @@ typedef uint64_t glStateBits_t;
 #define TAB_COS(x)  gl_static.sintab[((x) + 64) & 255]
 
 // auto textures
-#define NUM_AUTO_TEXTURES       13
+#define NUM_AUTO_TEXTURES       14
 #define AUTO_TEX(n)             gl_static.texnums[n]
 
 #define TEXNUM_DEFAULT          AUTO_TEX(0)
@@ -75,6 +75,7 @@ typedef uint64_t glStateBits_t;
 #define TEXNUM_PP_BLOOM         AUTO_TEX(10)
 #define TEXNUM_PP_BLUR_0        AUTO_TEX(11)
 #define TEXNUM_PP_BLUR_1        AUTO_TEX(12)
+#define TEXNUM_PP_DEPTH         AUTO_TEX(13)
 
 #define MAX_SHADOWMAP_LIGHTS    4
 #define SHADOWMAP_FACE_COUNT    6
@@ -675,6 +676,7 @@ void GL_LoadWorld(const char *name);
 #define GLS_DYNAMIC_LIGHTS      BIT_ULL(34)
 #define GLS_RIMLIGHT            BIT_ULL(35)
 #define GLS_SHADOWMAP           BIT_ULL(36)
+#define GLS_DOF                 BIT_ULL(37)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
@@ -688,10 +690,10 @@ void GL_LoadWorld(const char *name);
                                  GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
-                                 GLS_RIMLIGHT | GLS_SHADOWMAP)
+                                 GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
-                                 GLS_RIMLIGHT | GLS_SHADOWMAP)
+                                 GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -818,9 +820,10 @@ typedef struct {
     vec4_t      heightfog_end;
     GLfloat     heightfog_density;
     GLfloat     heightfog_falloff;
-    GLfloat     pad;
-    GLfloat     pad2;
-    vec4_t      vieworg;
+    GLfloat     dof_pad0;
+    GLfloat     dof_pad1;
+    vec4_t      dof_params; // x = focus, y = range, z = proj A, w = proj B
+    vec4_t      vieworg; // w = dof strength
     vec4_t      shadow_params; // x = 1/size, y = bias, z = softness, w = shadow depth scale
     vec4_t      shadow_params2; // x = method, y = quality, z = vcm bleed, w = vcm min variance
 } glUniformBlock_t;
@@ -1061,7 +1064,7 @@ void Scrap_Upload(void);
 void GL_InitImages(void);
 void GL_ShutdownImages(void);
 
-bool GL_InitFramebuffers(void);
+bool GL_InitFramebuffers(bool dof_active);
 bool GL_InitShadowmaps(int size, int layers);
 void GL_ShutdownShadowmaps(void);
 

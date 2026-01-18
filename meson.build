@@ -180,15 +180,16 @@ client_src = [
 ]
 
 ui_src = [
-  'src/client/ui/demos.cpp',
-  'src/client/ui/menu.cpp',
-  'src/client/ui/playerconfig.cpp',
-  'src/client/ui/playermodels.cpp',
-  'src/client/ui/script.cpp',
-  'src/client/ui/servers.cpp',
-  'src/client/ui/mapdb.cpp',
-  'src/client/ui/ui.cpp',
-  'src/client/ui/ui.h',
+  'src/game/cgame/ui/ui_core.cpp',
+  'src/game/cgame/ui/ui_menu.cpp',
+  'src/game/cgame/ui/ui_widgets.cpp',
+  'src/game/cgame/ui/ui_json.cpp',
+  'src/game/cgame/ui/ui_list.cpp',
+  'src/game/cgame/ui/ui_page_demos.cpp',
+  'src/game/cgame/ui/ui_page_servers.cpp',
+  'src/game/cgame/ui/ui_page_player.cpp',
+  'src/game/cgame/ui/ui_mapdb.cpp',
+  'src/game/cgame/ui/ui_playermodels.cpp',
 ]
 
 renderer_src = [
@@ -812,16 +813,16 @@ endif
 
 if get_option('client-ui')
 
-  # embed worr.menu
+  # embed worr.json
   prog_embed = find_program('embed.py')
 
-  worr_menu_c = custom_target(
-      'worr.menu.c',
-      output : 'worr.menu.c',
-      input : 'src/client/ui/worr.menu',
-      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_worr_menu'],
+  worr_json_c = custom_target(
+      'worr.json.c',
+      output : 'worr.json.c',
+      input : 'src/game/cgame/ui/worr.json',
+      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_worr_json'],
   )
-  client_src += worr_menu_c
+  client_src += worr_json_c
 
   config.set10('USE_UI', true)
 endif

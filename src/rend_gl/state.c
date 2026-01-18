@@ -264,6 +264,9 @@ void GL_Frustum(GLfloat fov_x, GLfloat fov_y, GLfloat reflect_x)
         zfar = gl_static.world.size * 2;
 
     Matrix_Frustum(fov_x, fov_y, reflect_x, znear, zfar, matrix);
+    gls.u_block.dof_params[2] = matrix[10];
+    gls.u_block.dof_params[3] = matrix[14];
+    gls.u_block_dirty = true;
     gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 

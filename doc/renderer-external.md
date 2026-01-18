@@ -30,4 +30,4 @@
 - Refresh-specific names were updated to renderer-oriented naming (for example, `timerenderer`).
 
 ## WORR Branding
-- Product/app identifiers now use `WORR` and `worr` for names like `worrconfig.cfg` and `worr.menu`.
+- Product/app identifiers now use `WORR` and `worr` for names like `worrconfig.cfg` and `worr.json`.

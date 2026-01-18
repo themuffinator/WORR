@@ -115,8 +115,9 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_heightfog_end;
         float u_heightfog_density;
         float u_heightfog_falloff;
-        float pad_5;
-        float pad_4;
+        float u_dof_pad0;
+        float u_dof_pad1;
+        vec4 u_dof_params;
         vec4 u_vieworg;
         vec4 u_shadow_params;
         vec4 u_shadow_params2;
@@ -744,6 +745,11 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
             GLSL(uniform sampler2D u_bloom;)
     }
 
+    if (bits & GLS_DOF) {
+        GLSL(uniform sampler2D u_blur;)
+        GLSL(uniform sampler2D u_depth;)
+    }
+
     if (bits & GLS_SKY_MASK)
         GLSL(in vec3 v_dir;)
     else
@@ -787,6 +793,15 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     else if (bits & GLS_BLUR_BOX)
         write_box_blur(buf);
 
+    if (bits & GLS_DOF) {
+        GLSL(
+            float linearize_depth(float depth) {
+                float z = depth * 2.0 - 1.0;
+                return abs(u_dof_params.w / (z + u_dof_params.z));
+            }
+        )
+    }
+
     GLSF("void main() {\n");
     if (bits & GLS_CLASSIC_SKY) {
         GLSL(
@@ -806,7 +821,26 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         if (bits & GLS_WARP_ENABLE)
             GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
 
-        if (bits & GLS_BLUR_MASK)
+        if (bits & GLS_DOF) {
+            GLSL(
+                vec4 scene = texture(u_texture, tc);
+                vec4 blurred = texture(u_blur, tc);
+                float depth_sample = texture(u_depth, tc).r;
+                float focus_dist = u_dof_params.x;
+                if (focus_dist <= 0.0) {
+                    float focus_depth = texture(u_depth, vec2(0.5, 0.5)).r;
+                    focus_dist = linearize_depth(focus_depth);
+                }
+                float blur_range = u_dof_params.y;
+                if (blur_range <= 0.0)
+                    blur_range = max(64.0, focus_dist * 0.25);
+                float dist = linearize_depth(depth_sample);
+                float blur_factor = clamp(abs(dist - focus_dist) / blur_range, 0.0, 1.0);
+                blur_factor = smoothstep(0.0, 1.0, blur_factor);
+                blur_factor *= clamp(u_vieworg.w, 0.0, 1.0);
+                vec4 diffuse = mix(scene, blurred, blur_factor);
+            )
+        } else if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
         else
             GLSL(vec4 diffuse = texture(u_texture, tc);)
@@ -1094,6 +1128,11 @@ static GLuint create_and_use_program(glStateBits_t bits)
             bind_texture_unit(program, "u_texture", TMU_TEXTURE);
             if (bits & GLS_BLOOM_OUTPUT)
                 bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
+        }
+
+        if (bits & GLS_DOF) {
+            bind_texture_unit(program, "u_blur", TMU_LIGHTMAP);
+            bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
         }
 
         if (bits & GLS_LIGHTMAP_ENABLE)
@@ -1426,8 +1465,7 @@ static void shader_update_blur(void)
 
 static void gl_bloom_sigma_changed(cvar_t *self)
 {
-    if (gl_bloom->integer)
-        shader_update_blur();
+    shader_update_blur();
 }
 
 static void shader_init(void)

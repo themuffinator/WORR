@@ -1265,6 +1265,23 @@ static void GL_InitPostProcTexture(int w, int h)
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+static void GL_InitDepthTexture(int w, int h)
+{
+    GLenum internal_format = GL_DEPTH_COMPONENT16;
+    GLenum type = GL_UNSIGNED_SHORT;
+
+    if (gl_config.depthbits > 16) {
+        internal_format = GL_DEPTH_COMPONENT24;
+        type = GL_UNSIGNED_INT;
+    }
+
+    qglTexImage2D(GL_TEXTURE_2D, 0, internal_format, w, h, 0, GL_DEPTH_COMPONENT, type, NULL);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
 static bool GL_CheckFramebufferStatus(bool check, const char *name)
 {
     GL_ShowErrors(__func__);
@@ -1286,11 +1303,12 @@ static bool GL_CheckFramebufferStatus(bool check, const char *name)
 #define CHECK_FB(check, name) \
     if (!GL_CheckFramebufferStatus(check, name)) return false
 
-bool GL_InitFramebuffers(void)
+bool GL_InitFramebuffers(bool dof_active)
 {
     int scene_w = 0, scene_h = 0, bloom_w = 0, bloom_h = 0;
+    int blur_w = 0, blur_h = 0;
 
-    if (gl_waterwarp->integer || gl_bloom->integer) {
+    if (gl_waterwarp->integer || gl_bloom->integer || dof_active) {
         scene_w = glr.fd.width;
         scene_h = glr.fd.height;
     }
@@ -1298,6 +1316,11 @@ bool GL_InitFramebuffers(void)
     if (gl_bloom->integer) {
         bloom_w = glr.fd.width;
         bloom_h = glr.fd.height;
+        blur_w = bloom_w / 4;
+        blur_h = bloom_h / 4;
+    } else if (dof_active) {
+        blur_w = glr.fd.width / 4;
+        blur_h = glr.fd.height / 4;
     }
 
     GL_ClearErrors();
@@ -1309,32 +1332,54 @@ bool GL_InitFramebuffers(void)
     GL_InitPostProcTexture(bloom_w, bloom_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-    GL_InitPostProcTexture(bloom_w / 4, bloom_h / 4);
+    GL_InitPostProcTexture(blur_w, blur_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_1);
-    GL_InitPostProcTexture(bloom_w / 4, bloom_h / 4);
+    GL_InitPostProcTexture(blur_w, blur_h);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_DEPTH);
+    if (dof_active && scene_w && scene_h)
+        GL_InitDepthTexture(scene_w, scene_h);
+    else
+        GL_InitDepthTexture(0, 0);
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_SCENE);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_SCENE : GL_NONE, 0);
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLOOM : GL_NONE, 0);
 
-    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.renderbuffer);
-    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, scene_w, scene_h);
-    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
+    if (dof_active) {
+        qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GL_NONE);
+        qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, scene_w ? TEXNUM_PP_DEPTH : GL_NONE, 0);
 
-    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene_w ? gl_static.renderbuffer : GL_NONE);
+        if (gl_config.stencilbits) {
+            qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.renderbuffer);
+            qglRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, scene_w, scene_h);
+            qglBindRenderbuffer(GL_RENDERBUFFER, 0);
+            qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene_w ? gl_static.renderbuffer : GL_NONE);
+        } else {
+            qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GL_NONE);
+        }
+    } else {
+        qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, GL_NONE, 0);
+        qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GL_NONE);
+        qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.renderbuffer);
+        qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, scene_w, scene_h);
+        qglBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+        qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene_w ? gl_static.renderbuffer : GL_NONE);
+    }
 
     CHECK_FB(scene_w, "FBO_SCENE");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLUR_0 : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blur_w ? TEXNUM_PP_BLUR_0 : GL_NONE, 0);
 
-    CHECK_FB(bloom_w, "FBO_BLUR_0");
+    CHECK_FB(blur_w, "FBO_BLUR_0");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_1);
-    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLUR_1 : GL_NONE, 0);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blur_w ? TEXNUM_PP_BLUR_1 : GL_NONE, 0);
 
-    CHECK_FB(bloom_w, "FBO_BLUR_1");
+    CHECK_FB(blur_w, "FBO_BLUR_1");
 
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
 

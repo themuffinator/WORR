@@ -74,6 +74,9 @@ cvar_t *gl_waterwarp;
 cvar_t *gl_fog;
 cvar_t *gl_bloom;
 cvar_t *gl_swapinterval;
+cvar_t *r_dof;
+cvar_t *r_dofBlurRange;
+cvar_t *r_dofFocusDistance;
 
 // development variables
 cvar_t *gl_znear;
@@ -784,6 +787,95 @@ static void GL_DrawBloom(bool waterwarp)
     GL_PostProcess(bits, vx, vy, vw, vh);
 }
 
+static void GL_DrawBloomAdd(bool waterwarp)
+{
+    int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
+    int w = max(1, glr.fd.width / 4);
+    int h = max(1, glr.fd.height / 4);
+
+    qglViewport(0, 0, w, h);
+    GL_Ortho(0, w, h, 0, -1, 1);
+
+    // downscale
+    gls.u_block.fog_color[0] = 1.0f / w;
+    gls.u_block.fog_color[1] = 1.0f / h;
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
+    GL_PostProcess(GLS_BLUR_BOX, 0, 0, w, h);
+
+    // blur X/Y
+    for (int i = 0; i < iterations; i++) {
+        int j = i & 1;
+
+        gls.u_block.fog_color[0] = 1.0f / w;
+        gls.u_block.fog_color[1] = 1.0f / h;
+        gls.u_block.fog_color[j] = 0;
+
+        GL_ForceTexture(TMU_TEXTURE, j ? TEXNUM_PP_BLUR_1 : TEXNUM_PP_BLUR_0);
+        qglBindFramebuffer(GL_FRAMEBUFFER, j ? FBO_BLUR_0 : FBO_BLUR_1);
+        GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+    }
+
+    GL_Setup2D();
+
+    glStateBits_t bits = GLS_BLEND_ADD;
+    if (waterwarp)
+        bits |= GLS_WARP_ENABLE;
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    int vx, vy, vw, vh;
+    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                             &vx, &vy, &vw, &vh);
+    GL_PostProcess(bits, vx, vy, vw, vh);
+}
+
+static void GL_DrawDof(bool waterwarp)
+{
+    const int iterations = 4;
+    int w = max(1, glr.fd.width / 4);
+    int h = max(1, glr.fd.height / 4);
+
+    qglViewport(0, 0, w, h);
+    GL_Ortho(0, w, h, 0, -1, 1);
+
+    // downscale
+    gls.u_block.fog_color[0] = 1.0f / w;
+    gls.u_block.fog_color[1] = 1.0f / h;
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
+    GL_PostProcess(GLS_BLUR_BOX, 0, 0, w, h);
+
+    // blur X/Y
+    for (int i = 0; i < iterations; i++) {
+        int j = i & 1;
+
+        gls.u_block.fog_color[0] = 1.0f / w;
+        gls.u_block.fog_color[1] = 1.0f / h;
+        gls.u_block.fog_color[j] = 0;
+
+        GL_ForceTexture(TMU_TEXTURE, j ? TEXNUM_PP_BLUR_1 : TEXNUM_PP_BLUR_0);
+        qglBindFramebuffer(GL_FRAMEBUFFER, j ? FBO_BLUR_0 : FBO_BLUR_1);
+        GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+    }
+
+    GL_Setup2D();
+
+    glStateBits_t bits = GLS_DOF;
+    if (waterwarp)
+        bits |= GLS_WARP_ENABLE;
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
+    GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    int vx, vy, vw, vh;
+    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                             &vx, &vy, &vw, &vh);
+    GL_PostProcess(bits, vx, vy, vw, vh);
+}
+
 static int32_t gl_waterwarp_modified = 0;
 static int32_t gl_bloom_modified = 0;
 
@@ -791,12 +883,14 @@ typedef enum {
     PP_NONE      = 0,
     PP_WATERWARP = BIT(0),
     PP_BLOOM     = BIT(1),
+    PP_DOF       = BIT(2),
 } pp_flags_t;
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
     bool resized = false;
+    bool dof_enabled = false;
 
     if (!gl_static.use_shaders)
         return PP_NONE;
@@ -807,16 +901,26 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_bloom->integer)
         flags |= PP_BLOOM;
 
+    if (r_dof && r_dof->integer)
+        dof_enabled = true;
+
+    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && dof_enabled && glr.fd.dof_strength > 0.0f) {
+        flags |= PP_DOF;
+    }
+
     if (flags)
         resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
 
-    if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified || gl_bloom->modified_count != gl_bloom_modified) {
-        glr.framebuffer_ok     = GL_InitFramebuffers();
+    static bool gl_dof_active = false;
+    if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified ||
+        gl_bloom->modified_count != gl_bloom_modified || dof_enabled != gl_dof_active) {
+        glr.framebuffer_ok     = GL_InitFramebuffers(dof_enabled);
         glr.framebuffer_width  = glr.fd.width;
         glr.framebuffer_height = glr.fd.height;
         gl_waterwarp_modified = gl_waterwarp->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
-        if (gl_bloom->integer)
+        gl_dof_active = dof_enabled;
+        if (gl_bloom->integer || dof_enabled)
             gl_backend->update_blur();
     }
 
@@ -1128,6 +1232,11 @@ void R_RenderFrame(const refdef_t *fd)
 
     GL_RenderShadowMaps();
 
+    gls.u_block.dof_params[0] = r_dofFocusDistance ? r_dofFocusDistance->value : 0.0f;
+    gls.u_block.dof_params[1] = r_dofBlurRange ? r_dofBlurRange->value : 0.0f;
+    gls.u_block.vieworg[3] = (r_dof && r_dof->integer) ? Q_clipf(glr.fd.dof_strength, 0.0f, 1.0f) : 0.0f;
+    gls.u_block_dirty = true;
+
     GL_Setup3D();
 
     GL_SetupFrustum();
@@ -1165,7 +1274,11 @@ void R_RenderFrame(const refdef_t *fd)
     // go back into 2D mode
     GL_Setup2D();
 
-    if (pp_flags & PP_BLOOM) {
+    if (pp_flags & PP_DOF) {
+        GL_DrawDof(pp_flags & PP_WATERWARP);
+        if (pp_flags & PP_BLOOM)
+            GL_DrawBloomAdd(pp_flags & PP_WATERWARP);
+    } else if (pp_flags & PP_BLOOM) {
         GL_DrawBloom(pp_flags & PP_WATERWARP);
     } else if (pp_flags & PP_WATERWARP) {
         GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
@@ -1498,6 +1611,9 @@ static void GL_Register(void)
     gl_waterwarp = Cvar_Get("gl_waterwarp", "1", 0);
     gl_fog = Cvar_Get("gl_fog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
+    r_dof = Cvar_Get("r_dof", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_dofBlurRange = Cvar_Get("r_dofBlurRange", "0.0", CVAR_SERVERINFO);
+    r_dofFocusDistance = Cvar_Get("r_dofFocusDistance", "16.0", CVAR_SERVERINFO);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 
