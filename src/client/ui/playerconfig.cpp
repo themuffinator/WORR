@@ -330,6 +330,7 @@ void M_Menu_PlayerConfig(void)
     m_player.refdef.num_entities = 0;
     m_player.refdef.entities = m_player.entities;
     m_player.refdef.rdflags = RDF_NOWORLDMODEL;
+    m_player.refdef.dof_strength = 0.0f;
 
     m_player.name.generic.type = MTYPE_FIELD;
     m_player.name.generic.flags = QMF_HASFOCUS;

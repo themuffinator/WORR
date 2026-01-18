@@ -1441,7 +1441,8 @@ static void shader_clear_state(void)
 
 static void shader_update_blur(void)
 {
-    float sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * glr.fd.height / 2160;
+    float base_height = glr.render_height ? (float)glr.render_height : (float)glr.fd.height;
+    float sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * base_height / 2160;
     if (gl_static.bloom_sigma == sigma)
         return;
 

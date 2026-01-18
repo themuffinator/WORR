@@ -22,6 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.h"
+#if !defined(RENDERER_DLL)
+#include "system/system.h"
+#endif
 
 glRefdef_t glr;
 glStatic_t gl_static;
@@ -77,6 +80,16 @@ cvar_t *gl_swapinterval;
 cvar_t *r_dof;
 cvar_t *r_dofBlurRange;
 cvar_t *r_dofFocusDistance;
+cvar_t *r_resolutionscale;
+cvar_t *r_resolutionscale_aggressive;
+cvar_t *r_resolutionscale_fixedscale_h;
+cvar_t *r_resolutionscale_fixedscale_w;
+cvar_t *r_resolutionscale_gooddrawtime;
+cvar_t *r_resolutionscale_increasespeed;
+cvar_t *r_resolutionscale_lowerspeed;
+cvar_t *r_resolutionscale_numframesbeforelowering;
+cvar_t *r_resolutionscale_numframesbeforeraising;
+cvar_t *r_resolutionscale_targetdrawtime;
 
 // development variables
 cvar_t *gl_znear;
@@ -115,7 +128,136 @@ cvar_t *gl_damageblend_frac;
 int32_t gl_shaders_modified;
 static bool gl_lightmap_syncing;
 
+static float gl_resolutionscale_current_w = 1.0f;
+static float gl_resolutionscale_current_h = 1.0f;
+static float gl_resolutionscale_session_draw_ms = 0.0f;
+static unsigned gl_resolutionscale_draw_samples = 0;
+static int gl_resolutionscale_good_frames = 0;
+static int gl_resolutionscale_bad_frames = 0;
+static int gl_resolutionscale_last_mode = -1;
+static int gl_resolutionscale_last_width = 0;
+static int gl_resolutionscale_last_height = 0;
+
+#define RESOLUTION_SCALE_MIN 0.1f
+#define RESOLUTION_SCALE_MAX 1.0f
+
 // ==============================================================================
+
+static void GL_ResetResolutionScaleHistory(void)
+{
+    gl_resolutionscale_session_draw_ms = 0.0f;
+    gl_resolutionscale_draw_samples = 0;
+    gl_resolutionscale_good_frames = 0;
+    gl_resolutionscale_bad_frames = 0;
+}
+
+static int GL_GetResolutionScaleMode(void)
+{
+    if (!r_resolutionscale)
+        return 0;
+
+    return Cvar_ClampInteger(r_resolutionscale, 0, 2);
+}
+
+static float GL_ClampResolutionScale(float scale)
+{
+    return Q_clipf(scale, RESOLUTION_SCALE_MIN, RESOLUTION_SCALE_MAX);
+}
+
+static void GL_UpdateResolutionScale(void)
+{
+    int mode = GL_GetResolutionScaleMode();
+
+    if (mode != gl_resolutionscale_last_mode) {
+        gl_resolutionscale_last_mode = mode;
+        gl_resolutionscale_current_w = 1.0f;
+        gl_resolutionscale_current_h = 1.0f;
+        GL_ResetResolutionScaleHistory();
+    }
+
+    if (glr.fd.width != gl_resolutionscale_last_width ||
+        glr.fd.height != gl_resolutionscale_last_height) {
+        gl_resolutionscale_last_width = glr.fd.width;
+        gl_resolutionscale_last_height = glr.fd.height;
+        GL_ResetResolutionScaleHistory();
+    }
+
+    if (mode == 0 || !gl_static.use_shaders) {
+        gl_resolutionscale_current_w = 1.0f;
+        gl_resolutionscale_current_h = 1.0f;
+    } else if (mode == 1) {
+        gl_resolutionscale_current_w = Cvar_ClampValue(r_resolutionscale_fixedscale_w,
+                                                       RESOLUTION_SCALE_MIN, RESOLUTION_SCALE_MAX);
+        gl_resolutionscale_current_h = Cvar_ClampValue(r_resolutionscale_fixedscale_h,
+                                                       RESOLUTION_SCALE_MIN, RESOLUTION_SCALE_MAX);
+        gl_resolutionscale_good_frames = 0;
+        gl_resolutionscale_bad_frames = 0;
+    } else {
+        float target = Cvar_ClampValue(r_resolutionscale_targetdrawtime, 0.0f, 1000.0f);
+        float good = Cvar_ClampValue(r_resolutionscale_gooddrawtime, 0.0f, 1000.0f);
+        float increase = Cvar_ClampValue(r_resolutionscale_increasespeed, 0.0f, 1.0f);
+        float lower = Cvar_ClampValue(r_resolutionscale_lowerspeed, 0.0f, 1.0f);
+        int raise_frames = Cvar_ClampInteger(r_resolutionscale_numframesbeforeraising, 1, 10000);
+        int lower_frames = Cvar_ClampInteger(r_resolutionscale_numframesbeforelowering, 1, 10000);
+
+        if (good > target)
+            good = target;
+
+        if (r_resolutionscale_aggressive->integer) {
+            increase *= 2.0f;
+            lower *= 2.0f;
+            raise_frames = max(1, raise_frames / 2);
+            lower_frames = max(1, lower_frames / 2);
+        }
+
+        if (gl_resolutionscale_draw_samples > 0) {
+            if (gl_resolutionscale_session_draw_ms <= good) {
+                gl_resolutionscale_good_frames++;
+                gl_resolutionscale_bad_frames = 0;
+            } else if (gl_resolutionscale_session_draw_ms >= target) {
+                gl_resolutionscale_bad_frames++;
+                gl_resolutionscale_good_frames = 0;
+            } else {
+                gl_resolutionscale_good_frames = 0;
+                gl_resolutionscale_bad_frames = 0;
+            }
+
+            if (gl_resolutionscale_bad_frames >= lower_frames) {
+                float next_scale = gl_resolutionscale_current_w - lower;
+                gl_resolutionscale_current_w = GL_ClampResolutionScale(next_scale);
+                gl_resolutionscale_current_h = gl_resolutionscale_current_w;
+                gl_resolutionscale_bad_frames = 0;
+            } else if (gl_resolutionscale_good_frames >= raise_frames) {
+                float next_scale = gl_resolutionscale_current_w + increase;
+                gl_resolutionscale_current_w = GL_ClampResolutionScale(next_scale);
+                gl_resolutionscale_current_h = gl_resolutionscale_current_w;
+                gl_resolutionscale_good_frames = 0;
+            }
+        }
+    }
+
+    gl_resolutionscale_current_w = GL_ClampResolutionScale(gl_resolutionscale_current_w);
+    gl_resolutionscale_current_h = GL_ClampResolutionScale(gl_resolutionscale_current_h);
+
+    glr.render_scale_w = gl_resolutionscale_current_w;
+    glr.render_scale_h = gl_resolutionscale_current_h;
+    glr.render_width = max(1, Q_rint(glr.fd.width * glr.render_scale_w));
+    glr.render_height = max(1, Q_rint(glr.fd.height * glr.render_scale_h));
+}
+
+static void GL_RecordResolutionScaleTime(unsigned start_ms)
+{
+    unsigned end_ms = Sys_Milliseconds();
+    float frame_ms = (float)(end_ms - start_ms);
+
+    if (gl_resolutionscale_draw_samples == 0)
+        gl_resolutionscale_session_draw_ms = frame_ms;
+    else
+        gl_resolutionscale_session_draw_ms =
+            gl_resolutionscale_session_draw_ms * 0.9f + frame_ms * 0.1f;
+
+    gl_resolutionscale_draw_samples++;
+}
 
 static void GL_SetupFrustum(void)
 {
@@ -740,8 +882,8 @@ static inline void gl_pixel_rect_to_virtual(int x, int y, int w, int h,
 static void GL_DrawBloom(bool waterwarp)
 {
     int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
-    int w = glr.fd.width / 4;
-    int h = glr.fd.height / 4;
+    int w = max(1, glr.render_width / 4);
+    int h = max(1, glr.render_height / 4);
 
     qglViewport(0, 0, w, h);
     GL_Ortho(0, w, h, 0, -1, 1);
@@ -790,8 +932,8 @@ static void GL_DrawBloom(bool waterwarp)
 static void GL_DrawBloomAdd(bool waterwarp)
 {
     int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
-    int w = max(1, glr.fd.width / 4);
-    int h = max(1, glr.fd.height / 4);
+    int w = max(1, glr.render_width / 4);
+    int h = max(1, glr.render_height / 4);
 
     qglViewport(0, 0, w, h);
     GL_Ortho(0, w, h, 0, -1, 1);
@@ -833,8 +975,8 @@ static void GL_DrawBloomAdd(bool waterwarp)
 static void GL_DrawDof(bool waterwarp)
 {
     const int iterations = 4;
-    int w = max(1, glr.fd.width / 4);
-    int h = max(1, glr.fd.height / 4);
+    int w = max(1, glr.render_width / 4);
+    int h = max(1, glr.render_height / 4);
 
     qglViewport(0, 0, w, h);
     GL_Ortho(0, w, h, 0, -1, 1);
@@ -884,6 +1026,7 @@ typedef enum {
     PP_WATERWARP = BIT(0),
     PP_BLOOM     = BIT(1),
     PP_DOF       = BIT(2),
+    PP_RESCALE   = BIT(3),
 } pp_flags_t;
 
 static pp_flags_t GL_BindFramebuffer(void)
@@ -908,15 +1051,18 @@ static pp_flags_t GL_BindFramebuffer(void)
         flags |= PP_DOF;
     }
 
+    if (glr.render_width != glr.fd.width || glr.render_height != glr.fd.height)
+        flags |= PP_RESCALE;
+
     if (flags)
-        resized = glr.fd.width != glr.framebuffer_width || glr.fd.height != glr.framebuffer_height;
+        resized = glr.render_width != glr.framebuffer_width || glr.render_height != glr.framebuffer_height;
 
     static bool gl_dof_active = false;
     if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified ||
         gl_bloom->modified_count != gl_bloom_modified || dof_enabled != gl_dof_active) {
         glr.framebuffer_ok     = GL_InitFramebuffers(dof_enabled);
-        glr.framebuffer_width  = glr.fd.width;
-        glr.framebuffer_height = glr.fd.height;
+        glr.framebuffer_width  = glr.render_width;
+        glr.framebuffer_height = glr.render_height;
         gl_waterwarp_modified = gl_waterwarp->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
         gl_dof_active = dof_enabled;
@@ -1190,6 +1336,7 @@ static void GL_RenderShadowMaps(void)
 void R_RenderFrame(const refdef_t *fd)
 {
     GL_Flush2D();
+    unsigned draw_start_ms = Sys_Milliseconds();
 
     Q_assert(gl_static.world.cache || (fd->rdflags & RDF_NOWORLDMODEL));
 
@@ -1197,6 +1344,7 @@ void R_RenderFrame(const refdef_t *fd)
 
     glr.fd = *fd;
     glr.ppl_bits  = 0;
+    GL_UpdateResolutionScale();
 
     bool shadowmaps_active = gl_shadowmaps->integer && GL_ShadowmapsSupported();
     if ((gl_dynamic->integer != 1 || gl_vertexlight->integer) && !shadowmaps_active)
@@ -1286,6 +1434,12 @@ void R_RenderFrame(const refdef_t *fd)
         gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
                                  &vx, &vy, &vw, &vh);
         GL_PostProcess(GLS_WARP_ENABLE, vx, vy, vw, vh);
+    } else if (pp_flags & PP_RESCALE) {
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        int vx, vy, vw, vh;
+        gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                                 &vx, &vy, &vw, &vh);
+        GL_PostProcess(GLS_DEFAULT, vx, vy, vw, vh);
     }
 
     if (gl_polyblend->integer)
@@ -1298,6 +1452,8 @@ void R_RenderFrame(const refdef_t *fd)
 
     if (gl_showerrors->integer > 1)
         GL_ShowErrors(__func__);
+
+    GL_RecordResolutionScaleTime(draw_start_ms);
 }
 
 bool R_SupportsPerPixelLighting(void)
@@ -1614,6 +1770,16 @@ static void GL_Register(void)
     r_dof = Cvar_Get("r_dof", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_dofBlurRange = Cvar_Get("r_dofBlurRange", "0.0", CVAR_SERVERINFO);
     r_dofFocusDistance = Cvar_Get("r_dofFocusDistance", "16.0", CVAR_SERVERINFO);
+    r_resolutionscale = Cvar_Get("r_resolutionscale", "0", CVAR_USERINFO | CVAR_LATCH);
+    r_resolutionscale_aggressive = Cvar_Get("r_resolutionscale_aggressive", "0", CVAR_ARCHIVE | CVAR_LATCH);
+    r_resolutionscale_fixedscale_h = Cvar_Get("r_resolutionscale_fixedscale_h", "1.0", CVAR_SERVERINFO | CVAR_LATCH);
+    r_resolutionscale_fixedscale_w = Cvar_Get("r_resolutionscale_fixedscale_w", "1.0", CVAR_SERVERINFO | CVAR_LATCH);
+    r_resolutionscale_gooddrawtime = Cvar_Get("r_resolutionscale_gooddrawtime", "0.9", CVAR_SERVERINFO | CVAR_LATCH);
+    r_resolutionscale_increasespeed = Cvar_Get("r_resolutionscale_increasespeed", "0.1", CVAR_SERVERINFO | CVAR_LATCH);
+    r_resolutionscale_lowerspeed = Cvar_Get("r_resolutionscale_lowerspeed", "0.1", CVAR_SERVERINFO | CVAR_LATCH);
+    r_resolutionscale_numframesbeforelowering = Cvar_Get("r_resolutionscale_numframesbeforelowering", "20", CVAR_USERINFO | CVAR_LATCH);
+    r_resolutionscale_numframesbeforeraising = Cvar_Get("r_resolutionscale_numframesbeforeraising", "200", CVAR_USERINFO | CVAR_LATCH);
+    r_resolutionscale_targetdrawtime = Cvar_Get("r_resolutionscale_targetdrawtime", "1.125", CVAR_SERVERINFO | CVAR_LATCH);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 

@@ -179,6 +179,10 @@ typedef struct {
     glStateBits_t   fog_bits, fog_bits_sky;
     glStateBits_t   ppl_bits;
     uint64_t        ppl_dlight_bits;
+    int             render_width;
+    int             render_height;
+    float           render_scale_w;
+    float           render_scale_h;
     int             framebuffer_width;
     int             framebuffer_height;
     bool            framebuffer_ok;

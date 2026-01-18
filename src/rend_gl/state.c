@@ -284,7 +284,7 @@ static void GL_RotateForViewer(void)
 void GL_Setup3D(void)
 {
     if (glr.framebuffer_bound)
-        qglViewport(0, 0, glr.fd.width, glr.fd.height);
+        qglViewport(0, 0, glr.render_width, glr.render_height);
     else
         qglViewport(glr.fd.x, r_config.height - (glr.fd.y + glr.fd.height),
                     glr.fd.width, glr.fd.height);

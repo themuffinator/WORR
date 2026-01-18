@@ -1307,20 +1307,23 @@ bool GL_InitFramebuffers(bool dof_active)
 {
     int scene_w = 0, scene_h = 0, bloom_w = 0, bloom_h = 0;
     int blur_w = 0, blur_h = 0;
+    int render_w = glr.render_width ? glr.render_width : glr.fd.width;
+    int render_h = glr.render_height ? glr.render_height : glr.fd.height;
 
-    if (gl_waterwarp->integer || gl_bloom->integer || dof_active) {
-        scene_w = glr.fd.width;
-        scene_h = glr.fd.height;
+    if (gl_waterwarp->integer || gl_bloom->integer || dof_active ||
+        render_w != glr.fd.width || render_h != glr.fd.height) {
+        scene_w = render_w;
+        scene_h = render_h;
     }
 
     if (gl_bloom->integer) {
-        bloom_w = glr.fd.width;
-        bloom_h = glr.fd.height;
+        bloom_w = render_w;
+        bloom_h = render_h;
         blur_w = bloom_w / 4;
         blur_h = bloom_h / 4;
     } else if (dof_active) {
-        blur_w = glr.fd.width / 4;
-        blur_h = glr.fd.height / 4;
+        blur_w = render_w / 4;
+        blur_h = render_h / 4;
     }
 
     GL_ClearErrors();

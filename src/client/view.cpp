@@ -55,6 +55,8 @@ particle_t  r_particles[MAX_PARTICLES];
 
 lightstyle_t    r_lightstyles[MAX_LIGHTSTYLES];
 
+static float v_dof_layout_blend;
+
 /*
 ====================
 V_ClearScene
@@ -541,6 +543,8 @@ V_RenderView
 */
 void V_RenderView(void)
 {
+    float dof_strength = 0.0f;
+
     // an invalid frame will just use the exact previous refdef
     // we can't use the old frame if the video mode has changed, though...
     if (cl.frame.valid) {
@@ -587,6 +591,22 @@ void V_RenderView(void)
 
         cl.refdef.frametime = cls.frametime;
         cl.refdef.time = cl.time * 0.001f;
+
+        {
+            float wheel_blend = 0.0f;
+            float wheel_timescale = CL_Wheel_TimeScale();
+            if (wheel_timescale < 1.0f) {
+                wheel_blend = (1.0f - wheel_timescale) / 0.9f;
+                wheel_blend = Q_clipf(wheel_blend, 0.0f, 1.0f);
+            }
+
+            float layout_target = (cl.frame.ps.stats[STAT_LAYOUTS] & (LAYOUTS_INVENTORY | LAYOUTS_HELP)) ? 1.0f : 0.0f;
+            float dt = Q_clipf(cl.refdef.frametime, 0.0f, 0.1f);
+            float step = Q_clipf(dt * 6.0f, 0.0f, 1.0f);
+            v_dof_layout_blend += (layout_target - v_dof_layout_blend) * step;
+
+            dof_strength = max(wheel_blend, v_dof_layout_blend);
+        }
 
         if (cl.frame.areabytes) {
             cl.refdef.areabits = cl.frame.areabits;
@@ -651,8 +671,11 @@ void V_RenderView(void)
 
 #undef Q_FP
         }
+    } else {
+        v_dof_layout_blend = 0.0f;
     }
 
+    cl.refdef.dof_strength = Q_clipf(dof_strength, 0.0f, 1.0f);
     R_RenderFrame(&cl.refdef);
 #if USE_DEBUG
     if (cl_stats->integer)

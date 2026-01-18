@@ -223,6 +223,7 @@ typedef struct renderer_import_s {
     char *fs_gamedir;
     const vid_driver_t **vid;
     unsigned *com_eventTime;
+    unsigned (*Sys_Milliseconds)(void);
     unsigned *com_linenum;
     const char (*com_env_suf)[3];
     int *cmd_optind;
@@ -258,6 +259,7 @@ extern renderer_import_t ri;
 #define Com_PageInMemory ri.Com_PageInMemory
 #define Com_SlowRand ri.Com_SlowRand
 #define Com_HashStringLen ri.Com_HashStringLen
+#define Sys_Milliseconds ri.Sys_Milliseconds
 
 #define Cvar_Get ri.Cvar_Get
 #ifdef Cvar_Reset

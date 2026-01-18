@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 
 #include "client.h"
+#include "system/system.h"
 #if USE_EXTERNAL_RENDERERS
 #include "renderer/renderer_api.h"
 #endif
@@ -588,6 +589,7 @@ static renderer_import_t R_BuildRendererImports(void)
         .fs_gamedir = fs_gamedir,
         .vid = &vid,
         .com_eventTime = &com_eventTime,
+        .Sys_Milliseconds = Sys_Milliseconds,
         .com_linenum = &com_linenum,
         .com_env_suf = com_env_suf,
         .cmd_optind = &cmd_optind,
