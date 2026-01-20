@@ -37,6 +37,9 @@ refcfg_t r_config;
 
 unsigned r_registration_sequence;
 
+static bool GL_EntityCastsShadowmap(const entity_t *ent);
+static bool GL_EntityInShadowRange(const entity_t *ent, const dlight_t *dl);
+
 // regular variables
 cvar_t *gl_partscale;
 cvar_t *gl_partstyle;
@@ -58,6 +61,7 @@ cvar_t *gl_shadowmaps;
 cvar_t *gl_shadowmap_size;
 cvar_t *gl_shadowmap_lights;
 cvar_t *gl_shadowmap_dynamic;
+cvar_t *gl_shadowmap_cache;
 cvar_t *gl_shadowmap_bias;
 cvar_t *gl_shadowmap_softness;
 cvar_t *gl_shadowmap_filter;
@@ -74,12 +78,50 @@ cvar_t *gl_md5_distance;
 #endif
 cvar_t *gl_damageblend_frac;
 cvar_t *gl_waterwarp;
+cvar_t *gl_warp_refraction;
 cvar_t *gl_fog;
 cvar_t *gl_bloom;
+cvar_t *gl_bloom_iterations;
+cvar_t *gl_bloom_downscale;
+cvar_t *gl_bloom_firefly;
+cvar_t *gl_bloom_levels;
+cvar_t *gl_bloom_threshold;
+cvar_t *gl_bloom_knee;
+cvar_t *gl_bloom_intensity;
+cvar_t *gl_bloom_saturation;
+cvar_t *gl_bloom_scene_saturation;
+cvar_t *gl_color_correction;
+cvar_t *gl_color_brightness;
+cvar_t *gl_color_contrast;
+cvar_t *gl_color_saturation;
+cvar_t *gl_color_tint;
+cvar_t *gl_color_split_shadows;
+cvar_t *gl_color_split_highlights;
+cvar_t *gl_color_split_strength;
+cvar_t *gl_color_split_balance;
+cvar_t *gl_color_lut;
+cvar_t *gl_color_lut_intensity;
+cvar_t *gl_hdr;
+cvar_t *gl_hdr_exposure;
+cvar_t *gl_hdr_white;
+cvar_t *gl_hdr_gamma;
+cvar_t *gl_hdr_auto;
+cvar_t *gl_hdr_auto_min;
+cvar_t *gl_hdr_auto_max;
+cvar_t *gl_hdr_auto_speed;
 cvar_t *gl_swapinterval;
 cvar_t *r_dof;
+cvar_t *r_dof_allow_stencil;
 cvar_t *r_dofBlurRange;
 cvar_t *r_dofFocusDistance;
+cvar_t *r_crt_brightboost;
+cvar_t *r_crt_hardPix;
+cvar_t *r_crt_hardScan;
+cvar_t *r_crt_maskDark;
+cvar_t *r_crt_maskLight;
+cvar_t *r_crt_scaleInLinearGamma;
+cvar_t *r_crt_shadowMask;
+cvar_t *r_crtmode;
 cvar_t *r_resolutionscale;
 cvar_t *r_resolutionscale_aggressive;
 cvar_t *r_resolutionscale_fixedscale_h;
@@ -137,6 +179,19 @@ static int gl_resolutionscale_bad_frames = 0;
 static int gl_resolutionscale_last_mode = -1;
 static int gl_resolutionscale_last_width = 0;
 static int gl_resolutionscale_last_height = 0;
+static vec3_t gl_color_tint_value = { 1.0f, 1.0f, 1.0f };
+static vec3_t gl_color_split_shadow_value = { 1.0f, 1.0f, 1.0f };
+static vec3_t gl_color_split_highlight_value = { 1.0f, 1.0f, 1.0f };
+static float gl_color_lut_size = 0.0f;
+static float gl_color_lut_inv_width = 0.0f;
+static float gl_color_lut_inv_height = 0.0f;
+static GLuint gl_color_lut_texnum = 0;
+static qhandle_t gl_color_lut_handle = 0;
+static bool gl_color_lut_valid = false;
+static int gl_auto_exposure_index = 0;
+static bool gl_auto_exposure_valid = false;
+static bool gl_scene_mips_enabled = false;
+static bool gl_hdr_auto_warned = false;
 
 #define RESOLUTION_SCALE_MIN 0.1f
 #define RESOLUTION_SCALE_MAX 1.0f
@@ -730,59 +785,82 @@ static void GL_ClassifyEntities(void)
     }
 }
 
-static void GL_DrawEntities(entity_t *ent)
+static void GL_DrawEntity(entity_t *ent)
 {
     model_t *model;
 
-    for (; ent; ent = ent->next) {
-        glr.ent = ent;
+    glr.ent = ent;
 
-        if (glr.shadow_pass && (ent->flags & (RF_WEAPONMODEL | RF_NOSHADOW)))
-            continue;
+    if (glr.shadow_pass && (ent->flags & (RF_WEAPONMODEL | RF_NOSHADOW)))
+        return;
 
-        // convert angles to axis
-        GL_SetEntityAxis();
+    // convert angles to axis
+    GL_SetEntityAxis();
 
-        // inline BSP model
-        if (ent->model & BIT(31)) {
-            const bsp_t *bsp = gl_static.world.cache;
-            int index = ~ent->model;
+    // inline BSP model
+    if (ent->model & BIT(31)) {
+        const bsp_t *bsp = gl_static.world.cache;
+        int index = ~ent->model;
 
-            if (!bsp)
-                Com_Error(ERR_DROP, "%s: inline model without world",
-                          __func__);
+        if (!bsp)
+            Com_Error(ERR_DROP, "%s: inline model without world",
+                      __func__);
 
-            if (index < 1 || index >= bsp->nummodels)
-                Com_Error(ERR_DROP, "%s: inline model %d out of range",
-                          __func__, index);
+        if (index < 1 || index >= bsp->nummodels)
+            Com_Error(ERR_DROP, "%s: inline model %d out of range",
+                      __func__, index);
 
-            GL_DrawBspModel(&bsp->models[index]);
-            continue;
-        }
+        GL_DrawBspModel(&bsp->models[index]);
+        return;
+    }
 
-        model = MOD_ForHandle(ent->model);
-        if (!model) {
-            if (!glr.shadow_pass)
-                GL_DrawNullModel();
-            continue;
-        }
-
-        switch (model->type) {
-        case MOD_ALIAS:
-            GL_DrawAliasModel(model);
-            break;
-        case MOD_SPRITE:
-            if (!glr.shadow_pass)
-                GL_DrawSpriteModel(model);
-            break;
-        case MOD_EMPTY:
-            break;
-        default:
-            Q_assert(!"bad model type");
-        }
-
-        if (!glr.shadow_pass && gl_showorigins->integer)
+    model = MOD_ForHandle(ent->model);
+    if (!model) {
+        if (!glr.shadow_pass)
             GL_DrawNullModel();
+        return;
+    }
+
+    switch (model->type) {
+    case MOD_ALIAS:
+        GL_DrawAliasModel(model);
+        break;
+    case MOD_SPRITE:
+        if (!glr.shadow_pass)
+            GL_DrawSpriteModel(model);
+        break;
+    case MOD_EMPTY:
+        break;
+    default:
+        Q_assert(!"bad model type");
+    }
+
+    if (!glr.shadow_pass && gl_showorigins->integer)
+        GL_DrawNullModel();
+}
+
+static void GL_DrawEntities(entity_t *ent)
+{
+    for (; ent; ent = ent->next)
+        GL_DrawEntity(ent);
+}
+
+static void GL_DrawShadowEntities(const dlight_t *dl)
+{
+    if (!gl_drawentities->integer)
+        return;
+
+    int total = min(glr.fd.num_entities, MAX_ENTITIES);
+    for (int i = 0; i < total; i++) {
+        entity_t *ent = &glr.fd.entities[i];
+
+        if (!GL_EntityCastsShadowmap(ent))
+            continue;
+
+        if (!GL_EntityInShadowRange(ent, dl))
+            continue;
+
+        GL_DrawEntity(ent);
     }
 }
 
@@ -879,21 +957,34 @@ static inline void gl_pixel_rect_to_virtual(int x, int y, int w, int h,
         *out_h = max(0, y1 - y0);
 }
 
-static void GL_DrawBloom(bool waterwarp)
+typedef enum {
+    PP_NONE      = 0,
+    PP_WATERWARP = BIT(0),
+    PP_BLOOM     = BIT(1),
+    PP_DOF       = BIT(2),
+    PP_RESCALE   = BIT(3),
+    PP_CRT       = BIT(4),
+    PP_REFRACT   = BIT(5),
+    PP_POSTFX    = BIT(6),
+} pp_flags_t;
+
+static void GL_BuildBloom(void)
 {
-    int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
-    int w = max(1, glr.render_width / 4);
-    int h = max(1, glr.render_height / 4);
+    int iterations = Cvar_ClampInteger(gl_bloom_iterations, 1, 8) * 2;
+    int downscale = Cvar_ClampInteger(gl_bloom_downscale, 1, 8);
+    int w = max(1, glr.render_width / downscale);
+    int h = max(1, glr.render_height / downscale);
 
     qglViewport(0, 0, w, h);
     GL_Ortho(0, w, h, 0, -1, 1);
 
-    // downscale
+    // prefilter & downscale
     gls.u_block.fog_color[0] = 1.0f / w;
     gls.u_block.fog_color[1] = 1.0f / h;
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_LIGHTMAP, gl_static.postfx_bloom_mrt ? TEXNUM_PP_BLOOM : TEXNUM_BLACK);
     qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
-    GL_PostProcess(GLS_BLUR_BOX, 0, 0, w, h);
+    GL_PostProcess(GLS_BLOOM_PREFILTER, 0, 0, w, h);
 
     // blur X/Y
     for (int i = 0; i < iterations; i++) {
@@ -908,71 +999,18 @@ static void GL_DrawBloom(bool waterwarp)
         GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
     }
 
-    GL_Setup2D();
-
-    glStateBits_t bits = GLS_BLOOM_OUTPUT;
-    if (q_unlikely(gl_showbloom->integer)) {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-        bits = GLS_DEFAULT;
-    } else {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
-        if (waterwarp)
-            bits |= GLS_WARP_ENABLE;
-    }
-
-    // upscale & add
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    int vx, vy, vw, vh;
-    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
-                             &vx, &vy, &vw, &vh);
-    GL_PostProcess(bits, vx, vy, vw, vh);
-}
-
-static void GL_DrawBloomAdd(bool waterwarp)
-{
-    int iterations = Cvar_ClampInteger(gl_bloom, 1, 8) * 2;
-    int w = max(1, glr.render_width / 4);
-    int h = max(1, glr.render_height / 4);
-
-    qglViewport(0, 0, w, h);
-    GL_Ortho(0, w, h, 0, -1, 1);
-
-    // downscale
-    gls.u_block.fog_color[0] = 1.0f / w;
-    gls.u_block.fog_color[1] = 1.0f / h;
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM);
-    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_BLUR_0);
-    GL_PostProcess(GLS_BLUR_BOX, 0, 0, w, h);
-
-    // blur X/Y
-    for (int i = 0; i < iterations; i++) {
-        int j = i & 1;
-
-        gls.u_block.fog_color[0] = 1.0f / w;
-        gls.u_block.fog_color[1] = 1.0f / h;
-        gls.u_block.fog_color[j] = 0;
-
-        GL_ForceTexture(TMU_TEXTURE, j ? TEXNUM_PP_BLUR_1 : TEXNUM_PP_BLUR_0);
-        qglBindFramebuffer(GL_FRAMEBUFFER, j ? FBO_BLUR_0 : FBO_BLUR_1);
-        GL_PostProcess(GLS_BLUR_GAUSS, 0, 0, w, h);
+    if (gls.u_block.postfx_bloom2[3] > 1.0f && qglGenerateMipmap) {
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLOOM_MIP);
+        if (qglReadBuffer)
+            qglReadBuffer(GL_COLOR_ATTACHMENT0);
+        qglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        qglGenerateMipmap(GL_TEXTURE_2D);
     }
 
     GL_Setup2D();
-
-    glStateBits_t bits = GLS_BLEND_ADD;
-    if (waterwarp)
-        bits |= GLS_WARP_ENABLE;
-
-    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    int vx, vy, vw, vh;
-    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
-                             &vx, &vy, &vw, &vh);
-    GL_PostProcess(bits, vx, vy, vw, vh);
 }
 
-static void GL_DrawDof(bool waterwarp)
+static void GL_DrawDof(GLuint target_fbo)
 {
     const int iterations = 4;
     int w = max(1, glr.render_width / 4);
@@ -1004,14 +1042,226 @@ static void GL_DrawDof(bool waterwarp)
     GL_Setup2D();
 
     glStateBits_t bits = GLS_DOF;
-    if (waterwarp)
-        bits |= GLS_WARP_ENABLE;
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
     GL_ForceTexture(TMU_LIGHTMAP, TEXNUM_PP_BLUR_0);
     GL_ForceTexture(TMU_GLOWMAP, TEXNUM_PP_DEPTH);
 
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    qglBindFramebuffer(GL_FRAMEBUFFER, target_fbo);
+    int vx, vy, vw, vh;
+    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                             &vx, &vy, &vw, &vh);
+    int post_x = vx;
+    int post_y = vy;
+    int post_w = vw;
+    int post_h = vh;
+
+    if (glr.fd.dof_rect_enabled) {
+        int left = max(vx, glr.fd.dof_rect.left);
+        int top = max(vy, glr.fd.dof_rect.top);
+        int right = min(vx + vw, glr.fd.dof_rect.right);
+        int bottom = min(vy + vh, glr.fd.dof_rect.bottom);
+
+        if (right <= left || bottom <= top)
+            return;
+
+        post_x = left;
+        post_y = top;
+        post_w = right - left;
+        post_h = bottom - top;
+    }
+
+    GL_PostProcess(bits, post_x, post_y, post_w, post_h);
+}
+
+static void GL_UpdatePostFxUniforms(bool bloom_active)
+{
+    float bloom_threshold = Cvar_ClampValue(gl_bloom_threshold, 0.0f, 10.0f);
+    float bloom_knee = Cvar_ClampValue(gl_bloom_knee, 0.0f, 1.0f);
+    float bloom_intensity = Cvar_ClampValue(gl_bloom_intensity, 0.0f, 10.0f);
+    float scene_saturation = bloom_active ? Cvar_ClampValue(gl_bloom_scene_saturation, 0.0f, 4.0f) : 1.0f;
+    float bloom_saturation = Cvar_ClampValue(gl_bloom_saturation, 0.0f, 4.0f);
+    float bloom_firefly = Cvar_ClampValue(gl_bloom_firefly, 0.0f, 1000.0f);
+    int bloom_levels = Cvar_ClampInteger(gl_bloom_levels, 1, 6);
+    int bloom_downscale = Cvar_ClampInteger(gl_bloom_downscale, 1, 8);
+    int render_w = glr.render_width ? glr.render_width : glr.fd.width;
+    int render_h = glr.render_height ? glr.render_height : glr.fd.height;
+    int min_dim = max(1, min(render_w / bloom_downscale, render_h / bloom_downscale));
+    int max_levels = 1;
+    while (min_dim > 1 && max_levels < 6) {
+        min_dim >>= 1;
+        max_levels++;
+    }
+    if (bloom_levels > max_levels)
+        bloom_levels = max_levels;
+
+    gls.u_block.postfx_bloom[0] = bloom_threshold;
+    gls.u_block.postfx_bloom[1] = bloom_knee;
+    gls.u_block.postfx_bloom[2] = bloom_intensity;
+    gls.u_block.postfx_bloom[3] = scene_saturation;
+
+    gls.u_block.postfx_bloom2[0] = bloom_saturation;
+    gls.u_block.postfx_bloom2[1] = gl_static.postfx_bloom_mrt ? 1.0f : 0.0f;
+    gls.u_block.postfx_bloom2[2] = bloom_firefly;
+    gls.u_block.postfx_bloom2[3] = qglGenerateMipmap ? (float)bloom_levels : 1.0f;
+
+    bool hdr_enabled = gl_hdr && gl_hdr->integer && gl_static.hdr_active;
+    float hdr_exposure = Cvar_ClampValue(gl_hdr_exposure, 0.0f, 10.0f);
+    float hdr_white = Cvar_ClampValue(gl_hdr_white, 0.1f, 20.0f);
+    float hdr_gamma = Cvar_ClampValue(gl_hdr_gamma, 1.0f, 3.0f);
+    bool hdr_auto = hdr_enabled && gl_hdr_auto && gl_hdr_auto->integer;
+    float hdr_auto_min = Cvar_ClampValue(gl_hdr_auto_min, 0.0001f, 10000.0f);
+    float hdr_auto_max = Cvar_ClampValue(gl_hdr_auto_max, hdr_auto_min, 10000.0f);
+    float hdr_auto_speed = Cvar_ClampValue(gl_hdr_auto_speed, 0.0f, 60.0f);
+    float hdr_auto_alpha = hdr_auto ? (hdr_auto_speed <= 0.0f ? 1.0f : (1.0f - expf(-hdr_auto_speed * glr.fd.frametime))) : 0.0f;
+
+    gls.u_block.postfx_hdr[0] = hdr_enabled ? hdr_exposure : 1.0f;
+    gls.u_block.postfx_hdr[1] = hdr_enabled ? hdr_white : 1.0f;
+    gls.u_block.postfx_hdr[2] = hdr_enabled ? hdr_gamma : 1.0f;
+    gls.u_block.postfx_hdr[3] = hdr_enabled ? 1.0f : 0.0f;
+
+    bool cc_enabled = gl_color_correction && gl_color_correction->integer;
+    float cc_brightness = cc_enabled ? Cvar_ClampValue(gl_color_brightness, -1.0f, 1.0f) : 0.0f;
+    float cc_contrast = cc_enabled ? Cvar_ClampValue(gl_color_contrast, 0.0f, 4.0f) : 1.0f;
+    float cc_saturation = cc_enabled ? Cvar_ClampValue(gl_color_saturation, 0.0f, 4.0f) : 1.0f;
+    float split_strength = Cvar_ClampValue(gl_color_split_strength, 0.0f, 1.0f);
+    float split_balance = Cvar_ClampValue(gl_color_split_balance, -1.0f, 1.0f);
+    float lut_intensity = Cvar_ClampValue(gl_color_lut_intensity, 0.0f, 1.0f);
+
+    if (cc_enabled)
+        gls.u_block.postfx_bloom[3] = 1.0f;
+
+    if (hdr_auto && !gl_auto_exposure_valid)
+        hdr_auto_alpha = 1.0f;
+
+    if (!gl_color_lut_valid)
+        lut_intensity = 0.0f;
+
+    gls.u_block.postfx_color[0] = cc_brightness;
+    gls.u_block.postfx_color[1] = cc_contrast;
+    gls.u_block.postfx_color[2] = cc_saturation;
+    gls.u_block.postfx_color[3] = cc_enabled ? 1.0f : 0.0f;
+
+    gls.u_block.postfx_tint[0] = cc_enabled ? gl_color_tint_value[0] : 1.0f;
+    gls.u_block.postfx_tint[1] = cc_enabled ? gl_color_tint_value[1] : 1.0f;
+    gls.u_block.postfx_tint[2] = cc_enabled ? gl_color_tint_value[2] : 1.0f;
+    gls.u_block.postfx_tint[3] = 0.0f;
+
+    gls.u_block.postfx_auto[0] = hdr_auto ? 1.0f : 0.0f;
+    gls.u_block.postfx_auto[1] = hdr_auto_min;
+    gls.u_block.postfx_auto[2] = hdr_auto_max;
+    gls.u_block.postfx_auto[3] = hdr_auto_alpha;
+
+    gls.u_block.postfx_split_shadow[0] = gl_color_split_shadow_value[0];
+    gls.u_block.postfx_split_shadow[1] = gl_color_split_shadow_value[1];
+    gls.u_block.postfx_split_shadow[2] = gl_color_split_shadow_value[2];
+    gls.u_block.postfx_split_shadow[3] = 0.0f;
+
+    gls.u_block.postfx_split_highlight[0] = gl_color_split_highlight_value[0];
+    gls.u_block.postfx_split_highlight[1] = gl_color_split_highlight_value[1];
+    gls.u_block.postfx_split_highlight[2] = gl_color_split_highlight_value[2];
+    gls.u_block.postfx_split_highlight[3] = 0.0f;
+
+    gls.u_block.postfx_split_params[0] = split_strength;
+    gls.u_block.postfx_split_params[1] = split_balance;
+    gls.u_block.postfx_split_params[2] = 0.0f;
+    gls.u_block.postfx_split_params[3] = 0.0f;
+
+    gls.u_block.postfx_lut[0] = lut_intensity;
+    gls.u_block.postfx_lut[1] = gl_color_lut_valid ? gl_color_lut_size : 0.0f;
+    gls.u_block.postfx_lut[2] = gl_color_lut_valid ? gl_color_lut_inv_width : 0.0f;
+    gls.u_block.postfx_lut[3] = gl_color_lut_valid ? gl_color_lut_inv_height : 0.0f;
+    gls.u_block_dirty = true;
+}
+
+static void GL_UpdateAutoExposure(void)
+{
+    bool hdr_auto = gls.u_block.postfx_hdr[3] > 0.5f && gls.u_block.postfx_auto[0] > 0.5f;
+
+    if (!hdr_auto) {
+        if (gl_scene_mips_enabled) {
+            GL_BindTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+            qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl_scene_mips_enabled = false;
+        }
+        gl_auto_exposure_valid = false;
+        gl_auto_exposure_index = 0;
+        gl_hdr_auto_warned = false;
+        return;
+    }
+
+    if (!qglGenerateMipmap) {
+        if (!gl_hdr_auto_warned) {
+            Com_WPrintf("HDR auto exposure requires mipmap generation; disabling.\n");
+            gl_hdr_auto_warned = true;
+        }
+        gl_auto_exposure_valid = false;
+        return;
+    }
+
+    if (!gl_scene_mips_enabled) {
+        GL_BindTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+        qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        gl_scene_mips_enabled = true;
+    }
+
+    GL_BindTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    qglGenerateMipmap(GL_TEXTURE_2D);
+
+    int src = gl_auto_exposure_index;
+    int dst = 1 - src;
+    GLuint src_tex = src ? TEXNUM_PP_EXPOSURE_1 : TEXNUM_PP_EXPOSURE_0;
+    GLuint dst_tex = dst ? TEXNUM_PP_EXPOSURE_1 : TEXNUM_PP_EXPOSURE_0;
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, FBO_EXPOSURE);
+    qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst_tex, 0);
+
+    qglViewport(0, 0, 1, 1);
+    GL_Ortho(0, 1, 1, 0, -1, 1);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
+    GL_ForceTexture(TMU_EXPOSURE, src_tex);
+    GL_PostProcess(GLS_EXPOSURE_UPDATE, 0, 0, 1, 1);
+
+    GL_Setup2D();
+
+    gl_auto_exposure_index = dst;
+    gl_auto_exposure_valid = true;
+}
+
+static void GL_DrawPostProcess(pp_flags_t flags, GLuint base_tex, GLuint target_fbo)
+{
+    bool waterwarp = (flags & PP_WATERWARP) != 0;
+    bool bloom = (flags & PP_BLOOM) != 0;
+    bool postfx = (flags & PP_POSTFX) != 0;
+
+    glStateBits_t bits = GLS_DEFAULT;
+    if (postfx)
+        bits |= GLS_POSTFX;
+    if (waterwarp)
+        bits |= GLS_WARP_ENABLE;
+
+    if (q_unlikely(gl_showbloom->integer) && bloom) {
+        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_BLUR_0);
+        bits = GLS_DEFAULT;
+    } else {
+        GL_ForceTexture(TMU_TEXTURE, base_tex);
+        if (bloom) {
+            GLuint bloom_tex = gls.u_block.postfx_bloom2[3] > 1.0f ? TEXNUM_PP_BLOOM_MIP : TEXNUM_PP_BLUR_0;
+            GL_ForceTexture(TMU_LIGHTMAP, bloom_tex);
+            bits |= GLS_BLOOM_OUTPUT;
+        }
+        if (postfx) {
+            GLuint exposure_tex = gl_auto_exposure_valid ?
+                                  (gl_auto_exposure_index ? TEXNUM_PP_EXPOSURE_1 : TEXNUM_PP_EXPOSURE_0) :
+                                  TEXNUM_WHITE;
+            GLuint lut_tex = gl_color_lut_valid ? gl_color_lut_texnum : TEXNUM_WHITE;
+            GL_ForceTexture(TMU_EXPOSURE, exposure_tex);
+            GL_ForceTexture(TMU_LUT, lut_tex);
+        }
+    }
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, target_fbo);
     int vx, vy, vw, vh;
     gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
                              &vx, &vy, &vw, &vh);
@@ -1020,20 +1270,72 @@ static void GL_DrawDof(bool waterwarp)
 
 static int32_t gl_waterwarp_modified = 0;
 static int32_t gl_bloom_modified = 0;
+static int32_t gl_bloom_downscale_modified = 0;
+static int32_t gl_hdr_modified = 0;
+static int32_t r_dof_allow_stencil_modified = 0;
+static int32_t gl_crt_modified = 0;
+static int32_t gl_warp_refraction_modified = 0;
 
-typedef enum {
-    PP_NONE      = 0,
-    PP_WATERWARP = BIT(0),
-    PP_BLOOM     = BIT(1),
-    PP_DOF       = BIT(2),
-    PP_RESCALE   = BIT(3),
-} pp_flags_t;
+static void GL_SetCrtUniforms(int width, int height)
+{
+    float hard_pix = r_crt_hardPix ? min(r_crt_hardPix->value, 0.0f) : -8.0f;
+    float hard_scan = r_crt_hardScan ? min(r_crt_hardScan->value, 0.0f) : -8.0f;
+    float bright_boost = r_crt_brightboost ? max(r_crt_brightboost->value, 0.0f) : 1.5f;
+    float mask_dark = r_crt_maskDark ? max(r_crt_maskDark->value, 0.0f) : 0.5f;
+    float mask_light = r_crt_maskLight ? max(r_crt_maskLight->value, 0.0f) : 1.5f;
+    float linear_gamma = r_crt_scaleInLinearGamma ? Cvar_ClampValue(r_crt_scaleInLinearGamma, 0.0f, 1.0f) : 1.0f;
+    float shadow_mask = r_crt_shadowMask ? Cvar_ClampValue(r_crt_shadowMask, 0.0f, 4.0f) : 0.0f;
+
+    float inv_w = width > 0 ? (1.0f / (float)width) : 0.0f;
+    float inv_h = height > 0 ? (1.0f / (float)height) : 0.0f;
+
+    gls.u_block.crt_params[0] = hard_pix;
+    gls.u_block.crt_params[1] = hard_scan;
+    gls.u_block.crt_params[2] = bright_boost;
+    gls.u_block.crt_params[3] = linear_gamma;
+
+    gls.u_block.crt_params2[0] = mask_dark;
+    gls.u_block.crt_params2[1] = mask_light;
+    gls.u_block.crt_params2[2] = shadow_mask;
+    {
+        float scan_scale = 1.0f;
+        if (glr.render_height > 0 && height > 0) {
+            scan_scale = (float)height / (float)glr.render_height;
+            if (scan_scale < 1.0f)
+                scan_scale = 1.0f;
+        }
+        gls.u_block.crt_params2[3] = scan_scale;
+    }
+
+    gls.u_block.crt_texel[0] = inv_w;
+    gls.u_block.crt_texel[1] = inv_h;
+    gls.u_block.crt_texel[2] = (float)width;
+    gls.u_block.crt_texel[3] = (float)height;
+
+    gls.u_block_dirty = true;
+}
+
+static void GL_DrawCrt(void)
+{
+    GL_Setup2D();
+    GL_SetCrtUniforms(r_config.width, r_config.height);
+
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_CRT);
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    int vx, vy, vw, vh;
+    gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
+                             &vx, &vy, &vw, &vh);
+    GL_PostProcess(GLS_CRT, vx, vy, vw, vh);
+}
 
 static pp_flags_t GL_BindFramebuffer(void)
 {
     pp_flags_t flags = PP_NONE;
     bool resized = false;
-    bool dof_enabled = false;
+    bool dof_requested = false;
+    bool postfx_enabled = false;
+    bool hdr_requested = false;
 
     if (!gl_static.use_shaders)
         return PP_NONE;
@@ -1044,31 +1346,72 @@ static pp_flags_t GL_BindFramebuffer(void)
     if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_bloom->integer)
         flags |= PP_BLOOM;
 
-    if (r_dof && r_dof->integer)
-        dof_enabled = true;
-
-    if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && dof_enabled && glr.fd.dof_strength > 0.0f) {
+    dof_requested = (r_dof && r_dof->integer) &&
+        !(glr.fd.rdflags & RDF_NOWORLDMODEL) &&
+        (glr.fd.dof_strength > 0.0f);
+    if (dof_requested)
         flags |= PP_DOF;
-    }
+
+    if (r_crtmode && r_crtmode->integer)
+        flags |= PP_CRT;
+
+    bool refract_active = gl_warp_refraction->value > 0.0f && gl_static.world.has_trans_warp &&
+        !(glr.fd.rdflags & RDF_NOWORLDMODEL);
+    if (refract_active)
+        flags |= PP_REFRACT;
 
     if (glr.render_width != glr.fd.width || glr.render_height != glr.fd.height)
         flags |= PP_RESCALE;
+
+    if (gl_bloom->integer)
+        postfx_enabled = true;
+    if (gl_color_correction && gl_color_correction->integer)
+        postfx_enabled = true;
+    if (gl_hdr && gl_hdr->integer) {
+        postfx_enabled = true;
+        hdr_requested = true;
+    }
+
+    if (postfx_enabled)
+        flags |= PP_POSTFX;
 
     if (flags)
         resized = glr.render_width != glr.framebuffer_width || glr.render_height != glr.framebuffer_height;
 
     static bool gl_dof_active = false;
+    bool crt_active = (flags & PP_CRT) != 0;
     if (resized || gl_waterwarp->modified_count != gl_waterwarp_modified ||
-        gl_bloom->modified_count != gl_bloom_modified || dof_enabled != gl_dof_active) {
-        glr.framebuffer_ok     = GL_InitFramebuffers(dof_enabled);
+        gl_bloom->modified_count != gl_bloom_modified ||
+        gl_bloom_downscale->modified_count != gl_bloom_downscale_modified ||
+        (gl_hdr && gl_hdr->modified_count != gl_hdr_modified) ||
+        (r_dof_allow_stencil && r_dof_allow_stencil->modified_count != r_dof_allow_stencil_modified) ||
+        (r_crtmode && r_crtmode->modified_count != gl_crt_modified) ||
+        gl_warp_refraction->modified_count != gl_warp_refraction_modified ||
+        dof_requested != gl_dof_active) {
+        glr.framebuffer_ok     = GL_InitFramebuffers(dof_requested, crt_active, refract_active,
+                                                     postfx_enabled, hdr_requested);
         glr.framebuffer_width  = glr.render_width;
         glr.framebuffer_height = glr.render_height;
         gl_waterwarp_modified = gl_waterwarp->modified_count;
         gl_bloom_modified = gl_bloom->modified_count;
-        gl_dof_active = dof_enabled;
-        if (gl_bloom->integer || dof_enabled)
+        gl_bloom_downscale_modified = gl_bloom_downscale->modified_count;
+        gl_scene_mips_enabled = false;
+        gl_auto_exposure_valid = false;
+        gl_auto_exposure_index = 0;
+        if (gl_hdr)
+            gl_hdr_modified = gl_hdr->modified_count;
+        if (r_dof_allow_stencil)
+            r_dof_allow_stencil_modified = r_dof_allow_stencil->modified_count;
+        gl_warp_refraction_modified = gl_warp_refraction->modified_count;
+        if (r_crtmode)
+            gl_crt_modified = r_crtmode->modified_count;
+        gl_dof_active = dof_requested;
+        if (gl_bloom->integer || gl_static.postfx_dof)
             gl_backend->update_blur();
     }
+
+    if (!gl_static.postfx_dof)
+        flags &= ~PP_DOF;
 
     if (!flags || !glr.framebuffer_ok)
         return PP_NONE;
@@ -1077,7 +1420,7 @@ static pp_flags_t GL_BindFramebuffer(void)
     glr.framebuffer_bound = true;
 
     if (gl_clear->integer || (r_fastsky && r_fastsky->integer)) {
-        if (flags & PP_BLOOM) {
+        if ((flags & PP_BLOOM) && gl_static.postfx_bloom_mrt) {
             static const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
             static const vec4_t black = { 0, 0, 0, 1 };
             qglDrawBuffers(2, buffers);
@@ -1170,20 +1513,33 @@ static const vec3_t gl_shadow_face_axis[SHADOWMAP_FACE_COUNT][3] = {
     { { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0} }  // -Z
 };
 
+static float GL_ShadowmapNearPlane(float radius)
+{
+    float znear = gl_znear->value;
+
+    if (radius > 0.0f) {
+        float target = max(1.0f, radius * 0.01f);
+        if (target < znear)
+            znear = target;
+    }
+
+    return znear;
+}
+
 static void GL_ShadowmapFrustum(float radius)
 {
     mat4_t matrix;
-    float znear = gl_znear->value;
+    float znear = GL_ShadowmapNearPlane(radius);
     float zfar = max(radius, znear + 1.0f);
 
     Matrix_Frustum(glr.fd.fov_x, glr.fd.fov_y, 1.0f, znear, zfar, matrix);
     gl_backend->load_matrix(GL_PROJECTION, matrix, gl_identity);
 }
 
-static void GL_SetupShadowView(const vec3_t origin, const vec3_t axis[3], float radius)
+static void GL_SetupShadowView(const vec3_t origin, const vec3_t axis[3], float fov, float radius)
 {
-    glr.fd.fov_x = 90.0f;
-    glr.fd.fov_y = 90.0f;
+    glr.fd.fov_x = fov;
+    glr.fd.fov_y = fov;
     VectorCopy(origin, glr.fd.vieworg);
 
     VectorCopy(axis[0], glr.viewaxis[0]);
@@ -1203,11 +1559,171 @@ static void GL_SetupShadowView(const vec3_t origin, const vec3_t axis[3], float 
     GL_SetupFrustum();
 }
 
+static uint32_t GL_ShadowmapHashU32(uint32_t hash, uint32_t value)
+{
+    return (hash ^ value) * 16777619u;
+}
+
+static uint32_t GL_ShadowmapHashFloat(uint32_t hash, float value)
+{
+    union {
+        float f;
+        uint32_t u;
+    } bits;
+
+    bits.f = value;
+    return GL_ShadowmapHashU32(hash, bits.u);
+}
+
+static uint32_t GL_ShadowmapHashVec3(uint32_t hash, const vec3_t v)
+{
+    hash = GL_ShadowmapHashFloat(hash, v[0]);
+    hash = GL_ShadowmapHashFloat(hash, v[1]);
+    hash = GL_ShadowmapHashFloat(hash, v[2]);
+    return hash;
+}
+
+static bool GL_EntityCastsShadowmap(const entity_t *ent)
+{
+    if (ent->flags & (RF_WEAPONMODEL | RF_NOSHADOW | RF_BEAM | RF_FLARE))
+        return false;
+
+    if (ent->model & BIT(31))
+        return true;
+
+    if (!ent->model)
+        return false;
+
+    const model_t *model = MOD_ForHandle(ent->model);
+    if (!model)
+        return false;
+
+    if (model->type == MOD_SPRITE || model->type == MOD_EMPTY)
+        return false;
+
+    return model->type == MOD_ALIAS;
+}
+
+static float GL_EntityMaxScale(const entity_t *ent)
+{
+    float sx = ent->scale[0] ? fabsf(ent->scale[0]) : 1.0f;
+    float sy = ent->scale[1] ? fabsf(ent->scale[1]) : 1.0f;
+    float sz = ent->scale[2] ? fabsf(ent->scale[2]) : 1.0f;
+
+    return max(sx, max(sy, sz));
+}
+
+static float GL_EntityShadowRadius(const entity_t *ent)
+{
+    float radius = 0.0f;
+
+    if (ent->model & BIT(31)) {
+        const bsp_t *bsp = gl_static.world.cache;
+        int index = ~ent->model;
+
+        if (!bsp || index < 1 || index >= bsp->nummodels)
+            return 0.0f;
+
+        radius = bsp->models[index].radius;
+    } else {
+        if (!ent->model)
+            return 0.0f;
+
+        const model_t *model = MOD_ForHandle(ent->model);
+        if (!model || model->type != MOD_ALIAS || model->numframes <= 0)
+            return 0.0f;
+
+        int frame = ent->frame;
+        int oldframe = ent->oldframe;
+
+        if (glr.fd.extended) {
+            frame %= model->numframes;
+            oldframe %= model->numframes;
+        } else {
+            if (frame < 0 || frame >= model->numframes)
+                frame = 0;
+            if (oldframe < 0 || oldframe >= model->numframes)
+                oldframe = frame;
+        }
+
+        radius = max(model->frames[frame].radius, model->frames[oldframe].radius);
+    }
+
+    if (radius <= 0.0f)
+        return 0.0f;
+
+    return radius * GL_EntityMaxScale(ent);
+}
+
+static bool GL_EntityInShadowRange(const entity_t *ent, const dlight_t *dl)
+{
+    float radius = dl->radius;
+    if (radius <= 0.0f)
+        return false;
+
+    float ent_radius = GL_EntityShadowRadius(ent);
+    float max_dist = radius + ent_radius;
+
+    return DistanceSquared(ent->origin, dl->origin) <= (max_dist * max_dist);
+}
+
+static uint32_t GL_ShadowmapSceneHash(void)
+{
+    uint32_t hash = 2166136261u;
+
+    if (!gl_drawentities->integer)
+        return hash;
+
+    int total = min(glr.fd.num_entities, MAX_ENTITIES);
+    hash = GL_ShadowmapHashU32(hash, (uint32_t)total);
+
+    for (int i = 0; i < total; i++) {
+        const entity_t *ent = &glr.fd.entities[i];
+        if (!GL_EntityCastsShadowmap(ent))
+            continue;
+
+        hash = GL_ShadowmapHashU32(hash, (uint32_t)ent->model);
+        hash = GL_ShadowmapHashVec3(hash, ent->origin);
+        hash = GL_ShadowmapHashVec3(hash, ent->angles);
+        hash = GL_ShadowmapHashVec3(hash, ent->scale);
+        hash = GL_ShadowmapHashU32(hash, ent->frame);
+        hash = GL_ShadowmapHashU32(hash, ent->oldframe);
+        hash = GL_ShadowmapHashFloat(hash, ent->backlerp);
+    }
+
+    return hash;
+}
+
+static bool GL_ShadowmapLightChanged(int slot, const dlight_t *dl, bool is_spot)
+{
+    vec4_t cone;
+
+    if (is_spot)
+        Vector4Copy(dl->cone, cone);
+    else
+        Vector4Clear(cone);
+
+    if (!VectorCompare(dl->origin, gl_static.shadowmap_cache_origins[slot]) ||
+        dl->radius != gl_static.shadowmap_cache_radius[slot] ||
+        gl_static.shadowmap_cache_is_spot[slot] != is_spot ||
+        !Vector4Compare(cone, gl_static.shadowmap_cache_cone[slot])) {
+        VectorCopy(dl->origin, gl_static.shadowmap_cache_origins[slot]);
+        gl_static.shadowmap_cache_radius[slot] = dl->radius;
+        gl_static.shadowmap_cache_is_spot[slot] = is_spot;
+        Vector4Copy(cone, gl_static.shadowmap_cache_cone[slot]);
+        return true;
+    }
+
+    return false;
+}
+
 static void GL_SelectShadowLights(void)
 {
     glr.shadow_light_count = 0;
-    for (int i = 0; i < MAX_DLIGHTS; i++)
+    for (int i = 0; i < MAX_DLIGHTS; i++) {
         glr.shadowmap_index[i] = -1;
+        glr.shadowmap_is_spot[i] = false;
+    }
 
     if (!gl_shadowmaps->integer || !gl_static.shadowmap_ok)
         return;
@@ -1223,11 +1739,21 @@ static void GL_SelectShadowLights(void)
 
         if (dl->shadow != DL_SHADOW_LIGHT)
             continue;
-        if (dl->conecos != 0.0f || dl->radius <= 0.0f || dl->intensity <= 0.0f)
+        if (dl->radius <= 0.0f || dl->intensity <= 0.0f)
             continue;
 
-        glr.shadowmap_index[i] = glr.shadow_light_count;
-        glr.shadow_light_indices[glr.shadow_light_count++] = i;
+        int slot = glr.shadow_light_count;
+        glr.shadowmap_index[i] = slot;
+        glr.shadowmap_is_spot[i] = (dl->conecos != 0.0f);
+        glr.shadow_light_indices[slot] = i;
+        glr.shadow_light_count++;
+
+        if (gl_shadowmap_cache && gl_shadowmap_cache->integer) {
+            if (GL_ShadowmapLightChanged(slot, dl, glr.shadowmap_is_spot[i])) {
+                for (int f = 0; f < SHADOWMAP_FACE_COUNT; f++)
+                    gl_static.shadowmap_cache_dirty[slot * SHADOWMAP_FACE_COUNT + f] = true;
+            }
+        }
     }
 
     if (!gl_shadowmap_dynamic->integer)
@@ -1238,14 +1764,31 @@ static void GL_SelectShadowLights(void)
 
         if (dl->shadow != DL_SHADOW_DYNAMIC)
             continue;
-        if (dl->conecos != 0.0f || dl->radius <= 0.0f || dl->intensity <= 0.0f)
+        if (dl->radius <= 0.0f || dl->intensity <= 0.0f)
             continue;
         if (glr.shadowmap_index[i] >= 0)
             continue;
 
         glr.shadowmap_index[i] = glr.shadow_light_count;
+        glr.shadowmap_is_spot[i] = (dl->conecos != 0.0f);
         glr.shadow_light_indices[glr.shadow_light_count++] = i;
     }
+}
+
+static void GL_ShadowmapCacheInvalidate(void)
+{
+    memset(gl_static.shadowmap_cache_dirty, 1, sizeof(gl_static.shadowmap_cache_dirty));
+}
+
+static void GL_CopyShadowmapLayer(GLuint dst_tex, int dst_layer, GLuint src_tex, int src_layer)
+{
+    if (!qglCopyTexSubImage3D)
+        return;
+
+    qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, src_tex, 0, src_layer);
+    GL_BindTexture(TMU_SHADOWMAP, dst_tex);
+    qglCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, dst_layer, 0, 0,
+                         gl_static.shadowmap_size, gl_static.shadowmap_size);
 }
 
 static void GL_RenderShadowMaps(void)
@@ -1263,6 +1806,23 @@ static void GL_RenderShadowMaps(void)
     if (!gl_static.shadowmap_ok || !glr.shadow_light_count)
         return;
 
+    bool cache_enabled = gl_shadowmap_cache && gl_shadowmap_cache->integer &&
+                         gl_static.shadowmap_cache_tex && qglCopyTexSubImage3D;
+    static bool cache_was_enabled = false;
+    if (cache_enabled != cache_was_enabled) {
+        GL_ShadowmapCacheInvalidate();
+        cache_was_enabled = cache_enabled;
+    }
+    if (cache_enabled) {
+        uint32_t scene_hash = GL_ShadowmapSceneHash();
+        if (!gl_static.shadowmap_cache_scene_valid ||
+            scene_hash != gl_static.shadowmap_cache_scene_hash) {
+            GL_ShadowmapCacheInvalidate();
+            gl_static.shadowmap_cache_scene_hash = scene_hash;
+            gl_static.shadowmap_cache_scene_valid = true;
+        }
+    }
+
     refdef_t saved_fd = glr.fd;
     vec3_t saved_viewaxis[3];
     mat4_t saved_viewmatrix;
@@ -1274,6 +1834,7 @@ static void GL_RenderShadowMaps(void)
     VectorCopy(glr.viewaxis[2], saved_viewaxis[2]);
     memcpy(saved_viewmatrix, glr.viewmatrix, sizeof(saved_viewmatrix));
 
+    glr.fd.areabits = NULL;
     glr.shadow_pass = true;
     glr.framebuffer_bound = true;
 
@@ -1287,21 +1848,53 @@ static void GL_RenderShadowMaps(void)
         int light_index = glr.shadow_light_indices[light_slot];
         const dlight_t *dl = &saved_fd.dlights[light_index];
         float radius = dl->radius;
+        bool is_static_shadow = dl->shadow == DL_SHADOW_LIGHT;
+        bool is_spot = glr.shadowmap_is_spot[light_index];
+        vec3_t spot_axis[3];
+        float fov = 90.0f;
 
         if (radius <= 0.0f)
             continue;
 
-        for (int face = 0; face < SHADOWMAP_FACE_COUNT; face++) {
+        if (is_spot) {
+            VectorCopy(dl->cone, spot_axis[0]);
+            if (VectorNormalize(spot_axis[0]) < 0.001f)
+                continue;
+
+            vec3_t up;
+            VectorSet(up, 0.0f, 0.0f, 1.0f);
+            if (fabsf(spot_axis[0][2]) > 0.9f)
+                VectorSet(up, 0.0f, 1.0f, 0.0f);
+
+            CrossProduct(up, spot_axis[0], spot_axis[1]);
+            if (VectorNormalize(spot_axis[1]) < 0.001f)
+                continue;
+            CrossProduct(spot_axis[0], spot_axis[1], spot_axis[2]);
+            VectorNormalize(spot_axis[2]);
+
+            fov = RAD2DEG(dl->cone[3] * 2.0f);
+            fov = Q_clipf(fov, 1.0f, 179.0f);
+        }
+
+        int face_count = is_spot ? 1 : SHADOWMAP_FACE_COUNT;
+        for (int face = 0; face < face_count; face++) {
             int layer = light_slot * SHADOWMAP_FACE_COUNT + face;
 
             glr.drawframe++;
+
+            if (is_static_shadow && cache_enabled && !gl_static.shadowmap_cache_dirty[layer]) {
+                GL_CopyShadowmapLayer(gl_static.shadowmap_tex, layer,
+                                      gl_static.shadowmap_cache_tex, layer);
+                continue;
+            }
 
             qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.shadowmap_tex, 0, layer);
 
             GL_StateBits(GLS_DEFAULT);
             gls.dlight_bits = glr.ppl_dlight_bits = 0;
 
-            GL_SetupShadowView(dl->origin, gl_shadow_face_axis[face], radius);
+            const vec3_t *axis = is_spot ? spot_axis : gl_shadow_face_axis[face];
+            GL_SetupShadowView(dl->origin, axis, fov, radius);
 
             qglClearBufferfv(GL_COLOR, 0, clear_color);
             qglClear(GL_DEPTH_BUFFER_BIT);
@@ -1309,10 +1902,15 @@ static void GL_RenderShadowMaps(void)
             if (gl_drawworld->integer)
                 GL_DrawWorld();
 
-            GL_DrawEntities(glr.ents.bmodels);
-            GL_DrawEntities(glr.ents.opaque);
+            GL_DrawShadowEntities(dl);
 
             GL_Flush3D();
+
+            if (is_static_shadow && cache_enabled) {
+                GL_CopyShadowmapLayer(gl_static.shadowmap_cache_tex, layer,
+                                      gl_static.shadowmap_tex, layer);
+                gl_static.shadowmap_cache_dirty[layer] = false;
+            }
         }
     }
 
@@ -1421,26 +2019,27 @@ void R_RenderFrame(const refdef_t *fd)
 
     // go back into 2D mode
     GL_Setup2D();
+    GL_UpdatePostFxUniforms((pp_flags & PP_BLOOM) != 0);
+
+    bool crt_enabled = (pp_flags & PP_CRT) != 0;
+    GLuint post_fbo = crt_enabled ? FBO_CRT : 0;
+    GLuint base_tex = TEXNUM_PP_SCENE;
 
     if (pp_flags & PP_DOF) {
-        GL_DrawDof(pp_flags & PP_WATERWARP);
-        if (pp_flags & PP_BLOOM)
-            GL_DrawBloomAdd(pp_flags & PP_WATERWARP);
-    } else if (pp_flags & PP_BLOOM) {
-        GL_DrawBloom(pp_flags & PP_WATERWARP);
-    } else if (pp_flags & PP_WATERWARP) {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        int vx, vy, vw, vh;
-        gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
-                                 &vx, &vy, &vw, &vh);
-        GL_PostProcess(GLS_WARP_ENABLE, vx, vy, vw, vh);
-    } else if (pp_flags & PP_RESCALE) {
-        GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
-        int vx, vy, vw, vh;
-        gl_pixel_rect_to_virtual(glr.fd.x, glr.fd.y, glr.fd.width, glr.fd.height,
-                                 &vx, &vy, &vw, &vh);
-        GL_PostProcess(GLS_DEFAULT, vx, vy, vw, vh);
+        GL_DrawDof(FBO_POST);
+        base_tex = TEXNUM_PP_POST;
     }
+
+    if (pp_flags & PP_BLOOM)
+        GL_BuildBloom();
+
+    GL_UpdateAutoExposure();
+
+    if (pp_flags & (PP_BLOOM | PP_WATERWARP | PP_DOF | PP_RESCALE | PP_REFRACT | PP_CRT | PP_POSTFX))
+        GL_DrawPostProcess(pp_flags, base_tex, post_fbo);
+
+    if (crt_enabled)
+        GL_DrawCrt();
 
     if (gl_polyblend->integer)
         GL_Blend();
@@ -1574,6 +2173,83 @@ static void GL_Strings_f(void)
 
     Com_Printf("GL_PFD: color(%d-bit) Z(%d-bit) stencil(%d-bit)\n",
                gl_config.colorbits, gl_config.depthbits, gl_config.stencilbits);
+}
+
+static void GL_GfxInfo_f(void)
+{
+    GLint integer = 0;
+    int render_w = glr.render_width ? glr.render_width : glr.fd.width;
+    int render_h = glr.render_height ? glr.render_height : glr.fd.height;
+    const char *renderer_name = "";
+    const cvar_t *renderer_var = Cvar_FindVar ? Cvar_FindVar("r_renderer") : NULL;
+    if (renderer_var)
+        renderer_name = renderer_var->string;
+
+    Com_Printf("\nGFXINFO\n");
+    if (renderer_name && renderer_name[0])
+        Com_Printf("Renderer: %s (%s backend)\n", renderer_name, gl_backend->name);
+    else
+        Com_Printf("Renderer: %s backend\n", gl_backend->name);
+
+    Com_Printf("GL_VENDOR: %s\n", qglGetString(GL_VENDOR));
+    Com_Printf("GL_RENDERER: %s\n", qglGetString(GL_RENDERER));
+    Com_Printf("GL_VERSION: %s\n", qglGetString(GL_VERSION));
+    if (gl_config.ver_sl)
+        Com_Printf("GL_SHADING_LANGUAGE_VERSION: %s\n", qglGetString(GL_SHADING_LANGUAGE_VERSION));
+
+    Com_Printf("GL_MAX_TEXTURE_SIZE: %d\n", gl_config.max_texture_size);
+    if (qglClientActiveTexture) {
+        qglGetIntegerv(GL_MAX_TEXTURE_UNITS, &integer);
+        Com_Printf("GL_MAX_TEXTURE_UNITS: %d\n", integer);
+    }
+    if (qglGetIntegerv) {
+        qglGetIntegerv(GL_MAX_DRAW_BUFFERS, &integer);
+        Com_Printf("GL_MAX_DRAW_BUFFERS: %d\n", integer);
+        if (qglGetStringi) {
+            qglGetIntegerv(GL_NUM_EXTENSIONS, &integer);
+            Com_Printf("GL_NUM_EXTENSIONS: %d\n", integer);
+        }
+    }
+
+    Com_Printf("GL_PFD: color(%d-bit) Z(%d-bit) stencil(%d-bit)\n",
+               gl_config.colorbits, gl_config.depthbits, gl_config.stencilbits);
+
+    if (gl_config.caps & QGL_CAP_TEXTURE_ANISOTROPY)
+        Com_Printf("GL_MAX_TEXTURE_MAX_ANISOTROPY: %.f\n", gl_config.max_anisotropy);
+
+    Com_Printf("Caps: shaders(%s) npot(%s) ssbo(%s) tex_lod_bias(%s) texture_bits(%s)\n",
+               (gl_config.caps & QGL_CAP_SHADER) ? "yes" : "no",
+               (gl_config.caps & QGL_CAP_TEXTURE_NON_POWER_OF_TWO) ? "yes" : "no",
+               (gl_config.caps & QGL_CAP_SHADER_STORAGE) ? "yes" : "no",
+               (gl_config.caps & QGL_CAP_TEXTURE_LOD_BIAS) ? "yes" : "no",
+               (gl_config.caps & QGL_CAP_TEXTURE_BITS) ? "yes" : "no");
+
+    Com_Printf("PostFX: shaders(%s) hdr_active(%s) framebuffer_ok(%s) fb(%dx%d) render(%dx%d) bloom_mrt(%s) dof_depth(%s)\n",
+               gl_static.use_shaders ? "on" : "off",
+               gl_static.hdr_active ? "yes" : "no",
+               glr.framebuffer_ok ? "yes" : "no",
+               glr.framebuffer_width, glr.framebuffer_height,
+               render_w, render_h,
+               gl_static.postfx_bloom_mrt ? "yes" : "no",
+               gl_static.postfx_dof ? "yes" : "no");
+
+    if (Cmd_Argc() > 1) {
+        Com_Printf("GL_EXTENSIONS: ");
+        if (qglGetStringi) {
+            qglGetIntegerv(GL_NUM_EXTENSIONS, &integer);
+            for (int i = 0; i < integer; i++)
+                Com_Printf("%s ", qglGetStringi(GL_EXTENSIONS, i));
+        } else {
+            const char *s = (const char *)qglGetString(GL_EXTENSIONS);
+            if (s) {
+                while (*s) {
+                    Com_Printf("%s", s);
+                    s += min(strlen(s), MAXPRINTMSG - 1);
+                }
+            }
+        }
+        Com_Printf("\n");
+    }
 }
 
 #if USE_DEBUG
@@ -1719,6 +2395,109 @@ static void gl_clearcolor_changed(cvar_t *self)
         qglClearColor(Vector4Unpack(gl_static.clearcolor));
 }
 
+static void gl_color_tint_changed(cvar_t *self)
+{
+    color_t color;
+
+    if (!SCR_ParseColor(self->string, &color)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
+        Cvar_Reset(self);
+        color.u32 = COLOR_U32_WHITE;
+    }
+
+    gl_color_tint_value[0] = color.u8[0] / 255.0f;
+    gl_color_tint_value[1] = color.u8[1] / 255.0f;
+    gl_color_tint_value[2] = color.u8[2] / 255.0f;
+}
+
+static void gl_color_split_shadows_changed(cvar_t *self)
+{
+    color_t color;
+
+    if (!SCR_ParseColor(self->string, &color)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
+        Cvar_Reset(self);
+        color.u32 = COLOR_U32_WHITE;
+    }
+
+    gl_color_split_shadow_value[0] = color.u8[0] / 255.0f;
+    gl_color_split_shadow_value[1] = color.u8[1] / 255.0f;
+    gl_color_split_shadow_value[2] = color.u8[2] / 255.0f;
+}
+
+static void gl_color_split_highlights_changed(cvar_t *self)
+{
+    color_t color;
+
+    if (!SCR_ParseColor(self->string, &color)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
+        Cvar_Reset(self);
+        color.u32 = COLOR_U32_WHITE;
+    }
+
+    gl_color_split_highlight_value[0] = color.u8[0] / 255.0f;
+    gl_color_split_highlight_value[1] = color.u8[1] / 255.0f;
+    gl_color_split_highlight_value[2] = color.u8[2] / 255.0f;
+}
+
+static void GL_ResetColorLut(void)
+{
+    gl_color_lut_size = 0.0f;
+    gl_color_lut_inv_width = 0.0f;
+    gl_color_lut_inv_height = 0.0f;
+    gl_color_lut_handle = 0;
+    gl_color_lut_texnum = 0;
+    gl_color_lut_valid = false;
+}
+
+static void gl_color_lut_changed(cvar_t *self)
+{
+    GL_ResetColorLut();
+
+    if (!self || !self->string[0])
+        return;
+
+    qhandle_t handle = R_RegisterImage(self->string, IT_PIC,
+                                       IF_PERMANENT | IF_EXACT | IF_NO_COLOR_ADJUST);
+    if (!handle) {
+        Com_WPrintf("Color LUT '%s' could not be loaded\n", self->string);
+        return;
+    }
+
+    image_t *image = IMG_ForHandle(handle);
+    if (!image || !image->upload_width || !image->upload_height) {
+        Com_WPrintf("Color LUT '%s' has invalid dimensions\n", self->string);
+        return;
+    }
+
+    int w = image->upload_width;
+    int h = image->upload_height;
+    int size = 0;
+
+    if (w == h * h)
+        size = h;
+    else if (h == w * w)
+        size = w;
+
+    if (size <= 0) {
+        Com_WPrintf("Color LUT '%s' expects NxN strip (got %dx%d)\n", self->string, w, h);
+        return;
+    }
+
+    gl_color_lut_size = (float)size;
+    gl_color_lut_inv_width = 1.0f / (float)w;
+    gl_color_lut_inv_height = 1.0f / (float)h;
+    gl_color_lut_handle = handle;
+    gl_color_lut_texnum = image->texnum;
+    gl_color_lut_valid = true;
+
+    GL_BindTexture(TMU_LUT, gl_color_lut_texnum);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
 static void GL_Register(void)
 {
     // regular variables
@@ -1746,12 +2525,13 @@ static void GL_Register(void)
     gl_dlight_falloff = Cvar_Get("gl_dlight_falloff", "1", 0);
     gl_shadowmaps = Cvar_Get("gl_shadowmaps", "1", CVAR_ARCHIVE);
     gl_shadowmap_size = Cvar_Get("gl_shadowmap_size", "512", CVAR_ARCHIVE);
-    gl_shadowmap_lights = Cvar_Get("gl_shadowmap_lights", "2", CVAR_ARCHIVE);
+    gl_shadowmap_lights = Cvar_Get("gl_shadowmap_lights", "4", CVAR_ARCHIVE);
     gl_shadowmap_dynamic = Cvar_Get("gl_shadowmap_dynamic", "1", CVAR_ARCHIVE);
-    gl_shadowmap_bias = Cvar_Get("gl_shadowmap_bias", "0.005", CVAR_ARCHIVE);
-    gl_shadowmap_softness = Cvar_Get("gl_shadowmap_softness", "1", CVAR_ARCHIVE);
-    gl_shadowmap_filter = Cvar_Get("gl_shadowmap_filter", "1", CVAR_ARCHIVE);
-    gl_shadowmap_quality = Cvar_Get("gl_shadowmap_quality", "1", CVAR_ARCHIVE);
+    gl_shadowmap_cache = Cvar_Get("gl_shadowmap_cache", "1", CVAR_ARCHIVE);
+    gl_shadowmap_bias = Cvar_Get("gl_shadowmap_bias", "0.003", CVAR_ARCHIVE);
+    gl_shadowmap_softness = Cvar_Get("gl_shadowmap_softness", "1.0", CVAR_ARCHIVE);
+    gl_shadowmap_filter = Cvar_Get("gl_shadowmap_filter", "2", CVAR_ARCHIVE);
+    gl_shadowmap_quality = Cvar_Get("gl_shadowmap_quality", "3", CVAR_ARCHIVE);
     gl_modulate_entities = Cvar_Get("gl_modulate_entities", "1", 0);
     gl_modulate_entities->changed = gl_modulate_entities_changed;
     gl_glowmap_intensity = Cvar_Get("gl_glowmap_intensity", "1", 0);
@@ -1765,21 +2545,71 @@ static void GL_Register(void)
 #endif
     gl_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     gl_waterwarp = Cvar_Get("gl_waterwarp", "1", 0);
+    gl_warp_refraction = Cvar_Get("gl_warp_refraction", "0.1", 0);
     gl_fog = Cvar_Get("gl_fog", "1", 0);
     gl_bloom = Cvar_Get("gl_bloom", "1", 0);
+    gl_bloom_iterations = Cvar_Get("gl_bloom_iterations", "1", CVAR_ARCHIVE);
+    gl_bloom_downscale = Cvar_Get("gl_bloom_downscale", "4", CVAR_ARCHIVE);
+    gl_bloom_firefly = Cvar_Get("gl_bloom_firefly", "10.0", CVAR_ARCHIVE);
+    gl_bloom_levels = Cvar_Get("gl_bloom_levels", "1", CVAR_ARCHIVE);
+    gl_bloom_threshold = Cvar_Get("gl_bloom_threshold", "1.0", CVAR_ARCHIVE);
+    gl_bloom_knee = Cvar_Get("gl_bloom_knee", "0.5", CVAR_ARCHIVE);
+    gl_bloom_intensity = Cvar_Get("gl_bloom_intensity", "1.0", CVAR_ARCHIVE);
+    gl_bloom_saturation = Cvar_Get("gl_bloom_saturation", "1.0", CVAR_ARCHIVE);
+    gl_bloom_scene_saturation = Cvar_Get("gl_bloom_scene_saturation", "1.0", CVAR_ARCHIVE);
+    gl_color_correction = Cvar_Get("gl_color_correction", "1", CVAR_ARCHIVE);
+    gl_color_brightness = Cvar_Get("gl_color_brightness", "0.0", CVAR_ARCHIVE);
+    gl_color_contrast = Cvar_Get("gl_color_contrast", "1.0", CVAR_ARCHIVE);
+    gl_color_saturation = Cvar_Get("gl_color_saturation", "1.0", CVAR_ARCHIVE);
+    gl_color_tint = Cvar_Get("gl_color_tint", "white", CVAR_ARCHIVE);
+    gl_color_tint->changed = gl_color_tint_changed;
+    gl_color_tint->generator = Com_Color_g;
+    gl_color_split_shadows = Cvar_Get("gl_color_split_shadows", "white", CVAR_ARCHIVE);
+    gl_color_split_shadows->changed = gl_color_split_shadows_changed;
+    gl_color_split_shadows->generator = Com_Color_g;
+    gl_color_split_highlights = Cvar_Get("gl_color_split_highlights", "white", CVAR_ARCHIVE);
+    gl_color_split_highlights->changed = gl_color_split_highlights_changed;
+    gl_color_split_highlights->generator = Com_Color_g;
+    gl_color_split_strength = Cvar_Get("gl_color_split_strength", "0.0", CVAR_ARCHIVE);
+    gl_color_split_balance = Cvar_Get("gl_color_split_balance", "0.0", CVAR_ARCHIVE);
+    gl_color_lut = Cvar_Get("gl_color_lut", "", CVAR_ARCHIVE);
+    gl_color_lut->changed = gl_color_lut_changed;
+    gl_color_lut_intensity = Cvar_Get("gl_color_lut_intensity", "1.0", CVAR_ARCHIVE);
+    gl_hdr = Cvar_Get("gl_hdr", "0", CVAR_ARCHIVE);
+    gl_hdr_exposure = Cvar_Get("gl_hdr_exposure", "1.0", CVAR_ARCHIVE);
+    gl_hdr_white = Cvar_Get("gl_hdr_white", "1.0", CVAR_ARCHIVE);
+    gl_hdr_gamma = Cvar_Get("gl_hdr_gamma", "2.2", CVAR_ARCHIVE);
+    gl_hdr_auto = Cvar_Get("gl_hdr_auto_exposure", "0", CVAR_ARCHIVE);
+    gl_hdr_auto_min = Cvar_Get("gl_hdr_auto_min_luma", "0.05", CVAR_ARCHIVE);
+    gl_hdr_auto_max = Cvar_Get("gl_hdr_auto_max_luma", "4.0", CVAR_ARCHIVE);
+    gl_hdr_auto_speed = Cvar_Get("gl_hdr_auto_speed", "2.0", CVAR_ARCHIVE);
+
+    if (gl_bloom_iterations->modified_count == 0 && gl_bloom->integer > 1) {
+        int legacy_iters = Cvar_ClampInteger(gl_bloom, 1, 8);
+        Cvar_SetByVar(gl_bloom_iterations, va("%d", legacy_iters), FROM_CODE);
+    }
     r_dof = Cvar_Get("r_dof", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_dof_allow_stencil = Cvar_Get("r_dof_allow_stencil", "0", CVAR_ARCHIVE);
     r_dofBlurRange = Cvar_Get("r_dofBlurRange", "0.0", CVAR_SERVERINFO);
     r_dofFocusDistance = Cvar_Get("r_dofFocusDistance", "16.0", CVAR_SERVERINFO);
-    r_resolutionscale = Cvar_Get("r_resolutionscale", "0", CVAR_USERINFO | CVAR_LATCH);
-    r_resolutionscale_aggressive = Cvar_Get("r_resolutionscale_aggressive", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_resolutionscale_fixedscale_h = Cvar_Get("r_resolutionscale_fixedscale_h", "1.0", CVAR_SERVERINFO | CVAR_LATCH);
-    r_resolutionscale_fixedscale_w = Cvar_Get("r_resolutionscale_fixedscale_w", "1.0", CVAR_SERVERINFO | CVAR_LATCH);
-    r_resolutionscale_gooddrawtime = Cvar_Get("r_resolutionscale_gooddrawtime", "0.9", CVAR_SERVERINFO | CVAR_LATCH);
-    r_resolutionscale_increasespeed = Cvar_Get("r_resolutionscale_increasespeed", "0.1", CVAR_SERVERINFO | CVAR_LATCH);
-    r_resolutionscale_lowerspeed = Cvar_Get("r_resolutionscale_lowerspeed", "0.1", CVAR_SERVERINFO | CVAR_LATCH);
-    r_resolutionscale_numframesbeforelowering = Cvar_Get("r_resolutionscale_numframesbeforelowering", "20", CVAR_USERINFO | CVAR_LATCH);
-    r_resolutionscale_numframesbeforeraising = Cvar_Get("r_resolutionscale_numframesbeforeraising", "200", CVAR_USERINFO | CVAR_LATCH);
-    r_resolutionscale_targetdrawtime = Cvar_Get("r_resolutionscale_targetdrawtime", "1.125", CVAR_SERVERINFO | CVAR_LATCH);
+    r_crt_brightboost = Cvar_Get("r_crt_brightboost", "1.5", CVAR_SERVERINFO);
+    r_crt_hardPix = Cvar_Get("r_crt_hardPix", "-8.0", CVAR_SERVERINFO);
+    r_crt_hardScan = Cvar_Get("r_crt_hardScan", "-8.0", CVAR_SERVERINFO);
+    r_crt_maskDark = Cvar_Get("r_crt_maskDark", "0.5", CVAR_SERVERINFO);
+    r_crt_maskLight = Cvar_Get("r_crt_maskLight", "1.5", CVAR_SERVERINFO);
+    r_crt_scaleInLinearGamma = Cvar_Get("r_crt_scaleInLinearGamma", "1.0", CVAR_ARCHIVE);
+    r_crt_shadowMask = Cvar_Get("r_crt_shadowMask", "0.0", CVAR_ARCHIVE);
+    r_crtmode = Cvar_Get("r_crtmode", "0", CVAR_ARCHIVE);
+    r_resolutionscale = Cvar_Get("r_resolutionscale", "0", CVAR_USERINFO);
+    r_resolutionscale_aggressive = Cvar_Get("r_resolutionscale_aggressive", "0", CVAR_ARCHIVE);
+    r_resolutionscale_fixedscale_h = Cvar_Get("r_resolutionscale_fixedscale_h", "1.0", CVAR_SERVERINFO);
+    r_resolutionscale_fixedscale_w = Cvar_Get("r_resolutionscale_fixedscale_w", "1.0", CVAR_SERVERINFO);
+    r_resolutionscale_gooddrawtime = Cvar_Get("r_resolutionscale_gooddrawtime", "0.9", CVAR_SERVERINFO);
+    r_resolutionscale_increasespeed = Cvar_Get("r_resolutionscale_increasespeed", "0.1", CVAR_SERVERINFO);
+    r_resolutionscale_lowerspeed = Cvar_Get("r_resolutionscale_lowerspeed", "0.1", CVAR_SERVERINFO);
+    r_resolutionscale_numframesbeforelowering = Cvar_Get("r_resolutionscale_numframesbeforelowering", "20", CVAR_USERINFO);
+    r_resolutionscale_numframesbeforeraising = Cvar_Get("r_resolutionscale_numframesbeforeraising", "200", CVAR_USERINFO);
+    r_resolutionscale_targetdrawtime = Cvar_Get("r_resolutionscale_targetdrawtime", "1.125", CVAR_SERVERINFO);
     gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
     gl_swapinterval->changed = gl_swapinterval_changed;
 
@@ -1831,8 +2661,13 @@ static void GL_Register(void)
     gl_modulate_entities_changed(NULL);
     gl_swapinterval_changed(gl_swapinterval);
     gl_clearcolor_changed(gl_clearcolor);
+    gl_color_tint_changed(gl_color_tint);
+    gl_color_split_shadows_changed(gl_color_split_shadows);
+    gl_color_split_highlights_changed(gl_color_split_highlights);
+    gl_color_lut_changed(gl_color_lut);
 
     Cmd_AddCommand("strings", GL_Strings_f);
+    Cmd_AddCommand("gfxinfo", GL_GfxInfo_f);
 
 #if USE_DEBUG
     Cmd_AddMacro("gl_viewcluster", GL_ViewCluster_m);

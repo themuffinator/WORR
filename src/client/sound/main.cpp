@@ -64,6 +64,8 @@ cvar_t      *s_show;
 cvar_t      *s_underwater;
 cvar_t      *s_underwater_gain_hf;
 cvar_t      *s_num_channels;
+cvar_t      *s_occlusion;
+cvar_t      *s_occlusion_strength;
 
 static cvar_t   *s_enable;
 static cvar_t   *s_auto_focus;
@@ -131,6 +133,26 @@ static void s_auto_focus_changed(cvar_t *self)
     S_Activate();
 }
 
+static void s_occlusion_changed(cvar_t *self)
+{
+    (void)self;
+
+    if (!s_started || !s_channels)
+        return;
+
+    for (int i = 0; i < s_numchannels; i++)
+        S_ResetOcclusion(&s_channels[i]);
+
+#if USE_SNDDMA
+    for (int i = 0; i < s_numchannels; i++) {
+        s_channels[i].occlusion_z1[0] = 0.0f;
+        s_channels[i].occlusion_z1[1] = 0.0f;
+        s_channels[i].occlusion_z2[0] = 0.0f;
+        s_channels[i].occlusion_z2[1] = 0.0f;
+    }
+#endif
+}
+
 /*
 ================
 S_Init
@@ -155,6 +177,8 @@ void S_Init(void)
     s_underwater = Cvar_Get("s_underwater", "1", 0);
     s_underwater_gain_hf = Cvar_Get("s_underwater_gain_hf", "0.25", 0);
     s_num_channels = Cvar_Get("s_num_channels", "64", CVAR_SOUND);
+    s_occlusion = Cvar_Get("s_occlusion", "1", CVAR_ARCHIVE);
+    s_occlusion_strength = Cvar_Get("s_occlusion_strength", "1.0", CVAR_ARCHIVE);
 
     s_maxchannels = Cvar_ClampInteger(s_num_channels, 16, 256);
     s_channels = static_cast<channel_t *>(Z_TagMalloc(sizeof(*s_channels) * s_maxchannels, TAG_SOUND));
@@ -189,6 +213,8 @@ void S_Init(void)
 
     s_auto_focus->changed = s_auto_focus_changed;
     s_auto_focus_changed(s_auto_focus);
+    s_occlusion->changed = s_occlusion_changed;
+    s_occlusion_strength->changed = s_occlusion_changed;
 
     num_sfx = 0;
 
@@ -254,6 +280,8 @@ void S_Shutdown(void)
     s_supports_float = false;
 
     s_auto_focus->changed = NULL;
+    s_occlusion->changed = NULL;
+    s_occlusion_strength->changed = NULL;
 
     Cmd_Deregister(c_sound);
 
@@ -890,6 +918,232 @@ void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, 
     *left_vol = master_vol * scale;
     if (*left_vol < 0)
         *left_vol = 0;
+}
+
+static void S_OcclusionTrace(const vec3_t start, const vec3_t end, float *out_weight, float *out_cutoff_hz)
+{
+    trace_t tr;
+    CL_Trace(&tr, start, end, vec3_origin, vec3_origin, NULL, MASK_SOLID);
+
+    if (tr.allsolid || tr.startsolid) {
+        *out_weight = 1.0f;
+        *out_cutoff_hz = S_OCCLUSION_CUTOFF_DEFAULT_HZ;
+        return;
+    }
+
+    if (tr.fraction >= 1.0f || (tr.surface && (tr.surface->flags & SURF_SKY))) {
+        *out_weight = 0.0f;
+        *out_cutoff_hz = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        return;
+    }
+
+    float weight = 1.0f;
+    float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+    bool cutoff_matched = false;
+    if (tr.contents & CONTENTS_WINDOW) {
+        weight = min(weight, S_OCCLUSION_WINDOW_WEIGHT);
+        cutoff = min(cutoff, S_OCCLUSION_CUTOFF_GLASS_HZ);
+        cutoff_matched = true;
+    }
+    if (tr.surface && (tr.surface->flags & (SURF_TRANS33 | SURF_TRANS66))) {
+        weight = min(weight, S_OCCLUSION_WINDOW_WEIGHT);
+        cutoff = min(cutoff, S_OCCLUSION_CUTOFF_GLASS_HZ);
+        cutoff_matched = true;
+    }
+
+    if (tr.surface && tr.surface->material[0]) {
+        static const struct {
+            const char *match;
+            float weight;
+            float cutoff_hz;
+        } material_weights[] = {
+            { "glass", S_OCCLUSION_GLASS_WEIGHT, S_OCCLUSION_CUTOFF_GLASS_HZ },
+            { "window", S_OCCLUSION_GLASS_WEIGHT, S_OCCLUSION_CUTOFF_GLASS_HZ },
+            { "grate", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "mesh", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "fence", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "chain", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "grill", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "vent", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "screen", S_OCCLUSION_GRATE_WEIGHT, S_OCCLUSION_CUTOFF_GRATE_HZ },
+            { "cloth", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "curtain", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "fabric", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "carpet", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "plaster", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "drywall", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "sheetrock", S_OCCLUSION_SOFT_WEIGHT, S_OCCLUSION_CUTOFF_SOFT_HZ },
+            { "wood", S_OCCLUSION_WOOD_WEIGHT, S_OCCLUSION_CUTOFF_WOOD_HZ },
+            { "plywood", S_OCCLUSION_WOOD_WEIGHT, S_OCCLUSION_CUTOFF_WOOD_HZ },
+            { "metal", S_OCCLUSION_METAL_WEIGHT, S_OCCLUSION_CUTOFF_METAL_HZ },
+            { "steel", S_OCCLUSION_METAL_WEIGHT, S_OCCLUSION_CUTOFF_METAL_HZ },
+            { "iron", S_OCCLUSION_METAL_WEIGHT, S_OCCLUSION_CUTOFF_METAL_HZ },
+            { "concrete", S_OCCLUSION_CONCRETE_WEIGHT, S_OCCLUSION_CUTOFF_CONCRETE_HZ },
+            { "cement", S_OCCLUSION_CONCRETE_WEIGHT, S_OCCLUSION_CUTOFF_CONCRETE_HZ },
+        };
+
+        for (size_t i = 0; i < q_countof(material_weights); i++) {
+            if (Q_strcasestr(tr.surface->material, material_weights[i].match)) {
+                weight = min(weight, material_weights[i].weight);
+                cutoff = min(cutoff, material_weights[i].cutoff_hz);
+                cutoff_matched = true;
+                break;
+            }
+        }
+    }
+
+    if (!cutoff_matched)
+        cutoff = S_OCCLUSION_CUTOFF_DEFAULT_HZ;
+
+    *out_weight = weight;
+    *out_cutoff_hz = cutoff;
+    return;
+}
+
+static const vec2_t s_occlusion_offsets[] = {
+    { 1.0f, 0.0f },
+    { -1.0f, 0.0f },
+    { 0.0f, 1.0f },
+    { 0.0f, -1.0f },
+    { M_SQRT1_2f, M_SQRT1_2f },
+    { -M_SQRT1_2f, M_SQRT1_2f },
+    { -M_SQRT1_2f, -M_SQRT1_2f },
+    { M_SQRT1_2f, -M_SQRT1_2f },
+};
+
+float S_ComputeOcclusion(const vec3_t origin, float *cutoff_hz)
+{
+    vec3_t dir;
+    VectorSubtract(origin, listener_origin, dir);
+    float dist = VectorNormalize(dir);
+    if (dist <= 0.0f) {
+        if (cutoff_hz)
+            *cutoff_hz = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        return 0.0f;
+    }
+
+    vec3_t right, up;
+    MakeNormalVectors(dir, right, up);
+
+    float source_radius = S_OCCLUSION_RADIUS_BASE + dist * S_OCCLUSION_RADIUS_SCALE;
+    source_radius = min(source_radius, S_OCCLUSION_RADIUS_MAX);
+    float listener_radius = max(source_radius * 0.6f, S_OCCLUSION_RADIUS_BASE * 0.5f);
+    listener_radius = min(listener_radius, S_OCCLUSION_RADIUS_MAX);
+
+    float direct = 0.0f;
+    float direct_cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+    S_OcclusionTrace(listener_origin, origin, &direct, &direct_cutoff);
+    float blocked = 0.0f;
+    float blocked_cutoff_weighted = 0.0f;
+    float blocked_cutoff_weight = 0.0f;
+    int samples = 0;
+
+    for (int i = 0; i < (int)q_countof(s_occlusion_offsets); i++) {
+        vec3_t endpoint;
+        VectorMA(origin, s_occlusion_offsets[i][0] * source_radius, right, endpoint);
+        VectorMA(endpoint, s_occlusion_offsets[i][1] * source_radius, up, endpoint);
+        float weight = 0.0f;
+        float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        S_OcclusionTrace(listener_origin, endpoint, &weight, &cutoff);
+        blocked += weight;
+        if (weight > 0.0f) {
+            blocked_cutoff_weighted += cutoff * weight;
+            blocked_cutoff_weight += weight;
+        }
+        samples++;
+    }
+
+    for (int i = 0; i < (int)q_countof(s_occlusion_offsets); i++) {
+        vec3_t start;
+        VectorMA(listener_origin, s_occlusion_offsets[i][0] * listener_radius, right, start);
+        VectorMA(start, s_occlusion_offsets[i][1] * listener_radius, up, start);
+        float weight = 0.0f;
+        float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        S_OcclusionTrace(start, origin, &weight, &cutoff);
+        blocked += weight;
+        if (weight > 0.0f) {
+            blocked_cutoff_weighted += cutoff * weight;
+            blocked_cutoff_weight += weight;
+        }
+        samples++;
+    }
+
+    float spread = samples ? (blocked / (float)samples) : 0.0f;
+    float spread_cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+    if (blocked_cutoff_weight > 0.0f)
+        spread_cutoff = blocked_cutoff_weighted / blocked_cutoff_weight;
+    float occlusion = FASTLERP(direct, spread, S_OCCLUSION_DIFFRACTION_WEIGHT);
+    float cutoff = FASTLERP(direct_cutoff, spread_cutoff, S_OCCLUSION_DIFFRACTION_WEIGHT);
+    occlusion = Q_clipf((occlusion - S_OCCLUSION_CLEAR_MARGIN) /
+                        (1.0f - S_OCCLUSION_CLEAR_MARGIN),
+                        0.0f, 1.0f);
+
+    cutoff = Q_clipf(cutoff, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+    if (cutoff_hz)
+        *cutoff_hz = cutoff;
+
+    return occlusion;
+}
+
+void S_ResetOcclusion(channel_t *ch)
+{
+    if (!ch)
+        return;
+
+    ch->occlusion = 0.0f;
+    ch->occlusion_target = 0.0f;
+    ch->occlusion_time = 0;
+    ch->occlusion_mix = 0.0f;
+    ch->occlusion_cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+    ch->occlusion_cutoff_target = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+}
+
+float S_SmoothOcclusion(channel_t *ch, float target)
+{
+    float dt = Q_clipf(cls.frametime, 0.0f, 0.1f);
+    float rate = (target > ch->occlusion) ? S_OCCLUSION_ATTACK_RATE : S_OCCLUSION_RELEASE_RATE;
+    float lerp = 1.0f - expf(-rate * dt);
+
+    ch->occlusion = FASTLERP(ch->occlusion, target, lerp);
+    ch->occlusion_cutoff = FASTLERP(ch->occlusion_cutoff, ch->occlusion_cutoff_target, lerp);
+    ch->occlusion_cutoff = Q_clipf(ch->occlusion_cutoff, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+    if (ch->occlusion < 0.001f) {
+        ch->occlusion = 0.0f;
+        ch->occlusion_cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+    }
+
+    return ch->occlusion;
+}
+
+float S_GetOcclusion(channel_t *ch, const vec3_t origin)
+{
+    if (!ch || !s_occlusion || !s_occlusion->integer || cls.state != ca_active || !cl.bsp) {
+        S_ResetOcclusion(ch);
+        return 0.0f;
+    }
+
+    if (cl.time >= ch->occlusion_time) {
+        float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        ch->occlusion_target = S_ComputeOcclusion(origin, &cutoff);
+        ch->occlusion_cutoff_target = cutoff;
+        int jitter = (ch->entnum & 7) * 3;
+        ch->occlusion_time = cl.time + S_OCCLUSION_UPDATE_MS + jitter;
+    }
+
+    return S_SmoothOcclusion(ch, ch->occlusion_target);
+}
+
+float S_MapOcclusion(float occlusion)
+{
+    if (occlusion <= 0.0f)
+        return 0.0f;
+
+    float strength = 1.0f;
+    if (s_occlusion_strength)
+        strength = Q_clipf(s_occlusion_strength->value, 0.0f, 2.0f);
+
+    float shaped = powf(occlusion, S_OCCLUSION_CURVE);
+    return Q_clipf(shaped * strength, 0.0f, 1.0f);
 }
 
 /*

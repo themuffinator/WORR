@@ -54,13 +54,20 @@ typedef struct mtexinfo_s {  // used internally due to name len probs //ZOID
     char                name[MAX_TEXNAME];
 
 #if USE_REF
+    int                 radiance;
     vec3_t              axis[2];
     vec2_t              offset;
+#if REF_VKPT
+    struct pbr_material_s *material;
+#endif
+#if REF_GL
     struct image_s      *image; // used for texturing
+#endif
     struct mtexinfo_s   *next; // used for animation
     int                 numframes;
 #endif
 #if USE_CLIENT
+    char                step_material[16];
     int                 step_id;
 #endif
 } mtexinfo_t;
@@ -69,6 +76,12 @@ typedef struct mtexinfo_s {  // used internally due to name len probs //ZOID
 typedef struct {
     vec3_t      point;
 } mvertex_t;
+
+typedef struct {
+    uint32_t    normal;
+    uint32_t    tangent;
+    uint32_t    bitangent;
+} mbasis_t;
 
 typedef struct {
     uint32_t    v[2];
@@ -108,6 +121,7 @@ typedef struct mface_s {
     int             drawflags; // DSURF_PLANEBACK, etc
     int             statebits;
     int             firstvert;
+    int             firstbasis;
     uint16_t        light_s, light_t;
     float           stylecache[MAX_LIGHTMAPS];
 
@@ -308,12 +322,21 @@ typedef struct {
     int             numsurfedges;
     msurfedge_t     *surfedges;
 
+    int             numbasisvectors;
+    vec3_t          *basisvectors;
+
+    int             numbases;
+    mbasis_t        *bases;
+
     lightgrid_t     lightgrid;
 
     bsp_normals_t   normals;
 
     bool            lm_decoupled;
 #endif
+    byte            *pvs_matrix;
+    byte            *pvs2_matrix;
+    bool            pvs_patched;
     bool            extended;   // QBSP extended format
     bool            has_bspx;   // has BSPX header
 
@@ -347,6 +370,10 @@ const lightgrid_sample_t *BSP_LookupLightgrid(const lightgrid_t *grid, const uin
 void BSP_ClusterVis(const bsp_t *bsp, visrow_t *mask, int cluster, int vis);
 const mleaf_t *BSP_PointLeaf(const mnode_t *node, const vec3_t p);
 const mmodel_t *BSP_InlineModel(const bsp_t *bsp, const char *name);
+
+byte *BSP_GetPvs(bsp_t *bsp, int cluster);
+byte *BSP_GetPvs2(bsp_t *bsp, int cluster);
+bool BSP_SavePatchedPVS(bsp_t *bsp);
 
 void BSP_Init(void);
 

@@ -11,64 +11,59 @@ remaining for the vote. - Automatic Closing: The menu automatically closes itsel
 ends (either by passing, failing, or timing out) while it is open.*/
 
 #include "../g_local.hpp"
-#include "../commands/commands.hpp"
+#include "../commands/command_system.hpp"
+#include "menu_ui_helpers.hpp"
 
-void OpenVoteMenu(gentity_t* ent) {
-	if (!Vote_Menu_Active(ent)) return;
+namespace {
 
-	auto menu = std::make_unique<Menu>();
-	for (size_t i = 0; i < 18; ++i)
-		menu->entries.emplace_back("", MenuAlign::Center);
+void UpdateVoteMenu(gentity_t *ent, bool openMenu) {
+  if (!ent || !ent->client)
+    return;
+  if (!level.vote.time || !level.vote.client || !level.vote.cmd)
+    return;
 
-	menu->onUpdate = [](gentity_t* ent, const Menu& m) {
-		if (!Vote_Menu_Active(ent)) {
-			MenuSystem::Close(ent);
-			return;
-		}
+  const int elapsed = (level.time - level.vote.time).seconds<int>();
+  const int timeout = std::max(0, 30 - elapsed);
 
-		int timeout = 30 - (level.time - level.vote.time).seconds<int>();
-		if (timeout <= 0) {
-			MenuSystem::Close(ent);
-			return;
-		}
+  std::string cmdLine = std::string(level.vote.cmd->name);
+  if (!level.vote.arg.empty())
+    cmdLine = fmt::format("{} {}", level.vote.cmd->name, level.vote.arg.c_str());
 
-		auto& menu = const_cast<Menu&>(m);
-		int i = 2;
-		menu.entries[i++].text = fmt::format("{} called a vote:", level.vote.client->sess.netName);
-		i = 4;
-		menu.entries[i++].text = fmt::format("{} {}", level.vote.cmd->name, level.vote.arg.c_str());
+  const bool canVote = (level.time - level.vote.time) >= 3_sec;
+  std::string readyLabel;
+  std::string readyCountdown;
+  if (!canVote) {
+    const int remaining = std::max(0, 3 - elapsed);
+    readyLabel = "GET READY TO VOTE!";
+    readyCountdown = fmt::format("{}...", remaining);
+  }
 
-		if (level.vote.time + 3_sec > level.time) {
-			i = 7;
-			menu.entries[i++].text = "GET READY TO VOTE!";
-			i = 8;
-			menu.entries[i++].text = fmt::format("{}...", 3 - (level.time - level.vote.time).seconds<int>());
-		}
-		else {
-			i = 7;
-			menu.entries[i++].text = "[ YES ]";
-			if (i > 0 && i <= menu.entries.size())
-				menu.entries[static_cast<int>(i) - 1].onSelect = [](gentity_t* e, Menu&) {
-				level.vote.countYes++;
-				e->client->pers.voted = 1;
-				gi.Client_Print(e, PRINT_HIGH, "Vote cast.\n");
-				MenuSystem::Close(e);
-				};
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_vote_line_0",
+                 fmt::format("{} called a vote:", level.vote.client->sess.netName));
+  cmd.AppendCvar("ui_vote_line_1", "");
+  cmd.AppendCvar("ui_vote_line_2", cmdLine);
+  cmd.AppendCvar("ui_vote_can_vote", canVote ? "1" : "0");
+  cmd.AppendCvar("ui_vote_ready_label", readyLabel);
+  cmd.AppendCvar("ui_vote_ready_countdown", readyCountdown);
+  cmd.AppendCvar("ui_vote_time_left", fmt::format("{}", timeout));
+  if (openMenu)
+    cmd.AppendCommand("pushmenu vote_menu");
+  cmd.Flush();
+}
 
-			i = 8;
-			menu.entries[i++].text = "[ NO ]";
-			if (i > 0 && i <= menu.entries.size())
-				menu.entries[static_cast<int>(i) - 1].onSelect = [](gentity_t* e, Menu&) {
-				level.vote.countNo++;
-				e->client->pers.voted = -1;
-				gi.Client_Print(e, PRINT_HIGH, "Vote cast.\n");
-				MenuSystem::Close(e);
-				};
-		}
+} // namespace
 
-		i = 16;
-		menu.entries[i].text = fmt::format("{}", timeout);
-		};
+void OpenVoteMenu(gentity_t *ent) {
+  if (!Vote_Menu_Active(ent))
+    return;
+  ent->client->ui.voteActive = true;
+  ent->client->ui.voteNextUpdate = level.time;
+  UpdateVoteMenu(ent, true);
+}
 
-	MenuSystem::Open(ent, std::move(menu));
+void RefreshVoteMenu(gentity_t *ent) {
+  if (!Vote_Menu_Active(ent))
+    return;
+  UpdateVoteMenu(ent, false);
 }

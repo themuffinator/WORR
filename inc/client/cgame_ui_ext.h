@@ -22,9 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 extern "C" {
 #endif
 
-#define CGAME_UI_API_VERSION 2
-#define CGAME_UI_IMPORT_EXT "CGameUI_Import_v2"
-#define CGAME_UI_EXPORT_EXT "CGameUI_Export_v2"
+#define CGAME_UI_API_VERSION 3
+#define CGAME_UI_IMPORT_EXT "CGameUI_Import_v3"
+#define CGAME_UI_EXPORT_EXT "CGameUI_Export_v3"
 
 typedef struct cgame_ui_import_s cgame_ui_import_t;
 typedef struct cgame_ui_export_s cgame_ui_export_t;

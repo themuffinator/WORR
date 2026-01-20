@@ -5,11 +5,13 @@ commands_client.cpp - Implements all general client-side commands.*/
 
 #include "command_system.hpp"
 #include "command_registration.hpp"
+#include "command_voting.hpp"
 #include "../g_local.hpp"
 #include "../client/client_session_service_impl.hpp"
 #include "../gameplay/map_flag_parser.hpp"
 #include "../gameplay/client_config.hpp"
 #include "../monsters/m_player.hpp"
+#include "../menu/menu_ui_list.hpp"
 #include "../../bgame/weapon_pref_utils.hpp"
 #include <string>
 #include <format>
@@ -19,6 +21,8 @@ commands_client.cpp - Implements all general client-side commands.*/
 #include <cctype>
 #include <ranges>
 #include <sstream>
+
+void MapSelector_CastVote(gentity_t* ent, int voteIndex);
 
 namespace Commands {
 
@@ -39,6 +43,7 @@ namespace Commands {
 	void Motd(gentity_t* ent, const CommandArgs& args);
 	void MyMap(gentity_t* ent, const CommandArgs& args);
 	void MySkill(gentity_t* ent, const CommandArgs& args);
+	void Vote(gentity_t* ent, const CommandArgs& args);
 	void Score(gentity_t* ent, const CommandArgs& args);
 	void Stats(gentity_t* ent, const CommandArgs& args);
 	void JoinTeam(gentity_t* ent, const CommandArgs& args);
@@ -46,7 +51,67 @@ namespace Commands {
 	void TimeOut(gentity_t* ent, const CommandArgs& args);
 	void Timer(gentity_t* ent, const CommandArgs& args);
 	void UnHook(gentity_t* ent, const CommandArgs& args);
+	void DmJoinClose(gentity_t* ent, const CommandArgs& args);
+	void DmHostInfo(gentity_t* ent, const CommandArgs& args);
+	void DmMatchInfo(gentity_t* ent, const CommandArgs& args);
+	void WelcomeContinue(gentity_t* ent, const CommandArgs& args);
+	void WorrUiListPrev(gentity_t* ent, const CommandArgs& args);
+	void WorrUiListNext(gentity_t* ent, const CommandArgs& args);
+	void WorrUiListClose(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteMap(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteMapFlags(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteMapFlag(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteMapClear(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteGametype(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteRuleset(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteTimelimit(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteScorelimit(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteUnlagged(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteRandom(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteArena(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteNextMap(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteRestart(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteShuffle(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteBalance(gentity_t* ent, const CommandArgs& args);
+	void WorrCallvoteCointoss(gentity_t* ent, const CommandArgs& args);
+	void WorrMyMapMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrMyMapFlags(gentity_t* ent, const CommandArgs& args);
+	void WorrMyMapFlag(gentity_t* ent, const CommandArgs& args);
+	void WorrMyMapClear(gentity_t* ent, const CommandArgs& args);
+	void WorrMyMapQueue(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupWelcome(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupStart(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupFormat(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupMaxPlayers(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupGametype(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupModifier(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupLength(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupType(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupBestOf(gentity_t* ent, const CommandArgs& args);
+	void WorrSetupSkip(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyInfo(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyMaps(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyVeto(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyPick(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyBan(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyReplayMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyReplayConfirm(gentity_t* ent, const CommandArgs& args);
+	void WorrTourneyReplay(gentity_t* ent, const CommandArgs& args);
+	void WorrVoteYes(gentity_t* ent, const CommandArgs& args);
+	void WorrVoteNo(gentity_t* ent, const CommandArgs& args);
+	void WorrVoteClose(gentity_t* ent, const CommandArgs& args);
+	void WorrMapSelectorVote(gentity_t* ent, const CommandArgs& args);
+	void WorrMapSelectorClose(gentity_t* ent, const CommandArgs& args);
+	void WorrMatchStatsMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrMatchStatsClose(gentity_t* ent, const CommandArgs& args);
+	void WorrForfeitMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrForfeitYes(gentity_t* ent, const CommandArgs& args);
+	void WorrAdminMenu(gentity_t* ent, const CommandArgs& args);
+	void WorrAdminCommands(gentity_t* ent, const CommandArgs& args);
 	void Wave(gentity_t* ent, const CommandArgs& args);
+	void Say(gentity_t* ent, const CommandArgs& args);
+	void SayTeam(gentity_t* ent, const CommandArgs& args);
 	void Where(gentity_t* ent, const CommandArgs& args);
 
 namespace inventory {
@@ -182,6 +247,283 @@ Allows the losing player in a duel to forfeit the match.
 	void Hook(gentity_t* ent, const CommandArgs& args) {
 		if (!g_allow_grapple->integer || !g_grapple_offhand->integer) return;
 		Weapon_Hook(ent);
+	}
+
+	namespace chat {
+		constexpr size_t kChatMaxLen = 256;
+
+		Weapon WeaponFromItemId(item_id_t id) {
+			switch (id) {
+			case IT_WEAPON_GRAPPLE: return Weapon::GrapplingHook;
+			case IT_WEAPON_BLASTER: return Weapon::Blaster;
+			case IT_WEAPON_CHAINFIST: return Weapon::Chainfist;
+			case IT_WEAPON_SHOTGUN: return Weapon::Shotgun;
+			case IT_WEAPON_SSHOTGUN: return Weapon::SuperShotgun;
+			case IT_WEAPON_MACHINEGUN: return Weapon::Machinegun;
+			case IT_WEAPON_ETF_RIFLE: return Weapon::ETFRifle;
+			case IT_WEAPON_CHAINGUN: return Weapon::Chaingun;
+			case IT_AMMO_GRENADES: return Weapon::HandGrenades;
+			case IT_AMMO_TRAP: return Weapon::Trap;
+			case IT_AMMO_TESLA: return Weapon::TeslaMine;
+			case IT_WEAPON_GLAUNCHER: return Weapon::GrenadeLauncher;
+			case IT_WEAPON_PROXLAUNCHER: return Weapon::ProxLauncher;
+			case IT_WEAPON_RLAUNCHER: return Weapon::RocketLauncher;
+			case IT_WEAPON_HYPERBLASTER: return Weapon::HyperBlaster;
+			case IT_WEAPON_IONRIPPER: return Weapon::IonRipper;
+			case IT_WEAPON_PLASMAGUN: return Weapon::PlasmaGun;
+			case IT_WEAPON_PLASMABEAM: return Weapon::PlasmaBeam;
+			case IT_WEAPON_THUNDERBOLT: return Weapon::Thunderbolt;
+			case IT_WEAPON_RAILGUN: return Weapon::Railgun;
+			case IT_WEAPON_PHALANX: return Weapon::Phalanx;
+			case IT_WEAPON_BFG: return Weapon::BFG10K;
+			case IT_WEAPON_DISRUPTOR: return Weapon::Disruptor;
+			default: return Weapon::None;
+			}
+		}
+
+		std::string ShortWeaponName(const Item* weapon) {
+			if (!weapon)
+				return {};
+
+			const Weapon weapon_id = WeaponFromItemId(weapon->id);
+			if (weapon_id != Weapon::None) {
+				const std::string_view abbr = WeaponToAbbreviation(weapon_id);
+				if (!abbr.empty())
+					return std::string(abbr);
+			}
+
+			return weapon->useName ? weapon->useName : "";
+		}
+
+		std::string LongWeaponName(const Item* weapon) {
+			if (!weapon)
+				return {};
+
+			return weapon->useName ? weapon->useName : "";
+		}
+
+		int PowerArmorCells(const gentity_t* ent) {
+			if (!ent || !ent->client)
+				return -1;
+
+			if (ent->client->pers.inventory[IT_POWER_SCREEN] > 0 ||
+				ent->client->pers.inventory[IT_POWER_SHIELD] > 0)
+				return ent->client->pers.inventory[IT_AMMO_CELLS];
+
+			return -1;
+		}
+
+		std::string Macro_Health(gentity_t* ent) {
+			return std::format("H:{}", ent->health);
+		}
+
+		std::string Macro_RawHealth(gentity_t* ent) {
+			return std::format("{}", ent->health);
+		}
+
+		std::string Macro_ShortArmor(gentity_t* ent) {
+			const item_id_t armor_index = ArmorIndex(ent);
+			const int count = (armor_index == IT_NULL) ? 0 : ent->client->pers.inventory[armor_index];
+			const int power = PowerArmorCells(ent);
+			if (power >= 0)
+				return std::format("A:{} P:{}", count, power);
+			return std::format("A:{}", count);
+		}
+
+		std::string Macro_RawArmor(gentity_t* ent) {
+			const item_id_t armor_index = ArmorIndex(ent);
+			if (armor_index == IT_NULL)
+				return "0";
+			return std::format("{}", ent->client->pers.inventory[armor_index]);
+		}
+
+		std::string Macro_LongArmor(gentity_t* ent) {
+			const item_id_t armor_index = ArmorIndex(ent);
+			const int count = (armor_index == IT_NULL) ? 0 : ent->client->pers.inventory[armor_index];
+			const char* armor_name = (armor_index == IT_NULL) ? nullptr : GetItemByIndex(armor_index)->useName;
+			const int power = PowerArmorCells(ent);
+
+			std::string result;
+			if (armor_name && *armor_name)
+				result = std::format("A:{} {}", count, armor_name);
+			else
+				result = std::format("A:{}", count);
+
+			if (power >= 0)
+				result += std::format(" P:{}", power);
+
+			return result;
+		}
+
+		std::string Macro_LongWeapon(gentity_t* ent) {
+			const Item* weapon = ent->client->pers.weapon;
+			if (!weapon)
+				return {};
+
+			std::string name = LongWeaponName(weapon);
+			if (name.empty())
+				return {};
+
+			if (weapon->ammo == IT_NULL)
+				return name;
+
+			const int ammo = ent->client->pers.inventory[weapon->ammo];
+			return std::format("{}:{}", name, ammo);
+		}
+
+		std::string Macro_ShortWeapon(gentity_t* ent) {
+			const Item* weapon = ent->client->pers.weapon;
+			if (!weapon)
+				return {};
+
+			std::string name = ShortWeaponName(weapon);
+			if (name.empty())
+				return {};
+
+			if (weapon->ammo == IT_NULL)
+				return name;
+
+			const int ammo = ent->client->pers.inventory[weapon->ammo];
+			return std::format("{}:{}", name, ammo);
+		}
+
+		std::string Macro_Location(gentity_t* ent) {
+			return Location_NameFor(ent);
+		}
+
+		std::string NearbyPlayers(gentity_t* ent, bool team_only) {
+			if (!ent || ent->health < 0)
+				return {};
+
+			std::string result;
+			for (auto player : active_players()) {
+				if (player == ent)
+					continue;
+				if (player->health <= 0)
+					continue;
+				if (team_only && !OnSameTeam(ent, player))
+					continue;
+				if (!visible(ent, player))
+					continue;
+
+				if (!result.empty())
+					result.append(", ");
+				result.append(player->client->sess.netName);
+
+				if (result.size() > 200)
+					break;
+			}
+
+			return result;
+		}
+
+		std::string Macro_NearByTeam(gentity_t* ent) {
+			return NearbyPlayers(ent, true);
+		}
+
+		std::string Macro_NearByAll(gentity_t* ent) {
+			return NearbyPlayers(ent, false);
+		}
+
+		struct chat_macro_t {
+			std::string_view symbol;
+			std::string (*replacement)(gentity_t* ent);
+		};
+
+		const std::array<chat_macro_t, 11> kChatMacros = {
+			chat_macro_t{ "%h", Macro_Health },
+			chat_macro_t{ "%H", Macro_Health },
+			chat_macro_t{ "%A", Macro_LongArmor },
+			chat_macro_t{ "%a", Macro_ShortArmor },
+			chat_macro_t{ "%W", Macro_LongWeapon },
+			chat_macro_t{ "%w", Macro_ShortWeapon },
+			chat_macro_t{ "%l", Macro_Location },
+			chat_macro_t{ "%n", Macro_NearByTeam },
+			chat_macro_t{ "%N", Macro_NearByAll },
+			chat_macro_t{ "#h", Macro_RawHealth },
+			chat_macro_t{ "#a", Macro_RawArmor }
+		};
+
+		void ExpandMacros(gentity_t* ent, std::string& text, size_t max_len) {
+			for (const auto& macro : kChatMacros) {
+				size_t pos = 0;
+				while ((pos = text.find(macro.symbol, pos)) != std::string::npos) {
+					std::string replacement = macro.replacement(ent);
+					if (replacement.empty()) {
+						text.erase(pos, macro.symbol.size());
+						continue;
+					}
+
+					if (text.size() - macro.symbol.size() + replacement.size() > max_len) {
+						if (g_verbose->integer)
+							gi.Com_PrintFmt("Chat macro overflow from {}\n", ent->client->sess.netName);
+						return;
+					}
+
+					text.replace(pos, macro.symbol.size(), replacement);
+					pos += replacement.size();
+				}
+			}
+		}
+
+		void SanitizeMessage(std::string& text) {
+			for (char& ch : text) {
+				const unsigned char uch = static_cast<unsigned char>(ch);
+				if (ch == '\r' || ch == '\n' || uch == 127)
+					ch = '.';
+			}
+		}
+
+		void SayInternal(gentity_t* ent, const CommandArgs& args, bool team) {
+			if (!ent || !ent->client)
+				return;
+			if (args.count() < 2)
+				return;
+
+			std::string message = args.joinFrom(1);
+			if (message.empty())
+				return;
+
+			const std::string prefix = team
+				? std::format("({}): ", ent->client->sess.netName)
+				: std::format("{}: ", ent->client->sess.netName);
+
+			if (prefix.size() >= kChatMaxLen)
+				return;
+
+			const size_t max_payload = kChatMaxLen - prefix.size();
+			if (message.size() > max_payload)
+				message.resize(max_payload);
+			if (message.empty())
+				return;
+
+			ExpandMacros(ent, message, max_payload);
+			if (message.empty())
+				return;
+
+			SanitizeMessage(message);
+
+			const std::string text = prefix + message + "\n";
+			if (CheckFlood(ent))
+				return;
+
+			if (g_dedicated->integer)
+				gi.Com_Print(text.c_str());
+
+			for (auto other : active_clients()) {
+				if (team && other != ent && !OnSameTeam(ent, other))
+					continue;
+				gi.Client_Print(other, PRINT_CHAT, text.c_str());
+			}
+		}
+	} // namespace chat
+
+	void Say(gentity_t* ent, const CommandArgs& args) {
+		chat::SayInternal(ent, args, false);
+	}
+
+	void SayTeam(gentity_t* ent, const CommandArgs& args) {
+		chat::SayInternal(ent, args, true);
 	}
 
 /*
@@ -517,17 +859,21 @@ Enables administrative permissions when the correct password is supplied.
 
 			if (deathmatch->integer) {
 				if (Vote_Menu_Active(ent)) return;
+				if (IsUiMenuOpen(cl)) {
+					CloseActiveMenu(ent);
+					return;
+				}
 				if (cl->initialMenu.frozen) {
-					if (!cl->menu.current && !cl->menu.restoreStatusBar)
+					if (cl->initialMenu.dmWelcomeActive)
+						return;
+					if (!cl->initialMenu.dmJoinActive)
 						OpenJoinMenu(ent);
 					return;
 				}
-				if (cl->menu.current || cl->menu.restoreStatusBar) {
-					CloseActiveMenu(ent);
-				}
-				else {
+				if (cl->initialMenu.dmJoinActive)
+					ForceCloseDmJoinMenu(ent);
+				else
 					OpenJoinMenu(ent);
-				}
 				return;
 			}
 
@@ -597,10 +943,8 @@ Enables administrative permissions when the correct password is supplied.
 		=============
 		*/
 		void InvUse(gentity_t* ent, const CommandArgs& args) {
-			if (deathmatch->integer && ent->client->menu.current) {
-				ActivateSelectedMenuItem(ent);
+			if (deathmatch->integer && IsBlockingUiMenuOpen(ent->client))
 				return;
-			}
 			if (level.intermission.time || !ClientIsPlaying(ent->client) || ent->health <= 0) return;
 
 			ValidateSelectedItem(ent);
@@ -1039,7 +1383,7 @@ Toggles the eyecam view when following other players.
 			ent->client->showHelp = false;
 			ent->client->showInventory = false;
 			globals.serverFlags &= ~SERVER_FLAG_SLOW_TIME;
-			if (deathmatch->integer && (ent->client->menu.current || ent->client->menu.restoreStatusBar)) {
+			if (deathmatch->integer && IsUiMenuOpen(ent->client)) {
 				if (Vote_Menu_Active(ent)) return;
 				CloseActiveMenu(ent);
 			}
@@ -1061,7 +1405,7 @@ Toggles the eyecam view when following other players.
 		ent->client->showHelp = false;
 		globals.serverFlags &= ~SERVER_FLAG_SLOW_TIME;
 
-		if (ent->client->menu.current || ent->client->menu.restoreStatusBar) CloseActiveMenu(ent);
+		if (IsUiMenuOpen(ent->client)) CloseActiveMenu(ent);
 
 		if (ent->client->showScores) {
 			ent->client->showScores = false;
@@ -1160,6 +1504,7 @@ Toggles the eyecam view when following other players.
 			return;
 		}
 
+		const bool wasSpectator = !ClientIsPlaying(ent->client);
 		Team team = StringToTeamNum(args.getString(1).data());
 		if (team != Team::None) {
 			const bool isBot = (ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot;
@@ -1168,8 +1513,540 @@ Toggles the eyecam view when following other players.
 				return;
 			}
 
-			::SetTeam(ent, team, false, false, false);
+			const bool changed = ::SetTeam(ent, team, false, false, false);
+			if (ent->client->initialMenu.frozen &&
+				(changed || (team == Team::Spectator && wasSpectator))) {
+				ent->client->initialMenu.frozen = false;
+				ent->client->initialMenu.shown = true;
+				ent->client->initialMenu.delay = 0_sec;
+				ent->client->initialMenu.hostSetupDone = true;
+				ent->client->initialMenu.dmWelcomeActive = false;
+				ent->client->initialMenu.dmJoinActive = false;
+			}
 		}
+	}
+
+	void DmJoinClose(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+
+		CloseDmJoinMenu(ent);
+	}
+
+	void DmHostInfo(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+
+		OpenDmHostInfoMenu(ent);
+	}
+
+	void DmMatchInfo(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+
+		OpenDmMatchInfoMenu(ent);
+	}
+
+	void WelcomeContinue(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+
+		auto* cl = ent->client;
+		if (!cl->initialMenu.frozen && !cl->initialMenu.dmWelcomeActive)
+			return;
+
+		cl->initialMenu.frozen = false;
+		cl->initialMenu.shown = true;
+		cl->initialMenu.delay = 0_sec;
+		cl->initialMenu.hostSetupDone = true;
+		cl->initialMenu.dmWelcomeActive = false;
+		cl->initialMenu.dmJoinActive = false;
+
+		if (match_autoJoin && match_autoJoin->integer) {
+			Team targetTeam = Teams() ? PickTeam(-1) : Team::Free;
+			::SetTeam(ent, targetTeam, false, false, false);
+		}
+		else {
+			OpenJoinMenu(ent);
+		}
+	}
+
+	static bool TryLaunchVoteWithFeedback(gentity_t* ent, std::string_view voteName, std::string_view voteArg) {
+		auto result = TryLaunchVote(ent, voteName, voteArg);
+		if (!result.success) {
+			if (!result.message.empty()) {
+				gi.Client_Print(ent, PRINT_HIGH, std::format("{}\n", result.message).c_str());
+			}
+			return false;
+		}
+		return true;
+	}
+
+	void WorrUiListPrev(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		UiList_Prev(ent);
+	}
+
+	void WorrUiListNext(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		UiList_Next(ent);
+	}
+
+	void WorrUiListClose(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.list.kind = UiListKind::None;
+		ent->client->ui.list.page = 0;
+	}
+
+	void WorrCallvoteMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenCallvoteMenu(ent);
+	}
+
+	void WorrCallvoteMap(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenCallvoteMapMenu(ent);
+			return;
+		}
+		const std::string_view mapName = args.getString(1);
+		const std::string voteArg = BuildMapFlagVoteArg(ent->client->ui.callvoteMap, mapName);
+		TryLaunchVoteWithFeedback(ent, "map", voteArg);
+	}
+
+	void WorrCallvoteMapFlags(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenCallvoteMapFlagsMenu(ent);
+	}
+
+	void WorrCallvoteMapFlag(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		if (!ToggleMapFlagByCode(ent->client->ui.callvoteMap, args.getString(1))) {
+			gi.Client_Print(ent, PRINT_HIGH, "Unknown map flag.\n");
+			return;
+		}
+		RefreshCallvoteMapFlagsMenu(ent);
+		UiList_Refresh(ent, false);
+	}
+
+	void WorrCallvoteMapClear(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.callvoteMap.enableFlags = 0;
+		ent->client->ui.callvoteMap.disableFlags = 0;
+		RefreshCallvoteMapFlagsMenu(ent);
+		UiList_Refresh(ent, false);
+	}
+
+	void WorrCallvoteGametype(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteGametypeMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "gametype", args.getString(1));
+	}
+
+	void WorrCallvoteRuleset(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteRulesetMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "ruleset", args.getString(1));
+	}
+
+	void WorrCallvoteTimelimit(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteTimelimitMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "timelimit", args.getString(1));
+	}
+
+	void WorrCallvoteScorelimit(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteScorelimitMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "scorelimit", args.getString(1));
+	}
+
+	void WorrCallvoteUnlagged(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteUnlaggedMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "unlagged", args.getString(1));
+	}
+
+	void WorrCallvoteRandom(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteRandomMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "random", args.getString(1));
+	}
+
+	void WorrCallvoteArena(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			OpenCallvoteArenaMenu(ent);
+			return;
+		}
+		TryLaunchVoteWithFeedback(ent, "arena", args.getString(1));
+	}
+
+	void WorrCallvoteNextMap(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		TryLaunchVoteWithFeedback(ent, "nextmap", "");
+	}
+
+	void WorrCallvoteRestart(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		TryLaunchVoteWithFeedback(ent, "restart", "");
+	}
+
+	void WorrCallvoteShuffle(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		TryLaunchVoteWithFeedback(ent, "shuffle", "");
+	}
+
+	void WorrCallvoteBalance(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		TryLaunchVoteWithFeedback(ent, "balance", "");
+	}
+
+	void WorrCallvoteCointoss(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		TryLaunchVoteWithFeedback(ent, "cointoss", "");
+	}
+
+	void WorrMyMapMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenMyMapMenu(ent);
+	}
+
+	void WorrMyMapFlags(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenMyMapFlagsMenu(ent);
+	}
+
+	void WorrMyMapFlag(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		if (!ToggleMapFlagByCode(ent->client->ui.mymap, args.getString(1))) {
+			gi.Client_Print(ent, PRINT_HIGH, "Unknown map flag.\n");
+			return;
+		}
+		RefreshMyMapFlagsMenu(ent);
+		UiList_Refresh(ent, false);
+	}
+
+	void WorrMyMapClear(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.mymap.enableFlags = 0;
+		ent->client->ui.mymap.disableFlags = 0;
+		RefreshMyMapFlagsMenu(ent);
+		UiList_Refresh(ent, false);
+	}
+
+	void WorrMyMapQueue(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		if (!CheckMyMapAllowed(ent))
+			return;
+		std::vector<std::string> flagArgs = BuildMapFlagArgs(ent->client->ui.mymap);
+		QueueMyMapRequest(ent, args.getString(1), flagArgs);
+	}
+
+	void WorrSetupWelcome(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenSetupWelcomeMenu(ent);
+	}
+
+	void WorrSetupStart(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenSetupMatchFormatMenu(ent);
+	}
+
+	void WorrSetupFormat(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupMatchFormatMenu(ent);
+			return;
+		}
+
+		const std::string_view value = args.getString(1);
+		ent->client->ui.setup.format = std::string(value);
+
+		if (value == "tournament") {
+			std::string error;
+			if (!Tournament_LoadConfig({}, &error)) {
+				if (!error.empty())
+					gi.LocClient_Print(ent, PRINT_HIGH, "Tournament load failed: {}\n", error.c_str());
+				return;
+			}
+			CloseActiveMenu(ent);
+			if (ent->client->initialMenu.frozen)
+				OpenJoinMenu(ent);
+			return;
+		}
+
+		OpenSetupMaxPlayersMenu(ent);
+	}
+
+	void WorrSetupMaxPlayers(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupMaxPlayersMenu(ent);
+			return;
+		}
+		auto parsed = CommandArgs::ParseInt(args.getString(1));
+		if (!parsed)
+			return;
+		ent->client->ui.setup.maxPlayers = *parsed;
+		OpenSetupGametypeMenu(ent);
+	}
+
+	void WorrSetupGametype(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupGametypeMenu(ent);
+			return;
+		}
+		ent->client->ui.setup.gametype = std::string(args.getString(1));
+		if (auto gt = Game::FromString(ent->client->ui.setup.gametype)) {
+			if (HasFlag(Game::GetInfo(*gt).flags, GameFlags::OneVOne))
+				ent->client->ui.setup.maxPlayers = 2;
+		}
+		OpenSetupModifierMenu(ent);
+	}
+
+	void WorrSetupModifier(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupModifierMenu(ent);
+			return;
+		}
+		ent->client->ui.setup.modifier = std::string(args.getString(1));
+		OpenSetupMatchLengthMenu(ent);
+	}
+
+	void WorrSetupLength(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupMatchLengthMenu(ent);
+			return;
+		}
+		ent->client->ui.setup.length = std::string(args.getString(1));
+		OpenSetupMatchTypeMenu(ent);
+	}
+
+	void WorrSetupType(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupMatchTypeMenu(ent);
+			return;
+		}
+		const std::string_view value = args.getString(1);
+		ent->client->ui.setup.type = std::string(value);
+		if (value == "tournament") {
+			OpenSetupBestOfMenu(ent);
+			return;
+		}
+		FinishSetupWizard(ent);
+	}
+
+	void WorrSetupBestOf(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2) {
+			OpenSetupBestOfMenu(ent);
+			return;
+		}
+		ent->client->ui.setup.bestOf = std::string(args.getString(1));
+		FinishSetupWizard(ent);
+	}
+
+	void WorrSetupSkip(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		CloseActiveMenu(ent);
+		if (ent->client->initialMenu.frozen)
+			OpenJoinMenu(ent);
+	}
+
+	void WorrTourneyInfo(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenTournamentInfoMenu(ent);
+	}
+
+	void WorrTourneyMaps(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenTournamentMapChoicesMenu(ent);
+	}
+
+	void WorrTourneyVeto(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenTournamentVetoMenu(ent);
+	}
+
+	void WorrTourneyPick(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			UiList_Open(ent, UiListKind::TournamentPick);
+			return;
+		}
+		TourneyPick(ent, CommandArgs{ "tourney_pick", args.getString(1) });
+	}
+
+	void WorrTourneyBan(gentity_t* ent, const CommandArgs& args) {
+		if (args.count() < 2) {
+			UiList_Open(ent, UiListKind::TournamentBan);
+			return;
+		}
+		TourneyBan(ent, CommandArgs{ "tourney_ban", args.getString(1) });
+	}
+
+	void WorrTourneyReplayMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenTournamentReplayMenu(ent);
+	}
+
+	void WorrTourneyReplayConfirm(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		auto parsed = CommandArgs::ParseInt(args.getString(1));
+		if (!parsed)
+			return;
+		OpenTournamentReplayConfirmMenu(ent, *parsed);
+	}
+
+	void WorrTourneyReplay(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		auto parsed = CommandArgs::ParseInt(args.getString(1));
+		if (!parsed)
+			return;
+
+		std::string message;
+		if (!Tournament_ReplayGame(*parsed, message)) {
+			if (!message.empty())
+				gi.Client_Print(ent, PRINT_HIGH, std::format("{}\n", message).c_str());
+		}
+		CloseActiveMenu(ent);
+	}
+
+	void WorrVoteYes(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		Vote(ent, CommandArgs{ "vote", "yes" });
+		CloseActiveMenu(ent);
+	}
+
+	void WorrVoteNo(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		Vote(ent, CommandArgs{ "vote", "no" });
+		CloseActiveMenu(ent);
+	}
+
+	void WorrVoteClose(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.voteActive = false;
+	}
+
+	void WorrMapSelectorVote(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client)
+			return;
+		if (args.count() < 2)
+			return;
+		auto parsed = CommandArgs::ParseInt(args.getString(1));
+		if (!parsed)
+			return;
+		MapSelector_CastVote(ent, *parsed);
+		ent->client->ui.mapSelectorNextUpdate = level.time;
+	}
+
+	void WorrMapSelectorClose(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.mapSelectorActive = false;
+	}
+
+	void WorrMatchStatsMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenPlayerMatchStatsMenu(ent);
+	}
+
+	void WorrMatchStatsClose(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		ent->client->ui.matchStatsActive = false;
+	}
+
+	void WorrForfeitMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		OpenForfeitMenu(ent);
+	}
+
+	void WorrForfeitYes(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		if (TryLaunchVoteWithFeedback(ent, "forfeit", "")) {
+			gi.Client_Print(ent, PRINT_HIGH, "Forfeit vote called.\n");
+		}
+		CloseActiveMenu(ent);
+	}
+
+	void WorrAdminMenu(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		if (!ent->client->sess.admin) {
+			gi.Client_Print(ent, PRINT_HIGH, "Admin access required.\n");
+			return;
+		}
+		OpenAdminSettingsMenu(ent);
+	}
+
+	void WorrAdminCommands(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client)
+			return;
+		if (!ent->client->sess.admin) {
+			gi.Client_Print(ent, PRINT_HIGH, "Admin access required.\n");
+			return;
+		}
+		OpenAdminCommandsMenu(ent);
 	}
 
 	void TimeIn(gentity_t* ent, const CommandArgs& args) {
@@ -1602,6 +2479,9 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("motd", &Motd, AllowSpectator | AllowIntermission);
 		RegisterCommand("mymap", &MyMap, AllowDead | AllowSpectator);
 		RegisterCommand("score", &Score, AllowDead | AllowIntermission | AllowSpectator, true);
+		RegisterCommand("say", &Say, AllowDead | AllowIntermission | AllowSpectator, true);
+		RegisterCommand("say_team", &SayTeam, AllowDead | AllowIntermission | AllowSpectator, true);
+		RegisterCommand("steam", &SayTeam, AllowDead | AllowIntermission | AllowSpectator, true);
 		RegisterCommand("sr", &MySkill, AllowDead | AllowSpectator);
 		RegisterCommand("stats", &Stats, AllowIntermission | AllowSpectator);
 		RegisterCommand("team", &JoinTeam, AllowDead | AllowSpectator);
@@ -1612,6 +2492,64 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("tourney_status", &TourneyStatus, AllowDead | AllowSpectator);
 		RegisterCommand("timer", &Timer, AllowSpectator | AllowDead);
 		RegisterCommand("unhook", &UnHook, {}, true);
+		RegisterCommand("worr_dm_join_close", &DmJoinClose, AllowDead | AllowSpectator);
+		RegisterCommand("worr_dm_hostinfo", &DmHostInfo, AllowDead | AllowSpectator);
+		RegisterCommand("worr_dm_matchinfo", &DmMatchInfo, AllowDead | AllowSpectator);
+		RegisterCommand("worr_welcome_continue", &WelcomeContinue, AllowDead | AllowSpectator);
+		RegisterCommand("worr_ui_list_prev", &WorrUiListPrev, AllowDead | AllowSpectator);
+		RegisterCommand("worr_ui_list_next", &WorrUiListNext, AllowDead | AllowSpectator);
+		RegisterCommand("worr_ui_list_close", &WorrUiListClose, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_menu", &WorrCallvoteMenu, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_map", &WorrCallvoteMap, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_map_flags", &WorrCallvoteMapFlags, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_map_flag", &WorrCallvoteMapFlag, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_map_clear", &WorrCallvoteMapClear, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_gametype", &WorrCallvoteGametype, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_ruleset", &WorrCallvoteRuleset, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_timelimit", &WorrCallvoteTimelimit, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_scorelimit", &WorrCallvoteScorelimit, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_unlagged", &WorrCallvoteUnlagged, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_random", &WorrCallvoteRandom, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_arena", &WorrCallvoteArena, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_nextmap", &WorrCallvoteNextMap, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_restart", &WorrCallvoteRestart, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_shuffle", &WorrCallvoteShuffle, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_balance", &WorrCallvoteBalance, AllowDead | AllowSpectator);
+		RegisterCommand("worr_callvote_cointoss", &WorrCallvoteCointoss, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mymap_menu", &WorrMyMapMenu, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mymap_flags", &WorrMyMapFlags, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mymap_flag", &WorrMyMapFlag, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mymap_clear", &WorrMyMapClear, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mymap_queue", &WorrMyMapQueue, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_welcome", &WorrSetupWelcome, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_start", &WorrSetupStart, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_format", &WorrSetupFormat, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_maxplayers", &WorrSetupMaxPlayers, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_gametype", &WorrSetupGametype, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_modifier", &WorrSetupModifier, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_length", &WorrSetupLength, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_type", &WorrSetupType, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_bestof", &WorrSetupBestOf, AllowDead | AllowSpectator);
+		RegisterCommand("worr_setup_skip", &WorrSetupSkip, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_info", &WorrTourneyInfo, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_maps", &WorrTourneyMaps, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_veto", &WorrTourneyVeto, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_pick", &WorrTourneyPick, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_ban", &WorrTourneyBan, AllowDead | AllowSpectator);
+		RegisterCommand("worr_tourney_replay_menu", &WorrTourneyReplayMenu, AllowDead | AllowSpectator | AdminOnly);
+		RegisterCommand("worr_tourney_replay_confirm", &WorrTourneyReplayConfirm, AllowDead | AllowSpectator | AdminOnly);
+		RegisterCommand("worr_tourney_replay", &WorrTourneyReplay, AllowDead | AllowSpectator | AdminOnly);
+		RegisterCommand("worr_vote_yes", &WorrVoteYes, AllowDead | AllowSpectator);
+		RegisterCommand("worr_vote_no", &WorrVoteNo, AllowDead | AllowSpectator);
+		RegisterCommand("worr_vote_close", &WorrVoteClose, AllowDead | AllowSpectator);
+		RegisterCommand("worr_mapselector_vote", &WorrMapSelectorVote, AllowDead | AllowSpectator | AllowIntermission);
+		RegisterCommand("worr_mapselector_close", &WorrMapSelectorClose, AllowDead | AllowSpectator | AllowIntermission);
+		RegisterCommand("worr_matchstats_menu", &WorrMatchStatsMenu, AllowDead | AllowSpectator);
+		RegisterCommand("worr_matchstats_close", &WorrMatchStatsClose, AllowDead | AllowSpectator);
+		RegisterCommand("worr_forfeit_menu", &WorrForfeitMenu, AllowDead | AllowSpectator);
+		RegisterCommand("worr_forfeit_yes", &WorrForfeitYes, AllowDead | AllowSpectator);
+		RegisterCommand("worr_admin_menu", &WorrAdminMenu, AllowDead | AllowSpectator | AdminOnly);
+		RegisterCommand("worr_admin_commands", &WorrAdminCommands, AllowDead | AllowSpectator | AdminOnly);
 		RegisterCommand("wave", &Wave);
 		RegisterCommand("where", &Where, AllowSpectator);
 	}

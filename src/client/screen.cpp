@@ -442,18 +442,10 @@ static bool SCR_BuildGamepadIconPath(int keynum, char *out_path, size_t out_size
     if (keynum < K_GAMEPAD_FIRST || keynum > K_GAMEPAD_LAST)
         return false;
 
-    const char *keyname = Key_KeynumToString(keynum);
-    if (!keyname || !*keyname || keyname[0] == '<')
+    int index = keynum - K_GAMEPAD_FIRST;
+    if (index < 0)
         return false;
-
-    char name[MAX_QPATH];
-    Q_strlcpy(name, keyname, sizeof(name));
-    size_t len = strlen(name);
-    for (size_t i = 0; i < len; i++) {
-        name[i] = (char)Q_tolower(name[i]);
-    }
-
-    Q_snprintf(out_path, out_size, "/gfx/controller/gamepad/%s.png", name);
+    Q_snprintf(out_path, out_size, "/gfx/controller/generic/f%04x.png", index);
     return true;
 }
 

@@ -331,15 +331,99 @@ static void underwater_filter(samplepair_t *samp, int count)
 /*
 ===============================================================================
 
+OCCLUSION FILTER
+
+===============================================================================
+*/
+
+static occlusion_biquad_t s_occlusion_biquad_default;
+
+static void DMA_CalcOcclusionBiquad(float cutoff_hz, occlusion_biquad_t *out)
+{
+    float freq = min(cutoff_hz, dma.speed * 0.45f);
+    if (freq <= 0.0f) {
+        *out = s_occlusion_biquad_default;
+        return;
+    }
+    float omega = 2.0f * M_PIf * freq / dma.speed;
+    float sin_omega = sinf(omega);
+    float cos_omega = cosf(omega);
+    float alpha = sin_omega / (2.0f * S_OCCLUSION_LOWPASS_Q);
+
+    float b0 = (1.0f - cos_omega) * 0.5f;
+    float b1 = 1.0f - cos_omega;
+    float b2 = (1.0f - cos_omega) * 0.5f;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cos_omega;
+    float a2 = 1.0f - alpha;
+
+    out->b0 = b0 / a0;
+    out->b1 = b1 / a0;
+    out->b2 = b2 / a0;
+    out->a1 = a1 / a0;
+    out->a2 = a2 / a0;
+}
+
+static void DMA_InitOcclusionFilter(void)
+{
+    DMA_CalcOcclusionBiquad(S_OCCLUSION_LOWPASS_HZ, &s_occlusion_biquad_default);
+}
+
+static inline float DMA_OcclusionFilterSample(const occlusion_biquad_t *biquad, float input, float *z1, float *z2)
+{
+    float output = biquad->b0 * input + *z1;
+    *z1 = biquad->b1 * input + *z2 - biquad->a1 * output;
+    *z2 = biquad->b2 * input - biquad->a2 * output;
+    return output;
+}
+
+static inline void DMA_ResetOcclusionState(channel_t *ch)
+{
+    ch->occlusion_z1[0] = 0.0f;
+    ch->occlusion_z1[1] = 0.0f;
+    ch->occlusion_z2[0] = 0.0f;
+    ch->occlusion_z2[1] = 0.0f;
+    ch->occlusion_biquad = s_occlusion_biquad_default;
+}
+
+static inline void DMA_SetOcclusion(channel_t *ch, float occlusion)
+{
+    ch->occlusion_mix = occlusion;
+    if (ch->occlusion_mix <= 0.001f) {
+        DMA_ResetOcclusionState(ch);
+        return;
+    }
+
+    float cutoff = Q_clipf(ch->occlusion_cutoff, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+    float scale = S_OCCLUSION_CUTOFF_DEFAULT_HZ > 0.0f ? (cutoff / S_OCCLUSION_CUTOFF_DEFAULT_HZ) : 1.0f;
+    DMA_CalcOcclusionBiquad(S_OCCLUSION_LOWPASS_HZ * scale, &ch->occlusion_biquad);
+}
+
+static inline void DMA_ApplyOcclusion(channel_t *ch, float *left, float *right)
+{
+    float occlusion = ch->occlusion_mix;
+    if (occlusion <= 0.001f)
+        return;
+
+    float filtered_left = DMA_OcclusionFilterSample(&ch->occlusion_biquad, *left, &ch->occlusion_z1[0], &ch->occlusion_z2[0]);
+    float filtered_right = DMA_OcclusionFilterSample(&ch->occlusion_biquad, *right, &ch->occlusion_z1[1], &ch->occlusion_z2[1]);
+
+    *left = *left + (filtered_left - *left) * occlusion;
+    *right = *right + (filtered_right - *right) * occlusion;
+}
+
+/*
+===============================================================================
+
 CHANNEL MIXING
 
 ===============================================================================
 */
 
-typedef void (*paintfunc_t)(const channel_t *, const sfxcache_t *, int, samplepair_t *);
+typedef void (*paintfunc_t)(channel_t *, const sfxcache_t *, int, samplepair_t *);
 
 #define PAINTFUNC(name) \
-    static void name(const channel_t *ch, const sfxcache_t *sc, int count, samplepair_t *samp)
+    static void name(channel_t *ch, const sfxcache_t *sc, int count, samplepair_t *samp)
 
 PAINTFUNC(PaintMono8)
 {
@@ -347,9 +431,21 @@ PAINTFUNC(PaintMono8)
     float rightvol = ch->rightvol * snd_vol * 256;
     const uint8_t *sfx = sc->data + ch->pos;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx++) {
+            samp->left += (*sfx - 128) * leftvol;
+            samp->right += (*sfx - 128) * rightvol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx++) {
-        samp->left += (*sfx - 128) * leftvol;
-        samp->right += (*sfx - 128) * rightvol;
+        float sample = (*sfx - 128);
+        float left = sample * leftvol;
+        float right = sample * rightvol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -359,10 +455,22 @@ PAINTFUNC(PaintStereoDmix8)
     float rightvol = ch->rightvol * snd_vol * (256 * M_SQRT1_2f);
     const uint8_t *sfx = sc->data + ch->pos * 2;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx += 2) {
+            int sum = (sfx[0] - 128) + (sfx[1] - 128);
+            samp->left += sum * leftvol;
+            samp->right += sum * rightvol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx += 2) {
         int sum = (sfx[0] - 128) + (sfx[1] - 128);
-        samp->left += sum * leftvol;
-        samp->right += sum * rightvol;
+        float left = sum * leftvol;
+        float right = sum * rightvol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -371,9 +479,20 @@ PAINTFUNC(PaintStereoFull8)
     float vol = ch->leftvol * snd_vol * 256;
     const uint8_t *sfx = sc->data + ch->pos * 2;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx += 2) {
+            samp->left += (sfx[0] - 128) * vol;
+            samp->right += (sfx[1] - 128) * vol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx += 2) {
-        samp->left += (sfx[0] - 128) * vol;
-        samp->right += (sfx[1] - 128) * vol;
+        float left = (sfx[0] - 128) * vol;
+        float right = (sfx[1] - 128) * vol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -383,9 +502,20 @@ PAINTFUNC(PaintMono16)
     float rightvol = ch->rightvol * snd_vol;
     const int16_t *sfx = (const int16_t *)sc->data + ch->pos;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx++) {
+            samp->left += *sfx * leftvol;
+            samp->right += *sfx * rightvol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx++) {
-        samp->left += *sfx * leftvol;
-        samp->right += *sfx * rightvol;
+        float left = *sfx * leftvol;
+        float right = *sfx * rightvol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -395,10 +525,22 @@ PAINTFUNC(PaintStereoDmix16)
     float rightvol = ch->rightvol * snd_vol * M_SQRT1_2f;
     const int16_t *sfx = (const int16_t *)sc->data + ch->pos * 2;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx += 2) {
+            int sum = sfx[0] + sfx[1];
+            samp->left += sum * leftvol;
+            samp->right += sum * rightvol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx += 2) {
         int sum = sfx[0] + sfx[1];
-        samp->left += sum * leftvol;
-        samp->right += sum * rightvol;
+        float left = sum * leftvol;
+        float right = sum * rightvol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -407,9 +549,20 @@ PAINTFUNC(PaintStereoFull16)
     float vol = ch->leftvol * snd_vol;
     const int16_t *sfx = (const int16_t *)sc->data + ch->pos * 2;
 
+    if (ch->occlusion_mix <= 0.001f) {
+        for (int i = 0; i < count; i++, samp++, sfx += 2) {
+            samp->left += sfx[0] * vol;
+            samp->right += sfx[1] * vol;
+        }
+        return;
+    }
+
     for (int i = 0; i < count; i++, samp++, sfx += 2) {
-        samp->left += sfx[0] * vol;
-        samp->right += sfx[1] * vol;
+        float left = sfx[0] * vol;
+        float right = sfx[1] * vol;
+        DMA_ApplyOcclusion(ch, &left, &right);
+        samp->left += left;
+        samp->right += right;
     }
 }
 
@@ -594,6 +747,7 @@ static bool DMA_Init(void)
 
     s_numchannels = s_maxchannels;
     s_supports_float = true;
+    DMA_InitOcclusionFilter();
 
     Com_Printf("sound sampling rate: %i\n", dma.speed);
 
@@ -667,6 +821,8 @@ static void DMA_Spatialize(channel_t *ch)
     if (S_IsFullVolume(ch)) {
         ch->leftvol = ch->master_vol;
         ch->rightvol = ch->master_vol;
+        S_ResetOcclusion(ch);
+        DMA_SetOcclusion(ch, 0.0f);
         return;
     }
 
@@ -677,6 +833,20 @@ static void DMA_Spatialize(channel_t *ch)
     }
 
     S_SpatializeOrigin(origin, ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol, dma.channels - 1);
+
+    float occlusion = 0.0f;
+    if (s_occlusion->integer && ch->dist_mult > 0.0f) {
+        occlusion = S_GetOcclusion(ch, origin);
+    } else {
+        S_ResetOcclusion(ch);
+    }
+
+    float occlusion_mix = S_MapOcclusion(occlusion);
+    float gain = FASTLERP(1.0f, S_OCCLUSION_GAIN, occlusion_mix);
+    ch->leftvol *= gain;
+    ch->rightvol *= gain;
+
+    DMA_SetOcclusion(ch, occlusion_mix);
 }
 
 #define GET_STEREO(ent) (S_GetEntityLoopStereoPan(ent) && dma.channels - 1)
@@ -695,12 +865,17 @@ static void AddLoopSounds(void)
     int         i, j;
     int         sounds[MAX_EDICTS];
     float       left, right, left_total, right_total, vol, att;
+    float       occlusion_weighted;
+    float       occlusion_cutoff_weighted;
+    float       occlusion_cutoff_weight;
+    float       gain_total;
     channel_t   *ch;
     sfx_t       *sfx;
     sfxcache_t  *sc;
     int         num;
     entity_state_t *ent;
     vec3_t      origin;
+    bool        occlusion_enabled = s_occlusion->integer;
 
     if (!S_BuildSoundList(sounds))
         return;
@@ -722,10 +897,32 @@ static void AddLoopSounds(void)
         vol = S_GetEntityLoopVolume(ent);
         att = S_GetEntityLoopDistMult(ent);
 
+        left_total = right_total = 0.0f;
+        occlusion_weighted = 0.0f;
+        occlusion_cutoff_weighted = 0.0f;
+        occlusion_cutoff_weight = 0.0f;
+        gain_total = 0.0f;
+
         // find the total contribution of all sounds of this type
         CL_GetEntitySoundOrigin(ent->number, origin);
-        S_SpatializeOrigin(origin, vol, att, &left_total,
-                           &right_total, GET_STEREO(ent));
+        S_SpatializeOrigin(origin, vol, att, &left, &right, GET_STEREO(ent));
+        float contribution = left + right;
+        float occ = 0.0f;
+        float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        if (occlusion_enabled && att > 0.0f)
+            occ = S_ComputeOcclusion(origin, &cutoff);
+        occlusion_weighted += occ * contribution;
+        if (occ > 0.0f) {
+            occlusion_cutoff_weighted += cutoff * occ * contribution;
+            occlusion_cutoff_weight += occ * contribution;
+        }
+        gain_total += contribution;
+        float occ_mix = S_MapOcclusion(occ);
+        float occ_gain = FASTLERP(1.0f, S_OCCLUSION_GAIN, occ_mix);
+        left *= occ_gain;
+        right *= occ_gain;
+        left_total += left;
+        right_total += right;
         for (j = i + 1; j < cl.frame.numEntities; j++) {
             if (sounds[j] != sounds[i])
                 continue;
@@ -735,16 +932,40 @@ static void AddLoopSounds(void)
             ent = &cl.entityStates[num];
 
             CL_GetEntitySoundOrigin(ent->number, origin);
+            float ent_vol = S_GetEntityLoopVolume(ent);
+            float ent_att = S_GetEntityLoopDistMult(ent);
             S_SpatializeOrigin(origin,
-                               S_GetEntityLoopVolume(ent),
-                               S_GetEntityLoopDistMult(ent),
+                               ent_vol,
+                               ent_att,
                                &left, &right, GET_STEREO(ent));
+            contribution = left + right;
+            occ = 0.0f;
+            cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+            if (occlusion_enabled && ent_att > 0.0f)
+                occ = S_ComputeOcclusion(origin, &cutoff);
+            occlusion_weighted += occ * contribution;
+            if (occ > 0.0f) {
+                occlusion_cutoff_weighted += cutoff * occ * contribution;
+                occlusion_cutoff_weight += occ * contribution;
+            }
+            gain_total += contribution;
+            occ_mix = S_MapOcclusion(occ);
+            occ_gain = FASTLERP(1.0f, S_OCCLUSION_GAIN, occ_mix);
+            left *= occ_gain;
+            right *= occ_gain;
             left_total += left;
             right_total += right;
         }
 
         if (left_total == 0 && right_total == 0)
             continue;       // not audible
+
+        float occlusion_target = 0.0f;
+        if (gain_total > 0.0f)
+            occlusion_target = Q_clipf(occlusion_weighted / gain_total, 0.0f, 1.0f);
+        float occlusion_cutoff_target = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        if (occlusion_cutoff_weight > 0.0f)
+            occlusion_cutoff_target = occlusion_cutoff_weighted / occlusion_cutoff_weight;
 
         // allocate a channel
         ch = S_PickChannel(0, 0);
@@ -759,6 +980,10 @@ static void AddLoopSounds(void)
         ch->sfx = sfx;
         ch->pos = s_paintedtime % sc->length;
         ch->end = s_paintedtime + sc->length - ch->pos;
+        float occlusion_mix = S_MapOcclusion(occlusion_target);
+        ch->occlusion_cutoff = occlusion_cutoff_target;
+        ch->occlusion_cutoff_target = occlusion_cutoff_target;
+        DMA_SetOcclusion(ch, occlusion_mix);
     }
 }
 

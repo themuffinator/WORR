@@ -75,8 +75,7 @@ static void UsedMessage(gentity_t* ent, Item* item) {
 
 void SelectNextItem(gentity_t* ent, item_flags_t itflags) {
 	gclient_t* cl = ent->client;
-	if (cl->menu.current) {
-		NextMenuItem(ent);
+	if (IsBlockingUiMenuOpen(cl)) {
 		return;
 	}
 	if (level.intermission.time) return;
@@ -101,8 +100,7 @@ void SelectNextItem(gentity_t* ent, item_flags_t itflags) {
 
 void SelectPrevItem(gentity_t* ent, item_flags_t itflags) {
 	gclient_t* cl = ent->client;
-	if (cl->menu.current) {
-		PreviousMenuItem(ent);
+	if (IsBlockingUiMenuOpen(cl)) {
 		return;
 	}
 	if (level.intermission.time) return;

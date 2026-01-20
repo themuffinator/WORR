@@ -251,6 +251,8 @@ void SP_target_teleporter(gentity_t *ent);      // q3
 void SP_target_kill(gentity_t *self);           // q3
 void SP_target_cvar(gentity_t *ent);            // ql
 void SP_target_setskill(gentity_t *ent);
+void SP_target_position(gentity_t *ent);
+void SP_target_location(gentity_t *ent);
 void SP_target_score(gentity_t *ent); // q3
 void SP_target_remove_weapons(gentity_t *ent);
 void SP_target_railgun(gentity_t *ent); // oblivion
@@ -538,7 +540,8 @@ static const std::initializer_list<spawn_t> spawns = {
 	{ "target_kill", SP_target_kill },
 	{ "target_cvar", SP_target_cvar },
 	{ "target_setskill", SP_target_setskill },
-	{ "target_position", SP_info_notnull },
+	{ "target_position", SP_target_position },
+	{ "target_location", SP_target_location },
 	{ "target_score", SP_target_score },
 	{ "target_remove_weapons", SP_target_remove_weapons },
 
@@ -1286,6 +1289,7 @@ static const std::initializer_list<temp_field_t> temp_fields = {
 	FIELD_AUTO_NAMED("shadowlightintensity", sl.data.intensity),
 	FIELD_AUTO_NAMED("shadowlightstartfadedistance", sl.data.fadeStart),
 	FIELD_AUTO_NAMED("shadowlightendfadedistance", sl.data.fadeEnd),
+	FIELD_AUTO_NAMED("shadowlightmaxfadedistance", sl.data.maxFadeDistance),
 	FIELD_AUTO_NAMED("shadowlightstyle", sl.data.lightStyle),
 	FIELD_AUTO_NAMED("shadowlightconeangle", sl.data.coneAngle),
 	FIELD_AUTO_NAMED("shadowlightstyletarget", sl.lightStyleTarget),
@@ -2163,9 +2167,11 @@ void SpawnEntities(const char *mapName, const char *entities,
   SaveClientData();
   gi.FreeTags(TAG_LEVEL);
   ResetLevelLocals();
+  Locations_Reset();
   Domination_ClearState();
   HeadHunters::ClearState();
   ProBall::ClearState();
+  Locations_Reset();
   neutralObelisk = nullptr;
   level.entityReloadGraceUntil = level.time + FRAME_TIME_MS * 2;
   std::memset(static_cast<void *>(g_entities), 0,
@@ -2261,6 +2267,7 @@ void SpawnEntities(const char *mapName, const char *entities,
   if (!EnsureWorldspawnPresent())
     gi.Com_ErrorFmt("{}: worldspawn failed to initialize after entity parse.\n",
                     __FUNCTION__);
+  Locations_Finalize();
 
   // Level post-processing and setup
   PrecacheStartItems();
@@ -2581,6 +2588,7 @@ bool G_ResetWorldEntitiesFromSavedString() {
         "{}: worldspawn failed to initialize after entity reload.\n",
         __FUNCTION__);
   }
+  Locations_Finalize();
   PrecacheStartItems();
   PrecacheInventoryItems();
   G_FindTeams();

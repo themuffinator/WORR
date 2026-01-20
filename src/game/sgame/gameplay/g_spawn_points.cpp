@@ -1357,8 +1357,7 @@ void MoveClientToFreeCam(gentity_t *ent) {
   ent->client->ps.gunIndex = 0;
   ent->client->ps.gunSkin = 0;
 
-  if (!ent->client->menu.current)
-    ent->client->ps.stats[STAT_SHOW_STATUSBAR] = 0;
+  ent->client->ps.stats[STAT_SHOW_STATUSBAR] = 0;
 
   ent->takeDamage = false;
   ent->s.modelIndex = 0;

@@ -27,11 +27,26 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // OpenAL implementation should support at least this number of sources
 #define MIN_CHANNELS    16
 
+// Quake units per second (1 unit ~= 1 inch).
+static constexpr float AL_DOPPLER_SPEED = 13500.0f;
+
 static cvar_t       *al_reverb;
 static cvar_t       *al_reverb_lerp_time;
+static cvar_t       *al_reverb_send;
+static cvar_t       *al_reverb_send_distance;
+static cvar_t       *al_reverb_send_min;
+static cvar_t       *al_reverb_send_occlusion_boost;
 
 static cvar_t       *al_timescale;
 static cvar_t       *al_merge_looping;
+static cvar_t       *al_distance_model;
+static cvar_t       *al_air_absorption;
+static cvar_t       *al_air_absorption_distance;
+static cvar_t       *al_doppler;
+static cvar_t       *al_doppler_speed;
+static cvar_t       *al_doppler_min_speed;
+static cvar_t       *al_doppler_max_speed;
+static cvar_t       *al_doppler_smooth;
 
 static ALuint       *s_srcnums;
 static int          s_numalsources;
@@ -45,6 +60,21 @@ static ALint        s_merge_looping_minval;
 
 static ALuint       s_underwater_filter;
 static bool         s_underwater_flag;
+static ALuint       *s_occlusion_filters;
+static int          s_num_occlusion_filters;
+static ALuint       *s_reverb_filters;
+static int          s_num_reverb_filters;
+static ALenum       s_air_absorption_enum;
+static bool         s_air_absorption_supported;
+
+typedef struct {
+    vec3_t  origin;
+    vec3_t  velocity;
+    int     time;
+} doppler_state_t;
+
+static doppler_state_t   s_doppler_state[MAX_EDICTS];
+static vec3_t            s_doppler_listener_velocity;
 
 // reverb stuff
 typedef struct {
@@ -594,6 +624,141 @@ static void s_volume_changed(cvar_t *self)
     qalListenerf(AL_GAIN, self->value);
 }
 
+static void al_doppler_changed(cvar_t *self)
+{
+    float factor = Cvar_ClampValue(self, 0.0f, 4.0f);
+    qalDopplerFactor(factor);
+    float speed = AL_DOPPLER_SPEED;
+    if (al_doppler_speed)
+        speed = Cvar_ClampValue(al_doppler_speed, 4000.0f, 30000.0f);
+    qalSpeedOfSound(speed);
+}
+
+static float AL_GetRolloffFactor(float dist_mult)
+{
+    if (al_distance_model && al_distance_model->integer)
+        return dist_mult * SOUND_FULLVOLUME;
+
+    return dist_mult * (8192 - SOUND_FULLVOLUME);
+}
+
+static void al_distance_model_changed(cvar_t *self)
+{
+    ALenum model = self->integer ? AL_INVERSE_DISTANCE_CLAMPED : AL_LINEAR_DISTANCE_CLAMPED;
+    qalDistanceModel(model);
+
+    if (!s_channels || !s_srcnums)
+        return;
+
+    for (int i = 0; i < s_numchannels; i++) {
+        channel_t *ch = &s_channels[i];
+        if (!ch->sfx)
+            continue;
+        if (al_merge_looping && al_merge_looping->integer >= s_merge_looping_minval &&
+            ch->autosound && !ch->no_merge)
+            continue;
+
+        qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, AL_GetRolloffFactor(ch->dist_mult));
+    }
+}
+
+static float AL_DistanceFromListener(const vec3_t origin)
+{
+    vec3_t delta;
+    VectorSubtract(origin, listener_origin, delta);
+    return VectorLength(delta);
+}
+
+static float AL_ComputeAirAbsorption(float distance)
+{
+    if (!al_air_absorption || !al_air_absorption->integer)
+        return 0.0f;
+
+    float max_dist = Cvar_ClampValue(al_air_absorption_distance, 128.0f, 16384.0f);
+    if (max_dist <= 0.0f)
+        return 0.0f;
+
+    return Q_clipf(distance / max_dist, 0.0f, 1.0f);
+}
+
+static float AL_GetOcclusionGainHF(const channel_t *ch, float occlusion_mix)
+{
+    if (occlusion_mix <= 0.0f)
+        return 1.0f;
+
+    float material_gainhf = S_OcclusionCutoffToGainHF(ch->occlusion_cutoff);
+    return FASTLERP(1.0f, material_gainhf, occlusion_mix);
+}
+
+static float AL_ComputeReverbSend(float distance, float occlusion_mix)
+{
+    if (!al_reverb_send || !al_reverb_send->integer)
+        return 1.0f;
+
+    float max_dist = Cvar_ClampValue(al_reverb_send_distance, 128.0f, 16384.0f);
+    float min_send = Cvar_ClampValue(al_reverb_send_min, 0.0f, 1.0f);
+    float send = max_dist > 0.0f ? Q_clipf(distance / max_dist, 0.0f, 1.0f) : 0.0f;
+
+    send = max(send, min_send);
+
+    if (occlusion_mix > 0.5f) {
+        float boost = Cvar_ClampValue(al_reverb_send_occlusion_boost, 1.0f, 4.0f);
+        send = min(send * boost, 1.0f);
+    }
+
+    return send;
+}
+
+static void AL_UpdateDirectFilter(channel_t *ch, float occlusion_mix, float air_absorption)
+{
+    if (s_air_absorption_supported)
+        qalSourcef(ch->srcnum, s_air_absorption_enum, air_absorption);
+
+    bool use_air_filter = !s_air_absorption_supported && air_absorption > 0.001f;
+    float gainhf = AL_GetOcclusionGainHF(ch, occlusion_mix);
+    if (use_air_filter) {
+        float air_gainhf = Q_clipf(1.0f - air_absorption, 0.0f, 1.0f);
+        gainhf = Q_clipf(gainhf * air_gainhf, 0.0f, 1.0f);
+    }
+
+    ALint filter = 0;
+    if (s_underwater_flag) {
+        filter = s_underwater_filter;
+    } else if (s_occlusion_filters && (occlusion_mix > 0.001f || use_air_filter)) {
+        int ch_index = static_cast<int>(ch - s_channels);
+        if (ch_index >= 0 && ch_index < s_num_occlusion_filters) {
+            qalFilterf(s_occlusion_filters[ch_index], AL_LOWPASS_GAINHF, gainhf);
+            filter = s_occlusion_filters[ch_index];
+        }
+    }
+
+    qalSourcei(ch->srcnum, AL_DIRECT_FILTER, filter);
+}
+
+static void AL_UpdateReverbSend(channel_t *ch, float distance, float occlusion_mix)
+{
+    if (!s_reverb_slot || !al_reverb || !al_reverb->integer || !cl.bsp) {
+        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
+        return;
+    }
+
+    if (!s_reverb_filters || !al_reverb_send || !al_reverb_send->integer) {
+        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
+        return;
+    }
+
+    int ch_index = static_cast<int>(ch - s_channels);
+    if (ch_index < 0 || ch_index >= s_num_reverb_filters) {
+        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
+        return;
+    }
+
+    float send = AL_ComputeReverbSend(distance, occlusion_mix);
+    qalFilterf(s_reverb_filters[ch_index], AL_LOWPASS_GAIN, send);
+    qalFilterf(s_reverb_filters[ch_index], AL_LOWPASS_GAINHF, send);
+    qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, s_reverb_filters[ch_index]);
+}
+
 static bool AL_Init(void)
 {
     int i;
@@ -640,12 +805,16 @@ static bool AL_Init(void)
     al_merge_looping = Cvar_Get("al_merge_looping", "1", 0);
     al_merge_looping->changed = al_merge_looping_changed;
 
+    al_distance_model = Cvar_Get("al_distance_model", "1", 0);
+    al_distance_model->changed = al_distance_model_changed;
+    al_distance_model_changed(al_distance_model);
+
     s_loop_points = qalIsExtensionPresent("AL_SOFT_loop_points");
     s_source_spatialize = qalIsExtensionPresent("AL_SOFT_source_spatialize");
     s_supports_float = qalIsExtensionPresent("AL_EXT_float32");
 
-    // init distance model
-    qalDistanceModel(AL_LINEAR_DISTANCE_CLAMPED);
+    s_air_absorption_enum = qalGetEnumValue("AL_AIR_ABSORPTION_FACTOR");
+    s_air_absorption_supported = (s_air_absorption_enum != 0);
 
     // init stream source
     qalSourcef(s_stream, AL_ROLLOFF_FACTOR, 0.0f);
@@ -658,12 +827,38 @@ static bool AL_Init(void)
     else if (qalIsExtensionPresent("AL_SOFT_direct_channels"))
         qalSourcei(s_stream, AL_DIRECT_CHANNELS_SOFT, AL_TRUE);
 
-    // init underwater filter
+    // init underwater and occlusion filters
     if (qalGenFilters && qalGetEnumValue("AL_FILTER_LOWPASS")) {
         qalGenFilters(1, &s_underwater_filter);
         qalFilteri(s_underwater_filter, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
         s_underwater_gain_hf->changed = s_underwater_gain_hf_changed;
         s_underwater_gain_hf_changed(s_underwater_gain_hf);
+
+        s_num_occlusion_filters = 0;
+        if (s_numchannels > 0) {
+            s_occlusion_filters = static_cast<ALuint *>(
+                Z_TagMalloc(sizeof(*s_occlusion_filters) * s_numchannels, TAG_SOUND));
+
+            qalGetError();
+            for (i = 0; i < s_numchannels; i++) {
+                qalGenFilters(1, &s_occlusion_filters[i]);
+                if (qalGetError() != AL_NO_ERROR)
+                    break;
+                qalFilteri(s_occlusion_filters[i], AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+                qalFilterf(s_occlusion_filters[i], AL_LOWPASS_GAIN, 1.0f);
+                qalFilterf(s_occlusion_filters[i], AL_LOWPASS_GAINHF, 1.0f);
+                s_num_occlusion_filters++;
+            }
+
+            if (!s_num_occlusion_filters) {
+                Z_Free(s_occlusion_filters);
+                s_occlusion_filters = NULL;
+            } else if (s_num_occlusion_filters < s_numchannels) {
+                s_occlusion_filters = static_cast<ALuint *>(
+                    Z_Realloc(s_occlusion_filters,
+                              sizeof(*s_occlusion_filters) * s_num_occlusion_filters));
+            }
+        }
     }
 
     if (qalGenEffects && qalGetEnumValue("AL_EFFECT_EAXREVERB")) {
@@ -672,11 +867,52 @@ static bool AL_Init(void)
         qalEffecti(s_reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
     }
 
+    if (s_reverb_slot && qalGenFilters && qalGetEnumValue("AL_FILTER_LOWPASS")) {
+        s_num_reverb_filters = 0;
+        if (s_numchannels > 0) {
+            s_reverb_filters = static_cast<ALuint *>(
+                Z_TagMalloc(sizeof(*s_reverb_filters) * s_numchannels, TAG_SOUND));
+
+            qalGetError();
+            for (i = 0; i < s_numchannels; i++) {
+                qalGenFilters(1, &s_reverb_filters[i]);
+                if (qalGetError() != AL_NO_ERROR)
+                    break;
+                qalFilteri(s_reverb_filters[i], AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+                qalFilterf(s_reverb_filters[i], AL_LOWPASS_GAIN, 1.0f);
+                qalFilterf(s_reverb_filters[i], AL_LOWPASS_GAINHF, 1.0f);
+                s_num_reverb_filters++;
+            }
+
+            if (!s_num_reverb_filters) {
+                Z_Free(s_reverb_filters);
+                s_reverb_filters = NULL;
+            } else if (s_num_reverb_filters < s_numchannels) {
+                s_reverb_filters = static_cast<ALuint *>(
+                    Z_Realloc(s_reverb_filters, sizeof(*s_reverb_filters) * s_num_reverb_filters));
+            }
+        }
+    }
+
     al_reverb = Cvar_Get("al_reverb", "1", 0);
     al_reverb->changed = al_reverb_changed;
     al_reverb_lerp_time = Cvar_Get("al_reverb_lerp_time", "3.0", 0);
+    al_reverb_send = Cvar_Get("al_reverb_send", "1", 0);
+    al_reverb_send_distance = Cvar_Get("al_reverb_send_distance", "2048", 0);
+    al_reverb_send_min = Cvar_Get("al_reverb_send_min", "0.2", 0);
+    al_reverb_send_occlusion_boost = Cvar_Get("al_reverb_send_occlusion_boost", "1.5", 0);
 
     al_timescale = Cvar_Get("al_timescale", "1", 0);
+    al_air_absorption = Cvar_Get("al_air_absorption", "1", 0);
+    al_air_absorption_distance = Cvar_Get("al_air_absorption_distance", "2048", 0);
+    al_doppler = Cvar_Get("al_doppler", "1", 0);
+    al_doppler_speed = Cvar_Get("al_doppler_speed", "13500", 0);
+    al_doppler_min_speed = Cvar_Get("al_doppler_min_speed", "30", 0);
+    al_doppler_max_speed = Cvar_Get("al_doppler_max_speed", "4000", 0);
+    al_doppler_smooth = Cvar_Get("al_doppler_smooth", "12", 0);
+    al_doppler->changed = al_doppler_changed;
+    al_doppler_speed->changed = al_doppler_changed;
+    al_doppler_changed(al_doppler);
 
     SCR_RegisterStat("al_reverb", AL_Reverb_stat);
 
@@ -713,6 +949,18 @@ static void AL_Shutdown(void)
         qalDeleteFilters(1, &s_underwater_filter);
         s_underwater_filter = 0;
     }
+    if (s_occlusion_filters) {
+        qalDeleteFilters(s_num_occlusion_filters, s_occlusion_filters);
+        Z_Free(s_occlusion_filters);
+        s_occlusion_filters = NULL;
+        s_num_occlusion_filters = 0;
+    }
+    if (s_reverb_filters) {
+        qalDeleteFilters(s_num_reverb_filters, s_reverb_filters);
+        Z_Free(s_reverb_filters);
+        s_reverb_filters = NULL;
+        s_num_reverb_filters = 0;
+    }
 
     if (s_reverb_effect) {
         qalDeleteEffects(1, &s_reverb_effect);
@@ -732,6 +980,11 @@ static void AL_Shutdown(void)
     s_underwater_gain_hf->changed = NULL;
     s_volume->changed = NULL;
     al_merge_looping->changed = NULL;
+    if (al_distance_model)
+        al_distance_model->changed = NULL;
+    al_doppler->changed = NULL;
+    if (al_doppler_speed)
+        al_doppler_speed->changed = NULL;
 
     SCR_UnregisterStat("al_reverb");
 
@@ -819,14 +1072,131 @@ static int AL_GetBeginofs(float timeofs)
     return s_paintedtime + timeofs * 1000;
 }
 
+static bool AL_DopplerEnabled(void)
+{
+    return al_doppler && al_doppler->value > 0.0f;
+}
+
+static bool AL_EntityHasDoppler(const entity_state_t *state)
+{
+    if (!state)
+        return false;
+
+    if (state->renderfx & RF_DOPPLER)
+        return true;
+
+    // Fallback for non-extended clients: projectiles identified by effects.
+    const effects_t doppler_fx = EF_ROCKET | EF_BLASTER | EF_BLUEHYPERBLASTER |
+                                 EF_HYPERBLASTER | EF_PLASMA | EF_IONRIPPER |
+                                 EF_BFG | EF_TRACKER | EF_TRACKERTRAIL |
+                                 EF_TRAP;
+    return (state->effects & doppler_fx) != 0;
+}
+
+static bool AL_GetEntityVelocity(int entnum, vec3_t velocity)
+{
+    velocity[0] = 0.0f;
+    velocity[1] = 0.0f;
+    velocity[2] = 0.0f;
+
+    if (!AL_DopplerEnabled())
+        return false;
+
+    if (entnum <= 0 || entnum >= (int) cl.csr.max_edicts)
+        return false;
+
+    const centity_t *cent = &cl_entities[entnum];
+    if (!AL_EntityHasDoppler(&cent->current))
+        return false;
+
+    if (cent->serverframe != cl.frame.number)
+        return false;
+
+    doppler_state_t *state = &s_doppler_state[entnum];
+    int now = cl.time;
+    vec3_t origin;
+    CL_GetEntitySoundOrigin(entnum, origin);
+
+    if (state->time <= 0) {
+        VectorCopy(origin, state->origin);
+        VectorClear(state->velocity);
+        state->time = now;
+        return true;
+    }
+
+    int dt_ms = now - state->time;
+    if (dt_ms <= 0 || dt_ms > 250) {
+        VectorCopy(origin, state->origin);
+        VectorClear(state->velocity);
+        state->time = now;
+        return true;
+    }
+
+    float dt = dt_ms * 0.001f;
+    vec3_t instant;
+    VectorSubtract(origin, state->origin, instant);
+    VectorScale(instant, 1.0f / dt, instant);
+
+    float speed = VectorLength(instant);
+    float max_speed = al_doppler_max_speed ? Cvar_ClampValue(al_doppler_max_speed, 0.0f, 20000.0f) : 0.0f;
+    if (max_speed > 0.0f && speed > max_speed) {
+        float scale = max_speed / speed;
+        VectorScale(instant, scale, instant);
+        speed = max_speed;
+    }
+
+    float min_speed = al_doppler_min_speed ? Cvar_ClampValue(al_doppler_min_speed, 0.0f, max_speed > 0.0f ? max_speed : 20000.0f) : 0.0f;
+    if (speed < min_speed)
+        VectorClear(instant);
+
+    float smooth = al_doppler_smooth ? Cvar_ClampValue(al_doppler_smooth, 0.0f, 40.0f) : 0.0f;
+    if (smooth > 0.0f) {
+        float lerp = 1.0f - expf(-smooth * dt);
+        state->velocity[0] = FASTLERP(state->velocity[0], instant[0], lerp);
+        state->velocity[1] = FASTLERP(state->velocity[1], instant[1], lerp);
+        state->velocity[2] = FASTLERP(state->velocity[2], instant[2], lerp);
+    } else {
+        VectorCopy(instant, state->velocity);
+    }
+
+    VectorCopy(origin, state->origin);
+    state->time = now;
+    VectorCopy(state->velocity, velocity);
+    return true;
+}
+
+static void AL_UpdateSourceVelocity(channel_t *ch)
+{
+    vec3_t velocity;
+    velocity[0] = 0.0f;
+    velocity[1] = 0.0f;
+    velocity[2] = 0.0f;
+
+    if (!ch->fixed_origin && !ch->fullvolume)
+        AL_GetEntityVelocity(ch->entnum, velocity);
+
+    qalSource3f(ch->srcnum, AL_VELOCITY, AL_UnpackVector(velocity));
+}
+
 static void AL_Spatialize(channel_t *ch)
 {
     // merged autosounds are handled differently
-    if (ch->autosound && al_merge_looping->integer >= s_merge_looping_minval)
+    if (ch->autosound && al_merge_looping->integer >= s_merge_looping_minval && !ch->no_merge)
         return;
 
     // anything coming from the view entity will always be full volume
     bool fullvolume = S_IsFullVolume(ch);
+    vec3_t origin;
+    bool have_origin = false;
+
+    if (!fullvolume) {
+        if (ch->fixed_origin) {
+            VectorCopy(ch->origin, origin);
+        } else {
+            CL_GetEntitySoundOrigin(ch->entnum, origin);
+        }
+        have_origin = true;
+    }
 
     // update fullvolume flag if needed
     if (ch->fullvolume != fullvolume) {
@@ -836,24 +1206,46 @@ static void AL_Spatialize(channel_t *ch)
         qalSourcei(ch->srcnum, AL_SOURCE_RELATIVE, fullvolume);
         if (fullvolume) {
             qalSource3f(ch->srcnum, AL_POSITION, 0, 0, 0);
-        } else if (ch->fixed_origin) {
-            qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(ch->origin));
+        } else if (ch->fixed_origin && have_origin) {
+            qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
         }
         ch->fullvolume = fullvolume;
     }
 
     // update position if needed
-    if (!ch->fixed_origin && !ch->fullvolume) {
-        vec3_t origin;
-        CL_GetEntitySoundOrigin(ch->entnum, origin);
+    if (!ch->fixed_origin && !ch->fullvolume && have_origin) {
         qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
     }
+
+    float distance = 0.0f;
+    if (have_origin)
+        distance = AL_DistanceFromListener(origin);
+
+    float occlusion = 0.0f;
+    if (have_origin && ch->dist_mult > 0.0f) {
+        occlusion = S_GetOcclusion(ch, origin);
+    } else {
+        S_ResetOcclusion(ch);
+    }
+
+    float occlusion_mix = S_MapOcclusion(occlusion);
+    float gain = ch->master_vol * FASTLERP(1.0f, S_OCCLUSION_GAIN, occlusion_mix);
+    qalSourcef(ch->srcnum, AL_GAIN, gain);
+
+    float air_absorption = 0.0f;
+    if (!s_underwater_flag)
+        air_absorption = AL_ComputeAirAbsorption(distance);
+
+    AL_UpdateDirectFilter(ch, occlusion_mix, air_absorption);
+    AL_UpdateReverbSend(ch, distance, occlusion_mix);
 
     if (al_timescale->integer) {
         qalSourcef(ch->srcnum, AL_PITCH, max(0.75f, CL_Wheel_TimeScale() * Cvar_VariableValue("timescale")));
     } else {
         qalSourcef(ch->srcnum, AL_PITCH, 1.0f);
     }
+
+    AL_UpdateSourceVelocity(ch);
 }
 
 static void AL_StopChannel(channel_t *ch)
@@ -888,7 +1280,7 @@ static void AL_PlayChannel(channel_t *ch)
     qalSourcef(ch->srcnum, AL_GAIN, ch->master_vol);
     qalSourcef(ch->srcnum, AL_REFERENCE_DISTANCE, SOUND_FULLVOLUME);
     qalSourcef(ch->srcnum, AL_MAX_DISTANCE, 8192);
-    qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, ch->dist_mult * (8192 - SOUND_FULLVOLUME));
+    qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, AL_GetRolloffFactor(ch->dist_mult));
 
     if (cl.bsp && s_reverb_slot && al_reverb->integer) {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
@@ -934,6 +1326,9 @@ static void AL_StopAllSounds(void)
             continue;
         AL_StopChannel(ch);
     }
+
+    memset(s_doppler_state, 0, sizeof(s_doppler_state));
+    VectorClear(s_doppler_listener_velocity);
 }
 
 static channel_t *AL_FindLoopingSound(int entnum, const sfx_t *sfx)
@@ -954,11 +1349,44 @@ static channel_t *AL_FindLoopingSound(int entnum, const sfx_t *sfx)
     return NULL;
 }
 
+static void AL_AddLoopSoundEntity(const entity_state_t *ent, sfx_t *sfx, const sfxcache_t *sc, bool no_merge)
+{
+    channel_t *ch = AL_FindLoopingSound(ent->number, sfx);
+    if (ch) {
+        ch->autoframe = s_framecount;
+        ch->end = s_paintedtime + sc->length;
+        ch->no_merge = no_merge;
+        ch->master_vol = S_GetEntityLoopVolume(ent);
+        ch->dist_mult = S_GetEntityLoopDistMult(ent);
+        return;
+    }
+
+    ch = S_PickChannel(0, 0);
+    if (!ch)
+        return;
+
+    ch->autosound = true;   // remove next frame
+    ch->autoframe = s_framecount;
+    ch->no_merge = no_merge;
+    ch->sfx = sfx;
+    ch->entnum = ent->number;
+    ch->master_vol = S_GetEntityLoopVolume(ent);
+    ch->dist_mult = S_GetEntityLoopDistMult(ent);
+    ch->end = s_paintedtime + sc->length;
+
+    AL_PlayChannel(ch);
+}
+
 static void AL_MergeLoopSounds(void)
 {
     int         i, j;
     int         sounds[MAX_EDICTS];
-    float       left, right, left_total, right_total, vol, att;
+    float       left, right, left_total, right_total, vol, att, occ_mix;
+    float       occlusion_weighted;
+    float       occlusion_cutoff_weighted;
+    float       occlusion_cutoff_weight;
+    float       distance_weighted;
+    float       gain_total;
     float       pan, pan2, gain;
     channel_t   *ch;
     sfx_t       *sfx;
@@ -966,6 +1394,9 @@ static void AL_MergeLoopSounds(void)
     int         num;
     entity_state_t *ent;
     vec3_t      origin;
+    bool        occlusion_enabled;
+
+    occlusion_enabled = s_occlusion && s_occlusion->integer;
 
     if (!S_BuildSoundList(sounds))
         return;
@@ -987,11 +1418,60 @@ static void AL_MergeLoopSounds(void)
         vol = S_GetEntityLoopVolume(ent);
         att = S_GetEntityLoopDistMult(ent);
 
+        bool has_doppler = AL_EntityHasDoppler(ent);
+        if (!has_doppler) {
+            for (j = i + 1; j < cl.frame.numEntities; j++) {
+                if (sounds[j] != sounds[i])
+                    continue;
+                num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
+                if (AL_EntityHasDoppler(&cl.entityStates[num])) {
+                    has_doppler = true;
+                    break;
+                }
+            }
+        }
+
+        if (has_doppler) {
+            for (j = i; j < cl.frame.numEntities; j++) {
+                if (sounds[j] != sounds[i])
+                    continue;
+                num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
+                AL_AddLoopSoundEntity(&cl.entityStates[num], sfx, sc, true);
+                sounds[j] = 0;
+            }
+            continue;
+        }
+
+        left_total = right_total = 0.0f;
+        occlusion_weighted = 0.0f;
+        occlusion_cutoff_weighted = 0.0f;
+        occlusion_cutoff_weight = 0.0f;
+        distance_weighted = 0.0f;
+        gain_total = 0.0f;
+
         // find the total contribution of all sounds of this type
         CL_GetEntitySoundOrigin(ent->number, origin);
         S_SpatializeOrigin(origin, vol, att,
-                           &left_total, &right_total,
+                           &left, &right,
                            S_GetEntityLoopStereoPan(ent));
+        float contribution = left + right;
+        float occ = 0.0f;
+        float cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        if (occlusion_enabled && att > 0.0f)
+            occ = S_ComputeOcclusion(origin, &cutoff);
+        occlusion_weighted += occ * contribution;
+        if (occ > 0.0f) {
+            occlusion_cutoff_weighted += cutoff * occ * contribution;
+            occlusion_cutoff_weight += occ * contribution;
+        }
+        distance_weighted += AL_DistanceFromListener(origin) * contribution;
+        gain_total += contribution;
+        occ_mix = S_MapOcclusion(occ);
+        float occ_gain = FASTLERP(1.0f, S_OCCLUSION_GAIN, occ_mix);
+        left *= occ_gain;
+        right *= occ_gain;
+        left_total += left;
+        right_total += right;
         for (j = i + 1; j < cl.frame.numEntities; j++) {
             if (sounds[j] != sounds[i])
                 continue;
@@ -1001,11 +1481,29 @@ static void AL_MergeLoopSounds(void)
             ent = &cl.entityStates[num];
 
             CL_GetEntitySoundOrigin(ent->number, origin);
+            float ent_vol = S_GetEntityLoopVolume(ent);
+            float ent_att = S_GetEntityLoopDistMult(ent);
             S_SpatializeOrigin(origin,
-                               S_GetEntityLoopVolume(ent),
-                               S_GetEntityLoopDistMult(ent),
+                               ent_vol,
+                               ent_att,
                                &left, &right,
                                S_GetEntityLoopStereoPan(ent));
+            contribution = left + right;
+            occ = 0.0f;
+            cutoff = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+            if (occlusion_enabled && ent_att > 0.0f)
+                occ = S_ComputeOcclusion(origin, &cutoff);
+            occlusion_weighted += occ * contribution;
+            if (occ > 0.0f) {
+                occlusion_cutoff_weighted += cutoff * occ * contribution;
+                occlusion_cutoff_weight += occ * contribution;
+            }
+            distance_weighted += AL_DistanceFromListener(origin) * contribution;
+            gain_total += contribution;
+            occ_mix = S_MapOcclusion(occ);
+            occ_gain = FASTLERP(1.0f, S_OCCLUSION_GAIN, occ_mix);
+            left *= occ_gain;
+            right *= occ_gain;
             left_total += left;
             right_total += right;
         }
@@ -1017,16 +1515,38 @@ static void AL_MergeLoopSounds(void)
         right_total = min(1.0f, right_total);
 
         gain = left_total + right_total;
+        float occlusion_target = 0.0f;
+        if (gain_total > 0.0f)
+            occlusion_target = Q_clipf(occlusion_weighted / gain_total, 0.0f, 1.0f);
+        float occlusion_cutoff_target = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        if (occlusion_cutoff_weight > 0.0f)
+            occlusion_cutoff_target = occlusion_cutoff_weighted / occlusion_cutoff_weight;
+        float avg_distance = gain_total > 0.0f ? (distance_weighted / gain_total) : 0.0f;
 
         pan  = (right_total - left_total) / (left_total + right_total);
         pan2 = -sqrtf(1.0f - pan * pan);
 
         ch = AL_FindLoopingSound(0, sfx);
         if (ch) {
+            float occlusion = 0.0f;
+            if (occlusion_enabled) {
+                ch->occlusion_cutoff_target = occlusion_cutoff_target;
+                occlusion = S_SmoothOcclusion(ch, occlusion_target);
+            } else {
+                S_ResetOcclusion(ch);
+            }
+            float occlusion_mix = S_MapOcclusion(occlusion);
+            float air_absorption = 0.0f;
+            if (!s_underwater_flag)
+                air_absorption = AL_ComputeAirAbsorption(avg_distance);
+            AL_UpdateDirectFilter(ch, occlusion_mix, air_absorption);
+            AL_UpdateReverbSend(ch, avg_distance, occlusion_mix);
             qalSourcef(ch->srcnum, AL_GAIN, gain);
             qalSource3f(ch->srcnum, AL_POSITION, pan, 0.0f, pan2);
+            qalSource3f(ch->srcnum, AL_VELOCITY, 0.0f, 0.0f, 0.0f);
             ch->autoframe = s_framecount;
             ch->end = s_paintedtime + sc->length;
+            ch->no_merge = false;
             continue;
         }
 
@@ -1036,6 +1556,19 @@ static void AL_MergeLoopSounds(void)
             continue;
 
         ch->srcnum = s_srcnums[ch - s_channels];
+        float occlusion = 0.0f;
+        if (occlusion_enabled) {
+            ch->occlusion_cutoff_target = occlusion_cutoff_target;
+            occlusion = S_SmoothOcclusion(ch, occlusion_target);
+        } else {
+            S_ResetOcclusion(ch);
+        }
+        float occlusion_mix = S_MapOcclusion(occlusion);
+        float air_absorption = 0.0f;
+        if (!s_underwater_flag)
+            air_absorption = AL_ComputeAirAbsorption(avg_distance);
+        AL_UpdateDirectFilter(ch, occlusion_mix, air_absorption);
+        AL_UpdateReverbSend(ch, avg_distance, occlusion_mix);
         qalGetError();
         qalSourcei(ch->srcnum, AL_BUFFER, sc->bufnum);
         qalSourcei(ch->srcnum, AL_LOOPING, AL_TRUE);
@@ -1046,9 +1579,11 @@ static void AL_MergeLoopSounds(void)
         qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, 0.0f);
         qalSourcef(ch->srcnum, AL_GAIN, gain);
         qalSource3f(ch->srcnum, AL_POSITION, pan, 0.0f, pan2);
+        qalSource3f(ch->srcnum, AL_VELOCITY, 0.0f, 0.0f, 0.0f);
 
         ch->autosound = true;   // remove next frame
         ch->autoframe = s_framecount;
+        ch->no_merge = false;
         ch->sfx = sfx;
         ch->entnum = ent->number;
         ch->master_vol = vol;
@@ -1096,6 +1631,7 @@ static void AL_AddLoopSounds(void)
         if (ch) {
             ch->autoframe = s_framecount;
             ch->end = s_paintedtime + sc->length;
+            ch->no_merge = false;
             continue;
         }
 
@@ -1106,6 +1642,7 @@ static void AL_AddLoopSounds(void)
 
         ch->autosound = true;   // remove next frame
         ch->autoframe = s_framecount;
+        ch->no_merge = false;
         ch->sfx = sfx;
         ch->entnum = ent->number;
         ch->master_vol = S_GetEntityLoopVolume(ent);
@@ -1231,6 +1768,38 @@ static void AL_UpdateUnderWater(void)
     s_underwater_flag = underwater;
 }
 
+static void AL_UpdateListenerVelocity(void)
+{
+    vec3_t velocity = { 0.0f, 0.0f, 0.0f };
+
+    if (AL_DopplerEnabled() && cls.state == ca_active) {
+        if (!cls.demo.playback && cl_predict->integer &&
+            !(cl.frame.ps.pmove.pm_flags & PMF_NO_PREDICTION)) {
+            VectorCopy(cl.predicted_velocity, velocity);
+        } else {
+            VectorCopy(cl.frame.ps.pmove.velocity, velocity);
+        }
+    }
+
+    float min_speed = al_doppler_min_speed ? Cvar_ClampValue(al_doppler_min_speed, 0.0f, 20000.0f) : 0.0f;
+    if (min_speed > 0.0f && VectorLength(velocity) < min_speed)
+        VectorClear(velocity);
+
+    float smooth = al_doppler_smooth ? Cvar_ClampValue(al_doppler_smooth, 0.0f, 40.0f) : 0.0f;
+    if (smooth > 0.0f && cls.frametime > 0.0f) {
+        float lerp = 1.0f - expf(-smooth * Q_clipf(cls.frametime, 0.0f, 0.1f));
+        s_doppler_listener_velocity[0] = FASTLERP(s_doppler_listener_velocity[0], velocity[0], lerp);
+        s_doppler_listener_velocity[1] = FASTLERP(s_doppler_listener_velocity[1], velocity[1], lerp);
+        s_doppler_listener_velocity[2] = FASTLERP(s_doppler_listener_velocity[2], velocity[2], lerp);
+    } else {
+        VectorCopy(velocity, s_doppler_listener_velocity);
+    }
+
+    vec3_t al_velocity;
+    AL_CopyVector(s_doppler_listener_velocity, al_velocity);
+    qalListener3f(AL_VELOCITY, al_velocity[0], al_velocity[1], al_velocity[2]);
+}
+
 static void AL_Activate(void)
 {
     S_StopAllSounds();
@@ -1257,6 +1826,7 @@ static void AL_Update(void)
     AL_CopyVector(listener_forward, orientation);
     AL_CopyVector(listener_up, orientation + 3);
     qalListenerfv(AL_ORIENTATION, orientation);
+    AL_UpdateListenerVelocity();
 
     AL_UpdateUnderWater();
     

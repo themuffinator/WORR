@@ -32,6 +32,7 @@ extern "C" void UI_Sys_UpdateTimes(void);
 extern "C" void UI_Sys_UpdateNetFrom(void);
 extern "C" void UI_Sys_UpdateRefConfig(void);
 extern "C" void UI_Sys_UpdateGameDir(void);
+extern "C" void UI_Sys_SetMenuBlurRect(const clipRect_t *rect);
 
 extern "C" {
     cvar_t *developer;
@@ -114,6 +115,12 @@ extern "C" void UI_Sys_UpdateGameDir(void)
         if (gamedir)
             Q_strlcpy(fs_gamedir, gamedir, sizeof(fs_gamedir));
     }
+}
+
+extern "C" void UI_Sys_SetMenuBlurRect(const clipRect_t *rect)
+{
+    if (uii && uii->CL_SetMenuBlurRect)
+        uii->CL_SetMenuBlurRect(rect);
 }
 
 static void UI_PrintFwd(void (*fn)(const char *fmt, ...), const char *fmt, va_list args)

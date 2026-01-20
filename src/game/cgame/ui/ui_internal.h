@@ -33,6 +33,7 @@ extern "C" void UI_Sys_UpdateRefConfig(void);
 extern "C" void UI_Sys_UpdateGameDir(void);
 extern "C" void UI_Sys_UpdateTimes(void);
 extern "C" void UI_Sys_UpdateNetFrom(void);
+extern "C" void UI_Sys_SetMenuBlurRect(const clipRect_t *rect);
 char *SV_GetSaveInfo(const char *dir);
 void UI_SetClipboardData(const char *text);
 
@@ -64,6 +65,30 @@ enum class Sound {
     Move,
     Out,
     Beep
+};
+
+enum class ConditionKind {
+    InGame,
+    Deathmatch,
+    Cvar
+};
+
+enum class ConditionOp {
+    Exists,
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual
+};
+
+struct MenuCondition {
+    ConditionKind kind = ConditionKind::InGame;
+    ConditionOp op = ConditionOp::Exists;
+    std::string name;
+    std::string value;
+    bool negate = false;
 };
 
 struct UiColors {
@@ -108,6 +133,12 @@ struct UiState {
 };
 
 extern UiState uis;
+
+struct UiHint {
+    int key = 0;
+    std::string label;
+    std::string keyLabel;
+};
 
 inline bool RectContains(const vrect_t &rect, int x, int y)
 {
@@ -157,18 +188,26 @@ public:
     virtual Sound Activate() { return Sound::NotHandled; }
     virtual void OnOpen() {}
     virtual void OnClose() {}
-    bool IsSelectable() const { return selectable_ && !hidden_ && !disabled_; }
-    bool IsHidden() const { return hidden_; }
-    bool IsDisabled() const { return disabled_; }
+    bool IsSelectable() const { return selectable_ && !IsHidden() && !IsDisabled(); }
+    bool IsHidden() const { return hidden_ || hiddenByCondition_; }
+    bool IsDisabled() const { return disabled_ || disabledByCondition_; }
     const vrect_t &Rect() const { return rect_; }
     const std::string &Label() const { return label_; }
     const std::string &Status() const { return status_; }
+    const char *LabelText() const;
     void SetLabel(std::string label) { label_ = std::move(label); }
     void SetStatus(std::string status) { status_ = std::move(status); }
+    void SetLabelCvar(cvar_t *cvar) { labelCvar_ = cvar; }
     void SetDisabled(bool disabled) { disabled_ = disabled; }
     void SetHidden(bool hidden) { hidden_ = hidden; }
     void SetSelectable(bool selectable) { selectable_ = selectable; }
     void SetOwner(class Menu *menu) { owner_ = menu; }
+    void SetShowConditions(std::vector<MenuCondition> conditions);
+    void SetEnableConditions(std::vector<MenuCondition> conditions);
+    void SetDefault(bool value) { default_ = value; }
+    void SetDefaultConditions(std::vector<MenuCondition> conditions);
+    void UpdateConditions();
+    bool IsDefault() const { return default_ || defaultByCondition_; }
 
 protected:
     vrect_t rect_{};
@@ -177,7 +216,16 @@ protected:
     bool selectable_ = true;
     bool hidden_ = false;
     bool disabled_ = false;
+    bool hiddenByCondition_ = false;
+    bool disabledByCondition_ = false;
+    bool default_ = false;
+    bool defaultByCondition_ = false;
+    std::vector<MenuCondition> showConditions_{};
+    std::vector<MenuCondition> enableConditions_{};
+    std::vector<MenuCondition> defaultConditions_{};
     class Menu *owner_ = nullptr;
+    cvar_t *labelCvar_ = nullptr;
+    mutable std::string labelCache_{};
 };
 
 class Menu : public MenuPage {
@@ -204,8 +252,18 @@ public:
     void SetBanner(qhandle_t banner, const vrect_t &rc);
     void SetPlaque(qhandle_t plaque, const vrect_t &rc);
     void SetLogo(qhandle_t logo, const vrect_t &rc);
+    void SetCloseCommand(std::string command) { closeCommand_ = std::move(command); }
+    void ClearHints();
+    void AddHintLeft(int key, std::string label, std::string keyLabel = {});
+    void AddHintRight(int key, std::string label, std::string keyLabel = {});
+    int HintHeight() const;
+    void RefreshLayout() { Layout(); }
+    int ContentTop() const { return contentTop_; }
+    int ContentBottom() const { return contentBottom_; }
+    int ContentHeight() const { return contentHeight_; }
 
 private:
+    void BuildDefaultHints();
     void Layout();
     int HitTest(int x, int y);
     void EnsureVisible(int index);
@@ -239,6 +297,11 @@ private:
     int focusedIndex_ = -1;
     int scrollY_ = 0;
     int contentHeight_ = 0;
+    int bitmapBaseX_ = 0;
+    bool hasBitmaps_ = false;
+    std::string closeCommand_{};
+    std::vector<UiHint> hintsLeft_;
+    std::vector<UiHint> hintsRight_;
     std::vector<int> itemYs_;
     std::vector<int> itemHeights_;
 };
@@ -250,10 +313,12 @@ public:
     void Draw(bool focused) const override;
     Sound Activate() override;
     void SetAlignLeft(bool alignLeft) { alignLeft_ = alignLeft; }
+    void SetCommandCvar(cvar_t *cvar) { commandCvar_ = cvar; }
     bool AlignLeft() const { return alignLeft_; }
 
 private:
     std::string command_;
+    cvar_t *commandCvar_ = nullptr;
     bool alignLeft_ = false;
 };
 
@@ -334,6 +399,40 @@ protected:
     bool negate_ = false;
 };
 
+class DropdownWidget : public SpinWidget {
+public:
+    DropdownWidget(std::string label, cvar_t *cvar, SpinType type);
+    void Draw(bool focused) const override;
+};
+
+enum class SwitchStyle {
+    Toggle,
+    Checkbox
+};
+
+class SwitchWidget : public Widget {
+public:
+    SwitchWidget(std::string label, cvar_t *cvar, int bit, bool negate);
+    void Draw(bool focused) const override;
+    Sound KeyEvent(int key) override;
+    Sound Activate() override;
+    void OnOpen() override;
+    void OnClose() override;
+    void SetStyle(SwitchStyle style) { style_ = style; }
+
+private:
+    void Toggle();
+    void SyncFromCvar();
+    void ApplyToCvar();
+
+    cvar_t *cvar_ = nullptr;
+    int mask_ = 0;
+    bool negate_ = false;
+    bool value_ = false;
+    bool modified_ = false;
+    SwitchStyle style_ = SwitchStyle::Toggle;
+};
+
 class ImageSpinWidget : public SpinWidget {
 public:
     ImageSpinWidget(std::string label, cvar_t *cvar, std::string path, std::string filter,
@@ -375,9 +474,39 @@ private:
     bool integer_ = false;
 };
 
+class ComboWidget : public Widget {
+public:
+    ComboWidget(std::string label, cvar_t *cvar, int width, bool center, bool numeric, bool integer);
+    void Layout(int x, int y, int width, int lineHeight) override;
+    void Draw(bool focused) const override;
+    Sound KeyEvent(int key) override;
+    Sound CharEvent(int ch) override;
+    void OnOpen() override;
+    void OnClose() override;
+    bool Center() const { return center_; }
+
+    void AddOption(std::string value);
+    void ClearOptions();
+
+private:
+    bool TestChar(int ch) const;
+    void SetFromIndex(int index);
+    void SyncIndexFromText();
+
+    cvar_t *cvar_ = nullptr;
+    inputField_t field_{};
+    std::vector<std::string> items_{};
+    int width_ = 16;
+    bool center_ = false;
+    bool numeric_ = false;
+    bool integer_ = false;
+    int currentIndex_ = -1;
+};
+
 class KeyBindWidget : public Widget {
 public:
     KeyBindWidget(std::string label, std::string command, std::string status, std::string altStatus);
+    int Height(int lineHeight) const override;
     void Draw(bool focused) const override;
     Sound Activate() override;
     Sound KeyEvent(int key) override;
@@ -393,12 +522,33 @@ private:
     std::string altStatus_;
     char binding_[32]{};
     char altBinding_[32]{};
+    int primaryKey_ = -1;
+    int altKey_ = -1;
 };
 
 class SeparatorWidget : public Widget {
 public:
     SeparatorWidget();
     void Draw(bool focused) const override;
+};
+
+class WrappedTextWidget : public Widget {
+public:
+    WrappedTextWidget(std::string text, int maxLines, int maxWidthChars, bool alignLeft);
+    int Height(int lineHeight) const override;
+    void Layout(int x, int y, int width, int lineHeight) override;
+    void Draw(bool focused) const override;
+
+private:
+    void RebuildLines(int lineHeight) const;
+
+    int maxLines_ = 0;
+    int maxWidthChars_ = 0;
+    bool alignLeft_ = true;
+    mutable int cachedLineHeight_ = 0;
+    mutable int cachedWidthChars_ = 0;
+    mutable std::string cachedText_{};
+    mutable std::vector<std::string> lines_{};
 };
 
 class SaveGameWidget : public Widget {
@@ -497,6 +647,10 @@ void UI_DrawRect8(const vrect_t *rect, int border, int c);
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string);
 void *UI_FormatColumns(int extrasize, ...);
 char *UI_GetColumn(char *s, int n);
+int UI_DrawKeyIcon(int x, int y, int height, color_t color, int keynum, const char *label);
+int UI_GetKeyIconWidth(int height, int keynum, const char *label);
+int UI_DrawHintBar(const std::vector<UiHint> &left, const std::vector<UiHint> &right, int bottom);
+int UI_GetHintBarHeight(const std::vector<UiHint> &left, const std::vector<UiHint> &right);
 
 void PlayerModel_Load();
 void PlayerModel_Free();
@@ -513,5 +667,8 @@ void UI_StartSound(Sound sound);
 std::unique_ptr<MenuPage> CreateDemoBrowserPage();
 std::unique_ptr<MenuPage> CreateServerBrowserPage();
 std::unique_ptr<MenuPage> CreatePlayerConfigPage();
+std::unique_ptr<MenuPage> CreateWelcomePage();
+
+bool UI_EvaluateConditions(const std::vector<MenuCondition> &conditions);
 
 } // namespace ui

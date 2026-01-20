@@ -4450,6 +4450,9 @@ void MoveClientToFreeCam(gentity_t *ent);
 //
 void target_laser_think(gentity_t *self);
 void target_laser_off(gentity_t *self);
+void Locations_Reset();
+void Locations_Finalize();
+std::string Location_NameFor(const gentity_t *ent);
 
 constexpr SpawnFlags SPAWNFLAG_LASER_ON = 0x0001_spawnflag;
 constexpr SpawnFlags SPAWNFLAG_LASER_RED = 0x0002_spawnflag;
@@ -5599,6 +5602,52 @@ constexpr GameTime COOP_DAMAGE_RESPAWN_TIME = 2000_ms;
 // time after firing that we can't respawn on a player for
 constexpr GameTime COOP_DAMAGE_FIRING_TIME = 2500_ms;
 
+struct MatchSetupState {
+  std::string format = "regular";
+  std::string gametype = "ffa";
+  std::string modifier = "standard";
+  int maxPlayers = 8;
+  std::string length = "standard";
+  std::string type = "standard";
+  std::string bestOf = "bo1";
+};
+
+struct UiMapFlagState {
+  uint16_t enableFlags = 0;
+  uint16_t disableFlags = 0;
+};
+
+enum class UiListKind : uint8_t {
+  None,
+  CallvoteMap,
+  CallvoteGametype,
+  CallvoteArena,
+  MyMap,
+  SetupGametype,
+  TournamentPick,
+  TournamentBan,
+  TournamentReplay
+};
+
+struct UiListState {
+  UiListKind kind = UiListKind::None;
+  int page = 0;
+};
+
+struct UiMenuState {
+  UiMapFlagState callvoteMap{};
+  UiMapFlagState mymap{};
+  UiListState list{};
+  bool voteActive = false;
+  GameTime voteNextUpdate = 0_ms;
+  bool mapSelectorActive = false;
+  GameTime mapSelectorNextUpdate = 0_ms;
+  bool matchStatsActive = false;
+  GameTime matchStatsNextUpdate = 0_ms;
+  MatchSetupState setup{};
+  bool setupActive = false;
+};
+
 // this structure is cleared on each ClientSpawn(),
 // except for 'client->pers'
 struct gclient_t {
@@ -5770,14 +5819,10 @@ struct gclient_t {
   GameTime emptyClickSound = 0_ms;
 
   struct {
-    std::shared_ptr<Menu> current; // Currently open menu, if any
-    GameTime updateTime = 0_ms;    // time to update menu
-    bool doUpdate = false;
-    bool restoreStatusBar =
-        false; // should STAT_SHOW_STATUSBAR be restored on close?
-    int32_t previousStatusBar = 0;   // cached STAT_SHOW_STATUSBAR value
-    bool previousShowScores = false; // cached showScores value
+    GameTime updateTime = 0_ms; // scoreboard refresh timing
   } menu;
+
+  UiMenuState ui{};
 
   struct {
     gentity_t *entity = nullptr;             // entity of grapple
@@ -5809,7 +5854,6 @@ struct gclient_t {
 
   GameTime invisibility_fade_time =
       0_ms; // [Paril-KEX] at this time, the player will be mostly fully cloaked
-  int32_t menu_sign = 0;   // menu sign
   Vector3 last_ladder_pos; // for ladder step sounds
   GameTime last_ladder_sound = 0_ms;
   CoopRespawn coopRespawnState = CoopRespawn::None;
@@ -5889,11 +5933,13 @@ struct gclient_t {
   int last_match_timer_update = 0;
 
   struct {
-    GameTime delay = 0_ms;
-    bool shown = false;
-    bool frozen = false;
-    bool hostSetupDone = false;
-  } initialMenu;
+      GameTime delay = 0_ms;
+      bool shown = false;
+      bool frozen = false;
+      bool hostSetupDone = false;
+      bool dmWelcomeActive = false;
+      bool dmJoinActive = false;
+    } initialMenu;
 
   GameTime lastPowerupMessageTime = 0_ms;
   GameTime lastBannedMessageTime = 0_ms;
@@ -6608,266 +6654,54 @@ extern cached_modelIndex sm_meat_index;
 extern cached_soundIndex snd_fry;
 
 // ===========================================================
-// MENU SYSTEM
+// UI MENU HELPERS
 // ===========================================================
 
-/*
-===============
-Menu.hpp
-===============
-*/
-
-// Forward declarations
-// struct gentity_t;
-class Menu;
-
-constexpr int MAX_MENU_WIDTH = 28;
-constexpr int MAX_VISIBLE_LINES = 18;
-
-/*
-===============
-TrimToWidth
-
-Ensures menu strings do not exceed MAX_MENU_WIDTH characters by trimming and
-appending an ellipsis when necessary.
-===============
-*/
-inline std::string TrimToWidth(const std::string &text) {
-  if (text.size() > MAX_MENU_WIDTH)
-    return text.substr(0, static_cast<size_t>(MAX_MENU_WIDTH - 3)) + "...";
-  return text;
+inline bool IsUiMenuOpen(const gclient_t *cl) {
+  if (!cl)
+    return false;
+  return cl->initialMenu.dmWelcomeActive || cl->initialMenu.dmJoinActive ||
+         cl->ui.voteActive || cl->ui.mapSelectorActive ||
+         cl->ui.matchStatsActive || cl->ui.setupActive ||
+         cl->ui.list.kind != UiListKind::None;
 }
 
-// extern gentity_t *g_entities;
+inline bool IsUiMenuOpen(const gentity_t *ent) {
+  return ent && ent->client && IsUiMenuOpen(ent->client);
+}
 
-/*
-===============
-MenuAlign
-===============
-*/
-enum class MenuAlign : uint8_t { Left, Center, Right };
+inline bool IsBlockingUiMenuOpen(const gclient_t *cl) {
+  if (!cl)
+    return false;
+  if (cl->initialMenu.dmWelcomeActive || cl->initialMenu.dmJoinActive ||
+      cl->ui.setupActive)
+    return true;
+  return cl->ui.list.kind == UiListKind::SetupGametype ||
+         cl->ui.list.kind == UiListKind::TournamentPick ||
+         cl->ui.list.kind == UiListKind::TournamentBan ||
+         cl->ui.list.kind == UiListKind::TournamentReplay;
+}
 
-/*
-===============
-MenuEntry
-===============
-*/
-class MenuEntry {
-public:
-  std::string text;
-  std::string textArg;
-  MenuAlign align;
-  std::function<void(gentity_t *, Menu &)> onSelect;
-  bool scrollable = true;
-  bool scrollableSet = false;
-  bool isDefault = false; // Marks this entry as the default/current setting for
-                          // visual indicator
+inline bool IsBlockingUiMenuOpen(const gentity_t *ent) {
+  return ent && ent->client && IsBlockingUiMenuOpen(ent->client);
+}
 
-  MenuEntry(const std::string &txt, MenuAlign a,
-            std::function<void(gentity_t *, Menu &)> cb = nullptr)
-      : text(txt), align(a), onSelect(std::move(cb)) {}
-};
-
-/*
-===============
-Menu
-===============
-*/
-class Menu {
-public:
-  std::vector<MenuEntry> entries;
-  int current = -1;
-  int scrollOffset = 0;
-  int defaultIndex =
-      -1; // Explicit default selection index (-1 means auto-select first)
-  std::function<void(gentity_t *, const Menu &)> onUpdate;
-  std::shared_ptr<void> context;
-
-  void Next();
-  void Prev();
-  void Select(gentity_t *ent);
-  void Render(gentity_t *ent) const;
-  void EnsureCurrentVisible();
-};
-
-/*
-===============
-MenuBuilder
-===============
-*/
-class MenuBuilder {
-private:
-  std::unique_ptr<Menu> menu;
-
-public:
-  MenuBuilder() : menu(std::make_unique<Menu>()) {}
-
-  MenuBuilder &
-  add(const std::string &text, MenuAlign align = MenuAlign::Left,
-      std::function<void(gentity_t *, Menu &)> onSelect = nullptr) {
-    menu->entries.emplace_back(text, align, std::move(onSelect));
-    return *this;
-  }
-
-  /*
-  ===============
-  addDefault
-
-  Adds an entry and marks it as the default selection.
-  ===============
-  */
-  MenuBuilder &
-  addDefault(const std::string &text, MenuAlign align = MenuAlign::Left,
-             std::function<void(gentity_t *, Menu &)> onSelect = nullptr) {
-    menu->entries.emplace_back(text, align, std::move(onSelect));
-    menu->entries.back().isDefault = true;
-    menu->defaultIndex = static_cast<int>(menu->entries.size()) - 1;
-    return *this;
-  }
-
-  /*
-  ===============
-  addFixed
-
-  Adds a non-scrollable entry to the menu.
-  ===============
-  */
-  MenuBuilder &
-  addFixed(const std::string &text, MenuAlign align = MenuAlign::Left,
-           std::function<void(gentity_t *, Menu &)> onSelect = nullptr) {
-    menu->entries.emplace_back(text, align, std::move(onSelect));
-    menu->entries.back().scrollable = false;
-    menu->entries.back().scrollableSet = true;
-    return *this;
-  }
-
-  MenuBuilder &spacer() {
-    menu->entries.emplace_back("", MenuAlign::Left);
-    return *this;
-  }
-
-  MenuBuilder &update(std::function<void(gentity_t *, const Menu &)> updater) {
-    menu->onUpdate = std::move(updater);
-    return *this;
-  }
-
-  MenuBuilder &context(std::shared_ptr<void> data) {
-    menu->context = std::move(data);
-    return *this;
-  }
-
-  /*
-  ===============
-  selectDefault
-
-  Explicitly sets which entry index should be selected by default.
-  ===============
-  */
-  MenuBuilder &selectDefault(int index) {
-    if (index >= 0 && index < static_cast<int>(menu->entries.size()))
-      menu->defaultIndex = index;
-    return *this;
-  }
-
-  /*
-  ===============
-  markDefault
-
-  Marks the last added entry as the default for visual indication.
-  ===============
-  */
-  MenuBuilder &markDefault() {
-    if (!menu->entries.empty()) {
-      menu->entries.back().isDefault = true;
-      menu->defaultIndex = static_cast<int>(menu->entries.size()) - 1;
-    }
-    return *this;
-  }
-
-  int size() const { return static_cast<int>(menu->entries.size()); }
-
-  std::unique_ptr<Menu> build() { return std::move(menu); }
-};
-
-/*
-===============
-MenuSystem
-===============
-*/
-class MenuSystem {
-public:
-  static void Open(gentity_t *ent, std::unique_ptr<Menu> menu);
-  static void Close(gentity_t *ent);
-  static void Update(gentity_t *ent);
-  static void DirtyAll();
-};
-
-constexpr GameTime MAP_SELECTOR_VOTE_DURATION = 5_sec;
-
-/*
-===============
-Inline Menu Utilities
-===============
-*/
 inline void CloseActiveMenu(gentity_t *ent) {
-  if (ent && ent->client)
-    MenuSystem::Close(ent);
-}
-
-inline void PreviousMenuItem(gentity_t *ent) {
-  if (ent && ent->client && ent->client->menu.current)
-    ent->client->menu.current->Prev();
-}
-
-inline void NextMenuItem(gentity_t *ent) {
-  if (ent && ent->client && ent->client->menu.current)
-    ent->client->menu.current->Next();
-}
-
-inline void ActivateSelectedMenuItem(gentity_t *ent) {
   if (!ent || !ent->client)
     return;
-  auto menu = ent->client->menu.current;
-  if (menu)
-    menu->Select(ent);
-}
 
-inline void DirtyAllMenus() { MenuSystem::DirtyAll(); }
+  ent->client->ui.voteActive = false;
+  ent->client->ui.mapSelectorActive = false;
+  ent->client->ui.matchStatsActive = false;
+  ent->client->ui.setupActive = false;
+  ent->client->ui.list.kind = UiListKind::None;
+  ent->client->ui.list.page = 0;
+  ent->client->initialMenu.dmWelcomeActive = false;
+  ent->client->initialMenu.dmJoinActive = false;
 
-inline void UpdateMenu(gentity_t *ent) { MenuSystem::Update(ent); }
-
-inline void RenderMenu(gentity_t *ent) {
-  if (ent && ent->client && ent->client->menu.current)
-    ent->client->menu.current->Render(ent);
-}
-
-/*
-===============
-Menu Helpers: Toggles and Choosers
-===============
-*/
-inline auto MakeToggle(std::function<bool()> getState,
-                       std::function<void()> toggleState)
-    -> std::tuple<std::string, MenuAlign,
-                  std::function<void(gentity_t *, Menu &)>> {
-  return {"", MenuAlign::Left,
-          [toggleState](gentity_t *, Menu &) { toggleState(); }};
-}
-
-inline auto MakeCycle(std::function<int()> getValue,
-                      std::function<void()> nextValue)
-    -> std::tuple<std::string, MenuAlign,
-                  std::function<void(gentity_t *, Menu &)>> {
-  return {"", MenuAlign::Left,
-          [nextValue](gentity_t *, Menu &) { nextValue(); }};
-}
-
-inline auto MakeChoice(const std::vector<std::string> &choices,
-                       std::function<int()> getIndex,
-                       std::function<void()> advance)
-    -> std::tuple<std::string, MenuAlign,
-                  std::function<void(gentity_t *, Menu &)>> {
-  return {"", MenuAlign::Left, [advance](gentity_t *, Menu &) { advance(); }};
+  gi.WriteByte(svc_stufftext);
+  gi.WriteString("forcemenuoff\n");
+  gi.unicast(ent, true);
 }
 
 /*
@@ -6879,18 +6713,49 @@ void OpenJoinMenu(gentity_t *ent);
 void OpenAdminSettingsMenu(gentity_t *ent);
 void OpenAdminCommandsMenu(gentity_t *ent);
 void OpenMyMapMenu(gentity_t *ent);
+void OpenMyMapFlagsMenu(gentity_t *ent);
+void RefreshMyMapFlagsMenu(gentity_t *ent);
 void OpenVoteMenu(gentity_t *ent);
+void RefreshVoteMenu(gentity_t *ent);
 void OpenCallvoteMenu(gentity_t *ent);
+void OpenCallvoteMapMenu(gentity_t *ent);
+void OpenCallvoteGametypeMenu(gentity_t *ent);
+void OpenCallvoteArenaMenu(gentity_t *ent);
+void OpenCallvoteRulesetMenu(gentity_t *ent);
+void OpenCallvoteTimelimitMenu(gentity_t *ent);
+void OpenCallvoteScorelimitMenu(gentity_t *ent);
+void OpenCallvoteUnlaggedMenu(gentity_t *ent);
+void OpenCallvoteRandomMenu(gentity_t *ent);
+void OpenCallvoteMapFlagsMenu(gentity_t *ent);
+void RefreshCallvoteMapFlagsMenu(gentity_t *ent);
 void OpenHostInfoMenu(gentity_t *ent);
 void OpenMatchInfoMenu(gentity_t *ent);
 void OpenPlayerMatchStatsMenu(gentity_t *ent);
+void RefreshMatchStatsMenu(gentity_t *ent);
 void OpenMapSelectorMenu(gentity_t *ent);
+void RefreshMapSelectorMenu(gentity_t *ent);
+void OpenForfeitMenu(gentity_t *ent);
 void OpenSetupWelcomeMenu(gentity_t *ent);
+void OpenSetupMatchFormatMenu(gentity_t *ent);
+void OpenSetupMaxPlayersMenu(gentity_t *ent);
+void OpenSetupGametypeMenu(gentity_t *ent);
+void OpenSetupModifierMenu(gentity_t *ent);
+void OpenSetupMatchLengthMenu(gentity_t *ent);
+void OpenSetupMatchTypeMenu(gentity_t *ent);
+void OpenSetupBestOfMenu(gentity_t *ent);
+void FinishSetupWizard(gentity_t *ent);
 void OpenPlayerWelcomeMenu(gentity_t *ent);
+void OpenDmWelcomeMenu(gentity_t *ent);
+void OpenDmJoinMenu(gentity_t *ent);
+void CloseDmJoinMenu(gentity_t *ent);
+void ForceCloseDmJoinMenu(gentity_t *ent);
+void OpenDmHostInfoMenu(gentity_t *ent);
+void OpenDmMatchInfoMenu(gentity_t *ent);
 void OpenTournamentInfoMenu(gentity_t *ent);
 void OpenTournamentMapChoicesMenu(gentity_t *ent);
 void OpenTournamentVetoMenu(gentity_t *ent);
 void OpenTournamentReplayMenu(gentity_t *ent);
+void OpenTournamentReplayConfirmMenu(gentity_t *ent, int gameNumber);
 
 // ===========================================================
 

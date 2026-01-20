@@ -1,0 +1,219 @@
+/*
+Copyright (C) 2018 Christoph Schied
+Copyright (C) 2019, NVIDIA CORPORATION. All rights reserved.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+// ========================================================================== //
+// This shader takes the entity models for the current frame and applies
+// transforms to their original frames, producing triangles for these models
+// in their final world positions. Also applies texture animations.
+// ========================================================================== //
+
+#version 460
+#extension GL_GOOGLE_include_directive    : enable
+#extension GL_EXT_nonuniform_qualifier    : enable
+
+#include "utils.glsl"
+
+#define GLOBAL_UBO_DESC_SET_IDX 0
+#include "global_ubo.h"
+
+#include "global_textures.h"
+
+#define VERTEX_BUFFER_DESC_SET_IDX 1
+#include "vertex_buffer.h"
+
+Triangle
+get_iqm_triangle(uint model_id, uint prim_id, int matrix_offset)
+{
+	VboPrimitive prim = primitive_buffers[nonuniformEXT(model_id)].primitives[prim_id];
+
+	Triangle t;
+	t.positions[0] = prim.pos0;
+	t.positions[1] = prim.pos1;
+	t.positions[2] = prim.pos2;
+
+	t.positions_prev = t.positions;
+	
+	t.normals[0] = decode_normal(prim.normals.x);
+	t.normals[1] = decode_normal(prim.normals.y);
+	t.normals[2] = decode_normal(prim.normals.z);
+
+	t.tangents[0] = decode_normal(prim.tangents.x);
+	t.tangents[1] = decode_normal(prim.tangents.y);
+	t.tangents[2] = decode_normal(prim.tangents.z);
+
+	t.tex_coords[0] = prim.uv0;
+	t.tex_coords[1] = prim.uv1;
+	t.tex_coords[2] = prim.uv2;
+
+	t.material_id = prim.material_id;
+	t.shell = prim.shell;
+	t.cluster = prim.cluster;
+	t.instance_index = 0;
+	t.instance_prim = 0;
+	
+	vec2 emissive_and_alpha = unpackHalf2x16(prim.emissive_and_alpha);
+	t.emissive_factor = emissive_and_alpha.x;
+	t.alpha = emissive_and_alpha.y;
+
+	for (int i_vtx = 0; i_vtx < 3; i_vtx++)
+	{
+		uint bone_indices;
+		uint bone_weights;
+		if (i_vtx == 0)
+		{
+			bone_indices = prim.custom0.x;
+			bone_weights = prim.custom0.y;
+		}
+		else if (i_vtx == 1)
+		{
+			bone_indices = prim.custom1.x;
+			bone_weights = prim.custom1.y;
+		}
+		else
+		{
+			bone_indices = prim.custom2.x;
+			bone_weights = prim.custom2.y;
+		}
+
+		mat3x4 transform = mat3x4(0);
+		float weight_sum = 0;
+
+		for (int i_bone = 0; i_bone < 4; i_bone++)
+		{
+			uint bone_index = (bone_indices >> (i_bone * 8)) & 0xff;
+			float bone_weight = float((bone_weights >> (i_bone * 8)) & 0xff); // skip normalization for precision
+
+			if (bone_weight > 0)
+			{
+				mat3x4 m = get_iqm_matrix(matrix_offset + bone_index);
+				transform += m * bone_weight;
+				weight_sum += bone_weight;
+			}
+		}
+
+		if (weight_sum > 0) // should always sum up to 1 by IQM definition, but maybe the data is missing altogether?
+		{
+			float weight_sum_rcp = 1.0 / weight_sum;
+			t.positions[i_vtx] = (vec4(t.positions[i_vtx], 1.0) * weight_sum_rcp) * transform;
+			t.normals[i_vtx] = normalize(vec4(t.normals[i_vtx], 0.0) * transform);
+			t.tangents[i_vtx] = normalize(vec4(t.tangents[i_vtx], 0.0) * transform);
+		}
+	}
+
+	return t;
+}
+
+#define LOCAL_SIZE_X 512
+
+layout(local_size_x = LOCAL_SIZE_X, local_size_y = 1, local_size_z = 1) in;
+
+void
+main()
+{	
+	uint instance_index = instance_buffer.animated_model_indices[gl_WorkGroupID.x];
+
+	ModelInstance mi = instance_buffer.model_instances[instance_index];
+
+	for(uint idx = gl_LocalInvocationID.x; idx < mi.prim_count; idx += LOCAL_SIZE_X)
+	{
+		Triangle t;
+
+		// See if the instance is skinned.
+		if (mi.iqm_matrix_offset_curr_frame >= 0)
+		{
+			// Perform bone-based skinning for two frames:
+			// Current frame...
+			t = get_iqm_triangle(mi.source_buffer_idx,
+				idx + mi.prim_offset_curr_pose_curr_frame, mi.iqm_matrix_offset_curr_frame);
+
+			// ... previous frame
+			Triangle t_prev = get_iqm_triangle(mi.source_buffer_idx,
+				idx + mi.prim_offset_curr_pose_prev_frame, mi.iqm_matrix_offset_prev_frame);
+
+			// Use only the triangle positions from the previous frame
+			t.positions_prev = t_prev.positions;
+
+			// Apply the model-to-world transform
+			for (int vtx = 0; vtx < 3; vtx++)
+			{
+				// Current position
+				t.positions[vtx] = vec3(mi.transform * vec4(t.positions[vtx], 1.0));
+
+				// Previous position
+				t.positions_prev[vtx] = vec3(mi.transform_prev * vec4(t.positions_prev[vtx], 1.0));
+
+				// Current normal
+				t.normals[vtx] = normalize(vec3(mi.transform * vec4(t.normals[vtx], 0.0)));
+
+				// Current tangent
+				t.tangents[vtx] = normalize(vec3(mi.transform * vec4(t.tangents[vtx], 0.0)));
+			}
+		}
+		else // Not skinned, so vertex animation.
+		{
+			// Interpolate vertex animations for two frames, from two poses in each frame
+			Triangle t_a_curr = load_triangle(mi.source_buffer_idx, idx + mi.prim_offset_curr_pose_curr_frame);
+			Triangle t_b_curr = load_triangle(mi.source_buffer_idx, idx + mi.prim_offset_prev_pose_curr_frame);
+			Triangle t_a_prev = load_triangle(mi.source_buffer_idx, idx + mi.prim_offset_curr_pose_prev_frame);
+			Triangle t_b_prev = load_triangle(mi.source_buffer_idx, idx + mi.prim_offset_prev_pose_prev_frame);
+
+			// Blend between the two animation frames and apply the model-to-world transform
+			for (int vtx = 0; vtx < 3; vtx++)
+			{
+				// Current position
+				t.positions[vtx] = mix(t_a_curr.positions[vtx], t_b_curr.positions[vtx], mi.pose_lerp_curr_frame);
+				t.positions[vtx] = vec3(mi.transform * vec4(t.positions[vtx], 1.0));
+
+				// Previous position
+				t.positions_prev[vtx] = mix(t_a_prev.positions[vtx], t_b_prev.positions[vtx], mi.pose_lerp_prev_frame);
+				t.positions_prev[vtx] = vec3(mi.transform_prev * vec4(t.positions_prev[vtx], 1.0));
+
+				// Current normal
+				t.normals[vtx] = mix(t_a_curr.normals[vtx], t_b_curr.normals[vtx], mi.pose_lerp_curr_frame);
+				t.normals[vtx] = normalize(vec3(mi.transform * vec4(t.normals[vtx], 0.0)));
+
+				// Current tangent
+				t.tangents[vtx] = mix(t_a_curr.tangents[vtx], t_b_curr.tangents[vtx], mi.pose_lerp_curr_frame);
+				t.tangents[vtx] = normalize(vec3(mi.transform * vec4(t.tangents[vtx], 0.0)));
+
+				// Current texture coordinates - assume no texcoord animation
+				t.tex_coords[vtx] = t_a_curr.tex_coords[vtx];
+			}
+
+			t.material_id = t_a_curr.material_id;
+			t.shell = t_a_curr.shell;
+			t.emissive_factor = t_a_curr.emissive_factor;
+			t.alpha = t_a_curr.alpha;
+		}
+
+		t.cluster = mi.cluster;
+		t.alpha *= unpackHalf2x16(mi.alpha_and_frame).x;
+		t.instance_index = instance_index;
+		if (mi.material != 0)
+		{
+			t.material_id = mi.material;
+			t.shell = mi.shell;
+		}
+
+		// Apply frame-based material animation
+		t.material_id = animate_material(t.material_id, int(mi.alpha_and_frame >> 16));
+
+		store_triangle(t, mi.render_buffer_idx, idx + mi.render_prim_offset);
+	}
+}

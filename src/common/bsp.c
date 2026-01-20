@@ -332,6 +332,8 @@ void BSP_Free(bsp_t *bsp)
     }
     Q_assert(bsp->refcount > 0);
     if (--bsp->refcount == 0) {
+        Z_Free(bsp->pvs_matrix);
+        Z_Free(bsp->pvs2_matrix);
         Hunk_Free(&bsp->hunk);
         List_Remove(&bsp->entry);
 #if USE_REF
@@ -340,6 +342,117 @@ void BSP_Free(bsp_t *bsp)
 #endif
         Z_Free(bsp);
     }
+}
+
+static void BSP_BuildPvsMatrix(bsp_t *bsp)
+{
+    if (!bsp->vis)
+        return;
+
+    size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
+    byte *pvs_matrix = Z_Mallocz(matrix_size);
+    visrow_t row;
+
+    for (int cluster = 0; cluster < bsp->vis->numclusters; cluster++) {
+        BSP_ClusterVis(bsp, &row, cluster, DVIS_PVS);
+        memcpy(pvs_matrix + bsp->visrowsize * cluster, row.b, bsp->visrowsize);
+    }
+
+    bsp->pvs_matrix = pvs_matrix;
+}
+
+byte *BSP_GetPvs(bsp_t *bsp, int cluster)
+{
+    if (!bsp || !bsp->vis || !bsp->pvs_matrix)
+        return NULL;
+
+    if (cluster < 0 || cluster >= bsp->vis->numclusters)
+        return NULL;
+
+    return bsp->pvs_matrix + bsp->visrowsize * cluster;
+}
+
+byte *BSP_GetPvs2(bsp_t *bsp, int cluster)
+{
+    if (!bsp || !bsp->vis || !bsp->pvs2_matrix)
+        return NULL;
+
+    if (cluster < 0 || cluster >= bsp->vis->numclusters)
+        return NULL;
+
+    return bsp->pvs2_matrix + bsp->visrowsize * cluster;
+}
+
+static bool BSP_GetPatchedPVSFileName(const char *map_path, char pvs_path[MAX_QPATH])
+{
+    int path_len = (int)strlen(map_path);
+    if (path_len < 5 || strcmp(map_path + path_len - 4, ".bsp") != 0)
+        return false;
+
+    const char *map_file = strrchr(map_path, '/');
+    if (map_file)
+        map_file += 1;
+    else
+        map_file = map_path;
+
+    memset(pvs_path, 0, MAX_QPATH);
+    strncpy(pvs_path, map_path, map_file - map_path);
+    strcat(pvs_path, "pvs/");
+    strncat(pvs_path, map_file, strlen(map_file) - 4);
+    strcat(pvs_path, ".bin");
+
+    return true;
+}
+
+static bool BSP_LoadPatchedPVS(bsp_t *bsp)
+{
+    char pvs_path[MAX_QPATH];
+
+    if (!BSP_GetPatchedPVSFileName(bsp->name, pvs_path))
+        return false;
+
+    unsigned char *filebuf = NULL;
+    int filelen = FS_LoadFile(pvs_path, (void **)&filebuf);
+    if (!filebuf || filelen < 0)
+        return false;
+
+    size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
+    if (filelen != (int)(matrix_size * 2)) {
+        FS_FreeFile(filebuf);
+        return false;
+    }
+
+    bsp->pvs_matrix = Z_Malloc(matrix_size);
+    memcpy(bsp->pvs_matrix, filebuf, matrix_size);
+
+    bsp->pvs2_matrix = Z_Malloc(matrix_size);
+    memcpy(bsp->pvs2_matrix, filebuf + matrix_size, matrix_size);
+
+    FS_FreeFile(filebuf);
+    return true;
+}
+
+bool BSP_SavePatchedPVS(bsp_t *bsp)
+{
+    char pvs_path[MAX_QPATH];
+
+    if (!bsp || !bsp->pvs_matrix || !bsp->pvs2_matrix)
+        return false;
+
+    if (!BSP_GetPatchedPVSFileName(bsp->name, pvs_path))
+        return false;
+
+    size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
+    unsigned char *filebuf = Z_Malloc(matrix_size * 2);
+
+    memcpy(filebuf, bsp->pvs_matrix, matrix_size);
+    memcpy(filebuf + matrix_size, bsp->pvs2_matrix, matrix_size);
+
+    int err = FS_WriteFile(pvs_path, filebuf, matrix_size * 2);
+
+    Z_Free(filebuf);
+
+    return err >= 0;
 }
 
 #if USE_CLIENT
@@ -356,7 +469,8 @@ int BSP_LoadMaterials(bsp_t *bsp)
         for (j = i - 1; j >= 0; j--) {
             tex = &bsp->texinfo[j];
             if (!Q_stricmp(tex->name, out->name)) {
-                strcpy(out->c.material, tex->c.material);
+                Q_strlcpy(out->step_material, tex->step_material, sizeof(out->step_material));
+                Q_strlcpy(out->c.material, tex->c.material, sizeof(out->c.material));
                 out->step_id = tex->step_id;
                 break;
             }
@@ -368,21 +482,25 @@ int BSP_LoadMaterials(bsp_t *bsp)
         Q_concat(path, sizeof(path), "textures/", out->name, ".mat");
         FS_OpenFile(path, &f, FS_MODE_READ | FS_FLAG_LOADFILE);
         if (f) {
-            FS_Read(out->c.material, sizeof(out->c.material) - 1, f);
+            FS_Read(out->step_material, sizeof(out->step_material) - 1, f);
             FS_CloseFile(f);
+            out->step_material[sizeof(out->step_material) - 1] = 0;
         }
 
-        if (out->c.material[0] && !COM_IsPath(out->c.material)) {
-            Com_WPrintf("Bad material \"%s\" in %s\n", Com_MakePrintable(out->c.material), path);
+        Q_strlcpy(out->c.material, out->step_material, sizeof(out->c.material));
+
+        if (out->step_material[0] && !COM_IsPath(out->step_material)) {
+            Com_WPrintf("Bad material \"%s\" in %s\n", Com_MakePrintable(out->step_material), path);
+            out->step_material[0] = 0;
             out->c.material[0] = 0;
         }
 
-        if (!out->c.material[0] || !Q_stricmp(out->c.material, "default")) {
+        if (!out->step_material[0] || !Q_stricmp(out->step_material, "default")) {
             out->step_id = FOOTSTEP_ID_DEFAULT;
             continue;
         }
 
-        if (!Q_stricmp(out->c.material, "ladder")) {
+        if (!Q_stricmp(out->step_material, "ladder")) {
             out->step_id = FOOTSTEP_ID_LADDER;
             continue;
         }
@@ -390,7 +508,7 @@ int BSP_LoadMaterials(bsp_t *bsp)
         // see if already allocated step_id for this material
         for (j = i - 1; j >= 0; j--) {
             tex = &bsp->texinfo[j];
-            if (!Q_stricmp(tex->c.material, out->c.material)) {
+            if (!Q_stricmp(tex->step_material, out->step_material)) {
                 out->step_id = tex->step_id;
                 break;
             }
@@ -693,6 +811,15 @@ static bool BSP_ParseFaceNormalsHeader(bsp_t *bsp, const byte *in, size_t filele
     return true;
 }
 
+static size_t BSP_ParseFaceNormalsHeaderAlloc(bsp_t *bsp, const byte *in, size_t filelen)
+{
+    if (!BSP_ParseFaceNormalsHeader(bsp, in, filelen)) {
+        return 0;
+    }
+
+    return filelen + BSP_ALIGN - 1;
+}
+
 static void BSP_ParseFaceNormals(bsp_t *bsp, const byte *in, size_t filelen)
 {
     if (!BSP_ParseFaceNormalsHeader(bsp, in, filelen))
@@ -717,18 +844,45 @@ static void BSP_ParseFaceNormals(bsp_t *bsp, const byte *in, size_t filelen)
         return;
     }
 
+    bsp->basisvectors = BSP_ALLOC(sizeof(vec3_t) * bsp->normals.num_normals);
+    bsp->numbasisvectors = bsp->normals.num_normals;
+    memcpy(bsp->basisvectors, bsp->normals.normals, sizeof(vec3_t) * bsp->normals.num_normals);
+
+    bsp->bases = BSP_ALLOC(sizeof(mbasis_t) * num_indices);
+    bsp->numbases = (int)num_indices;
+
     bsp->normals.normal_indices = Z_Malloc(sizeof(uint32_t) * num_indices);
 
     for (size_t i = 0; i < num_indices; i++) {
-        memcpy(&bsp->normals.normal_indices[i], in + off, sizeof(uint32_t));
-        off += sizeof(uint32_t) * 3;
+        uint32_t normal;
+        uint32_t tangent;
+        uint32_t bitangent;
+
+        memcpy(&normal, in + off, sizeof(uint32_t));
+        off += sizeof(uint32_t);
+        memcpy(&tangent, in + off, sizeof(uint32_t));
+        off += sizeof(uint32_t);
+        memcpy(&bitangent, in + off, sizeof(uint32_t));
+        off += sizeof(uint32_t);
+
+        bsp->normals.normal_indices[i] = normal;
+        bsp->bases[i].normal = normal;
+        bsp->bases[i].tangent = tangent;
+        bsp->bases[i].bitangent = bitangent;
+    }
+
+    int basis_offset = 0;
+    for (int i = 0; i < bsp->numfaces; i++) {
+        mface_t *face = bsp->faces + i;
+        face->firstbasis = basis_offset;
+        basis_offset += face->numsurfedges;
     }
 }
 
 static const xlump_info_t bspx_lumps[] = {
     { "DECOUPLED_LM", BSP_ParseDecoupledLM },
     { "LIGHTGRID_OCTREE", BSP_ParseLightgrid, BSP_ParseLightgridHeader },
-    { "FACENORMALS", BSP_ParseFaceNormals }
+    { "FACENORMALS", BSP_ParseFaceNormals, BSP_ParseFaceNormalsHeaderAlloc }
 };
 
 // returns amount of extra space to allocate
@@ -940,6 +1094,14 @@ int BSP_Load(const char *name, bsp_t **bsp_p)
         goto fail1;
     }
 
+    if (bsp->vis) {
+        if (!BSP_LoadPatchedPVS(bsp)) {
+            BSP_BuildPvsMatrix(bsp);
+        } else {
+            bsp->pvs_patched = true;
+        }
+    }
+
 #if USE_REF
     // load extension lumps
     for (i = 0; i < q_countof(bspx_lumps); i++) {
@@ -1106,7 +1268,7 @@ void BSP_ClusterVis(const bsp_t *bsp, visrow_t *mask, int cluster, int vis)
     byte        *out, *out_end;
     int         c;
 
-    Q_assert(vis == DVIS_PVS || vis == DVIS_PHS);
+    Q_assert(vis == DVIS_PVS || vis == DVIS_PHS || vis == DVIS_PVS2);
 
     if (!bsp || !bsp->vis) {
         memset(mask, 0xff, sizeof(*mask));
@@ -1118,6 +1280,23 @@ void BSP_ClusterVis(const bsp_t *bsp, visrow_t *mask, int cluster, int vis)
     }
     if (cluster < 0 || cluster >= bsp->vis->numclusters) {
         Com_Error(ERR_DROP, "%s: bad cluster", __func__);
+    }
+
+    if (vis == DVIS_PVS2) {
+        const byte *row = BSP_GetPvs2((bsp_t *)bsp, cluster);
+        if (row) {
+            memcpy(mask->b, row, bsp->visrowsize);
+            return;
+        }
+        vis = DVIS_PVS;
+    }
+
+    if (vis == DVIS_PVS) {
+        const byte *row = BSP_GetPvs((bsp_t *)bsp, cluster);
+        if (row) {
+            memcpy(mask->b, row, bsp->visrowsize);
+            return;
+        }
     }
 
     // decompress vis

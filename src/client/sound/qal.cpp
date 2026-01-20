@@ -76,6 +76,7 @@ static const alsection_t sections[] = {
             QAL_FN(DeleteBuffers),
             QAL_FN(DeleteSources),
             QAL_FN(Disable),
+            QAL_FN(DopplerFactor),
             QAL_FN(DistanceModel),
             QAL_FN(Enable),
             QAL_FN(GenBuffers),
@@ -99,6 +100,7 @@ static const alsection_t sections[] = {
             QAL_FN(Sourcef),
             QAL_FN(Sourcei),
             QAL_FN(Source3i),
+            QAL_FN(SpeedOfSound),
             { NULL }
         }
     },

@@ -396,7 +396,7 @@ static explosion_t *CL_PlainExplosion(void)
     ex = CL_AllocExplosion();
     VectorCopy(te.pos1, ex->ent.origin);
     ex->type = ex_poly;
-    ex->ent.flags = RF_FULLBRIGHT;
+    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->light = 350;
     VectorSet(ex->lightcolor, 1.0f, 0.5f, 0.5f);
@@ -415,7 +415,7 @@ static void CL_BFGExplosion(const vec3_t pos)
     ex = CL_AllocExplosion();
     VectorCopy(pos, ex->ent.origin);
     ex->type = ex_poly;
-    ex->ent.flags = RF_FULLBRIGHT;
+    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->light = 350;
     VectorSet(ex->lightcolor, 0.0f, 1.0f, 0.0f);
@@ -521,7 +521,7 @@ void CL_SmokeAndFlash(const vec3_t origin)
     ex = CL_AllocExplosion();
     VectorCopy(origin, ex->ent.origin);
     ex->type = ex_flash;
-    ex->ent.flags = RF_FULLBRIGHT;
+    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
     ex->frames = 2;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->ent.model = cl_mod_flash;
@@ -1409,7 +1409,7 @@ void CL_ParseTEnt(void)
         VectorCopy(te.pos1, ex->ent.origin);
         dirtoangles(ex->ent.angles);
         ex->type = ex_misc;
-        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT;
+        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT | RF_NOSHADOW;
         ex->light = 150;
         switch (te.type) {
         case TE_BLASTER:
@@ -1563,7 +1563,7 @@ void CL_ParseTEnt(void)
         ex->type = ex_flash;
         // note to self
         // we need a better no draw flag
-        ex->ent.flags = RF_BEAM;
+        ex->ent.flags = RF_BEAM | RF_NOSHADOW;
         ex->start = cl.servertime - CL_FRAMETIME;
         ex->light = 100 + (Q_rand() % 75);
         VectorSet(ex->lightcolor, 1.0f, 1.0f, 0.3f);
@@ -1675,7 +1675,7 @@ void CL_ParseTEnt(void)
         dirtoangles(ex->ent.angles);
         ex->type = ex_misc;
         ex->ent.model = cl_mod_explode;
-        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT;
+        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT | RF_NOSHADOW;
         VectorSet(ex->ent.scale, 3.0f, 3.0f, 3.0f);
         ex->ent.skinnum = 2;
         ex->start = cl.servertime - CL_FRAMETIME;

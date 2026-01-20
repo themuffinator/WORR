@@ -32,6 +32,7 @@ static cvar_t   *cl_add_particles;
 static cvar_t   *cl_add_lights;
 static cvar_t   *cl_add_entities;
 static cvar_t   *cl_add_blend;
+static cvar_t   *cl_menu_bokeh_blur;
 
 #if USE_DEBUG
 static cvar_t   *cl_testparticles;
@@ -49,6 +50,7 @@ dlight_t    r_dlights[MAX_DLIGHTS];
 
 int         r_numentities;
 entity_t    r_entities[MAX_ENTITIES];
+static int  r_next_entity_id;
 
 int         r_numparticles;
 particle_t  r_particles[MAX_PARTICLES];
@@ -56,6 +58,7 @@ particle_t  r_particles[MAX_PARTICLES];
 lightstyle_t    r_lightstyles[MAX_LIGHTSTYLES];
 
 static float v_dof_layout_blend;
+static float v_dof_menu_blend;
 
 /*
 ====================
@@ -94,7 +97,10 @@ void V_AddEntity(const entity_t *ent)
         return;
     }
 
-    r_entities[r_numentities++] = *ent;
+    entity_t *dst = &r_entities[r_numentities++];
+    *dst = *ent;
+    if (dst->id == 0)
+        dst->id = --r_next_entity_id;
 }
 
 /*
@@ -184,7 +190,7 @@ void V_AddLightEx(cl_shadow_light_t *light)
     dl->fade[0] = light->fade_start;
     dl->fade[1] = light->fade_end;
     dl->shadow = DL_SHADOW_NONE;
-    if (!light->coneangle && light->resolution > 0) {
+    if (light->resolution > 0 && cl_shadowlights->integer && R_SupportsPerPixelLighting()) {
         dl->shadow = DL_SHADOW_LIGHT;
     }
 }
@@ -279,6 +285,7 @@ static void V_TestEntities(void)
 
     for (i = 0; i < r_numentities; i++) {
         ent = &r_entities[i];
+        ent->id = i + 1;
 
         r = 64 * ((i % 4) - 1.5f);
         f = 64 * (i / 4) + 128;
@@ -544,6 +551,7 @@ V_RenderView
 void V_RenderView(void)
 {
     float dof_strength = 0.0f;
+    float menu_blur_strength = 0.0f;
 
     // an invalid frame will just use the exact previous refdef
     // we can't use the old frame if the video mode has changed, though...
@@ -601,11 +609,15 @@ void V_RenderView(void)
             }
 
             float layout_target = (cl.frame.ps.stats[STAT_LAYOUTS] & (LAYOUTS_INVENTORY | LAYOUTS_HELP)) ? 1.0f : 0.0f;
+            float menu_target = (cls.key_dest & KEY_MENU) ? 1.0f : 0.0f;
             float dt = Q_clipf(cl.refdef.frametime, 0.0f, 0.1f);
             float step = Q_clipf(dt * 6.0f, 0.0f, 1.0f);
             v_dof_layout_blend += (layout_target - v_dof_layout_blend) * step;
+            v_dof_menu_blend += (menu_target - v_dof_menu_blend) * step;
 
             dof_strength = max(wheel_blend, v_dof_layout_blend);
+            menu_blur_strength = Q_clipf(cl_menu_bokeh_blur->value, 0.0f, 1.0f) * v_dof_menu_blend;
+            dof_strength = max(dof_strength, menu_blur_strength);
         }
 
         if (cl.frame.areabytes) {
@@ -673,8 +685,20 @@ void V_RenderView(void)
         }
     } else {
         v_dof_layout_blend = 0.0f;
+        v_dof_menu_blend = 0.0f;
+        menu_blur_strength = 0.0f;
     }
 
+    cl.refdef.dof_rect_enabled = false;
+    if ((cls.key_dest & KEY_MENU) && cl.menu_blur_active && menu_blur_strength > 0.0f) {
+        if (cl.menu_blur_rect.right > cl.menu_blur_rect.left &&
+            cl.menu_blur_rect.bottom > cl.menu_blur_rect.top) {
+            cl.refdef.dof_rect_enabled = true;
+            cl.refdef.dof_rect = cl.menu_blur_rect;
+        }
+    }
+    if (!cl.refdef.dof_rect_enabled)
+        cl.refdef.dof_rect = {};
     cl.refdef.dof_strength = Q_clipf(dof_strength, 0.0f, 1.0f);
     R_RenderFrame(&cl.refdef);
 #if USE_DEBUG
@@ -746,6 +770,7 @@ void V_Init(void)
     cl_add_entities = Cvar_Get("cl_entities", "1", 0);
     cl_add_blend = Cvar_Get("cl_blend", "1", 0);
     cl_add_blend->changed = cl_add_blend_changed;
+    cl_menu_bokeh_blur = Cvar_Get("cl_menu_bokeh_blur", "0.85", CVAR_ARCHIVE);
 
     cl_adjustfov = Cvar_Get("cl_adjustfov", "1", 0);
 }

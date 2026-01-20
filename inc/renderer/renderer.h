@@ -40,11 +40,17 @@ extern "C" {
 #define RF_RIMLIGHT         BIT_ULL(33)
 #define RF_OUTLINE          BIT_ULL(34)
 #define RF_OUTLINE_NODEPTH  BIT_ULL(35)
+#define RF_BRIGHTSKIN       BIT_ULL(36)
 
 #define RF_SHELL_MASK       (RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | \
                              RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM | RF_SHELL_LITE_GREEN)
 
 #define DLIGHT_CUTOFF       64
+#define DLIGHT_SPHERE       0
+#define DLIGHT_SPOT         1
+
+#define DLIGHT_SPOT_EMISSION_PROFILE_FALLOFF            0
+#define DLIGHT_SPOT_EMISSION_PROFILE_AXIS_ANGLE_TEXTURE 1
 
 typedef enum {
     DL_SHADOW_NONE = 0,
@@ -79,6 +85,7 @@ typedef struct entity_s {
     color_t rgba;
 
     uint64_t    flags;
+    int         id;
 
     qhandle_t   skin;           // NULL for inline skin
     vec3_t      scale;
@@ -101,6 +108,23 @@ typedef struct {
     vec4_t  sphere;
     float   conecos;
     uint32_t shadow;
+
+    // RTX light types support (optional).
+    int     light_type;
+    struct {
+        int     emission_profile;
+        vec3_t  direction;
+        union {
+            struct {
+                float   cos_total_width;
+                float   cos_falloff_start;
+            };
+            struct {
+                float   total_width;
+                qhandle_t texture;
+            };
+        };
+    } spot;
 } dlight_t;
 
 typedef struct {
@@ -109,11 +133,45 @@ typedef struct {
     float   scale;
     float   alpha;
     color_t rgba;
+    float   brightness;
+    float   radius;
 } particle_t;
 
 typedef struct {
     float   white;              // highest of RGB
 } lightstyle_t;
+
+#ifdef USE_SMALL_GPU
+#define MAX_DECALS 2
+#else
+#define MAX_DECALS 50
+#endif
+
+typedef struct {
+    vec3_t pos;
+    vec3_t dir;
+    float spread;
+    float length;
+    float dummy;
+} decal_t;
+
+typedef struct {
+    int         viewcluster;
+    int         lookatcluster;
+    int         num_light_polys;
+    int         resolution_scale;
+
+    char        view_material[MAX_QPATH];
+    char        view_material_override[MAX_QPATH];
+    int         view_material_index;
+
+    vec3_t      hdr_color;
+    float       adapted_luminance;
+} ref_feedback_t;
+
+typedef struct {
+    int left, right, top, bottom;
+} clipRect_t;
 
 typedef struct {
     int         x, y, width, height;// in virtual screen coordinates
@@ -127,6 +185,8 @@ typedef struct {
     float       frametime;          // seconds since last video frame
     float       time;               // time is used to auto animate
     float       dof_strength;       // depth-of-field transition strength [0..1]
+    bool        dof_rect_enabled;   // restrict DOF to a virtual rect
+    clipRect_t  dof_rect;
     int         rdflags;            // RDF_UNDERWATER, etc
     bool        extended;
 
@@ -142,6 +202,12 @@ typedef struct {
 
     int         num_particles;
     particle_t  *particles;
+
+    int         decal_beg;
+    int         decal_end;
+    decal_t     decal[MAX_DECALS];
+
+    ref_feedback_t feedback;
 } refdef_t;
 
 enum {
@@ -175,10 +241,6 @@ typedef struct {
 
 extern refcfg_t r_config;
 
-typedef struct {
-    int left, right, top, bottom;
-} clipRect_t;
-
 typedef enum {
     IF_NONE             = 0,
     IF_PERMANENT        = BIT(0),   // not freed by R_EndRegistration()
@@ -194,11 +256,20 @@ typedef enum {
     IF_CUBEMAP          = BIT(10),  // cubemap (or part of it)
     IF_CLASSIC_SKY      = BIT(11),  // split in two halves
     IF_SPECIAL          = BIT(12),  // 1x1 pixel pure white image
+    IF_SRGB             = BIT(13),  // sRGB texture content
+    IF_FAKE_EMISSIVE    = BIT(14),  // use fake emissive synthesis
+    IF_EXACT            = BIT(15),  // exact sizing (no resample)
 
     // these flags only affect R_RegisterImage() behavior,
     // and are not stored in image
     IF_OPTIONAL         = BIT(16),  // don't warn if not found
     IF_KEEP_EXTENSION   = BIT(17),  // don't override extension
+    IF_NORMAL_MAP       = BIT(18),  // normal map (RTX)
+    IF_BILERP           = BIT(19),  // always lerp (RTX)
+    IF_SRC_BASE         = BIT(20),  // source is basegame
+    IF_SRC_GAME         = BIT(21),  // source is mod
+    IF_NO_COLOR_ADJUST  = BIT(22),  // skip gamma/saturation adjustments
+    IF_SRC_MASK         = (BIT(20) | BIT(21)),
 } imageflags_t;
 
 typedef enum {

@@ -59,7 +59,7 @@ typedef uint64_t glStateBits_t;
 #define TAB_COS(x)  gl_static.sintab[((x) + 64) & 255]
 
 // auto textures
-#define NUM_AUTO_TEXTURES       14
+#define NUM_AUTO_TEXTURES       20
 #define AUTO_TEX(n)             gl_static.texnums[n]
 
 #define TEXNUM_DEFAULT          AUTO_TEX(0)
@@ -76,15 +76,24 @@ typedef uint64_t glStateBits_t;
 #define TEXNUM_PP_BLUR_0        AUTO_TEX(11)
 #define TEXNUM_PP_BLUR_1        AUTO_TEX(12)
 #define TEXNUM_PP_DEPTH         AUTO_TEX(13)
+#define TEXNUM_PP_CRT           AUTO_TEX(14)
+#define TEXNUM_PP_REFRACT       AUTO_TEX(15)
+#define TEXNUM_PP_POST          AUTO_TEX(16)
+#define TEXNUM_PP_BLOOM_MIP     AUTO_TEX(17)
+#define TEXNUM_PP_EXPOSURE_0    AUTO_TEX(18)
+#define TEXNUM_PP_EXPOSURE_1    AUTO_TEX(19)
 
-#define MAX_SHADOWMAP_LIGHTS    4
+#define MAX_SHADOWMAP_LIGHTS    16
 #define SHADOWMAP_FACE_COUNT    6
 
 // framebuffers
-#define FBO_COUNT   3
+#define FBO_COUNT   6
 #define FBO_SCENE   gl_static.framebuffers[0]
 #define FBO_BLUR_0  gl_static.framebuffers[1]
 #define FBO_BLUR_1  gl_static.framebuffers[2]
+#define FBO_CRT     gl_static.framebuffers[3]
+#define FBO_POST    gl_static.framebuffers[4]
+#define FBO_EXPOSURE gl_static.framebuffers[5]
 
 typedef struct {
     GLuint query;
@@ -106,6 +115,7 @@ typedef struct {
         GLuint      buffer;
         size_t      buffer_size;
         vec_t       size;
+        bool        has_trans_warp;
     } world;
     GLuint          renderbuffer;
     GLuint          framebuffers[FBO_COUNT];
@@ -121,6 +131,14 @@ typedef struct {
     GLuint          shadowmap_fbo;
     GLuint          shadowmap_tex;
     GLuint          shadowmap_depth;
+    GLuint          shadowmap_cache_tex;                                        // Cached static light shadows
+    bool            shadowmap_cache_dirty[MAX_SHADOWMAP_LIGHTS * SHADOWMAP_FACE_COUNT];
+    vec3_t          shadowmap_cache_origins[MAX_SHADOWMAP_LIGHTS];              // Cached light origins for invalidation
+    float           shadowmap_cache_radius[MAX_SHADOWMAP_LIGHTS];
+    vec4_t          shadowmap_cache_cone[MAX_SHADOWMAP_LIGHTS];
+    bool            shadowmap_cache_is_spot[MAX_SHADOWMAP_LIGHTS];
+    uint32_t        shadowmap_cache_scene_hash;
+    bool            shadowmap_cache_scene_valid;
     GLuint          warp_program;
     GLuint          texnums[NUM_AUTO_TEXTURES];
     GLenum          samples_passed;
@@ -148,6 +166,9 @@ typedef struct {
     hash_map_t      *queries;
     hash_map_t      *programs;
     bool            shadowmap_ok;
+    bool            hdr_active;
+    bool            postfx_bloom_mrt;
+    bool            postfx_dof;
 } glStatic_t;
 
 typedef struct {
@@ -191,6 +212,7 @@ typedef struct {
     int             shadow_light_count;
     int             shadow_light_indices[MAX_SHADOWMAP_LIGHTS];
     int             shadowmap_index[MAX_DLIGHTS];
+    bool            shadowmap_is_spot[MAX_DLIGHTS];
 } glRefdef_t;
 
 typedef enum {
@@ -295,6 +317,7 @@ extern cvar_t *gl_shadowmaps;
 extern cvar_t *gl_shadowmap_size;
 extern cvar_t *gl_shadowmap_lights;
 extern cvar_t *gl_shadowmap_dynamic;
+extern cvar_t *gl_shadowmap_cache;
 extern cvar_t *gl_shadowmap_bias;
 extern cvar_t *gl_shadowmap_softness;
 extern cvar_t *gl_shadowmap_filter;
@@ -306,8 +329,11 @@ extern cvar_t *gl_md5_distance;
 #endif
 extern cvar_t *gl_damageblend_frac;
 extern cvar_t *gl_waterwarp;
+extern cvar_t *gl_warp_refraction;
 extern cvar_t *gl_bloom;
+extern cvar_t *gl_bloom_downscale;
 extern cvar_t *gl_bloom_height;
+extern cvar_t *r_dof_allow_stencil;
 
 // development variables
 extern cvar_t *gl_znear;
@@ -681,6 +707,11 @@ void GL_LoadWorld(const char *name);
 #define GLS_RIMLIGHT            BIT_ULL(35)
 #define GLS_SHADOWMAP           BIT_ULL(36)
 #define GLS_DOF                 BIT_ULL(37)
+#define GLS_CRT                 BIT_ULL(38)
+#define GLS_REFRACT_ENABLE      BIT_ULL(39)
+#define GLS_POSTFX              BIT_ULL(40)
+#define GLS_BLOOM_PREFILTER     BIT_ULL(41)
+#define GLS_EXPOSURE_UPDATE     BIT_ULL(42)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
@@ -691,13 +722,15 @@ void GL_LoadWorld(const char *name);
 #define GLS_BLOOM_MASK          (GLS_BLOOM_GENERATE | GLS_BLOOM_OUTPUT | GLS_BLOOM_SHELL)
 #define GLS_BLUR_MASK           (GLS_BLUR_GAUSS | GLS_BLUR_BOX)
 #define GLS_SHADER_MASK         (GLS_ALPHATEST_ENABLE | GLS_TEXTURE_REPLACE | GLS_SCROLL_ENABLE | \
-                                 GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_INTENSITY_ENABLE | \
+                                 GLS_LIGHTMAP_ENABLE | GLS_WARP_ENABLE | GLS_REFRACT_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
-                                 GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF)
-#define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
-                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
-                                 GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF)
+                                 GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF | GLS_CRT | GLS_POSTFX | GLS_BLOOM_PREFILTER | \
+                                 GLS_EXPOSURE_UPDATE)
+#define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_REFRACT_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
+                                 GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER | GLS_BLUR_MASK | \
+                                 GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF | GLS_CRT | GLS_POSTFX | \
+                                 GLS_EXPOSURE_UPDATE)
 #define GLS_SCROLL_MASK         (GLS_SCROLL_ENABLE | GLS_SCROLL_X | GLS_SCROLL_Y | GLS_SCROLL_FLIP | GLS_SCROLL_SLOW)
 
 typedef enum {
@@ -759,6 +792,9 @@ typedef enum {
     TMU_LIGHTMAP,
     TMU_GLOWMAP,
     TMU_SHADOWMAP,
+    TMU_REFRACT,
+    TMU_EXPOSURE,
+    TMU_LUT,
     MAX_TMUS,
 
     // MD5
@@ -782,7 +818,7 @@ typedef struct {
     float     radius;
     vec4_t    color; // a = intensity
     vec4_t    cone; // a = angle
-    vec4_t    shadow; // x = shadow map index, yzw reserved
+    vec4_t    shadow; // x = shadow map index, y = spot flag, z/w reserved
 } glDlight_t;
 
 typedef struct {
@@ -824,12 +860,25 @@ typedef struct {
     vec4_t      heightfog_end;
     GLfloat     heightfog_density;
     GLfloat     heightfog_falloff;
-    GLfloat     dof_pad0;
-    GLfloat     dof_pad1;
+    GLfloat     refract_scale;
+    GLfloat     refract_pad;
     vec4_t      dof_params; // x = focus, y = range, z = proj A, w = proj B
     vec4_t      vieworg; // w = dof strength
     vec4_t      shadow_params; // x = 1/size, y = bias, z = softness, w = shadow depth scale
     vec4_t      shadow_params2; // x = method, y = quality, z = vcm bleed, w = vcm min variance
+    vec4_t      crt_params; // x = hard pix, y = hard scan, z = bright boost, w = linear gamma
+    vec4_t      crt_params2; // x = mask dark, y = mask light, z = mask type, w = pad
+    vec4_t      crt_texel; // x = inv width, y = inv height, z = width, w = height
+    vec4_t      postfx_bloom; // x = threshold, y = knee, z = intensity, w = scene saturation
+    vec4_t      postfx_bloom2; // x = bloom saturation, y = glow enable, z = firefly clamp, w = bloom levels
+    vec4_t      postfx_hdr; // x = exposure, y = white, z = gamma, w = enabled
+    vec4_t      postfx_color; // x = brightness, y = contrast, z = saturation, w = enabled
+    vec4_t      postfx_tint; // rgb = tint, w = pad
+    vec4_t      postfx_auto; // x = enabled, y = min luma, z = max luma, w = adapt alpha
+    vec4_t      postfx_split_shadow; // rgb = shadow tint, w = pad
+    vec4_t      postfx_split_highlight; // rgb = highlight tint, w = pad
+    vec4_t      postfx_split_params; // x = strength, y = balance, zw = pad
+    vec4_t      postfx_lut; // x = intensity, y = size, z = inv width, w = inv height
 } glUniformBlock_t;
 
 typedef struct {
@@ -1068,9 +1117,11 @@ void Scrap_Upload(void);
 void GL_InitImages(void);
 void GL_ShutdownImages(void);
 
-bool GL_InitFramebuffers(bool dof_active);
+bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
+                         bool postfx_active, bool hdr_requested);
 bool GL_InitShadowmaps(int size, int layers);
 void GL_ShutdownShadowmaps(void);
+void GL_EnsureRefractionTexture(int w, int h);
 
 extern cvar_t *gl_intensity;
 

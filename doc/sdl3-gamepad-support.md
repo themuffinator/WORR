@@ -8,8 +8,9 @@
 - Implemented analog stick movement and look handling with per-stick deadzones,
   plus trigger thresholding to emit digital `left_trigger` / `right_trigger`
   key events.
-- Added optional gamepad bind icon resolution that maps key names to
-  `/gfx/controller/gamepad/<key>.png` when assets are present.
+- Added optional gamepad bind icon resolution that maps gamepad keys to
+  `/gfx/controller/generic/fXXXX.png` (index is `keynum - K_GAMEPAD_FIRST`)
+  when assets are present.
 
 ## Gamepad Button Mapping
 SDL gamepad buttons map to the following key names (case-insensitive):

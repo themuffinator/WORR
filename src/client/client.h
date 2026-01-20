@@ -87,6 +87,7 @@ typedef struct {
     int             fly_stoptime;
 
     float           flashlightfrac;
+    int             id;
 
 // KEX
     int32_t         current_frame, last_frame, frame_servertime;
@@ -102,6 +103,7 @@ extern centity_t    cl_entities[MAX_EDICTS];
 typedef struct {
     char name[MAX_QPATH];
     qhandle_t skin;
+    qhandle_t brightskin;
     char icon_name[MAX_QPATH];
     char model_name[MAX_QPATH];
     char skin_name[MAX_QPATH];
@@ -169,6 +171,7 @@ typedef struct {
     int         resolution;
     float       intensity;
     float       fade_start, fade_end;
+    float       max_fade_dist;
     int         lightstyle;
     float       coneangle; // spot if non-zero
     vec3_t      conedirection;
@@ -269,6 +272,8 @@ typedef struct {
 #endif
 
     refdef_t    refdef;
+    bool        menu_blur_active;
+    clipRect_t  menu_blur_rect;
     float       fov_x;      // interpolated
     float       fov_y;      // derived from fov_x assuming 4/3 aspect ratio
     int         lightlevel;
@@ -601,6 +606,15 @@ extern cvar_t   *cl_noglow;
 extern cvar_t   *cl_nobob;
 extern cvar_t   *cl_nolerp;
 extern cvar_t   *cl_shadowlights;
+extern cvar_t   *cl_player_outline_enemy;
+extern cvar_t   *cl_player_outline_team;
+extern cvar_t   *cl_player_outline_width;
+extern cvar_t   *cl_player_rimlight_enemy;
+extern cvar_t   *cl_player_rimlight_team;
+extern cvar_t   *cl_player_rimlight_shell;
+extern cvar_t   *cl_force_enemy_model;
+extern cvar_t   *cl_force_team_model;
+// legacy outline/rimlight cvars (deprecated)
 extern cvar_t   *cl_enemy_outline;
 extern cvar_t   *cl_enemy_outline_self;
 extern cvar_t   *cl_enemy_rimlight;
@@ -899,6 +913,9 @@ void CL_RegisterTEntModels(void);
 void CL_ParseTEnt(void);
 void CL_AddTEnts(void);
 void CL_ClearTEnts(void);
+void CL_InitBrightskins(void);
+void CL_MigratePlayerCvars(void);
+void CL_RegisterForcedModels(void);
 void CL_InitTEnts(void);
 
 

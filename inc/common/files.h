@@ -38,6 +38,8 @@ extern "C" {
 #define FS_Malloc(size)         Z_TagMalloc(size, TAG_FILESYSTEM)
 #define FS_Mallocz(size)        Z_TagMallocz(size, TAG_FILESYSTEM)
 #define FS_CopyString(string)   Z_TagCopyString(string, TAG_FILESYSTEM)
+#define FS_LoadFileFlags(path, buf, flags) \
+    FS_LoadFileEx(path, buf, flags, TAG_FILESYSTEM)
 #define FS_LoadFile(path, buf)  FS_LoadFileEx(path, buf, 0, TAG_FILESYSTEM)
 #define FS_FreeFile(buf)        Z_Free(buf)
 
@@ -75,6 +77,8 @@ qhandle_t FS_EasyOpenFile(char *buf, size_t size, unsigned mode,
 int FS_LoadFileEx(const char *path, void **buffer, unsigned flags, memtag_t tag);
 // a NULL buffer will just return the file length without loading
 // length < 0 indicates error
+
+int FS_LastModified(const char *file, uint64_t *last_modified);
 
 int FS_WriteFile(const char *path, const void *data, size_t len);
 

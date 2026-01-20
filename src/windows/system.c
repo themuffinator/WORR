@@ -35,6 +35,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <versionhelpers.h>
 #endif
 
+#if defined(_WIN32)
+// Hint hybrid-GPU drivers to prefer the discrete adapter.
+__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
+
 HINSTANCE                       hGlobalInstance;
 
 #if USE_WINSVC

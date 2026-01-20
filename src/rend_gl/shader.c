@@ -115,12 +115,25 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits)
         vec4 u_heightfog_end;
         float u_heightfog_density;
         float u_heightfog_falloff;
-        float u_dof_pad0;
-        float u_dof_pad1;
+        float u_refract_scale;
+        float u_refract_pad;
         vec4 u_dof_params;
         vec4 u_vieworg;
         vec4 u_shadow_params;
         vec4 u_shadow_params2;
+        vec4 u_crt_params;
+        vec4 u_crt_params2;
+        vec4 u_crt_texel;
+        vec4 u_postfx_bloom;
+        vec4 u_postfx_bloom2;
+        vec4 u_postfx_hdr;
+        vec4 u_postfx_color;
+        vec4 u_postfx_tint;
+        vec4 u_postfx_auto;
+        vec4 u_postfx_split_shadow;
+        vec4 u_postfx_split_highlight;
+        vec4 u_postfx_split_params;
+        vec4 u_postfx_lut;
     )
     GLSF("};\n");
 }
@@ -260,6 +273,45 @@ static void write_dynamic_lights(sizebuf_t *buf)
             return shadow_compare(uv, layer, depth, bias);
         }
 
+        float shadow_spot(vec3 light_vec, float dist, float radius, float shadow_index,
+                          vec3 spot_dir, float spot_cos) {
+            if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
+                return 1.0;
+
+            vec3 dir = light_vec / max(dist, 1.0);
+            vec3 forward = normalize(spot_dir);
+            float proj = dot(dir, forward);
+            if (proj <= 0.0)
+                return 1.0;
+
+            vec3 basis_up = abs(forward.z) > 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+            vec3 right = normalize(cross(basis_up, forward));
+            vec3 up = cross(forward, right);
+
+            float spot_sin = sqrt(max(1.0 - spot_cos * spot_cos, 0.0));
+            float inv_tan = spot_cos / max(spot_sin, 0.0001);
+            vec2 proj_uv = vec2(dot(dir, right), dot(dir, up)) * (inv_tan / max(proj, 0.001));
+            vec2 uv = proj_uv * 0.5 + 0.5;
+
+            if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+                return 1.0;
+
+            float layer = shadow_index * 6.0;
+            float depth = dist / radius;
+            float bias = u_shadow_params.y;
+            float texel = u_shadow_params.x * max(u_shadow_params.z, 0.0);
+            int method = int(u_shadow_params2.x + 0.5);
+            int quality = int(u_shadow_params2.y + 0.5);
+
+            if (method == 2)
+                return shadow_vcm(uv, layer, depth, bias, u_shadow_params2.z, u_shadow_params2.w);
+
+            if (method == 1)
+                return shadow_pcf(uv, layer, depth, bias, texel, quality);
+
+            return shadow_compare(uv, layer, depth, bias);
+        }
+
         vec3 calc_dynamic_lights() {
             vec3 shade = vec3(0);
 
@@ -292,7 +344,13 @@ static void write_dynamic_lights(sizebuf_t *buf)
                     result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - light_cone)), 0.0);
                 }
 
-                result *= shadow_point(shadow_vec, shadow_dist, dlights[i].radius, dlights[i].shadow.x);
+                if (dlights[i].shadow.y > 0.5) {
+                    result *= shadow_spot(shadow_vec, shadow_dist, dlights[i].radius,
+                                          dlights[i].shadow.x, dlights[i].cone.xyz, light_cone);
+                } else {
+                    result *= shadow_point(shadow_vec, shadow_dist, dlights[i].radius,
+                                           dlights[i].shadow.x);
+                }
 
                 shade += result;
             }
@@ -741,14 +799,22 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(uniform samplerCube u_texture;)
     } else {
         GLSL(uniform sampler2D u_texture;)
-        if (bits & GLS_BLOOM_OUTPUT)
+        if (bits & (GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER))
             GLSL(uniform sampler2D u_bloom;)
+        if (bits & GLS_REFRACT_ENABLE)
+            GLSL(uniform sampler2D u_refract;)
     }
 
     if (bits & GLS_DOF) {
         GLSL(uniform sampler2D u_blur;)
         GLSL(uniform sampler2D u_depth;)
     }
+
+    if (bits & (GLS_POSTFX | GLS_EXPOSURE_UPDATE))
+        GLSL(uniform sampler2D u_exposure;)
+
+    if (bits & GLS_POSTFX)
+        GLSL(uniform sampler2D u_lut;)
 
     if (bits & GLS_SKY_MASK)
         GLSL(in vec3 v_dir;)
@@ -802,7 +868,173 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         )
     }
 
+    if (bits & GLS_CRT) {
+        GLSL(
+            float crt_to_linear_1(float c) {
+                if (u_crt_params.w <= 0.0)
+                    return c;
+                return (c <= 0.04045) ? (c / 12.92) : pow((c + 0.055) / 1.055, 2.4);
+            }
+            vec3 crt_to_linear(vec3 c) {
+                return vec3(crt_to_linear_1(c.r), crt_to_linear_1(c.g), crt_to_linear_1(c.b));
+            }
+            float crt_to_srgb_1(float c) {
+                if (u_crt_params.w <= 0.0)
+                    return c;
+                return (c < 0.0031308) ? (c * 12.92) : (1.055 * pow(c, 0.41666) - 0.055);
+            }
+            vec3 crt_to_srgb(vec3 c) {
+                return vec3(crt_to_srgb_1(c.r), crt_to_srgb_1(c.g), crt_to_srgb_1(c.b));
+            }
+            float crt_gauss(float x, float scale) {
+                return exp2(scale * pow(abs(x), 2.0));
+            }
+            vec2 crt_dist(vec2 pos) {
+                pos = pos * u_crt_texel.zw;
+                return -((pos - floor(pos)) - vec2(0.5));
+            }
+            vec3 crt_fetch(vec2 pos, vec2 off) {
+                vec2 p = (floor(pos * u_crt_texel.zw + off) + vec2(0.5)) * u_crt_texel.xy;
+                vec3 c = texture(u_texture, p).rgb * u_crt_params.z;
+                return crt_to_linear(c);
+            }
+            vec3 crt_horz3(vec2 pos, float off, float hard_pix) {
+                vec3 b = crt_fetch(pos, vec2(-1.0, off));
+                vec3 c = crt_fetch(pos, vec2( 0.0, off));
+                vec3 d = crt_fetch(pos, vec2( 1.0, off));
+                float dst = crt_dist(pos).x;
+                float wb = crt_gauss(dst - 1.0, hard_pix);
+                float wc = crt_gauss(dst + 0.0, hard_pix);
+                float wd = crt_gauss(dst + 1.0, hard_pix);
+                return (b * wb + c * wc + d * wd) / (wb + wc + wd);
+            }
+            vec3 crt_horz5(vec2 pos, float off, float hard_pix) {
+                vec3 a = crt_fetch(pos, vec2(-2.0, off));
+                vec3 b = crt_fetch(pos, vec2(-1.0, off));
+                vec3 c = crt_fetch(pos, vec2( 0.0, off));
+                vec3 d = crt_fetch(pos, vec2( 1.0, off));
+                vec3 e = crt_fetch(pos, vec2( 2.0, off));
+                float dst = crt_dist(pos).x;
+                float wa = crt_gauss(dst - 2.0, hard_pix);
+                float wb = crt_gauss(dst - 1.0, hard_pix);
+                float wc = crt_gauss(dst + 0.0, hard_pix);
+                float wd = crt_gauss(dst + 1.0, hard_pix);
+                float we = crt_gauss(dst + 2.0, hard_pix);
+                return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
+            }
+            float crt_scan(vec2 pos, float off, float hard_scan) {
+                float dst = crt_dist(pos).y;
+                return crt_gauss(dst + off, hard_scan);
+            }
+            vec3 crt_tri(vec2 pos, float hard_pix, float hard_scan) {
+                vec3 a = crt_horz3(pos, -1.0, hard_pix);
+                vec3 b = crt_horz5(pos,  0.0, hard_pix);
+                vec3 c = crt_horz3(pos,  1.0, hard_pix);
+                float wa = crt_scan(pos, -1.0, hard_scan);
+                float wb = crt_scan(pos,  0.0, hard_scan);
+                float wc = crt_scan(pos,  1.0, hard_scan);
+                return a * wa + b * wb + c * wc;
+            }
+            vec3 crt_mask(vec2 pos) {
+                float mask = u_crt_params2.z;
+                if (mask < 0.5)
+                    return vec3(1.0);
+
+                float mask_dark = u_crt_params2.x;
+                float mask_light = u_crt_params2.y;
+                vec3 out_mask = vec3(mask_dark);
+
+                if (mask < 1.5) {
+                    float line = mask_light;
+                    float odd = 0.0;
+                    if (fract(pos.x * 0.16666666) < 0.5)
+                        odd = 1.0;
+                    if (fract((pos.y + odd) * 0.5) < 0.5)
+                        line = mask_dark;
+
+                    pos.x = fract(pos.x * 0.33333333);
+                    if (pos.x < 0.333) out_mask.r = mask_light;
+                    else if (pos.x < 0.666) out_mask.g = mask_light;
+                    else out_mask.b = mask_light;
+                    out_mask *= line;
+                } else if (mask < 2.5) {
+                    pos.x = fract(pos.x * 0.33333333);
+                    if (pos.x < 0.333) out_mask.r = mask_light;
+                    else if (pos.x < 0.666) out_mask.g = mask_light;
+                    else out_mask.b = mask_light;
+                } else if (mask < 3.5) {
+                    pos.x += pos.y * 3.0;
+                    pos.x = fract(pos.x * 0.16666666);
+                    if (pos.x < 0.333) out_mask.r = mask_light;
+                    else if (pos.x < 0.666) out_mask.g = mask_light;
+                    else out_mask.b = mask_light;
+                } else {
+                    pos = floor(pos * vec2(1.0, 0.5));
+                    pos.x += pos.y * 3.0;
+                    pos.x = fract(pos.x * 0.16666666);
+                    if (pos.x < 0.333) out_mask.r = mask_light;
+                    else if (pos.x < 0.666) out_mask.g = mask_light;
+                    else out_mask.b = mask_light;
+                }
+
+                return out_mask;
+            }
+            float crt_scanline_mod(float hard_scan) {
+                float scan_dark = exp2(hard_scan * 0.25);
+                float scale = max(u_crt_params2.w, 1.0);
+                float line = mod(floor(gl_FragCoord.y / scale), 2.0);
+                return mix(scan_dark, 1.0, line);
+            }
+        )
+    }
+
+    if (bits & (GLS_POSTFX | GLS_BLOOM_PREFILTER | GLS_EXPOSURE_UPDATE)) {
+        GLSL(
+            float postfx_luma(vec3 color) {
+                return dot(color, vec3(0.2126, 0.7152, 0.0722));
+            }
+            vec3 postfx_saturate(vec3 color, float saturation) {
+                float luma = postfx_luma(color);
+                return mix(vec3(luma), color, saturation);
+            }
+        )
+    }
+
+    if (bits & GLS_POSTFX) {
+        GLSL(
+            vec3 postfx_tonemap_aces(vec3 x) {
+                const float a = 2.51;
+                const float b = 0.03;
+                const float c = 2.43;
+                const float d = 0.59;
+                const float e = 0.14;
+                return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+            }
+        )
+    }
+
+    if (bits & GLS_EXPOSURE_UPDATE) {
+        GLSF("void main() {\n");
+        GLSL(
+            ivec2 tex_size = textureSize(u_texture, 0);
+            float max_dim = float(max(tex_size.x, tex_size.y));
+            float max_mip = max(floor(log2(max_dim)), 0.0);
+            vec3 scene = textureLod(u_texture, vec2(0.5), max_mip).rgb;
+            float luma = postfx_luma(scene);
+            luma = clamp(luma, u_postfx_auto.y, u_postfx_auto.z);
+            float target = u_postfx_hdr.x / max(luma, 1e-4);
+            float prev = texture(u_exposure, vec2(0.5)).r;
+            float alpha = clamp(u_postfx_auto.w, 0.0, 1.0);
+            float exposure = mix(prev, target, alpha);
+            o_color = vec4(exposure, exposure, exposure, 1.0);
+        )
+        GLSF("}\n");
+        return;
+    }
+
     GLSF("void main() {\n");
+    if (bits & GLS_REFRACT_ENABLE)
+        GLSL(vec2 warp_ofs = vec2(0.0);)
     if (bits & GLS_CLASSIC_SKY) {
         GLSL(
             float len = length(v_dir);
@@ -817,11 +1049,33 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
         GLSL(vec4 diffuse = texture(u_texture, v_dir);)
     } else {
         GLSL(vec2 tc = v_tc;)
+        if (bits & GLS_REFRACT_ENABLE)
+            GLSL(vec2 tc_base = tc;)
 
-        if (bits & GLS_WARP_ENABLE)
-            GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
+        if (bits & GLS_WARP_ENABLE) {
+            if (bits & GLS_REFRACT_ENABLE) {
+                GLSL(warp_ofs = w_amp * sin(tc.ts * w_phase + u_time);)
+                GLSL(tc += warp_ofs;)
+            } else {
+                GLSL(tc += w_amp * sin(tc.ts * w_phase + u_time);)
+            }
+        }
 
-        if (bits & GLS_DOF) {
+        if (bits & GLS_CRT) {
+            GLSL(
+                float hard_pix = u_crt_params.x;
+                float hard_scan = u_crt_params.y;
+                vec3 color = crt_tri(tc, hard_pix, hard_scan);
+                color *= crt_scanline_mod(hard_scan);
+
+                if (u_crt_params2.z > 0.0)
+                    color *= crt_mask(gl_FragCoord.xy * 1.000001);
+
+                color = min(color, vec3(1.0));
+                color = crt_to_srgb(color);
+                vec4 diffuse = vec4(color, 1.0);
+            )
+        } else if (bits & GLS_DOF) {
             GLSL(
                 vec4 scene = texture(u_texture, tc);
                 vec4 blurred = texture(u_blur, tc);
@@ -839,6 +1093,41 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
                 blur_factor = smoothstep(0.0, 1.0, blur_factor);
                 blur_factor *= clamp(u_vieworg.w, 0.0, 1.0);
                 vec4 diffuse = mix(scene, blurred, blur_factor);
+            )
+        } else if (bits & GLS_BLOOM_PREFILTER) {
+            GLSL(
+                vec2 texel = u_fog_color.xy;
+                vec2 o = vec2(0.25) * texel;
+                vec3 scene = vec3(0.0);
+                scene += texture(u_texture, tc + vec2(-o.x, -o.y)).rgb;
+                scene += texture(u_texture, tc + vec2(-o.x,  o.y)).rgb;
+                scene += texture(u_texture, tc + vec2( o.x, -o.y)).rgb;
+                scene += texture(u_texture, tc + vec2( o.x,  o.y)).rgb;
+                scene *= 0.25;
+
+                vec3 glow = vec3(0.0);
+                if (u_postfx_bloom2.y > 0.5) {
+                    glow += texture(u_bloom, tc + vec2(-o.x, -o.y)).rgb;
+                    glow += texture(u_bloom, tc + vec2(-o.x,  o.y)).rgb;
+                    glow += texture(u_bloom, tc + vec2( o.x, -o.y)).rgb;
+                    glow += texture(u_bloom, tc + vec2( o.x,  o.y)).rgb;
+                    glow *= 0.25;
+                }
+
+                float luma = postfx_luma(scene);
+                float firefly = u_postfx_bloom2.z;
+                if (firefly > 0.0 && luma > firefly) {
+                    scene *= firefly / max(luma, 1e-5);
+                    luma = firefly;
+                }
+                float threshold = max(u_postfx_bloom.x, 0.0);
+                float knee = threshold * u_postfx_bloom.y + 1e-5;
+                float soft = clamp(luma - threshold + knee, 0.0, 2.0 * knee);
+                soft = (soft * soft) / (4.0 * knee + 1e-5);
+                float contribution = max(luma - threshold, 0.0) + soft;
+                vec3 bright = scene * (contribution / max(luma, 1e-5));
+                vec3 prefilter = bright + glow;
+                vec4 diffuse = vec4(prefilter, 1.0);
             )
         } else if (bits & GLS_BLUR_MASK)
             GLSL(vec4 diffuse = blur(u_texture, tc, u_fog_color.xy);)
@@ -945,8 +1234,129 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits)
     if (bits & GLS_FOG_SKY)
         GLSL(diffuse.rgb = mix(diffuse.rgb, u_fog_color.rgb, u_fog_sky_factor);)
 
-    if (bits & GLS_BLOOM_OUTPUT)
-        GLSL(diffuse.rgb += texture(u_bloom, tc).rgb;)
+    if (bits & GLS_REFRACT_ENABLE) {
+        GLSL(
+            if (u_refract_scale > 0.0) {
+                vec2 base_tc = gl_FragCoord.xy * u_crt_texel.xy;
+                vec2 refr_tc = base_tc;
+                vec2 warp_tc = warp_ofs * u_refract_scale;
+
+                vec2 dxtc = dFdx(tc_base);
+                vec2 dytc = dFdy(tc_base);
+                float det = dxtc.x * dytc.y - dxtc.y * dytc.x;
+                if (abs(det) > 1e-6) {
+                    vec2 pix_ofs = vec2(
+                        ( dytc.y * warp_tc.x - dxtc.y * warp_tc.y),
+                        (-dytc.x * warp_tc.x + dxtc.x * warp_tc.y)
+                    ) / det;
+                    refr_tc = base_tc + pix_ofs * u_crt_texel.xy;
+                } else {
+                    refr_tc = base_tc + warp_tc;
+                }
+
+                vec3 base = texture(u_refract, base_tc).rgb;
+                vec3 refr = texture(u_refract, refr_tc).rgb;
+                float alpha = clamp(diffuse.a, 0.0, 1.0);
+                vec3 desired = mix(refr, diffuse.rgb, alpha);
+                if (alpha > 0.0001) {
+                    vec3 adjusted = (desired - base * (1.0 - alpha)) / alpha;
+                    diffuse.rgb = clamp(adjusted, 0.0, 1.0);
+                } else {
+                    diffuse.rgb = desired;
+                }
+            }
+        )
+    }
+
+    if (bits & GLS_BLOOM_OUTPUT) {
+        GLSL(vec3 bloom_sample = texture(u_bloom, tc).rgb;)
+        GLSL(
+            if (u_postfx_bloom2.w > 1.0) {
+                vec3 accum = vec3(0.0);
+                float weight = 1.0;
+                float weight_sum = 0.0;
+                for (int i = 0; i < 6; i++) {
+                    if (float(i) >= u_postfx_bloom2.w)
+                        break;
+                    accum += textureLod(u_bloom, tc, float(i)).rgb * weight;
+                    weight_sum += weight;
+                    weight *= 0.5;
+                }
+                bloom_sample = accum / max(weight_sum, 1e-5);
+            }
+        )
+        if (bits & GLS_POSTFX) {
+            GLSL(
+                diffuse.rgb = postfx_saturate(diffuse.rgb, u_postfx_bloom.w);
+                bloom_sample = postfx_saturate(bloom_sample, u_postfx_bloom2.x);
+                diffuse.rgb += bloom_sample * u_postfx_bloom.z;
+            )
+        } else {
+            GLSL(diffuse.rgb += bloom_sample;)
+        }
+    }
+
+    if (bits & GLS_POSTFX) {
+        GLSL(
+            vec3 postfx_color = diffuse.rgb;
+        )
+        if (!(bits & GLS_BLOOM_OUTPUT)) {
+            GLSL(postfx_color = postfx_saturate(postfx_color, u_postfx_bloom.w);)
+        }
+        GLSL(
+            if (u_postfx_hdr.w > 0.5) {
+                if (u_postfx_hdr.z > 1.0)
+                    postfx_color = pow(max(postfx_color, vec3(0.0)), vec3(u_postfx_hdr.z));
+                float exposure = u_postfx_hdr.x;
+                if (u_postfx_auto.x > 0.5)
+                    exposure = texture(u_exposure, vec2(0.5)).r;
+                postfx_color *= exposure;
+                vec3 mapped = postfx_tonemap_aces(postfx_color);
+                vec3 white = postfx_tonemap_aces(vec3(max(u_postfx_hdr.y, 1e-4)));
+                postfx_color = mapped / max(white, vec3(1e-4));
+                if (u_postfx_hdr.z > 1.0)
+                    postfx_color = pow(max(postfx_color, vec3(0.0)), vec3(1.0 / u_postfx_hdr.z));
+            }
+            if (u_postfx_color.w > 0.5) {
+                postfx_color = (postfx_color - vec3(0.5)) * u_postfx_color.y + vec3(0.5);
+                postfx_color += u_postfx_color.x;
+                postfx_color = postfx_saturate(postfx_color, u_postfx_color.z);
+                postfx_color *= u_postfx_tint.rgb;
+            }
+            if (u_postfx_split_params.x > 0.0) {
+                float luma = postfx_luma(postfx_color);
+                float balance = clamp(u_postfx_split_params.y, -1.0, 1.0);
+                float pivot = 0.5 + balance * 0.5;
+                float weight = smoothstep(pivot - 0.25, pivot + 0.25, luma);
+                vec3 toned = mix(postfx_color * u_postfx_split_shadow.rgb,
+                                 postfx_color * u_postfx_split_highlight.rgb,
+                                 weight);
+                postfx_color = mix(postfx_color, toned, u_postfx_split_params.x);
+            }
+            if (u_postfx_lut.x > 0.0 && u_postfx_lut.y > 1.0) {
+                vec3 lut_color = clamp(postfx_color, 0.0, 1.0);
+                float size = u_postfx_lut.y;
+                float slice = lut_color.b * (size - 1.0);
+                float slice0 = floor(slice);
+                float slice1 = min(slice0 + 1.0, size - 1.0);
+                float t = slice - slice0;
+                float u = lut_color.r * (size - 1.0) + 0.5;
+                float v = lut_color.g * (size - 1.0) + 0.5;
+                vec2 uv0;
+                vec2 uv1;
+                if (u_postfx_lut.z < u_postfx_lut.w) {
+                    uv0 = vec2((slice0 * size + u) * u_postfx_lut.z, v * u_postfx_lut.w);
+                    uv1 = vec2((slice1 * size + u) * u_postfx_lut.z, v * u_postfx_lut.w);
+                } else {
+                    uv0 = vec2(u * u_postfx_lut.z, (slice0 * size + v) * u_postfx_lut.w);
+                    uv1 = vec2(u * u_postfx_lut.z, (slice1 * size + v) * u_postfx_lut.w);
+                }
+                vec3 graded = mix(texture(u_lut, uv0).rgb, texture(u_lut, uv1).rgb, t);
+                postfx_color = mix(postfx_color, graded, u_postfx_lut.x);
+            }
+            diffuse.rgb = clamp(postfx_color, 0.0, 1.0);
+        )
+    }
 
     if (bits & GLS_BLOOM_GENERATE)
         GLSL(o_bloom = bloom;)
@@ -1126,7 +1536,7 @@ static GLuint create_and_use_program(glStateBits_t bits)
             bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
         } else {
             bind_texture_unit(program, "u_texture", TMU_TEXTURE);
-            if (bits & GLS_BLOOM_OUTPUT)
+            if (bits & (GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER))
                 bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
         }
 
@@ -1140,6 +1550,15 @@ static GLuint create_and_use_program(glStateBits_t bits)
 
         if (bits & GLS_GLOWMAP_ENABLE)
             bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
+
+        if (bits & GLS_REFRACT_ENABLE)
+            bind_texture_unit(program, "u_refract", TMU_REFRACT);
+
+        if (bits & (GLS_POSTFX | GLS_EXPOSURE_UPDATE))
+            bind_texture_unit(program, "u_exposure", TMU_EXPOSURE);
+
+        if (bits & GLS_POSTFX)
+            bind_texture_unit(program, "u_lut", TMU_LUT);
 
         if (bits & GLS_DYNAMIC_LIGHTS)
             bind_texture_unit(program, "u_shadowmap", TMU_SHADOWMAP);
@@ -1270,7 +1689,7 @@ static void shader_load_lights(void)
         }
         gls.u_dlights.lights[i].cone[3] = dl->conecos;
         gls.u_dlights.lights[i].shadow[0] = (float)glr.shadowmap_index[n];
-        gls.u_dlights.lights[i].shadow[1] = 0.0f;
+        gls.u_dlights.lights[i].shadow[1] = glr.shadowmap_is_spot[n] ? 1.0f : 0.0f;
         gls.u_dlights.lights[i].shadow[2] = 0.0f;
         gls.u_dlights.lights[i].shadow[3] = 0.0f;
 
@@ -1310,6 +1729,8 @@ static void shader_setup_2d(void)
     gls.u_block.add = 0.0f;
     gls.u_block.intensity = 1.0f;
     gls.u_block.intensity2 = 1.0f;
+    gls.u_block.refract_scale = 0.0f;
+    gls.u_block.refract_pad = 0.0f;
 
     gls.u_block.w_amp[0] = 0.0025f;
     gls.u_block.w_amp[1] = 0.0025f;
@@ -1343,6 +1764,8 @@ static void shader_setup_3d(void)
     gls.u_block.add = gl_brightness->value;
     gls.u_block.intensity = gl_intensity->value;
     gls.u_block.intensity2 = gl_intensity->value * gl_glowmap_intensity->value;
+    gls.u_block.refract_scale = Cvar_ClampValue(gl_warp_refraction, 0.0f, 2.0f);
+    gls.u_block.refract_pad = 0.0f;
 
     gls.u_block.w_amp[0] = 0.0625f;
     gls.u_block.w_amp[1] = 0.0625f;
@@ -1350,6 +1773,13 @@ static void shader_setup_3d(void)
     gls.u_block.w_phase[1] = 4;
 
     gls.dlight_bits = 0;
+
+    int refract_w = glr.framebuffer_bound ? glr.render_width : r_config.width;
+    int refract_h = glr.framebuffer_bound ? glr.render_height : r_config.height;
+    gls.u_block.crt_texel[0] = refract_w > 0 ? (1.0f / (float)refract_w) : 0.0f;
+    gls.u_block.crt_texel[1] = refract_h > 0 ? (1.0f / (float)refract_h) : 0.0f;
+    gls.u_block.crt_texel[2] = (float)refract_w;
+    gls.u_block.crt_texel[3] = (float)refract_h;
 
     shader_setup_fog();
 
@@ -1415,6 +1845,12 @@ static void shader_setup_3d(void)
 
 static void shader_disable_state(void)
 {
+    qglActiveTexture(GL_TEXTURE0 + TMU_LUT);
+    qglBindTexture(GL_TEXTURE_2D, 0);
+
+    qglActiveTexture(GL_TEXTURE0 + TMU_EXPOSURE);
+    qglBindTexture(GL_TEXTURE_2D, 0);
+
     qglActiveTexture(GL_TEXTURE0 + TMU_SHADOWMAP);
     qglBindTexture(GL_TEXTURE_2D_ARRAY, 0);
 
@@ -1442,7 +1878,9 @@ static void shader_clear_state(void)
 static void shader_update_blur(void)
 {
     float base_height = glr.render_height ? (float)glr.render_height : (float)glr.fd.height;
+    int downscale = gl_bloom_downscale ? Cvar_ClampInteger(gl_bloom_downscale, 1, 8) : 4;
     float sigma = Cvar_ClampValue(gl_bloom_sigma, 1, MAX_SIGMA) * base_height / 2160;
+    sigma *= 4.0f / (float)downscale;
     if (gl_static.bloom_sigma == sigma)
         return;
 

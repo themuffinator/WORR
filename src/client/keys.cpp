@@ -335,6 +335,20 @@ const char *Key_GetBinding(const char *binding)
 
 /*
 ===================
+Key_GetBindingForKey
+
+Returns the command bound to a given key.
+===================
+*/
+const char *Key_GetBindingForKey(int keynum)
+{
+    if (keynum < 0 || keynum >= 256)
+        return "";
+    return keybindings[keynum] ? keybindings[keynum] : "";
+}
+
+/*
+===================
 Key_EnumBindings
 ===================
 */

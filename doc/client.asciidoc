@@ -324,6 +324,12 @@ s_underwater::
 s_underwater_gain_hf::
     Specifies HF gain value for lowpass sound filter. Default value is 0.25.
 
+s_occlusion::
+    Enables line-of-sight occlusion filtering for sound effects. Default value
+    is 1.
+      - 0 - disable occlusion
+      - 1 - enable occlusion
+
 s_auto_focus::
     Specifies the minimum focus level main WORR window should have for sound
     to be activated.  Default value is 0.

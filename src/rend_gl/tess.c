@@ -145,7 +145,7 @@ static void GL_FlushBeamSegments(void)
     else
         array |= GLA_TC;
 
-    if (glr.framebuffer_bound && gl_bloom->integer)
+    if (glr.framebuffer_bound && gl_bloom->integer && gl_static.postfx_bloom_mrt)
         state |= GLS_BLOOM_GENERATE | GLS_BLOOM_SHELL;
 
     GL_BindTexture(TMU_TEXTURE, texnum);
@@ -637,6 +637,21 @@ void GL_ShutdownArrays(void)
     qglDeleteBuffers(1, &gl_static.vertex_buffer);
 }
 
+static bool GL_TexnumsSparse(const GLuint *texnum)
+{
+    bool saw_zero = false;
+
+    for (int i = 0; i < MAX_TMUS; i++) {
+        if (!texnum[i]) {
+            saw_zero = true;
+        } else if (saw_zero) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void GL_Flush3D(void)
 {
     glStateBits_t state = tess.flags;
@@ -668,7 +683,7 @@ void GL_Flush3D(void)
         array |= GLA_NORMAL;
     }
 
-    if (!(state & GLS_SHADOWMAP) && glr.framebuffer_bound && gl_bloom->integer)
+    if (!(state & GLS_SHADOWMAP) && glr.framebuffer_bound && gl_bloom->integer && gl_static.postfx_bloom_mrt)
         state |= GLS_BLOOM_GENERATE;
 
     if (!(state & GLS_TEXTURE_REPLACE) && !(state & GLS_SHADOWMAP))
@@ -684,7 +699,7 @@ void GL_Flush3D(void)
 
     if (state & GLS_DEFAULT_SKY) {
         GL_BindCubemap(tess.texnum[TMU_TEXTURE]);
-    } else if (qglBindTextures) {
+    } else if (qglBindTextures && !GL_TexnumsSparse(tess.texnum)) {
 #if USE_DEBUG
         if (q_unlikely(gl_nobind->integer))
             tess.texnum[TMU_TEXTURE] = TEXNUM_DEFAULT;
@@ -700,8 +715,10 @@ void GL_Flush3D(void)
         if (count)
             qglBindTextures(0, count, tess.texnum);
     } else {
-        for (int i = 0; i < MAX_TMUS && tess.texnum[i]; i++)
-            GL_BindTexture(i, tess.texnum[i]);
+        for (int i = 0; i < MAX_TMUS; i++) {
+            if (tess.texnum[i])
+                GL_BindTexture(i, tess.texnum[i]);
+        }
     }
 
     GL_DrawIndexed(SHOWTRIS_WORLD);
@@ -774,6 +791,7 @@ static void GL_DrawFace(const mface_t *surf)
         tess.numindices += numindices;
 
         tess.flags = state;
+        GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
         c.facesTris += numtris;
         c.facesDrawn++;
@@ -785,6 +803,8 @@ static void GL_DrawFace(const mface_t *surf)
     GLuint texnum[MAX_TMUS] = { 0 };
 
     texnum[TMU_TEXTURE] = image->texnum;
+    if (gl_static.use_shaders && (state & GLS_REFRACT_ENABLE) && gl_warp_refraction->value > 0.0f)
+        texnum[TMU_REFRACT] = TEXNUM_PP_REFRACT;
     if (q_likely(surf->light_m)) {
         texnum[TMU_LIGHTMAP] = lm.texnums[surf->light_m - lm.lightmaps];
         texnum[TMU_GLOWMAP ] = image->texnum2;
@@ -848,6 +868,30 @@ void GL_DrawSolidFaces(void)
     }
 }
 
+static bool GL_AlphaFacesNeedRefraction(const mface_t *face)
+{
+    for (; face; face = face->next) {
+        if (face->statebits & GLS_REFRACT_ENABLE)
+            return true;
+    }
+
+    return false;
+}
+
+static void GL_UpdateRefractionTexture(void)
+{
+    int w = glr.framebuffer_bound ? glr.render_width : r_config.width;
+    int h = glr.framebuffer_bound ? glr.render_height : r_config.height;
+
+    if (w <= 0 || h <= 0)
+        return;
+
+    GL_Flush3D();
+    GL_EnsureRefractionTexture(w, h);
+    GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_REFRACT);
+    qglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+}
+
 void GL_DrawAlphaFaces(void)
 {
     if (!faces_alpha)
@@ -858,6 +902,11 @@ void GL_DrawAlphaFaces(void)
     glr.ent = NULL;
 
     GL_BindArrays(VA_3D);
+
+    if (gl_static.use_shaders && gl_warp_refraction->value > 0.0f &&
+        GL_AlphaFacesNeedRefraction(faces_alpha)) {
+        GL_UpdateRefractionTexture();
+    }
 
     for (const mface_t *face = faces_alpha; face; face = face->next) {
         if (glr.ent != face->entity) {

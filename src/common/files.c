@@ -1972,6 +1972,41 @@ done:
     return len;
 }
 
+int FS_LastModified(const char *file, uint64_t *last_modified)
+{
+#ifndef NO_TEXTURE_RELOADS
+    char fullpath[MAX_OSPATH];
+    searchpath_t *search;
+    int valid = PATH_NOT_CHECKED;
+
+    for (search = fs_searchpaths; search; search = search->next) {
+        if (search->pack)
+            continue;
+
+        if (valid == PATH_NOT_CHECKED)
+            valid = FS_ValidatePath(file);
+        if (valid == PATH_INVALID)
+            continue;
+
+        if (Q_concat(fullpath, sizeof(fullpath), search->filename, "/", file) >= sizeof(fullpath)) {
+            return Q_ERR(ENAMETOOLONG);
+        }
+
+        struct stat st;
+        if (os_stat(fullpath, &st) == 0) {
+            if (last_modified)
+                *last_modified = (uint64_t)st.st_mtime;
+            return Q_ERR_SUCCESS;
+        }
+    }
+#else
+    if (last_modified)
+        *last_modified = 0;
+#endif
+
+    return Q_ERR_INVALID_PATH;
+}
+
 static int write_and_close(const void *data, size_t len, qhandle_t f)
 {
     int ret1 = FS_Write(data, len, f);

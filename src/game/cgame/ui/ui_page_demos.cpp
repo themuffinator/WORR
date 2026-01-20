@@ -93,6 +93,7 @@ DemoBrowserPage::DemoBrowserPage()
     ui_sortdemos_->changed = ui_sortdemos_changed;
 
     list_.mlFlags = MLF_HEADER | MLF_SCROLLBAR;
+    list_.extrasize = DEMO_EXTRASIZE;
     list_.columns.resize(COL_MAX);
     list_.columns[COL_NAME].name = browse_;
     list_.columns[COL_NAME].uiFlags = UI_LEFT;
@@ -435,7 +436,8 @@ void DemoBrowserPage::UpdateLayout()
 {
     list_.x = 0;
     list_.y = CONCHAR_HEIGHT;
-    list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1;
+    int hintHeight = CONCHAR_HEIGHT;
+    list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1 - hintHeight;
 
     int w1 = 17 + widest_map_ + widest_pov_;
     int w2 = uis.width - w1 * CONCHAR_WIDTH - MLIST_PADDING * 4 - MLIST_SCROLLBAR_WIDTH;
@@ -586,12 +588,26 @@ void DemoBrowserPage::Draw()
     list_.Draw();
 
     if (uis.canvas_width >= 640) {
-        UI_DrawString(uis.width, uis.height - CONCHAR_HEIGHT, UI_RIGHT, COLOR_WHITE, status_);
+        int hintHeight = CONCHAR_HEIGHT;
+        UI_DrawString(uis.width, uis.height - hintHeight - CONCHAR_HEIGHT, UI_RIGHT, COLOR_WHITE, status_);
     }
+
+    std::vector<UiHint> hints_left{
+        UiHint{ K_ESCAPE, "Back", "Esc" },
+        UiHint{ K_BACKSPACE, "Up", "Bksp" }
+    };
+    std::vector<UiHint> hints_right{
+        UiHint{ K_ENTER, "Select", "Enter" }
+    };
+    UI_DrawHintBar(hints_left, hints_right, uis.height);
 }
 
 Sound DemoBrowserPage::KeyEvent(int key)
 {
+    if (key == K_ESCAPE || key == K_MOUSE2) {
+        GetMenuSystem().Pop();
+        return Sound::Out;
+    }
     if (key == K_BACKSPACE) {
         return LeaveDirectory();
     }

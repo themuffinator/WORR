@@ -180,14 +180,18 @@ client_src = [
 ]
 
 ui_src = [
+  'src/game/cgame/ui/ui_cgame_access.cpp',
   'src/game/cgame/ui/ui_core.cpp',
   'src/game/cgame/ui/ui_menu.cpp',
+  'src/game/cgame/ui/ui_hints.cpp',
   'src/game/cgame/ui/ui_widgets.cpp',
   'src/game/cgame/ui/ui_json.cpp',
+  'src/game/cgame/ui/ui_conditions.cpp',
   'src/game/cgame/ui/ui_list.cpp',
   'src/game/cgame/ui/ui_page_demos.cpp',
   'src/game/cgame/ui/ui_page_servers.cpp',
   'src/game/cgame/ui/ui_page_player.cpp',
+  'src/game/cgame/ui/ui_page_welcome.cpp',
   'src/game/cgame/ui/ui_mapdb.cpp',
   'src/game/cgame/ui/ui_playermodels.cpp',
 ]
@@ -219,8 +223,46 @@ renderer_src = [
 ]
 
 renderer_vk_src = [
-  'src/rend_vk/vk_main.c',
-  'src/rend_vk/vk_local.h',
+  'src/rend_vk/vkpt/asvgf.c',
+  'src/rend_vk/vkpt/bloom.c',
+  'src/rend_vk/vkpt/bsp_mesh.c',
+  'src/rend_vk/vkpt/buddy_allocator.c',
+  'src/rend_vk/vkpt/cameras.c',
+  'src/rend_vk/vkpt/conversion.c',
+  'src/rend_vk/vkpt/debug.c',
+  'src/rend_vk/vkpt/device_memory_allocator.c',
+  'src/rend_vk/vkpt/draw.c',
+  'src/rend_vk/vkpt/fog.c',
+  'src/rend_vk/vkpt/freecam.c',
+  'src/rend_vk/vkpt/fsr.c',
+  'src/rend_vk/vkpt/god_rays.c',
+  'src/rend_vk/vkpt/main.c',
+  'src/rend_vk/vkpt/material.c',
+  'src/rend_vk/vkpt/matrix.c',
+  'src/rend_vk/vkpt/mgpu.c',
+  'src/rend_vk/vkpt/models.c',
+  'src/rend_vk/vkpt/path_tracer.c',
+  'src/rend_vk/vkpt/physical_sky.c',
+  'src/rend_vk/vkpt/precomputed_sky.c',
+  'src/rend_vk/vkpt/profiler.c',
+  'src/rend_vk/vkpt/shadow_map.c',
+  'src/rend_vk/vkpt/textures.c',
+  'src/rend_vk/vkpt/tone_mapping.c',
+  'src/rend_vk/vkpt/transparency.c',
+  'src/rend_vk/vkpt/uniform_buffer.c',
+  'src/rend_vk/vkpt/vertex_buffer.c',
+  'src/rend_vk/vkpt/vk_util.c',
+
+  'src/rend_vk/refresh/debug.c',
+  'src/rend_vk/refresh/debug_text.c',
+  'src/rend_vk/refresh/images.c',
+  'src/rend_vk/refresh/model_iqm.c',
+  'src/rend_vk/refresh/models.c',
+  'src/rend_vk/refresh/refresh_ptrs.c',
+  'src/rend_vk/refresh/stb/stb.c',
+
+  'src/rend_vk/vkpt/vkpt.h',
+  'src/rend_vk/vkpt/vk_util.h',
   'inc/renderer/renderer.h',
 ]
 
@@ -307,7 +349,6 @@ sgame_src = bgame_src + [
   'src/game/sgame/match/match_logging.cpp',
   'src/game/sgame/match/match_state.cpp',
   'src/game/sgame/match/tournament.cpp',
-  'src/game/sgame/menu/menu_main.cpp',
   'src/game/sgame/menu/menu_page_admin_commands.cpp',
   'src/game/sgame/menu/menu_page_admin.cpp',
   'src/game/sgame/menu/menu_page_callvote.cpp',
@@ -321,7 +362,8 @@ sgame_src = bgame_src + [
   'src/game/sgame/menu/menu_page_tournament.cpp',
   'src/game/sgame/menu/menu_page_voting.cpp',
   'src/game/sgame/menu/menu_page_welcome.cpp',
-  'src/game/sgame/menu/menu_system.cpp',
+  'src/game/sgame/menu/menu_ui_helpers.cpp',
+  'src/game/sgame/menu/menu_ui_list.cpp',
   'src/game/sgame/monsters/m_actor.cpp',
   'src/game/sgame/monsters/m_arachnid.cpp',
   'src/game/sgame/monsters/m_berserk.cpp',
@@ -457,6 +499,7 @@ engine_args = []
 if win32
   engine_args += '-D_WIN32_WINNT=0x0601'
 endif
+engine_args += ['-DREF_GL=1', '-DREF_VKPT=2']
 
 common_link_args = []
 exe_link_args = []
@@ -515,7 +558,7 @@ client_cpp_args = [
   '-DHAVE_CONFIG_H',
   '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
   '-DUSE_CLIENT=1',
-  '-DUSE_REF=1',
+  '-DUSE_REF=REF_GL',
 ]
 if win32
   client_cpp_args += '-D_USE_MATH_DEFINES'
@@ -685,6 +728,107 @@ common_deps = [zlib]
 client_deps = [png, curl, sdl3]
 server_deps = []
 game_deps = [fmt_dep, jsoncpp_dep]
+
+vkpt_shader_target = []
+if vulkan.found() and cpu.endswith('64')
+  vkpt_shader_sources = files(
+    'src/rend_vk/vkpt/shader/animate_materials.comp',
+    'src/rend_vk/vkpt/shader/god_rays_filter.comp',
+    'src/rend_vk/vkpt/shader/god_rays.comp',
+    'src/rend_vk/vkpt/shader/bloom_composite.comp',
+    'src/rend_vk/vkpt/shader/bloom_blur.comp',
+    'src/rend_vk/vkpt/shader/bloom_downscale.comp',
+    'src/rend_vk/vkpt/shader/compositing.comp',
+    'src/rend_vk/vkpt/shader/checkerboard_interleave.comp',
+    'src/rend_vk/vkpt/shader/asvgf_atrous.comp',
+    'src/rend_vk/vkpt/shader/asvgf_gradient_atrous.comp',
+    'src/rend_vk/vkpt/shader/asvgf_gradient_img.comp',
+    'src/rend_vk/vkpt/shader/asvgf_gradient_reproject.comp',
+    'src/rend_vk/vkpt/shader/asvgf_lf.comp',
+    'src/rend_vk/vkpt/shader/asvgf_taau.comp',
+    'src/rend_vk/vkpt/shader/asvgf_temporal.comp',
+    'src/rend_vk/vkpt/shader/instance_geometry.comp',
+    'src/rend_vk/vkpt/shader/normalize_normal_map.comp',
+    'src/rend_vk/vkpt/shader/tone_mapping_histogram.comp',
+    'src/rend_vk/vkpt/shader/tone_mapping_curve.comp',
+    'src/rend_vk/vkpt/shader/tone_mapping_apply.comp',
+    'src/rend_vk/vkpt/shader/physical_sky.comp',
+    'src/rend_vk/vkpt/shader/physical_sky_space.comp',
+    'src/rend_vk/vkpt/shader/shadow_map.vert',
+    'src/rend_vk/vkpt/shader/sky_buffer_resolve.comp',
+    'src/rend_vk/vkpt/shader/stretch_pic.frag',
+    'src/rend_vk/vkpt/shader/stretch_pic.vert',
+    'src/rend_vk/vkpt/shader/final_blit.frag',
+    'src/rend_vk/vkpt/shader/final_blit.vert',
+    'src/rend_vk/vkpt/shader/fsr_easu_fp16.comp',
+    'src/rend_vk/vkpt/shader/fsr_easu_fp32.comp',
+    'src/rend_vk/vkpt/shader/fsr_rcas_fp16.comp',
+    'src/rend_vk/vkpt/shader/fsr_rcas_fp32.comp',
+    'src/rend_vk/vkpt/shader/debug_line.frag',
+    'src/rend_vk/vkpt/shader/debug_line.vert',
+  )
+
+  vkpt_shader_rt_sources = files(
+    'src/rend_vk/vkpt/shader/primary_rays.rgen',
+    'src/rend_vk/vkpt/shader/direct_lighting.rgen',
+    'src/rend_vk/vkpt/shader/indirect_lighting.rgen',
+    'src/rend_vk/vkpt/shader/path_tracer.rchit',
+    'src/rend_vk/vkpt/shader/path_tracer.rmiss',
+    'src/rend_vk/vkpt/shader/path_tracer_masked.rahit',
+    'src/rend_vk/vkpt/shader/path_tracer_particle.rahit',
+    'src/rend_vk/vkpt/shader/path_tracer_sprite.rahit',
+    'src/rend_vk/vkpt/shader/path_tracer_beam.rahit',
+    'src/rend_vk/vkpt/shader/path_tracer_beam.rint',
+    'src/rend_vk/vkpt/shader/path_tracer_explosion.rahit',
+    'src/rend_vk/vkpt/shader/reflect_refract.rgen',
+  )
+
+  vkpt_shader_includes = files(
+    'src/rend_vk/vkpt/shader/asvgf.glsl',
+    'src/rend_vk/vkpt/shader/brdf.glsl',
+    'src/rend_vk/vkpt/shader/fsr_easu.glsl',
+    'src/rend_vk/vkpt/shader/fsr_rcas.glsl',
+    'src/rend_vk/vkpt/shader/fsr_utils.glsl',
+    'src/rend_vk/vkpt/shader/path_tracer_transparency.glsl',
+    'src/rend_vk/vkpt/shader/precomputed_sky.glsl',
+    'src/rend_vk/vkpt/shader/projection.glsl',
+    'src/rend_vk/vkpt/shader/tone_mapping_utils.glsl',
+    'src/rend_vk/vkpt/shader/utils.glsl',
+    'src/rend_vk/vkpt/shader/water.glsl',
+    'src/rend_vk/vkpt/shader/constants.h',
+    'src/rend_vk/vkpt/shader/global_textures.h',
+    'src/rend_vk/vkpt/shader/global_ubo.h',
+    'src/rend_vk/vkpt/shader/god_rays_shared.h',
+    'src/rend_vk/vkpt/shader/light_lists.h',
+    'src/rend_vk/vkpt/shader/path_tracer_hit_shaders.h',
+    'src/rend_vk/vkpt/shader/path_tracer_rgen.h',
+    'src/rend_vk/vkpt/shader/path_tracer.h',
+    'src/rend_vk/vkpt/shader/precomputed_sky_params.h',
+    'src/rend_vk/vkpt/shader/shader_structs.h',
+    'src/rend_vk/vkpt/shader/sky.h',
+    'src/rend_vk/vkpt/shader/tiny_encryption_algorithm.h',
+    'src/rend_vk/vkpt/shader/vertex_buffer.h',
+    'src/rend_vk/vkpt/fsr/ffx_a.h',
+    'src/rend_vk/vkpt/fsr/ffx_fsr1.h',
+  )
+
+  vkpt_shader_out_dir = meson.current_build_dir() / get_option('base-game') / 'shader_vkpt'
+  prog_python = find_program('python3')
+  prog_compile_vkpt_shaders = meson.current_source_dir() / 'tools' / 'compile_vkpt_shaders.py'
+
+  vkpt_shader_target = custom_target(
+    'vkpt_shaders',
+    input: vkpt_shader_sources + vkpt_shader_rt_sources + vkpt_shader_includes,
+    output: 'vkpt_shaders.stamp',
+    command: [
+      prog_python,
+      prog_compile_vkpt_shaders,
+      '--out-dir', vkpt_shader_out_dir,
+      '--stamp', '@OUTPUT@'
+    ],
+    build_by_default: true,
+  )
+endif
 
 jpeg = dependency('libjpeg',
   required:        get_option('libjpeg'),
@@ -896,7 +1040,9 @@ if get_option('external-renderers')
   endif
   renderer_deps += khr_headers_dep
 
-  renderer_c_args = ['-DUSE_CLIENT=1', '-DUSE_REF=1', '-DRENDERER_DLL'] + engine_args
+  renderer_c_args = ['-DUSE_CLIENT=1', '-DRENDERER_DLL'] + engine_args
+  renderer_gl_c_args = renderer_c_args + ['-DUSE_REF=REF_GL']
+  renderer_vk_c_args = renderer_c_args + ['-DUSE_REF=REF_VKPT', '-DRENDERER_VULKAN']
 
   renderer_gl_lib_src = renderer_src + ['src/renderer/renderer_api.c']
   renderer_gl_lib_name = meson.project_name() + '_opengl_' + cpu
@@ -905,7 +1051,7 @@ if get_option('external-renderers')
     include_directories:   ['inc', 'q2proto/inc'],
     gnu_symbol_visibility: 'hidden',
     link_args:             dll_link_args,
-    c_args:                renderer_c_args,
+    c_args:                renderer_gl_c_args,
     name_prefix:           '',
     install:               true,
     install_dir:           libdir,
@@ -916,10 +1062,10 @@ if get_option('external-renderers')
     renderer_vk_lib_name = meson.project_name() + '_vulkan_' + cpu
     renderer_vk_lib = shared_library(renderer_vk_lib_name, renderer_vk_lib_src,
       dependencies:          renderer_deps + [vulkan],
-      include_directories:   ['inc', 'q2proto/inc'],
+      include_directories:   ['inc', 'q2proto/inc', 'src/rend_vk/refresh/stb', 'src/rend_vk/third_party'],
       gnu_symbol_visibility: 'hidden',
       link_args:             dll_link_args,
-      c_args:                renderer_c_args + ['-DRENDERER_VULKAN'],
+      c_args:                renderer_vk_c_args,
       name_prefix:           '',
       install:               true,
       install_dir:           libdir,
@@ -949,7 +1095,7 @@ executable('worr', common_src, client_src, renderer_engine_src,
   win_subsystem:         win_subsystem_client,
   link_args:             exe_link_args,
   link_with:             q2proto_lib,
-  c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=1', engine_args],
+  c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=REF_GL', engine_args],
   cpp_args:              client_cpp_args,
   install:               true,
   install_dir:           bindir,

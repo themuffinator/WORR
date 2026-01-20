@@ -29,6 +29,60 @@ float bobMove = 0.0f;
 int	  bobCycle = 0, bobCycleRun = 0;	  // odd cycles are right foot going forward
 float bobFracSin = 0.0f; // std::sinf(bobfrac*M_PI)
 
+namespace {
+
+constexpr GameTime kVoteMenuUpdateInterval = 250_ms;
+constexpr GameTime kMapSelectorUpdateInterval = 200_ms;
+constexpr GameTime kMatchStatsUpdateInterval = 1_sec;
+
+void UpdateCgameUiMenus(gentity_t* ent) {
+	if (!ent || !ent->client)
+		return;
+
+	auto* cl = ent->client;
+
+	const bool voteActive = Vote_Menu_Active(ent);
+	if (!voteActive) {
+		if (cl->ui.voteActive) {
+			CloseActiveMenu(ent);
+		}
+	} else {
+		if (!cl->ui.voteActive) {
+			OpenVoteMenu(ent);
+		} else if (cl->ui.voteNextUpdate <= level.time) {
+			RefreshVoteMenu(ent);
+			cl->ui.voteNextUpdate = level.time + kVoteMenuUpdateInterval;
+		}
+	}
+
+	const bool mapSelectorActive = (level.mapSelector.voteStartTime != 0_sec);
+	if (!mapSelectorActive) {
+		if (cl->ui.mapSelectorActive) {
+			CloseActiveMenu(ent);
+		}
+	} else {
+		if (!cl->ui.mapSelectorActive) {
+			OpenMapSelectorMenu(ent);
+		} else if (cl->ui.mapSelectorNextUpdate <= level.time) {
+			RefreshMapSelectorMenu(ent);
+			cl->ui.mapSelectorNextUpdate = level.time + kMapSelectorUpdateInterval;
+		}
+	}
+
+	if (!g_matchstats || !g_matchstats->integer) {
+		if (cl->ui.matchStatsActive) {
+			CloseActiveMenu(ent);
+		}
+	} else if (cl->ui.matchStatsActive) {
+		if (cl->ui.matchStatsNextUpdate <= level.time) {
+			RefreshMatchStatsMenu(ent);
+			cl->ui.matchStatsNextUpdate = level.time + kMatchStatsUpdateInterval;
+		}
+	}
+}
+
+} // namespace
+
 /*
 ===============
 SkipViewModifiers
@@ -1512,7 +1566,7 @@ and right after spawning
 [[maybe_unused]] static int scorelimit = -1;
 void ClientEndServerFrame(gentity_t* ent) {
 	// no player exists yet (load game)
-	if (!ent->client->pers.spawned && !level.mapSelector.voteStartTime && !ent->client->menu.current)
+	if (!ent->client->pers.spawned && !level.mapSelector.voteStartTime && !IsUiMenuOpen(ent->client))
 		return;
 
 	float bobTime = 0, bobTimeRun = 0;
@@ -1558,22 +1612,6 @@ void ClientEndServerFrame(gentity_t* ent) {
 	currentClient->ps.pmove.origin = ent->s.origin;
 	currentClient->ps.pmove.velocity = ent->velocity;
 
-	if (deathmatch->integer) {
-		auto& ms = level.mapSelector;
-
-		// Vote UI handling: ensure the selector is opened when a vote is active.
-		const bool voteActive = (ms.voteStartTime != 0_sec);
-		if (voteActive) {
-			// If no menu is currently open, open the map selector.
-			if (!ent->client->menu.current) {
-				OpenMapSelectorMenu(ent);
-				// Prime immediate first update
-				ent->client->menu.updateTime = level.time;
-			}
-			// Do NOT return here; fall through to the unified updater below so it refreshes every cadence tick.
-		}
-	}
-
 	//
 	// If the end of unit layout is displayed, don't give
 	// the player any normal movement attributes
@@ -1586,27 +1624,12 @@ void ClientEndServerFrame(gentity_t* ent) {
 		SetStats(ent);
 		SetCoopStats(ent);
 
-		bool handledUiUpdate = false;
-
 		if (deathmatch->integer) {
-			const bool voteActive = (level.mapSelector.voteStartTime != 0_sec);
-
-			if (voteActive && ent->client->menu.current) {
-				// Keep the menu flowing during the vote even though we're in intermission.
-				ent->client->showScores = true;
-
-				if (ent->client->menu.updateTime <= level.time) {
-					MenuSystem::Update(ent);
-					gi.unicast(ent, true);
-					ent->client->menu.updateTime = level.time + FRAME_TIME_MS;
-				}
-
-				handledUiUpdate = true;
-			}
+			UpdateCgameUiMenus(ent);
 		}
 
 		// if the scoreboard is up, update it if a client leaves
-		if (!handledUiUpdate && deathmatch->integer && ent->client->showScores && ent->client->menu.updateTime) {
+		if (deathmatch->integer && ent->client->showScores && ent->client->menu.updateTime) {
 			DeathmatchScoreboardMessage(ent, ent->enemy);
 			gi.unicast(ent, false);
 			ent->client->menu.updateTime = 0_ms;
@@ -1742,21 +1765,12 @@ void ClientEndServerFrame(gentity_t* ent) {
 	================
 	*/
 
-	// MENUS
-	if (ent->client->menu.current) {
-		// Ensure showScores remains true while a menu is visible (layouts render via scoreboard channel)
-		ent->client->showScores = true;
-
-		// Update at frame cadence
-		if (ent->client->menu.updateTime <= level.time) {
-			MenuSystem::Update(ent);
-			gi.unicast(ent, true);
-			ent->client->menu.updateTime = level.time + FRAME_TIME_MS;
-			// Do not toggle doUpdate here; MenuSystem and DirtyAll control it.
-		}
+	if (deathmatch->integer) {
+		UpdateCgameUiMenus(ent);
 	}
-	// SCOREBOARD (only if no active menu)
-	else if (ent->client->showScores) {
+
+	// SCOREBOARD
+	if (ent->client->showScores) {
 		if (ent->client->menu.updateTime <= level.time) {
 			DeathmatchScoreboardMessage(ent, ent->enemy);
 			gi.unicast(ent, false);

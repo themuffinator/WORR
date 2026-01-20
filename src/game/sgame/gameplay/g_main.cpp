@@ -2049,7 +2049,7 @@ static void HostAutoScreenshotsRun() {
     host->client->initialMenu.shown = true;
     host->client->showScores = false;
     host->client->showInventory = false;
-    host->client->menu.current = nullptr; // close any open menu
+    CloseActiveMenu(host);
     level.autoScreenshotTool_initialised = true;
   }
 
@@ -2060,7 +2060,7 @@ static void HostAutoScreenshotsRun() {
       host->client->initialMenu.shown = true;
       host->client->showScores = false;
       host->client->showInventory = false;
-      host->client->menu.current = nullptr; // close any open menu
+      CloseActiveMenu(host);
       // gi.Com_PrintFmt("HostAutoScreenshotsRun: Taking screenshots for {}\n",
       // host->client->sess.netName);
 
@@ -2094,7 +2094,7 @@ static void HostAutoScreenshotsRun() {
     host->client->initialMenu.shown = true;
     host->client->showScores = false;
     host->client->showInventory = false;
-    host->client->menu.current = nullptr; // close any open menu
+    CloseActiveMenu(host);
     level.autoScreenshotTool_delayTime = level.time + 300_ms;
     break;
   case 1:
@@ -2105,7 +2105,7 @@ static void HostAutoScreenshotsRun() {
     host->client->initialMenu.shown = true;
     host->client->showScores = false;
     host->client->showInventory = false;
-    host->client->menu.current = nullptr; // close any open menu
+    CloseActiveMenu(host);
     if (level.spawnSpots[level.autoScreenshotTool_index]) {
       TeleportPlayer(
           host, level.spawnSpots[level.autoScreenshotTool_index]->s.origin,

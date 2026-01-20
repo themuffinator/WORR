@@ -590,6 +590,7 @@ enum renderfx_t : uint32_t {
 	RF_NO_LOD = bit_v<25>, // [Paril-KEX] never LOD
 	RF_NO_STEREO = RF_WEAPONMODEL, // [Paril-KEX] this is a bit dumb, but, for looping noises if this is set there's no stereo
 	RF_STAIR_STEP = bit_v<26>, // [Paril-KEX] re-tuned, now used to handle stair steps for monsters
+	RF_DOPPLER = bit_v<27>, // [WORR] doppler shift on looped sounds
 
 	RF_FLARE_LOCK_ANGLE = RF_MINLIGHT
 };
@@ -2013,6 +2014,7 @@ struct shadow_light_data_t {
 	float				intensity = 1;
 	float				fadeStart;
 	float				fadeEnd;
+	float				maxFadeDistance = 0.0f;
 	int					lightStyle = -1;
 	float				coneAngle = 45;
 	Vector3				coneDirection;

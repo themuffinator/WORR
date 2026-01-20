@@ -71,10 +71,13 @@ typedef struct renderer_import_s {
     void (*Com_PageInMemory)(void *buffer, size_t size);
     uint32_t (*Com_SlowRand)(void);
     unsigned (*Com_HashStringLen)(const char *s, size_t len, unsigned size);
+    void (*Com_AddConfigFile)(const char *name, unsigned flags);
 
     cvar_t *(*Cvar_Get)(const char *name, const char *value, int flags);
     void (*Cvar_Reset)(cvar_t *var);
     void (*Cvar_Set)(const char *name, const char *value);
+    void (*Cvar_SetValue)(cvar_t *var, float value, from_t from);
+    void (*Cvar_SetInteger)(cvar_t *var, int value, from_t from);
     int (*Cvar_VariableInteger)(const char *name);
     float (*Cvar_VariableValue)(const char *name);
     float (*Cvar_ClampValue)(cvar_t *var, float min, float max);
@@ -95,8 +98,15 @@ typedef struct renderer_import_s {
 
     int (*FS_LoadFileEx)(const char *path, void **buffer, unsigned flags, memtag_t tag);
     int64_t (*FS_OpenFile)(const char *filename, qhandle_t *f, unsigned mode);
+    qhandle_t (*FS_EasyOpenFile)(char *buf, size_t size, unsigned mode,
+                                 const char *dir, const char *name, const char *ext);
     int (*FS_Read)(void *buffer, size_t len, qhandle_t f);
     int (*FS_CloseFile)(qhandle_t f);
+    int (*FS_FPrintf)(qhandle_t f, const char *format, ...);
+    int64_t (*FS_Length)(qhandle_t f);
+    void **(*FS_ListFiles)(const char *path, const char *filter, unsigned flags, int *count_p);
+    void (*FS_FreeList)(void **list);
+    int (*FS_LastModified)(const char *file, uint64_t *last_modified);
     size_t (*FS_NormalizePathBuffer)(char *out, const char *in, size_t size);
     void (*FS_CleanupPath)(char *s);
     int (*FS_CreatePath)(char *path);
@@ -138,6 +148,9 @@ typedef struct renderer_import_s {
     const lightgrid_sample_t *(*BSP_LookupLightgrid)(const lightgrid_t *grid, const uint32_t point[3]);
     void (*BSP_ClusterVis)(const bsp_t *bsp, visrow_t *mask, int cluster, int vis);
     const mleaf_t *(*BSP_PointLeaf)(const mnode_t *node, const vec3_t p);
+    byte *(*BSP_GetPvs)(bsp_t *bsp, int cluster);
+    byte *(*BSP_GetPvs2)(bsp_t *bsp, int cluster);
+    bool (*BSP_SavePatchedPVS)(bsp_t *bsp);
 
     void (*Prompt_AddMatch)(genctx_t *ctx, const char *s);
 
@@ -149,6 +162,9 @@ typedef struct renderer_import_s {
     bool (*SCR_ParseColor)(const char *s, color_t *color);
 
     void (*CL_SetSky)(void);
+
+    int (*Key_IsDown)(int key);
+    const char *(*Key_GetBindingForKey)(int keynum);
 
     char *(*COM_ParseEx)(const char **data_p, int flags);
     size_t (*COM_ParseToken)(const char **data_p, char *buffer, size_t size, int flags);
@@ -221,6 +237,7 @@ typedef struct renderer_import_s {
     char *(*va)(const char *fmt, ...);
 
     char *fs_gamedir;
+    cvar_t *fs_game;
     const vid_driver_t **vid;
     unsigned *com_eventTime;
     unsigned (*Sys_Milliseconds)(void);
@@ -259,6 +276,7 @@ extern renderer_import_t ri;
 #define Com_PageInMemory ri.Com_PageInMemory
 #define Com_SlowRand ri.Com_SlowRand
 #define Com_HashStringLen ri.Com_HashStringLen
+#define Com_AddConfigFile ri.Com_AddConfigFile
 #define Sys_Milliseconds ri.Sys_Milliseconds
 
 #define Cvar_Get ri.Cvar_Get
@@ -268,6 +286,8 @@ extern renderer_import_t ri;
 #define Cvar_Reset ri.Cvar_Reset
 #define Cvar_Set ri.Cvar_Set
 #define Cvar_SetByVar(var, value, from) Cvar_Set((var)->name, (value))
+#define Cvar_SetValue ri.Cvar_SetValue
+#define Cvar_SetInteger ri.Cvar_SetInteger
 #define Cvar_VariableInteger ri.Cvar_VariableInteger
 #define Cvar_VariableValue ri.Cvar_VariableValue
 #define Cvar_ClampValue ri.Cvar_ClampValue
@@ -288,8 +308,14 @@ extern renderer_import_t ri;
 
 #define FS_LoadFileEx ri.FS_LoadFileEx
 #define FS_OpenFile ri.FS_OpenFile
+#define FS_EasyOpenFile ri.FS_EasyOpenFile
 #define FS_Read ri.FS_Read
 #define FS_CloseFile ri.FS_CloseFile
+#define FS_FPrintf ri.FS_FPrintf
+#define FS_Length ri.FS_Length
+#define FS_ListFiles ri.FS_ListFiles
+#define FS_FreeList ri.FS_FreeList
+#define FS_LastModified ri.FS_LastModified
 #define FS_NormalizePathBuffer ri.FS_NormalizePathBuffer
 #define FS_CleanupPath ri.FS_CleanupPath
 #define FS_CreatePath ri.FS_CreatePath
@@ -324,6 +350,9 @@ extern renderer_import_t ri;
 #define BSP_LookupLightgrid ri.BSP_LookupLightgrid
 #define BSP_ClusterVis ri.BSP_ClusterVis
 #define BSP_PointLeaf ri.BSP_PointLeaf
+#define BSP_GetPvs ri.BSP_GetPvs
+#define BSP_GetPvs2 ri.BSP_GetPvs2
+#define BSP_SavePatchedPVS ri.BSP_SavePatchedPVS
 
 #define Prompt_AddMatch ri.Prompt_AddMatch
 
@@ -335,6 +364,9 @@ extern renderer_import_t ri;
 #define SCR_ParseColor ri.SCR_ParseColor
 
 #define CL_SetSky ri.CL_SetSky
+
+#define Key_IsDown ri.Key_IsDown
+#define Key_GetBindingForKey ri.Key_GetBindingForKey
 
 #define COM_ParseEx ri.COM_ParseEx
 #define COM_ParseToken ri.COM_ParseToken
@@ -408,6 +440,7 @@ extern renderer_import_t ri;
 #define va ri.va
 
 #define fs_gamedir ri.fs_gamedir
+#define fs_game ri.fs_game
 #define vid (*ri.vid)
 #define com_eventTime (*ri.com_eventTime)
 #define com_linenum (*ri.com_linenum)

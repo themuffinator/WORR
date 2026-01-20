@@ -49,6 +49,10 @@ static mat4_t       m_shadow_model;     // fog hack
 static const model_t *m_model;
 
 #define OUTLINE_SCALE 1.02f
+#define OUTLINE_WIDTH_DEFAULT 2.0f
+#define OUTLINE_WIDTH_MIN 0.5f
+#define OUTLINE_WIDTH_MAX 6.0f
+#define OUTLINE_SCALE_MAX 3.0f
 #define OUTLINE_STENCIL_REF 1
 
 #if USE_MD5
@@ -65,7 +69,7 @@ static void setup_dotshading(void)
     if (!gl_dotshading->integer || (gl_static.use_shaders && gl_per_pixel_lighting->integer))
         return;
 
-    if (glr.ent->flags & (RF_SHELL_MASK | RF_TRACKER | RF_RIMLIGHT))
+    if (glr.ent->flags & (RF_SHELL_MASK | RF_TRACKER | RF_RIMLIGHT | RF_BRIGHTSKIN))
         return;
 
     if (drawshadow == SHADOW_ONLY)
@@ -392,6 +396,10 @@ static void setup_color(void)
             color[1] = 1;
         if (flags & RF_SHELL_BLUE)
             color[2] = 1;
+    } else if (flags & RF_BRIGHTSKIN) {
+        color[0] = glr.ent->rgba.r * (1.0f / 255.0f);
+        color[1] = glr.ent->rgba.g * (1.0f / 255.0f);
+        color[2] = glr.ent->rgba.b * (1.0f / 255.0f);
     } else if (flags & RF_FULLBRIGHT) {
         VectorSet(color, 1, 1, 1);
     } else if ((flags & RF_IR_VISIBLE) && (glr.fd.rdflags & RDF_IRGOGGLES)) {
@@ -473,6 +481,69 @@ static void build_outline_matrix(mat4_t matrix, float scale)
     matrix[ 7] = 0;
     matrix[11] = 0;
     matrix[15] = 1;
+}
+
+static float clamp_outline_width(float width)
+{
+    if (width < OUTLINE_WIDTH_MIN)
+        return OUTLINE_WIDTH_MIN;
+    if (width > OUTLINE_WIDTH_MAX)
+        return OUTLINE_WIDTH_MAX;
+    return width;
+}
+
+static float get_outline_width(void)
+{
+    float width = OUTLINE_WIDTH_DEFAULT;
+
+#if defined(RENDERER_DLL)
+    if (Cvar_VariableValue)
+        width = Cvar_VariableValue("cl_player_outline_width");
+    else if (Cvar_VariableInteger)
+        width = (float)Cvar_VariableInteger("cl_player_outline_width");
+#else
+    extern cvar_t *cl_player_outline_width;
+
+    if (cl_player_outline_width)
+        width = cl_player_outline_width->value;
+#endif
+
+    return clamp_outline_width(width);
+}
+
+static float outline_scale(void)
+{
+    float scale = OUTLINE_SCALE;
+    float width_px = get_outline_width();
+
+    if (width_px <= 0.0f || !m_model || m_model->numframes <= 0)
+        return scale;
+
+    float radius = (m_model->frames[newframenum].radius * frontlerp +
+                    m_model->frames[oldframenum].radius * backlerp) * glr.entscale;
+    if (radius <= 0.0f)
+        return scale;
+
+    float dist = Distance(glr.fd.vieworg, glr.ent->origin);
+    if (dist <= 0.0f || glr.fd.fov_y <= 0.0f || glr.fd.height <= 0)
+        return scale;
+
+    float half_fov = DEG2RAD(glr.fd.fov_y * 0.5f);
+    float denom = 2.0f * tanf(half_fov) * dist;
+    if (denom <= 0.0f)
+        return scale;
+
+    float radius_px = radius * ((float)glr.fd.height / denom);
+    if (radius_px <= 0.0f)
+        return scale;
+
+    float desired = 1.0f + (width_px / radius_px);
+    if (desired > scale)
+        scale = desired;
+    if (scale > OUTLINE_SCALE_MAX)
+        scale = OUTLINE_SCALE_MAX;
+
+    return scale;
 }
 
 static void draw_celshading(const uint16_t *indices, int num_indices)
@@ -694,13 +765,20 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     c.trisDrawn += num_indices / 3;
 
     if (glr.shadow_pass) {
-        glStateBits_t state = GLS_SHADOWMAP | meshbits;
+        glStateBits_t state = GLS_SHADOWMAP | (meshbits & (GLS_MESH_MD2 | GLS_MESH_MD5 | GLS_MESH_LERP));
 
         GL_StateBits(state);
         GL_BindTexture(TMU_TEXTURE, TEXNUM_WHITE);
-        if (gls.currentva)
+        if (gls.currentva == VA_NONE) {
+            if (meshbits & GLS_MESH_MD5)
+                GL_ArrayBits(GLA_MESH_LERP | GLA_NORMAL);
+            else
+                GL_ArrayBits((meshbits & GLS_MESH_LERP) ? GLA_MESH_LERP : GLA_MESH_STATIC);
+        } else if (!(meshbits & GLS_MESH_MD5)) {
             GL_ArrayBits(GLA_VERTEX);
+        }
 
+        GL_LoadMatrix(glr.entmatrix, glr.viewmatrix);
         GL_LoadUniforms();
         GL_LockArrays(num_verts);
         qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
@@ -771,7 +849,7 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
         state |= GLS_SHADE_SMOOTH;
 
     if (glr.ent->flags & RF_TRANSLUCENT) {
-        if (glr.ent->flags & RF_RIMLIGHT)
+        if (glr.ent->flags & (RF_RIMLIGHT | RF_BRIGHTSKIN))
             state |= GLS_BLEND_ADD | GLS_DEPTHMASK_FALSE;
         else
             state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
@@ -781,13 +859,15 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     if (skin->texnum2)
         state |= GLS_GLOWMAP_ENABLE;
 
-    if (glr.framebuffer_bound && gl_bloom->integer) {
+    if (glr.framebuffer_bound && gl_bloom->integer && gl_static.postfx_bloom_mrt) {
         state |= GLS_BLOOM_GENERATE;
         if (glr.ent->flags & (RF_SHELL_MASK | RF_RIMLIGHT))
             state |= GLS_BLOOM_SHELL;
     }
 
-    if (!(state & (GLS_MESH_SHELL | GLS_RIMLIGHT)) && glr.ppl_dlight_bits)
+    if (!(state & (GLS_MESH_SHELL | GLS_RIMLIGHT)) &&
+        !(glr.ent->flags & RF_BRIGHTSKIN) &&
+        glr.ppl_dlight_bits)
         state |= glr.ppl_bits;
 
     GL_StateBits(state);
@@ -846,7 +926,7 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
         float outline_g = outline_color.g * (1.0f / 255.0f);
         float outline_b = outline_color.b * (1.0f / 255.0f);
 
-        build_outline_matrix(outline_matrix, OUTLINE_SCALE);
+        build_outline_matrix(outline_matrix, outline_scale());
         GL_LoadMatrix(outline_matrix, glr.viewmatrix);
         GL_StateBits(outline_bits);
 
@@ -991,6 +1071,7 @@ static void bind_skel_arrays(const md5_mesh_t *mesh)
 
         gls.u_block.mesh.weight_ofs   = (uintptr_t)mesh->weights / sizeof(mesh->weights[0]);
         gls.u_block.mesh.jointnum_ofs = (uintptr_t)mesh->jointnums;
+        gls.u_block_dirty = true;
 
         GL_ActiveTexture(TMU_SKEL_WEIGHTS);
         qglBindTexture(GL_TEXTURE_BUFFER, gl_static.skeleton_tex[0]);
@@ -1261,6 +1342,7 @@ void GL_DrawAliasModel(const model_t *model)
         gls.u_block.mesh.shellscale = shellscale;
         gls.u_block.mesh.backlerp = backlerp;
         gls.u_block.mesh.frontlerp = frontlerp;
+        gls.u_block_dirty = true;
     } else {
         Q_assert(!buffer);
 

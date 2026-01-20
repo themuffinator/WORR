@@ -17,20 +17,20 @@
       "banner": "m_banner_video",
       "items": [
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "video mode",
           "cvar": "vid_fullscreen",
           "items": ["windowed", "$$vid_modelist"]
         },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "fov scaling",
           "cvar": "cl_adjustfov",
           "items": ["vert-", "hor+"]
         },
-        { "type": "toggle", "label": "vertical sync", "cvar": "gl_swapinterval" },
+        { "type": "checkbox", "label": "vertical sync", "cvar": "gl_swapinterval" },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "anti-aliasing",
           "cvar": "gl_multisamples",
           "pairs": [
@@ -41,10 +41,10 @@
           ]
         },
         { "type": "range", "label": "texture gamma", "cvar": "vid_gamma", "min": 1.3, "max": 0.3 },
-        { "type": "toggle", "label": "hardware gamma", "cvar": "vid_hwgamma" },
+        { "type": "checkbox", "label": "hardware gamma", "cvar": "vid_hwgamma" },
         { "type": "range", "label": "texture quality", "cvar": "gl_picmip", "min": 3, "max": 0, "step": -1 },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "texture filter",
           "cvar": "gl_texturemode",
           "pairs": [
@@ -55,7 +55,7 @@
           ]
         },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "anisotropic filter",
           "cvar": "gl_anisotropy",
           "pairs": [
@@ -68,7 +68,7 @@
         },
         { "type": "range", "label": "texture saturation", "cvar": "gl_saturation", "min": 0, "max": 1 },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "texture intensity",
           "cvar": "intensity",
           "pairs": [
@@ -80,11 +80,41 @@
         { "type": "range", "label": "lightmap saturation", "cvar": "gl_coloredlightmaps", "min": 0, "max": 1 },
         { "type": "range", "label": "lightmap brightness", "cvar": "gl_brightness", "min": 0, "max": 0.3 },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "rendering backend",
           "cvar": "gl_shaders",
           "items": ["legacy", "shaders"]
         }
+      ]
+    },
+    {
+      "name": "performance",
+      "title": "Performance",
+      "items": [
+        {
+          "type": "combobox",
+          "label": "client fps cap",
+          "cvar": "cl_maxfps",
+          "items": ["0", "60", "90", "120", "144", "165", "240", "300"],
+          "numeric": true,
+          "integer": true,
+          "width": 4,
+          "status": "0 - uncapped"
+        },
+        {
+          "type": "combobox",
+          "label": "renderer fps cap",
+          "cvar": "r_maxfps",
+          "items": ["0", "60", "90", "120", "144", "165", "240", "300"],
+          "numeric": true,
+          "integer": true,
+          "width": 4,
+          "status": "0 - uncapped"
+        },
+        { "type": "checkbox", "label": "client prediction", "cvar": "cl_predict" },
+        { "type": "checkbox", "label": "footsteps", "cvar": "cl_footsteps" },
+        { "type": "checkbox", "label": "warn on fps rounding", "cvar": "cl_warn_on_fps_rounding" },
+        { "type": "checkbox", "label": "async frame processing", "cvar": "cl_async" }
       ]
     },
     {
@@ -96,6 +126,7 @@
         { "type": "action", "label": "key bindings", "command": "pushmenu keys" },
         { "type": "action", "label": "weapon bindings", "command": "pushmenu weapons" },
         { "type": "action", "label": "video setup", "command": "pushmenu video" },
+        { "type": "action", "label": "performance", "command": "pushmenu performance" },
         { "type": "action", "label": "sound setup", "command": "pushmenu sound" },
         { "type": "action", "label": "effects setup", "command": "pushmenu effects" },
         { "type": "action", "label": "screen setup", "command": "pushmenu screen" },
@@ -108,7 +139,7 @@
       "title": "Sound Setup",
       "items": [
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "sound engine",
           "cvar": "s_enable",
           "items": ["no sound", "software", "OpenAL"]
@@ -116,17 +147,17 @@
         { "type": "range", "label": "sound latency", "cvar": "s_mixahead", "min": 0.05, "max": 0.2 },
         { "type": "range", "label": "sound volume", "cvar": "s_volume", "min": 0, "max": 1 },
         { "type": "range", "label": "music volume", "cvar": "ogg_volume", "min": 0, "max": 1 },
-        { "type": "toggle", "label": "enable music", "cvar": "ogg_enable" },
-        { "type": "toggle", "label": "shuffle tracks", "cvar": "ogg_shuffle" },
-        { "type": "toggle", "label": "underwater effect", "cvar": "s_underwater" },
+        { "type": "checkbox", "label": "enable music", "cvar": "ogg_enable" },
+        { "type": "checkbox", "label": "shuffle tracks", "cvar": "ogg_shuffle" },
+        { "type": "checkbox", "label": "underwater effect", "cvar": "s_underwater" },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "ambient sounds",
           "cvar": "s_ambient",
           "items": ["no", "yes", "only player's own"]
         },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "chat beep",
           "cvar": "cl_chat_sound",
           "items": ["disabled", "default", "alternative"]
@@ -165,28 +196,28 @@
       "title": "Effects Setup",
       "items": [
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "dynamic lighting",
           "cvar": "gl_dynamic",
           "items": ["no", "yes", "only switchable"]
         },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "entity cel-shading",
           "cvar": "gl_celshading",
           "items": ["no", "1x", "2x", "3x"]
         },
-        { "type": "toggle", "label": "entity glowing", "cvar": "cl_noglow", "negate": true },
+        { "type": "checkbox", "label": "entity glowing", "cvar": "cl_noglow", "negate": true },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "ground shadows",
           "cvar": "gl_shadows",
           "items": ["no", "yes", "fade"]
         },
-        { "type": "toggle", "label": "screen blending", "cvar": "gl_polyblend" },
-        { "type": "toggle", "label": "screen warping", "cvar": "gl_waterwarp" },
-        { "type": "toggle", "label": "grenade explosions", "cvar": "cl_disable_explosions", "bit": 0, "negate": true },
-        { "type": "toggle", "label": "rocket explosions", "cvar": "cl_disable_explosions", "bit": 1, "negate": true },
+        { "type": "checkbox", "label": "screen blending", "cvar": "gl_polyblend" },
+        { "type": "checkbox", "label": "screen warping", "cvar": "gl_waterwarp" },
+        { "type": "checkbox", "label": "grenade explosions", "cvar": "cl_disable_explosions", "bit": 0, "negate": true },
+        { "type": "checkbox", "label": "rocket explosions", "cvar": "cl_disable_explosions", "bit": 1, "negate": true },
         { "type": "blank" },
         { "type": "action", "label": "railgun trail setup...", "align": "left", "command": "pushmenu railtrail" }
       ]
@@ -207,7 +238,7 @@
         { "type": "range", "label": "crosshair size", "cvar": "cl_crosshairSize", "min": 4, "max": 64, "step": 1 },
         { "type": "range", "label": "crosshair brightness", "cvar": "cl_crosshairBrightness", "min": 0, "max": 1, "step": 0.05 },
         { "type": "range", "label": "crosshair color", "cvar": "cl_crosshairColor", "min": 1, "max": 26, "step": 1 },
-        { "type": "toggle", "label": "color by health", "cvar": "cl_crosshairHealth" },
+        { "type": "checkbox", "label": "color by health", "cvar": "cl_crosshairHealth" },
         {
           "type": "values",
           "label": "hit style",
@@ -226,7 +257,7 @@
         },
         { "type": "range", "label": "hit color", "cvar": "cl_crosshairHitColor", "min": 1, "max": 26, "step": 1 },
         { "type": "range", "label": "hit time (ms)", "cvar": "cl_crosshairHitTime", "min": 0, "max": 1000, "step": 10 },
-        { "type": "toggle", "label": "pickup pulse", "cvar": "cl_crosshairPulse" }
+        { "type": "checkbox", "label": "pickup pulse", "cvar": "cl_crosshairPulse" }
       ]
     },
     {
@@ -234,9 +265,9 @@
       "title": "Screen Setup",
       "items": [
         { "type": "range", "label": "screen size", "cvar": "viewsize", "min": 40, "max": 100, "step": 10 },
-        { "type": "toggle", "label": "ping graph", "cvar": "scr_lag_draw" },
+        { "type": "checkbox", "label": "ping graph", "cvar": "scr_lag_draw" },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "demo bar",
           "cvar": "scr_demobar",
           "items": ["no", "yes", "verbose"]
@@ -244,7 +275,7 @@
         { "type": "range", "label": "HUD opacity", "cvar": "scr_alpha", "min": 0, "max": 1 },
         { "type": "range", "label": "console opacity", "cvar": "con_alpha", "min": 0, "max": 1 },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "HUD scale",
           "cvar": "scr_scale",
           "pairs": [
@@ -255,7 +286,7 @@
           ]
         },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "console scale",
           "cvar": "con_scale",
           "pairs": [
@@ -266,7 +297,7 @@
           ]
         },
         {
-          "type": "pairs",
+          "type": "dropdown",
           "label": "menu scale",
           "cvar": "ui_scale",
           "pairs": [
@@ -284,33 +315,33 @@
       "name": "downloads",
       "title": "Download Options",
       "items": [
-        { "type": "toggle", "label": "allow downloading", "cvar": "allow_download" },
-        { "type": "toggle", "label": "maps", "cvar": "allow_download_maps" },
-        { "type": "toggle", "label": "player models/skins", "cvar": "allow_download_players" },
-        { "type": "toggle", "label": "models", "cvar": "allow_download_models" },
-        { "type": "toggle", "label": "sounds", "cvar": "allow_download_sounds" },
-        { "type": "toggle", "label": "textures", "cvar": "allow_download_textures" },
-        { "type": "toggle", "label": "pics", "cvar": "allow_download_pics" },
+        { "type": "checkbox", "label": "allow downloading", "cvar": "allow_download" },
+        { "type": "checkbox", "label": "maps", "cvar": "allow_download_maps" },
+        { "type": "checkbox", "label": "player models/skins", "cvar": "allow_download_players" },
+        { "type": "checkbox", "label": "models", "cvar": "allow_download_models" },
+        { "type": "checkbox", "label": "sounds", "cvar": "allow_download_sounds" },
+        { "type": "checkbox", "label": "textures", "cvar": "allow_download_textures" },
+        { "type": "checkbox", "label": "pics", "cvar": "allow_download_pics" },
         { "type": "blank" },
-        { "type": "toggle", "label": "HTTP downloads", "cvar": "cl_http_downloads" }
+        { "type": "checkbox", "label": "HTTP downloads", "cvar": "cl_http_downloads" }
       ]
     },
     {
       "name": "gameflags",
       "title": "Deathmatch Flags",
       "items": [
-        { "type": "toggle", "label": "falling damage", "cvar": "dmflags", "bit": 3, "negate": true },
-        { "type": "toggle", "label": "weapons stay", "cvar": "dmflags", "bit": 2 },
-        { "type": "toggle", "label": "instant powerups", "cvar": "dmflags", "bit": 4 },
-        { "type": "toggle", "label": "allow powerups", "cvar": "dmflags", "bit": 1, "negate": true },
-        { "type": "toggle", "label": "allow health", "cvar": "dmflags", "bit": 0, "negate": true },
-        { "type": "toggle", "label": "allow armor", "cvar": "dmflags", "bit": 11, "negate": true },
-        { "type": "toggle", "label": "spawn farthest", "cvar": "dmflags", "bit": 9 },
-        { "type": "toggle", "label": "same map", "cvar": "dmflags", "bit": 5 },
-        { "type": "toggle", "label": "force respawn", "cvar": "dmflags", "bit": 10 },
-        { "type": "toggle", "label": "infinite ammo", "cvar": "dmflags", "bit": 13 },
-        { "type": "toggle", "label": "fixed FOV", "cvar": "dmflags", "bit": 15 },
-        { "type": "toggle", "label": "quad drop", "cvar": "dmflags", "bit": 14 }
+        { "type": "checkbox", "label": "falling damage", "cvar": "dmflags", "bit": 3, "negate": true },
+        { "type": "checkbox", "label": "weapons stay", "cvar": "dmflags", "bit": 2 },
+        { "type": "checkbox", "label": "instant powerups", "cvar": "dmflags", "bit": 4 },
+        { "type": "checkbox", "label": "allow powerups", "cvar": "dmflags", "bit": 1, "negate": true },
+        { "type": "checkbox", "label": "allow health", "cvar": "dmflags", "bit": 0, "negate": true },
+        { "type": "checkbox", "label": "allow armor", "cvar": "dmflags", "bit": 11, "negate": true },
+        { "type": "checkbox", "label": "spawn farthest", "cvar": "dmflags", "bit": 9 },
+        { "type": "checkbox", "label": "same map", "cvar": "dmflags", "bit": 5 },
+        { "type": "checkbox", "label": "force respawn", "cvar": "dmflags", "bit": 10 },
+        { "type": "checkbox", "label": "infinite ammo", "cvar": "dmflags", "bit": 13 },
+        { "type": "checkbox", "label": "fixed FOV", "cvar": "dmflags", "bit": 15 },
+        { "type": "checkbox", "label": "quad drop", "cvar": "dmflags", "bit": 14 }
       ]
     },
     {
@@ -318,13 +349,14 @@
       "banner": "m_banner_start_server",
       "items": [
         {
-          "type": "strings",
+          "type": "combobox",
           "label": "initial map",
           "cvar": "_ui_nextserver",
-          "items": ["$$com_maplist"]
+          "items": ["$$com_maplist"],
+          "width": 20
         },
         {
-          "type": "values",
+          "type": "dropdown",
           "label": "rules",
           "cvar": "coop",
           "items": ["deathmatch", "cooperative"]
@@ -348,7 +380,7 @@
         { "type": "field", "label": "max players", "cvar": "maxclients", "integer": true, "width": 3 },
         { "type": "field", "label": "host name", "cvar": "hostname", "width": 16 },
         { "type": "blank" },
-        { "type": "action", "label": "deathmatch flags...", "align": "left", "command": "pushmenu gameflags" },
+        { "type": "action", "label": "deathmatch flags...", "align": "left", "command": "pushmenu gameflags", "showIf": ["coop=0"] },
         {
           "type": "action",
           "label": "begin game!",
@@ -366,6 +398,14 @@
         { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
         { "type": "action", "label": "start server", "command": "pushmenu startserver" }
       ]
+    },
+    {
+      "name": "servers",
+      "feeder": "servers"
+    },
+    {
+      "name": "demos",
+      "feeder": "demos"
     },
     {
       "name": "skill_select",
@@ -389,7 +429,7 @@
         { "type": "action", "label": "start level", "align": "left", "command": "set _mapdb_type level; pushmenu skill_select" },
         { "type": "blank" },
         { "type": "action", "label": "load game...", "command": "pushmenu loadgame" },
-        { "type": "action", "label": "save game...", "command": "pushmenu savegame" }
+        { "type": "action", "label": "save game...", "command": "pushmenu savegame", "enableIf": ["ingame", "deathmatch=0", "coop=0"] }
       ]
     },
     {
@@ -452,13 +492,377 @@
       "background": "#0000ff20",
       "style": { "compact": true },
       "items": [
+        { "type": "action", "label": "resume game", "command": "forcemenuoff", "ingameOnly": true },
+        { "type": "action", "label": "player setup", "command": "pushmenu players" },
+        { "type": "action", "label": "options", "command": "pushmenu options" },
+        { "type": "action", "label": "deathmatch flags...", "command": "pushmenu gameflags", "deathmatchOnly": true },
         { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+http://q2servers.com/?raw=2\"" },
         { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
         { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
-        { "type": "action", "label": "single player", "command": "pushmenu singleplayer" },
-        { "type": "action", "label": "options", "command": "pushmenu options" },
-        { "type": "action", "label": "disconnect", "command": "disconnect" },
+        { "type": "action", "label": "save game...", "command": "pushmenu savegame", "enableIf": ["ingame", "deathmatch=0", "coop=0"] },
+        { "type": "action", "label": "load game...", "command": "pushmenu loadgame", "showIf": ["deathmatch=0"] },
+        { "type": "action", "label": "disconnect", "command": "disconnect", "ingameOnly": true },
         { "type": "action", "label": "quit", "command": "quit" }
+      ]
+    },
+    {
+      "name": "dm_welcome",
+      "background": "#000000c8",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "forcemenuoff; worr_welcome_continue",
+      "items": [
+        { "type": "action", "label": "Welcome to", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_welcome_title", "align": "center", "selectable": false },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_welcome_hostname",
+          "align": "center",
+          "selectable": false,
+          "showIf": ["ui_welcome_hostname"]
+        },
+        { "type": "blank", "showIf": ["ui_welcome_hostname"] },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_welcome_motd",
+          "align": "left",
+          "maxLines": 5,
+          "showIf": ["ui_welcome_motd"]
+        },
+        { "type": "blank", "showIf": ["ui_welcome_motd"] },
+        {
+          "type": "action",
+          "label": "Continue",
+          "align": "left",
+          "command": "forcemenuoff; worr_welcome_continue"
+        }
+      ]
+    },
+    {
+      "name": "dm_join",
+      "background": "#000000c8",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "forcemenuoff; worr_dm_join_close",
+      "items": [
+        { "type": "action", "labelCvar": "ui_dm_title", "align": "center", "selectable": false },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_subtitle",
+          "align": "center",
+          "selectable": false,
+          "showIf": ["ui_dm_subtitle"]
+        },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_red",
+          "align": "left",
+          "command": "forcemenuoff; team red",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_blue",
+          "align": "left",
+          "command": "forcemenuoff; team blue",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_free",
+          "align": "left",
+          "command": "forcemenuoff; team free",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=0"]
+        },
+        {
+          "type": "action",
+          "label": "Spectate",
+          "align": "left",
+          "command": "forcemenuoff; team spectator",
+          "showIf": ["ui_dm_show_spectate=1"]
+        },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "label": "Information",
+          "align": "left",
+          "command": "worr_tourney_info",
+          "showIf": ["ui_dm_show_tourney_info=1"]
+        },
+        {
+          "type": "action",
+          "label": "Map Choices",
+          "align": "left",
+          "command": "worr_tourney_maps",
+          "showIf": ["ui_dm_show_tourney_maps=1"]
+        },
+        {
+          "type": "action",
+          "label": "Call a Vote",
+          "align": "left",
+          "command": "worr_callvote_menu",
+          "showIf": ["ui_dm_show_callvote=1"]
+        },
+        {
+          "type": "action",
+          "label": "MyMap",
+          "align": "left",
+          "command": "worr_mymap_menu",
+          "showIf": ["ui_dm_show_mymap=1"]
+        },
+        {
+          "type": "action",
+          "label": "Host Info",
+          "align": "left",
+          "command": "worr_dm_hostinfo"
+        },
+        {
+          "type": "action",
+          "label": "Forfeit",
+          "align": "left",
+          "command": "worr_forfeit_menu",
+          "showIf": ["ui_dm_show_forfeit=1"]
+        },
+        {
+          "type": "action",
+          "label": "Match Info",
+          "align": "left",
+          "command": "worr_dm_matchinfo"
+        },
+        {
+          "type": "action",
+          "label": "Player Stats",
+          "align": "left",
+          "command": "worr_matchstats_menu",
+          "showIf": ["ui_dm_show_matchstats=1"]
+        },
+        {
+          "type": "action",
+          "label": "Admin",
+          "align": "left",
+          "command": "worr_admin_menu",
+          "showIf": ["ui_dm_show_admin=1"]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "visit darkmatter-quake.com", "align": "center", "selectable": false },
+        { "type": "action", "label": ":: community :: matches ::", "align": "center", "selectable": false },
+        { "type": "action", "label": ":: content :: news ::", "align": "center", "selectable": false }
+      ]
+    },
+    {
+      "name": "join",
+      "background": "#000000c8",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "forcemenuoff; worr_dm_join_close",
+      "items": [
+        { "type": "action", "labelCvar": "ui_dm_title", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "---", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_red",
+          "align": "left",
+          "command": "forcemenuoff; team red",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_blue",
+          "align": "left",
+          "command": "forcemenuoff; team blue",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_dm_join_free",
+          "align": "left",
+          "command": "forcemenuoff; team free",
+          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=0"]
+        },
+        {
+          "type": "action",
+          "label": "Spectate",
+          "align": "left",
+          "command": "forcemenuoff; team spectator",
+          "showIf": ["ui_dm_show_spectate=1"]
+        },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "label": "Information",
+          "align": "left",
+          "command": "worr_tourney_info",
+          "showIf": ["ui_dm_show_tourney_info=1"]
+        },
+        {
+          "type": "action",
+          "label": "Map Choices",
+          "align": "left",
+          "command": "worr_tourney_maps",
+          "showIf": ["ui_dm_show_tourney_maps=1"]
+        },
+        {
+          "type": "action",
+          "label": "Call a Vote",
+          "align": "left",
+          "command": "worr_callvote_menu",
+          "showIf": ["ui_dm_show_callvote=1"]
+        },
+        {
+          "type": "action",
+          "label": "MyMap",
+          "align": "left",
+          "command": "worr_mymap_menu",
+          "showIf": ["ui_dm_show_mymap=1"]
+        },
+        {
+          "type": "action",
+          "label": "Host Info",
+          "align": "left",
+          "command": "worr_dm_hostinfo"
+        },
+        {
+          "type": "action",
+          "label": "Forfeit",
+          "align": "left",
+          "command": "worr_forfeit_menu",
+          "showIf": ["ui_dm_show_forfeit=1"]
+        },
+        {
+          "type": "action",
+          "label": "Match Info",
+          "align": "left",
+          "command": "worr_dm_matchinfo"
+        },
+        {
+          "type": "action",
+          "label": "Player Stats",
+          "align": "left",
+          "command": "worr_matchstats_menu",
+          "showIf": ["ui_dm_show_matchstats=1"]
+        },
+        {
+          "type": "action",
+          "label": "Admin",
+          "align": "left",
+          "command": "worr_admin_menu",
+          "showIf": ["ui_dm_show_admin=1"]
+        },
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "action", "label": "visit darkmatter-quake.com", "align": "center", "selectable": false },
+        { "type": "action", "label": ":: community :: matches ::", "align": "center", "selectable": false },
+        { "type": "action", "label": ":: content :: news ::", "align": "center", "selectable": false }
+      ]
+    },
+    {
+      "name": "dm_hostinfo",
+      "title": "Host Info",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Server Name:", "align": "left", "selectable": false },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_hostinfo_server",
+          "align": "left",
+          "maxLines": 3,
+          "showIf": ["ui_hostinfo_server"]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "Host:", "align": "left", "selectable": false, "showIf": ["ui_hostinfo_host"] },
+        {
+          "type": "action",
+          "labelCvar": "ui_hostinfo_host",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_hostinfo_host"]
+        },
+        { "type": "blank", "showIf": ["ui_hostinfo_host"] },
+        {
+          "type": "action",
+          "label": "Message of the Day:",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_hostinfo_motd"]
+        },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_hostinfo_motd",
+          "align": "left",
+          "maxLines": 6,
+          "showIf": ["ui_hostinfo_motd"]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "dm_matchinfo",
+      "title": "Match Info",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_gametype",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_gametype"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_map",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_map"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_mapname",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_mapname"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_author1",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_author1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_author2",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_author2"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_ruleset",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_ruleset"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_scorelimit",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_scorelimit"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_matchinfo_timelimit",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_matchinfo_timelimit"]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
       ]
     },
     {
@@ -488,19 +892,21 @@
       "title": "Input Setup",
       "items": [
         { "type": "field", "label": "mouse sens", "cvar": "sensitivity", "numeric": true, "width": 8 },
-        { "type": "toggle", "label": "auto sens", "cvar": "m_autosens" },
-        { "type": "toggle", "label": "mouse filter", "cvar": "m_filter" },
-        { "type": "toggle", "label": "free look", "cvar": "freelook" },
-        { "type": "toggle", "label": "always run", "cvar": "cl_run" }
+        { "type": "checkbox", "label": "auto sens", "cvar": "m_autosens" },
+        { "type": "checkbox", "label": "mouse filter", "cvar": "m_filter" },
+        { "type": "checkbox", "label": "free look", "cvar": "freelook" },
+        { "type": "checkbox", "label": "always run", "cvar": "cl_run" }
       ]
     },
     {
       "name": "keys",
       "title": "Key Bindings",
       "items": [
+        { "type": "blank", "label": "combat" },
         { "type": "bind", "label": "attack", "command": "+attack" },
         { "type": "bind", "label": "next weapon", "command": "weapnext" },
         { "type": "bind", "label": "previous weapon", "command": "weapprev" },
+        { "type": "blank", "label": "movement" },
         { "type": "bind", "label": "walk forward", "command": "+forward" },
         { "type": "bind", "label": "backpedal", "command": "+back" },
         { "type": "bind", "label": "run", "command": "+speed" },
@@ -508,11 +914,13 @@
         { "type": "bind", "label": "step right", "command": "+moveright" },
         { "type": "bind", "label": "up / jump", "command": "+moveup" },
         { "type": "bind", "label": "down / crouch", "command": "+movedown" },
+        { "type": "blank", "label": "inventory" },
         { "type": "bind", "label": "inventory", "command": "inven" },
         { "type": "bind", "label": "use item", "command": "invuse" },
         { "type": "bind", "label": "drop item", "command": "invdrop" },
         { "type": "bind", "label": "prev item", "command": "invprev" },
         { "type": "bind", "label": "next item", "command": "invnext" },
+        { "type": "blank", "label": "interface" },
         { "type": "bind", "label": "help computer", "command": "help" },
         { "type": "bind", "label": "pause game", "command": "pause" },
         { "type": "bind", "label": "scoreboard", "command": "score" },
@@ -550,6 +958,720 @@
         { "type": "bind", "label": "railgun", "command": "use Railgun" },
         { "type": "bind", "label": "bfg10k", "command": "use BFG10K" },
         { "type": "bind", "label": "grenades", "command": "use Grenades" }
+      ]
+    },
+    {
+      "name": "ui_list",
+      "closeCommand": "worr_ui_list_close",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "labelCvar": "ui_list_title", "align": "center", "selectable": false, "showIf": ["ui_list_title"] },
+        { "type": "action", "labelCvar": "ui_list_subtitle", "align": "center", "selectable": false, "showIf": ["ui_list_subtitle"] },
+        { "type": "action", "labelCvar": "ui_list_header", "align": "center", "selectable": false, "showIf": ["ui_list_header"] },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_extra_label_0",
+          "align": "left",
+          "commandCvar": "ui_list_extra_cmd_0",
+          "showIf": ["ui_list_extra_show_0=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_extra_label_1",
+          "align": "left",
+          "commandCvar": "ui_list_extra_cmd_1",
+          "showIf": ["ui_list_extra_show_1=1"]
+        },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_0",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_0",
+          "showIf": ["ui_list_item_show_0=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_1",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_1",
+          "showIf": ["ui_list_item_show_1=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_2",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_2",
+          "showIf": ["ui_list_item_show_2=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_3",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_3",
+          "showIf": ["ui_list_item_show_3=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_4",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_4",
+          "showIf": ["ui_list_item_show_4=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_5",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_5",
+          "showIf": ["ui_list_item_show_5=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_6",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_6",
+          "showIf": ["ui_list_item_show_6=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_7",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_7",
+          "showIf": ["ui_list_item_show_7=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_8",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_8",
+          "showIf": ["ui_list_item_show_8=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_9",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_9",
+          "showIf": ["ui_list_item_show_9=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_10",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_10",
+          "showIf": ["ui_list_item_show_10=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_item_label_11",
+          "align": "left",
+          "commandCvar": "ui_list_item_cmd_11",
+          "showIf": ["ui_list_item_show_11=1"]
+        },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_list_page_label",
+          "align": "center",
+          "selectable": false,
+          "showIf": ["ui_list_page_label"]
+        },
+        {
+          "type": "action",
+          "label": "Previous Page",
+          "align": "left",
+          "command": "worr_ui_list_prev",
+          "showIf": ["ui_list_has_prev=1"]
+        },
+        {
+          "type": "action",
+          "label": "Next Page",
+          "align": "left",
+          "command": "worr_ui_list_next",
+          "showIf": ["ui_list_has_next=1"]
+        },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_main",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Call a Vote", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Map", "align": "left", "command": "worr_callvote_map", "showIf": ["ui_callvote_show_map=1"] },
+        { "type": "action", "label": "Next Map", "align": "left", "command": "worr_callvote_nextmap", "showIf": ["ui_callvote_show_nextmap=1"] },
+        { "type": "action", "label": "Restart Match", "align": "left", "command": "worr_callvote_restart", "showIf": ["ui_callvote_show_restart=1"] },
+        { "type": "action", "label": "Gametype", "align": "left", "command": "worr_callvote_gametype", "showIf": ["ui_callvote_show_gametype=1"] },
+        { "type": "action", "label": "Ruleset", "align": "left", "command": "worr_callvote_ruleset", "showIf": ["ui_callvote_show_ruleset=1"] },
+        { "type": "action", "label": "Timelimit", "align": "left", "command": "worr_callvote_timelimit", "showIf": ["ui_callvote_show_timelimit=1"] },
+        { "type": "action", "label": "Scorelimit", "align": "left", "command": "worr_callvote_scorelimit", "showIf": ["ui_callvote_show_scorelimit=1"] },
+        { "type": "action", "label": "Shuffle Teams", "align": "left", "command": "worr_callvote_shuffle", "showIf": ["ui_callvote_show_shuffle=1"] },
+        { "type": "action", "label": "Balance Teams", "align": "left", "command": "worr_callvote_balance", "showIf": ["ui_callvote_show_balance=1"] },
+        { "type": "action", "label": "Unlagged", "align": "left", "command": "worr_callvote_unlagged", "showIf": ["ui_callvote_show_unlagged=1"] },
+        { "type": "action", "label": "Cointoss", "align": "left", "command": "worr_callvote_cointoss", "showIf": ["ui_callvote_show_cointoss=1"] },
+        { "type": "action", "label": "Random Number", "align": "left", "command": "worr_callvote_random", "showIf": ["ui_callvote_show_random=1"] },
+        { "type": "action", "label": "Arena", "align": "left", "command": "worr_callvote_arena", "showIf": ["ui_callvote_show_arena=1"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_ruleset",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Callvote: Ruleset", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "SLIPGATE", "align": "left", "command": "worr_callvote_ruleset q1" },
+        { "type": "action", "label": "STROYENT", "align": "left", "command": "worr_callvote_ruleset q2" },
+        { "type": "action", "label": "VADRIGAR", "align": "left", "command": "worr_callvote_ruleset q3" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_timelimit",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Callvote: Timelimit", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_callvote_timelimit_current", "align": "left", "selectable": false, "showIf": ["ui_callvote_timelimit_current"] },
+        { "type": "action", "label": "Disable", "align": "left", "command": "worr_callvote_timelimit 0" },
+        { "type": "action", "label": "Set 5 minutes", "align": "left", "command": "worr_callvote_timelimit 5" },
+        { "type": "action", "label": "Set 10 minutes", "align": "left", "command": "worr_callvote_timelimit 10" },
+        { "type": "action", "label": "Set 15 minutes", "align": "left", "command": "worr_callvote_timelimit 15" },
+        { "type": "action", "label": "Set 20 minutes", "align": "left", "command": "worr_callvote_timelimit 20" },
+        { "type": "action", "label": "Set 30 minutes", "align": "left", "command": "worr_callvote_timelimit 30" },
+        { "type": "action", "label": "Set 45 minutes", "align": "left", "command": "worr_callvote_timelimit 45" },
+        { "type": "action", "label": "Set 60 minutes", "align": "left", "command": "worr_callvote_timelimit 60" },
+        { "type": "action", "label": "Set 90 minutes", "align": "left", "command": "worr_callvote_timelimit 90" },
+        { "type": "action", "label": "Set 120 minutes", "align": "left", "command": "worr_callvote_timelimit 120" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_scorelimit",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Callvote: Scorelimit", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_current", "align": "left", "selectable": false, "showIf": ["ui_callvote_scorelimit_current"] },
+        { "type": "action", "label": "Disable", "align": "left", "command": "worr_callvote_scorelimit 0" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_5", "align": "left", "command": "worr_callvote_scorelimit 5" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_10", "align": "left", "command": "worr_callvote_scorelimit 10" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_15", "align": "left", "command": "worr_callvote_scorelimit 15" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_20", "align": "left", "command": "worr_callvote_scorelimit 20" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_25", "align": "left", "command": "worr_callvote_scorelimit 25" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_30", "align": "left", "command": "worr_callvote_scorelimit 30" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_50", "align": "left", "command": "worr_callvote_scorelimit 50" },
+        { "type": "action", "labelCvar": "ui_callvote_scorelimit_set_100", "align": "left", "command": "worr_callvote_scorelimit 100" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_unlagged",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Callvote: Unlagged", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_callvote_unlagged_current", "align": "left", "selectable": false, "showIf": ["ui_callvote_unlagged_current"] },
+        { "type": "action", "label": "Enable", "align": "left", "command": "worr_callvote_unlagged 1" },
+        { "type": "action", "label": "Disable", "align": "left", "command": "worr_callvote_unlagged 0" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_random",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Callvote: Random", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "1-2", "align": "left", "command": "worr_callvote_random 2" },
+        { "type": "action", "label": "1-7", "align": "left", "command": "worr_callvote_random 7" },
+        { "type": "action", "label": "1-12", "align": "left", "command": "worr_callvote_random 12" },
+        { "type": "action", "label": "1-17", "align": "left", "command": "worr_callvote_random 17" },
+        { "type": "action", "label": "1-22", "align": "left", "command": "worr_callvote_random 22" },
+        { "type": "action", "label": "1-27", "align": "left", "command": "worr_callvote_random 27" },
+        { "type": "action", "label": "1-32", "align": "left", "command": "worr_callvote_random 32" },
+        { "type": "action", "label": "1-37", "align": "left", "command": "worr_callvote_random 37" },
+        { "type": "action", "label": "1-42", "align": "left", "command": "worr_callvote_random 42" },
+        { "type": "action", "label": "1-47", "align": "left", "command": "worr_callvote_random 47" },
+        { "type": "action", "label": "1-52", "align": "left", "command": "worr_callvote_random 52" },
+        { "type": "action", "label": "1-57", "align": "left", "command": "worr_callvote_random 57" },
+        { "type": "action", "label": "1-62", "align": "left", "command": "worr_callvote_random 62" },
+        { "type": "action", "label": "1-67", "align": "left", "command": "worr_callvote_random 67" },
+        { "type": "action", "label": "1-72", "align": "left", "command": "worr_callvote_random 72" },
+        { "type": "action", "label": "1-77", "align": "left", "command": "worr_callvote_random 77" },
+        { "type": "action", "label": "1-82", "align": "left", "command": "worr_callvote_random 82" },
+        { "type": "action", "label": "1-87", "align": "left", "command": "worr_callvote_random 87" },
+        { "type": "action", "label": "1-92", "align": "left", "command": "worr_callvote_random 92" },
+        { "type": "action", "label": "1-97", "align": "left", "command": "worr_callvote_random 97" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "callvote_map_flags",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Map Flags", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_pu", "align": "left", "command": "worr_callvote_map_flag pu" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_pa", "align": "left", "command": "worr_callvote_map_flag pa" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_ar", "align": "left", "command": "worr_callvote_map_flag ar" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_am", "align": "left", "command": "worr_callvote_map_flag am" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_ht", "align": "left", "command": "worr_callvote_map_flag ht" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_bfg", "align": "left", "command": "worr_callvote_map_flag bfg" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_pb", "align": "left", "command": "worr_callvote_map_flag pb" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_fd", "align": "left", "command": "worr_callvote_map_flag fd" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_sd", "align": "left", "command": "worr_callvote_map_flag sd" },
+        { "type": "action", "labelCvar": "ui_callvote_flag_ws", "align": "left", "command": "worr_callvote_map_flag ws" },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "mymap_flags",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "MyMap Flags", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_pu", "align": "left", "command": "worr_mymap_flag pu" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_pa", "align": "left", "command": "worr_mymap_flag pa" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_ar", "align": "left", "command": "worr_mymap_flag ar" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_am", "align": "left", "command": "worr_mymap_flag am" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_ht", "align": "left", "command": "worr_mymap_flag ht" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_bfg", "align": "left", "command": "worr_mymap_flag bfg" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_pb", "align": "left", "command": "worr_mymap_flag pb" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_fd", "align": "left", "command": "worr_mymap_flag fd" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_sd", "align": "left", "command": "worr_mymap_flag sd" },
+        { "type": "action", "labelCvar": "ui_mymap_flag_ws", "align": "left", "command": "worr_mymap_flag ws" },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "forfeit_confirm",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "CONFIRM FORFEIT", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Are you sure you want to forfeit?", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "YES", "align": "center", "command": "worr_forfeit_yes" },
+        { "type": "action", "label": "NO", "align": "center", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "admin_menu",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "*Admin Menu*", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Match Setup owns game settings.", "align": "left", "selectable": false },
+        { "type": "action", "label": "Use Reset State to rerun.", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Reset State", "align": "left", "command": "worr_setup_welcome" },
+        { "type": "action", "label": "Replay Game", "align": "left", "command": "worr_tourney_replay_menu", "showIf": ["ui_admin_show_replay=1"] },
+        { "type": "action", "label": "Admin Commands", "align": "left", "command": "pushmenu admin_commands" },
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "admin_commands",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "*Admin Commands*", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Commands need /admin login.", "align": "left", "selectable": false },
+        { "type": "action", "label": "Use console for args.", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "add_admin", "align": "left", "selectable": false },
+        { "type": "action", "label": "Adds player to admin.txt", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: add_admin <client>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "add_ban", "align": "left", "selectable": false },
+        { "type": "action", "label": "Bans player by social ID", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: add_ban <client>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "arena", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force specific arena", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: arena <num>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "balance", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force teams to balance", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: balance", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "boot", "align": "left", "selectable": false },
+        { "type": "action", "label": "Kick player; host/admin safe", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: boot <client>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "end_match", "align": "left", "selectable": false },
+        { "type": "action", "label": "End current match now", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: end_match", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "force_vote", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force pending vote result", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: force_vote <y|n>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "gametype", "align": "left", "selectable": false },
+        { "type": "action", "label": "Set current gametype", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: gametype <name>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "load_admins", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reload admin.txt", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: load_admins", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "load_bans", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reload ban list", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: load_bans", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "load_motd", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reload MOTD file", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: load_motd", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "load_mappool", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reload map pool + cycle", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: load_mappool", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "load_mapcycle", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reload map cycle", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: load_mapcycle", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "lock_team", "align": "left", "selectable": false },
+        { "type": "action", "label": "Lock red or blue team", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: lock_team <red|blue>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "map_restart", "align": "left", "selectable": false },
+        { "type": "action", "label": "Restart the current map", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: map_restart", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "next_map", "align": "left", "selectable": false },
+        { "type": "action", "label": "Skip to the next map", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: next_map", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "ready_all", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force all players ready", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: ready_all", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "remove_admin", "align": "left", "selectable": false },
+        { "type": "action", "label": "Remove admin entry", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: remove_admin <id>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "remove_ban", "align": "left", "selectable": false },
+        { "type": "action", "label": "Unban from ban.txt", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: remove_ban <id>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "reset_match", "align": "left", "selectable": false },
+        { "type": "action", "label": "Reset match in progress", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: reset_match", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "replay", "align": "left", "selectable": false },
+        { "type": "action", "label": "Replay a tournament game", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: replay <game#> [confirm]", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "ruleset", "align": "left", "selectable": false },
+        { "type": "action", "label": "Select ruleset (q1/2/3a)", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: ruleset <type>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "set_map", "align": "left", "selectable": false },
+        { "type": "action", "label": "Change to another pool map", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: set_map <map>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "set_team", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force a client onto team", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: set_team <client>", "align": "left", "selectable": false },
+        { "type": "action", "label": "<team>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "shuffle", "align": "left", "selectable": false },
+        { "type": "action", "label": "Shuffle current teams", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: shuffle", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "start_match", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force match start", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: start_match", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "unlock_team", "align": "left", "selectable": false },
+        { "type": "action", "label": "Unlock red or blue team", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: unlock_team <team>", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "unready_all", "align": "left", "selectable": false },
+        { "type": "action", "label": "Force all players unready", "align": "left", "selectable": false },
+        { "type": "action", "label": "usage: unready_all", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "setup_welcome",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Welcome to", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_title", "align": "center", "selectable": false, "showIf": ["ui_setup_title"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Match Setup", "align": "left", "command": "worr_setup_start", "default": true },
+        { "type": "action", "label": "Skip", "align": "left", "command": "worr_setup_skip" }
+      ]
+    },
+    {
+      "name": "setup_format",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Match Format", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Regular", "align": "left", "command": "worr_setup_format regular", "default": true },
+        { "type": "action", "label": "Practice", "align": "left", "command": "worr_setup_format practice" },
+        { "type": "action", "label": "Marathon", "align": "left", "command": "worr_setup_format marathon" },
+        { "type": "action", "label": "Tournament", "align": "left", "command": "worr_setup_format tournament", "showIf": ["ui_setup_show_tournament=1"] }
+      ]
+    },
+    {
+      "name": "setup_maxplayers",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Max Players", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "2", "align": "left", "command": "worr_setup_maxplayers 2", "showIf": ["ui_setup_maxplayers_limit>=2"], "defaultIf": ["ui_setup_default=2"] },
+        { "type": "action", "label": "4", "align": "left", "command": "worr_setup_maxplayers 4", "showIf": ["ui_setup_maxplayers_limit>=4"], "defaultIf": ["ui_setup_default=4"] },
+        { "type": "action", "label": "6", "align": "left", "command": "worr_setup_maxplayers 6", "showIf": ["ui_setup_maxplayers_limit>=6"], "defaultIf": ["ui_setup_default=6"] },
+        { "type": "action", "label": "8", "align": "left", "command": "worr_setup_maxplayers 8", "showIf": ["ui_setup_maxplayers_limit>=8"], "defaultIf": ["ui_setup_default=8"] },
+        { "type": "action", "label": "12", "align": "left", "command": "worr_setup_maxplayers 12", "showIf": ["ui_setup_maxplayers_limit>=12"], "defaultIf": ["ui_setup_default=12"] },
+        { "type": "action", "label": "16", "align": "left", "command": "worr_setup_maxplayers 16", "showIf": ["ui_setup_maxplayers_limit>=16"], "defaultIf": ["ui_setup_default=16"] },
+        { "type": "action", "label": "24", "align": "left", "command": "worr_setup_maxplayers 24", "showIf": ["ui_setup_maxplayers_limit>=24"], "defaultIf": ["ui_setup_default=24"] },
+        { "type": "action", "label": "32", "align": "left", "command": "worr_setup_maxplayers 32", "showIf": ["ui_setup_maxplayers_limit>=32"], "defaultIf": ["ui_setup_default=32"] },
+        { "type": "action", "label": "64", "align": "left", "command": "worr_setup_maxplayers 64", "showIf": ["ui_setup_maxplayers_limit>=64"], "defaultIf": ["ui_setup_default=64"] }
+      ]
+    },
+    {
+      "name": "setup_modifier",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Modifiers", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_modifier standard", "default": true },
+        { "type": "action", "label": "InstaGib", "align": "left", "command": "worr_setup_modifier instagib" },
+        { "type": "action", "label": "Vampiric Damage", "align": "left", "command": "worr_setup_modifier vampiric" },
+        { "type": "action", "label": "Frenzy", "align": "left", "command": "worr_setup_modifier frenzy" },
+        { "type": "action", "label": "Gravity Lotto", "align": "left", "command": "worr_setup_modifier gravity_lotto" }
+      ]
+    },
+    {
+      "name": "setup_length",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Match Length", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Short", "align": "left", "command": "worr_setup_length short" },
+        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_length standard", "default": true },
+        { "type": "action", "label": "Long", "align": "left", "command": "worr_setup_length long" },
+        { "type": "action", "label": "Endurance", "align": "left", "command": "worr_setup_length endurance" }
+      ]
+    },
+    {
+      "name": "setup_type",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Match Type", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Casual", "align": "left", "command": "worr_setup_type casual" },
+        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_type standard", "default": true },
+        { "type": "action", "label": "Competitive", "align": "left", "command": "worr_setup_type competitive" },
+        { "type": "action", "label": "Tournament", "align": "left", "command": "worr_setup_type tournament" }
+      ]
+    },
+    {
+      "name": "setup_bestof",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
+        { "type": "action", "label": "Best Of", "align": "center", "selectable": false },
+        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
+        { "type": "blank" },
+        { "type": "action", "label": "BO1", "align": "left", "command": "worr_setup_bestof bo1" },
+        { "type": "action", "label": "BO3", "align": "left", "command": "worr_setup_bestof bo3", "default": true },
+        { "type": "action", "label": "BO5", "align": "left", "command": "worr_setup_bestof bo5" },
+        { "type": "action", "label": "BO7", "align": "left", "command": "worr_setup_bestof bo7" },
+        { "type": "action", "label": "BO9", "align": "left", "command": "worr_setup_bestof bo9" }
+      ]
+    },
+    {
+      "name": "tourney_info",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "*Tournament Info*", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Tournament format runs a match", "align": "left", "selectable": false },
+        { "type": "action", "label": "as a best-of set of games.", "align": "left", "selectable": false },
+        { "type": "action", "label": "Rosters are locked to the", "align": "left", "selectable": false },
+        { "type": "action", "label": "listed participants.", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "When everyone is ready,", "align": "left", "selectable": false },
+        { "type": "action", "label": "home picks or bans first.", "align": "left", "selectable": false },
+        { "type": "action", "label": "The decider game is picked", "align": "left", "selectable": false },
+        { "type": "action", "label": "at random from what remains.", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Use tourney_status in the", "align": "left", "selectable": false },
+        { "type": "action", "label": "console for live updates.", "align": "left", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "tourney_mapchoices",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "*Tournament Map Choices*", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_0", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_0"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_1", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_1"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_2", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_2"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_3", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_3"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_4", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_4"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_5", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_5"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_6", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_6"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_7", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_7"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_8", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_8"] },
+        { "type": "action", "labelCvar": "ui_tourney_mapchoice_line_9", "align": "left", "selectable": false, "showIf": ["ui_tourney_mapchoice_line_9"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "tourney_veto",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "*Tournament Veto*", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_tourney_veto_inactive", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_show_inactive=1"] },
+        { "type": "blank", "showIf": ["ui_tourney_veto_show_inactive=1"] },
+        { "type": "action", "labelCvar": "ui_tourney_veto_turn", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_turn"] },
+        { "type": "blank", "showIf": ["ui_tourney_veto_turn"] },
+        { "type": "action", "labelCvar": "ui_tourney_veto_wait_0", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_show_wait=1"] },
+        { "type": "action", "labelCvar": "ui_tourney_veto_wait_1", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_show_wait=1"] },
+        { "type": "action", "label": "Pick", "align": "left", "command": "worr_tourney_pick", "showIf": ["ui_tourney_veto_can_pick=1"] },
+        { "type": "action", "label": "Ban", "align": "left", "command": "worr_tourney_ban", "showIf": ["ui_tourney_veto_can_ban=1"] },
+        {
+          "type": "action",
+          "label": "Ban (locked)",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_tourney_veto_can_pick=1", "ui_tourney_veto_can_ban=0"]
+        },
+        { "type": "blank", "showIf": ["ui_tourney_veto_can_pick=1"] },
+        { "type": "action", "labelCvar": "ui_tourney_veto_picks_needed", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_can_pick=1"] },
+        { "type": "action", "labelCvar": "ui_tourney_veto_maps_remaining", "align": "left", "selectable": false, "showIf": ["ui_tourney_veto_can_pick=1"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "tourney_replay_confirm",
+      "style": { "compact": true, "transparent": true },
+      "items": [
+        { "type": "action", "label": "CONFIRM REPLAY", "align": "center", "selectable": false },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_tourney_replay_prompt", "align": "center", "selectable": false, "showIf": ["ui_tourney_replay_prompt"] },
+        { "type": "blank" },
+        { "type": "action", "label": "YES", "align": "center", "commandCvar": "ui_tourney_replay_yes_cmd" },
+        { "type": "action", "label": "NO", "align": "center", "command": "popmenu" }
+      ]
+    },
+    {
+      "name": "vote_menu",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "worr_vote_close",
+      "items": [
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_vote_line_0", "align": "center", "selectable": false, "showIf": ["ui_vote_line_0"] },
+        { "type": "action", "labelCvar": "ui_vote_line_1", "align": "center", "selectable": false, "showIf": ["ui_vote_line_1"] },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_vote_line_2", "align": "center", "selectable": false, "showIf": ["ui_vote_line_2"] },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_vote_ready_label", "align": "center", "selectable": false, "showIf": ["ui_vote_can_vote=0"] },
+        { "type": "action", "labelCvar": "ui_vote_ready_countdown", "align": "center", "selectable": false, "showIf": ["ui_vote_can_vote=0"] },
+        { "type": "action", "label": "[ YES ]", "align": "center", "command": "worr_vote_yes", "showIf": ["ui_vote_can_vote=1"] },
+        { "type": "action", "label": "[ NO ]", "align": "center", "command": "worr_vote_no", "showIf": ["ui_vote_can_vote=1"] },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_vote_time_left", "align": "center", "selectable": false, "showIf": ["ui_vote_time_left"] }
+      ]
+    },
+    {
+      "name": "map_selector",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "worr_mapselector_close",
+      "items": [
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_mapselector_title", "align": "center", "selectable": false, "showIf": ["ui_mapselector_title"] },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_mapselector_option_0",
+          "align": "left",
+          "command": "worr_mapselector_vote 0",
+          "showIf": ["ui_mapselector_option_show_0=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_mapselector_option_1",
+          "align": "left",
+          "command": "worr_mapselector_vote 1",
+          "showIf": ["ui_mapselector_option_show_1=1"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_mapselector_option_2",
+          "align": "left",
+          "command": "worr_mapselector_vote 2",
+          "showIf": ["ui_mapselector_option_show_2=1"]
+        },
+        { "type": "blank" },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_mapselector_ack_0", "align": "center", "selectable": false, "showIf": ["ui_mapselector_ack_show=1"] },
+        { "type": "action", "labelCvar": "ui_mapselector_ack_1", "align": "center", "selectable": false, "showIf": ["ui_mapselector_ack_show=1"] },
+        { "type": "blank" },
+        { "type": "action", "labelCvar": "ui_mapselector_bar", "align": "left", "selectable": false, "showIf": ["ui_mapselector_bar"] }
+      ]
+    },
+    {
+      "name": "match_stats",
+      "style": { "compact": true, "transparent": true },
+      "closeCommand": "worr_matchstats_close",
+      "items": [
+        { "type": "action", "labelCvar": "ui_matchstats_line_0", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_0"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_1", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_1"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_2", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_2"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_3", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_3"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_4", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_4"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_5", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_5"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_6", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_6"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_7", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_7"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_8", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_8"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_9", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_9"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_10", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_10"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_11", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_11"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_12", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_12"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_13", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_13"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_14", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_14"] },
+        { "type": "action", "labelCvar": "ui_matchstats_line_15", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_15"] },
+        { "type": "blank" },
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
       ]
     }
   ]

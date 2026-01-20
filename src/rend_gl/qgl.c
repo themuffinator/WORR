@@ -49,6 +49,7 @@ static const glsection_t sections[] = {
             QGL_FN(ClearColor),
             QGL_FN(ClearStencil),
             QGL_FN(ColorMask),
+            QGL_FN(CopyTexSubImage2D),
             QGL_FN(CullFace),
             QGL_FN(DeleteTextures),
             QGL_FN(DepthFunc),
@@ -78,6 +79,16 @@ static const glsection_t sections[] = {
             QGL_FN(TexParameteri),
             QGL_FN(TexSubImage2D),
             QGL_FN(Viewport),
+            { NULL }
+        }
+    },
+
+    // GL 1.1, ES 3.0
+    {
+        .ver_gl = QGL_VER(1, 1),
+        .ver_es = QGL_VER(3, 0),
+        .functions = (const glfunction_t []) {
+            QGL_FN(ReadBuffer),
             { NULL }
         }
     },
@@ -297,6 +308,7 @@ static const glsection_t sections[] = {
             QGL_FN(BindBufferRange),
             QGL_FN(BindVertexArray),
             QGL_FN(ClearBufferfv),
+            QGL_FN(CopyTexSubImage3D),
             QGL_FN(DeleteVertexArrays),
             QGL_FN(FramebufferTextureLayer),
             QGL_FN(GenVertexArrays),

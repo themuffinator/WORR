@@ -45,6 +45,15 @@ cvar_t  *cl_rollhack;
 cvar_t  *cl_noglow;
 cvar_t  *cl_nobob;
 cvar_t  *cl_nolerp;
+cvar_t  *cl_player_outline_enemy;
+cvar_t  *cl_player_outline_team;
+cvar_t  *cl_player_outline_width;
+cvar_t  *cl_player_rimlight_enemy;
+cvar_t  *cl_player_rimlight_team;
+cvar_t  *cl_player_rimlight_shell;
+cvar_t  *cl_force_enemy_model;
+cvar_t  *cl_force_team_model;
+// legacy outline/rimlight cvars (deprecated)
 cvar_t  *cl_enemy_outline;
 cvar_t  *cl_enemy_outline_self;
 cvar_t  *cl_enemy_rimlight;
@@ -2767,6 +2776,7 @@ static void CL_InitLocal(void)
     LOC_Init();
     CL_InitAscii();
     CL_InitEffects();
+    CL_InitBrightskins();
     CL_InitTEnts();
     CL_InitDownloads();
     CL_GTV_Init();
@@ -2809,10 +2819,19 @@ static void CL_InitLocal(void)
     cl_nobob = Cvar_Get("cl_nobob", "0", 0);
     cl_nolerp = Cvar_Get("cl_nolerp", "0", 0);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
+    cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
+    cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);
+    cl_player_outline_width = Cvar_Get("cl_player_outline_width", "2.0", CVAR_ARCHIVE);
+    cl_player_rimlight_enemy = Cvar_Get("cl_player_rimlight_enemy", "0", CVAR_ARCHIVE);
+    cl_player_rimlight_team = Cvar_Get("cl_player_rimlight_team", "0", CVAR_ARCHIVE);
+    cl_player_rimlight_shell = Cvar_Get("cl_player_rimlight_shell", "1", CVAR_ARCHIVE);
+    cl_force_enemy_model = Cvar_Get("cl_force_enemy_model", "", CVAR_ARCHIVE);
+    cl_force_team_model = Cvar_Get("cl_force_team_model", "", CVAR_ARCHIVE);
     cl_enemy_outline = Cvar_Get("cl_enemy_outline", "0", CVAR_ARCHIVE);
     cl_enemy_outline_self = Cvar_Get("cl_enemy_outline_self", "0", CVAR_ARCHIVE);
     cl_enemy_rimlight = Cvar_Get("cl_enemy_rimlight", "0", CVAR_ARCHIVE);
     cl_enemy_rimlight_self = Cvar_Get("cl_enemy_rimlight_self", "0", CVAR_ARCHIVE);
+    CL_MigratePlayerCvars();
 
     // hack for timedemo
     com_timedemo->changed = cl_sync_changed;
@@ -3469,13 +3488,13 @@ unsigned CL_Frame(unsigned msec)
         if (host_speeds->integer)
             time_after_ref = Sys_Milliseconds();
 
-        cls.frametime = 0.0f;
-
         ref_extra -= ref_msec;
         R_FRAMES++;
 
         // update audio after the 3D view was drawn
         S_Update();
+
+        cls.frametime = 0.0f;
     } else if (sync_mode == SYNC_SLEEP_10) {
         // force audio and effects update if not rendering
         CL_CalcViewValues();

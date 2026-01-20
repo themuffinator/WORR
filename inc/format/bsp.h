@@ -68,6 +68,7 @@ typedef struct {
 // compressed bit vectors
 #define DVIS_PVS    0
 #define DVIS_PHS    1
+#define DVIS_PVS2   16 // Q2RTX: 2nd order PVS
 
 typedef struct {
     uint32_t    numclusters;

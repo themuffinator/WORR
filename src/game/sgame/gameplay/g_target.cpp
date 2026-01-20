@@ -15,6 +15,308 @@ Scripting Utilities: Provides helper entities like `target_relay` (to chain trig
 
 #include "../g_local.hpp"
 #include "../../bgame/char_array_utils.hpp"
+#include "../../../../inc/shared/files.h"
+#include <algorithm>
+#include <cstring>
+#include <format>
+#include <limits>
+#include <string>
+#include <vector>
+
+namespace {
+	using filesystem_handle_t = int;
+
+	struct filesystem_api_v1_t {
+		int64_t		(*OpenFile)(const char *path, filesystem_handle_t *f, unsigned mode);
+		int			(*CloseFile)(filesystem_handle_t f);
+		int			(*LoadFile)(const char *path, void **buffer, unsigned flags, unsigned tag);
+
+		int			(*ReadFile)(void *buffer, size_t len, filesystem_handle_t f);
+		int			(*WriteFile)(const void *buffer, size_t len, filesystem_handle_t f);
+		int			(*FlushFile)(filesystem_handle_t f);
+		int64_t		(*TellFile)(filesystem_handle_t f);
+		int			(*SeekFile)(filesystem_handle_t f, int64_t offset, int whence);
+		int			(*ReadLine)(filesystem_handle_t f, char *buffer, size_t size);
+
+		void		**(*ListFiles)(const char *path, const char *filter, unsigned flags, int *count_p);
+		void		(*FreeFileList)(void **list);
+
+		const char	*(*ErrorString)(int error);
+	};
+
+	constexpr char kFilesystemApiV1[] = "FILESYSTEM_API_V1";
+
+	struct location_point_t {
+		Vector3 origin;
+		std::string name;
+	};
+
+	std::vector<location_point_t> g_target_locations;
+	std::vector<location_point_t> g_file_locations;
+	bool g_loaded_loc_file = false;
+	bool g_loc_file_present = false;
+
+	const filesystem_api_v1_t* Locations_GetFilesystem() {
+		return static_cast<const filesystem_api_v1_t*>(gi.GetExtension(kFilesystemApiV1));
+	}
+
+	std::string Locations_TrimName(const char* input) {
+		if (!input)
+			return {};
+
+		std::string_view view(input);
+		const size_t start = view.find_first_not_of(" \t\r\n");
+		if (start == std::string_view::npos)
+			return {};
+
+		const size_t end = view.find_last_not_of(" \t\r\n");
+		view = view.substr(start, end - start + 1);
+		if (view.size() >= 2 && view.front() == '"' && view.back() == '"') {
+			view = view.substr(1, view.size() - 2);
+		}
+
+		return std::string(view);
+	}
+
+	bool Locations_IsHighValueItem(const gentity_t* ent) {
+		if (!ent || !ent->inUse || !ent->item)
+			return false;
+
+		const Item* item = ent->item;
+		const bool is_weapon_or_powerup = (item->flags & (IF_WEAPON | IF_POWERUP)) && !(item->flags & IF_AMMO);
+		const bool is_mega_health = (item->id == IT_HEALTH_MEGA);
+		return is_weapon_or_powerup || is_mega_health;
+	}
+
+	const location_point_t* Locations_FindBest(const Vector3& origin, const std::vector<location_point_t>& locations) {
+		const location_point_t* best_any = nullptr;
+		const location_point_t* best_pvs = nullptr;
+		float best_any_dist = std::numeric_limits<float>::max();
+		float best_pvs_dist = std::numeric_limits<float>::max();
+
+		for (const auto& loc : locations) {
+			const Vector3 delta = origin - loc.origin;
+			const float dist = delta.lengthSquared();
+			if (dist < best_any_dist) {
+				best_any_dist = dist;
+				best_any = &loc;
+			}
+			if (gi.inPVS(origin, loc.origin, false) && dist < best_pvs_dist) {
+				best_pvs_dist = dist;
+				best_pvs = &loc;
+			}
+		}
+
+		return best_pvs ? best_pvs : best_any;
+	}
+
+	void Locations_LoadLocFile() {
+		if (g_loaded_loc_file)
+			return;
+
+		g_loaded_loc_file = true;
+
+		const filesystem_api_v1_t* fs = Locations_GetFilesystem();
+		if (!fs)
+			return;
+
+		if (!level.mapName[0])
+			return;
+
+		char path[MAX_QPATH];
+		G_FmtTo(path, "locs/{}.loc", level.mapName.data());
+
+		void* buffer = nullptr;
+		fs->LoadFile(path, &buffer, 0, TAG_LEVEL);
+		if (!buffer)
+			return;
+
+		g_loc_file_present = true;
+
+		char* data = static_cast<char*>(buffer);
+		char* cursor = data;
+		int line = 0;
+
+		while (*cursor) {
+			char* eol = strchr(cursor, '\n');
+			if (eol)
+				*eol = '\0';
+			++line;
+
+			const char* parse = cursor;
+			const char* token = COM_Parse(&parse);
+			if (token && token[0]) {
+				const float x = std::strtof(token, nullptr);
+				token = COM_Parse(&parse);
+				if (!token || !token[0]) {
+					if (g_verbose->integer)
+						gi.Com_PrintFmt("{}.loc: line {} missing y\n", level.mapName.data(), line);
+					goto next_line;
+				}
+				const float y = std::strtof(token, nullptr);
+				token = COM_Parse(&parse);
+				if (!token || !token[0]) {
+					if (g_verbose->integer)
+						gi.Com_PrintFmt("{}.loc: line {} missing z\n", level.mapName.data(), line);
+					goto next_line;
+				}
+				const float z = std::strtof(token, nullptr);
+
+				std::string name = Locations_TrimName(parse);
+				if (name.empty()) {
+					if (g_verbose->integer)
+						gi.Com_PrintFmt("{}.loc: line {} missing name\n", level.mapName.data(), line);
+					goto next_line;
+				}
+
+				location_point_t loc;
+				loc.origin = { x * 0.125f, y * 0.125f, z * 0.125f };
+				loc.name = std::move(name);
+				g_file_locations.push_back(std::move(loc));
+			}
+
+next_line:
+			if (!eol)
+				break;
+			cursor = eol + 1;
+		}
+
+		gi.TagFree(buffer);
+	}
+
+	void Locations_WriteLocFile() {
+		const filesystem_api_v1_t* fs = Locations_GetFilesystem();
+		if (!fs)
+			return;
+
+		if (!level.mapName[0])
+			return;
+
+		char path[MAX_QPATH];
+		G_FmtTo(path, "locs/{}.loc", level.mapName.data());
+
+		filesystem_handle_t file = 0;
+		fs->OpenFile(path, &file, FS_MODE_WRITE | FS_FLAG_TEXT | FS_FLAG_EXCL);
+		if (!file)
+			return;
+
+		for (const auto& loc : g_target_locations) {
+			const std::string line = std::format("{:.0f} {:.0f} {:.0f} {}\n",
+				loc.origin.x * 8.0f, loc.origin.y * 8.0f, loc.origin.z * 8.0f, loc.name);
+			fs->WriteFile(line.data(), line.size(), file);
+		}
+
+		fs->CloseFile(file);
+		g_loc_file_present = true;
+	}
+
+	std::string Locations_FallbackName(const gentity_t* ent) {
+		if (!ent)
+			return "unknown";
+
+		gentity_t* best = nullptr;
+		float best_dist = std::numeric_limits<float>::max();
+		float best_height = 0.0f;
+		item_id_t best_id = IT_NULL;
+
+		for (gentity_t* e = g_entities + game.maxClients + 1; e < g_entities + globals.numEntities; ++e) {
+			if (!Locations_IsHighValueItem(e))
+				continue;
+
+			if (!gi.inPVS(ent->s.origin, e->s.origin, false))
+				continue;
+
+			const Vector3 delta = ent->s.origin - e->s.origin;
+			const float dist = delta.lengthSquared();
+			if (dist < best_dist) {
+				best_dist = dist;
+				best = e;
+				best_height = e->s.origin.z;
+				best_id = e->item->id;
+			}
+		}
+
+		if (best && best->item) {
+			const char* modifier = nullptr;
+			for (gentity_t* e = g_entities + game.maxClients + 1; e < g_entities + globals.numEntities; ++e) {
+				if (e == best || !Locations_IsHighValueItem(e))
+					continue;
+
+				if (e->item->id == best_id) {
+					modifier = (e->s.origin.z < best_height) ? "upper " : "lower ";
+					break;
+				}
+			}
+
+			const char* item_name = best->item->useName ? best->item->useName : best->item->className;
+			return std::format("{}{}", modifier ? modifier : "", item_name ? item_name : "unknown");
+		}
+
+		if (ent->waterLevel)
+			return "water";
+
+		return level.mapName[0] ? level.mapName.data() : "unknown";
+	}
+} // namespace
+
+void Locations_Reset() {
+	std::vector<location_point_t>().swap(g_target_locations);
+	std::vector<location_point_t>().swap(g_file_locations);
+	g_loaded_loc_file = false;
+	g_loc_file_present = false;
+}
+
+void Locations_Finalize() {
+	Locations_LoadLocFile();
+
+	if (!g_loc_file_present && !g_target_locations.empty()) {
+		Locations_WriteLocFile();
+	}
+}
+
+std::string Location_NameFor(const gentity_t* ent) {
+	if (!ent)
+		return "unknown";
+
+	if (!g_target_locations.empty()) {
+		if (const location_point_t* loc = Locations_FindBest(ent->s.origin, g_target_locations))
+			return loc->name;
+	}
+
+	if (!g_file_locations.empty()) {
+		if (const location_point_t* loc = Locations_FindBest(ent->s.origin, g_file_locations))
+			return loc->name;
+	}
+
+	return Locations_FallbackName(ent);
+}
+
+/*QUAKED target_position (0 0.5 0) (-4 -4 -4) (4 4 4)
+Used as a positional target for in-game calculation, like jumppad targets.
+*/
+void SP_target_position(gentity_t* self) {
+	self->absMin = self->s.origin;
+	self->absMax = self->s.origin;
+}
+
+/*QUAKED target_location (0 0.5 0) (-8 -8 -8) (8 8 8)
+Set "message" to the name of this location.
+
+Closest target_location in sight used for the location, if none
+in sight, closest in distance.
+*/
+void SP_target_location(gentity_t* self) {
+	if (!self)
+		return;
+
+	self->svFlags |= SVF_NOCLIENT;
+	self->solid = SOLID_NOT;
+	self->absMin = self->s.origin;
+	self->absMax = self->s.origin;
+
+	const char* name = (self->message && *self->message) ? self->message : "unknown";
+	g_target_locations.push_back({ self->s.origin, name });
+}
 
 /*QUAKED target_temp_entity (1 0 0) (-8 -8 -8) (8 8 8) x x x x x x x x NOT_EASY NOT_MEDIUM NOT_HARD NOT_DM NOT_COOP
 Fire an origin based temp entity event to the clients.

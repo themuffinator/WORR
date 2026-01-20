@@ -3256,6 +3256,8 @@ bool InitPlayerTeam(gentity_t *ent) {
   ent->client->initialMenu.frozen = true;
   ent->client->initialMenu.hostSetupDone = false;
   ent->client->initialMenu.shown = false;
+  ent->client->initialMenu.dmWelcomeActive = false;
+  ent->client->initialMenu.dmJoinActive = false;
   if (!ent->client->initialMenu.shown)
     ent->client->initialMenu.delay = level.time + 10_hz;
 
@@ -3644,10 +3646,8 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
   if (changedTeam)
     Harvester_HandleTeamChange(ent);
 
-  if (cl->menu.current || cl->menu.restoreStatusBar) {
+  if (IsUiMenuOpen(cl))
     CloseActiveMenu(ent);
-    cl->menu_sign = 0;
-  }
 
   const int64_t now = GetCurrentRealTimeMillis();
 
@@ -3776,6 +3776,8 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
     cl->initialMenu.shown = true;
     cl->initialMenu.delay = 0_sec;
     cl->initialMenu.hostSetupDone = true;
+    cl->initialMenu.dmWelcomeActive = false;
+    cl->initialMenu.dmJoinActive = false;
   }
 
   if (!force && wasInitialised && changedTeam)
@@ -4159,9 +4161,6 @@ to ClientThink rather than being delayed.
     G_PlayerNoise(ent, pm.s.origin, PlayerNoise::Self);
 }
 
-inline void PreviousMenuItem(gentity_t *ent);
-inline void NextMenuItem(gentity_t *ent);
-
 /*
 =========================
 PrintModifierIntro
@@ -4488,8 +4487,6 @@ This will be called once for each server frame, before running
 any other entities in the world.
 ==============
 */
-inline void ActivateSelectedMenuItem(gentity_t *ent);
-
 /*
 ==============
 ClientBeginServerFrame

@@ -252,9 +252,10 @@ void MenuSystem::Init()
     PlayerModel_Load();
 
     UI_LoadJsonMenus(UI_DEFAULT_FILE);
-    RegisterMenu(CreatePlayerConfigPage());
-    RegisterMenu(CreateServerBrowserPage());
-    RegisterMenu(CreateDemoBrowserPage());
+    if (!FindMenu("players"))
+        RegisterMenu(CreatePlayerConfigPage());
+    if (!FindMenu("dm_welcome"))
+        RegisterMenu(CreateWelcomePage());
 
     uis.initialized = true;
 }
@@ -363,6 +364,7 @@ void MenuSystem::ForceOff()
     active_ = nullptr;
     uis.keywait = false;
     uis.transparent = false;
+    UI_Sys_SetMenuBlurRect(nullptr);
     Key_SetDest(static_cast<keydest_t>(Key_GetDest() & ~KEY_MENU));
 }
 
@@ -402,10 +404,10 @@ void MenuSystem::Draw(unsigned realtime)
     UI_Sys_UpdateRefConfig();
     uis.realtime = realtime;
 
-    if (!(Key_GetDest() & KEY_MENU))
+    if (!(Key_GetDest() & KEY_MENU) || !active_) {
+        UI_Sys_SetMenuBlurRect(nullptr);
         return;
-    if (!active_)
-        return;
+    }
 
     R_SetScale(uis.scale);
     active_->Draw();

@@ -442,10 +442,13 @@ static renderer_import_t R_BuildRendererImports(void)
         .Com_PageInMemory = Com_PageInMemory,
         .Com_SlowRand = Com_SlowRand,
         .Com_HashStringLen = Com_HashStringLen,
+        .Com_AddConfigFile = Com_AddConfigFile,
 
         .Cvar_Get = Cvar_Get,
         .Cvar_Reset = R_Cvar_Reset,
         .Cvar_Set = R_Cvar_Set,
+        .Cvar_SetValue = Cvar_SetValue,
+        .Cvar_SetInteger = Cvar_SetInteger,
         .Cvar_VariableInteger = Cvar_VariableInteger,
         .Cvar_VariableValue = Cvar_VariableValue,
         .Cvar_ClampValue = Cvar_ClampValue,
@@ -466,8 +469,14 @@ static renderer_import_t R_BuildRendererImports(void)
 
         .FS_LoadFileEx = FS_LoadFileEx,
         .FS_OpenFile = FS_OpenFile,
+        .FS_EasyOpenFile = FS_EasyOpenFile,
         .FS_Read = FS_Read,
         .FS_CloseFile = FS_CloseFile,
+        .FS_FPrintf = FS_FPrintf,
+        .FS_Length = FS_Length,
+        .FS_ListFiles = FS_ListFiles,
+        .FS_FreeList = FS_FreeList,
+        .FS_LastModified = FS_LastModified,
         .FS_NormalizePathBuffer = FS_NormalizePathBuffer,
         .FS_CleanupPath = FS_CleanupPath,
         .FS_CreatePath = FS_CreatePath,
@@ -502,6 +511,9 @@ static renderer_import_t R_BuildRendererImports(void)
         .BSP_LookupLightgrid = BSP_LookupLightgrid,
         .BSP_ClusterVis = BSP_ClusterVis,
         .BSP_PointLeaf = BSP_PointLeaf,
+        .BSP_GetPvs = BSP_GetPvs,
+        .BSP_GetPvs2 = BSP_GetPvs2,
+        .BSP_SavePatchedPVS = BSP_SavePatchedPVS,
 
         .Prompt_AddMatch = Prompt_AddMatch,
 
@@ -513,6 +525,9 @@ static renderer_import_t R_BuildRendererImports(void)
         .SCR_ParseColor = SCR_ParseColor,
 
         .CL_SetSky = CL_SetSky,
+
+        .Key_IsDown = Key_IsDown,
+        .Key_GetBindingForKey = Key_GetBindingForKey,
 
         .COM_ParseEx = COM_ParseEx,
         .COM_ParseToken = COM_ParseToken,
@@ -587,6 +602,7 @@ static renderer_import_t R_BuildRendererImports(void)
         .va = va,
 
         .fs_gamedir = fs_gamedir,
+        .fs_game = fs_game,
         .vid = &vid,
         .com_eventTime = &com_eventTime,
         .Sys_Milliseconds = Sys_Milliseconds,

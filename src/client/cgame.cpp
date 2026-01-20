@@ -229,6 +229,17 @@ static void CG_UI_DrawFill32(int x, int y, int w, int h, color_t color)
     R_DrawFill32(x, y, w, h, color);
 }
 
+static void CG_UI_SetMenuBlurRect(const clipRect_t *rect)
+{
+    if (rect) {
+        cl.menu_blur_rect = *rect;
+        cl.menu_blur_active = true;
+    } else {
+        cl.menu_blur_active = false;
+        cl.menu_blur_rect = {};
+    }
+}
+
 static cgame_ui_import_t cg_ui_import = {
     .api_version = CGAME_UI_API_VERSION,
 
@@ -331,6 +342,7 @@ static cgame_ui_import_t cg_ui_import = {
     .Re_DrawFill8 = CG_UI_DrawFill8,
     .Re_DrawFill32 = CG_UI_DrawFill32,
     .Re_GetConfig = CG_UI_GetConfig,
+    .CL_SetMenuBlurRect = CG_UI_SetMenuBlurRect,
 
     .SetClipboardData = CG_UI_SetClipboardData,
     .GetEventTime = CG_UI_GetEventTime,

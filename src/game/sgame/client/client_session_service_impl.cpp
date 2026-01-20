@@ -229,42 +229,6 @@ static const char* ClientSkinOverride(const char* s) {
 	return "male/grunt";}
 
 /*
-=================
-HandleMenuMovement
-
-Processes menu navigation and activation input for clients currently in a menu.
-=================
-*/
-static bool HandleMenuMovement(gentity_t* ent, usercmd_t* ucmd) {
-	if (!ent->client->menu.current)
-		return false;
-
-	// [Paril-KEX] handle menu movement
-	int32_t menu_sign = ucmd->forwardMove > 0 ? 1 : ucmd->forwardMove < 0 ? -1 : 0;
-
-	if (ent->client->menu_sign != menu_sign) {
-		ent->client->menu_sign = menu_sign;
-
-		if (menu_sign > 0) {
-			PreviousMenuItem(ent);
-			return true;
-		}
-		else if (menu_sign < 0) {
-			NextMenuItem(ent);
-			return true;
-		}
-	}
-
-	if (ent->client->latchedButtons & (BUTTON_ATTACK | BUTTON_JUMP)) {
-		ActivateSelectedMenuItem(ent);
-		ent->client->latchedButtons &= ~(BUTTON_ATTACK | BUTTON_JUMP);
-		return true;
-	}
-
-	return false;
-}
-
-/*
 =============
 ClientPMoveClip
 
@@ -1189,13 +1153,12 @@ movement, inactivity timers, and weapon logic.
 */
 void ClientSessionServiceImpl::ClientThink(local_game_import_t& gi, GameLocals& game, LevelLocals& level,
 gentity_t* ent, usercmd_t* ucmd) {
-        gclient_t* cl;
-        gentity_t* other;
-        PMove           pm{};
+	gclient_t* cl;
+	gentity_t* other;
+	PMove           pm{};
 
 	level.currentEntity = ent;
 	cl = ent->client;
-	bool menuHandled = false;
 
 	//no movement during map or match intermission
 	if (level.timeoutActive > 0_ms) {
@@ -1212,9 +1175,6 @@ gentity_t* ent, usercmd_t* ucmd) {
 	cl->buttons = ucmd->buttons;
 	cl->latchedButtons |= cl->buttons & ~cl->oldButtons;
 	cl->cmd = *ucmd;
-
-	if (cl->menu.current)
-		menuHandled = HandleMenuMovement(ent, ucmd);
 
 	if ((cl->latchedButtons & BUTTON_USE) && FreezeTag_IsActive() && ClientIsPlaying(cl) && !cl->eliminated) {
 		if (gentity_t* target = worr::server::client::FreezeTag_FindFrozenTarget(ent)) {
@@ -1234,6 +1194,8 @@ gentity_t* ent, usercmd_t* ucmd) {
 		cl->initialMenu.shown = true;
 		cl->initialMenu.delay = 0_sec;
 		cl->initialMenu.hostSetupDone = true;
+		cl->initialMenu.dmWelcomeActive = false;
+		cl->initialMenu.dmJoinActive = false;
 	}
 
 	auto showInitialMenu = [&](gentity_t* player) {
@@ -1243,6 +1205,8 @@ gentity_t* ent, usercmd_t* ucmd) {
 		if ((player->svFlags & SVF_BOT) || player->client->sess.is_a_bot) {
 			player->client->initialMenu.frozen = false;
 			player->client->initialMenu.hostSetupDone = true;
+			player->client->initialMenu.dmWelcomeActive = false;
+			player->client->initialMenu.dmJoinActive = false;
 			return;
 		}
 
@@ -1262,12 +1226,18 @@ gentity_t* ent, usercmd_t* ucmd) {
 			}
 		}
 
+		if (deathmatch->integer && player != host && !player->client->initialMenu.dmWelcomeActive) {
+			OpenDmWelcomeMenu(player);
+			return;
+		}
+
 		OpenJoinMenu(player);
 	};
 
 	if (cl->initialMenu.frozen) {
 		if (!ClientIsPlaying(cl)) {
-			const bool needsOpen = (!cl->initialMenu.shown && initialMenuReady) || (cl->initialMenu.shown && !cl->menu.current);
+			const bool menuOpen = IsUiMenuOpen(cl);
+			const bool needsOpen = (!cl->initialMenu.shown && initialMenuReady) || (cl->initialMenu.shown && !menuOpen);
 			if (needsOpen) {
 				showInitialMenu(ent);
 				cl->initialMenu.delay = 0_sec;
@@ -1342,8 +1312,6 @@ gentity_t* ent, usercmd_t* ucmd) {
 		cl->ps.pmove.pmType = PM_FREEZE;
 
 		bool n64_sp = false;
-		if (cl->menu.current && !menuHandled)
-			HandleMenuMovement(ent, ucmd);
 
 		if (level.intermission.time) {
 			n64_sp = !deathmatch->integer && level.isN64;
@@ -1375,13 +1343,8 @@ gentity_t* ent, usercmd_t* ucmd) {
 		pmove_state_t& pmState = cl->ps.pmove;
 
 		if (ent->moveType == MoveType::FreeCam) {
-			if (cl->menu.current) {
+			if (IsBlockingUiMenuOpen(cl))
 				pmState.pmType = PM_FREEZE;
-
-				// [Paril-KEX] handle menu movement
-				if (!menuHandled)
-					HandleMenuMovement(ent, ucmd);
-			}
 			else if (cl->awaitingRespawn)
 				pmState.pmType = PM_FREEZE;
 			else if (!ClientIsPlaying(ent->client) || cl->eliminated)
@@ -1442,7 +1405,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		if (std::memcmp(&cl->old_pmove, &pm.s, sizeof(pm.s)) != 0)
 			pm.snapInitial = true;
 		pm.cmd = *ucmd;
-		if (cl->menu.current && !ClientIsPlaying(cl)) {
+		if (IsBlockingUiMenuOpen(cl) && !ClientIsPlaying(cl)) {
 			pm.cmd.angles = cl->ps.viewAngles - pm.s.deltaAngles;
 		}
 		pm.player = ent;
@@ -1524,7 +1487,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		ent->mins = pm.mins;
 		ent->maxs = pm.maxs;
 
-		if (!cl->menu.current)
+		if (!IsBlockingUiMenuOpen(cl))
 			cl->resp.cmdAngles = ucmd->angles;
 
 		if (pm.jumpSound && !onLadder) {
@@ -1553,7 +1516,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 			cl->ps.viewAngles[PITCH] = -15;
 			cl->ps.viewAngles[YAW] = cl->killerYaw;
 		}
-		else if (!cl->menu.current) {
+		else if (!IsBlockingUiMenuOpen(cl)) {
 			cl->vAngle = pm.viewAngles;
 			cl->ps.viewAngles = pm.viewAngles;
 			AngleVectors(cl->vAngle, cl->vForward, nullptr, nullptr);
@@ -1595,7 +1558,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 	}
 
 	// fire weapon from final position if needed
-	if (!cl->menu.current && (cl->latchedButtons & BUTTON_ATTACK)) {
+	if (!IsBlockingUiMenuOpen(cl) && (cl->latchedButtons & BUTTON_ATTACK)) {
 		if (!ClientIsPlaying(cl) || (cl->eliminated && !cl->sess.is_a_bot)) {
 			cl->latchedButtons = BUTTON_NONE;
 
@@ -1620,7 +1583,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 	}
 
 	if (!ClientIsPlaying(cl) || (cl->eliminated && !cl->sess.is_a_bot)) {
-		if (!menuHandled && !HandleMenuMovement(ent, ucmd)) {
+		if (!IsBlockingUiMenuOpen(cl)) {
 			if (ucmd->buttons & BUTTON_JUMP) {
 				if (!(cl->ps.pmove.pmFlags & PMF_JUMP_HELD)) {
 					cl->ps.pmove.pmFlags |= PMF_JUMP_HELD;
@@ -1696,7 +1659,7 @@ gentity_t* ent) {
 	else
 		client->weapon.thunk = false;
 
-	if (ent->client->menu.current) {
+	if (IsBlockingUiMenuOpen(ent->client)) {
 		client->latchedButtons = BUTTON_NONE;
 		return;
 	}

@@ -693,9 +693,17 @@ size_t Q_strnlcpy(char *dst, const char *src, size_t count, size_t size);
 size_t Q_strlcat(char *dst, const char *src, size_t size);
 size_t Q_strnlcat(char *dst, const char *src, size_t count, size_t size);
 
+size_t Q_concat_array(char *dest, size_t size, const char **arr);
+#ifdef __cplusplus
+#define Q_concat(dest, size, ...) \
+    ([&]() { \
+        const char *arr[] = { __VA_ARGS__, NULL }; \
+        return Q_concat_array(dest, size, arr); \
+    }())
+#else
 #define Q_concat(dest, size, ...) \
     Q_concat_array(dest, size, (const char *[]){__VA_ARGS__, NULL})
-size_t Q_concat_array(char *dest, size_t size, const char **arr);
+#endif
 
 size_t Q_vsnprintf(char *dest, size_t size, const char *fmt, va_list argptr);
 size_t Q_vscnprintf(char *dest, size_t size, const char *fmt, va_list argptr);
@@ -1251,6 +1259,7 @@ typedef uint64_t effects_t;
 #define RF_LOW_PRIORITY     BIT(24)
 #define RF_NO_LOD           BIT(25)
 #define RF_STAIR_STEP       BIT(26)
+#define RF_DOPPLER          BIT(27)     // [WORR] doppler shift on looped sounds
 
 #define RF_NO_STEREO        RF_WEAPONMODEL
 #define RF_FLARE_LOCK_ANGLE RF_MINLIGHT

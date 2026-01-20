@@ -28,6 +28,42 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 #define MAX_SFX_SAMPLES     ((1 << 23) - 1)
+#define S_OCCLUSION_GAIN            0.35f
+#define S_OCCLUSION_LOWPASS_HZ      600.0f
+#define S_OCCLUSION_LOWPASS_Q       0.707f
+#define S_OCCLUSION_AL_GAINHF       0.08f
+#define S_OCCLUSION_UPDATE_MS       50
+#define S_OCCLUSION_CLEAR_MARGIN    0.1f
+#define S_OCCLUSION_ATTACK_RATE     25.0f
+#define S_OCCLUSION_RELEASE_RATE    8.0f
+#define S_OCCLUSION_RADIUS_BASE     6.0f
+#define S_OCCLUSION_RADIUS_SCALE    0.02f
+#define S_OCCLUSION_RADIUS_MAX      24.0f
+#define S_OCCLUSION_WINDOW_WEIGHT   0.25f
+#define S_OCCLUSION_GLASS_WEIGHT    0.25f
+#define S_OCCLUSION_GRATE_WEIGHT    0.3f
+#define S_OCCLUSION_SOFT_WEIGHT     0.6f
+#define S_OCCLUSION_WOOD_WEIGHT     0.75f
+#define S_OCCLUSION_METAL_WEIGHT    0.85f
+#define S_OCCLUSION_CONCRETE_WEIGHT 0.15f
+#define S_OCCLUSION_DIFFRACTION_WEIGHT 0.4f
+#define S_OCCLUSION_CURVE           0.75f
+#define S_OCCLUSION_CUTOFF_REFERENCE_HZ 20000.0f
+#define S_OCCLUSION_CUTOFF_MIN_HZ   400.0f
+#define S_OCCLUSION_CUTOFF_CLEAR_HZ S_OCCLUSION_CUTOFF_REFERENCE_HZ
+#define S_OCCLUSION_CUTOFF_DEFAULT_HZ (S_OCCLUSION_AL_GAINHF * S_OCCLUSION_CUTOFF_REFERENCE_HZ)
+#define S_OCCLUSION_CUTOFF_GLASS_HZ 4000.0f
+#define S_OCCLUSION_CUTOFF_GRATE_HZ S_OCCLUSION_CUTOFF_CLEAR_HZ
+#define S_OCCLUSION_CUTOFF_SOFT_HZ  2000.0f
+#define S_OCCLUSION_CUTOFF_WOOD_HZ  2000.0f
+#define S_OCCLUSION_CUTOFF_CONCRETE_HZ 800.0f
+#define S_OCCLUSION_CUTOFF_METAL_HZ 1500.0f
+
+static inline float S_OcclusionCutoffToGainHF(float cutoff_hz)
+{
+    float cutoff = Q_clipf(cutoff_hz, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_REFERENCE_HZ);
+    return cutoff / S_OCCLUSION_CUTOFF_REFERENCE_HZ;
+}
 
 typedef struct {
     int         length;
@@ -69,6 +105,13 @@ typedef struct {
     int         begin;          // begin on this sample
 } playsound_t;
 
+#if USE_SNDDMA
+typedef struct {
+    float   b0, b1, b2;
+    float   a1, a2;
+} occlusion_biquad_t;
+#endif
+
 typedef struct {
     sfx_t       *sfx;           // sfx number
     float       leftvol;        // 0.0-1.0 volume
@@ -82,6 +125,18 @@ typedef struct {
     float       master_vol;     // 0.0-1.0 master volume
     bool        fixed_origin;   // use origin instead of fetching entnum's origin
     bool        autosound;      // from an entity->sound, cleared each frame
+    bool        no_merge;       // bypass loop merging for this channel
+    float       occlusion;      // 0.0-1.0 smoothed occlusion factor
+    float       occlusion_target;
+    int         occlusion_time;
+    float       occlusion_mix;
+    float       occlusion_cutoff;
+    float       occlusion_cutoff_target;
+#if USE_SNDDMA
+    float       occlusion_z1[2];
+    float       occlusion_z2[2];
+    occlusion_biquad_t occlusion_biquad;
+#endif
 #if USE_OPENAL
     byte        fullvolume;
     unsigned    autoframe;
@@ -171,6 +226,8 @@ extern cvar_t       *s_show;
 extern cvar_t       *s_underwater;
 extern cvar_t       *s_underwater_gain_hf;
 extern cvar_t       *s_num_channels;
+extern cvar_t       *s_occlusion;
+extern cvar_t       *s_occlusion_strength;
 
 #define S_IsFullVolume(ch) \
     ((ch)->entnum == -1 || (ch)->entnum == listener_entnum || (ch)->dist_mult == 0)
@@ -191,3 +248,8 @@ channel_t *S_PickChannel(int entnum, int entchannel);
 void S_IssuePlaysound(playsound_t *ps);
 int S_BuildSoundList(int *sounds);
 void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo);
+float S_GetOcclusion(channel_t *ch, const vec3_t origin);
+float S_SmoothOcclusion(channel_t *ch, float target);
+float S_ComputeOcclusion(const vec3_t origin, float *cutoff_hz);
+float S_MapOcclusion(float occlusion);
+void S_ResetOcclusion(channel_t *ch);

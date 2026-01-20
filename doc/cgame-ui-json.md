@@ -35,6 +35,7 @@ Menu object fields:
 - `banner`: image displayed at top.
 - `plaque`: string image name or object `{ "image": "...", "logo": "..." }`.
 - `style`: object `{ "compact": bool, "transparent": bool }`.
+- `feeder`: optional built-in page id (`servers`, `demos`, `players`); ignores `items`.
 - `items`: array of menu item objects.
 
 Item expansion:
@@ -49,9 +50,10 @@ Item types and fields:
 - `strings`: `label`, `cvar`, `items` (string list).
 - `pairs`: `label`, `cvar`, `pairs` array of `{ "label": "...", "value": "..." }`.
 - `toggle`: `label`, `cvar`, `bit` (optional), `negate` (optional).
+- `switch`: `label`, `cvar`, `bit` (optional), `negate` (optional).
 - `bind`: `label`, `command`, `status`, `altStatus`.
 - `field`: `label`, `cvar`, `width`, `center`, `numeric`, `integer`.
-- `blank`: separator spacer.
+- `blank`: separator spacer; optional `label` draws a section header line.
 - `imagevalues`: `label`, `cvar`, `path`, `filter`, `imageWidth`, `imageHeight`.
 - `episode_selector`: `label`, `cvar` (choices from mapdb episodes).
 - `unit_selector`: `label`, `cvar` (choices from mapdb units).
@@ -59,10 +61,10 @@ Item types and fields:
 - `loadgame`: `slot`.
 
 ## Built-in pages
-These are registered in C++ and are not defined in JSON:
-- `servers` (server browser).
-- `demos` (demo browser).
-- `players` (player config/preview).
+These are registered via `feeder` in JSON (with `players` still auto-registered if missing):
+- `servers`: server browser.
+- `demos`: demo browser.
+- `players`: player config/preview.
 
 ## Paging and input
 - Menus auto-center, compute item layout each frame, and clamp focus to visible entries.

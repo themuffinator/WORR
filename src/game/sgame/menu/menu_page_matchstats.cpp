@@ -10,42 +10,65 @@ Because it uses the `onUpdate` callback, the stats displayed in the menu are upd
 match progresses whenever the menu is open.*/
 
 #include "../g_local.hpp"
+#include "menu_ui_helpers.hpp"
 
-void OpenPlayerMatchStatsMenu(gentity_t* ent) {
-	auto menu = std::make_unique<Menu>();
+namespace {
 
-	for (int i = 0; i < 16; ++i)
-		menu->entries.emplace_back("", MenuAlign::Left);
+void UpdateMatchStatsMenu(gentity_t *ent, bool openMenu) {
+  if (!ent || !ent->client || !g_matchstats->integer)
+    return;
 
-	menu->onUpdate = [](gentity_t* ent, const Menu& m) {
-		if (!ent || !ent->client || !g_matchstats->integer) return;
+  auto &st = ent->client->pers.match;
+  std::array<std::string, 16> lines{};
+  size_t i = 0;
 
-		auto& menu = const_cast<Menu&>(m);
-		auto& st = ent->client->pers.match;
-		int i = 0;
+  lines[i++] = "Player Stats for Match";
+  lines[i++] = ent->client->sess.netName;
+  lines[i++] = "--------------------------";
+  lines[i++] = fmt::format("kills: {}", st.totalKills);
+  lines[i++] = fmt::format("deaths: {}", st.totalDeaths);
+  if (st.totalDeaths > 0)
+    lines[i++] =
+        fmt::format("k/d ratio: {:.2f}",
+                    static_cast<float>(st.totalKills) / st.totalDeaths);
+  else
+    lines[i++] = "";
+  lines[i++] = fmt::format("dmg dealt: {}", st.totalDmgDealt);
+  lines[i++] = fmt::format("dmg received: {}", st.totalDmgReceived);
+  if (st.totalDmgReceived > 0)
+    lines[i++] =
+        fmt::format("dmg ratio: {:.2f}",
+                    static_cast<float>(st.totalDmgDealt) / st.totalDmgReceived);
+  else
+    lines[i++] = "";
+  lines[i++] = fmt::format("shots fired: {}", st.totalShots);
+  lines[i++] = fmt::format("shots on target: {}", st.totalHits);
+  if (st.totalShots > 0)
+    lines[i++] = fmt::format(
+        "total accuracy: {}%",
+        static_cast<int>((static_cast<float>(st.totalHits) / st.totalShots) *
+                         100));
 
-		menu.entries[i++].text = "Player Stats for Match";
+  MenuUi::UiCommandBuilder cmd(ent);
+  for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+    cmd.AppendCvar(fmt::format("ui_matchstats_line_{}", lineIndex).c_str(),
+                   lines[lineIndex]);
+  }
+  if (openMenu)
+    cmd.AppendCommand("pushmenu match_stats");
+  cmd.Flush();
+}
 
-		char value[MAX_INFO_VALUE] = {};
-		gi.Info_ValueForKey(g_entities[1].client->pers.userInfo, "name", value, sizeof(value));
-		if (value[0]) menu.entries[i++].text = value;
+} // namespace
 
-		menu.entries[i++].text = "--------------------------";
-		menu.entries[i++].text = fmt::format("kills: {}", st.totalKills);
-		menu.entries[i++].text = fmt::format("deaths: {}", st.totalDeaths);
-		if (st.totalDeaths > 0)
-			menu.entries[i++].text = fmt::format("k/d ratio: {:.2f}", (float)st.totalKills / st.totalDeaths);
-		else i++;
-		menu.entries[i++].text = fmt::format("dmg dealt: {}", st.totalDmgDealt);
-		menu.entries[i++].text = fmt::format("dmg received: {}", st.totalDmgReceived);
-		if (st.totalDmgReceived > 0)
-			menu.entries[i++].text = fmt::format("dmg ratio: {:.2f}", (float)st.totalDmgDealt / st.totalDmgReceived);
-		else i++;
-		menu.entries[i++].text = fmt::format("shots fired: {}", st.totalShots);
-		menu.entries[i++].text = fmt::format("shots on target: {}", st.totalHits);
-		if (st.totalShots > 0)
-			menu.entries[i++].text = fmt::format("total accuracy: {}%", (int)((float)st.totalHits / st.totalShots * 100));
-		};
+void OpenPlayerMatchStatsMenu(gentity_t *ent) {
+  if (!ent || !ent->client || !g_matchstats->integer)
+    return;
+  ent->client->ui.matchStatsActive = true;
+  ent->client->ui.matchStatsNextUpdate = level.time;
+  UpdateMatchStatsMenu(ent, true);
+}
 
-	MenuSystem::Open(ent, std::move(menu));
+void RefreshMatchStatsMenu(gentity_t *ent) {
+  UpdateMatchStatsMenu(ent, false);
 }

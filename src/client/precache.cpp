@@ -171,6 +171,7 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
     char        dogtag_name[MAX_QPATH];
     char        model_filename[MAX_QPATH];
     char        skin_filename[MAX_QPATH];
+    char        brightskin_filename[MAX_QPATH];
     char        weapon_filename[MAX_QPATH];
     char        icon_filename[MAX_QPATH];
     char        dogtag_filename[MAX_QPATH];
@@ -224,6 +225,12 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
         ci->skin = R_RegisterSkin(skin_filename);
     }
 
+    // brightskin file (optional)
+    Q_concat(brightskin_filename, sizeof(brightskin_filename),
+             "players/", model_name, "/", skin_name, "_brtskn.png");
+    ci->brightskin = R_RegisterImage(brightskin_filename, IT_SKIN,
+                                     static_cast<imageflags_t>(IF_KEEP_EXTENSION | IF_OPTIONAL));
+
     // weapon file
     for (i = 0; i < cl.numWeaponModels; i++) {
         Q_concat(weapon_filename, sizeof(weapon_filename),
@@ -254,6 +261,7 @@ void CL_LoadClientinfo(clientinfo_t *ci, const char *s)
     // must have loaded all data types to be valid
     if (!ci->skin || !ci->model || !ci->weaponmodel[0]) {
         ci->skin = 0;
+        ci->brightskin = 0;
         ci->icon_name[0] = 0;
         ci->model = 0;
         ci->weaponmodel[0] = 0;
@@ -437,7 +445,7 @@ early on in KexQ2's development and I have to live with it.
 static void CS_LoadShadowLight(int index, const char *s)
 {
 /*
-		gi.configstring(CS_SHADOWLIGHTS + i, G_Fmt("{};{};{:1};{};{:1};{:1};{:1};{};{:1};{:1};{:1};{:1}",
+		gi.configstring(CS_SHADOWLIGHTS + i, G_Fmt("{};{};{:1};{};{:1};{:1};{:1};{:1};{};{:1};{:1};{:1};{:1}",
 			self->s.number,
 			(int)shadowlightinfo[i].shadowlight.lighttype,
 			shadowlightinfo[i].shadowlight.radius,
@@ -445,6 +453,7 @@ static void CS_LoadShadowLight(int index, const char *s)
 			shadowlightinfo[i].shadowlight.intensity,
 			shadowlightinfo[i].shadowlight.fade_start,
 			shadowlightinfo[i].shadowlight.fade_end,
+			shadowlightinfo[i].shadowlight.max_fade_dist,
 			shadowlightinfo[i].shadowlight.lightstyle,
 			shadowlightinfo[i].shadowlight.coneangle,
 			shadowlightinfo[i].shadowlight.conedirection[0],
@@ -467,7 +476,7 @@ static void CS_LoadShadowLight(int index, const char *s)
     }
 
     // bad shadow light
-    if (n != 11) {
+    if (n != 11 && n != 12) {
         return;
     }
 
@@ -481,6 +490,10 @@ static void CS_LoadShadowLight(int index, const char *s)
     light->intensity = Q_atof(COM_Parse(&p));
     light->fade_start = Q_atof(COM_Parse(&p));
     light->fade_end = Q_atof(COM_Parse(&p));
+    if (n == 12)
+        light->max_fade_dist = Q_atof(COM_Parse(&p));
+    else
+        light->max_fade_dist = 0.0f;
     light->lightstyle = Q_atoi(COM_Parse(&p));
     light->coneangle = Q_atof(COM_Parse(&p));
     light->conedirection[0] = Q_atof(COM_Parse(&p));
@@ -548,6 +561,7 @@ void CL_PrepRenderer(void)
     }
 
     CL_LoadClientinfo(&cl.baseclientinfo, "unnamed\\male/grunt\\default");
+    CL_RegisterForcedModels();
 
     // set sky textures and speed
     CL_SetSky();

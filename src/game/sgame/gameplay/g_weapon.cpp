@@ -440,6 +440,7 @@ void fire_blaster(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   bolt->s.modelIndex = gi.modelIndex("models/objects/laser/tris.md2");
   bolt->s.sound =
       gi.soundIndex(altNoise ? "enforcer/enfire.wav" : "misc/lasfly.wav");
+  bolt->s.renderFX |= RF_DOPPLER;
   bolt->owner = self;
   bolt->touch = blaster_touch;
   bolt->style = static_cast<int>(mod.id);
@@ -597,6 +598,7 @@ void fire_blueblaster(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   bolt->s.effects |= effect;
   bolt->s.modelIndex = gi.modelIndex("models/objects/laser/tris.md2");
   bolt->s.sound = gi.soundIndex("misc/lasfly.wav");
+  bolt->s.renderFX |= RF_DOPPLER;
   bolt->s.skinNum = 1;
   bolt->owner = self;
   bolt->touch = blaster_touch;
@@ -948,6 +950,7 @@ gentity_t *fire_rocket(gentity_t *self, const Vector3 &start,
   rocket->splashDamage = splashDamage;
   rocket->splashRadius = splashRadius;
   rocket->s.sound = gi.soundIndex("weapons/rockfly.wav");
+  rocket->s.renderFX |= RF_DOPPLER;
   rocket->className = "rocket";
 
   gi.linkEntity(rocket);
@@ -1386,6 +1389,7 @@ void fire_bfg(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   bfg->splashRadius = splashRadius;
   bfg->className = "bfg blast";
   bfg->s.sound = gi.soundIndex("weapons/bfg__l1a.wav");
+  bfg->s.renderFX |= RF_DOPPLER;
 
   bfg->think = bfg_think;
   bfg->nextThink = level.time + FRAME_TIME_S;
@@ -1436,6 +1440,7 @@ void fire_disintegrator(gentity_t *self, const Vector3 &start,
   bfg->think = FreeEntity;
   bfg->className = "disint ball";
   bfg->s.sound = gi.soundIndex("weapons/bfg__l1a.wav");
+  bfg->s.renderFX |= RF_DOPPLER;
 
   gi.linkEntity(bfg);
 }
@@ -1946,6 +1951,7 @@ void fire_disruptor(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   bolt->speed = (float)speed;
   bolt->s.effects = EF_TRACKER;
   bolt->s.sound = gi.soundIndex("weapons/disrupt.wav");
+  bolt->s.renderFX |= RF_DOPPLER;
   bolt->s.modelIndex = gi.modelIndex("models/proj/disintegrator/tris.md2");
   bolt->touch = disruptor_touch;
   bolt->enemy = enemy;
@@ -3243,6 +3249,7 @@ void fire_ionripper(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   // Optional: Use a different model/sound for nailgun-like effect
   ion->s.modelIndex = gi.modelIndex("models/objects/boomrang/tris.md2");
   ion->s.sound = gi.soundIndex("misc/lasfly.wav");
+  ion->s.renderFX |= RF_DOPPLER;
 
   ion->owner = self;
   ion->touch = ionripper_touch;
@@ -3360,6 +3367,7 @@ void fire_heat(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   heat->splashDamage = splashDamage;
   heat->splashRadius = splashRadius;
   heat->s.sound = gi.soundIndex("weapons/rockfly.wav");
+  heat->s.renderFX |= RF_DOPPLER;
 
   gi.linkEntity(heat);
 }
@@ -3440,6 +3448,7 @@ void fire_plasmagun(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   plasma->s.renderFX |= RF_TRANSLUCENT;
   plasma->s.modelIndex = gi.modelIndex("sprites/s_pls1.sp2");
   plasma->s.sound = gi.soundIndex("weapons/plsmhumm.wav");
+  plasma->s.renderFX |= RF_DOPPLER;
   plasma->owner = self;
   plasma->touch = plasmagun_touch;
   plasma->nextThink = level.time + GameTime::from_sec(8000.f / speed);
@@ -3524,6 +3533,7 @@ void fire_phalanx(gentity_t *self, const Vector3 &start, const Vector3 &dir,
   phalanx->splashDamage = splashDamage;
   phalanx->splashRadius = splashRadius;
   phalanx->s.sound = gi.soundIndex("weapons/rockfly.wav");
+  phalanx->s.renderFX |= RF_DOPPLER;
 
   phalanx->s.modelIndex = gi.modelIndex("sprites/s_photon.sp2");
   phalanx->s.effects |= EF_PLASMA | EF_ANIM_ALLFAST;
@@ -4020,6 +4030,7 @@ void fire_homing_pod(gentity_t *self, const Vector3 &start, const Vector3 &dir,
 
   pod->s.effects |= EF_TRACKER | EF_TRACKERTRAIL;
   pod->s.sound = gi.soundIndex("misc/lasfly.wav");
+  pod->s.renderFX |= RF_DOPPLER;
 
   gi.linkEntity(pod);
 

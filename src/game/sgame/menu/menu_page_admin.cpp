@@ -8,25 +8,14 @@ provides access to the new command reference page.
 */
 
 #include "../g_local.hpp"
+#include "menu_ui_helpers.hpp"
 
-void OpenAdminSettingsMenu(gentity_t* ent) {
-	MenuBuilder builder;
-	builder.add("*Admin Menu*", MenuAlign::Center);
-	builder.spacer();
-	builder.add("Match Setup owns game settings.", MenuAlign::Left);
-	builder.add("Use Reset State to rerun.", MenuAlign::Left);
-	builder.spacer();
-	builder.add("Reset State", MenuAlign::Left,
-			 [](gentity_t* e, Menu&) { OpenSetupWelcomeMenu(e); });
-	if (Tournament_IsActive()) {
-		builder.add("Replay Game", MenuAlign::Left,
-				 [](gentity_t* e, Menu&) { OpenTournamentReplayMenu(e); });
-	}
-	builder.add("Admin Commands", MenuAlign::Left,
-			 [](gentity_t* e, Menu&) { OpenAdminCommandsMenu(e); });
-	builder.spacer().spacer();
-	builder.add("Return", MenuAlign::Left, [](gentity_t* e, Menu&) {
-		OpenJoinMenu(e);
-	});
-	MenuSystem::Open(ent, builder.build());
+void OpenAdminSettingsMenu(gentity_t *ent) {
+	if (!ent || !ent->client)
+		return;
+
+	MenuUi::UiCommandBuilder cmd(ent);
+	cmd.AppendCvar("ui_admin_show_replay", Tournament_IsActive() ? "1" : "0");
+	cmd.AppendCommand("pushmenu admin_menu");
+	cmd.Flush();
 }

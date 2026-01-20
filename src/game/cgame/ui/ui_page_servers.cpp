@@ -201,7 +201,7 @@ ServerBrowserPage::ServerBrowserPage()
     list_.columns[COL_RTT].name = "Ping";
     list_.columns[COL_RTT].uiFlags = UI_RIGHT;
 
-    info_.mlFlags = MLF_HEADER;
+    info_.mlFlags = MLF_HEADER | MLF_SCROLLBAR;
     info_.extrasize = 0;
     info_.columns.resize(2);
     info_.columns[0].name = "Rule";
@@ -209,7 +209,7 @@ ServerBrowserPage::ServerBrowserPage()
     info_.columns[1].name = "Value";
     info_.columns[1].uiFlags = UI_LEFT;
 
-    players_.mlFlags = MLF_HEADER;
+    players_.mlFlags = MLF_HEADER | MLF_SCROLLBAR;
     players_.extrasize = 0;
     players_.columns.resize(3);
     players_.columns[0].name = "S";
@@ -794,10 +794,11 @@ void ServerBrowserPage::BuildColumns()
 {
     int w = uis.width - MLIST_SCROLLBAR_WIDTH;
     int base = (w - (3 * CONCHAR_WIDTH + MLIST_PADDING) - (5 * CONCHAR_WIDTH + MLIST_PADDING)) / 3;
+    int hintHeight = CONCHAR_HEIGHT;
 
     list_.x = 0;
     list_.y = CONCHAR_HEIGHT;
-    list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1;
+    list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1 - hintHeight;
     list_.columns[COL_NAME].width = base + MLIST_PADDING;
     list_.columns[COL_MOD].width = base + MLIST_PADDING;
     list_.columns[COL_MAP].width = base + MLIST_PADDING;
@@ -809,14 +810,16 @@ void ServerBrowserPage::BuildColumns()
         info_.x = w + MLIST_SCROLLBAR_WIDTH;
         info_.y = CONCHAR_HEIGHT;
         info_.height = (uis.height + 1) / 2 - CONCHAR_HEIGHT - 2;
-        info_.width = uis.width - info_.x;
-        info_.columns[0].width = info_.width / 3;
-        info_.columns[1].width = info_.width - info_.columns[0].width;
+        int side_width = max(0, uis.width - info_.x);
+        int list_width = max(0, side_width - MLIST_SCROLLBAR_WIDTH);
+        info_.width = list_width;
+        info_.columns[0].width = list_width / 3;
+        info_.columns[1].width = list_width - info_.columns[0].width;
 
         players_.x = w + MLIST_SCROLLBAR_WIDTH;
         players_.y = (uis.height + 1) / 2 + 1;
-        players_.height = uis.height - players_.y - CONCHAR_HEIGHT;
-        players_.width = info_.width;
+        players_.height = uis.height - hintHeight - players_.y - CONCHAR_HEIGHT;
+        players_.width = list_width;
         players_.columns[0].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
         players_.columns[1].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
         players_.columns[2].width = 15 * CONCHAR_WIDTH + MLIST_PADDING;
@@ -858,27 +861,42 @@ void ServerBrowserPage::Draw()
         players_.Draw();
     }
 
+    int hintHeight = CONCHAR_HEIGHT;
+    int statusY = uis.height - hintHeight - CONCHAR_HEIGHT;
     int w = (pingstage_ == PING_STAGES && list_.numItems)
         ? pingindex_ * uis.width / list_.numItems
         : uis.width;
-    R_DrawFill8(0, uis.height - CONCHAR_HEIGHT, w, CONCHAR_HEIGHT, 4);
-    R_DrawFill8(w, uis.height - CONCHAR_HEIGHT, uis.width - w, CONCHAR_HEIGHT, 0);
+    R_DrawFill8(0, statusY, w, CONCHAR_HEIGHT, 4);
+    R_DrawFill8(w, statusY, uis.width - w, CONCHAR_HEIGHT, 0);
 
     if (status_c_)
-        UI_DrawString(uis.width / 2, uis.height - CONCHAR_HEIGHT, UI_CENTER, COLOR_WHITE, status_c_);
+        UI_DrawString(uis.width / 2, statusY, UI_CENTER, COLOR_WHITE, status_c_);
 
     if (uis.canvas_width >= 800 && list_.numItems)
-        UI_DrawString(uis.width, uis.height - CONCHAR_HEIGHT, UI_RIGHT, COLOR_WHITE, status_r_);
+        UI_DrawString(uis.width, statusY, UI_RIGHT, COLOR_WHITE, status_r_);
 
     if (uis.canvas_width >= 800 && list_.numItems && list_.curvalue >= 0) {
         auto *slot = static_cast<serverslot_t *>(list_.items[list_.curvalue]);
         if (slot->status > SLOT_PENDING)
-            UI_DrawString(0, uis.height - CONCHAR_HEIGHT, UI_LEFT, COLOR_WHITE, slot->hostname);
+            UI_DrawString(0, statusY, UI_LEFT, COLOR_WHITE, slot->hostname);
     }
+
+    std::vector<UiHint> hints_left{
+        UiHint{ K_ESCAPE, "Back", "Esc" },
+        UiHint{ K_SPACE, "Refresh", "Space" }
+    };
+    std::vector<UiHint> hints_right{
+        UiHint{ K_ENTER, "Select", "Enter" }
+    };
+    UI_DrawHintBar(hints_left, hints_right, uis.height);
 }
 
 Sound ServerBrowserPage::KeyEvent(int key)
 {
+    if (key == K_ESCAPE || key == K_MOUSE2) {
+        GetMenuSystem().Pop();
+        return Sound::Out;
+    }
     if (Key_IsDown(key) > 1)
         return Sound::NotHandled;
 

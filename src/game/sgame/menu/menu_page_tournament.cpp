@@ -6,9 +6,10 @@ information panel, map order list, veto UI, and replay confirmation flows.
 */
 
 #include "../g_local.hpp"
+#include "menu_ui_helpers.hpp"
+#include "menu_ui_list.hpp"
 
 #include <algorithm>
-#include <vector>
 
 namespace {
 
@@ -18,18 +19,6 @@ std::string MapDisplayName(std::string_view mapName) {
     return G_Fmt("{} ({})", entry->longName.c_str(), mapName.data()).data();
   }
   return std::string(mapName);
-}
-
-bool MapIsSelected(std::string_view mapName) {
-  for (const auto &map : game.tournament.mapPicks) {
-    if (_stricmp(map.c_str(), mapName.data()) == 0)
-      return true;
-  }
-  for (const auto &map : game.tournament.mapBans) {
-    if (_stricmp(map.c_str(), mapName.data()) == 0)
-      return true;
-  }
-  return false;
 }
 
 int TournamentPicksNeeded() {
@@ -101,248 +90,115 @@ bool TournamentActorTurn(gentity_t *ent) {
   return !allowedId.empty() && allowedId == id;
 }
 
-std::vector<std::string> TournamentAvailableMaps() {
-  std::vector<std::string> maps;
-  maps.reserve(game.tournament.mapPool.size());
-  for (const auto &map : game.tournament.mapPool) {
-    if (MapIsSelected(map))
-      continue;
-    maps.push_back(map);
-  }
-  return maps;
-}
-
-void OpenTournamentVetoMapMenu(gentity_t *ent, TournamentVetoAction action);
-void OpenTournamentReplayConfirmMenu(gentity_t *ent, int gameNumber);
-
 } // namespace
 
 void OpenTournamentInfoMenu(gentity_t *ent) {
-  MenuBuilder builder;
-  builder.add("*Tournament Info*", MenuAlign::Center);
-  builder.spacer();
-  builder.add("Tournament format runs a match", MenuAlign::Left);
-  builder.add("as a best-of set of games.", MenuAlign::Left);
-  builder.add("Rosters are locked to the", MenuAlign::Left);
-  builder.add("listed participants.", MenuAlign::Left);
-  builder.spacer();
-  builder.add("When everyone is ready,", MenuAlign::Left);
-  builder.add("home picks or bans first.", MenuAlign::Left);
-  builder.add("The decider game is picked", MenuAlign::Left);
-  builder.add("at random from what remains.", MenuAlign::Left);
-  builder.spacer();
-  builder.add("Use tourney_status in the", MenuAlign::Left);
-  builder.add("console for live updates.", MenuAlign::Left);
-  builder.spacer();
-  builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-    OpenJoinMenu(e);
-  });
-  MenuSystem::Open(ent, builder.build());
+  if (!ent || !ent->client)
+    return;
+
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCommand("pushmenu tourney_info");
+  cmd.Flush();
 }
 
 void OpenTournamentMapChoicesMenu(gentity_t *ent) {
-  MenuBuilder builder;
-  builder.add("*Tournament Map Choices*", MenuAlign::Center);
-  builder.spacer();
+  if (!ent || !ent->client)
+    return;
+
+  std::array<std::string, 10> lines{};
+  size_t lineIndex = 0;
 
   if (!Tournament_IsActive() || !game.tournament.vetoComplete ||
       game.tournament.mapOrder.empty()) {
-    builder.add("Map order appears once", MenuAlign::Left);
-    builder.add("picks and bans finish.", MenuAlign::Left);
+    lines[lineIndex++] = "Map order appears once";
+    if (lineIndex < lines.size())
+      lines[lineIndex++] = "picks and bans finish.";
   } else {
-    int index = 1;
+    int mapIndex = 1;
     for (const auto &map : game.tournament.mapOrder) {
-      const std::string display = MapDisplayName(map);
-      builder.add(G_Fmt("{}: {}", index, display.c_str()).data(),
-                  MenuAlign::Left);
-      index++;
+      if (lineIndex >= lines.size())
+        break;
+      lines[lineIndex++] = fmt::format("{}: {}", mapIndex, MapDisplayName(map));
+      ++mapIndex;
     }
   }
 
-  builder.spacer();
-  builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-    OpenJoinMenu(e);
-  });
-  MenuSystem::Open(ent, builder.build());
+  MenuUi::UiCommandBuilder cmd(ent);
+  for (size_t i = 0; i < lines.size(); ++i) {
+    cmd.AppendCvar(fmt::format("ui_tourney_mapchoice_line_{}", i).c_str(),
+                   lines[i]);
+  }
+  cmd.AppendCommand("pushmenu tourney_mapchoices");
+  cmd.Flush();
 }
 
 void OpenTournamentVetoMenu(gentity_t *ent) {
   if (!ent || !ent->client)
     return;
 
-  MenuBuilder builder;
-  builder.add("*Tournament Veto*", MenuAlign::Center);
-  builder.spacer();
+  MenuUi::UiCommandBuilder cmd(ent);
 
   if (!Tournament_IsActive() || game.tournament.vetoComplete) {
-    builder.add("Veto is not active.", MenuAlign::Left);
-    builder.spacer();
-    builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-      OpenJoinMenu(e);
-    });
-    MenuSystem::Open(ent, builder.build());
+    cmd.AppendCvar("ui_tourney_veto_show_inactive", "1");
+    cmd.AppendCvar("ui_tourney_veto_inactive", "Veto is not active.");
+    cmd.AppendCvar("ui_tourney_veto_turn", "");
+    cmd.AppendCvar("ui_tourney_veto_show_wait", "0");
+    cmd.AppendCvar("ui_tourney_veto_wait_0", "");
+    cmd.AppendCvar("ui_tourney_veto_wait_1", "");
+    cmd.AppendCvar("ui_tourney_veto_can_pick", "0");
+    cmd.AppendCvar("ui_tourney_veto_can_ban", "0");
+    cmd.AppendCvar("ui_tourney_veto_picks_needed", "");
+    cmd.AppendCvar("ui_tourney_veto_maps_remaining", "");
+    cmd.AppendCommand("pushmenu tourney_veto");
+    cmd.Flush();
     return;
   }
 
-  const std::string sideLabel =
-      TournamentSideLabel(game.tournament.vetoHomeTurn);
-  builder.add(G_Fmt("Turn: {}", sideLabel.c_str()).data(),
-              MenuAlign::Left);
-  builder.spacer();
+  cmd.AppendCvar("ui_tourney_veto_show_inactive", "0");
+  cmd.AppendCvar("ui_tourney_veto_inactive", "");
+  cmd.AppendCvar("ui_tourney_veto_turn",
+                 fmt::format("Turn: {}",
+                             TournamentSideLabel(game.tournament.vetoHomeTurn)));
 
   if (!TournamentActorTurn(ent)) {
-    builder.add("Waiting for the active", MenuAlign::Left);
-    builder.add("side to make a choice.", MenuAlign::Left);
-    builder.spacer();
-    builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-      OpenJoinMenu(e);
-    });
-    MenuSystem::Open(ent, builder.build());
-    return;
-  }
-
-  builder.add("Pick", MenuAlign::Left,
-              [](gentity_t *e, Menu &) {
-                OpenTournamentVetoMapMenu(e, TournamentVetoAction::Pick);
-              });
-
-  if (TournamentBansAllowed()) {
-    builder.add("Ban", MenuAlign::Left,
-                [](gentity_t *e, Menu &) {
-                  OpenTournamentVetoMapMenu(e, TournamentVetoAction::Ban);
-                });
+    cmd.AppendCvar("ui_tourney_veto_show_wait", "1");
+    cmd.AppendCvar("ui_tourney_veto_wait_0", "Waiting for the active");
+    cmd.AppendCvar("ui_tourney_veto_wait_1", "side to make a choice.");
+    cmd.AppendCvar("ui_tourney_veto_can_pick", "0");
+    cmd.AppendCvar("ui_tourney_veto_can_ban", "0");
+    cmd.AppendCvar("ui_tourney_veto_picks_needed", "");
+    cmd.AppendCvar("ui_tourney_veto_maps_remaining", "");
   } else {
-    builder.add("Ban (locked)", MenuAlign::Left);
+    cmd.AppendCvar("ui_tourney_veto_show_wait", "0");
+    cmd.AppendCvar("ui_tourney_veto_wait_0", "");
+    cmd.AppendCvar("ui_tourney_veto_wait_1", "");
+    cmd.AppendCvar("ui_tourney_veto_can_pick", "1");
+    cmd.AppendCvar("ui_tourney_veto_can_ban",
+                   TournamentBansAllowed() ? "1" : "0");
+    cmd.AppendCvar("ui_tourney_veto_picks_needed",
+                   fmt::format("Picks needed: {}", TournamentPicksRemaining()));
+    cmd.AppendCvar(
+        "ui_tourney_veto_maps_remaining",
+        fmt::format("Maps remaining: {}", TournamentRemainingMaps()));
   }
 
-  builder.spacer();
-  builder.add(G_Fmt("Picks needed: {}", TournamentPicksRemaining()).data(),
-              MenuAlign::Left);
-  builder.add(G_Fmt("Maps remaining: {}", TournamentRemainingMaps()).data(),
-              MenuAlign::Left);
-  builder.spacer();
-  builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-    OpenJoinMenu(e);
-  });
-
-  MenuSystem::Open(ent, builder.build());
+  cmd.AppendCommand("pushmenu tourney_veto");
+  cmd.Flush();
 }
 
 void OpenTournamentReplayMenu(gentity_t *ent) {
-  MenuBuilder builder;
-  builder.add("*Replay Tournament Game*", MenuAlign::Center);
-  builder.spacer();
-
-  if (!Tournament_IsActive() || game.tournament.mapOrder.empty()) {
-    builder.add("Replay is available once", MenuAlign::Left);
-    builder.add("the map order is locked.", MenuAlign::Left);
-    builder.spacer();
-    builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-      OpenAdminSettingsMenu(e);
-    });
-    MenuSystem::Open(ent, builder.build());
-    return;
-  }
-
-  int gameNum = 1;
-  for (const auto &map : game.tournament.mapOrder) {
-    const std::string display = MapDisplayName(map);
-    builder.add(
-        G_Fmt("Replay game {}: {}", gameNum, display.c_str())
-            .data(),
-        MenuAlign::Left, [gameNum](gentity_t *e, Menu &) {
-          OpenTournamentReplayConfirmMenu(e, gameNum);
-        });
-    gameNum++;
-  }
-
-  builder.spacer();
-  builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-    OpenAdminSettingsMenu(e);
-  });
-  MenuSystem::Open(ent, builder.build());
-}
-
-namespace {
-
-void OpenTournamentVetoMapMenu(gentity_t *ent, TournamentVetoAction action) {
-  if (!ent || !ent->client)
-    return;
-
-  MenuBuilder builder;
-  builder.add(action == TournamentVetoAction::Pick
-                  ? "*Pick a Map*"
-                  : "*Ban a Map*",
-              MenuAlign::Center);
-  builder.spacer();
-
-  if (!Tournament_IsActive() || game.tournament.vetoComplete) {
-    builder.add("Veto is not active.", MenuAlign::Left);
-  } else {
-    const auto maps = TournamentAvailableMaps();
-    if (maps.empty()) {
-      builder.add("No maps remain to", MenuAlign::Left);
-      builder.add("pick or ban.", MenuAlign::Left);
-    } else {
-      for (const auto &map : maps) {
-        builder.add(MapDisplayName(map), MenuAlign::Left,
-                    [action, map](gentity_t *e, Menu &) {
-                      std::string message;
-                      if (!Tournament_HandleVetoAction(e, action, map,
-                                                       message)) {
-                        if (!message.empty()) {
-                          gi.Client_Print(
-                              e, PRINT_HIGH,
-                              G_Fmt("{}\n", message.c_str()).data());
-                        }
-                        return;
-                      }
-
-                      if (!message.empty()) {
-                        gi.Client_Print(
-                            e, PRINT_HIGH,
-                            G_Fmt("{}\n", message.c_str()).data());
-                      }
-                      MenuSystem::Close(e);
-                    });
-      }
-    }
-  }
-
-  builder.spacer();
-  builder.add("Back", MenuAlign::Left, [](gentity_t *e, Menu &) {
-    OpenTournamentVetoMenu(e);
-  });
-
-  MenuSystem::Open(ent, builder.build());
+  UiList_Open(ent, UiListKind::TournamentReplay);
 }
 
 void OpenTournamentReplayConfirmMenu(gentity_t *ent, int gameNumber) {
-  auto menu = std::make_unique<Menu>();
-  menu->entries.emplace_back("CONFIRM REPLAY", MenuAlign::Center);
-  menu->entries.emplace_back("", MenuAlign::Center);
-  menu->entries.emplace_back(
-      G_Fmt("Replay game {}?", gameNumber).data(), MenuAlign::Center);
-  menu->entries.emplace_back("", MenuAlign::Center);
+  if (!ent || !ent->client)
+    return;
 
-  MenuEntry yesOpt("YES", MenuAlign::Center);
-  yesOpt.onSelect = [gameNumber](gentity_t *e, Menu &) {
-    std::string message;
-    if (!Tournament_ReplayGame(gameNumber, message)) {
-      if (!message.empty()) {
-        gi.Client_Print(e, PRINT_HIGH,
-                        G_Fmt("{}\n", message.c_str()).data());
-      }
-    }
-    MenuSystem::Close(e);
-  };
-  menu->entries.push_back(std::move(yesOpt));
-
-  MenuEntry noOpt("NO", MenuAlign::Center);
-  noOpt.onSelect = [](gentity_t *e, Menu &) { OpenTournamentReplayMenu(e); };
-  menu->entries.push_back(std::move(noOpt));
-
-  MenuSystem::Open(ent, std::move(menu));
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_tourney_replay_prompt",
+                 fmt::format("Replay game {}?", gameNumber));
+  cmd.AppendCvar("ui_tourney_replay_yes_cmd",
+                 fmt::format("worr_tourney_replay {}", gameNumber));
+  cmd.AppendCommand("pushmenu tourney_replay_confirm");
+  cmd.Flush();
 }
-
-} // namespace

@@ -13,25 +13,10 @@ The final step in the wizard calls `FinishMatchSetup`, which applies the chosen
 settings to the server and closes the menu.*/
 
 #include "../g_local.hpp"
+#include "menu_ui_helpers.hpp"
+#include "menu_ui_list.hpp"
 
 extern void OpenJoinMenu(gentity_t *ent);
-
-/*
-===============
-MatchSetupState
-===============
-*/
-struct MatchSetupState {
-  std::string format = "regular";
-  std::string gametype = "ffa";
-  std::string modifier = "standard";
-  int maxPlayers = 8;
-  std::string length = "standard";
-  std::string type = "standard";
-  std::string bestOf = "bo1";
-};
-
-static void OpenSetupGametypeMenu(gentity_t *ent, MatchSetupState *state);
 
 namespace {
 bool IsTeamBasedGametype(std::string_view gt);
@@ -197,15 +182,6 @@ std::string GetCurrentModifierKey() {
   if (g_frenzy && g_frenzy->integer)
     return "frenzy";
   return "standard";
-}
-
-void AddSetupHeading(MenuBuilder &builder, std::string_view title,
-                     const std::string &current) {
-  builder.add("Match Setup", MenuAlign::Center);
-  builder.add(std::string(title), MenuAlign::Center);
-  if (!current.empty())
-    builder.add(G_Fmt("Current: {}", current).data(), MenuAlign::Center);
-  builder.spacer();
 }
 
 void InitializeMatchSetupState(MatchSetupState &state) {
@@ -391,38 +367,50 @@ int GetDefaultPlayerCount(std::string_view gt) {
 }
 } // namespace
 
-static void FinishMatchSetup(gentity_t *ent, MatchSetupState *state) {
-  state->format = NormalizeSelection(state->format, "regular", kFormatKeys);
-  state->modifier =
-      NormalizeSelection(state->modifier, "standard", kModifierKeys);
-  state->length = NormalizeSelection(state->length, "standard", kLengthKeys);
-  state->type = NormalizeSelection(state->type, "standard", kTypeKeys);
-  state->bestOf = NormalizeSelection(state->bestOf, "bo1", kBestOfKeys);
+namespace {
+
+std::string SetupCurrentLabel(std::string_view label) {
+  if (label.empty())
+    return {};
+  return fmt::format("Current: {}", label);
+}
+
+static void FinishMatchSetup(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
+  state.format = NormalizeSelection(state.format, "regular", kFormatKeys);
+  state.modifier =
+      NormalizeSelection(state.modifier, "standard", kModifierKeys);
+  state.length = NormalizeSelection(state.length, "standard", kLengthKeys);
+  state.type = NormalizeSelection(state.type, "standard", kTypeKeys);
+  state.bestOf = NormalizeSelection(state.bestOf, "bo1", kBestOfKeys);
 
   bool gametypeChanged = false;
-  if (auto gt = Game::FromString(state->gametype)) {
+  if (auto gt = Game::FromString(state.gametype)) {
     if (*gt != Game::GetCurrentType()) {
       ChangeGametype(*gt);
       gametypeChanged = true;
     }
   }
 
-  if (IsOneVOneGametype(state->gametype))
-    state->maxPlayers = 2;
+  if (IsOneVOneGametype(state.gametype))
+    state.maxPlayers = 2;
 
-  ApplyMatchFormat(state->format);
-  const bool latchedChanged = ApplyModifiers(state->modifier);
-  ApplyMatchLength(state->length, state->gametype, state->maxPlayers);
-  ApplyMatchType(state->type, state->gametype);
+  ApplyMatchFormat(state.format);
+  const bool latchedChanged = ApplyModifiers(state.modifier);
+  ApplyMatchLength(state.length, state.gametype, state.maxPlayers);
+  ApplyMatchType(state.type, state.gametype);
 
-  gi.cvarSet("maxplayers", G_Fmt("{}", state->maxPlayers).data());
+  gi.cvarSet("maxplayers", G_Fmt("{}", state.maxPlayers).data());
 
   if (match_setup_length)
-    gi.cvarSet("match_setup_length", state->length.c_str());
+    gi.cvarSet("match_setup_length", state.length.c_str());
   if (match_setup_type)
-    gi.cvarSet("match_setup_type", state->type.c_str());
+    gi.cvarSet("match_setup_type", state.type.c_str());
   if (match_setup_bestof)
-    gi.cvarSet("match_setup_bestof", state->bestOf.c_str());
+    gi.cvarSet("match_setup_bestof", state.bestOf.c_str());
 
   if (latchedChanged && !gametypeChanged && level.mapName[0]) {
     gi.AddCommandString(G_Fmt("gamemap {}\n", level.mapName.data()).data());
@@ -430,298 +418,127 @@ static void FinishMatchSetup(gentity_t *ent, MatchSetupState *state) {
 
   gi.Com_PrintFmt("Match setup complete: format={} gametype={} modifier={} "
                   "players={} length={} type={} bestof={}\n",
-                  state->format.c_str(), state->gametype.c_str(),
-                  state->modifier.c_str(), state->maxPlayers,
-                  state->length.c_str(), state->type.c_str(),
-                  state->bestOf.c_str());
+                  state.format.c_str(), state.gametype.c_str(),
+                  state.modifier.c_str(), state.maxPlayers,
+                  state.length.c_str(), state.type.c_str(),
+                  state.bestOf.c_str());
 
-  gi.TagFree(state);
-  MenuSystem::Close(ent);
+  CloseActiveMenu(ent);
 
-  if (ent && ent->client && ent->client->initialMenu.frozen)
+  if (ent->client->initialMenu.frozen)
     OpenJoinMenu(ent);
 }
 
-/*
-===============
-OpenSetupBestOfMenu
-===============
-*/
-static void OpenSetupBestOfMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Best Of", GetBestOfLabel(state->bestOf));
-  // BO3 is a common default for tournaments
-  b.add("BO1", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->bestOf = "bo1";
-    FinishMatchSetup(e, state);
-  });
-  b.addDefault("BO3", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->bestOf = "bo3";
-    FinishMatchSetup(e, state);
-  });
-  b.add("BO5", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->bestOf = "bo5";
-    FinishMatchSetup(e, state);
-  });
-  b.add("BO7", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->bestOf = "bo7";
-    FinishMatchSetup(e, state);
-  });
-  b.add("BO9", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->bestOf = "bo9";
-    FinishMatchSetup(e, state);
-  });
-  MenuSystem::Open(ent, b.build());
+} // namespace
+
+void OpenSetupBestOfMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current", SetupCurrentLabel(GetBestOfLabel(state.bestOf)));
+  cmd.AppendCommand("pushmenu setup_bestof");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupMatchTypeMenu
-===============
-*/
-static void OpenSetupMatchTypeMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Match Type", GetTypeLabel(state->type));
-  // Order: casual, standard (default), competitive, tournament
-  b.add("Casual", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->type = "casual";
-    FinishMatchSetup(e, state);
-  });
-  b.addDefault("Standard", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->type = "standard";
-    FinishMatchSetup(e, state);
-  });
-  b.add("Competitive", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->type = "competitive";
-    FinishMatchSetup(e, state);
-  });
-  b.add("Tournament", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->type = "tournament";
-    // Best Of menu for all gametypes in tournament mode
-    OpenSetupBestOfMenu(e, state);
-  });
-  MenuSystem::Open(ent, b.build());
+void OpenSetupMatchTypeMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current", SetupCurrentLabel(GetTypeLabel(state.type)));
+  cmd.AppendCommand("pushmenu setup_type");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupMatchLengthMenu
-===============
-*/
-static void OpenSetupMatchLengthMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Match Length", GetLengthLabel(state->length));
+void OpenSetupMatchLengthMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
 
-  // Items in ascending order: Short, Standard (default), Long, Endurance
-  b.add("Short", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->length = "short";
-    OpenSetupMatchTypeMenu(e, state);
-  });
-  b.addDefault("Standard", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->length = "standard";
-    OpenSetupMatchTypeMenu(e, state);
-  });
-  b.add("Long", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->length = "long";
-    OpenSetupMatchTypeMenu(e, state);
-  });
-  b.add("Endurance", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->length = "endurance";
-    OpenSetupMatchTypeMenu(e, state);
-  });
-  MenuSystem::Open(ent, b.build());
+  auto &state = ent->client->ui.setup;
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current",
+                 SetupCurrentLabel(GetLengthLabel(state.length)));
+  cmd.AppendCommand("pushmenu setup_length");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupMaxPlayersMenu
-===============
-*/
-static void OpenSetupMaxPlayersMenu(gentity_t *ent, MatchSetupState *state) {
+void OpenSetupMaxPlayersMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
   const int maxClientsLimit = GetMaxClientsLimit();
-  const int defaultPlayers = GetDefaultPlayerCount(state->gametype);
-  const int currentPlayers = state->maxPlayers;
+  const int defaultPlayers = GetDefaultPlayerCount(state.gametype);
 
-  MenuBuilder b;
-  AddSetupHeading(b, "Max Players", G_Fmt("{}", currentPlayers).data());
-
-  int defaultIndex = -1;
-  int itemIndex = 0;
-
-  for (int count : kPlayerCountOptions) {
-    // Skip options that exceed maxclients
-    if (count > maxClientsLimit)
-      continue;
-
-    const bool isDefault = (count == defaultPlayers);
-    const bool isCurrent = (count == currentPlayers);
-
-    if (isDefault || isCurrent) {
-      // Use addDefault to mark with * and set as selected
-      b.addDefault(G_Fmt("{}", count).data(), MenuAlign::Left,
-                   [=](gentity_t *e, Menu &m) {
-                     state->maxPlayers = count;
-                     OpenSetupGametypeMenu(e, state);
-                   });
-      if (defaultIndex < 0)
-        defaultIndex = itemIndex;
-    } else {
-      b.add(G_Fmt("{}", count).data(), MenuAlign::Left,
-            [=](gentity_t *e, Menu &m) {
-              state->maxPlayers = count;
-              OpenSetupGametypeMenu(e, state);
-            });
-    }
-    itemIndex++;
-  }
-
-  // If we found a default, use selectDefault to ensure it's initially selected
-  if (defaultIndex >= 0)
-    b.selectDefault(defaultIndex);
-
-  MenuSystem::Open(ent, b.build());
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current",
+                 SetupCurrentLabel(fmt::format("{}", state.maxPlayers)));
+  cmd.AppendCvar("ui_setup_default",
+                 fmt::format("{}", defaultPlayers));
+  cmd.AppendCvar("ui_setup_maxplayers_limit",
+                 fmt::format("{}", maxClientsLimit));
+  cmd.AppendCommand("pushmenu setup_maxplayers");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupModifierMenu
-===============
-*/
-static void OpenSetupModifierMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Modifiers", GetModifierLabel(state->modifier));
-  // Standard is the default - mark it with * and select it
-  b.addDefault("Standard", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->modifier = "standard";
-    OpenSetupMatchLengthMenu(e, state);
-  });
-  b.add("InstaGib", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->modifier = "instagib";
-    OpenSetupMatchLengthMenu(e, state);
-  });
-  b.add("Vampiric Damage", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->modifier = "vampiric";
-    OpenSetupMatchLengthMenu(e, state);
-  });
-  b.add("Frenzy", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->modifier = "frenzy";
-    OpenSetupMatchLengthMenu(e, state);
-  });
-  b.add("Gravity Lotto", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->modifier = "gravity_lotto";
-    OpenSetupMatchLengthMenu(e, state);
-  });
-  MenuSystem::Open(ent, b.build());
+void OpenSetupModifierMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current",
+                 SetupCurrentLabel(GetModifierLabel(state.modifier)));
+  cmd.AppendCommand("pushmenu setup_modifier");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupGametypeMenu
-===============
-*/
-static void OpenSetupGametypeMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Gametype", GetGametypeLabel(state->gametype));
-
-  // List all gametypes in g_gametype order with FFA as default
-  for (const auto &mode : GAME_MODES) {
-    if (mode.type == GameType::None)
-      continue;
-    const std::string label(mode.long_name);
-    const std::string value(mode.short_name);
-    const bool isFFA = (mode.type == GameType::FreeForAll);
-
-    if (isFFA) {
-      // FFA is the default selection
-      b.addDefault(label, MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-        state->gametype = value;
-        if (IsOneVOneGametype(state->gametype))
-          state->maxPlayers = 2;
-        OpenSetupModifierMenu(e, state);
-      });
-    } else {
-      b.add(label, MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-        state->gametype = value;
-        if (IsOneVOneGametype(state->gametype))
-          state->maxPlayers = 2;
-        OpenSetupModifierMenu(e, state);
-      });
-    }
-  }
-  MenuSystem::Open(ent, b.build());
+void OpenSetupGametypeMenu(gentity_t *ent) {
+  UiList_Open(ent, UiListKind::SetupGametype);
+  if (ent && ent->client)
+    ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupMatchFormatMenu
-===============
-*/
-static void OpenSetupMatchFormatMenu(gentity_t *ent, MatchSetupState *state) {
-  MenuBuilder b;
-  AddSetupHeading(b, "Match Format", GetFormatLabel(state->format));
+void OpenSetupMatchFormatMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &state = ent->client->ui.setup;
   const bool tourneyAvailable = Tournament_ConfigIsValid();
-  b.addDefault("Regular", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->format = "regular";
-    OpenSetupMaxPlayersMenu(e, state);
-  });
-  b.add("Practice", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->format = "practice";
-    OpenSetupMaxPlayersMenu(e, state);
-  });
-  b.add("Marathon", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-    state->format = "marathon";
-    OpenSetupMaxPlayersMenu(e, state);
-  });
-  if (tourneyAvailable) {
-    b.add("Tournament", MenuAlign::Left, [=](gentity_t *e, Menu &m) {
-      std::string error;
-      if (!Tournament_LoadConfig({}, &error)) {
-        if (!error.empty()) {
-          gi.LocClient_Print(e, PRINT_HIGH, "Tournament load failed: {}\n",
-                             error.c_str());
-        }
-        return;
-      }
-      gi.TagFree(state);
-      MenuSystem::Close(e);
-      if (e && e->client && e->client->initialMenu.frozen)
-        OpenJoinMenu(e);
-    });
-  }
-  MenuSystem::Open(ent, b.build());
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_setup_current",
+                 SetupCurrentLabel(GetFormatLabel(state.format)));
+  cmd.AppendCvar("ui_setup_show_tournament", tourneyAvailable ? "1" : "0");
+  cmd.AppendCommand("pushmenu setup_format");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
 }
 
-/*
-===============
-OpenSetupWelcomeMenu
-===============
-*/
 void OpenSetupWelcomeMenu(gentity_t *ent) {
-  auto *state = static_cast<MatchSetupState *>(
-      gi.TagMalloc(sizeof(MatchSetupState), TAG_LEVEL));
-  new (state) MatchSetupState();
-  InitializeMatchSetupState(*state);
+  if (!ent || !ent->client)
+    return;
 
-  MenuBuilder b;
-  // Line 1: Welcome to
-  b.add("Welcome to", MenuAlign::Center);
-  // Line 2: Product name and version
-  b.add(G_Fmt("{} v{}", worr::version::kGameTitle, worr::version::kGameVersion)
-            .data(),
-        MenuAlign::Center);
-  // Line 3: blank
-  b.spacer();
-  // Line 4: Match Setup (default selection)
-  b.addDefault("Match Setup", MenuAlign::Left,
-               [=](gentity_t *e, Menu &m) {
-                 OpenSetupMatchFormatMenu(e, state);
-               });
-  // Line 5: Skip
-  b.add("Skip", MenuAlign::Left, [state](gentity_t *e, Menu &m) {
-    gi.TagFree(state);
-    MenuSystem::Close(e);
-    if (e && e->client && e->client->initialMenu.frozen)
-      OpenJoinMenu(e);
-  });
-  MenuSystem::Open(ent, b.build());
+  auto &state = ent->client->ui.setup;
+  InitializeMatchSetupState(state);
+
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar(
+      "ui_setup_title",
+      fmt::format("{} v{}", worr::version::kGameTitle,
+                  worr::version::kGameVersion));
+  cmd.AppendCommand("pushmenu setup_welcome");
+  cmd.Flush();
+  ent->client->ui.setupActive = true;
+}
+
+void FinishSetupWizard(gentity_t *ent) {
+  FinishMatchSetup(ent);
 }

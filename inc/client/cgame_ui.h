@@ -139,6 +139,7 @@ typedef struct cgame_ui_import_s {
     void (*Re_DrawFill8)(int x, int y, int w, int h, int c);
     void (*Re_DrawFill32)(int x, int y, int w, int h, color_t color);
     void (*Re_GetConfig)(refcfg_t *out);
+    void (*CL_SetMenuBlurRect)(const clipRect_t *rect);
 
     void (*SetClipboardData)(const char *text);
     unsigned (*GetEventTime)(void);

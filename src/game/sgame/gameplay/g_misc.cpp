@@ -693,7 +693,7 @@ void setup_shadow_lights() {
 				level.shadowLightInfo[i].shadowlight.lightStyle = target->style;
 		}
 
-		gi.configString(CS_SHADOWLIGHTS + i, G_Fmt("{};{};{:1};{};{:1};{:1};{:1};{};{:1};{:1};{:1};{:1}",
+		gi.configString(CS_SHADOWLIGHTS + i, G_Fmt("{};{};{:1};{};{:1};{:1};{:1};{:1};{};{:1};{:1};{:1};{:1}",
 			self->s.number,
 			(int)level.shadowLightInfo[i].shadowlight.lightType,
 			level.shadowLightInfo[i].shadowlight.radius,
@@ -701,6 +701,7 @@ void setup_shadow_lights() {
 			level.shadowLightInfo[i].shadowlight.intensity,
 			level.shadowLightInfo[i].shadowlight.fadeStart,
 			level.shadowLightInfo[i].shadowlight.fadeEnd,
+			level.shadowLightInfo[i].shadowlight.maxFadeDistance,
 			level.shadowLightInfo[i].shadowlight.lightStyle,
 			level.shadowLightInfo[i].shadowlight.coneAngle,
 			level.shadowLightInfo[i].shadowlight.coneDirection[0],
@@ -738,6 +739,9 @@ void G_LoadShadowLights() {
 
 			token = COM_ParseEx(&cstr, ";");
 			level.shadowLightInfo[i].shadowlight.fadeEnd = atof(token);
+
+			token = COM_ParseEx(&cstr, ";");
+			level.shadowLightInfo[i].shadowlight.maxFadeDistance = atof(token);
 
 			token = COM_ParseEx(&cstr, ";");
 			level.shadowLightInfo[i].shadowlight.lightStyle = atoi(token);

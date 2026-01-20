@@ -109,6 +109,18 @@ BSP_LOAD(Texinfo)
         out->c.value = BSP_Long();
         // Paril: re-release
         out->c.id = i + 1;
+#if USE_REF
+        out->radiance = out->c.value;
+#if REF_VKPT
+        out->material = NULL;
+#endif
+#if REF_GL
+        out->image = NULL;
+#endif
+#endif
+#if USE_CLIENT
+        out->step_material[0] = 0;
+#endif
 
         memcpy(out->c.name, in, sizeof(out->c.name) - 1);
         memcpy(out->name, in, sizeof(out->name) - 1);

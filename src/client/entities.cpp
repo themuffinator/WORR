@@ -24,6 +24,173 @@ extern qhandle_t cl_mod_laser;
 extern qhandle_t cl_mod_dmspot;
 extern qhandle_t cl_img_flare;
 
+static cvar_t *cl_brightskins_custom;
+static cvar_t *cl_brightskins_enemy_color;
+static cvar_t *cl_brightskins_team_color;
+static cvar_t *cl_brightskins_dead;
+static color_t brightskin_enemy_color = COLOR_RED;
+static color_t brightskin_team_color = COLOR_GREEN;
+
+#define RESERVED_ENTITY_GUN 1
+#define RESERVED_ENTITY_TESTMODEL 2
+#define RESERVED_ENTITY_COUNT 3
+
+static bool CL_ParseBrightskinColor(const char *s, color_t *color)
+{
+    if (SCR_ParseColor(s, color))
+        return true;
+
+    if (s[0] != '#') {
+        size_t len = strlen(s);
+        if (len == 6 || len == 8) {
+            char buffer[10];
+
+            buffer[0] = '#';
+            Q_strlcpy(buffer + 1, s, sizeof(buffer) - 1);
+            return SCR_ParseColor(buffer, color);
+        }
+    }
+
+    return false;
+}
+
+static void cl_brightskins_enemy_color_changed(cvar_t *self)
+{
+    if (!CL_ParseBrightskinColor(self->string, &brightskin_enemy_color)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
+        Cvar_Reset(self);
+        brightskin_enemy_color = COLOR_RED;
+    }
+}
+
+static void cl_brightskins_team_color_changed(cvar_t *self)
+{
+    if (!CL_ParseBrightskinColor(self->string, &brightskin_team_color)) {
+        Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
+        Cvar_Reset(self);
+        brightskin_team_color = COLOR_GREEN;
+    }
+}
+
+void CL_InitBrightskins(void)
+{
+    cl_brightskins_custom = Cvar_Get("cl_brightskins_custom", "0", CVAR_ARCHIVE);
+    cl_brightskins_enemy_color = Cvar_Get("cl_brightskins_enemy_color", "#ff0000", CVAR_ARCHIVE);
+    cl_brightskins_enemy_color->changed = cl_brightskins_enemy_color_changed;
+    cl_brightskins_enemy_color->generator = Com_Color_g;
+    cl_brightskins_enemy_color_changed(cl_brightskins_enemy_color);
+    cl_brightskins_team_color = Cvar_Get("cl_brightskins_team_color", "#00ff00", CVAR_ARCHIVE);
+    cl_brightskins_team_color->changed = cl_brightskins_team_color_changed;
+    cl_brightskins_team_color->generator = Com_Color_g;
+    cl_brightskins_team_color_changed(cl_brightskins_team_color);
+    cl_brightskins_dead = Cvar_Get("cl_brightskins_dead", "1", CVAR_ARCHIVE);
+}
+
+typedef struct {
+    clientinfo_t info;
+    bool active;
+} forced_model_t;
+
+static forced_model_t cl_forced_enemy_model;
+static forced_model_t cl_forced_team_model;
+static int32_t cl_forced_enemy_modcount = -1;
+static int32_t cl_forced_team_modcount = -1;
+
+static bool CL_IsSpectatorView(void)
+{
+    pmtype_t pm_type = cl.frame.ps.pmove.pm_type;
+
+    return pm_type == PM_SPECTATOR || pm_type == PM_FREEZE;
+}
+
+void CL_MigratePlayerCvars(void)
+{
+    float old_enemy_outline = 0.0f;
+    float old_self_outline = 0.0f;
+    float old_enemy_rim = 0.0f;
+    float old_self_rim = 0.0f;
+
+    if (cl_enemy_outline)
+        old_enemy_outline = Cvar_ClampValue(cl_enemy_outline, 0.0f, 1.0f);
+    if (cl_enemy_outline_self)
+        old_self_outline = Cvar_ClampValue(cl_enemy_outline_self, 0.0f, 1.0f);
+    if (cl_enemy_rimlight)
+        old_enemy_rim = Cvar_ClampValue(cl_enemy_rimlight, 0.0f, 1.0f);
+    if (cl_enemy_rimlight_self)
+        old_self_rim = Cvar_ClampValue(cl_enemy_rimlight_self, 0.0f, 1.0f);
+
+    if (cl_player_outline_enemy && cl_player_outline_enemy->modified_count == 0 && old_enemy_outline > 0.0f)
+        Cvar_SetValue(cl_player_outline_enemy, old_enemy_outline, FROM_CODE);
+
+    if (cl_player_outline_team && cl_player_outline_team->modified_count == 0) {
+        float team_outline = old_enemy_outline > old_self_outline ? old_enemy_outline : old_self_outline;
+        if (team_outline > 0.0f)
+            Cvar_SetValue(cl_player_outline_team, team_outline, FROM_CODE);
+    }
+
+    if (cl_player_rimlight_enemy && cl_player_rimlight_enemy->modified_count == 0 && old_enemy_rim > 0.0f)
+        Cvar_SetValue(cl_player_rimlight_enemy, old_enemy_rim, FROM_CODE);
+
+    if (cl_player_rimlight_team && cl_player_rimlight_team->modified_count == 0) {
+        float team_rim = old_enemy_rim > old_self_rim ? old_enemy_rim : old_self_rim;
+        if (team_rim > 0.0f)
+            Cvar_SetValue(cl_player_rimlight_team, team_rim, FROM_CODE);
+    }
+}
+
+static bool CL_ForceModelActive(const cvar_t *var)
+{
+    if (!var || !var->string[0])
+        return false;
+
+    return Q_stricmp(var->string, "0") != 0;
+}
+
+static void CL_LoadForcedModel(forced_model_t *forced, const char *label, const cvar_t *var)
+{
+    memset(forced, 0, sizeof(*forced));
+
+    if (!CL_ForceModelActive(var))
+        return;
+
+    char buffer[MAX_QPATH * 2];
+    if (Q_concat(buffer, sizeof(buffer), "forced\\", var->string) >= sizeof(buffer)) {
+        Com_WPrintf("cl_force_%s_model too long: '%s'\n", label, var->string);
+        return;
+    }
+
+    CL_LoadClientinfo(&forced->info, buffer);
+    if (!forced->info.model || !forced->info.skin) {
+        memset(&forced->info, 0, sizeof(forced->info));
+        return;
+    }
+
+    forced->active = true;
+}
+
+static void CL_UpdateForcedModels(void)
+{
+    if (!cl_force_enemy_model || !cl_force_team_model)
+        return;
+
+    if (cl_forced_enemy_modcount != cl_force_enemy_model->modified_count) {
+        cl_forced_enemy_modcount = cl_force_enemy_model->modified_count;
+        CL_LoadForcedModel(&cl_forced_enemy_model, "enemy", cl_force_enemy_model);
+    }
+
+    if (cl_forced_team_modcount != cl_force_team_model->modified_count) {
+        cl_forced_team_modcount = cl_force_team_model->modified_count;
+        CL_LoadForcedModel(&cl_forced_team_model, "team", cl_force_team_model);
+    }
+}
+
+void CL_RegisterForcedModels(void)
+{
+    cl_forced_enemy_modcount = -1;
+    cl_forced_team_modcount = -1;
+    CL_UpdateForcedModels();
+}
+
 /*
 =========================================================================
 
@@ -43,6 +210,8 @@ static inline bool entity_is_optimized(const entity_state_t *state)
 static inline void
 entity_update_new(centity_t *ent, const entity_state_t *state, const vec_t *origin)
 {
+    static int entity_ctr;
+    ent->id = ++entity_ctr;
     ent->trailcount = 1024;     // for diminishing rocket / grenade trails
     ent->flashlightfrac = 1.0f;
 
@@ -558,7 +727,7 @@ static bool CL_GetPlayerTeamInfo(const entity_state_t *state, uint8_t *team_inde
     return true;
 }
 
-static color_t CL_PlayerTeamColor(uint8_t team_index)
+static color_t CL_BrightskinTeamColor(uint8_t team_index)
 {
     switch (team_index) {
     case 1:
@@ -566,21 +735,70 @@ static color_t CL_PlayerTeamColor(uint8_t team_index)
     case 2:
         return COLOR_BLUE;
     default:
-        return COLOR_RED;
+        return COLOR_GREEN;
     }
 }
 
-static color_t CL_PlayerEffectColor(bool teamplay, uint8_t team_index)
+static color_t CL_SelectBrightskinColor(bool use_custom, bool is_enemy, bool is_ally, bool is_self, uint8_t team_index)
 {
-    if (teamplay && team_index)
-        return CL_PlayerTeamColor(team_index);
+    if (!use_custom)
+        return CL_BrightskinTeamColor(team_index);
 
-    return COLOR_RED;
+    if (is_enemy || (!is_self && !is_ally))
+        return brightskin_enemy_color;
+
+    return brightskin_team_color;
 }
 
 static bool CL_IsThirdPersonSelf(const entity_state_t *state)
 {
     return cl.thirdPersonView && state->number == cl.frame.clientNum + 1;
+}
+
+static uint8_t CL_ShellColorToByte(float value)
+{
+    int scaled = Q_rint(value * 255.0f);
+    return (uint8_t)Q_clip(scaled, 0, 255);
+}
+
+static bool CL_ShellRimlightColor(renderfx_t flags, color_t *color)
+{
+    flags &= RF_SHELL_MASK;
+    if (!flags)
+        return false;
+
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+
+    if (flags & RF_SHELL_LITE_GREEN) {
+        r = 0.56f;
+        g = 0.93f;
+        b = 0.56f;
+    }
+    if (flags & RF_SHELL_HALF_DAM) {
+        r = 0.56f;
+        g = 0.59f;
+        b = 0.45f;
+    }
+    if (flags & RF_SHELL_DOUBLE) {
+        r = 0.9f;
+        g = 0.7f;
+        b = 0.0f;
+    }
+
+    if (flags & RF_SHELL_RED)
+        r = 1.0f;
+    if (flags & RF_SHELL_GREEN)
+        g = 1.0f;
+    if (flags & RF_SHELL_BLUE)
+        b = 1.0f;
+
+    if (r == 0.0f && g == 0.0f && b == 0.0f)
+        return false;
+
+    *color = COLOR_RGB(CL_ShellColorToByte(r), CL_ShellColorToByte(g), CL_ShellColorToByte(b));
+    return true;
 }
 
 /*
@@ -605,15 +823,20 @@ static void CL_AddPacketEntities(void)
     float                   custom_alpha;
     float                   entity_alpha;
     uint64_t                custom_flags;
+    float                   enemy_outline_alpha;
+    float                   team_outline_alpha;
     bool                    enemy_outline_enabled;
-    float                   self_outline_alpha;
-    bool                    self_outline_enabled;
     float                   enemy_rim_alpha;
     bool                    enemy_rim_enabled;
-    float                   self_rim_alpha;
-    bool                    self_rim_enabled;
+    float                   team_rim_alpha;
+    bool                    team_outline_enabled;
+    bool                    team_rim_enabled;
+    float                   shell_rim_scale;
     uint8_t                 my_team;
     bool                    teamplay;
+    bool                    brightskins_custom;
+    bool                    brightskins_hide_dead;
+    bool                    viewer_is_spectator;
 
     // bonus items rotate at a fixed rate
     autorotate = anglemod(cl.time * 0.1f);
@@ -623,15 +846,21 @@ static void CL_AddPacketEntities(void)
 
     autobob = 5 * sinf(cl.time / 400.0f);
 
-    enemy_outline_enabled = Cvar_ClampValue(cl_enemy_outline, 0.0f, 1.0f) > 0.0f;
-    self_outline_alpha = Cvar_ClampValue(cl_enemy_outline_self, 0.0f, 1.0f);
-    self_outline_enabled = self_outline_alpha > 0.0f && cl.thirdPersonView;
-    enemy_rim_alpha = Cvar_ClampValue(cl_enemy_rimlight, 0.0f, 1.0f);
+    viewer_is_spectator = CL_IsSpectatorView();
+    enemy_outline_alpha = Cvar_ClampValue(cl_player_outline_enemy, 0.0f, 1.0f);
+    team_outline_alpha = Cvar_ClampValue(cl_player_outline_team, 0.0f, 1.0f);
+    enemy_outline_enabled = enemy_outline_alpha > 0.0f;
+    team_outline_enabled = team_outline_alpha > 0.0f;
+    enemy_rim_alpha = Cvar_ClampValue(cl_player_rimlight_enemy, 0.0f, 1.0f);
+    team_rim_alpha = Cvar_ClampValue(cl_player_rimlight_team, 0.0f, 1.0f);
     enemy_rim_enabled = enemy_rim_alpha > 0.0f;
-    self_rim_alpha = Cvar_ClampValue(cl_enemy_rimlight_self, 0.0f, 1.0f);
-    self_rim_enabled = self_rim_alpha > 0.0f && cl.thirdPersonView;
+    team_rim_enabled = team_rim_alpha > 0.0f;
+    shell_rim_scale = cl_player_rimlight_shell ? Cvar_ClampValue(cl_player_rimlight_shell, 0.0f, 1.0f) : 0.0f;
     my_team = cl.frame.ps.team_id;
     teamplay = my_team != 0;
+    brightskins_custom = cl_brightskins_custom->integer != 0 && !viewer_is_spectator;
+    brightskins_hide_dead = cl_brightskins_dead->integer != 0;
+    CL_UpdateForcedModels();
 
     memset(&ent, 0, sizeof(ent));
 
@@ -645,8 +874,22 @@ static void CL_AddPacketEntities(void)
         }
 
         cent = &cl_entities[s1->number];
+        ent.id = cent->id + RESERVED_ENTITY_COUNT;
 
         has_trail = false;
+        bool is_player = CL_IsPlayerEntity(s1);
+        const clientinfo_t *render_ci = NULL;
+        qhandle_t brightskin = 0;
+        bool is_self = false;
+        uint8_t other_team = 0;
+        bool is_dead = false;
+        bool has_team_info = false;
+        bool is_enemy = false;
+        bool is_ally = false;
+        bool valid_player = false;
+        bool shell_rim_active = false;
+        color_t shell_rim_color = COLOR_WHITE;
+        float shell_rim_alpha = 0.0f;
 
         effects = s1->effects;
         renderfx = s1->renderfx;
@@ -844,11 +1087,16 @@ static void CL_AddPacketEntities(void)
                     ent.model = cl.baseclientinfo.model;
                     ci = &cl.baseclientinfo;
                 }
+                render_ci = ci;
+                brightskin = ci->brightskin;
                 if (renderfx & RF_USE_DISGUISE) {
                     char buffer[MAX_QPATH];
 
                     Q_concat(buffer, sizeof(buffer), "players/", ci->model_name, "/disguise.pcx");
                     ent.skin = R_RegisterSkin(buffer);
+                    Q_concat(buffer, sizeof(buffer), "players/", ci->model_name, "/disguise_brtskn.png");
+                    brightskin = R_RegisterImage(buffer, IT_SKIN,
+                                                 static_cast<imageflags_t>(IF_KEEP_EXTENSION | IF_OPTIONAL));
                 }
             } else {
                 ent.skinnum = s1->skinnum;
@@ -863,6 +1111,7 @@ static void CL_AddPacketEntities(void)
         if (cl.csr.extended && renderfx & RF_CUSTOMSKIN && (unsigned)s1->skinnum < cl.csr.max_images) {
             ent.skin = cl.image_precache[s1->skinnum];
             ent.skinnum = 0;
+            brightskin = 0;
         }
 
         // only used for black hole model right now, FIXME: do better
@@ -1024,56 +1273,100 @@ static void CL_AddPacketEntities(void)
 
         VectorSet(ent.scale, s1->scale, s1->scale, s1->scale);
 
-        if (enemy_outline_enabled || self_outline_enabled || enemy_rim_enabled || self_rim_enabled) {
-            bool is_self = CL_IsThirdPersonSelf(s1);
-            bool is_player = CL_IsPlayerEntity(s1);
-            uint8_t other_team = 0;
-            bool is_dead = false;
-            bool has_team_info = is_player && CL_GetPlayerTeamInfo(s1, &other_team, &is_dead);
-            bool is_enemy = false;
-            bool is_ally = false;
-            bool valid_player = is_player && !is_dead;
+        is_self = is_player && CL_IsThirdPersonSelf(s1);
+        other_team = 0;
+        is_dead = false;
+        has_team_info = is_player && CL_GetPlayerTeamInfo(s1, &other_team, &is_dead);
+        is_enemy = false;
+        is_ally = false;
+        valid_player = is_player && !is_dead;
 
-            if (valid_player && !is_self) {
-                if (teamplay && has_team_info) {
-                    if (other_team) {
-                        if (other_team == my_team)
-                            is_ally = true;
-                        else
-                            is_enemy = true;
-                    }
-                } else {
-                    is_enemy = true;
+        if (is_player && !is_self) {
+            if (teamplay && has_team_info) {
+                if (other_team) {
+                    if (other_team == my_team)
+                        is_ally = true;
+                    else
+                        is_enemy = true;
+                }
+            } else {
+                is_enemy = true;
+            }
+        }
+
+        if (!viewer_is_spectator && is_player && !is_self &&
+            !(renderfx & (RF_CUSTOMSKIN | RF_USE_DISGUISE))) {
+            const forced_model_t *forced = NULL;
+
+            if (is_enemy && cl_forced_enemy_model.active)
+                forced = &cl_forced_enemy_model;
+            else if (is_ally && cl_forced_team_model.active)
+                forced = &cl_forced_team_model;
+
+            if (forced && forced->info.model && forced->info.skin) {
+                ent.skin = forced->info.skin;
+                ent.model = forced->info.model;
+                brightskin = forced->info.brightskin;
+                render_ci = &forced->info;
+            }
+        }
+
+        if (enemy_outline_enabled || team_outline_enabled || enemy_rim_enabled || team_rim_enabled) {
+            bool self_effects = is_self && valid_player && cl.thirdPersonView;
+            bool outline_enemy = enemy_outline_enabled && is_enemy && valid_player;
+            bool outline_team = team_outline_enabled && is_ally && valid_player;
+            bool outline_self = team_outline_enabled && self_effects;
+            bool rim_enemy = enemy_rim_enabled && is_enemy && valid_player;
+            bool rim_team = team_rim_enabled && is_ally && valid_player;
+            bool rim_self = team_rim_enabled && self_effects;
+
+            if (outline_enemy || outline_team || outline_self) {
+                uint8_t team_index = is_self ? my_team : other_team;
+                color_t outline_color = CL_SelectBrightskinColor(brightskins_custom, is_enemy, is_ally, is_self, team_index);
+                float outline_scale = outline_enemy ? enemy_outline_alpha : team_outline_alpha;
+                float outline_alpha = entity_alpha * outline_scale * (outline_color.a * (1.0f / 255.0f));
+
+                if (outline_alpha > 0.0f) {
+                    ent.rgba = COLOR_SETA_F(outline_color, outline_alpha);
+                    ent.flags |= RF_OUTLINE;
+                    if (outline_team)
+                        ent.flags |= RF_OUTLINE_NODEPTH;
                 }
             }
 
-            bool outline_enemy = enemy_outline_enabled && is_enemy;
-            bool outline_ally = enemy_outline_enabled && is_ally;
-            bool outline_self = self_outline_enabled && is_self && valid_player;
-
-            if (outline_enemy || outline_ally || outline_self) {
-                uint8_t team_index = outline_self ? my_team : other_team;
-                color_t outline_color = CL_PlayerEffectColor(teamplay, team_index);
-                ent.rgba = COLOR_SETA_F(outline_color, entity_alpha);
-                ent.flags |= RF_OUTLINE;
-                if (outline_ally)
-                    ent.flags |= RF_OUTLINE_NODEPTH;
-            }
-
-            if ((enemy_rim_enabled && (is_enemy || is_ally)) || (self_rim_enabled && is_self && valid_player)) {
-                float rim_scale = is_self ? self_rim_alpha : enemy_rim_alpha;
+            if (rim_enemy || rim_team || rim_self) {
+                float rim_scale = rim_enemy ? enemy_rim_alpha : team_rim_alpha;
                 uint8_t team_index = is_self ? my_team : other_team;
-                color_t rim_color = CL_PlayerEffectColor(teamplay, team_index);
-                entity_t rim = ent;
-                rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
-                rim.alpha = entity_alpha * rim_scale;
-                rim.rgba = rim_color;
-                V_AddEntity(&rim);
+                color_t rim_color = CL_SelectBrightskinColor(brightskins_custom, is_enemy, is_ally, is_self, team_index);
+                float rim_alpha = entity_alpha * rim_scale * (rim_color.a * (1.0f / 255.0f));
+
+                if (rim_alpha > 0.0f) {
+                    entity_t rim = ent;
+                    rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
+                    rim.alpha = rim_alpha;
+                    rim.rgba = rim_color;
+                    V_AddEntity(&rim);
+                }
             }
         }
 
         // add to renderer list
         V_AddEntity(&ent);
+
+        if (is_player && brightskin && (!brightskins_hide_dead || !is_dead)) {
+            uint8_t team_index = is_self ? my_team : other_team;
+            color_t bright_color = CL_SelectBrightskinColor(brightskins_custom, is_enemy, is_ally, is_self, team_index);
+            float bright_alpha = entity_alpha * (bright_color.a * (1.0f / 255.0f));
+            if (bright_alpha > 0.0f) {
+                entity_t bright = ent;
+                bright.skin = brightskin;
+                bright.skinnum = 0;
+                bright.flags = RF_FULLBRIGHT | RF_TRANSLUCENT | RF_BRIGHTSKIN | RF_NOSHADOW;
+                bright.alpha = bright_alpha;
+                bright.rgba = bright_color;
+                V_AddEntity(&bright);
+            }
+        }
 
         // color shells generate a separate entity for the main model
         if (effects & EF_COLOR_SHELL) {
@@ -1106,6 +1399,23 @@ static void CL_AddPacketEntities(void)
                     }
                 }
             }
+
+            if (shell_rim_scale > 0.0f && is_player) {
+                color_t rim_color;
+                if (CL_ShellRimlightColor(renderfx, &rim_color)) {
+                    float rim_alpha = entity_alpha * (0.30f * shell_rim_scale);
+                    if (rim_alpha > 0.0f) {
+                        entity_t rim = ent;
+                        rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
+                        rim.alpha = rim_alpha;
+                        rim.rgba = rim_color;
+                        V_AddEntity(&rim);
+                        shell_rim_active = true;
+                        shell_rim_color = rim_color;
+                        shell_rim_alpha = rim_alpha;
+                    }
+                }
+            }
             ent.flags = renderfx | RF_TRANSLUCENT;
             ent.alpha = custom_alpha * 0.30f;
             V_AddEntity(&ent);
@@ -1120,6 +1430,8 @@ static void CL_AddPacketEntities(void)
         if (s1->modelindex2) {
             if (s1->modelindex2 == MODELINDEX_PLAYER) {
                 // custom weapon
+                const clientinfo_t *weapon_ci = render_ci;
+
                 if (cl.game_api == Q2PROTO_GAME_RERELEASE) {
                     player_skinnum_t unpacked = { .skinnum = s1->skinnum };
                     ci = &cl.clientinfo[unpacked.client_num];
@@ -1128,12 +1440,14 @@ static void CL_AddPacketEntities(void)
                     ci = &cl.clientinfo[s1->skinnum & 0xff];
                     i = (s1->skinnum >> 8); // 0 is default weapon model
                 }
+                if (!weapon_ci)
+                    weapon_ci = ci;
                 if (i < 0 || i > cl.numWeaponModels - 1)
                     i = 0;
-                ent.model = ci->weaponmodel[i];
+                ent.model = weapon_ci->weaponmodel[i];
                 if (!ent.model) {
                     if (i != 0)
-                        ent.model = ci->weaponmodel[0];
+                        ent.model = weapon_ci->weaponmodel[0];
                     if (!ent.model)
                         ent.model = cl.baseclientinfo.weaponmodel[0];
                 }
@@ -1147,6 +1461,14 @@ static void CL_AddPacketEntities(void)
             }
 
             V_AddEntity(&ent);
+
+            if (shell_rim_active) {
+                entity_t rim = ent;
+                rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
+                rim.alpha = shell_rim_alpha;
+                rim.rgba = shell_rim_color;
+                V_AddEntity(&rim);
+            }
 
             //PGM - make sure these get reset.
             ent.flags = custom_flags;
@@ -1368,6 +1690,7 @@ static void CL_AddViewWeapon(void)
     ops = CL_OLDKEYPS;
 
     memset(&gun, 0, sizeof(gun));
+    gun.id = RESERVED_ENTITY_GUN;
 
     if (gun_model) {
         gun.model = gun_model;  // development tool

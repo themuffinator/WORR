@@ -521,6 +521,7 @@ void fire_plasmaball(gentity_t* self, const Vector3& start, const Vector3& dir, 
 	plasma->splashRadius = damageRadius;
 	plasma->className = "plasma blast";
 	plasma->s.sound = gi.soundIndex("weapons/plasma__l1a.wav");
+	plasma->s.renderFX |= RF_DOPPLER;
 	plasma->teamMaster = plasma;
 	plasma->teamChain = nullptr;
 
@@ -544,6 +545,7 @@ void fire_lightning(gentity_t* self, const Vector3& start, const Vector3& dir, i
 	bolt->s.modelIndex = gi.modelIndex("models/proj/lightning/tris.md2");
 	bolt->s.skinNum = 1;
 	bolt->s.sound = gi.soundIndex("weapons/tesla.wav");
+	bolt->s.renderFX |= RF_DOPPLER;
 	bolt->owner = self;
 	bolt->touch = blaster_touch;
 	bolt->nextThink = level.time + 2_sec;

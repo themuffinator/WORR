@@ -241,7 +241,7 @@ int MapSelector_SyncVotes(LevelLocals &levelState) {
 
   if (votesCleared || ms.voteCounts != previousCounts) {
     for (auto ec : active_players()) {
-      ec->client->menu.doUpdate = true;
+      ec->client->ui.mapSelectorNextUpdate = level.time;
     }
   }
 
@@ -354,7 +354,7 @@ void MapSelector_CastVote(gentity_t *ent, int voteIndex) {
                         ent->client->sess.netName, mapName);
 
   // Mark menu dirty to update HUD/bar
-  ent->client->menu.doUpdate = true;
+  ent->client->ui.mapSelectorNextUpdate = level.time;
 
   // === Early vote finalization check ===
   // If a map has more than half the votes, finalize early

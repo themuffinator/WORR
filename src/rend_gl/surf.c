@@ -619,6 +619,8 @@ static glStateBits_t statebits_for_surface(const mface_t *surf)
 
     if (surf->drawflags & SURF_WARP)
         statebits |= GLS_WARP_ENABLE;
+    if ((surf->drawflags & SURF_WARP) && (surf->drawflags & SURF_TRANS_MASK))
+        statebits |= GLS_REFRACT_ENABLE;
 
     if (surf->drawflags & SURF_TRANS_MASK)
         statebits |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
@@ -1173,6 +1175,8 @@ void GL_LoadWorld(const char *name)
         }
     }
 
+    gl_static.world.has_trans_warp = false;
+
     // setup drawflags, etc
     for (i = n64surfs = 0, surf = bsp->faces; i < bsp->numfaces; i++, surf++) {
         // hack surface flags into drawflags for faster access
@@ -1199,6 +1203,9 @@ void GL_LoadWorld(const char *name)
 
         if (surf->drawflags & (SURF_N64_UV | SURF_N64_SCROLL_X | SURF_N64_SCROLL_Y))
             n64surfs++;
+
+        if ((surf->drawflags & SURF_WARP) && (surf->drawflags & SURF_TRANS_MASK))
+            gl_static.world.has_trans_warp = true;
     }
 
     // remove fake sky faces in vanilla maps

@@ -12,114 +12,88 @@ State: After a player has voted, the menu updates to show an acknowledgment mess
 them from voting again.*/
 
 #include "../g_local.hpp"
+#include "menu_ui_helpers.hpp"
 
-void MapSelector_CastVote(gentity_t* ent, int voteIndex);
+namespace {
+
+constexpr int kMapSelectorCandidates = 3;
+constexpr int kMapSelectorBarSegments = 28;
+
+std::string MapDisplayName(std::string_view mapName) {
+  const MapEntry *entry = game.mapSystem.GetMapEntry(std::string(mapName));
+  if (entry && !entry->longName.empty())
+    return std::string(entry->longName);
+  return std::string(mapName);
+}
+
+void UpdateMapSelectorMenu(gentity_t *ent, bool openMenu) {
+  if (!ent || !ent->client)
+    return;
+
+  auto &ms = level.mapSelector;
+  const int clientNum = ent->s.number - 1;
+  if (clientNum < 0 || clientNum >= MAX_CLIENTS)
+    return;
+
+  const int vote = ms.votes[clientNum];
+  const bool hasVoted =
+      (vote >= 0 && vote < kMapSelectorCandidates && !ms.candidates[vote].empty());
+
+  MenuUi::UiCommandBuilder cmd(ent);
+  cmd.AppendCvar("ui_mapselector_title",
+                 hasVoted ? "" : "Vote for the next arena:");
+
+  for (int i = 0; i < kMapSelectorCandidates; ++i) {
+    const auto &candidateId = ms.candidates[i];
+    const bool showEntry = !hasVoted && !candidateId.empty();
+    const std::string display = showEntry ? MapDisplayName(candidateId) : "";
+    cmd.AppendCvar(fmt::format("ui_mapselector_option_{}", i).c_str(), display);
+    cmd.AppendCvar(fmt::format("ui_mapselector_option_show_{}", i).c_str(),
+                   showEntry ? "1" : "0");
+  }
+
+  if (hasVoted) {
+    const auto &candidateId = ms.candidates[vote];
+    cmd.AppendCvar("ui_mapselector_ack_show", "1");
+    cmd.AppendCvar("ui_mapselector_ack_0", "Vote cast:");
+    cmd.AppendCvar("ui_mapselector_ack_1", MapDisplayName(candidateId));
+  } else {
+    cmd.AppendCvar("ui_mapselector_ack_show", "0");
+    cmd.AppendCvar("ui_mapselector_ack_0", "");
+    cmd.AppendCvar("ui_mapselector_ack_1", "");
+  }
+
+  float elapsed = (level.time - ms.voteStartTime).seconds();
+  elapsed = std::clamp(elapsed, 0.0f, MAP_SELECTOR_DURATION.seconds());
+
+  const int filled = static_cast<int>(
+      (elapsed / MAP_SELECTOR_DURATION.seconds()) * kMapSelectorBarSegments);
+  const int empty = std::max(0, kMapSelectorBarSegments - filled);
+  cmd.AppendCvar("ui_mapselector_bar",
+                 std::string(filled, '=') + std::string(empty, ' '));
+
+  if (openMenu)
+    cmd.AppendCommand("pushmenu map_selector");
+  cmd.Flush();
+}
+
+} // namespace
 
 /*
 ========================
 OpenMapSelectorMenu
 ========================
 */
-void OpenMapSelectorMenu(gentity_t* ent) {
-	if (!ent || !ent->client)
-		return;
+void OpenMapSelectorMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+  ent->client->ui.mapSelectorActive = true;
+  ent->client->ui.mapSelectorNextUpdate = level.time;
+  UpdateMapSelectorMenu(ent, true);
+}
 
-	constexpr int NUM_CANDIDATES = 3;
-	constexpr int TOTAL_BAR_SEGMENTS = 28;	//24;
-
-	MenuBuilder builder;
-
-	// --- Initial spacing ---
-	builder.spacer().spacer();
-
-	// --- Header ---
-	const int headerIndex = builder.size();
-	builder.add("Vote for the next arena:", MenuAlign::Center);
-	builder.spacer();
-
-	// --- Map vote entries ---
-	std::array<int, NUM_CANDIDATES> voteEntryIndices{};
-	for (int i = 0; i < NUM_CANDIDATES; ++i) {
-		voteEntryIndices[i] = builder.size();
-		builder.add("(loading...)", MenuAlign::Center, [i](gentity_t* ent, Menu& menu) {
-			MapSelector_CastVote(ent, i);
-			});
-	}
-
-	builder.spacer().spacer();
-
-	// --- Acknowledgement lines ---
-	const int ackIndex = builder.size();
-	builder.add("", MenuAlign::Center);
-	builder.add("", MenuAlign::Center);
-
-	// --- Progress bar line ---
-	const int barIndex = builder.size();
-	builder.add("", MenuAlign::Center);
-
-	// --- Update logic ---
-	builder.update([=](gentity_t* ent, const Menu& m) {
-		auto& ms = level.mapSelector;
-		auto& menu = const_cast<Menu&>(m);
-		const int clientNum = ent->s.number - 1;
-		if (clientNum < 0 || clientNum >= MAX_CLIENTS)
-			return;
-
-		const int vote = ms.votes[clientNum];
-		const bool hasVoted = (vote >= 0 && vote < NUM_CANDIDATES && !ms.candidates[vote].empty());
-
-		if (!hasVoted) {
-			menu.entries[headerIndex].text = "Vote for the next arena:";
-
-			for (int i = 0; i < NUM_CANDIDATES; ++i) {
-				const int idx = voteEntryIndices[i];
-				const auto& candidateId = ms.candidates[i];
-				const MapEntry* candidate = game.mapSystem.GetMapEntry(candidateId);
-
-				if (!candidateId.empty()) {
-					const std::string candidateName = candidate && !candidate->longName.empty()
-						? candidate->longName
-						: candidateId;
-
-					menu.entries[idx].text = candidateName;
-					menu.entries[idx].onSelect = [i](gentity_t* ent, Menu& menu) {
-						MapSelector_CastVote(ent, i);
-					};
-					menu.entries[idx].align = MenuAlign::Left;
-				}
-				else {
-					menu.entries[idx].text.clear();
-					menu.entries[idx].onSelect = nullptr;
-				}
-			}
-
-			menu.entries[ackIndex].text.clear();
-		}
-		else {
-			// Hide vote options, show result
-			menu.entries[headerIndex].text.clear();
-			for (int idx : voteEntryIndices) {
-				menu.entries[idx].text.clear();
-				menu.entries[idx].onSelect = nullptr;
-			}
-
-			const auto& candidateId = ms.candidates[vote];
-			const MapEntry* voted = game.mapSystem.GetMapEntry(candidateId);
-			const std::string name = (voted && !voted->longName.empty()) ? voted->longName : candidateId;
-			menu.entries[ackIndex].text = "Vote cast:";
-			menu.entries[ackIndex + 1].text = G_Fmt("{}", name);
-		}
-
-		// --- Progress bar ---
-		float elapsed = (level.time - ms.voteStartTime).seconds();
-		elapsed = std::clamp(elapsed, 0.0f, MAP_SELECTOR_DURATION.seconds());
-
-		int filled = static_cast<int>((elapsed / MAP_SELECTOR_DURATION.seconds()) * TOTAL_BAR_SEGMENTS);
-		int empty = TOTAL_BAR_SEGMENTS - filled;
-
-		menu.entries[barIndex].text = std::string(filled, '=') + std::string(empty, ' ');
-		menu.entries[barIndex].align = MenuAlign::Left;
-		});
-
-	MenuSystem::Open(ent, builder.build());
+void RefreshMapSelectorMenu(gentity_t *ent) {
+  if (!ent || !ent->client)
+    return;
+  UpdateMapSelectorMenu(ent, false);
 }
