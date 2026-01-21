@@ -96,13 +96,18 @@ To facilitate elegant traversal, generic widgets are replaced with specialized o
 *   **Match Setup (Admin):**
     *   **Rules:** `timelimit` (slider 0-60), `fraglimit` (slider 0-100), `maxclients`.
     *   **Flags:** `dmflags` bitmask managed via checkboxes:
-        *   Weapons Stay
-        *   Falling Damage
-        *   Instant Powerups
-        *   Allow Powerups/Health/Armor
-        *   Spawn Farthest
-        *   Force Respawn
-        *   Quad Drop
+        *   Weapons Stay (2)
+        *   Falling Damage (~3)
+        *   Instant Powerups (4)
+        *   Allow Powerups (~1)
+        *   Allow Health (~0)
+        *   Allow Armor (~11)
+        *   Spawn Farthest (9)
+        *   Same Map (5)
+        *   Force Respawn (10)
+        *   Infinite Ammo (13)
+        *   Fixed FOV (15)
+        *   Quad Drop (14)
 *   **Map Vote:**
     *   *List:* Visual list of available maps (`maps/*.bsp`).
     *   *Action:* "Call Vote" or "Force" (if admin).
@@ -115,72 +120,103 @@ The core settings menu is tabbed for quick access.
 *   **Display:**
     *   Mode: `vid_fullscreen` (Windowed/Fullscreen).
     *   Resolution: `vid_mode` (custom widget listing modes).
-    *   Brightness: `r_gamma` (slider).
+    *   Brightness: `vid_gamma` (slider 1.3 to 0.3).
+    *   HW Gamma: `vid_hwgamma` (toggle).
     *   Contrast: `gl_contrast` (slider).
     *   VSync: `gl_swapinterval` (toggle).
 *   **Quality:**
-    *   Texture Quality: `gl_picmip` (High/Med/Low).
+    *   Texture Quality: `gl_picmip` (3 to 0, High/Med/Low).
     *   Filtering: `gl_texturemode` (Nearest/Linear/Trilinear).
     *   Anisotropy: `gl_anisotropy` (Off/2x/4x/8x/16x).
     *   Multisample: `gl_multisamples` (Off/2x/4x/8x).
+    *   Saturation: `gl_saturation` (0 to 1).
+    *   Intensity: `intensity` (1x, 2x, 3x).
+    *   Lightmap Sat: `gl_coloredlightmaps` (0 to 1).
+    *   Lightmap Bright: `gl_brightness` (0 to 0.3).
 *   **Advanced / Effects:**
     *   *Condition:* Visible only if `r_renderer` is OpenGL/Vulkan.
     *   *Condition:* Some items disabled if `gl_shaders` is 0.
     *   Shaders: `gl_shaders` (Toggle).
     *   Bloom: `gl_bloom_sigma` (Slider).
     *   Dynamic Lights: `gl_dynamic` (All/Switchable/None).
-    *   Shadows: `gl_shadows` (Off/On/Soft).
+    *   Shadows: `gl_shadows` (Off/On/Fade).
     *   Cel-Shading: `gl_celshading` (Off/1x/2x).
     *   Particles: `gl_partscale`.
+    *   Entity Glow: `cl_noglow` (toggle).
+    *   Screen Blend: `gl_polyblend` (toggle).
+    *   Water Warp: `gl_waterwarp` (toggle).
+    *   Explosions: `cl_disable_explosions` (Rocket/Grenade toggles).
 
 #### **B. Audio (`begin sound`)**
 *   **Volume:**
-    *   Master: `s_volume`.
-    *   Music: `ogg_volume`.
+    *   Master: `s_volume` (0 to 1).
+    *   Music: `ogg_volume` (0 to 1).
 *   **Options:**
     *   Sound Backend: `s_enable` (Software/OpenAL).
-    *   Mix Ahead (Latency): `s_mixahead`.
-    *   Ambient Sounds: `s_ambient`.
+    *   Mix Ahead (Latency): `s_mixahead` (0.05 to 0.2).
+    *   Ambient Sounds: `s_ambient` (No/Yes/Own).
+    *   Underwater FX: `s_underwater` (toggle).
     *   Chat Beep: `cl_chat_sound`.
+    *   Music Enable: `ogg_enable`.
+    *   Shuffle: `ogg_shuffle`.
 
 #### **C. Input (`begin input`)**
 *   **Mouse:**
     *   Sensitivity: `sensitivity`.
     *   Filter: `m_filter`.
+    *   Auto-Sens: `m_autosens`.
     *   Accel: `m_accel`.
-    *   Invert Y: `m_pitch` (negative value toggle).
+    *   Free Look: `freelook`.
+    *   Always Run: `cl_run`.
 *   **Weapon Wheel:**
     *   Enable: `cl_use_wheel` (hypothetical).
     *   Hold Time: `ww_hover_time`.
     *   Deadzone: `ww_mouse_deadzone_speed`.
     *   Scale: `ww_hover_scale`.
+    *   Screen Frac X/Y: `ww_screen_frac_x`, `ww_screen_frac_y`.
 
 #### **D. Controls (`begin keys`)**
 *   **Categories:**
-    *   *Movement:* Forward, Back, Left, Right, Jump, Crouch, Walk.
-    *   *Combat:* Attack, Alt-Attack, Next/Prev Weapon.
-    *   *Weapons:* Direct binds for Railgun, Rocket, etc.
-    *   *Communication:* Chat, Team Chat, Taunt.
-    *   *UI:* Scoreboard, Pause, Screenshot.
+    *   *Movement:* Forward, Back, Left, Right, Jump, Crouch, Walk, Run.
+    *   *Combat:* Attack, Next/Prev Weapon, Weapon 1-10 (Blaster...BFG).
+    *   *Interaction:* Inventory, Use Item, Drop Item, Prev/Next Item.
+    *   *Communication:* Chat, Help.
+    *   *UI:* Scoreboard, Pause.
+    *   *Legacy:* Look Up/Down, Center View, Mouse/Keyboard Look.
 
 #### **E. Gameplay / HUD (`begin game_options`)**
 *   **Crosshair:**
-    *   Type: `crosshair` (Image spinner).
-    *   Size: `cl_crosshairSize`.
-    *   Color: `cl_crosshairColor` (Palette widget).
-    *   Hit Marker: `cl_crosshairHitStyle`.
+    *   Type: `crosshair` (Image spinner `ch*`).
+    *   Size: `cl_crosshairSize` (4 to 64).
+    *   Color: `cl_crosshairColor` (Palette 1-26).
+    *   Brightness: `cl_crosshairBrightness` (0 to 1).
+    *   Hit Style: `cl_crosshairHitStyle` (Off/Color/Pulse/etc).
+    *   Hit Color: `cl_crosshairHitColor`.
+    *   Hit Time: `cl_crosshairHitTime`.
+    *   Pickup Pulse: `cl_crosshairPulse`.
+    *   Health Color: `cl_crosshairHealth`.
 *   **HUD:**
-    *   Scale: `scr_scale`.
-    *   Opacity: `scr_alpha`.
-    *   Lagometer: `scr_lag_draw`.
+    *   Screen Size: `viewsize`.
+    *   Ping Graph: `scr_lag_draw`.
+    *   Demo Bar: `scr_demobar`.
+    *   HUD Opacity: `scr_alpha`.
+    *   Console Opacity: `con_alpha`.
+    *   Scales: `scr_scale`, `con_scale`, `ui_scale`.
 *   **Railgun:**
-    *   Style: `cl_railtrail_type`.
+    *   Type: `cl_railtrail_type`.
+    *   Duration: `cl_railtrail_time`.
+    *   Core Width: `cl_railcore_width`.
+    *   Spiral Radius: `cl_railspiral_radius`.
     *   Core Color: `cl_railcore_color`.
     *   Spiral Color: `cl_railspiral_color`.
 *   **View:**
     *   FOV: `cl_adjustfov` / `fov`.
     *   Gun Model: `cl_gun` (Handedness/Off).
-    *   Bobbing: `cl_bob*` (Toggles).
+
+#### **F. Downloads (`begin downloads`)**
+*   **Allow:** `allow_download`.
+*   **Types:** `allow_download_maps`, `_players`, `_models`, `_sounds`, `_textures`, `_pics`.
+*   **Method:** `cl_http_downloads`.
 
 ## 6. Implementation Plan
 
@@ -231,6 +267,7 @@ The core settings menu is tabbed for quick access.
 
 ## 9. Technical Considerations
 
+*   **Legacy Preservation:** All CVARs from the original `worr.menu` (e.g., `gl_saturation`, `gl_waterwarp`) have been mapped to the new structure to ensure no functionality is lost.
 *   **Scripting Limits:** Watch for the 1024 char limit on expanded lines. Use the `$$` hack for spin controls where necessary.
 *   **Menu Depth:** Current limit is 8 (`MAX_MENU_DEPTH`). The new structure should be flat enough to avoid hitting this, but using "Tabs" (switching menus instead of pushing) helps.
 *   **Responsiveness:** The engine's `Menu_Size` function may need updates to better handle dynamic width allocation for the split-pane design.
