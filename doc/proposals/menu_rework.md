@@ -140,7 +140,35 @@ The settings menu is the core area requiring the most restructuring to accommoda
     *   Update `banner`, `plaque`, and `background` assets to match the modern aesthetic.
     *   Use `MTYPE_STATIC` for descriptive headers within lists.
 
-## 7. Technical Considerations
+## 7. Deep Dive: Conditional & Complex Items
+
+To achieve a modern experience, generic widgets are insufficient for certain complex settings.
+
+### 7.1. Conditional & Renderer-Specific Logic
+The menu must adapt availability based on the engine state.
+*   **Renderer Context:** Checks against `r_renderer` (or `vid_ref`) must be performed.
+    *   *OpenGL:* Show `gl_swapinterval`, `gl_shaders`.
+    *   *Vulkan:* Show `vk_present_mode` (hypothetical), `vk_vsync`.
+*   **Feature Gating:**
+    *   If `gl_shaders` is **OFF**: Options like `gl_bloom_sigma`, `gl_celshading`, and `gl_shadows` must be **disabled (grayed out)** or **hidden**.
+    *   Visual feedback (e.g., a lock icon or tooltip) should explain *why* an option is unavailable.
+
+### 7.2. Expanded Item Examples
+We will move beyond simple number spinners for key customization options.
+
+*   **Crosshair Color (`cl_crosshairColor`)**
+    *   *Current:* A number from 1-26.
+    *   *Proposed:* A **Palette Slider** widget.
+    *   *Visuals:* Instead of displaying "12", display the actual color swatch. The slider track shows the full 26-color spectrum.
+*   **Resolution (`vid_modelist`)**
+    *   *Current:* A long text string list.
+    *   *Proposed:* A **Resolution Picker**.
+    *   *Logic:* Group by Aspect Ratio (4:3, 16:9, 16:10). Show "Native" marker for desktop resolution.
+*   **Field of View (`cl_adjustfov` / `fov`)**
+    *   *Proposed:* A visual **FOV Slider** with degrees.
+    *   *Preview:* Real-time background update (if in-game) to show the effect.
+
+## 8. Technical Considerations
 
 *   **Scripting Limits:** Watch for the 1024 char limit on expanded lines. Use the `$$` hack for spin controls where necessary.
 *   **Menu Depth:** Current limit is 8 (`MAX_MENU_DEPTH`). The new structure should be flat enough to avoid hitting this, but using "Tabs" (switching menus instead of pushing) helps.
