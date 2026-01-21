@@ -13,162 +13,223 @@ To completely overhaul the existing menu system (`worr.menu`) to achieve a moder
 
 ## 3. Layout Strategy
 
-### 3.1. Main Menu (Widescreen)
-*   **Left Column (Navigation):** A vertical list of high-level categories (Singleplayer, Multiplayer, Settings, etc.).
-*   **Right Panel (Content):** A large dynamic area that updates based on the selected category.
-*   **Background:** Immersive 3D scene or high-quality artwork.
+### 3.1. Main Menu (Widescreen Layout > 16:10)
+*   **Container:** Fullscreen background image/scene (3D map or artwork).
+*   **Sidebar (Left 25%):**
+    *   **Header:** Game Logo (Top 15%).
+    *   **Navigation List:** Vertical list of categories (Singleplayer, Multiplayer, Options, Quit).
+    *   **Footer:** Version info and copyright (Bottom 5%).
+*   **Content Panel (Right 75%):**
+    *   **Dynamic Container:** Loads the sub-menu for the selected category.
+    *   **Padding:** Significant whitespace to avoid clutter.
+    *   **Background:** Semi-transparent dark overlay (e.g., `rgba(0,0,0,0.8)`) to ensure text readability.
 
-### 3.2. Main Menu (4:3 / Narrow)
-*   **Single Column:** The Navigation list takes center stage.
-*   **Drill-down:** Selecting a category replaces the view with the content panel (breadcrumb navigation required to go back).
+### 3.2. Main Menu (Narrow Layout 4:3)
+*   **Container:** Fullscreen background.
+*   **Central Stack (Width 60-80%):**
+    *   **Header:** Game Logo (Top 20%).
+    *   **Navigation List:** Centered vertical list.
+*   **Drill-down Behavior:** Selecting a category *replaces* the list with the sub-menu items. A "Back" button appears prominently at the top or bottom.
 
-### 3.3. In-Game Menu
-*   **Overlay Style:** A semi-transparent overlay (darkened game background).
-*   **Center/Left Aligned:** Quick access options.
-*   **Content:** "Resume Game", "Options" (opens a modal version of Settings), "Server Info", "Disconnect".
+### 3.3. In-Game Menu (Overlay)
+*   **Style:** Modal Overlay.
+*   **Background:** Screen blur or heavy darken (`gl_polyblend` style).
+*   **Position:** Left-aligned or Centered card (approx 400-600px width).
+*   **Structure:**
+    *   **Header:** Server Name / Map Name.
+    *   **Quick Actions:** Resume, Server Info, Vote, Settings (opens full settings modal), Disconnect.
+    *   **Footer:** Current time / Connection status.
 
 ## 4. Navigation & Widget Usage
 
-To facilitate elegant traversal, we will employ specific widget types for specific data:
+To facilitate elegant traversal, generic widgets are replaced with specialized ones:
 
-*   **Tabs / Categories (`MTYPE_LIST` / `MTYPE_ACTION`):** For top-level navigation (e.g., Video, Audio, Input).
-*   **Sliders (`MTYPE_SLIDER`):** exclusively for continuous values (Volume, Gamma, Sensitivity).
-*   **Spin Controls (`MTYPE_SPINCONTROL`):** For discrete choices (Resolution, Texture Quality).
-*   **Toggles (`MTYPE_TOGGLE`):** For On/Off states (VSync, Bloom).
-*   **Binding Lists (`MTYPE_KEYBIND`):** Organized by category (Movement, Combat, Weapon Wheel).
-*   **Action Buttons (`MTYPE_ACTION`):** For immediate effects (Apply, Reset, Defaults).
+*   **Tabs / Categories (`MTYPE_TAB`):**
+    *   *Usage:* Top of the "Settings" menu to switch between Video, Audio, Input, etc.
+    *   *Visual:* Horizontal strip or icon bar.
+*   **Smart Lists (`MTYPE_LIST`):**
+    *   *Usage:* Server browser, Demo list.
+    *   *Features:* Sortable columns, scrollbars, distinct headers.
+*   **Visual Sliders (`MTYPE_SLIDER`):**
+    *   *Usage:* Volume, Gamma, Sensitivity.
+    *   *Visual:* Filled bar indicating percentage, numeric value on the right.
+*   **Palette Picker (`MTYPE_PALETTE`):**
+    *   *Usage:* Crosshair color, Railgun color.
+    *   *Visual:* Grid or strip of color swatches. Highlighting one updates the cvar immediately.
+*   **Toggle Switch (`MTYPE_TOGGLE`):**
+    *   *Usage:* Binary settings (VSync, Show FPS).
+    *   *Visual:* "Switch" graphic (Left=Off, Right=On) rather than Yes/No text.
+*   **Key Binder (`MTYPE_KEYBIND`):**
+    *   *Visual:* Displays current key. Clicking enters "listening" mode (pulsing/color change). Supports clearing (DEL/Backspace).
 
-## 5. Detailed Menu Tree
+## 5. Detailed Menu Tree & Cvars
 
 ### 5.1. Main Menu (`begin main`)
-*   **Campaign** (New Game / Load Game / Episodes)
-*   **Multiplayer** (Server Browser / Create Server / Player Setup)
-*   **Settings** (Opens the comprehensive settings panel)
-*   **Extras** (Demos / Credits / Mods)
+*   **Singleplayer:**
+    *   New Game (Difficulty Select -> Episode Select)
+    *   Load Game (Visual save slots with thumbnails if possible)
+*   **Multiplayer:**
+    *   Server Browser (`pushmenu servers`)
+    *   Host Game (`pushmenu startserver`)
+    *   Player Setup (Model, Skin, Name)
+*   **Settings:** (Opens the comprehensive settings panel)
+*   **Extras:**
+    *   Demos (`pushmenu demos`)
+    *   Credits
 *   **Quit**
 
 ### 5.2. In-Game Menu (`begin game`)
 *   **Resume**
 *   **Match Control** (Context-sensitive)
-    *   **Welcome / MOTD:** View server message and rules.
-    *   **Match Setup:** (Admin/Host only) Modify timelimit, fraglimit, map rotation, and game flags on the fly.
-    *   **Match Status:** Current scores, players, and match time.
-*   **Settings** (Reuses the Settings sub-menus)
-*   **Vote** (Call vote / Vote Yes/No)
+    *   **Welcome / MOTD:** Server Message of the Day.
+    *   **Match Setup:** (Admin) Change Map, Timelimit, Fraglimit.
+    *   **Match Status:** Scoreboard summary, time remaining.
+*   **Settings** (Reuses Settings Menu)
+*   **Vote** (Call Vote / Yes / No)
 *   **Disconnect**
 *   **Quit to Desktop**
 
-#### **Deathmatch Specifics**
-For Deathmatch modes, the "Match Control" section becomes the hub for the "Deathmatch Match Menu System".
-*   **Welcome Menu:** displayed automatically on join, accessible later via "Match Control". Displays Server Name, MOTD, and specific rules/flags in a clean, widget-driven layout (not just text).
-*   **Match Setup:** A dedicated submenu for configuring the *next* or *current* match.
-    *   **Rules:** Time Limit, Frag Limit, Max Players.
-    *   **Flags:** Weapons Stay, Powerups, Friendly Fire (checkboxes/toggles).
-    *   **Map:** Vote or force next map from a visual list.
+#### **Deathmatch Specifics (Match Menu)**
+*   **Welcome:**
+    *   *Widgets:* Scrollable text area for MOTD.
+    *   *Actions:* "Join Game", "Spectate", "Ready".
+*   **Match Setup (Admin):**
+    *   **Rules:** `timelimit` (slider 0-60), `fraglimit` (slider 0-100), `maxclients`.
+    *   **Flags:** `dmflags` bitmask managed via checkboxes:
+        *   Weapons Stay
+        *   Falling Damage
+        *   Instant Powerups
+        *   Allow Powerups/Health/Armor
+        *   Spawn Farthest
+        *   Force Respawn
+        *   Quad Drop
+*   **Map Vote:**
+    *   *List:* Visual list of available maps (`maps/*.bsp`).
+    *   *Action:* "Call Vote" or "Force" (if admin).
 
 ### 5.3. Settings Hierarchy
 
-The settings menu is the core area requiring the most restructuring to accommodate new features.
+The core settings menu is tabbed for quick access.
 
-#### **A. Video**
+#### **A. Video (`begin video`)**
 *   **Display:**
-    *   Window Mode (Fullscreen/Windowed/Borderline)
-    *   Resolution
-    *   VSync (`gl_swapinterval`)
-    *   FOV (`cl_adjustfov`)
-    *   Monitor Selection (if applicable)
+    *   Mode: `vid_fullscreen` (Windowed/Fullscreen).
+    *   Resolution: `vid_mode` (custom widget listing modes).
+    *   Brightness: `r_gamma` (slider).
+    *   Contrast: `gl_contrast` (slider).
+    *   VSync: `gl_swapinterval` (toggle).
 *   **Quality:**
-    *   Texture Quality (`gl_picmip`)
-    *   Filtering (`gl_texturemode`, `gl_anisotropy`)
-    *   High Quality Upscaling (`hqx_*`)
-*   **Advanced Effects:** (New Features Integration)
-    *   Bloom (`gl_bloom_sigma`)
-    *   Dynamic Lighting (`gl_dynamic`)
-    *   Shadows (`gl_shadows`) & Soft Shadows
-    *   Cel-Shading (`gl_celshading`)
-    *   Per-Pixel Lighting (`gl_per_pixel_lighting`)
-    *   Particles (`gl_partscale`)
-*   **Tools:**
-    *   Screenshot Format (`gl_screenshot_format`)
-    *   Screenshot Quality (`gl_screenshot_quality`)
+    *   Texture Quality: `gl_picmip` (High/Med/Low).
+    *   Filtering: `gl_texturemode` (Nearest/Linear/Trilinear).
+    *   Anisotropy: `gl_anisotropy` (Off/2x/4x/8x/16x).
+    *   Multisample: `gl_multisamples` (Off/2x/4x/8x).
+*   **Advanced / Effects:**
+    *   *Condition:* Visible only if `r_renderer` is OpenGL/Vulkan.
+    *   *Condition:* Some items disabled if `gl_shaders` is 0.
+    *   Shaders: `gl_shaders` (Toggle).
+    *   Bloom: `gl_bloom_sigma` (Slider).
+    *   Dynamic Lights: `gl_dynamic` (All/Switchable/None).
+    *   Shadows: `gl_shadows` (Off/On/Soft).
+    *   Cel-Shading: `gl_celshading` (Off/1x/2x).
+    *   Particles: `gl_partscale`.
 
-#### **B. Audio**
-*   **Volume:** Master, Sound Effects, Music (`s_volume`, `ogg_volume`).
-*   **System:** Sound Engine (Software/OpenAL), Quality, Speaker Config.
-*   **Ambience:** Ambient Sounds, Underwater Effects.
+#### **B. Audio (`begin sound`)**
+*   **Volume:**
+    *   Master: `s_volume`.
+    *   Music: `ogg_volume`.
+*   **Options:**
+    *   Sound Backend: `s_enable` (Software/OpenAL).
+    *   Mix Ahead (Latency): `s_mixahead`.
+    *   Ambient Sounds: `s_ambient`.
+    *   Chat Beep: `cl_chat_sound`.
 
-#### **C. Input**
+#### **C. Input (`begin input`)**
 *   **Mouse:**
-    *   Sensitivity (`sensitivity`), Invert, Filter (`m_filter`).
-    *   Auto-Sensitivity (`m_autosens`).
-*   **Weapon Wheel:** (New Feature Integration)
-    *   Enable/Disable
-    *   Deadzone Speed (`ww_mouse_deadzone_speed`)
-    *   Sensitivity (`ww_mouse_sensitivity`)
-    *   Hover Time/Scale (`ww_hover_time`, `ww_hover_scale`)
-    *   Screen Fraction (`ww_screen_frac_x/y`)
-*   **Key Bindings:**
-    *   Grouped: Movement, Combat, Interaction, Weapon Wheel (`+wheel`), UI.
-*   **Gamepad:** (If supported, sensitivity and layout)
+    *   Sensitivity: `sensitivity`.
+    *   Filter: `m_filter`.
+    *   Accel: `m_accel`.
+    *   Invert Y: `m_pitch` (negative value toggle).
+*   **Weapon Wheel:**
+    *   Enable: `cl_use_wheel` (hypothetical).
+    *   Hold Time: `ww_hover_time`.
+    *   Deadzone: `ww_mouse_deadzone_speed`.
+    *   Scale: `ww_hover_scale`.
 
-#### **D. Gameplay / Interface**
+#### **D. Controls (`begin keys`)**
+*   **Categories:**
+    *   *Movement:* Forward, Back, Left, Right, Jump, Crouch, Walk.
+    *   *Combat:* Attack, Alt-Attack, Next/Prev Weapon.
+    *   *Weapons:* Direct binds for Railgun, Rocket, etc.
+    *   *Communication:* Chat, Team Chat, Taunt.
+    *   *UI:* Scoreboard, Pause, Screenshot.
+
+#### **E. Gameplay / HUD (`begin game_options`)**
+*   **Crosshair:**
+    *   Type: `crosshair` (Image spinner).
+    *   Size: `cl_crosshairSize`.
+    *   Color: `cl_crosshairColor` (Palette widget).
+    *   Hit Marker: `cl_crosshairHitStyle`.
 *   **HUD:**
-    *   Crosshair: Style, Size, Color, Hit Marker (`cl_crosshair*`).
-    *   Scale: HUD Scale (`scr_scale`), Console Scale (`con_scale`).
-    *   Opacity: HUD/Console Alpha.
-*   **Feedback:**
-    *   Railgun Trails (`cl_railtrail_type`, core/spiral colors).
-    *   Bobbing / Sway.
-    *   Explosions (Toggle Rocket/Grenade explosions).
-*   **Downloads:** (HTTP download toggles)
-
-#### **E. Player**
-*   **Identity:** Name, Model, Skin.
-*   **Team:** Handedness.
+    *   Scale: `scr_scale`.
+    *   Opacity: `scr_alpha`.
+    *   Lagometer: `scr_lag_draw`.
+*   **Railgun:**
+    *   Style: `cl_railtrail_type`.
+    *   Core Color: `cl_railcore_color`.
+    *   Spiral Color: `cl_railspiral_color`.
+*   **View:**
+    *   FOV: `cl_adjustfov` / `fov`.
+    *   Gun Model: `cl_gun` (Handedness/Off).
+    *   Bobbing: `cl_bob*` (Toggles).
 
 ## 6. Implementation Plan
 
-1.  **Refactor `worr.menu`:**
-    *   Split `video` into `video_display`, `video_quality`, `video_effects`.
-    *   Create a master `settings` menu that acts as the navigation hub (Tabs).
-2.  **Widget Enhancements:**
-    *   Ensure `MTYPE_LIST` can support "categories" that trigger `pushmenu` commands effectively for the split-view layout.
-    *   Implement logic (C++ side in `menu.cpp`) to detect aspect ratio and adjust `RCOLUMN_OFFSET` / `LCOLUMN_OFFSET` or use new `ui_layout` cvars to switch between split-view and single-view.
-3.  **New Cvars:**
-    *   Expose all identified `ww_*` (Weapon Wheel) and `gl_*` (Render) cvars in their respective new sections.
-4.  **Visual Polish:**
-    *   Update `banner`, `plaque`, and `background` assets to match the modern aesthetic.
-    *   Use `MTYPE_STATIC` for descriptive headers within lists.
+1.  **Refactor `menu.cpp` Layout Engine:**
+    *   Implement `Menu_Size` logic that respects "Containers" and "Columns".
+    *   Add `ui_layout` cvar support (0=Auto, 1=Wide, 2=Narrow).
+2.  **Enhance Widget Classes:**
+    *   `MTYPE_SLIDER`: Add support for rendering a filled bar.
+    *   `MTYPE_PALETTE`: Create new draw function for color grids.
+3.  **Implement Conditional Logic:**
+    *   Add `condition <cvar> <value>` keyword to menu parser.
+    *   Code `Menu_AddItem` to respect this flag, setting `QMF_GRAYED` or `QMF_HIDDEN` if condition fails.
+4.  **Rewrite `worr.menu`:**
+    *   Translate the "Detailed Menu Tree" above into the actual script format.
+    *   Utilize new `begin_tab` or similar grouping constructs if implemented, or simulate with `pushmenu`.
 
 ## 7. Deep Dive: Conditional & Complex Items
 
-To achieve a modern experience, generic widgets are insufficient for certain complex settings.
-
 ### 7.1. Conditional & Renderer-Specific Logic
-The menu must adapt availability based on the engine state.
-*   **Renderer Context:** Checks against `r_renderer` (or `vid_ref`) must be performed.
-    *   *OpenGL:* Show `gl_swapinterval`, `gl_shaders`.
-    *   *Vulkan:* Show `vk_present_mode` (hypothetical), `vk_vsync`.
-*   **Feature Gating:**
-    *   If `gl_shaders` is **OFF**: Options like `gl_bloom_sigma`, `gl_celshading`, and `gl_shadows` must be **disabled (grayed out)** or **hidden**.
-    *   Visual feedback (e.g., a lock icon or tooltip) should explain *why* an option is unavailable.
+*   **Problem:** Vulkan options shouldn't show in GL mode. High-end shader options shouldn't show if shaders are disabled.
+*   **Solution:**
+    *   **Menu Script:** `item ... condition gl_shaders 1`
+    *   **Code:** `Menu_Draw` checks the condition. If false, item is drawn with `uis.color.disabled` and input is ignored.
+    *   **Feedback:** Tooltip (if supported) or status text says "Requires Shaders Enabled".
 
 ### 7.2. Expanded Item Examples
-We will move beyond simple number spinners for key customization options.
+*   **Weapon Wheel Configurator:**
+    *   *Visual:* A circular preview drawn using `MTYPE_STATIC` or a custom draw routine.
+    *   *Interaction:* Adjusting `ww_popout_amount` updates the radius of the preview circle in real-time.
+*   **Resolution Picker:**
+    *   *Logic:* Instead of a raw list, parse `vid_modelist`.
+    *   *Grouping:* Detect "Desktop" resolution. Group others by aspect ratio.
+    *   *Widget:* A combobox-style list (`MTYPE_SPINCONTROL` with a pop-up list variant).
 
-*   **Crosshair Color (`cl_crosshairColor`)**
-    *   *Current:* A number from 1-26.
-    *   *Proposed:* A **Palette Slider** widget.
-    *   *Visuals:* Instead of displaying "12", display the actual color swatch. The slider track shows the full 26-color spectrum.
-*   **Resolution (`vid_modelist`)**
-    *   *Current:* A long text string list.
-    *   *Proposed:* A **Resolution Picker**.
-    *   *Logic:* Group by Aspect Ratio (4:3, 16:9, 16:10). Show "Native" marker for desktop resolution.
-*   **Field of View (`cl_adjustfov` / `fov`)**
-    *   *Proposed:* A visual **FOV Slider** with degrees.
-    *   *Preview:* Real-time background update (if in-game) to show the effect.
+## 8. Visual Style Guide
 
-## 8. Technical Considerations
+*   **Colors:**
+    *   *Background:* Dark Grey / Transparent Black (#000000CC).
+    *   *Text Normal:* White (#FFFFFF).
+    *   *Text Active/Hover:* Bright Cyan (#00FFFF) or Theme Color.
+    *   *Text Disabled:* Grey (#777777).
+*   **Typography:**
+    *   Use `scr_font` (conchars) for retro feel, or support TTF rendering for headers if engine allows.
+*   **Feedback:**
+    *   *Hover:* Slight scale up or brightness increase.
+    *   *Click:* Sound effect (`misc/menu1.wav`).
+    *   *Transition:* Simple fade-in/out (200ms).
+
+## 9. Technical Considerations
 
 *   **Scripting Limits:** Watch for the 1024 char limit on expanded lines. Use the `$$` hack for spin controls where necessary.
 *   **Menu Depth:** Current limit is 8 (`MAX_MENU_DEPTH`). The new structure should be flat enough to avoid hitting this, but using "Tabs" (switching menus instead of pushing) helps.
