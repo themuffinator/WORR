@@ -519,7 +519,7 @@ namespace {
 		if (pickupTime) {
 			gi.LocBroadcast_Print(
 				PRINT_HIGH,
-				"{} TEAM CAPTURED the flag! ({} captured in {})\n",
+				"$g_sgame_auto_4e27928143af",
 				Teams_TeamName(scoringTeam),
 				scorer->client->sess.netName,
 				TimeString((level.time - pickupTime).milliseconds(), true, false));
@@ -527,7 +527,7 @@ namespace {
 		else {
 			gi.LocBroadcast_Print(
 				PRINT_HIGH,
-				"{} TEAM CAPTURED the flag! (captured by {})\n",
+				"$g_sgame_auto_e9691a6f20ec",
 				Teams_TeamName(scoringTeam),
 				scorer->client->sess.netName);
 		}
@@ -774,7 +774,7 @@ namespace {
 		if (targetTeam != Team::None) {
 			gi.LocBroadcast_Print(
 				PRINT_HIGH,
-				"{} FLAG TAKEN by {} TEAM!\n",
+				"$g_sgame_auto_855da5256f5a",
 				Teams_TeamName(targetTeam),
 				Teams_TeamName(team));
 		}
@@ -1022,10 +1022,10 @@ static void Team_ReturnFlag(Team team) {
 	Team_ReturnFlagSound(team);
 
 	if (team == Team::Free) {
-		gi.Broadcast_Print(PRINT_HIGH, "The flag has returned!\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_b10cd82591da");
 	}
 	else {
-		gi.LocBroadcast_Print(PRINT_HIGH, "The {} flag has returned!\n", Teams_TeamName(team));
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_flag_returned", Teams_TeamName(team));
 	}
 }
 
@@ -1083,7 +1083,7 @@ void CTF_ScoreBonuses(gentity_t* targ, gentity_t*, gentity_t* attacker) {
 	if (targ->client->pers.inventory[enemyFlagItem]) {
 		attacker->client->resp.ctf_lastfraggedcarrier = level.time;
 		G_AdjustPlayerScore(attacker->client, CTF::FRAG_CARRIER_BONUS, false, 0);
-		gi.LocBroadcast_Print(PRINT_MEDIUM, "{} fragged {}'s flag carrier!",
+		gi.LocBroadcast_Print(PRINT_MEDIUM, "$g_sgame_auto_ebb9672c8db9",
 			attacker->client->sess.netName,
 			Teams_TeamName(targetTeam));
 		ResetCarrierHurtTimers(otherTeam);
@@ -1236,7 +1236,7 @@ bool CTF_PickupFlag(gentity_t* ent, gentity_t* other) {
 
 	const auto flagTeamOpt = TeamFromFlagItem(ent->item->id);
 	if (!flagTeamOpt) {
-		gi.LocClient_Print(other, PRINT_HIGH, "Don't know what team the flag is on, removing.\n");
+		gi.LocClient_Print(other, PRINT_HIGH, "$g_sgame_auto_1ad317f44749");
 		RemoveDroppedFlag(ent);
 		return false;
 	}
@@ -1262,7 +1262,7 @@ bool CTF_PickupFlag(gentity_t* ent, gentity_t* other) {
 				CTF_ResetFlags();
 
 				if (Game::Is(GameType::CaptureStrike)) {
-					gi.LocBroadcast_Print(PRINT_CENTER, "Flag captured!\n{} wins the round!\n", Teams_TeamName(flagTeam));
+					gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_a448dc5ba7c1", Teams_TeamName(flagTeam));
 					Round_End();
 				}
 

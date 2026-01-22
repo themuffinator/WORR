@@ -129,7 +129,7 @@ static void Pass_NextMap() {
   } else {
     game.map.overrideEnableFlags = 0;
     game.map.overrideDisableFlags = 0;
-    gi.Broadcast_Print(PRINT_HIGH, "No eligible maps available.\n");
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_46e7e44d0b8c");
   }
 }
 
@@ -140,13 +140,13 @@ static void Pass_BalanceTeams() { TeamBalance(true); }
 static void Pass_Unlagged() {
   const bool enable = CommandArgs::ParseInt(level.vote.arg).value_or(0) != 0;
   gi.cvarForceSet("g_lag_compensation", enable ? "1" : "0");
-  gi.LocBroadcast_Print(PRINT_HIGH, "Lag compensation has been {}.\n",
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_c377eedebb41",
                         enable ? "ENABLED" : "DISABLED");
 }
 
 static void Pass_Cointoss() {
   const bool heads = brandom();
-  gi.LocBroadcast_Print(PRINT_HIGH, "Coin toss result: {}!\n",
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_8af04bf23246",
                         heads ? "HEADS" : "TAILS");
 }
 
@@ -158,7 +158,7 @@ static void Pass_Random() {
   }
 
   const int roll = irandom(1, maxValue + 1);
-  gi.LocBroadcast_Print(PRINT_HIGH, "Random roll (1-{}): {}\n", maxValue, roll);
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_a6db76c1e482", maxValue, roll);
 }
 
 static void Pass_Arena() {
@@ -168,11 +168,11 @@ static void Pass_Arena() {
     return;
   }
 
-  gi.LocBroadcast_Print(PRINT_HIGH, "Arena {} is now active.\n", *desiredArena);
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_67abe6fb7c79", *desiredArena);
 }
 
 static void Pass_Forfeit() {
-  gi.Broadcast_Print(PRINT_HIGH, "Forfeit vote passed. Match ending.\n");
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_4986aeaa345a");
   ::Match_End();
 }
 
@@ -194,9 +194,9 @@ static void Pass_Ruleset() {
 static void Pass_Timelimit() {
   if (auto val = CommandArgs::ParseInt(level.vote.arg)) {
     if (*val == 0) {
-      gi.Broadcast_Print(PRINT_HIGH, "Time limit has been DISABLED.\n");
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_08e5df689bf6");
     } else {
-      gi.LocBroadcast_Print(PRINT_HIGH, "Time limit has been set to {}.\n",
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_b1d39b8ada0b",
                             TimeString(*val * 60000, false, false));
     }
     gi.cvarForceSet("timeLimit", level.vote.arg.c_str());
@@ -206,9 +206,9 @@ static void Pass_Timelimit() {
 static void Pass_Scorelimit() {
   if (auto val = CommandArgs::ParseInt(level.vote.arg)) {
     if (*val == 0) {
-      gi.Broadcast_Print(PRINT_HIGH, "Score limit has been DISABLED.\n");
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_f7e6404c4e27");
     } else {
-      gi.LocBroadcast_Print(PRINT_HIGH, "Score limit has been set to {}.\n",
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_12d256604a40",
                             *val);
     }
     std::string limitCvar = std::format("{}limit", GT_ScoreLimitString());
@@ -227,7 +227,7 @@ static bool Validate_Map(gentity_t *ent, const CommandArgs &args) {
   const MapEntry *map = game.mapSystem.GetMapEntry(std::string(mapName));
 
   if (!map) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Map '{}' not found in map pool.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_356fb3f821c4",
                        mapName.data());
     return false;
   }
@@ -240,7 +240,7 @@ static bool Validate_Map(gentity_t *ent, const CommandArgs &args) {
       const int elapsed = delta > 0 ? static_cast<int>(delta) : 0;
       const int remaining = std::max(0, cooldownSeconds - elapsed);
       gi.LocClient_Print(ent, PRINT_HIGH,
-                         "Map '{}' was played recently, please wait {}.\n",
+                         "$g_sgame_auto_354db5343ba1",
                          mapName.data(), FormatDuration(remaining).c_str());
       return false;
     }
@@ -251,7 +251,7 @@ static bool Validate_Map(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Forfeit(gentity_t *ent, const CommandArgs &args) {
   if (level.matchState != MatchState::In_Progress &&
       level.matchState != MatchState::Countdown) {
-    gi.Client_Print(ent, PRINT_HIGH, "Can only forfeit during a match.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_6ed020aeac9b");
     return false;
   }
   return true;
@@ -259,7 +259,7 @@ static bool Validate_Forfeit(gentity_t *ent, const CommandArgs &args) {
 
 static bool Validate_Gametype(gentity_t *ent, const CommandArgs &args) {
   if (!Game::FromString(args.getString(2))) {
-    gi.Client_Print(ent, PRINT_HIGH, "Invalid gametype.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_112f94340b1b");
     return false;
   }
   return true;
@@ -268,11 +268,11 @@ static bool Validate_Gametype(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Ruleset(gentity_t *ent, const CommandArgs &args) {
   Ruleset desired_rs = RS_IndexFromString(args.getString(2).data());
   if (desired_rs == Ruleset::None) {
-    gi.Client_Print(ent, PRINT_HIGH, "Invalid ruleset.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d6b7bd7d3da7");
     return false;
   }
   if (desired_rs == game.ruleset) {
-    gi.Client_Print(ent, PRINT_HIGH, "That ruleset is already active.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c3e2a6e167ba");
     return false;
   }
   return true;
@@ -281,11 +281,11 @@ static bool Validate_Ruleset(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Timelimit(gentity_t *ent, const CommandArgs &args) {
   auto limit = args.getInt(2);
   if (!limit || *limit < 0 || *limit > 1440) {
-    gi.Client_Print(ent, PRINT_HIGH, "Invalid time limit value.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_81b419189d06");
     return false;
   }
   if (*limit == timeLimit->integer) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Time limit is already set to {}.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_61066055f19e",
                        *limit);
     return false;
   }
@@ -295,11 +295,11 @@ static bool Validate_Timelimit(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Scorelimit(gentity_t *ent, const CommandArgs &args) {
   auto limit = args.getInt(2);
   if (!limit || *limit < 0) {
-    gi.Client_Print(ent, PRINT_HIGH, "Invalid score limit value.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f8483f88887b");
     return false;
   }
   if (*limit == GT_ScoreLimit()) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Score limit is already set to {}.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_b7ba778b0e9d",
                        *limit);
     return false;
   }
@@ -308,8 +308,8 @@ static bool Validate_Scorelimit(gentity_t *ent, const CommandArgs &args) {
 
 static bool Validate_TeamBased(gentity_t *ent, const CommandArgs &args) {
   if (!Teams()) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "This vote is only available in team-based gametypes.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_c8dbfb2dde0d");
     return false;
   }
   return true;
@@ -318,14 +318,14 @@ static bool Validate_TeamBased(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Unlagged(gentity_t *ent, const CommandArgs &args) {
   auto value = args.getInt(2);
   if (!value || (*value != 0 && *value != 1)) {
-    gi.Client_Print(ent, PRINT_HIGH, "Usage: callvote unlagged <0|1>.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0e29046b3325");
     return false;
   }
 
   const bool currentlyEnabled =
       g_lagCompensation && g_lagCompensation->integer != 0;
   if (currentlyEnabled == (*value != 0)) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Lag compensation is already {}.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_71675ea7152d",
                        currentlyEnabled ? "ENABLED" : "DISABLED");
     return false;
   }
@@ -335,8 +335,8 @@ static bool Validate_Unlagged(gentity_t *ent, const CommandArgs &args) {
 
 static bool Validate_Cointoss(gentity_t *ent, const CommandArgs &args) {
   if (args.count() > 2) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "Cointoss does not take any parameters.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_d68f9df3f553");
     return false;
   }
 
@@ -346,8 +346,8 @@ static bool Validate_Cointoss(gentity_t *ent, const CommandArgs &args) {
 static bool Validate_Random(gentity_t *ent, const CommandArgs &args) {
   auto limit = args.getInt(2);
   if (!limit || *limit < 2 || *limit > 100) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "Random vote range must be between 2 and 100.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_0448caa8397f");
     return false;
   }
 
@@ -356,25 +356,25 @@ static bool Validate_Random(gentity_t *ent, const CommandArgs &args) {
 
 static bool Validate_Arena(gentity_t *ent, const CommandArgs &args) {
   if (level.arenaTotal <= 0) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "This vote is only available in arena-based modes.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_2c4ae488c0fc");
     return false;
   }
 
   auto arenaNum = args.getInt(2);
   if (!arenaNum) {
-    gi.Client_Print(ent, PRINT_HIGH, "Invalid arena number.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_feab1aa2b2f7");
     return false;
   }
 
   if (!CheckArenaValid(*arenaNum)) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Arena {} is not available.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ac22248ce11b",
                        *arenaNum);
     return false;
   }
 
   if (*arenaNum == level.arenaActive) {
-    gi.Client_Print(ent, PRINT_HIGH, "That arena is already active.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ee68da0415c6");
     return false;
   }
 
@@ -442,7 +442,7 @@ static void VoteCommandStore(gentity_t *ent, const VoteCommand *vote_cmd,
     argSuffix = std::format(" {}", effectiveArg);
   }
 
-  gi.LocBroadcast_Print(PRINT_CENTER, "{} called a vote:\n{}{}\n",
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_367fce8f6362",
                         level.vote.client->sess.netName, vote_cmd->name.data(),
                         argSuffix.empty() ? "" : argSuffix.c_str());
 
@@ -590,41 +590,41 @@ VoteLaunchResult TryLaunchVote(gentity_t *ent, std::string_view voteName,
 
 void CallVote(gentity_t *ent, const CommandArgs &args) {
   if (!g_allowVoting->integer) {
-    gi.Client_Print(ent, PRINT_HIGH, "Voting is disabled on this server.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_13161b3d1478");
     return;
   }
   if (Tournament_IsActive()) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "Voting is disabled during tournaments.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_7eed61b646fc");
     return;
   }
   if (level.vote.time) {
-    gi.Client_Print(ent, PRINT_HIGH, "A vote is already in progress.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_4158cf771f43");
     return;
   }
   if (!g_allowVoteMidGame->integer &&
       level.matchState >= MatchState::Countdown) {
-    gi.Client_Print(ent, PRINT_HIGH, "Voting is only allowed during warmup.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_2b0ea2465112");
     return;
   }
   if (g_vote_limit->integer &&
       ent->client->pers.vote_count >= g_vote_limit->integer) {
     gi.LocClient_Print(ent, PRINT_HIGH,
-                       "You have called the maximum number of votes ({}).\n",
+                       "$g_sgame_auto_5744768f36b8",
                        g_vote_limit->integer);
     return;
   }
   if (!ClientIsPlaying(ent->client) && !g_allowSpecVote->integer) {
-    gi.Client_Print(ent, PRINT_HIGH,
-                    "Spectators cannot call a vote on this server.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH,
+                    "$g_sgame_auto_6f3c61bcd287");
     return;
   }
   if (level.vote.time) {
-    gi.Client_Print(ent, PRINT_HIGH, "A vote is already in progress.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_4158cf771f43");
     return;
   }
   if (level.vote.executeTime || level.restarted) {
-    gi.Client_Print(ent, PRINT_HIGH, "Cannot start a vote right now.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_79f0c39d8350");
     return;
   }
 
@@ -667,9 +667,9 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
       }
 
       const std::string message = oss.str();
-      gi.Client_Print(ent, PRINT_HIGH, message.c_str());
+      gi.LocClient_Print(ent, PRINT_HIGH, message.c_str());
     } else {
-      gi.Client_Print(ent, PRINT_HIGH, "No votes are currently enabled.\n");
+      gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_84134bd0e15d");
     }
 
     return;
@@ -680,7 +680,7 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
   if (!ValidatePrintableASCII(voteName, "Vote command", validationError)) {
     std::string message = validationError;
     message.push_back('\n');
-    gi.Client_Print(ent, PRINT_HIGH, message.c_str());
+    gi.LocClient_Print(ent, PRINT_HIGH, message.c_str());
     return;
   }
 
@@ -689,7 +689,7 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
                                 validationError)) {
       std::string message = validationError;
       message.push_back('\n');
-      gi.Client_Print(ent, PRINT_HIGH, message.c_str());
+      gi.LocClient_Print(ent, PRINT_HIGH, message.c_str());
       return;
     }
   }
@@ -697,7 +697,7 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
   auto it = s_voteCommands.find(voteName);
 
   if (it == s_voteCommands.end()) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "Invalid vote command: '{}'.\n",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fc5991932355",
                        voteName.data());
     return;
   }
@@ -712,8 +712,8 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
   if (found_cmd.validate(ent, args)) {
 
     if ((g_vote_flags->integer & found_cmd.flag) == 0) {
-      gi.Client_Print(ent, PRINT_HIGH,
-                      "That vote type is disabled on this server.\n");
+      gi.LocClient_Print(ent, PRINT_HIGH,
+                      "$g_sgame_auto_94cdc9e5b051");
       return;
     }
 
@@ -732,7 +732,7 @@ void CallVote(gentity_t *ent, const CommandArgs &args) {
       std::string parseError;
       auto parsed = ParseMapVoteArguments(mapArgs, parseError);
       if (!parsed) {
-        gi.LocClient_Print(ent, PRINT_HIGH, "{}\n", parseError.c_str());
+        gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_5f36b2ea2906", parseError.c_str());
         return;
       }
 
@@ -787,7 +787,7 @@ void G_RevertVote(gclient_t *client) {
     return;
   }
 
-  gi.Broadcast_Print(PRINT_HIGH, "Vote cancelled (caller disconnected).\n");
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6a98dca73c34");
 
   level.vote.client = nullptr;
   level.vote.cmd = nullptr;

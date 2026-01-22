@@ -64,6 +64,7 @@ typedef struct image_s {
     unsigned        texnum, texnum2; // gl texture binding
     float           sl, sh, tl, th;
     float           aspect;
+    uint64_t        last_modified;
 } image_t;
 
 #define MAX_RIMAGES     8192

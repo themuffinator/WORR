@@ -661,23 +661,23 @@ void OGG_LoadTrackList(void)
 static void OGG_Play_f(void)
 {
     if (Cmd_Argc() < 3) {
-        Com_Printf("Usage: %s %s <track>\n", Cmd_Argv(0), Cmd_Argv(1));
+        Com_Printf("$e_auto_bd8795aad49c", Cmd_Argv(0), Cmd_Argv(1));
         return;
     }
 
     if (!s_started) {
-        Com_Printf("Sound system not started.\n");
+        Com_Printf("$e_auto_830f9dc2c0a7");
         return;
     }
 
     if (cls.state == ca_cinematic) {
-        Com_Printf("Can't play music in cinematic mode.\n");
+        Com_Printf("$e_auto_aa73cd5fd87e");
         return;
     }
 
     const char *path = lookup_track_path(Cmd_Argv(2));
     if (!path) {
-        Com_Printf("No such track: %s\n", Cmd_Argv(2));
+        Com_Printf("$e_auto_71c2c825dc61", Cmd_Argv(2));
         return;
     }
 
@@ -695,7 +695,7 @@ static void OGG_Info_f(void)
     if (ogg.fmt_ctx)
         av_dump_format(ogg.fmt_ctx, 0, ogg.fmt_ctx->url, 0);
     else
-        Com_Printf("Playback stopped.\n");
+        Com_Printf("$e_auto_79b47d22b1d3");
 }
 
 static void OGG_Cmd_c(genctx_t *ctx, int argnum)
@@ -719,12 +719,12 @@ static void OGG_Cmd_c(genctx_t *ctx, int argnum)
 static void OGG_Next_f(void)
 {
     if (!s_started) {
-        Com_Printf("Sound system not started.\n");
+        Com_Printf("$e_auto_830f9dc2c0a7");
         return;
     }
 
     if (cls.state == ca_cinematic) {
-        Com_Printf("Can't play music in cinematic mode.\n");
+        Com_Printf("$e_auto_aa73cd5fd87e");
         return;
     }
 
@@ -737,7 +737,7 @@ static void OGG_Next_f(void)
 static void OGG_Pause_f(void)
 {
     if (!ogg.dec_ctx) {
-        Com_Printf("Playback stopped.\n");
+        Com_Printf("$e_auto_79b47d22b1d3");
         return;
     }
 
@@ -764,7 +764,7 @@ static void OGG_Cmd_f(void)
     else if (!strcmp(cmd, "pause") || !strcmp(cmd, "toggle"))
         OGG_Pause_f();
     else
-        Com_Printf("Usage: %s <info|play|stop|next|pause>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_9b38c06a5ed1", Cmd_Argv(0));
 }
 
 static void ogg_enable_changed(cvar_t *self)

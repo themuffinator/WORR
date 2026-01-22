@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef REFRESH_DEBUG_H_
 #define REFRESH_DEBUG_H_
 
+#include "shared/list.h"
+
 #define MAX_DEBUG_LINES     8192
 #define MAX_DEBUG_VERTICES  (MAX_DEBUG_LINES * 2)
 

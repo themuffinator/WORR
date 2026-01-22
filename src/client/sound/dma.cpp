@@ -678,7 +678,7 @@ extern "C" const snddma_driver_t    snddma_wave;
 #endif
 
 #if USE_SDL
-extern const snddma_driver_t    snddma_sdl;
+extern "C" const snddma_driver_t    snddma_sdl;
 #endif
 
 static const snddma_driver_t *const s_drivers[] = {
@@ -696,13 +696,13 @@ static const snddma_driver_t    *snddma;
 
 static void DMA_SoundInfo(void)
 {
-    Com_Printf("%5d channels\n", dma.channels);
-    Com_Printf("%5d samples\n", dma.samples);
-    Com_Printf("%5d samplepos\n", dma.samplepos);
-    Com_Printf("%5d samplebits\n", dma.samplebits);
-    Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
-    Com_Printf("%5d speed\n", dma.speed);
-    Com_Printf("%p dma buffer\n", dma.buffer);
+    Com_Printf("$e_auto_d359e858f230", dma.channels);
+    Com_Printf("$e_auto_5a4ad441a3d7", dma.samples);
+    Com_Printf("$e_auto_cd8809bb2e07", dma.samplepos);
+    Com_Printf("$e_auto_9b76d03925f0", dma.samplebits);
+    Com_Printf("$e_auto_a6981ff5c3a8", dma.submission_chunk);
+    Com_Printf("$e_auto_001763d30d22", dma.speed);
+    Com_Printf("$e_auto_a3f65c922527", dma.buffer);
 }
 
 static bool DMA_Init(void)
@@ -749,7 +749,7 @@ static bool DMA_Init(void)
     s_supports_float = true;
     DMA_InitOcclusionFilter();
 
-    Com_Printf("sound sampling rate: %i\n", dma.speed);
+    Com_Printf("$e_auto_cb9848071902", dma.speed);
 
     return true;
 }
@@ -1047,7 +1047,7 @@ static void DMA_Update(void)
             }
         }
         if (s_show->integer > 1 || total) {
-            Com_Printf("----(%i)---- painted: %i\n", total, s_paintedtime);
+            Com_Printf("$e_auto_0e4356fb2cf6", total, s_paintedtime);
         }
     }
 #endif

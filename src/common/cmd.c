@@ -59,7 +59,7 @@ static void Cmd_Wait_f(void)
     int count = Q_atoi(Cmd_Argv(1));
 
     if (cmd_current->waitCount >= 1000) {
-        Com_WPrintf("Runaway wait count\n");
+        Com_WPrintf("$e_auto_f1b83d0e66c9");
         return;
     }
 
@@ -93,7 +93,7 @@ void Cbuf_AddText(cmdbuf_t *buf, const char *text)
 
     Q_assert(buf->cursize <= buf->maxsize);
     if (l > buf->maxsize - buf->cursize) {
-        Com_WPrintf("%s: overflow\n", __func__);
+        Com_WPrintf("$e_auto_222e9240889b", __func__);
         return;
     }
     memcpy(buf->text + buf->cursize, text, l);
@@ -118,7 +118,7 @@ void Cbuf_InsertText(cmdbuf_t *buf, const char *text)
     }
     Q_assert(buf->cursize <= buf->maxsize);
     if (l >= buf->maxsize - buf->cursize) {
-        Com_WPrintf("%s: overflow\n", __func__);
+        Com_WPrintf("$e_auto_222e9240889b", __func__);
         return;
     }
 
@@ -185,7 +185,7 @@ void Cbuf_Execute(cmdbuf_t *buf)
             cmd_current = buf;
             buf->exec(buf, line);
         } else {
-            Com_Printf("Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+            Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
         }
     }
 }
@@ -351,33 +351,33 @@ void Cmd_Alias_f(void)
 
     if (Cmd_Argc() < 2) {
         if (LIST_EMPTY(&cmd_alias)) {
-            Com_Printf("No alias commands registered.\n");
+            Com_Printf("$e_auto_e58851d27288");
             return;
         }
-        Com_Printf("Registered alias commands:\n");
+        Com_Printf("$e_auto_5a2290e8949f");
         FOR_EACH_ALIAS(a) {
-            Com_Printf("\"%s\" = \"%s\"\n", a->name, a->value);
+            Com_Printf("$e_auto_c1ac475b26f9", a->name, a->value);
         }
         return;
     }
 
     s = Cmd_Argv(1);
     if (Cmd_Exists(s)) {
-        Com_Printf("\"%s\" already defined as a command\n", s);
+        Com_Printf("$e_auto_cc5e9df92c38", s);
         return;
     }
 
     if (Cvar_Exists(s, true)) {
-        Com_Printf("\"%s\" already defined as a cvar\n", s);
+        Com_Printf("$e_auto_5db1acfedd95", s);
         return;
     }
 
     if (Cmd_Argc() < 3) {
         a = Cmd_AliasFind(s);
         if (a) {
-            Com_Printf("\"%s\" = \"%s\"\n", a->name, a->value);
+            Com_Printf("$e_auto_c1ac475b26f9", a->name, a->value);
         } else {
-            Com_Printf("\"%s\" is undefined\n", s);
+            Com_Printf("$e_auto_fc5d90c00b6e", s);
         }
         return;
     }
@@ -414,7 +414,7 @@ static void Cmd_UnAlias_f(void)
                 List_Init(&cmd_aliasHash[hash]);
             }
             List_Init(&cmd_alias);
-            Com_Printf("Removed all alias commands.\n");
+            Com_Printf("$e_auto_147a87479fd1");
             return;
         default:
             return;
@@ -422,7 +422,7 @@ static void Cmd_UnAlias_f(void)
     }
 
     if (!cmd_optarg[0]) {
-        Com_Printf("Missing alias name.\n");
+        Com_Printf("$e_auto_8aa0a71a471c");
         Cmd_PrintHint();
         return;
     }
@@ -430,7 +430,7 @@ static void Cmd_UnAlias_f(void)
     s = Cmd_Argv(1);
     a = Cmd_AliasFind(s);
     if (!a) {
-        Com_Printf("\"%s\" is undefined.\n", s);
+        Com_Printf("$e_auto_34a43883dfb0", s);
         return;
     }
 
@@ -507,13 +507,13 @@ static void list_triggers(void)
     cmd_trigger_t *trigger;
 
     if (LIST_EMPTY(&cmd_triggers)) {
-        Com_Printf("No current message triggers\n");
+        Com_Printf("$e_auto_123e4c5a134d");
         return;
     }
 
-    Com_Printf("Current message triggers:\n");
+    Com_Printf("$e_auto_4b9d566d5f92");
     FOR_EACH_TRIGGER(trigger) {
-        Com_Printf("\"%s\" = \"%s\"\n", trigger->command, trigger->match);
+        Com_Printf("$e_auto_c1ac475b26f9", trigger->command, trigger->match);
     }
 }
 
@@ -534,7 +534,7 @@ static void Cmd_Trigger_f(void)
     }
 
     if (Cmd_Argc() < 3) {
-        Com_Printf("Usage: %s <command> <match>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_1191386e1852", Cmd_Argv(0));
         return;
     }
 
@@ -549,7 +549,7 @@ static void Cmd_Trigger_f(void)
     cmdlen = strlen(command) + 1;
     matchlen = strlen(match) + 1;
     if (matchlen < 4) {
-        Com_Printf("Match string is too short\n");
+        Com_Printf("$e_auto_2128c0ac068b");
         return;
     }
 
@@ -572,7 +572,7 @@ static void Cmd_UnTrigger_f(void)
     }
 
     if (LIST_EMPTY(&cmd_triggers)) {
-        Com_Printf("No current message triggers\n");
+        Com_Printf("$e_auto_123e4c5a134d");
         return;
     }
 
@@ -585,12 +585,12 @@ static void Cmd_UnTrigger_f(void)
                 count++;
             }
 
-            Com_Printf("Removed %d trigger%s\n", count, count == 1 ? "" : "s");
+            Com_Printf("$e_auto_7987984782b4", count, count == 1 ? "" : "s");
             List_Init(&cmd_triggers);
             return;
         }
 
-        Com_Printf("Usage: %s <command> <match>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_1191386e1852", Cmd_Argv(0));
         return;
     }
 
@@ -599,7 +599,7 @@ static void Cmd_UnTrigger_f(void)
 
     trigger = find_trigger(command, match);
     if (!trigger) {
-        Com_Printf("Can't find trigger \"%s\" = \"%s\"\n", command, match);
+        Com_Printf("$e_auto_3f32e987a006", command, match);
         return;
     }
 
@@ -648,7 +648,7 @@ static void Cmd_If_f(void)
     int i, j;
 
     if (Cmd_Argc() < 5) {
-        Com_Printf("Usage: if <expr> <op> <expr> [then] <command> [else <command>]\n");
+        Com_Printf("$e_auto_51d307fee76e");
         return;
     }
 
@@ -664,7 +664,7 @@ static void Cmd_If_f(void)
     } else if (!strcmp(op, "<")) {
         if (!numeric) {
 error:
-            Com_Printf("Can't use '%s' with non-numeric expression(s)\n", op);
+            Com_Printf("$e_auto_45ddf1902a53", op);
             return;
         }
         matched = Q_atof(a) < Q_atof(b);
@@ -693,8 +693,8 @@ error:
     } else if (!Q_stricmp(op, "ne")) {
         matched = Q_stricmp(a, b);
     } else {
-        Com_Printf("Unknown operator '%s'\n", op);
-        Com_Printf("Valid are: ==, != or <>, <, <=, >, >=, [!]isin[i], eq, ne\n");
+        Com_Printf("$e_auto_d4de46d59515", op);
+        Com_Printf("$e_auto_048af56bd6de");
         return;
     }
 
@@ -778,7 +778,7 @@ void Cmd_AddMacro(const char *name, xmacro_t function)
 
 // fail if the macro is a variable name
     if (Cvar_Exists(name, false)) {
-        Com_WPrintf("%s: %s already defined as a cvar\n", __func__, name);
+        Com_WPrintf("$e_auto_900d94221b36", __func__, name);
         return;
     }
 
@@ -786,7 +786,7 @@ void Cmd_AddMacro(const char *name, xmacro_t function)
     macro = Cmd_FindMacro(name);
     if (macro) {
         if (macro->function != function) {
-            Com_WPrintf("%s: %s already defined\n", __func__, name);
+            Com_WPrintf("$e_auto_63ae75e00274", __func__, name);
         }
         return;
     }
@@ -1056,7 +1056,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
         // parse long option argument
         if (p) {
             if (o->sh[1] != ':') {
-                Com_Printf("%s does not take an argument.\n", cmd_argv[cmd_optind]);
+                Com_Printf("$e_auto_433adc0b106f", cmd_argv[cmd_optind]);
                 Cmd_PrintHint();
                 return '!';
             }
@@ -1078,7 +1078,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     // parse option argument
     if (!p && o->sh[1] == ':') {
         if (cmd_optind + 1 == cmd_argc) {
-            Com_Printf("Missing argument to %s.\n", cmd_argv[cmd_optind]);
+            Com_Printf("$e_auto_f2564956cac4", cmd_argv[cmd_optind]);
             Cmd_PrintHint();
             return ':';
         }
@@ -1089,14 +1089,14 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     return o->sh[0];
 
 unknown:
-    Com_Printf("Unknown option: %s.\n", cmd_argv[cmd_optind]);
+    Com_Printf("$e_auto_d6e935de0e44", cmd_argv[cmd_optind]);
     Cmd_PrintHint();
     return '?';
 }
 
 void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
 {
-    Com_Printf("Usage: %s [-", cmd_argv[0]);
+    Com_Printf("$e_auto_7535716ffdff", cmd_argv[0]);
     while (opt->sh) {
         Com_Printf("%c", opt->sh[0]);
         if (opt->sh[1] == ':') {
@@ -1105,7 +1105,7 @@ void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
         opt++;
     }
     if (suffix) {
-        Com_Printf("] %s\n", suffix);
+        Com_Printf("$e_auto_8ac24f918f3e", suffix);
     } else {
         Com_Printf("]\n");
     }
@@ -1124,7 +1124,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
         width = max(width, min(len, 31));
     }
 
-    Com_Printf("\nAvailable options:\n");
+    Com_Printf("$e_auto_43221e8bf8b1");
     while (opt->sh) {
         if (opt->sh[1] == ':') {
             Q_concat(buffer, sizeof(buffer), opt->lo, "=<", opt->sh + 2, ">");
@@ -1139,7 +1139,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
 
 void Cmd_PrintHint(void)
 {
-    Com_Printf("Try '%s --help' for more information.\n", cmd_argv[0]);
+    Com_Printf("$e_auto_55f681b31104", cmd_argv[0]);
 }
 
 void Cmd_Option_c(const cmd_option_t *opt, xgenerator_t g, genctx_t *ctx, int argnum)
@@ -1263,7 +1263,7 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
 
     len = strlen(text);
     if (len >= MAX_STRING_CHARS) {
-        Com_Printf("Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+        Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
         return NULL;
     }
 
@@ -1311,12 +1311,12 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
 
         j = strlen(result);
         if (j >= remaining) {
-            Com_Printf("Expanded line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+            Com_Printf("$e_auto_4f734c250891", MAX_STRING_CHARS);
             return NULL;
         }
 
         if (++count == 100) {
-            Com_Printf("Macro expansion loop, discarded.\n");
+            Com_Printf("$e_auto_e6a1218ed003");
             return NULL;
         }
 
@@ -1331,7 +1331,7 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
     }
 
     if (inquote) {
-        Com_Printf("Line has unmatched quote, discarded.\n");
+        Com_Printf("$e_auto_372c92bfdaaf");
         return NULL;
     }
 
@@ -1377,7 +1377,7 @@ void Cmd_TokenizeString(const char *text, bool macroExpand)
 
     len = strlen(text);
     if (len >= MAX_STRING_CHARS) {
-        Com_Printf("Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+        Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
         return;
     }
 
@@ -1477,7 +1477,7 @@ static void Cmd_RegCommand(const cmdreg_t *reg)
 
 // fail if the command is a variable name
     if (Cvar_Exists(reg->name, false)) {
-        Com_WPrintf("%s: %s already defined as a cvar\n", __func__, reg->name);
+        Com_WPrintf("$e_auto_900d94221b36", __func__, reg->name);
         return;
     }
 
@@ -1485,7 +1485,7 @@ static void Cmd_RegCommand(const cmdreg_t *reg)
     cmd = Cmd_Find(reg->name);
     if (cmd) {
         if (cmd->function) {
-            Com_WPrintf("%s: %s already defined\n", __func__, reg->name);
+            Com_WPrintf("$e_auto_63ae75e00274", __func__, reg->name);
             return;
         }
         cmd->function = reg->function;
@@ -1599,7 +1599,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
         if (cmd->function) {
             cmd->function();
         } else if (!COM_DEDICATED && !CL_ForwardToServer()) {
-            Com_Printf("Can't \"%s\", not connected\n", cmd_argv[0]);
+            Com_Printf("$e_auto_23a15e4dcb24", cmd_argv[0]);
         }
         return;
     }
@@ -1608,7 +1608,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
     a = Cmd_AliasFind(cmd_argv[0]);
     if (a) {
         if (buf->aliasCount >= ALIAS_LOOP_COUNT) {
-            Com_WPrintf("Runaway alias loop\n");
+            Com_WPrintf("$e_auto_146248f9ee83");
             return;
         }
         text = Cmd_MacroExpandString(a->value, true);
@@ -1628,7 +1628,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
 
     // send it as a server command if we are connected
     if (!CL_ForwardToServer()) {
-        Com_Printf("Unknown command \"%s\"\n", cmd_argv[0]);
+        Com_Printf("$e_auto_7cd2e8eb4815", cmd_argv[0]);
     }
 }
 
@@ -1686,7 +1686,7 @@ int Cmd_ExecuteFile(const char *path, unsigned flags)
     }
 
     // everything ok, execute it
-    Com_Printf("Execing %s\n", path);
+    Com_Printf("$e_auto_6d0101f3edea", path);
 
     buf->aliasCount++;
     Cbuf_InsertText(buf, f);
@@ -1709,7 +1709,7 @@ static void Cmd_Exec_f(void)
     int     ret;
 
     if (Cmd_Argc() != 2) {
-        Com_Printf("%s <filename> : execute a script file\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_8229a49e2a97", Cmd_Argv(0));
         return;
     }
 
@@ -1728,7 +1728,7 @@ static void Cmd_Exec_f(void)
 
 fail:
     if (ret) {
-        Com_Printf("Couldn't exec %s: %s\n", buffer, Q_ErrorString(ret));
+        Com_Printf("$e_auto_bab55c887650", buffer, Q_ErrorString(ret));
     }
 }
 
@@ -1828,7 +1828,7 @@ static void Cmd_EchoEx_f(void)
         switch (c) {
         case 'h':
             Cmd_PrintUsage(o_echo, "[text]");
-            Com_Printf("Print a line of text into the console.\n");
+            Com_Printf("$e_auto_822ffbdd85b6");
             Cmd_PrintHelp(o_echo);
             return;
         case 'e':
@@ -1846,7 +1846,7 @@ static void Cmd_EchoEx_f(void)
             case 'e': level = PRINT_ERROR;     break;
             case 'n': level = PRINT_NOTICE;    break;
             default:
-                Com_Printf("Bad print level: %s\n", cmd_optarg);
+                Com_Printf("$e_auto_bcc0a8583c82", cmd_optarg);
                 return;
             }
             break;
@@ -1895,7 +1895,7 @@ static void Cmd_List_f(void)
         Com_Printf("%s\n", cmd->name);
         i++;
     }
-    Com_Printf("%i of %i commands\n", i, total);
+    Com_Printf("$e_auto_cfbfbe758955", i, total);
 }
 
 /*
@@ -1923,7 +1923,7 @@ static void Cmd_MacroList_f(void)
         Com_Printf("%-16s %s\n", macro->name, buffer);
         i++;
     }
-    Com_Printf("%i of %i macros\n", i, total);
+    Com_Printf("$e_auto_f1a758aff3ef", i, total);
 }
 
 static void Cmd_Text_f(void)
@@ -1941,7 +1941,7 @@ static void Cmd_Complete_f(void)
         return;
 
     if (cmd_argc < 2) {
-        Com_Printf("Usage: %s <command>", cmd_argv[0]);
+        Com_Printf("$e_auto_c8135ca9df1b", cmd_argv[0]);
         return;
     }
 
@@ -1949,7 +1949,7 @@ static void Cmd_Complete_f(void)
 
 // fail if the command is a variable name
     if (Cvar_Exists(name, true)) {
-        Com_Printf("%s is already defined as a cvar\n", name);
+        Com_Printf("$e_auto_ed853522e12d", name);
         return;
     }
 

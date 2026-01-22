@@ -77,7 +77,7 @@ static cvar_t   *s_auto_focus;
 static void S_SoundInfo_f(void)
 {
     if (!s_started) {
-        Com_Printf("Sound system not started.\n");
+        Com_Printf("$e_auto_830f9dc2c0a7");
         return;
     }
 
@@ -105,15 +105,15 @@ static void S_SoundList_f(void)
             Com_Printf("(%2db) (%dch) %6i : %s\n", sc->width * 8, sc->channels, sc->size, sfx->name);
         } else {
             if (sfx->name[0] == '*')
-                Com_Printf("  placeholder : %s\n", sfx->name);
+                Com_Printf("$e_auto_41788ae1f142", sfx->name);
             else
-                Com_Printf("  not loaded  : %s (%s)\n",
+                Com_Printf("$e_auto_ecbcd2965f35",
                            sfx->name, Q_ErrorString(sfx->error));
         }
         count++;
     }
-    Com_Printf("Total sounds: %d (out of %d slots)\n", count, num_sfx);
-    Com_Printf("Total resident: %zu\n", total);
+    Com_Printf("$e_auto_e391772931a1", count, num_sfx);
+    Com_Printf("$e_auto_91de38aa9aed", total);
 }
 
 static const cmdreg_t c_sound[] = {
@@ -162,11 +162,11 @@ void S_Init(void)
 {
     s_enable = Cvar_Get("s_enable", "2", CVAR_SOUND);
     if (s_enable->integer <= SS_NOT) {
-        Com_Printf("Sound initialization disabled.\n");
+        Com_Printf("$e_auto_5d1f180265cb");
         return;
     }
 
-    Com_Printf("------- S_Init -------\n");
+    Com_Printf("$e_auto_a49b8ae1ad17");
 
     s_volume = Cvar_Get("s_volume", "0.7", CVAR_ARCHIVE);
     s_ambient = Cvar_Get("s_ambient", "1", 0);
@@ -201,7 +201,7 @@ void S_Init(void)
 #endif
 
     if (s_started == SS_NOT) {
-        Com_EPrintf("Sound failed to initialize.\n");
+        Com_EPrintf("$e_auto_be2e6da1b98d");
         goto fail;
     }
 
@@ -227,7 +227,7 @@ void S_Init(void)
 
 fail:
     Cvar_SetInteger(s_enable, s_started, FROM_CODE);
-    Com_Printf("----------------------\n");
+    Com_Printf("$e_auto_2bc25acf4b25");
 }
 
 
@@ -655,7 +655,7 @@ void S_IssuePlaysound(playsound_t *ps)
 
 #if USE_DEBUG
     if (s_show->integer)
-        Com_Printf("Issue %i\n", ps->begin);
+        Com_Printf("$e_auto_28119ee774cb", ps->begin);
 #endif
     // pick a channel to play on
     ch = S_PickChannel(ps->entnum, ps->entchannel);
@@ -666,7 +666,7 @@ void S_IssuePlaysound(playsound_t *ps)
 
     sc = S_LoadSound(ps->sfx);
     if (!sc) {
-        Com_Printf("S_IssuePlaysound: couldn't load %s\n", ps->sfx->name);
+        Com_Printf("$e_auto_b0ba0ae0c004", ps->sfx->name);
         S_FreePlaysound(ps);
         return;
     }

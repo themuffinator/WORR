@@ -834,9 +834,18 @@ static void CL_Download_f(void)
     }
 }
 
+static void CL_DownloadCancel_f(void)
+{
+    if (cls.download.pending <= 0)
+        return;
+
+    CL_Disconnect(ERR_DISCONNECT);
+}
+
 void CL_InitDownloads(void)
 {
     Cmd_AddCommand("download", CL_Download_f);
+    Cmd_AddCommand("download_cancel", CL_DownloadCancel_f);
 
     List_Init(&cls.download.queue);
 }

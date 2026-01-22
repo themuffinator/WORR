@@ -1062,6 +1062,39 @@ void R_SetScale(float scale)
     vk_scale = scale;
 }
 
+static inline bool vk_is_color_escape(char c)
+{
+    if (c >= '0' && c <= '7')
+        return true;
+    if (c >= 'a' && c <= 'z')
+        return true;
+    if (c >= 'A' && c <= 'Z')
+        return true;
+    return false;
+}
+
+static size_t vk_strlen_no_color(const char *string, size_t maxlen)
+{
+    if (!string || !*string)
+        return 0;
+
+    size_t remaining = maxlen;
+    size_t len = 0;
+    const char *s = string;
+    while (remaining && *s) {
+        if (remaining >= 2 && *s == '^' && vk_is_color_escape(s[1])) {
+            s += 2;
+            remaining -= 2;
+            continue;
+        }
+        ++s;
+        --remaining;
+        ++len;
+    }
+
+    return len;
+}
+
 void R_DrawChar(int x, int y, int flags, int ch, color_t color, qhandle_t font)
 {
     (void)x;
@@ -1100,7 +1133,8 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxChars,
     if (maxChars && len > maxChars)
         len = maxChars;
 
-    return x + (int)(len * 8 * max(scale, 1));
+    size_t visible_len = vk_strlen_no_color(string, len);
+    return x + (int)(visible_len * 8 * max(scale, 1));
 }
 
 const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
@@ -1121,12 +1155,27 @@ const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
+    static cvar_t *cl_debugFonts;
+    if (!cl_debugFonts)
+        cl_debugFonts = Cvar_Get("cl_debugFonts", "1", 0);
+    const bool debug_fonts = cl_debugFonts && cl_debugFonts->integer;
+
     memset(font, 0, sizeof(*font));
 
     char *buffer;
 
-    if (FS_LoadFile(filename, (void **) &buffer) < 0)
+    if (FS_LoadFile(filename, (void **) &buffer) < 0) {
+        if (debug_fonts) {
+            Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\" failed: %s\n",
+                        filename ? filename : "<null>", Com_GetLastError());
+        }
         return;
+    }
+
+    if (debug_fonts) {
+        Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\"\n",
+                    filename ? filename : "<null>");
+    }
 
     const char *data = buffer;
 
@@ -1139,6 +1188,10 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
         if (!strcmp(token, "texture")) {
             token = COM_Parse(&data);
             font->pic = R_RegisterFont(va("/%s", token));
+            if (debug_fonts) {
+                Com_LPrintf(PRINT_ALL, "Font: kfont texture \"%s\" handle=%d\n",
+                            token ? token : "<null>", font->pic);
+            }
         } else if (!strcmp(token, "unicode")) {
         } else if (!strcmp(token, "mapchar")) {
             token = COM_Parse(&data);
@@ -1171,6 +1224,11 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
     }
 
     FS_FreeFile(buffer);
+
+    if (debug_fonts) {
+        Com_LPrintf(PRINT_ALL, "Font: kfont \"%s\" loaded line_height=%d handle=%d\n",
+                    filename ? filename : "<null>", font->line_height, font->pic);
+    }
 }
 
 int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t *kfont)

@@ -118,13 +118,13 @@ namespace
 
 			// malformed: non-digit at start (except we allow immediate '.' to mean empty which we reject)
 			if (!IsDigit(s.front())) {
-				gi.LocClient_Print(nullptr, PRINT_HIGH, "Bad filter address: {}\n", std::string(s).c_str());
+				gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_762a1dd7ee0a", std::string(s).c_str());
 				return false;
 			}
 
 			uint8_t oct = 0;
 			if (!ParseOctet(s, oct)) {
-				gi.LocClient_Print(nullptr, PRINT_HIGH, "Bad filter address: {}\n", std::string(s).c_str());
+				gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_762a1dd7ee0a", std::string(s).c_str());
 				return false;
 			}
 
@@ -228,7 +228,7 @@ namespace
 	static void PrintIP(const std::array<uint8_t, 4>& b)
 	{
 		const std::string formatted = FormatIP(b);
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "{}\n", formatted.c_str());
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_5f36b2ea2906", formatted.c_str());
 	}
 
 	/*
@@ -256,7 +256,7 @@ namespace
 	*/
 	static void Svcmd_Test_f()
 	{
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Svcmd_Test_f()\n");
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_e248f6b18c28");
 	}
 
 	/*
@@ -267,12 +267,12 @@ namespace
 	static void SVCmd_AddIP_f()
 	{
 		if (gi.argc() < 3) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Usage: sv {} <ip-mask>\n", gi.argv(1));
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_49b37599328b", gi.argv(1));
 			return;
 		}
 
 		if (g_filters.size() >= MAX_IPFILTERS) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "IP filter list is full\n");
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_02ac71f31677");
 			return;
 		}
 
@@ -299,7 +299,7 @@ namespace
 	static void SVCmd_RemoveIP_f()
 	{
 		if (gi.argc() < 3) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Usage: sv {} <ip-mask>\n", gi.argv(1));
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_49b37599328b", gi.argv(1));
 			return;
 		}
 
@@ -316,10 +316,10 @@ namespace
 			g_filters.end());
 
 		if (g_filters.size() != oldSize) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Removed.\n");
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_fe7c444adc1a");
 		}
 		else {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Did not find {}.\n", gi.argv(2));
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_c79065397faf", gi.argv(2));
 		}
 	}
 
@@ -330,7 +330,7 @@ namespace
 	*/
 	static void SVCmd_ListIP_f()
 	{
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Filter list:\n");
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_d1d00cfb9080");
 		for (const auto& f : g_filters) {
 			PrintIP(f.compare);
 		}
@@ -348,13 +348,13 @@ namespace
 		const std::filesystem::path path = ResolveIPFilterPath();
 		const std::string pathStr = path.generic_string();
 
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Writing {}.\n", pathStr.c_str());
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_b2f31e2d2c6e", pathStr.c_str());
 
 		if (!path.parent_path().empty()) {
 			std::error_code dirError;
 			std::filesystem::create_directories(path.parent_path(), dirError);
 			if (dirError) {
-				gi.LocClient_Print(nullptr, PRINT_HIGH, "Failed to create directory {}: {}\n",
+				gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_bb7da3428607",
 					path.parent_path().generic_string().c_str(), dirError.message().c_str());
 				return;
 			}
@@ -362,26 +362,26 @@ namespace
 
 		std::unique_ptr<std::FILE, decltype(&std::fclose)> file(std::fopen(pathStr.c_str(), "wb"), &std::fclose);
 		if (!file) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Couldn't open {}\n", pathStr.c_str());
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_7aa2109d84ab", pathStr.c_str());
 			return;
 		}
 
 		const int filterValue = (filterBan != nullptr) ? filterBan->integer : 1;
 		if (std::fprintf(file.get(), "set filterban %d\n", filterValue) < 0) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Failed to write filterban state to {}\n", pathStr.c_str());
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_fcde7b73d2ab", pathStr.c_str());
 			return;
 		}
 
 		for (const auto& f : g_filters) {
 			const std::string ip = FormatIP(f.compare);
 			if (std::fprintf(file.get(), "sv addip %s\n", ip.c_str()) < 0) {
-				gi.LocClient_Print(nullptr, PRINT_HIGH, "Failed to write entry for {}\n", ip.c_str());
+				gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_ddbe0ec85279", ip.c_str());
 				return;
 			}
 		}
 
 		if (std::fclose(file.release()) != 0) {
-			gi.LocClient_Print(nullptr, PRINT_HIGH, "Error closing {}\n", pathStr.c_str());
+			gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_75533e2f5be8", pathStr.c_str());
 		}
 	}
 
@@ -415,11 +415,11 @@ void G_LoadIPFilters()
 
 	std::ifstream stream(path);
 	if (!stream.is_open()) {
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Failed to open {} for reading.\n", pathStr.c_str());
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_4e4387469408", pathStr.c_str());
 		return;
 	}
 
-	gi.LocClient_Print(nullptr, PRINT_HIGH, "Loading IP filters from {}.\n", pathStr.c_str());
+	gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_90b352aba65b", pathStr.c_str());
 
 	std::string line;
 	while (std::getline(stream, line)) {
@@ -438,7 +438,7 @@ void G_LoadIPFilters()
 	}
 
 	if (stream.bad()) {
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Error reading {}.\n", pathStr.c_str());
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_630aa8bb06e1", pathStr.c_str());
 	}
 }
 /*
@@ -493,7 +493,7 @@ void ServerCommand()
 {
 	const char* cmd = gi.argv(1);
 	if (!cmd || !*cmd) {
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "No server command provided.\n");
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_4b35a84b7906");
 		return;
 	}
 
@@ -516,7 +516,7 @@ void ServerCommand()
 		SVCmd_NextMap_f();
 	}
 	else {
-		gi.LocClient_Print(nullptr, PRINT_HIGH, "Unknown server command \"{}\"\n", cmd);
+		gi.LocClient_Print(nullptr, PRINT_HIGH, "$g_sgame_auto_14d3c73afcac", cmd);
 	}
 }
 

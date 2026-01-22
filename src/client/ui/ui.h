@@ -296,6 +296,7 @@ void ImageSpinControl_Init(menuSpinControl_t *s);
 // animated menu cursor
 #define CURSOR_WIDTH    32
 #define CURSOR_OFFSET   25
+#define MENU_CURSOR_SIZE 12
 
 #define NUM_CURSOR_FRAMES 15
 
@@ -321,6 +322,8 @@ typedef struct {
     qhandle_t fontHandle;
     qhandle_t cursorHandle;
     int cursorWidth, cursorHeight;
+    qhandle_t cursorTextHandle;
+    int cursorTextWidth, cursorTextHeight;
 
     qhandle_t bitmapCursors[NUM_CURSOR_FRAMES];
 

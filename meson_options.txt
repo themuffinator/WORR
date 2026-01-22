@@ -136,6 +136,11 @@ option('sdl3',
   value: 'auto',
   description: 'SDL3 video and audio drivers')
 
+option('sdl3-ttf',
+  type: 'feature',
+  value: 'auto',
+  description: 'SDL3_ttf support')
+
 option('software-sound',
   type: 'feature',
   value: 'auto',

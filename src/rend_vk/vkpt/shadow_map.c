@@ -48,7 +48,7 @@ static float vkpt_frand(void)
 	return (int32_t)Com_SlowRand() * 0x1p-32f + 0.5f;
 }
 
-void vkpt_shadow_map_reset_instances()
+void vkpt_shadow_map_reset_instances(void)
 {
 	num_shadowmap_instances = 0;
 }
@@ -120,7 +120,7 @@ create_render_pass(void)
 }
 
 VkResult
-vkpt_shadow_map_initialize()
+vkpt_shadow_map_initialize(void)
 {
 	create_render_pass();
 
@@ -215,7 +215,7 @@ vkpt_shadow_map_initialize()
 }
 
 VkResult
-vkpt_shadow_map_destroy()
+vkpt_shadow_map_destroy(void)
 {
 	vkDestroyImageView(qvk.device, imv_smap_depth, NULL);
 	imv_smap_depth = VK_NULL_HANDLE;
@@ -236,13 +236,13 @@ vkpt_shadow_map_destroy()
 	return VK_SUCCESS;
 }
 
-VkImageView vkpt_shadow_map_get_view()
+VkImageView vkpt_shadow_map_get_view(void)
 {
 	return imv_smap_depth_array;
 }
 
 VkResult
-vkpt_shadow_map_create_pipelines()
+vkpt_shadow_map_create_pipelines(void)
 {
 	LOG_FUNC();
 
@@ -384,7 +384,7 @@ vkpt_shadow_map_create_pipelines()
 }
 
 VkResult
-vkpt_shadow_map_destroy_pipelines()
+vkpt_shadow_map_destroy_pipelines(void)
 {
 	LOG_FUNC();
 	vkDestroyFramebuffer(qvk.device, framebuffer_smap, NULL);

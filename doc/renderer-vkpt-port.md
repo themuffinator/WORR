@@ -12,7 +12,7 @@ Replace the preliminary Vulkan renderer with the full Q2RTX vkpt renderer while 
 - Replaced missing `SCR_*` helpers in vkpt with local alignment + `R_DrawStringStretch` calls.
 - Added `vkpt_draw_set_hud_alpha` so vkpt can fade the HUD during accumulation/photo mode.
 - Implemented full `R_DrawChar`, `R_DrawStretchChar`, `R_DrawStringStretch`, `R_DrawKFontChar`, `SCR_KFontLookup`, and `SCR_LoadKFont` for vkpt.
-- Added a basic `R_DrawStretchRotatePic` fallback (currently non-rotating).
+- Implemented `R_DrawStretchRotatePic` rotation support in the vkpt stretch-pic path.
 
 ## Freecam input
 - Removed reliance on client globals and SDL input.
@@ -33,4 +33,4 @@ Replace the preliminary Vulkan renderer with the full Q2RTX vkpt renderer while 
 - Defined `REF_GL=1` and `REF_VKPT=2` globally; set `USE_REF` per renderer target (`REF_GL` for GL, `REF_VKPT` for vkpt).
 
 ## Known limitations
-- `R_DrawStretchRotatePic` currently ignores rotation and draws the unrotated quad.
+- None tracked here after the stretch-rotate fix; add new entries as they are discovered.

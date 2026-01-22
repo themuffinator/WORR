@@ -42,6 +42,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <linux/input-event-codes.h>
 
+// linux/input-event-codes.h defines KEY_MENU; use game keydest instead.
+#ifdef KEY_MENU
+#undef KEY_MENU
+#endif
+
 #include <EGL/egl.h>
 
 #include <fcntl.h>
@@ -130,7 +135,8 @@ SEAT
 
 static void set_cursor(void)
 {
-    if (wl.mouse_grabbed) {
+    bool show_cursor = !(Key_GetDest() & KEY_MENU);
+    if (wl.mouse_grabbed || !show_cursor) {
         wl_pointer_set_cursor(wl.pointer, wl.pointer_enter_serial, NULL, 0, 0);
     } else if (wl.cursor_surface) {
         wl_pointer_set_cursor(wl.pointer, wl.pointer_enter_serial, wl.cursor_surface,
@@ -883,9 +889,6 @@ RELATIVE MOUSE
 
 ===============================================================================
 */
-
-// input-event-codes.h defines this
-#undef KEY_MENU
 
 static void handle_relative_motion(void *data, struct zwp_relative_pointer_v1 *zwp_relative_pointer_v1,
                                    uint32_t utime_hi, uint32_t utime_lo, wl_fixed_t dx, wl_fixed_t dy,

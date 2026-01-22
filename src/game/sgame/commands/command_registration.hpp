@@ -15,7 +15,7 @@ void RegisterCommand(
 	std::string_view name,
 	void (*function)(gentity_t*, const CommandArgs&),
 	BitFlags<CommandFlag> flags = CommandFlag::None,
-	bool floodExempt = false
+	bool floodExempt = true
 );
 
 // Declare common helper functions shared across command modules.

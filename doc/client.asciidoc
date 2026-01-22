@@ -1247,7 +1247,7 @@ cl_autopause::
 
 ui_open::
     Specifies if menu is automatically opened on startup, instead of full
-    screen console. Default value is 0 (don't open menu).
+    screen console. Default value is 1 (open menu).
 
 ui_background::
     Specifies image to use as menu background. Default value is empty, which

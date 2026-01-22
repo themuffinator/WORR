@@ -550,7 +550,15 @@ static char *my_strndup(const char *s, size_t len) {
   return d;
 }
 
-char *dynamic_fgets(char **buf, size_t *size, FILE *file) {
+#ifndef TINYOBJ_UNUSED
+#if defined(__GNUC__) || defined(__clang__)
+#define TINYOBJ_UNUSED __attribute__((unused))
+#else
+#define TINYOBJ_UNUSED
+#endif
+#endif
+
+TINYOBJ_UNUSED static char *dynamic_fgets(char **buf, size_t *size, FILE *file) {
   char *offset;
   char *ret;
   size_t old_size;

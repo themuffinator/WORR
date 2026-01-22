@@ -333,13 +333,13 @@ Returns -1 if invalid
 	if (s[0] >= '0' && s[0] <= '9') {
 		idnum = atoi(s);
 		if ((unsigned)idnum >= (unsigned)game.maxClients) {
-			gi.LocClient_Print(to, PRINT_HIGH, "Bad client slot: {}\n\"", idnum);
+			gi.LocClient_Print(to, PRINT_HIGH, "$g_sgame_auto_27e687804472", idnum);
 			return -1;
 		}
 
 		cl = &game.clients[idnum];
 		if (!cl->pers.connected) {
-			gi.LocClient_Print(to, PRINT_HIGH, "gclient_t {} is not active.\n\"", idnum);
+			gi.LocClient_Print(to, PRINT_HIGH, "$g_sgame_auto_bae2b3fa7ecc", idnum);
 			return -1;
 		}
 		return idnum;
@@ -356,7 +356,7 @@ Returns -1 if invalid
 		}
 	}
 
-	gi.LocClient_Print(to, PRINT_HIGH, "User {} is not on the server.\n\"", s);
+	gi.LocClient_Print(to, PRINT_HIGH, "$g_sgame_auto_459cb8cf342c", s);
 	return -1;
 }
 

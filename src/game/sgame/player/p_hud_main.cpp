@@ -16,6 +16,7 @@ targets. - Crosshair ID: Updates the stats that show the name of the player
 being aimed at.*/
 
 #include "../g_local.hpp"
+#include "../gameplay/g_hud_blob.hpp"
 #include "../gameplay/g_statusbar.hpp"
 
 #include <array>
@@ -129,6 +130,33 @@ static void SortLevelEntries() {
             });
 }
 
+static std::string HudBlob_QuoteToken(std::string_view value) {
+  std::string cleaned;
+  cleaned.reserve(value.size());
+  bool needs_quotes = value.empty();
+
+  for (char c : value) {
+    if (c == '"' || c == '\r' || c == '\n' || c == '\t') {
+      cleaned.push_back(' ');
+      needs_quotes = true;
+      continue;
+    }
+    if (c == ' ')
+      needs_quotes = true;
+    cleaned.push_back(c);
+  }
+
+  if (!needs_quotes)
+    return cleaned;
+
+  std::string out;
+  out.reserve(cleaned.size() + 2);
+  out.push_back('"');
+  out += cleaned;
+  out.push_back('"');
+  return out;
+}
+
 /*
 ===============
 BuildEOUTableRow
@@ -216,12 +244,28 @@ void EndOfUnitMessage() {
   int y = 16;
   LevelEntry totals{};
   int32_t numRows = 0;
+  std::string eou_section;
+  eou_section.reserve(1024);
 
   for (auto &entry : game.levelEntries) {
     if (!entry.mapName[0])
       break;
 
     BuildEOUTableRow(layout, y, entry);
+    const char *displayName = nullptr;
+    if (entry.longMapName[0]) {
+      displayName = entry.longMapName.data();
+    } else if (entry.mapName[0]) {
+      displayName = entry.mapName.data();
+    } else {
+      displayName = "???";
+    }
+    fmt::format_to(
+        std::back_inserter(eou_section),
+        FMT_STRING("eou_row {} {} {} {} {} {}\n"),
+        HudBlob_QuoteToken(displayName), entry.killedMonsters,
+        entry.totalMonsters, entry.foundSecrets, entry.totalSecrets,
+        entry.time.milliseconds());
     y += 8;
 
     totals.killedMonsters += entry.killedMonsters;
@@ -234,8 +278,19 @@ void EndOfUnitMessage() {
       numRows++;
   }
 
-  if (numRows > 1)
+  if (numRows > 1) {
     AddEOUTotalsRow(layout, y, totals);
+    fmt::format_to(std::back_inserter(eou_section),
+                   FMT_STRING("eou_total {} {} {} {} {}\n"),
+                   totals.killedMonsters, totals.totalMonsters,
+                   totals.foundSecrets, totals.totalSecrets,
+                   totals.time.milliseconds());
+  }
+
+  const int frameGate = level.intermission.serverFrame + (5_sec).frames();
+  fmt::format_to(std::back_inserter(eou_section), FMT_STRING("eou_press {}\n"),
+                 frameGate);
+  G_HudBlob_SetEOUSection(eou_section);
 
   BroadcastEOULayout(layout);
 }

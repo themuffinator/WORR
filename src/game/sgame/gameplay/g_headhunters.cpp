@@ -335,7 +335,7 @@ namespace HeadHunters {
 			const char* name = player->client->sess.netName;
 			const char* headWord = (heads == 1) ? "head" : "heads";
 			const char* pointWord = (points == 1) ? "point" : "points";
-			gi.LocBroadcast_Print(PRINT_HIGH, "{} deposits {} {} for {} {}!\n", name, heads, headWord, points, pointWord);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_22262d9d2b45", name, heads, headWord, points, pointWord);
 		}
 
 		void AnnounceDrop(const gentity_t* player, const gentity_t* instigator, uint8_t heads) {
@@ -344,11 +344,11 @@ namespace HeadHunters {
 			const char* victimName = player->client->sess.netName;
 			const char* headWord = (heads == 1) ? "head" : "heads";
 			if (instigator && instigator->client) {
-				gi.LocBroadcast_Print(PRINT_HIGH, "{} knocks {}'s {} {} loose!\n",
+				gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_2b587ce58d76",
 					instigator->client->sess.netName, victimName, heads, headWord);
 			}
 			else {
-				gi.LocBroadcast_Print(PRINT_HIGH, "{} drops {} {}!\n", victimName, heads, headWord);
+				gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_1f39f05237ce", victimName, heads, headWord);
 			}
 		}
 

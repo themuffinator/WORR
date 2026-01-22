@@ -459,7 +459,7 @@ static void AddServer(const netadr_t *address, const char *hostname)
             return;
 
         if (!NET_StringToAdr(hostname, &tmp, PORT_SERVER)) {
-            Com_Printf("Bad server address: %s\n", hostname);
+            Com_Printf("$e_auto_35af01e118a2", hostname);
             return;
         }
 
@@ -475,7 +475,7 @@ static void AddServer(const netadr_t *address, const char *hostname)
 
     // privileged ports are not allowed
     if (BigShort(address->port) < 1024) {
-        Com_Printf("Bad server port: %s\n", hostname);
+        Com_Printf("$e_auto_0f3fc5b0f530", hostname);
         return;
     }
 
@@ -612,7 +612,7 @@ static void ParseMasterArgs(netadr_t *broadcast)
             (*parse)(data, len, chunk);
             HTTP_FreeFile(data);
 #else
-            Com_Printf("Can't fetch '%s', no HTTP support compiled in.\n", s);
+            Com_Printf("$e_auto_9f78db570fe8", s);
 #endif
             continue;
         }
@@ -634,7 +634,7 @@ static void ParseMasterArgs(netadr_t *broadcast)
         }
 
 ignore:
-        Com_Printf("Ignoring invalid master URL: %s\n", s);
+        Com_Printf("$e_auto_f8b0044bcfd3", s);
     }
 }
 

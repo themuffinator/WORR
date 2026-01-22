@@ -98,6 +98,7 @@ public:
     Sound CharEvent(int ch) override;
     void MouseEvent(int x, int y, bool down) override;
     bool IsTransparent() const override { return menu_.IsTransparent(); }
+    bool WantsTextCursor(int x, int y) const override;
 
 private:
     void BuildMenu();
@@ -208,6 +209,13 @@ Sound WelcomePage::CharEvent(int ch)
 void WelcomePage::MouseEvent(int x, int y, bool down)
 {
     menu_.MouseEvent(x, y, down);
+}
+
+bool WelcomePage::WantsTextCursor(int x, int y) const
+{
+    (void)x;
+    (void)y;
+    return menu_.HoverTextInput();
 }
 
 std::unique_ptr<MenuPage> CreateWelcomePage()

@@ -74,7 +74,7 @@ static void compute_push_constants(void)
 	push_constants_vblur.pixstep_y = 1.f;
 	push_constants_vblur.pass = 1;
 }
-void vkpt_bloom_reset()
+void vkpt_bloom_reset(void)
 {
 	bloom_intensity = cvar_bloom_intensity->value;
 	bloom_sigma = cvar_bloom_sigma->value;
@@ -127,7 +127,7 @@ void vkpt_bloom_update(QVKUniformBuffer_t * ubo, float frame_time, bool under_wa
 }
 
 VkResult
-vkpt_bloom_initialize()
+vkpt_bloom_initialize(void)
 {
 	cvar_bloom_enable = Cvar_Get("bloom_enable", "1", 0);
 	cvar_bloom_debug = Cvar_Get("bloom_debug", "0", 0);
@@ -165,7 +165,7 @@ vkpt_bloom_initialize()
 }
 
 VkResult
-vkpt_bloom_destroy()
+vkpt_bloom_destroy(void)
 {
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_blur, NULL);
 	pipeline_layout_blur = NULL;
@@ -176,7 +176,7 @@ vkpt_bloom_destroy()
 }
 
 VkResult
-vkpt_bloom_create_pipelines()
+vkpt_bloom_create_pipelines(void)
 {
 	VkComputePipelineCreateInfo pipeline_info[BLOOM_NUM_PIPELINES] = {
 		[BLUR] = {
@@ -201,7 +201,7 @@ vkpt_bloom_create_pipelines()
 }
 
 VkResult
-vkpt_bloom_destroy_pipelines()
+vkpt_bloom_destroy_pipelines(void)
 {
 	for(int i = 0; i < BLOOM_NUM_PIPELINES; i++)
 		vkDestroyPipeline(qvk.device, pipelines[i], NULL);

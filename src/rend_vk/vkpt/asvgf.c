@@ -41,7 +41,7 @@ static VkPipelineLayout pipeline_layout_general;
 static VkPipelineLayout pipeline_layout_taa;
 
 VkResult
-vkpt_asvgf_initialize()
+vkpt_asvgf_initialize(void)
 {
 	VkDescriptorSetLayout desc_set_layouts[] = {
 		qvk.desc_set_layout_ubo, qvk.desc_set_layout_textures,
@@ -77,7 +77,7 @@ vkpt_asvgf_initialize()
 }
 
 VkResult
-vkpt_asvgf_destroy()
+vkpt_asvgf_destroy(void)
 {
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_atrous,     NULL);
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_general,   NULL);
@@ -87,7 +87,7 @@ vkpt_asvgf_destroy()
 }
 
 VkResult
-vkpt_asvgf_create_pipelines()
+vkpt_asvgf_create_pipelines(void)
 {
 	VkSpecializationMapEntry specEntries[] = {
 		{ .constantID = 0, .offset = 0, .size = sizeof(uint32_t) }
@@ -176,7 +176,7 @@ vkpt_asvgf_create_pipelines()
 }
 	
 VkResult
-vkpt_asvgf_destroy_pipelines()
+vkpt_asvgf_destroy_pipelines(void)
 {
 	for(int i = 0; i < ASVGF_NUM_PIPELINES; i++)
 		vkDestroyPipeline(qvk.device, pipeline_asvgf[i], NULL);

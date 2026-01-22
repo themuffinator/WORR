@@ -19,18 +19,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include "cgame_classic.h"
 #include "client/cgame_ui.h"
+#include "client/font.h"
+#include "client/ui_font.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
 
 static cvar_t   *scr_alpha;
-static cvar_t   *scr_font;
 
 static void CG_AddCommandString(const char *string);
-
-static void scr_font_changed(cvar_t *self)
-{
-    scr.font_pic = R_RegisterFont(self->string);
-}
+static const char* CG_Localize(const char *base, const char **args, size_t num_args);
 
 static bool CGX_IsExtendedServer(void)
 {
@@ -209,6 +206,45 @@ static int CG_UI_DrawStringStretch(int x, int y, int scale, int flags, size_t ma
     return R_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font);
 }
 
+static int CG_UI_FontDrawString(int x, int y, int flags, size_t maxChars,
+                                const char *string, color_t color)
+{
+    return UI_FontDrawString(x, y, flags, maxChars, string, color);
+}
+
+static int CG_UI_FontMeasureString(int flags, size_t maxChars, const char *string,
+                                   int *out_height)
+{
+    return UI_FontMeasureString(flags, maxChars, string, out_height);
+}
+
+static int CG_UI_FontLineHeight(int scale)
+{
+    return UI_FontLineHeight(scale);
+}
+
+static int CG_UI_FontDrawStringSized(int x, int y, int flags, size_t maxChars,
+                                     const char *string, color_t color, int size)
+{
+    return UI_FontDrawStringSized(x, y, flags, maxChars, string, color, size);
+}
+
+static int CG_UI_FontMeasureStringSized(int flags, size_t maxChars, const char *string,
+                                        int *out_height, int size)
+{
+    return UI_FontMeasureStringSized(flags, maxChars, string, out_height, size);
+}
+
+static int CG_UI_FontLineHeightSized(int size)
+{
+    return UI_FontLineHeightSized(size);
+}
+
+static qhandle_t CG_UI_FontLegacyHandle(void)
+{
+    return UI_FontLegacyHandle();
+}
+
 static void CG_UI_DrawPic(int x, int y, color_t color, qhandle_t pic)
 {
     R_DrawPic(x, y, color, pic);
@@ -251,6 +287,7 @@ static cgame_ui_import_t cg_ui_import = {
     .Com_FormatSize = Com_FormatSize,
     .Com_FormatSizeLong = Com_FormatSizeLong,
     .Q_ErrorString = Q_ErrorString,
+    .Localize = CG_Localize,
 
     .Sys_Milliseconds = Sys_Milliseconds,
 
@@ -337,6 +374,13 @@ static cgame_ui_import_t cg_ui_import = {
     .Re_ClampScale = CG_UI_ClampScale,
     .Re_DrawChar = CG_UI_DrawChar,
     .Re_DrawStringStretch = CG_UI_DrawStringStretch,
+    .UI_FontDrawString = CG_UI_FontDrawString,
+    .UI_FontMeasureString = CG_UI_FontMeasureString,
+    .UI_FontLineHeight = CG_UI_FontLineHeight,
+    .UI_FontDrawStringSized = CG_UI_FontDrawStringSized,
+    .UI_FontMeasureStringSized = CG_UI_FontMeasureStringSized,
+    .UI_FontLineHeightSized = CG_UI_FontLineHeightSized,
+    .UI_FontLegacyHandle = CG_UI_FontLegacyHandle,
     .Re_DrawPic = CG_UI_DrawPic,
     .Re_DrawKeepAspectPic = CG_UI_DrawKeepAspectPic,
     .Re_DrawFill8 = CG_UI_DrawFill8,
@@ -353,9 +397,6 @@ static cgame_ui_import_t cg_ui_import = {
 void CG_Init(void)
 {
     scr_alpha = Cvar_Get("scr_alpha", "1", 0);
-    scr_font = Cvar_Get("scr_font", "conchars", 0);
-    scr_font->changed = scr_font_changed;
-    scr_font_changed(scr_font);
 }
 
 static void CG_Print(const char *msg)
@@ -557,42 +598,39 @@ static void CG_SCR_SetAltTypeface(bool enabled)
 
 static float CG_SCR_FontLineHeight(int scale)
 {
-    if (!scr.kfont.pic)
-        return CONCHAR_HEIGHT * scale;
+    int draw_scale = scale > 0 ? scale : 1;
 
-    return scr.kfont.line_height;
-}
+    if (scr.font)
+        return (float)Font_LineHeight(scr.font, draw_scale);
 
-static int CG_MeasureKFontWidth(const char *str, size_t maxlen)
-{
-    int x = 0;
-    for (const char *r = str; *r && maxlen > 0; r++, maxlen--) {
-        const kfont_char_t *ch = SCR_KFontLookup(&scr.kfont, *r);
-
-        if (ch)
-            x += ch->w;
-    }
-    return x;
+    return (float)(CONCHAR_HEIGHT * draw_scale);
 }
 
 static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
 {
-    // TODO: 'str' may contain UTF-8, handle that.
+    if (!str || !*str)
+        return cg_vec2_t{ 0.0f, 0.0f };
+
     size_t maxlen = strlen(str);
     int num_lines = 1;
     int max_width = 0;
+    int draw_scale = scale > 0 ? scale : 1;
 
     while (*str) {
         const char *p = strchr(str, '\n');
         if (!p) {
-            int line_width = scr.kfont.pic ? CG_MeasureKFontWidth(str, maxlen) : maxlen * CONCHAR_WIDTH * scale;
+            int line_width = scr.font
+                ? Font_MeasureString(scr.font, draw_scale, 0, maxlen, str, nullptr)
+                : (int)Com_StrlenNoColor(str, maxlen) * CONCHAR_WIDTH * draw_scale;
             if (line_width > max_width)
                 max_width = line_width;
             break;
         }
 
         size_t len = min(p - str, maxlen);
-        int line_width = scr.kfont.pic ? CG_MeasureKFontWidth(str, len) : len * CONCHAR_WIDTH * scale;
+        int line_width = scr.font
+            ? Font_MeasureString(scr.font, draw_scale, 0, len, str, nullptr)
+            : (int)Com_StrlenNoColor(str, len) * CONCHAR_WIDTH * draw_scale;
         if (line_width > max_width)
             max_width = line_width;
         maxlen -= len;
@@ -601,7 +639,8 @@ static cg_vec2_t CG_SCR_MeasureFontString(const char *str, int scale)
         str = p + 1;
     }
 
-    return cg_vec2_t{ static_cast<float>(max_width), static_cast<float>(num_lines) * CG_SCR_FontLineHeight(scale) };
+    return cg_vec2_t{ static_cast<float>(max_width),
+                      static_cast<float>(num_lines) * CG_SCR_FontLineHeight(draw_scale) };
 }
 
 static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, const rgba_t *color, bool shadow, text_align_t align)
@@ -619,14 +658,8 @@ static void CG_SCR_DrawFontString(const char *str, int x, int y, int scale, cons
     color_t draw_color = apply_scr_alpha(*color);
     int draw_scale = scale > 0 ? scale : 1;
 
-    // TODO: 'str' may contain UTF-8, handle that.
-    if (!scr.kfont.pic) {
-        SCR_DrawStringMultiStretch(draw_x, y, draw_scale,
-                                   draw_flags, strlen(str), str, draw_color, scr.font_pic);
-    } else {
-        SCR_DrawKStringMultiStretch(draw_x, y, draw_scale,
-                                    draw_flags, strlen(str), str, draw_color, &scr.kfont);
-    }
+    SCR_DrawStringMultiStretch(draw_x, y, draw_scale,
+                               draw_flags, strlen(str), str, draw_color, scr.font_pic);
 }
 
 static bool CG_CL_GetTextInput(const char **msg, bool *is_team)
@@ -711,6 +744,185 @@ static int32_t CG_SCR_DrawBindIcon(const char *binding, int x, int y, int size, 
     return SCR_DrawBindIcon(binding, x, y, size, draw_color, out_keyname);
 }
 
+static int CG_GetBaseScaleInt(void)
+{
+    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int = (int)base_scale;
+
+    if (base_scale_int < 1)
+        base_scale_int = 1;
+
+    return base_scale_int;
+}
+
+static int CG_GetUiScaleInt(int base_scale_int)
+{
+    float extra_scale = 1.0f;
+    cvar_t *scale_var = Cvar_WeakGet("scr_scale");
+
+    if (scale_var && scale_var->value)
+        extra_scale = Cvar_ClampValue(scale_var, 0.25f, 10.0f);
+
+    int ui_scale_int = (int)((float)base_scale_int * extra_scale);
+
+    if (ui_scale_int < 1)
+        ui_scale_int = 1;
+
+    return ui_scale_int;
+}
+
+static void CG_SCR_GetScreenMetrics(cg_screen_metrics_t *out)
+{
+    if (!out)
+        return;
+
+    if (scr.virtual_width <= 0 || scr.virtual_height <= 0 || scr.virtual_scale <= 0.0f) {
+        int base_scale_int = CG_GetBaseScaleInt();
+        scr.virtual_width = max(1, r_config.width / base_scale_int);
+        scr.virtual_height = max(1, r_config.height / base_scale_int);
+        scr.virtual_scale = (float)base_scale_int;
+    }
+
+    int base_scale_int = CG_GetBaseScaleInt();
+    int ui_scale_int = CG_GetUiScaleInt(base_scale_int);
+    float hud_scale = scr.hud_scale > 0.0f ? scr.hud_scale : 1.0f;
+
+    out->screen_width = r_config.width;
+    out->screen_height = r_config.height;
+    out->hud_width = Q_rint(scr.virtual_width * hud_scale);
+    out->hud_height = Q_rint(scr.virtual_height * hud_scale);
+    out->hud_scale = hud_scale;
+    out->virtual_scale = scr.virtual_scale;
+    out->base_scale = base_scale_int;
+    out->ui_scale = ui_scale_int;
+}
+
+static void CG_SCR_SetScale(float scale)
+{
+    R_SetScale(scale);
+}
+
+static int32_t CG_SCR_DrawString(int x, int y, int scale, int flags, size_t max_chars, const char *text, const rgba_t *color)
+{
+    color_t draw_color = apply_scr_alpha(color ? *color : COLOR_WHITE);
+    return SCR_DrawStringStretch(x, y, scale, flags, max_chars, text, draw_color, scr.font_pic);
+}
+
+static int32_t CG_SCR_MeasureString(const char *text, size_t max_chars)
+{
+    return SCR_MeasureString(text, max_chars);
+}
+
+static void CG_SCR_DrawStretchRotatePic(int x, int y, int w, int h, const rgba_t *color, float angle,
+                                        int pivot_x, int pivot_y, const char *name)
+{
+    if (!name || !*name)
+        return;
+
+    qhandle_t img = R_RegisterImage(name, IT_PIC, IF_NONE);
+    if (!img)
+        return;
+
+    color_t draw_color = apply_scr_alpha(color ? *color : COLOR_WHITE);
+    R_DrawStretchRotatePic(x, y, w, h, draw_color, angle, pivot_x, pivot_y, img);
+}
+
+static void CG_CL_GetViewParams(cg_view_params_t *out)
+{
+    if (!out)
+        return;
+
+    VectorCopy(cl.refdef.vieworg, out->vieworg);
+    VectorCopy(cl.predicted_angles, out->viewangles);
+    out->fov_x = cl.refdef.fov_x;
+    out->fov_y = cl.refdef.fov_y;
+}
+
+static const char *CG_CL_GetChatPrompt(int *prompt_skip)
+{
+    return Con_GetChatPromptText(prompt_skip);
+}
+
+static bool CG_CL_GetChatInput(cg_chat_input_t *out)
+{
+    if (!(cls.key_dest & KEY_MESSAGE))
+        return false;
+
+    inputField_t *field = Con_GetChatInputField();
+    if (!field)
+        return false;
+
+    if (out) {
+        out->text = field->text;
+        out->max_chars = field->maxChars;
+        out->visible_chars = field->visibleChars;
+        out->cursor_pos = field->cursorPos;
+        out->overstrike = Key_GetOverstrikeMode();
+    }
+    return true;
+}
+
+static void CG_CL_SetChatCursor(size_t cursor_pos)
+{
+    inputField_t *field = Con_GetChatInputField();
+    if (!field)
+        return;
+
+    field->cursorPos = min(cursor_pos, field->maxChars);
+}
+
+static void CG_CL_SetChatVisibleChars(size_t visible_chars)
+{
+    inputField_t *field = Con_GetChatInputField();
+    if (!field)
+        return;
+
+    field->visibleChars = min(visible_chars, field->maxChars);
+}
+
+static int32_t CG_CL_GetKeyDest(void)
+{
+    return cls.key_dest;
+}
+
+static bool CG_Key_IsDown(int key)
+{
+    return Key_IsDown(key);
+}
+
+static const char *CG_CL_GetImageConfigString(int image_index)
+{
+    if (image_index < 0 || image_index >= cl.csr.max_images)
+        return "";
+
+    return cl.configstrings[cl.csr.images + image_index];
+}
+
+#if !USE_EXTERNAL_RENDERERS
+extern uint32_t d_8to24table[256];
+#endif
+
+static rgba_t CG_CL_GetPaletteColor(int index)
+{
+    if (index < 0)
+        index = 0;
+    if (index > 255)
+        index = 255;
+
+#if USE_EXTERNAL_RENDERERS
+    const uint32_t *palette = re.PaletteTable;
+    if (!palette)
+        return rgba_white;
+    color_t color = { .u32 = palette[index] };
+#else
+    color_t color = { .u32 = d_8to24table[index] };
+#endif
+
+    return color;
+}
+
 static bool CG_CL_InAutoDemoLoop(void)
 {
     // FIXME: implement
@@ -789,6 +1001,20 @@ static void CG_FillImports(cgame_import_t *imports)
         .SCR_DrawCharStretch = CG_SCR_DrawCharStretch,
         .SCR_WarpMouse = CG_SCR_WarpMouse,
         .SCR_DrawBindIcon = CG_SCR_DrawBindIcon,
+        .SCR_GetScreenMetrics = CG_SCR_GetScreenMetrics,
+        .SCR_SetScale = CG_SCR_SetScale,
+        .SCR_DrawString = CG_SCR_DrawString,
+        .SCR_MeasureString = CG_SCR_MeasureString,
+        .SCR_DrawStretchRotatePic = CG_SCR_DrawStretchRotatePic,
+        .CL_GetViewParams = CG_CL_GetViewParams,
+        .CL_GetChatPrompt = CG_CL_GetChatPrompt,
+        .CL_GetChatInput = CG_CL_GetChatInput,
+        .CL_SetChatCursor = CG_CL_SetChatCursor,
+        .CL_SetChatVisibleChars = CG_CL_SetChatVisibleChars,
+        .CL_GetKeyDest = CG_CL_GetKeyDest,
+        .Key_IsDown = CG_Key_IsDown,
+        .CL_GetImageConfigString = CG_CL_GetImageConfigString,
+        .CL_GetPaletteColor = CG_CL_GetPaletteColor,
     };
 }
 

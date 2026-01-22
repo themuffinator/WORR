@@ -27,7 +27,7 @@ static VkDescriptorPool desc_pool_ubo;
 static size_t ubo_alignment = 0;
 
 VkResult
-vkpt_uniform_buffer_create()
+vkpt_uniform_buffer_create(void)
 {
 	VkDescriptorPoolSize pool_sizes[2] = { 0 };
 	VkDescriptorSetLayoutBinding ubo_layout_bindings[2] = { 0 };
@@ -127,7 +127,7 @@ vkpt_uniform_buffer_create()
 }
 
 VkResult
-vkpt_uniform_buffer_destroy()
+vkpt_uniform_buffer_destroy(void)
 {
 	vkDestroyDescriptorPool(qvk.device, desc_pool_ubo, NULL);
 	vkDestroyDescriptorSetLayout(qvk.device, qvk.desc_set_layout_ubo, NULL);
@@ -142,7 +142,7 @@ vkpt_uniform_buffer_destroy()
 }
 
 VkResult
-vkpt_uniform_buffer_upload_to_staging()
+vkpt_uniform_buffer_upload_to_staging(void)
 {
 	BufferResource_t* ubo = host_uniform_buffers + qvk.current_frame_index;
 	assert(ubo);

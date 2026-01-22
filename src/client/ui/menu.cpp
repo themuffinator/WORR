@@ -74,7 +74,7 @@ static void Action_Draw(menuAction_t *a)
         } else {
             flags |= UI_ALTCOLOR;
             if ((uis.realtime >> 8) & 1) {
-                UI_DrawChar(a->generic.x - strlen(a->generic.name) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, a->generic.y, flags, color, 13);
+                UI_DrawChar(a->generic.x - Com_StrlenNoColor(a->generic.name, strlen(a->generic.name)) * CONCHAR_WIDTH / 2 - CONCHAR_WIDTH, a->generic.y, flags, color, 13);
             }
         }
     }
@@ -409,6 +409,27 @@ static void Field_Init(menuField_t *f)
     }
 }
 
+static void DrawTextBox(int x, int y, int width, bool focused, bool disabled)
+{
+    int box_w = max(1, width);
+    int box_h = CONCHAR_HEIGHT + 4;
+    int box_x = x;
+    int box_y = y - 2;
+
+    color_t fill = COLOR_RGBA(0, 0, 0, disabled ? 80 : 140);
+    color_t border = disabled
+        ? COLOR_SETA_U8(uis.color.disabled, 140)
+        : (focused ? COLOR_SETA_U8(uis.color.active, 220)
+                   : COLOR_SETA_U8(uis.color.selection, 160));
+
+    R_DrawFill32(box_x, box_y, box_w, box_h, fill);
+    if (border.a > 0) {
+        R_DrawFill32(box_x, box_y, box_w, 1, border);
+        R_DrawFill32(box_x, box_y + box_h - 1, box_w, 1, border);
+        R_DrawFill32(box_x, box_y, 1, box_h, border);
+        R_DrawFill32(box_x + box_w - 1, box_y, 1, box_h, border);
+    }
+}
 
 /*
 =================
@@ -419,8 +440,10 @@ static void Field_Draw(menuField_t *f)
 {
     int flags = f->generic.uiFlags;
     color_t color = uis.color.normal;
+    bool disabled = (f->generic.flags & (QMF_GRAYED | QMF_DISABLED)) != 0;
+    bool focused = (f->generic.flags & QMF_HASFOCUS) != 0;
 
-    if (f->generic.flags & QMF_HASFOCUS) {
+    if (focused) {
         flags |= UI_DRAWCURSOR;
         color = uis.color.active;
     }
@@ -429,14 +452,14 @@ static void Field_Draw(menuField_t *f)
         UI_DrawString(f->generic.x + LCOLUMN_OFFSET, f->generic.y,
                       f->generic.uiFlags | UI_RIGHT | UI_ALTCOLOR, color, f->generic.name);
 
-        R_DrawFill32(f->generic.x + RCOLUMN_OFFSET, f->generic.y - 1,
-                     f->field.visibleChars * CONCHAR_WIDTH, CONCHAR_HEIGHT + 2, color);
+        DrawTextBox(f->generic.x + RCOLUMN_OFFSET, f->generic.y,
+                    f->field.visibleChars * CONCHAR_WIDTH, focused, disabled);
 
         IF_Draw(&f->field, f->generic.x + RCOLUMN_OFFSET, f->generic.y,
                 flags, uis.fontHandle);
     } else {
-        R_DrawFill32(f->generic.rect.x, f->generic.rect.y - 1,
-                     f->generic.rect.width, CONCHAR_HEIGHT + 2, color);
+        DrawTextBox(f->generic.rect.x, f->generic.rect.y,
+                    f->generic.rect.width, focused, disabled);
 
         IF_Draw(&f->field, f->generic.rect.x, f->generic.rect.y,
                 flags, uis.fontHandle);
@@ -447,6 +470,10 @@ static bool Field_TestKey(menuField_t *f, int key)
 {
     if (f->generic.flags & QMF_NUMBERSONLY) {
         return Q_isdigit(key) || key == '+' || key == '-' || key == '.';
+    }
+
+    if (key >= 0x80 && key <= UNICODE_MAX) {
+        return true;
     }
 
     return Q_isprint(key);

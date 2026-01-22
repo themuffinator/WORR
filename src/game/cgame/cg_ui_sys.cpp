@@ -126,11 +126,15 @@ extern "C" void UI_Sys_SetMenuBlurRect(const clipRect_t *rect)
 static void UI_PrintFwd(void (*fn)(const char *fmt, ...), const char *fmt, va_list args)
 {
     char buffer[MAX_STRING_CHARS];
+    const char *format = fmt;
 
     if (!fn)
         return;
 
-    Q_vsnprintf(buffer, sizeof(buffer), fmt, args);
+    if (uii && fmt && fmt[0] == '$' && uii->Localize)
+        format = uii->Localize(fmt, NULL, 0);
+
+    Q_vsnprintf(buffer, sizeof(buffer), format, args);
     fn("%s", buffer);
 }
 
@@ -202,9 +206,12 @@ void Com_Error(error_type_t code, const char *fmt, ...)
 {
     va_list args;
     char buffer[MAX_STRING_CHARS];
+    const char *format = fmt;
 
     va_start(args, fmt);
-    Q_vsnprintf(buffer, sizeof(buffer), fmt, args);
+    if (uii && fmt && fmt[0] == '$' && uii->Localize)
+        format = uii->Localize(fmt, NULL, 0);
+    Q_vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
 
     if (uii && uii->Com_Error) {
@@ -350,7 +357,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
 
         if (p) {
             if (o->sh[1] != ':') {
-                Com_Printf("%s does not take an argument.\n", Cmd_Argv(cmd_optind));
+                Com_Printf("$cg_auto_433adc0b106f", Cmd_Argv(cmd_optind));
                 Cmd_PrintHint();
                 return '!';
             }
@@ -368,7 +375,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
 
     if (!p && o->sh[1] == ':') {
         if (cmd_optind + 1 == argc) {
-            Com_Printf("Missing argument to %s.\n", Cmd_Argv(cmd_optind));
+            Com_Printf("$cg_auto_f2564956cac4", Cmd_Argv(cmd_optind));
             Cmd_PrintHint();
             return ':';
         }
@@ -379,14 +386,14 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     return o->sh[0];
 
 unknown:
-    Com_Printf("Unknown option: %s.\n", Cmd_Argv(cmd_optind));
+    Com_Printf("$cg_auto_d6e935de0e44", Cmd_Argv(cmd_optind));
     Cmd_PrintHint();
     return '?';
 }
 
 void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
 {
-    Com_Printf("Usage: %s [-", Cmd_Argv(0));
+    Com_Printf("$cg_auto_7535716ffdff", Cmd_Argv(0));
     while (opt->sh) {
         Com_Printf("%c", opt->sh[0]);
         if (opt->sh[1] == ':')
@@ -394,7 +401,7 @@ void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
         opt++;
     }
     if (suffix)
-        Com_Printf("] %s\n", suffix);
+        Com_Printf("$cg_auto_8ac24f918f3e", suffix);
     else
         Com_Printf("]\n");
 }
@@ -412,7 +419,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
         width = max(width, min(len, 31));
     }
 
-    Com_Printf("\nAvailable options:\n");
+    Com_Printf("$cg_auto_43221e8bf8b1");
     while (opt->sh) {
         if (opt->sh[1] == ':')
             Q_concat(buffer, sizeof(buffer), opt->lo, "=<", opt->sh + 2, ">");
@@ -426,7 +433,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
 
 void Cmd_PrintHint(void)
 {
-    Com_Printf("Try '%s --help' for more information.\n", Cmd_Argv(0));
+    Com_Printf("$cg_auto_55f681b31104", Cmd_Argv(0));
 }
 
 void Cmd_Option_c(const cmd_option_t *opt, xgenerator_t g, genctx_t *ctx, int argnum)
@@ -772,6 +779,67 @@ extern "C" int R_DrawStringStretch(int x, int y, int scale, int flags, size_t ma
     if (!uii || !uii->Re_DrawStringStretch)
         return 0;
     return uii->Re_DrawStringStretch(x, y, scale, flags, maxChars, string, color, font);
+}
+
+extern "C" int UI_FontDrawString(int x, int y, int flags, size_t maxChars,
+                                 const char *string, color_t color)
+{
+    if (!uii || !uii->UI_FontDrawString)
+        return 0;
+    return uii->UI_FontDrawString(x, y, flags, maxChars, string, color);
+}
+
+extern "C" int UI_FontMeasureString(int flags, size_t maxChars, const char *string,
+                                    int *out_height)
+{
+    if (!uii || !uii->UI_FontMeasureString)
+        return 0;
+    return uii->UI_FontMeasureString(flags, maxChars, string, out_height);
+}
+
+extern "C" int UI_FontLineHeight(int scale)
+{
+    if (!uii || !uii->UI_FontLineHeight)
+        return CONCHAR_HEIGHT * max(scale, 1);
+    return uii->UI_FontLineHeight(scale);
+}
+
+extern "C" int UI_FontDrawStringSized(int x, int y, int flags, size_t maxChars,
+                                      const char *string, color_t color, int size)
+{
+    if (uii && uii->UI_FontDrawStringSized)
+        return uii->UI_FontDrawStringSized(x, y, flags, maxChars, string, color, size);
+    if (uii && uii->UI_FontDrawString)
+        return uii->UI_FontDrawString(x, y, flags, maxChars, string, color);
+    return 0;
+}
+
+extern "C" int UI_FontMeasureStringSized(int flags, size_t maxChars, const char *string,
+                                         int *out_height, int size)
+{
+    if (uii && uii->UI_FontMeasureStringSized)
+        return uii->UI_FontMeasureStringSized(flags, maxChars, string, out_height, size);
+    if (uii && uii->UI_FontMeasureString)
+        return uii->UI_FontMeasureString(flags, maxChars, string, out_height);
+    if (out_height)
+        *out_height = 0;
+    return 0;
+}
+
+extern "C" int UI_FontLineHeightSized(int size)
+{
+    if (uii && uii->UI_FontLineHeightSized)
+        return uii->UI_FontLineHeightSized(size);
+    if (uii && uii->UI_FontLineHeight)
+        return uii->UI_FontLineHeight(1);
+    return CONCHAR_HEIGHT;
+}
+
+extern "C" qhandle_t UI_FontLegacyHandle(void)
+{
+    if (!uii || !uii->UI_FontLegacyHandle)
+        return 0;
+    return uii->UI_FontLegacyHandle();
 }
 
 extern "C" void R_DrawPic(int x, int y, color_t color, qhandle_t pic)

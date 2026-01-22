@@ -150,12 +150,12 @@ static void ReleaseWelcomeFreeze(gentity_t *ent) {
   ent->client->initialMenu.dmJoinActive = false;
 }
 
-static void TryJoinTeam(gentity_t *ent, Team team) {
+[[maybe_unused]] static void TryJoinTeam(gentity_t *ent, Team team) {
   if (SetTeam(ent, team, false, false, false))
     ReleaseWelcomeFreeze(ent);
 }
 
-static void SelectSpectate(gentity_t *ent) {
+[[maybe_unused]] static void SelectSpectate(gentity_t *ent) {
   if (!ent || !ent->client)
     return;
 

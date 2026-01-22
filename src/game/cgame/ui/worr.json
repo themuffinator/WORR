@@ -1,13 +1,13 @@
 {
   "globals": {
     "background": "black",
-    "font": "conchars",
-    "cursor": "ch1",
+    "font": "$ui_font",
+    "cursor": "/gfx/cursor.png",
     "weapon": "w_railgun.md2",
     "colors": {
-      "normal": "#0f90eb64",
-      "active": "#0f90ff64",
-      "selection": "#0f90eb64",
+      "normal": "#3e643b70",
+      "active": "#5b8a4a90",
+      "selection": "#3f6a3ab0",
       "disabled": "#7f7f7f"
     }
   },
@@ -324,6 +324,48 @@
         { "type": "checkbox", "label": "pics", "cvar": "allow_download_pics" },
         { "type": "blank" },
         { "type": "checkbox", "label": "HTTP downloads", "cvar": "cl_http_downloads" }
+      ]
+    },
+    {
+      "name": "download_status",
+      "background": "black",
+      "closeCommand": "download_cancel",
+      "style": {
+        "frame": {
+          "fill": "#0b0f14e6",
+          "border": "#1f2b36ff",
+          "padding": 20,
+          "borderWidth": 1
+        }
+      },
+      "items": [
+        { "type": "action", "label": "Downloading content", "align": "center", "selectable": false },
+        { "type": "blank" },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_download_file",
+          "align": "left",
+          "maxLines": 2,
+          "wrapWidth": 30,
+          "showIf": ["ui_download_file"]
+        },
+        {
+          "type": "action",
+          "labelCvar": "ui_download_status",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_download_status"]
+        },
+        { "type": "blank" },
+        { "type": "progress", "cvar": "ui_download_percent", "min": 0, "max": 100 },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "labelCvar": "ui_download_queue",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["ui_download_queue"]
+        }
       ]
     },
     {
@@ -962,7 +1004,7 @@
     },
     {
       "name": "ui_list",
-      "closeCommand": "worr_ui_list_close",
+      "closeCommand": "popmenu; worr_ui_list_close",
       "style": { "compact": true, "transparent": true },
       "items": [
         { "type": "action", "labelCvar": "ui_list_title", "align": "center", "selectable": false, "showIf": ["ui_list_title"] },
@@ -1091,7 +1133,7 @@
           "showIf": ["ui_list_has_next=1"]
         },
         { "type": "blank" },
-        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu; worr_ui_list_close" }
       ]
     },
     {
@@ -1595,7 +1637,7 @@
     {
       "name": "vote_menu",
       "style": { "compact": true, "transparent": true },
-      "closeCommand": "worr_vote_close",
+      "closeCommand": "popmenu; worr_vote_close",
       "items": [
         { "type": "blank" },
         { "type": "action", "labelCvar": "ui_vote_line_0", "align": "center", "selectable": false, "showIf": ["ui_vote_line_0"] },
@@ -1614,7 +1656,7 @@
     {
       "name": "map_selector",
       "style": { "compact": true, "transparent": true },
-      "closeCommand": "worr_mapselector_close",
+      "closeCommand": "popmenu; worr_mapselector_close",
       "items": [
         { "type": "blank" },
         { "type": "blank" },
@@ -1652,7 +1694,7 @@
     {
       "name": "match_stats",
       "style": { "compact": true, "transparent": true },
-      "closeCommand": "worr_matchstats_close",
+      "closeCommand": "popmenu; worr_matchstats_close",
       "items": [
         { "type": "action", "labelCvar": "ui_matchstats_line_0", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_0"] },
         { "type": "action", "labelCvar": "ui_matchstats_line_1", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_1"] },
@@ -1671,7 +1713,7 @@
         { "type": "action", "labelCvar": "ui_matchstats_line_14", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_14"] },
         { "type": "action", "labelCvar": "ui_matchstats_line_15", "align": "left", "selectable": false, "showIf": ["ui_matchstats_line_15"] },
         { "type": "blank" },
-        { "type": "action", "label": "Return", "align": "left", "command": "popmenu" }
+        { "type": "action", "label": "Return", "align": "left", "command": "popmenu; worr_matchstats_close" }
       ]
     }
   ]

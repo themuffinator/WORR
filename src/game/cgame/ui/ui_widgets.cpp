@@ -82,6 +82,63 @@ static int DefaultWrapWidthChars()
     return Q_clip(maxChars, 20, 60);
 }
 
+static int DrawInputFieldText(const inputField_t *field, int x, int y, int flags,
+                              size_t max_chars, int *out_cursor_x)
+{
+    if (out_cursor_x)
+        *out_cursor_x = x;
+    if (!field || !field->maxChars || !field->visibleChars)
+        return 0;
+
+    size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
+    size_t offset_chars = 0;
+    if (cursor_chars >= field->visibleChars) {
+        offset_chars = cursor_chars - (field->visibleChars - 1);
+    }
+
+    size_t draw_chars = field->visibleChars;
+    if (draw_chars > max_chars)
+        draw_chars = max_chars;
+
+    size_t cursor_chars_visible = (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
+    if (cursor_chars_visible > draw_chars)
+        cursor_chars_visible = draw_chars;
+
+    size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
+    const char *text = field->text + offset;
+    size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
+    size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars_visible);
+
+    int end_x = UI_FontDrawString(x, y, flags, draw_len, text, COLOR_WHITE);
+    if (out_cursor_x)
+        *out_cursor_x = x + UI_FontMeasureString(0, cursor_bytes, text, nullptr);
+
+    return end_x;
+}
+
+static void DrawTextBox(int x, int y, int width, int height, bool focused, bool disabled)
+{
+    int box_w = max(1, width);
+    int text_h = max(1, UI_FontLineHeight(1));
+    int box_h = max(6, min(height, text_h + 4));
+    int box_x = x;
+    int box_y = y + (height - box_h) / 2;
+
+    color_t fill = COLOR_RGBA(0, 0, 0, disabled ? 80 : 140);
+    color_t border = disabled
+        ? COLOR_SETA_U8(uis.color.disabled, 140)
+        : (focused ? COLOR_SETA_U8(uis.color.active, 220)
+                   : COLOR_SETA_U8(uis.color.selection, 160));
+
+    R_DrawFill32(box_x, box_y, box_w, box_h, fill);
+    if (border.a > 0) {
+        R_DrawFill32(box_x, box_y, box_w, 1, border);
+        R_DrawFill32(box_x, box_y + box_h - 1, box_w, 1, border);
+        R_DrawFill32(box_x, box_y, 1, box_h, border);
+        R_DrawFill32(box_x + box_w - 1, box_y, 1, box_h, border);
+    }
+}
+
 } // namespace
 
 int Widget::Height(int lineHeight) const
@@ -659,6 +716,49 @@ void SwitchWidget::Draw(bool focused) const
     R_DrawFill32(knob_x, knob_y, knob_size, knob_size, knob);
 }
 
+ProgressWidget::ProgressWidget(cvar_t *cvar, float minValue, float maxValue)
+    : cvar_(cvar)
+    , minValue_(minValue)
+    , maxValue_(maxValue)
+{
+    selectable_ = false;
+}
+
+void ProgressWidget::Draw(bool focused) const
+{
+    (void)focused;
+
+    float value = cvar_ ? cvar_->value : 0.0f;
+    float range = maxValue_ - minValue_;
+    float frac = range > 0.0f ? (value - minValue_) / range : 0.0f;
+    frac = Q_clipf(frac, 0.0f, 1.0f);
+
+    int bar_margin = CONCHAR_WIDTH * 2;
+    int bar_x = rect_.x + bar_margin;
+    int bar_width = rect_.width - bar_margin * 2;
+    if (bar_width < 1)
+        return;
+
+    int bar_height = max(6, rect_.height / 3);
+    int bar_y = rect_.y + (rect_.height - bar_height) / 2;
+
+    color_t track = COLOR_SETA_U8(uis.color.disabled, 120);
+    color_t fill = COLOR_SETA_U8(uis.color.active, 200);
+    color_t border = COLOR_SETA_U8(uis.color.selection, 180);
+
+    R_DrawFill32(bar_x, bar_y, bar_width, bar_height, track);
+    int fill_width = Q_rint(bar_width * frac);
+    if (fill_width > 0)
+        R_DrawFill32(bar_x, bar_y, fill_width, bar_height, fill);
+
+    if (border.a > 0) {
+        R_DrawFill32(bar_x, bar_y, bar_width, 1, border);
+        R_DrawFill32(bar_x, bar_y + bar_height - 1, bar_width, 1, border);
+        R_DrawFill32(bar_x, bar_y, 1, bar_height, border);
+        R_DrawFill32(bar_x + bar_width - 1, bar_y, 1, bar_height, border);
+    }
+}
+
 ImageSpinWidget::ImageSpinWidget(std::string label, cvar_t *cvar, std::string path,
                                  std::string filter, int width, int height)
     : SpinWidget(std::move(label), cvar, SpinType::String)
@@ -827,10 +927,13 @@ void FieldWidget::Draw(bool focused) const
     }
 
     int flags = center_ ? UI_CENTER : UI_LEFT;
-    IF_Draw(&field_, x, rect_.y, flags, uis.fontHandle);
+    int box_w = max(1, width_ * CONCHAR_WIDTH);
+    int box_x = center_ ? (x - box_w / 2) : x;
+    DrawTextBox(box_x, rect_.y, box_w, rect_.height, focused, disabled);
+    int cursor_x = x;
+    DrawInputFieldText(&field_, x, rect_.y, flags, field_.visibleChars, &cursor_x);
 
     if (focused && !disabled && ((uis.realtime >> 8) & 1)) {
-        int cursor_x = x + static_cast<int>(field_.cursorPos) * CONCHAR_WIDTH;
         UI_DrawChar(cursor_x, rect_.y, UI_LEFT, color, 11);
     }
 }
@@ -973,13 +1076,16 @@ void ComboWidget::Draw(bool focused) const
     }
 
     int flags = center_ ? UI_CENTER : UI_LEFT;
-    IF_Draw(&field_, x, rect_.y, flags, uis.fontHandle);
+    int box_w = max(1, width_ * CONCHAR_WIDTH + CONCHAR_WIDTH);
+    int box_x = center_ ? (x - box_w / 2) : x;
+    DrawTextBox(box_x, rect_.y, box_w, rect_.height, focused, disabled);
+    int cursor_x = x;
+    DrawInputFieldText(&field_, x, rect_.y, flags, field_.visibleChars, &cursor_x);
 
-    int arrow_x = x + width_ * CONCHAR_WIDTH + CONCHAR_WIDTH;
+    int arrow_x = box_x + box_w - CONCHAR_WIDTH;
     UI_DrawChar(arrow_x, rect_.y, UI_LEFT, color, 'v');
 
     if (focused && !disabled && ((uis.realtime >> 8) & 1)) {
-        int cursor_x = x + static_cast<int>(field_.cursorPos) * CONCHAR_WIDTH;
         UI_DrawChar(cursor_x, rect_.y, UI_LEFT, color, 11);
     }
 }

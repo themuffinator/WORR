@@ -70,7 +70,7 @@ static void UsedMessage(gentity_t* ent, Item* item) {
 	if (item->id == IT_ADRENALINE && !match_holdableAdrenaline->integer)
 		return;
 
-	gi.LocClient_Print(ent, PRINT_CENTER, "Used {}", item->pickupName);
+	gi.LocClient_Print(ent, PRINT_CENTER, "$g_sgame_auto_d64b7423065f", item->pickupName);
 }
 
 void SelectNextItem(gentity_t* ent, item_flags_t itflags) {
@@ -1092,7 +1092,7 @@ void QuadHog_Spawn(Item* item, gentity_t* spot, bool reset) {
 	ent->velocity = forward * 100;
 	ent->velocity[_Z] = 300;
 
-	gi.LocBroadcast_Print(PRINT_CENTER, "The Quad {}!\n", reset ? "respawned" : "has spawned");
+	gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_f66568d7ef42", reset ? "respawned" : "has spawned");
 	gi.sound(ent, CHAN_RELIABLE | CHAN_NO_PHS_ADD | CHAN_AUX, gi.soundIndex("misc/alarm.wav"), 1, ATTN_NONE, 0);
 
 	gi.linkEntity(ent);
@@ -2021,7 +2021,7 @@ static bool Pickup_AllowPowerupPickup(gentity_t* ent, gentity_t* other) {
 
 		if (match_powerupMinPlayerLock->integer > 0 && level.pop.num_playing_clients < match_powerupMinPlayerLock->integer) {
 			if (level.time - other->client->lastPowerupMessageTime > 5_sec) {
-				gi.LocClient_Print(other, PRINT_CENTER, ".There must be {}+ players in the match\nto pick this up :(", match_powerupMinPlayerLock->integer);
+				gi.LocClient_Print(other, PRINT_CENTER, "$g_sgame_auto_e0876bd2cf55", match_powerupMinPlayerLock->integer);
 				other->client->lastPowerupMessageTime = level.time;
 			}
 			return false;
@@ -2681,7 +2681,7 @@ static void Use_Powerup_BroadcastMsg(gentity_t* ent, Item* item, const char* sou
 		return;
 
 	if (g_quadhog->integer && item->id == IT_POWERUP_QUAD) {
-		gi.LocBroadcast_Print(PRINT_CENTER, "{} is the Quad Hog!\n", ent->client->sess.netName);
+		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_0d00e491f39d", ent->client->sess.netName);
 	}
 
 	gi.sound(ent, CHAN_RELIABLE | CHAN_NO_PHS_ADD | CHAN_AUX, gi.soundIndex(sound_name), 1, ATTN_NONE, 0);

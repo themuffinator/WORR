@@ -248,7 +248,7 @@ public:
 struct Command {
 	std::function<void(gentity_t*, const CommandArgs&)> function;
 	BitFlags<CommandFlag> flags;
-	bool floodExempt = false;
+	bool floodExempt = true;
 };
 
 struct VoteCommand {

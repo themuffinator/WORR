@@ -235,7 +235,7 @@ static bool Push(menuFrameWork_t *self)
     if (!uis.numPlayerModels) {
         PlayerModel_Load();
         if (!uis.numPlayerModels) {
-            Com_Printf("No player models found.\n");
+            Com_Printf("$e_auto_f0e9a2b48b82");
             return false;
         }
     }

@@ -2264,7 +2264,7 @@ static void SendIndividualMiniStats(const MatchStats& matchStats) {
 		double eff = total > 0 ? (double)p.totalKills / total * 100.0 : 0.0;
 		msg += G_Fmt(" | Eff: {:.1f}%%\n", eff);
 		*/
-		gi.LocClient_Print(ec, PRINT_HIGH, "{}\n", msg.c_str());
+		gi.LocClient_Print(ec, PRINT_HIGH, "$g_sgame_auto_5f36b2ea2906", msg.c_str());
 	}
 }
 /*
@@ -2824,7 +2824,7 @@ void MatchStats_Init() {
 	matchStats.matchID = level.matchID;
 	//matchStats.startTime = level.matchStartRealTime.seconds();	// std::time(nullptr);
 
-	gi.LocBroadcast_Print(PRINT_TTS, "Match start for ID: {}\n", level.matchID.c_str());
+	gi.LocBroadcast_Print(PRINT_TTS, "$g_sgame_auto_4665bf2f3bac", level.matchID.c_str());
 
 	G_LogEvent("MATCH START");
 }

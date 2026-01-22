@@ -682,7 +682,7 @@ bool Tournament_ReplayGame(int gameNumber, std::string &message) {
   }
 
   gi.LocBroadcast_Print(PRINT_CENTER,
-                        ".Tournament replay: game {} will be replayed.",
+                        "$g_sgame_auto_7548560aaebb",
                         gameNumber);
   gi.AddCommandString(G_Fmt("gamemap {}\n", mapName).data());
   return true;
@@ -924,14 +924,14 @@ static void ResetMatchPlayers(
 
 static void RoundAnnounceWin(Team team, const char *reason) {
   G_AdjustTeamScore(team, 1);
-  gi.LocBroadcast_Print(PRINT_CENTER, "{} wins the round!\n({})\n",
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_66337a092169",
                         Teams_TeamName(team), reason);
   AnnouncerSound(world,
                  team == Team::Red ? "red_wins_round" : "blue_wins_round");
 }
 
 static void RoundAnnounceDraw() {
-  gi.Broadcast_Print(PRINT_CENTER, "Round draw!\n");
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_512197de4dc8");
   AnnouncerSound(world, "round_draw");
 }
 
@@ -1053,7 +1053,7 @@ static void CheckRoundHorde() {
   Horde_RunSpawning();
   if (level.horde_all_spawned &&
       !(level.campaign.totalMonsters - level.campaign.killedMonsters)) {
-    gi.Broadcast_Print(PRINT_CENTER, "Monsters eliminated!\n");
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_0d3f9b948937");
     gi.positionedSound(world->s.origin, world, CHAN_AUTO | CHAN_RELIABLE,
                        gi.soundIndex("ctf/flagcap.wav"), 1, ATTN_NONE, 0);
     Round_End();
@@ -1062,7 +1062,7 @@ static void CheckRoundHorde() {
 
 static void CheckRoundRR() {
   if (!level.pop.num_playing_red || !level.pop.num_playing_blue) {
-    gi.Broadcast_Print(PRINT_CENTER, "Round Ends!\n");
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_fb90c7190d8a");
     gi.positionedSound(world->s.origin, world, CHAN_AUTO | CHAN_RELIABLE,
                        gi.soundIndex("ctf/flagcap.wav"), 1, ATTN_NONE, 0);
     if (level.roundNumber + 1 >= roundLimit->integer) {
@@ -1082,7 +1082,7 @@ static void CheckRoundStrikeTimeLimit() {
         level.strike_red_attacks ? Team::Blue : Team::Red;
     RoundAnnounceWin(defendingTeam, "successfully defended");
     gi.LocBroadcast_Print(PRINT_CENTER,
-                          "Turn has ended.\n{} successfully defended!",
+                          "$g_sgame_auto_714515a8a0ac",
                           Teams_TeamName(defendingTeam));
   }
   Round_End();
@@ -1285,7 +1285,7 @@ void Match_UpdateDuelRecords() {
       if (ec->client->sess.team != Team::Spectator) {
         SetTeam(ec, Team::Spectator, false, true, false);
         gi.LocClient_Print(ec, PRINT_HIGH,
-                           "This is a Duel match (1v1 only).\nYou have been "
+                           "$g_sgame_auto_f2135fef2032"
                            "moved to spectator.");
       }
     }
@@ -1361,11 +1361,11 @@ static bool Round_StartNew() {
       round_num = level.roundNumber + 1;
 
     if (Game::Is(GameType::RedRover) && roundLimit->integer) {
-      gi.LocBroadcast_Print(PRINT_CENTER, "{} {} of {}\nBegins in...",
+      gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_0c743ddcbb89",
                             horde ? "Wave" : "Round", round_num,
                             roundLimit->integer);
     } else
-      gi.LocBroadcast_Print(PRINT_CENTER, "{} {}\nBegins in...",
+      gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_ff1c75025db3",
                             horde ? "Wave" : "Round", round_num);
   }
 
@@ -1470,7 +1470,7 @@ void Match_Start() {
   if (Round_StartNew())
     return;
 
-  gi.LocBroadcast_Print(PRINT_CENTER, ".FIGHT!");
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_b08ccea3f72e");
   AnnouncerSound(world, "fight");
 }
 
@@ -1689,7 +1689,7 @@ void Match_Reset() {
         std::optional<WarmupState>{WarmupState::Default},
         std::optional<GameTime>{0_sec}, std::optional<bool>{false}});
     CalculateRanks();
-    gi.Broadcast_Print(PRINT_CENTER, ".The match has been reset.\n");
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_7f30af4ec849");
     return;
   }
 
@@ -1704,7 +1704,7 @@ void Match_Reset() {
 
   CalculateRanks();
 
-  gi.Broadcast_Print(PRINT_CENTER, ".The match has been reset.\n");
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_7f30af4ec849");
 }
 /*
 ============
@@ -1736,7 +1736,7 @@ static void CheckDMRoundState() {
             ? level.time + GameTime::from_min(roundTimeLimit->value)
             : 0_sec;
     level.roundNumber++;
-    gi.Broadcast_Print(PRINT_CENTER, ".FIGHT!\n");
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_b0ba1f882b96");
     AnnouncerSound(world, "fight");
 
     if (Game::Is(GameType::CaptureStrike)) {
@@ -1950,7 +1950,7 @@ static void CheckDMMatchEndWarning(void) {
       // CHAN_AUTO | CHAN_RELIABLE, gi.soundIndex(G_Fmt("world/{}{}.wav", t, t
       // >= 20 ? "sec" : "").data()), 1, ATTN_NONE, 0);
       if (t >= 10)
-        gi.LocBroadcast_Print(PRINT_HIGH, "{} second warning!\n", t);
+        gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_0c01dd17d858", t);
     } else if (t == 300 || t == 60) {
       AnnouncerSound(world, G_Fmt("{}_minute", t == 300 ? 5 : 1).data());
     }
@@ -2053,7 +2053,7 @@ static void CheckDMWarmupState() {
       if (level.matchState == MatchState::Countdown) {
         const char *reason =
             teamsImbalanced ? "teams are imbalanced" : "not enough players";
-        gi.LocBroadcast_Print(PRINT_CENTER, ".Countdown cancelled: {}\n",
+        gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_77d3915ff87d",
                               reason);
       }
 
@@ -2138,11 +2138,11 @@ static void CheckDMWarmupState() {
           game.clients[level.sortedClients[0]].pers.connected &&
           game.clients[level.sortedClients[1]].pers.connected) {
         gi.LocBroadcast_Print(
-            PRINT_CENTER, "{} vs {}\nBegins in...",
+            PRINT_CENTER, "$g_sgame_auto_dada6003170d",
             game.clients[level.sortedClients[0]].sess.netName,
             game.clients[level.sortedClients[1]].sess.netName);
       } else {
-        gi.LocBroadcast_Print(PRINT_CENTER, "{}\nBegins in...",
+        gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_c1b6c1827a61",
                               level.gametype_name.data());
       }
 
@@ -2237,18 +2237,18 @@ void CheckVote(void) {
     return;
 
   if (level.time - level.vote.time >= 30_sec) {
-    gi.Broadcast_Print(PRINT_HIGH, "Vote timed out.\n");
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_d03340fdcc18");
     AnnouncerSound(world, "vote_failed");
   } else {
     int halfpoint = level.pop.num_voting_clients / 2;
     if (level.vote.countYes > halfpoint) {
       // execute the command, then remove the vote
-      gi.Broadcast_Print(PRINT_HIGH, "Vote passed.\n");
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_11b7029218ae");
       level.vote.executeTime = level.time + 3_sec;
       AnnouncerSound(world, "vote_passed");
     } else if (level.vote.countNo >= halfpoint) {
       // same behavior as a timeout
-      gi.Broadcast_Print(PRINT_HIGH, "Vote failed.\n");
+      gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_398159efdc8c");
       AnnouncerSound(world, "vote_failed");
     } else {
       // still waiting for a majority
@@ -2439,7 +2439,7 @@ void CheckDMExitRules() {
   // --- HORDE mode defeat ---
   if (Game::Is(GameType::Horde)) {
     if ((level.campaign.totalMonsters - level.campaign.killedMonsters) >= 100) {
-      gi.Broadcast_Print(PRINT_CENTER, "DEFEATED!");
+      gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_04cfa24c8e3e");
       QueueIntermission("OVERRUN BY MONSTERS!", true, false);
       return;
     }
@@ -2535,7 +2535,7 @@ void CheckDMExitRules() {
         // [Paril-KEX] Sudden death must not run an "overtime" event.
         if (!level.suddenDeath) {
           level.suddenDeath = true;
-          gi.Broadcast_Print(PRINT_CENTER, "Sudden Death!");
+          gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_ef449b15f866");
           AnnouncerSound(world, "sudden_death");
         }
         return;

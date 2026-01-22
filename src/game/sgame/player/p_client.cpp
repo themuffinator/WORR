@@ -144,6 +144,46 @@ ClientSessionServiceImpl &GetClientSessionService() {
 
 } // namespace worr::server::client
 
+namespace {
+constexpr char kObituaryMetaStart = '\x1e';
+constexpr char kObituaryMetaSep = '\x1f';
+constexpr const char kObituaryMetaTag[] = "OBIT";
+
+constexpr const char *kObitKeyExpiration = "obit_expiration";
+constexpr const char *kObitKeySelfPlasmaGun = "obit_self_plasmagun";
+constexpr const char *kObitKeyKillPlasmaGun = "obit_kill_plasmagun";
+constexpr const char *kObitKeyKillPlasmaGunSplash = "obit_kill_plasmagun_splash";
+constexpr const char *kObitKeyKillThunderbolt = "obit_kill_thunderbolt";
+constexpr const char *kObitKeyKillThunderboltDischarge =
+    "obit_kill_thunderbolt_discharge";
+constexpr const char *kObitKeySelfThunderboltDischarge =
+    "obit_self_thunderbolt_discharge";
+constexpr const char *kObitKeySelfTesla = "obit_self_tesla";
+
+std::string BuildObituaryLocBase(const char *key, const char *base) {
+  std::string out;
+  out.push_back(kObituaryMetaStart);
+  out.append(kObituaryMetaTag);
+  out.push_back(kObituaryMetaSep);
+  if (key)
+    out.append(key);
+  out.push_back(kObituaryMetaSep);
+  if (base)
+    out.append(base);
+  return out;
+}
+
+void BroadcastObituaryPrint(const char *key, const char *base,
+                            const char *victim, const char *killer) {
+  const std::string decorated = BuildObituaryLocBase(key, base);
+  if (killer && *killer) {
+    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), victim, killer);
+  } else {
+    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), victim);
+  }
+}
+} // namespace
+
 /*
 =============
 ClientSetReadyStatus
@@ -158,7 +198,7 @@ void ClientSetReadyStatus(gentity_t &ent, bool state, bool toggle) {
           &ent, state, toggle);
 
   if (result == worr::server::client::ReadyResult::AlreadySet) {
-    gi.LocClient_Print(&ent, PRINT_HIGH, "You are already {}ready.\n",
+    gi.LocClient_Print(&ent, PRINT_HIGH, "$g_sgame_auto_992cb0dca638",
                        state ? "" : "NOT ");
   }
 }
@@ -492,7 +532,7 @@ void P_RestoreFromGhostSlot(gentity_t *ent) {
     cl->resp.pendingGhostOrigin = g.origin;
     cl->resp.pendingGhostAngles = g.angles;
 
-    gi.Client_Print(ent, PRINT_HIGH, "Your game state has been restored.\n");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_07394ac22fea");
 
     // Clear the ghost slot
     g = Ghosts{};
@@ -988,6 +1028,7 @@ GetMonsterDisplayName(std::string_view class_name) {
 static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
                            gentity_t *attacker, MeansOfDeath mod) {
   std::string base{};
+  const char *obit_key = nullptr;
 
   if (!victim || !victim->client)
     return;
@@ -1006,42 +1047,54 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
   switch (mod.id) {
   case Suicide:
     base = "{} suicides.\n";
+    obit_key = "$g_mod_generic_suicide";
     break;
   case Expiration:
     base = "{} ran out of blood.\n";
+    obit_key = kObitKeyExpiration;
     break;
   case FallDamage:
     base = "{} cratered.\n";
+    obit_key = "$g_mod_generic_falling";
     break;
   case Crushed:
     base = "{} was squished.\n";
+    obit_key = "$g_mod_generic_crush";
     break;
   case Drowning:
     base = "{} sank like a rock.\n";
+    obit_key = "$g_mod_generic_water";
     break;
   case Slime:
     base = "{} melted.\n";
+    obit_key = "$g_mod_generic_slime";
     break;
   case Lava:
     base = "{} does a back flip into the lava.\n";
+    obit_key = "$g_mod_generic_lava";
     break;
   case Explosives:
   case Barrel:
     base = "{} blew up.\n";
+    obit_key = "$g_mod_generic_explosive";
     break;
   case ExitLevel:
     base = "{} found a way out.\n";
+    obit_key = "$g_mod_generic_exit";
     break;
   case Laser:
     base = "{} saw the light.\n";
+    obit_key = "$g_mod_generic_laser";
     break;
   case ShooterBlaster:
     base = "{} got blasted.\n";
+    obit_key = "$g_mod_generic_blaster";
     break;
   case Bomb:
   case Splash:
   case Hurt:
     base = "{} was in the wrong place.\n";
+    obit_key = "$g_mod_generic_hurt";
     break;
   default:
     // base = nullptr;
@@ -1052,46 +1105,57 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
     switch (mod.id) {
     case HandGrenade_Held:
       base = "{} tried to put the pin back in.\n";
+      obit_key = "$g_mod_self_held_grenade";
       break;
     case HandGrenade_Splash:
     case GrenadeLauncher_Splash:
       base = "{} tripped on their own grenade.\n";
+      obit_key = "$g_mod_self_grenade_splash";
       break;
     case RocketLauncher_Splash:
       base = "{} blew themselves up.\n";
+      obit_key = "$g_mod_self_rocket_splash";
       break;
     case BFG10K_Blast:
       base = "{} should have used a smaller gun.\n";
+      obit_key = "$g_mod_self_bfg_blast";
       break;
     case Trap:
       base = "{} was sucked into their own trap.\n";
+      obit_key = "$g_mod_self_trap";
       break;
     case Thunderbolt_Discharge:
       base = "{} had a fatal discharge.\n";
+      obit_key = kObitKeySelfThunderboltDischarge;
       break;
     case PlasmaGun:
     case PlasmaGun_Splash:
       base = "{} was dissolved by their own Plasma Gun.\n";
+      obit_key = kObitKeySelfPlasmaGun;
       break;
     case Doppelganger_Explode:
       base = "{} was fooled by their own doppelganger.\n";
+      obit_key = "$g_mod_self_dopple_explode";
       break;
     case Expiration:
       base = "{} ran out of blood.\n";
+      obit_key = kObitKeyExpiration;
       break;
     case TeslaMine:
       base = "{} got zapped by their own tesla mine.\n";
+      obit_key = kObitKeySelfTesla;
       break;
     default:
       base = "{} killed themselves.\n";
+      obit_key = "$g_mod_self_default";
       break;
     }
   }
 
   // send generic/victim
   if (!base.empty()) {
-    gi.LocBroadcast_Print(PRINT_MEDIUM, base.c_str(),
-                          victim->client->sess.netName);
+    BroadcastObituaryPrint(obit_key, base.c_str(),
+                           victim->client->sess.netName, nullptr);
 
     {
       std::string small;
@@ -1129,133 +1193,174 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
   switch (mod.id) {
   case Blaster:
     base = "{} was blasted by {}.\n";
+    obit_key = "$g_mod_kill_blaster";
     break;
   case Shotgun:
     base = "{} was gunned down by {}.\n";
+    obit_key = "$g_mod_kill_shotgun";
     break;
   case SuperShotgun:
     base = "{} was blown away by {}'s Super Shotgun.\n";
+    obit_key = "$g_mod_kill_sshotgun";
     break;
   case Machinegun:
     base = "{} was machinegunned by {}.\n";
+    obit_key = "$g_mod_kill_machinegun";
     break;
   case Chaingun:
     base = "{} was cut in half by {}'s Chaingun.\n";
+    obit_key = "$g_mod_kill_chaingun";
     break;
   case GrenadeLauncher:
     base = "{} was popped by {}'s grenade.\n";
+    obit_key = "$g_mod_kill_grenade";
     break;
   case GrenadeLauncher_Splash:
     base = "{} was shredded by {}'s shrapnel.\n";
+    obit_key = "$g_mod_kill_grenade_splash";
     break;
   case RocketLauncher:
     base = "{} ate {}'s rocket.\n";
+    obit_key = "$g_mod_kill_rocket";
     break;
   case RocketLauncher_Splash:
     base = "{} almost dodged {}'s rocket.\n";
+    obit_key = "$g_mod_kill_rocket_splash";
     break;
   case HyperBlaster:
     base = "{} was melted by {}'s HyperBlaster.\n";
+    obit_key = "$g_mod_kill_hyperblaster";
     break;
   case Railgun:
     base = "{} was railed by {}.\n";
+    obit_key = "$g_mod_kill_railgun";
     break;
   case BFG10K_Laser:
     base = "{} saw the pretty lights from {}'s BFG.\n";
+    obit_key = "$g_mod_kill_bfg_laser";
     break;
   case BFG10K_Blast:
     base = "{} was disintegrated by {}'s BFG blast.\n";
+    obit_key = "$g_mod_kill_bfg_blast";
     break;
   case BFG10K_Effect:
     base = "{} couldn't hide from {}'s BFG.\n";
+    obit_key = "$g_mod_kill_bfg_effect";
     break;
   case HandGrenade:
     base = "{} caught {}'s handgrenade.\n";
+    obit_key = "$g_mod_kill_handgrenade";
     break;
   case HandGrenade_Splash:
     base = "{} didn't see {}'s handgrenade.\n";
+    obit_key = "$g_mod_kill_handgrenade_splash";
     break;
   case HandGrenade_Held:
     base = "{} feels {}'s pain.\n";
+    obit_key = "$g_mod_kill_held_grenade";
     break;
   case Telefragged:
   case Telefrag_Spawn:
     base = "{} tried to invade {}'s personal space.\n";
+    obit_key = "$g_mod_kill_telefrag";
     break;
   case IonRipper:
     base = "{} ripped to shreds by {}'s ripper gun.\n";
+    obit_key = "$g_mod_kill_ripper";
     break;
   case Phalanx:
     base = "{} was evaporated by {}.\n";
+    obit_key = "$g_mod_kill_phalanx";
     break;
   case Trap:
     base = "{} was caught in {}'s trap.\n";
+    obit_key = "$g_mod_kill_trap";
     break;
   case Chainfist:
     base = "{} was shredded by {}'s ripsaw.\n";
+    obit_key = "$g_mod_kill_chainfist";
     break;
   case Disruptor:
     base = "{} lost his grip courtesy of {}'s Disintegrator.\n";
+    obit_key = "$g_mod_kill_disintegrator";
     break;
   case ETFRifle:
     base = "{} was perforated by {}.\n";
+    obit_key = "$g_mod_kill_etf_rifle";
     break;
   case PlasmaGun:
     base = "{} was melted by {}'s Plasma Gun.\n";
+    obit_key = kObitKeyKillPlasmaGun;
     break;
   case PlasmaGun_Splash:
     base = "{} was splashed by {}'s Plasma Gun.\n";
+    obit_key = kObitKeyKillPlasmaGunSplash;
     break;
   case PlasmaBeam:
     base = "{} was scorched by {}'s Plasma Beam.\n";
+    obit_key = "$g_mod_kill_heatbeam";
     break;
   case Thunderbolt:
     base = "{} accepts {}'s shaft.\n";
+    obit_key = kObitKeyKillThunderbolt;
     break;
   case Thunderbolt_Discharge:
     base = "{} accepts {}'s discharge.\n";
+    obit_key = kObitKeyKillThunderboltDischarge;
     break;
   case TeslaMine:
     base = "{} was enlightened by {}'s tesla mine.\n";
+    obit_key = "$g_mod_kill_tesla";
     break;
   case ProxMine:
     base = "{} got too close to {}'s proximity mine.\n";
+    obit_key = "$g_mod_kill_prox";
     break;
   case Nuke:
     base = "{} was nuked by {}'s antimatter bomb.\n";
+    obit_key = "$g_mod_kill_nuke";
     break;
   case VengeanceSphere:
     base = "{} was purged by {}'s Vengeance Sphere.\n";
+    obit_key = "$g_mod_kill_vengeance_sphere";
     break;
   case DefenderSphere:
     base = "{} had a blast with {}'s Defender Sphere.\n";
+    obit_key = "$g_mod_kill_defender_sphere";
     break;
   case HunterSphere:
     base = "{} was hunted down by {}'s Hunter Sphere.\n";
+    obit_key = "$g_mod_kill_hunter_sphere";
     break;
   case Tracker:
     base = "{} was annihilated by {}'s Disruptor.\n";
+    obit_key = "$g_mod_kill_tracker";
     break;
   case Doppelganger_Explode:
     base = "{} was tricked by {}'s Doppelganger.\n";
+    obit_key = "$g_mod_kill_dopple_explode";
     break;
   case Doppelganger_Vengeance:
     base = "{} was purged by {}'s Doppelganger.\n";
+    obit_key = "$g_mod_kill_dopple_vengeance";
     break;
   case Doppelganger_Hunter:
     base = "{} was hunted down by {}'s Doppelganger.\n";
+    obit_key = "$g_mod_kill_dopple_hunter";
     break;
   case GrapplingHook:
     base = "{} was caught by {}'s grapple.\n";
+    obit_key = "$g_mod_kill_grapple";
     break;
   default:
     base = "{} was killed by {}.\n";
+    obit_key = "$g_mod_kill_generic";
     break;
   }
 
-  gi.LocBroadcast_Print(PRINT_MEDIUM, base.c_str(),
-                        victim->client->sess.netName,
-                        attacker->client->sess.netName);
+  BroadcastObituaryPrint(obit_key, base.c_str(),
+                         victim->client->sess.netName,
+                         attacker->client->sess.netName);
   if (!base.empty()) {
     std::string small = fmt::vformat(
         base, fmt::make_format_args(victim->client->sess.netName,
@@ -1284,7 +1389,7 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
             level.roundState == RoundState::In_Progress) {
           gi.LocClient_Print(
               victim, PRINT_CENTER,
-              ".You were fragged by {}\nYou will respawn next round.",
+              "$g_sgame_auto_24516e7280f1",
               attacker->client->sess.netName);
         } else if (Game::Is(GameType::FreezeTag) &&
                    level.roundState == RoundState::In_Progress) {
@@ -1294,12 +1399,12 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
               (victim->client->sess.team == Team::Blue &&
                level.pop.num_living_blue > 1))
             last_standing = false;
-          gi.LocClient_Print(victim, PRINT_CENTER, ".You were frozen by {}{}",
+          gi.LocClient_Print(victim, PRINT_CENTER, "$g_sgame_auto_46b053398cf6",
                              attacker->client->sess.netName,
                              last_standing ? ""
                                            : "\nYou will respawn once thawed.");
         } else {
-          gi.LocClient_Print(victim, PRINT_CENTER, ".You were {} by {}",
+          gi.LocClient_Print(victim, PRINT_CENTER, "$g_sgame_auto_ddeb5b9cd278",
                              Game::Is(GameType::FreezeTag) ? "frozen"
                                                            : "fragged",
                              attacker->client->sess.netName);
@@ -1309,7 +1414,7 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
     if (!(attacker->svFlags & SVF_BOT)) {
       if (Teams() && OnSameTeam(victim, attacker)) {
         gi.LocClient_Print(attacker, PRINT_CENTER,
-                           ".You fragged {}, your team mate :(",
+                           "$g_sgame_auto_e1384014eedb",
                            victim->client->sess.netName);
       } else {
         if (level.matchState == MatchState::Warmup_ReadyUp) {
@@ -1317,24 +1422,24 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
         } else if (attacker->client->killStreakCount &&
                    !(attacker->client->killStreakCount % 10)) {
           gi.LocBroadcast_Print(PRINT_CENTER,
-                                ".{} is on a rampage\nwith {} frags!",
+                                "$g_sgame_auto_5ea9ca9e55c0",
                                 attacker->client->sess.netName,
                                 attacker->client->killStreakCount);
           PushAward(attacker, PlayerMedal::Rampage);
         } else if (killStreakCount >= 10) {
           gi.LocBroadcast_Print(
-              PRINT_CENTER, ".{} put an end to {}'s\nrampage!",
+              PRINT_CENTER, "$g_sgame_auto_d037994285e0",
               attacker->client->sess.netName, victim->client->sess.netName);
         } else if (Teams() || level.matchState != MatchState::In_Progress) {
           if (attacker->client->sess.pc.show_fragmessages)
-            gi.LocClient_Print(attacker, PRINT_CENTER, ".You {} {}",
+            gi.LocClient_Print(attacker, PRINT_CENTER, "$g_sgame_auto_161a2768fd20",
                                Game::Is(GameType::FreezeTag) ? "froze"
                                                              : "fragged",
                                victim->client->sess.netName);
         } else {
           if (attacker->client->sess.pc.show_fragmessages)
             gi.LocClient_Print(
-                attacker, PRINT_CENTER, ".You {} {}\n{} place with {}",
+                attacker, PRINT_CENTER, "$g_sgame_auto_e41afbaf7793",
                 Game::Is(GameType::FreezeTag) ? "froze" : "fragged",
                 victim->client->sess.netName,
                 PlaceString(attacker->client->pers.currentRank + 1),
@@ -1356,8 +1461,8 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
   if (base.size())
     return;
 
-  gi.LocBroadcast_Print(PRINT_MEDIUM, "$g_mod_generic_died",
-                        victim->client->sess.netName);
+  BroadcastObituaryPrint("$g_mod_generic_died", "$g_mod_generic_died",
+                         victim->client->sess.netName, nullptr);
 }
 
 /*
@@ -2036,9 +2141,9 @@ static void FreezeTag_StopThawHold(gentity_t *frozen, bool notify) {
   gentity_t *thawer = fcl->resp.thawer;
 
   if (notify && thawer && thawer->client) {
-    gi.LocClient_Print(thawer, PRINT_CENTER, ".You stopped thawing {}.",
+    gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_0979fa106e6c",
                        fcl->sess.netName);
-    gi.LocClient_Print(frozen, PRINT_CENTER, ".{} stopped thawing you.",
+    gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_311f822919dd",
                        thawer->client->sess.netName);
   }
 
@@ -2065,9 +2170,9 @@ void worr::server::client::FreezeTag_StartThawHold(gentity_t *thawer,
 
   gi.sound(frozen, CHAN_AUTO, gi.soundIndex("world/steam.wav"), 1, ATTN_NORM,
            0);
-  gi.LocClient_Print(thawer, PRINT_CENTER, ".Helping {} thaw...",
+  gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_01aa97dfc24a",
                      fcl->sess.netName);
-  gi.LocClient_Print(frozen, PRINT_CENTER, ".{} is thawing you...",
+  gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_fdb011c6e37e",
                      thawer->client->sess.netName);
 }
 
@@ -2095,15 +2200,15 @@ void worr::server::client::FreezeTag_ThawPlayer(gentity_t *thawer,
   if (thawer && thawer->client && awardScore) {
     ++thawer->client->resp.thawed;
     G_AdjustPlayerScore(thawer->client, 1, false, 0);
-    gi.LocClient_Print(thawer, PRINT_CENTER, ".You thawed {}!",
+    gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_d2e00686ef3e",
                        frozen->client->sess.netName);
   }
 
   if (thawer && thawer->client) {
-    gi.LocClient_Print(frozen, PRINT_CENTER, ".{} thawed you out!",
+    gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_b5a10a49253a",
                        thawer->client->sess.netName);
   } else if (autoThaw) {
-    gi.LocClient_Print(frozen, PRINT_CENTER, ".You thawed out!");
+    gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_6b9b4499a953");
   }
 
   MeansOfDeath thawMod{ModID::Thaw, false};
@@ -2950,7 +3055,7 @@ void worr::server::client::ClientCompleteSpawn(gentity_t *ent) {
       ent->client->awaitingRespawn = true;
       gi.LocClient_Print(
           ent, PRINT_CENTER,
-          "No safe spawn point available.\nRetrying in 2 seconds...");
+          "$g_sgame_auto_f11403053ddc");
       return;
     }
   }
@@ -3524,7 +3629,7 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
     if (!Tournament_IsParticipant(cl)) {
       if (!silent)
         gi.LocClient_Print(ent, PRINT_HIGH,
-                           "Tournament slots are locked to participants.\n");
+                           "$g_sgame_auto_397418db7edb");
       return false;
     }
 
@@ -3541,13 +3646,13 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
     if (!silent)
       gi.LocClient_Print(
           ent, PRINT_HIGH,
-          "Your team change will be applied at the next round.\n");
+          "$g_sgame_auto_3fdd679681cc");
     return false;
   }
 
   if (!force && cl->resp.teamDelayTime > level.time) {
     gi.LocClient_Print(ent, PRINT_HIGH,
-                       ".You must wait before switching teams again.\n");
+                       "$g_sgame_auto_d2f12db97932");
     return false;
   }
 
@@ -3591,7 +3696,7 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
         requestQueue = true;
       } else {
         if (!silent)
-          gi.LocClient_Print(ent, PRINT_HIGH, "The match is locked.\n");
+          gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_eb439676ee76");
         return false;
       }
     }
@@ -3613,7 +3718,7 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
       break;
     case TeamJoinCapacityAction::Deny:
       if (!silent)
-        gi.LocClient_Print(ent, PRINT_HIGH, "Server is full.\n");
+        gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_22f98ab91aa9");
       return false;
     }
   }
@@ -4176,23 +4281,23 @@ void worr::server::client::PrintModifierIntro(gentity_t *ent) {
   if (g_quadhog->integer) {
     gi.LocClient_Print(
         ent, PRINT_CENTER,
-        ".QUAD HOG\nHold onto the Quad Damage and become the hog!");
+        "$g_sgame_auto_56bc30d874d4");
   } else if (g_vampiric_damage->integer) {
     gi.LocClient_Print(
         ent, PRINT_CENTER,
-        ".VAMPIRIC DAMAGE\nDeal damage to heal yourself. Blood is fuel.");
+        "$g_sgame_auto_1581815c80f0");
   } else if (g_frenzy->integer) {
     gi.LocClient_Print(
         ent, PRINT_CENTER,
-        ".WEAPONS FRENZY\nFaster fire, faster rockets, infinite ammo regen.");
+        "$g_sgame_auto_3bd95624502e");
   } else if (g_gravity_lotto && g_gravity_lotto->integer) {
     gi.LocClient_Print(ent, PRINT_CENTER,
-                       ".GRAVITY LOTTO\nGravity is set to {} for this match.",
+                       "$g_sgame_auto_63e47ec21ba1",
                        g_gravity->integer);
   } else if (g_nadeFest->integer) {
-    gi.LocClient_Print(ent, PRINT_CENTER, ".NADE FEST\nIt's raining grenades!");
+    gi.LocClient_Print(ent, PRINT_CENTER, "$g_sgame_auto_cd1341266e56");
   } else if (g_instaGib->integer) {
-    gi.LocClient_Print(ent, PRINT_CENTER, ".INSTAGIB\nIt’s a raily good time!");
+    gi.LocClient_Print(ent, PRINT_CENTER, "$g_sgame_auto_d761dbbb03b3");
   }
 }
 

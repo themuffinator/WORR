@@ -5,6 +5,31 @@
 
 namespace ui {
 
+namespace {
+
+constexpr int kDemoListFontSize = 6;
+constexpr int kDemoListRowPadding = 2;
+constexpr float kDemoListAlternateShade = 0.8f;
+
+int DemoListTextHeight()
+{
+    return max(1, UI_FontLineHeightSized(kDemoListFontSize));
+}
+
+int DemoListSpacing()
+{
+    return DemoListTextHeight() + kDemoListRowPadding;
+}
+
+int DemoHintReserveHeight()
+{
+    int textHeight = CONCHAR_HEIGHT;
+    int iconHeight = max(1, textHeight * 2);
+    return max(textHeight, iconHeight);
+}
+
+} // namespace
+
 #define DEMO_EXTENSIONS ".dm2;.dm2.gz;.mvd2;.mvd2.gz"
 #define DEMO_EXTRASIZE offsetof(demoEntry_t, name)
 #define DEMO_MVD_POV "\x90\xcd\xd6\xc4\x91"
@@ -47,6 +72,7 @@ public:
 private:
     void BuildList();
     void FreeList();
+    void UpdateSummaryStatus();
     void BuildName(const file_info_t *info, char **cache);
     void BuildDir(const char *name, int type);
     void CalcHash(void **list);
@@ -353,10 +379,7 @@ void DemoBrowserPage::BuildList()
 
     UpdateLayout();
 
-    int demos_count = list_.numItems - numDirs_;
-    size_t len = Q_scnprintf(status_, sizeof(status_), "%d demo%s, ",
-                             demos_count, demos_count == 1 ? "" : "s");
-    Com_FormatSizeLong(status_ + len, sizeof(status_) - len, total_bytes_);
+    UpdateSummaryStatus();
 
     SCR_UpdateScreen();
 }
@@ -379,12 +402,20 @@ Sound DemoBrowserPage::Change()
 
     auto *e = static_cast<demoEntry_t *>(list_.items[list_.curvalue]);
     if (e->type == ENTRY_DEMO) {
-        Q_strlcpy(status_, "Press Enter to play demo", sizeof(status_));
+        UpdateSummaryStatus();
     } else {
         Q_strlcpy(status_, "Press Enter to change directory", sizeof(status_));
     }
 
     return Sound::Silent;
+}
+
+void DemoBrowserPage::UpdateSummaryStatus()
+{
+    int demos_count = list_.numItems - numDirs_;
+    size_t len = Q_scnprintf(status_, sizeof(status_), "%d demo%s, ",
+                             demos_count, demos_count == 1 ? "" : "s");
+    Com_FormatSizeLong(status_ + len, sizeof(status_) - len, total_bytes_);
 }
 
 Sound DemoBrowserPage::Sort()
@@ -436,7 +467,11 @@ void DemoBrowserPage::UpdateLayout()
 {
     list_.x = 0;
     list_.y = CONCHAR_HEIGHT;
-    int hintHeight = CONCHAR_HEIGHT;
+    list_.fontSize = kDemoListFontSize;
+    list_.alternateRows = true;
+    list_.alternateShade = kDemoListAlternateShade;
+    list_.rowSpacing = DemoListSpacing();
+    int hintHeight = DemoHintReserveHeight();
     list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1 - hintHeight;
 
     int w1 = 17 + widest_map_ + widest_pov_;
@@ -588,7 +623,7 @@ void DemoBrowserPage::Draw()
     list_.Draw();
 
     if (uis.canvas_width >= 640) {
-        int hintHeight = CONCHAR_HEIGHT;
+        int hintHeight = DemoHintReserveHeight();
         UI_DrawString(uis.width, uis.height - hintHeight - CONCHAR_HEIGHT, UI_RIGHT, COLOR_WHITE, status_);
     }
 

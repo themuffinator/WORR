@@ -293,7 +293,7 @@ static bool ClientInactivityTimer(gentity_t* ent) {
 		cl->sess.inactiveStatus = true;
 		cl->sess.inactivityWarning = false;
 		cl->sess.inactivityTime = 0_sec;
-		gi.LocClient_Print(ent, PRINT_CENTER, "You have been removed from the match\ndue to inactivity.\n");
+		gi.LocClient_Print(ent, PRINT_CENTER, "$g_sgame_auto_a0dc3c7e2a1c");
 		worr::Logf(worr::LogLevel::Warn, "{}: dropping {} for inactivity", __FUNCTION__, ClientLogLabel(ent));
 		SetTeam(ent, Team::Spectator, true, true, false);
 		return false;
@@ -302,7 +302,7 @@ static bool ClientInactivityTimer(gentity_t* ent) {
 	// Warning 10 seconds before timeout
 	if (!cl->sess.inactivityWarning && level.time > cl->sess.inactivityTime - 10_sec) {
 		cl->sess.inactivityWarning = true;
-		gi.LocClient_Print(ent, PRINT_CENTER, "Ten seconds until inactivity trigger!\n");
+		gi.LocClient_Print(ent, PRINT_CENTER, "$g_sgame_auto_d6e49f108c3f");
 		gi.localSound(ent, CHAN_AUTO, gi.soundIndex("world/fish.wav"), 1, ATTN_NONE, 0);
 		worr::Logf(worr::LogLevel::Trace, "{}: inactivity warning sent to {}", __FUNCTION__, ClientLogLabel(ent));
 	}
@@ -415,9 +415,9 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "ANTISEMITE DETECTED ({})!\n", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_01787314874c", name);
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "{}: God Bless Palestine\n", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_35c469e0ed79", name);
 			}
 		}
 
@@ -435,9 +435,9 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "WARNING! KNOWN CHEATER DETECTED ({})!\n", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_20f0bccab75a", name);
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "{}: I am a known cheater, banned from all servers.\n", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_9d12a54636ca", name);
 			}
 		}
 
@@ -455,9 +455,9 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "WARNING! MOANERTONE DETECTED ({})!\n", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_802ecb6cbfb2", name);
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "{}: Listen up, I have something to moan about.\n", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_b8f60b5f0ef7", name);
 			}
 		}
 
@@ -478,9 +478,9 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "FAKE 888 AGENT DETECTED ({})!\n", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_b4a374f1ef2b", name);
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "{}: bejesus, what a lovely lobby! certainly better than 888's!\n", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_cf2e3748aef1", name);
 			}
 		}
 		gi.localSound(ent, CHAN_AUTO, gi.soundIndex("world/klaxon3.wav"), 1, ATTN_NONE, 0);
@@ -670,13 +670,13 @@ gentity_t* ent, char* userInfo, const char* socialID, bool isBot) {
 		}
 
 		if (ent->client->sess.banned) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "BANNED PLAYER {} connects.\n", value.data());
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_59bb445bff79", value.data());
 			gi.AddCommandString(G_Fmt("kick {}\n", ent - g_entities - 1).data());
 			return false;
 		}
 
 		if (ent->client->sess.skillRating > 0) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "{} connects. (SR: {})\n", value.data(),
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa87f5ca778d", value.data(),
 				ent->client->sess.skillRating);
 		}
 		else {
@@ -957,7 +957,7 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 		level.timeoutActive = GameTime::from_sec(match_timeoutLength->integer);
 		game.tournament.autoTimeoutActive = true;
 		gi.LocBroadcast_Print(PRINT_CENTER,
-			".Tournament timeout: {} disconnected.\n{} remaining.",
+			"$g_sgame_auto_e14920069ec3",
 			cl->sess.netName,
 			TimeString(match_timeoutLength->integer * 1000, false, false));
 		G_LogEvent("MATCH TIMEOUT STARTED");
@@ -994,7 +994,7 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 
 	if (cl->pers.connected && cl->sess.initialised && !cl->sess.is_a_bot) {
 		if (cl->sess.netName[0]) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "{} disconnected.", cl->sess.netName);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5ff8533b699f", cl->sess.netName);
 		}
 	}
 
@@ -1073,7 +1073,7 @@ void ClientSessionServiceImpl::OnDisconnect(local_game_import_t& gi, gentity_t* 
 
 	if (canUpdateReady && cl->sess.netName[0]) {
 		gi.LocBroadcast_Print(PRINT_CENTER,
-				"%bind:+wheel2:Use Compass to toggle your ready status.%.MATCH IS IN WARMUP\n{} is NOT ready.",
+				"$g_sgame_auto_c29829d27a76",
 				cl->sess.netName);
 	}
 }
@@ -1249,7 +1249,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		if (!ClientIsPlaying(cl) && (!cl->sess.initialised || cl->sess.inactiveStatus)) {
 			showInitialMenu(ent);
 			//if (!cl->initialMenu.shown)
-			//      gi.LocClient_Print(ent, PRINT_CHAT, "Welcome to {} v{}.\n", worr::version::kGameTitle, worr::version::kGameVersion);
+			//      gi.LocClient_Print(ent, PRINT_CHAT, "$g_sgame_auto_dd208e2c558a", worr::version::kGameTitle, worr::version::kGameVersion);
 			cl->initialMenu.delay = 0_sec;
 			cl->initialMenu.shown = true;
 		}
@@ -1279,7 +1279,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		if (cl->sess.motdModificationCount != game.motdModificationCount) {
 			if (level.time >= cl->sess.teamJoinTime + delay) {
 				if (g_showmotd->integer && game.motd.size()) {
-					gi.LocCenter_Print(ent, "{}", game.motd.c_str());
+					gi.LocCenter_Print(ent, "$g_sgame_auto_bf21a9e8fbc5", game.motd.c_str());
 					delay += 5_sec;
 					cl->sess.motdModificationCount = game.motdModificationCount;
 				}
@@ -1724,7 +1724,7 @@ ReadyResult ClientSessionServiceImpl::OnReadyToggled(gentity_t* ent, bool state,
 		}
 
 		gi_.LocBroadcast_Print(PRINT_CENTER,
-			"%bind:+wheel2:Use Compass to toggle your ready status.%.MATCH IS IN WARMUP\n{} is {}ready.",
+			"$g_sgame_auto_079b93a3e425",
 			ent->client->sess.netName, ent->client->pers.readyStatus ? "" : "NOT " );
 
 		return ReadyResult::Success;}

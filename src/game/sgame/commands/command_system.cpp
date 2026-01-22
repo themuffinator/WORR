@@ -54,7 +54,7 @@ namespace Commands {
 		if (!help_text.empty()) {
 			usage += std::format("\n{}", help_text);
 		}
-		gi.Client_Print(ent, PRINT_HIGH, usage.c_str());
+		gi.LocClient_Print(ent, PRINT_HIGH, usage.c_str());
 	}
 
 	// --- Helper Function Definitions ---
@@ -173,8 +173,8 @@ namespace Commands {
 		const char* actionLabel = matchInProgress ? "rebalance" : "shuffle";
 		const int32_t graceSeconds = std::max(graceDuration.seconds<int32_t>(), 0);
 
-		gi.LocBroadcast_Print(PRINT_HIGH, "[SHUFFLE]: Skill-based {} ({}) - respawning in {}s.\n", actionLabel, phaseLabel, graceSeconds);
-		gi.LocBroadcast_Print(PRINT_CENTER, ".Skill-based {} ({})\n.Respawning in {} seconds...\n", actionLabel, phaseLabel, graceSeconds);
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_90ed2d4ab1ff", actionLabel, phaseLabel, graceSeconds);
+		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_55109ded405e", actionLabel, phaseLabel, graceSeconds);
 	}
 
 	/*
@@ -326,7 +326,7 @@ void RegisterAllCommands() {
 bool CheatsOk(gentity_t* ent) {
 	if (!deathmatch->integer && !coop->integer) return true;
 	if (!g_cheats->integer) {
-		gi.Client_Print(ent, PRINT_HIGH, "Cheats must be enabled to use this command.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3f73d9b2a803");
 		return false;
 	}
 	return true;
@@ -334,7 +334,7 @@ bool CheatsOk(gentity_t* ent) {
 
 static inline bool AdminOk(gentity_t* ent) {
 	if (!g_allowAdmin->integer || !ent->client->sess.admin) {
-		gi.Client_Print(ent, PRINT_HIGH, "Only admins can use this command.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c80b31662070");
 		return false;
 	}
 	return true;
@@ -392,7 +392,7 @@ void ClientCommand(gentity_t* ent) {
 				return;
 			}
 		}
-		gi.LocClient_Print(ent, PRINT_HIGH, "Unknown command: '{}'\n", commandName.data());
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8d9eaaf535d0", commandName.data());
 		return;
 	}
 

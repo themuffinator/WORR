@@ -57,6 +57,9 @@ typedef struct {
 
 static sdl_gamepad_t sdl_gamepad;
 
+static void sdl_gamepad_close(unsigned time);
+static void sdl_gamepad_open_first(void);
+
 /*
 ===============================================================================
 
@@ -395,7 +398,7 @@ static void window_event(SDL_WindowEvent *event)
 
     // wayland doesn't set SDL_WINDOW_*_FOCUS flags
     if (sdl.wayland) {
-        switch (event->type) {
+        switch ((int)event->type) {
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
             sdl.focus_hack = SDL_WINDOW_INPUT_FOCUS;
             break;
@@ -406,7 +409,7 @@ static void window_event(SDL_WindowEvent *event)
         flags |= sdl.focus_hack;
     }
 
-    switch (event->type) {
+    switch ((int)event->type) {
     case SDL_EVENT_WINDOW_MINIMIZED:
     case SDL_EVENT_WINDOW_RESTORED:
     case SDL_EVENT_WINDOW_MOUSE_ENTER:
@@ -818,7 +821,8 @@ static void grab_mouse(bool grab)
     SDL_SetWindowMouseGrab(sdl.window, grab);
     SDL_SetWindowRelativeMouseMode(sdl.window, grab && !(Key_GetDest() & (KEY_MENU | KEY_MESSAGE)));
     SDL_GetRelativeMouseState(NULL, NULL);
-    set_cursor_visible(!(sdl.flags & QVF_FULLSCREEN));
+    bool show_cursor = !(sdl.flags & QVF_FULLSCREEN) && !(Key_GetDest() & KEY_MENU);
+    set_cursor_visible(show_cursor);
 }
 
 static bool probe(void)
@@ -830,6 +834,36 @@ static bool sdl_get_native_window(vid_native_window_t *out)
 {
     if (!out)
         return false;
+
+    SDL_PropertiesID props = SDL_GetWindowProperties(sdl.window);
+    if (props) {
+        void *hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+        if (hwnd) {
+            out->platform = VID_NATIVE_WIN32;
+            out->handle.win32.hwnd = hwnd;
+            out->handle.win32.hinstance = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, NULL);
+            out->handle.win32.hdc = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HDC_POINTER, NULL);
+            return true;
+        }
+
+        void *wl_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
+        void *wl_surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
+        if (wl_display && wl_surface) {
+            out->platform = VID_NATIVE_WAYLAND;
+            out->handle.wayland.display = wl_display;
+            out->handle.wayland.surface = wl_surface;
+            return true;
+        }
+
+        void *x11_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, NULL);
+        Sint64 x11_window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+        if (x11_display && x11_window) {
+            out->platform = VID_NATIVE_X11;
+            out->handle.x11.display = x11_display;
+            out->handle.x11.window = (uintptr_t)x11_window;
+            return true;
+        }
+    }
 
     out->platform = VID_NATIVE_SDL;
     out->handle.sdl.window = sdl.window;

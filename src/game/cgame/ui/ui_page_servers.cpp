@@ -6,6 +6,31 @@
 
 namespace ui {
 
+namespace {
+
+constexpr int kServerListFontSize = 6;
+constexpr int kServerListRowPadding = 2;
+constexpr float kServerListAlternateShade = 0.8f;
+
+int ServerListTextHeight()
+{
+    return max(1, UI_FontLineHeightSized(kServerListFontSize));
+}
+
+int ServerListSpacing()
+{
+    return ServerListTextHeight() + kServerListRowPadding;
+}
+
+int ServerHintReserveHeight()
+{
+    int textHeight = CONCHAR_HEIGHT;
+    int iconHeight = max(1, textHeight * 2);
+    return max(textHeight, iconHeight);
+}
+
+} // namespace
+
 #define MAX_STATUS_RULES 64
 #define MAX_STATUS_SERVERS 1024
 #define SLOT_EXTRASIZE offsetof(serverslot_t, name)
@@ -579,7 +604,7 @@ void ServerBrowserPage::ParseMasterArgs(netadr_t *broadcast)
                 ParsePlain(data, len, chunk);
             HTTP_FreeFile(data);
 #else
-            Com_Printf("Can't fetch '%s', no HTTP support compiled in.\n", s);
+            Com_Printf("$cg_auto_9f78db570fe8", s);
 #endif
             continue;
         }
@@ -603,7 +628,7 @@ void ServerBrowserPage::ParseMasterArgs(netadr_t *broadcast)
         }
 
 ignore:
-        Com_Printf("Ignoring invalid master URL: %s\n", s);
+        Com_Printf("$cg_auto_f8b0044bcfd3", s);
     }
 }
 
@@ -617,7 +642,7 @@ void ServerBrowserPage::AddServer(const netadr_t *address, const char *hostname)
         if (!hostname)
             return;
         if (!NET_StringToAdr(hostname, &tmp, PORT_SERVER)) {
-            Com_Printf("Bad server address: %s\n", hostname);
+            Com_Printf("$cg_auto_35af01e118a2", hostname);
             return;
         }
         address = &tmp;
@@ -630,7 +655,7 @@ void ServerBrowserPage::AddServer(const netadr_t *address, const char *hostname)
         hostname = NET_AdrToString(address);
 
     if (BigShort(address->port) < 1024) {
-        Com_Printf("Bad server port: %s\n", hostname);
+        Com_Printf("$cg_auto_0f3fc5b0f530", hostname);
         return;
     }
 
@@ -794,10 +819,15 @@ void ServerBrowserPage::BuildColumns()
 {
     int w = uis.width - MLIST_SCROLLBAR_WIDTH;
     int base = (w - (3 * CONCHAR_WIDTH + MLIST_PADDING) - (5 * CONCHAR_WIDTH + MLIST_PADDING)) / 3;
-    int hintHeight = CONCHAR_HEIGHT;
+    int hintHeight = ServerHintReserveHeight();
+    int rowSpacing = ServerListSpacing();
 
     list_.x = 0;
     list_.y = CONCHAR_HEIGHT;
+    list_.fontSize = kServerListFontSize;
+    list_.alternateRows = true;
+    list_.alternateShade = kServerListAlternateShade;
+    list_.rowSpacing = rowSpacing;
     list_.height = uis.height - CONCHAR_HEIGHT * 2 - 1 - hintHeight;
     list_.columns[COL_NAME].width = base + MLIST_PADDING;
     list_.columns[COL_MOD].width = base + MLIST_PADDING;
@@ -809,6 +839,10 @@ void ServerBrowserPage::BuildColumns()
     if (uis.canvas_width >= 640) {
         info_.x = w + MLIST_SCROLLBAR_WIDTH;
         info_.y = CONCHAR_HEIGHT;
+        info_.fontSize = kServerListFontSize;
+        info_.alternateRows = true;
+        info_.alternateShade = kServerListAlternateShade;
+        info_.rowSpacing = rowSpacing;
         info_.height = (uis.height + 1) / 2 - CONCHAR_HEIGHT - 2;
         int side_width = max(0, uis.width - info_.x);
         int list_width = max(0, side_width - MLIST_SCROLLBAR_WIDTH);
@@ -818,6 +852,10 @@ void ServerBrowserPage::BuildColumns()
 
         players_.x = w + MLIST_SCROLLBAR_WIDTH;
         players_.y = (uis.height + 1) / 2 + 1;
+        players_.fontSize = kServerListFontSize;
+        players_.alternateRows = true;
+        players_.alternateShade = kServerListAlternateShade;
+        players_.rowSpacing = rowSpacing;
         players_.height = uis.height - hintHeight - players_.y - CONCHAR_HEIGHT;
         players_.width = list_width;
         players_.columns[0].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
@@ -861,7 +899,7 @@ void ServerBrowserPage::Draw()
         players_.Draw();
     }
 
-    int hintHeight = CONCHAR_HEIGHT;
+    int hintHeight = ServerHintReserveHeight();
     int statusY = uis.height - hintHeight - CONCHAR_HEIGHT;
     int w = (pingstage_ == PING_STAGES && list_.numItems)
         ? pingindex_ * uis.width / list_.numItems

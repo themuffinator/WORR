@@ -75,7 +75,7 @@ static int reset_required = 1; // If 1, recomputes tone curve based only on this
 
 // Creates our pipeline layouts.
 VkResult
-vkpt_tone_mapping_initialize()
+vkpt_tone_mapping_initialize(void)
 {
 	VkDescriptorSetLayout desc_set_layouts[] = {
 		qvk.desc_set_layout_ubo, 
@@ -125,7 +125,7 @@ vkpt_tone_mapping_initialize()
 
 // Destroys our pipeline layouts.
 VkResult
-vkpt_tone_mapping_destroy()
+vkpt_tone_mapping_destroy(void)
 {
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_tone_mapping_histogram, NULL);
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_tone_mapping_curve, NULL);
@@ -137,7 +137,7 @@ vkpt_tone_mapping_destroy()
 // Tells the tone mapper to calculate the next tone curve without blending with
 // previous frames' tone curves.
 void
-vkpt_tone_mapping_request_reset()
+vkpt_tone_mapping_request_reset(void)
 {
 	reset_required = 1;
 }
@@ -145,7 +145,7 @@ vkpt_tone_mapping_request_reset()
 
 // Creates our pipelines.
 VkResult
-vkpt_tone_mapping_create_pipelines()
+vkpt_tone_mapping_create_pipelines(void)
 {
 	VkSpecializationMapEntry specEntries[] = {
 		{ .constantID = 0, .offset = 0, .size = sizeof(uint32_t) }
@@ -220,7 +220,7 @@ vkpt_tone_mapping_reset(VkCommandBuffer cmd_buf)
 
 // Destroys our pipelines.
 VkResult
-vkpt_tone_mapping_destroy_pipelines()
+vkpt_tone_mapping_destroy_pipelines(void)
 {
 	for (int i = 0; i < TM_NUM_PIPELINES; i++)
 		vkDestroyPipeline(qvk.device, pipelines[i], NULL);
@@ -416,7 +416,7 @@ vkpt_tone_mapping_record_cmd_buffer(VkCommandBuffer cmd_buf, float frame_time)
 }
 
 void
-vkpt_tone_mapping_draw_debug()
+vkpt_tone_mapping_draw_debug(void)
 {
 	float profiler_scale = R_ClampScale(cvar_profiler_scale);
 	int x = (int)(10.f * profiler_scale);

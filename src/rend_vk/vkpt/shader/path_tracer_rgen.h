@@ -958,8 +958,9 @@ vec3 get_emissive_shell(uint material_id, uint shell)
 		}
 		if ((shell & SHELL_DOUBLE) != 0)
 		{
-			c.r = 0.9f;
-			c.g = 0.7f;
+			c.r = 0.25f;
+			c.g = 0.88f;
+			c.b = 0.82f;
 		}
 		if ((shell & SHELL_LITE_GREEN) != 0)
 		{

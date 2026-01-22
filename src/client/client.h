@@ -65,6 +65,8 @@ extern "C" {
 
 //=============================================================================
 
+typedef struct font_s font_t;
+
 typedef struct {
     entity_state_t     current;
     entity_state_t     prev;           // will always be valid, but might just be a copy of current
@@ -1149,6 +1151,7 @@ typedef struct {
 
     qhandle_t   net_pic;
     qhandle_t   font_pic;
+    font_t      *font;
 
     int         canvas_width, canvas_height;
     float       virtual_scale;
@@ -1182,6 +1185,7 @@ float   SCR_FadeAlpha(unsigned startTime, unsigned visTime, unsigned fadeTime);
 int     SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font);
 void    SCR_DrawKStringMultiStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, const kfont_t *kfont);
+int     SCR_MeasureString(const char *text, size_t max_chars);
 bool    SCR_GetBindIconForKey(int keynum, qhandle_t *pic, int *w, int *h);
 int     SCR_DrawBindIcon(const char *binding, int x, int y, int size, color_t color, const char **out_keyname);
 

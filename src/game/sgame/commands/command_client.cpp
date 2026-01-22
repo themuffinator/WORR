@@ -128,7 +128,7 @@ void WeapPrev(gentity_t* ent, const CommandArgs& args);
 		*/
 		void Follow(gentity_t* ent, const CommandArgs& args) {
 			if (ClientIsPlaying(ent->client)) {
-				gi.Client_Print(ent, PRINT_HIGH, "You must be a spectator to follow.\n");
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_4805c1b66629");
 				return;
 			}
 			if (args.count() < 2) {
@@ -138,7 +138,7 @@ void WeapPrev(gentity_t* ent, const CommandArgs& args);
 
 			gentity_t* follow_ent = ClientEntFromString(args.getString(1).data());
 			if (!follow_ent || !follow_ent->inUse || !ClientIsPlaying(follow_ent->client)) {
-				gi.Client_Print(ent, PRINT_HIGH, "Invalid or non-playing client specified.\n");
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8f54bfa61bb5");
 				return;
 			}
 
@@ -155,7 +155,7 @@ void WeapPrev(gentity_t* ent, const CommandArgs& args);
 		void FollowKiller(gentity_t* ent, const CommandArgs& args) {
 			(void)args;
 			ent->client->sess.pc.follow_killer = !ent->client->sess.pc.follow_killer;
-			gi.LocClient_Print(ent, PRINT_HIGH, "Auto-follow killer: {}.\n", ent->client->sess.pc.follow_killer ? "ON" : "OFF");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ee1f4535e75b", ent->client->sess.pc.follow_killer ? "ON" : "OFF");
 		}
 
 		/*
@@ -166,7 +166,7 @@ void WeapPrev(gentity_t* ent, const CommandArgs& args);
 		void FollowLeader(gentity_t* ent, const CommandArgs& args) {
 			(void)args;
 			ent->client->sess.pc.follow_leader = !ent->client->sess.pc.follow_leader;
-			gi.LocClient_Print(ent, PRINT_HIGH, "Auto-follow leader: {}.\n", ent->client->sess.pc.follow_leader ? "ON" : "OFF");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d3b4121bc093", ent->client->sess.pc.follow_leader ? "ON" : "OFF");
 		}
 
 		/*
@@ -177,7 +177,7 @@ void WeapPrev(gentity_t* ent, const CommandArgs& args);
 		void FollowPowerup(gentity_t* ent, const CommandArgs& args) {
 			(void)args;
 			ent->client->sess.pc.follow_powerup = !ent->client->sess.pc.follow_powerup;
-			gi.LocClient_Print(ent, PRINT_HIGH, "Auto-follow powerup carrier: {}.\n", ent->client->sess.pc.follow_powerup ? "ON" : "OFF");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_6bed12fd4a3c", ent->client->sess.pc.follow_powerup ? "ON" : "OFF");
 		}
 
 	} // namespace follow
@@ -191,29 +191,29 @@ Allows the losing player in a duel to forfeit the match.
 */
 	void Forfeit(gentity_t* ent, const CommandArgs& args) {
 		if (!Game::Has(GameFlags::OneVOne)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Forfeit is only available during Duel or Gauntlet.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0d92bc808334");
 			return;
 		}
 		if (level.matchState < MatchState::In_Progress) {
-			gi.Client_Print(ent, PRINT_HIGH, "Forfeit is not available during warmup.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_756744b8e4c8");
 			return;
 		}
 		const int runnerUpIndex = level.sortedClients[1];
 		if (runnerUpIndex < 0 || runnerUpIndex >= static_cast<int>(game.maxClients)) {
-			gi.Client_Print(ent, PRINT_HIGH, "No opponent to forfeit against.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_959b3e505382");
 			return;
 		}
 		gclient_t* runnerUp = &game.clients[runnerUpIndex];
 		if (!runnerUp->pers.connected) {
-			gi.Client_Print(ent, PRINT_HIGH, "No opponent to forfeit against.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_959b3e505382");
 			return;
 		}
 		if (ent->client != runnerUp) {
-			gi.Client_Print(ent, PRINT_HIGH, "Forfeit is only available to the losing player.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c4325eaf6a89");
 			return;
 		}
 		if (!g_allowForfeit->integer) {
-			gi.Client_Print(ent, PRINT_HIGH, "Forfeits are not enabled on this server.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_e49affcf0b2e");
 			return;
 		}
 		std::string msg = std::format("{} forfeits the match.", ent->client->sess.netName);
@@ -513,7 +513,7 @@ Allows the losing player in a duel to forfeit the match.
 			for (auto other : active_clients()) {
 				if (team && other != ent && !OnSameTeam(ent, other))
 					continue;
-				gi.Client_Print(other, PRINT_CHAT, text.c_str());
+				gi.LocClient_Print(other, PRINT_CHAT, text.c_str());
 			}
 		}
 	} // namespace chat
@@ -535,7 +535,7 @@ Enables administrative permissions when the correct password is supplied.
 */
 	void Admin(gentity_t* ent, const CommandArgs& args) {
 		if (!g_allowAdmin->integer) {
-			gi.Client_Print(ent, PRINT_HIGH, "Administration is disabled.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_dcaf4bdac459");
 			return;
 		}
 
@@ -545,23 +545,23 @@ Enables administrative permissions when the correct password is supplied.
 		}
 
 		if (ent->client->sess.admin) {
-			gi.Client_Print(ent, PRINT_HIGH, "You already have administrative rights.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_139b351ebd95");
 			return;
 		}
 
 		std::string password(args.getString(1));
 		if (admin_password->string && *admin_password->string && Q_strcasecmp(admin_password->string, password.c_str()) == 0) {
 			ent->client->sess.admin = true;
-			gi.LocBroadcast_Print(PRINT_HIGH, "{} has become an admin.\n", ent->client->sess.netName);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa6c0d95b39c", ent->client->sess.netName);
 			return;
 		}
 
-		gi.Client_Print(ent, PRINT_HIGH, "Invalid admin password.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9c8fe37f5f58");
 	}
 
 	void CrosshairID(gentity_t* ent, const CommandArgs& args) {
 		ent->client->sess.pc.show_id = !ent->client->sess.pc.show_id;
-		gi.LocClient_Print(ent, PRINT_HIGH, "Player identification display: {}.\n", ent->client->sess.pc.show_id ? "ON" : "OFF");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7b782003ecf3", ent->client->sess.pc.show_id ? "ON" : "OFF");
 	}
 
 	/*
@@ -588,12 +588,12 @@ Enables administrative permissions when the correct password is supplied.
 		// parse impulse number
 		std::optional<int> opt = args.getInt(1);
 		if (!opt) {
-			gi.Client_Print(ent, PRINT_HIGH, "usage: impulse <0..255>\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0fe4295ce9e6");
 			return;
 		}
 		const int n = *opt;
 		if (n < 0 || n > 255) {
-			gi.Client_Print(ent, PRINT_HIGH, "impulse: expected integer 0..255\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_b2e39f7bc1a2");
 			return;
 		}
 
@@ -655,7 +655,7 @@ Enables administrative permissions when the correct password is supplied.
 				}
 				// Optional: fill ammo, keys, and armor to sane amounts if you want classic "give all"
 			}
-			gi.Client_Print(ent, PRINT_LOW, "impulse 9: all weapons granted\n");
+			gi.LocClient_Print(ent, PRINT_LOW, "$g_sgame_auto_8f2d7f078423");
 			handled = true;
 			break;
 			// 10: next weapon
@@ -676,19 +676,19 @@ Enables administrative permissions when the correct password is supplied.
 			if (ID_QUAD > IT_NULL && ID_QUAD < IT_TOTAL) {
 				cl->pers.inventory[ID_QUAD] += 1;
 				use_item(ID_QUAD); // trigger it immediately
-				gi.Client_Print(ent, PRINT_LOW, "Quad Damage activated.\n");
+				gi.LocClient_Print(ent, PRINT_LOW, "$g_sgame_auto_4501a0248675");
 				handled = true;
 			}
 			break;
 
 			default:
 			// Unknown impulses silently ignored (classic Q1 feel), but a hint helps once.
-			gi.LocClient_Print(ent, PRINT_LOW, "impulse {} ignored (supported: 1..8, 9, 10, 12, 21, 255)\n", n);
+			gi.LocClient_Print(ent, PRINT_LOW, "$g_sgame_auto_0047bb964b5c", n);
 			return;
 		}
 
 		if (!handled && n >= 1 && n <= 8) {
-			gi.LocClient_Print(ent, PRINT_LOW, "You do not have a valid weapon for impulse {}\n", n);
+			gi.LocClient_Print(ent, PRINT_LOW, "$g_sgame_auto_43bb937adbc9", n);
 		}
 	}
 
@@ -754,7 +754,7 @@ Enables administrative permissions when the correct password is supplied.
 			}
 
 			if (!it) {
-				gi.LocClient_Print(ent, PRINT_HIGH, "Unknown item: {}\n", arg1.data());
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_unknown_item_name", arg1.data());
 				return;
 			}
 
@@ -765,29 +765,29 @@ Enables administrative permissions when the correct password is supplied.
 
 			if (it->id == IT_FLAG_RED || it->id == IT_FLAG_BLUE) {
 				if (!(match_dropCmdFlags->integer & 1)) {
-					gi.Client_Print(ent, PRINT_HIGH, "Flag dropping has been disabled on this server.\n");
+					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_891c05d361d0");
 					return;
 				}
 			}
 			else if (it->flags & IF_POWERUP) {
 				if (!(match_dropCmdFlags->integer & 2)) {
-					gi.Client_Print(ent, PRINT_HIGH, "Powerup dropping has been disabled on this server.\n");
+					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_45ed49e15a7b");
 					return;
 				}
 			}
 			else if (it->flags & (IF_WEAPON | IF_AMMO)) {
 				if (!(match_dropCmdFlags->integer & 4)) {
-					gi.Client_Print(ent, PRINT_HIGH, "Weapon and ammo dropping has been disabled on this server.\n");
+					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f61733e6f1a0");
 					return;
 				}
 				if (!ItemSpawnsEnabled()) {
-					gi.Client_Print(ent, PRINT_HIGH, "Weapon and ammo dropping is not available in this mode.\n");
+					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3770d5da103b");
 					return;
 				}
 			}
 
 			if (it->flags & IF_WEAPON && deathmatch->integer && match_weaponsStay->integer) {
-				gi.Client_Print(ent, PRINT_HIGH, "Weapon dropping is not available during weapons stay mode.\n");
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bf247978f8d5");
 				return;
 			}
 
@@ -1022,19 +1022,19 @@ Displays connected clients, optionally sorted by score or time played.
 
 		std::ranges::stable_sort(clientIndices, sortBy);
 
-		gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "\nClients ({}):\n", clientIndices.size());
+		gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "$g_sgame_auto_93bfb36db106", clientIndices.size());
 
 		for (int clientIndex : clientIndices) {
 			gclient_t* cl = &game.clients[clientIndex];
 			const auto timePlayed = (level.time - cl->resp.enterTime).seconds<int32_t>();
 
 			gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY,
-				"[{}] {} | score: {} | time: {}s\n",
+				"$g_sgame_auto_16e0f4a83957",
 				clientIndex, cl->sess.netName,
 				ClientScoreForStandings(cl), timePlayed);
 		}
 
-		gi.Client_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "\n");
+		gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "$g_sgame_auto_adc83b19e793");
 	}
 
 /*
@@ -1047,7 +1047,7 @@ Toggles display of frag message popups for the client.
 	void FragMessages(gentity_t* ent, const CommandArgs& args) {
 		(void)args;
 		ent->client->sess.pc.show_fragmessages = !ent->client->sess.pc.show_fragmessages;
-		gi.LocClient_Print(ent, PRINT_HIGH, "{} frag messages.\n", ent->client->sess.pc.show_fragmessages ? "Activating" : "Disabling");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_1e4996f3f794", ent->client->sess.pc.show_fragmessages ? "Activating" : "Disabling");
 	}
 
 /*
@@ -1060,7 +1060,7 @@ Toggles the eyecam view when following other players.
 	void EyeCam(gentity_t* ent, const CommandArgs& args) {
 		(void)args;
 		ent->client->sess.pc.use_eyecam = !ent->client->sess.pc.use_eyecam;
-		gi.LocClient_Print(ent, PRINT_HIGH, "Eyecam: {}.\n", ent->client->sess.pc.use_eyecam ? "ON" : "OFF");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_b54334bfc9f9", ent->client->sess.pc.use_eyecam ? "ON" : "OFF");
 	}
 
 	void KillBeep(gentity_t* ent, const CommandArgs& args) {
@@ -1073,7 +1073,7 @@ Toggles the eyecam view when following other players.
 		}
 		const char* sb[5] = { "off", "clang", "beep-boop", "insane", "tang-tang" };
 		ent->client->sess.pc.killbeep_num = num;
-		gi.LocClient_Print(ent, PRINT_HIGH, "Kill beep changed to: {}.\n", sb[num]);
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8e50c9c3f759", sb[num]);
 	}
 
 	void Kill(gentity_t* ent, const CommandArgs& args) {
@@ -1088,13 +1088,13 @@ Toggles the eyecam view when following other players.
 
 	void MapInfo(gentity_t* ent, const CommandArgs& args) {
 		if (level.mapName[0]) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "MAP INFO:\nfilename: {}\n", level.mapName.data());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ed3b6b55b6b1", level.mapName.data());
 		}
 		else {
 			return;
 		}
 		if (level.longName[0]) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "longname: {}\n", level.longName.data());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_75688e14b4eb", level.longName.data());
 		}
 		if (level.author[0]) {
 			std::string authors = level.author;
@@ -1102,7 +1102,7 @@ Toggles the eyecam view when following other players.
 				authors += ", ";
 				authors += level.author2;
 			}
-			gi.LocClient_Print(ent, PRINT_HIGH, "author{}: {}\n", level.author2[0] ? "s" : "", authors.c_str());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_979ac75bb95e", level.author2[0] ? "s" : "", authors.c_str());
 		}
 	}
 
@@ -1120,7 +1120,7 @@ Toggles the eyecam view when following other players.
 		}
 
 		int count = PrintMapListFiltered(ent, false, filter);
-		gi.LocClient_Print(ent, PRINT_HIGH, "Total maps in pool: {}\n", count);
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_dbd17340d1e5", count);
 	}
 
 	/*
@@ -1137,15 +1137,15 @@ Toggles the eyecam view when following other players.
 		}
 
 		int count = PrintMapListFiltered(ent, true, filter);
-		gi.LocClient_Print(ent, PRINT_HIGH, "Total cycleable maps: {}\n", count);
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c06989704e08", count);
 	}
 
 	void Motd(gentity_t* ent, const CommandArgs& args) {
 		if (!game.motd.empty()) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Message of the Day:\n{}\n", game.motd.c_str());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_cfceb5bdde07", game.motd.c_str());
 		}
 		else {
-			gi.Client_Print(ent, PRINT_HIGH, "No Message of the Day set.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_862a9a492d00");
 		}
 	}
 
@@ -1154,15 +1154,15 @@ Toggles the eyecam view when following other players.
 			return false;
 		}
 		if (Tournament_IsActive()) {
-			gi.Client_Print(ent, PRINT_HIGH, "MyMap is disabled during tournaments.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fdae15df893a");
 			return false;
 		}
 		if (!g_maps_mymap || !g_maps_mymap->integer || (g_allowMymap && !g_allowMymap->integer)) {
-			gi.Client_Print(ent, PRINT_HIGH, "MyMap functionality is disabled on this server.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f682e4dca47f");
 			return false;
 		}
 		if (!ent->client->sess.socialID[0]) {
-			gi.Client_Print(ent, PRINT_HIGH, "You must be logged in to use MyMap.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9bd212761302");
 			return false;
 		}
 		return true;
@@ -1175,33 +1175,33 @@ Toggles the eyecam view when following other players.
 
 		const MapEntry* map = game.mapSystem.GetMapEntry(std::string(mapName));
 		if (!map) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Map '{}' not found in map pool.\n", mapName.data());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_356fb3f821c4", mapName.data());
 			return false;
 		}
 		if (map->filename.empty()) {
-			gi.Client_Print(ent, PRINT_HIGH, "Cannot queue map with missing filename metadata.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_1c95ca8d760c");
 			return false;
 		}
 		if (game.mapSystem.IsMapInQueue(map->filename)) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Map '{}' is already in the play queue.\n", map->filename.c_str());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9049813cef3c", map->filename.c_str());
 			return false;
 		}
 		if (game.mapSystem.IsClientInQueue(ent->client->sess.socialID)) {
-			gi.Client_Print(ent, PRINT_HIGH, "You already have a map queued.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0821b9c2179c");
 			return false;
 		}
 
 		uint16_t enableFlags = 0;
 		uint16_t disableFlags = 0;
 		if (!ParseMyMapFlags(flagArgs, enableFlags, disableFlags)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid flag(s). Use 'mymap ?' for help.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fb851cb3819e");
 			return false;
 		}
 
 		std::string_view socialID = ent->client->sess.socialID;
 		const auto enqueueResult = game.mapSystem.EnqueueMyMapRequest(*map, socialID, enableFlags, disableFlags, level.time);
 		if (!enqueueResult.accepted) {
-			gi.Client_Print(ent, PRINT_HIGH, "MyMap queueing is currently disabled.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_b8defe3277d3");
 			return false;
 		}
 
@@ -1211,12 +1211,12 @@ Toggles the eyecam view when following other players.
 			display.append(flag);
 		}
 
-		gi.LocClient_Print(ent, PRINT_HIGH, "MyMap queued: {}.\n", display.c_str());
-		gi.LocBroadcast_Print(PRINT_HIGH, "{} queued {} for MyMap.\n",
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_365594b83c4e", display.c_str());
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_e95aa4fc7359",
 			ent->client->sess.netName,
 			display.c_str());
 		if (enqueueResult.evictedOldest) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "MyMap queue was full; the oldest request was replaced.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fc37447ee950");
 		}
 		return true;
 	}
@@ -1230,12 +1230,12 @@ Toggles the eyecam view when following other players.
 		std::string message;
 		if (!Tournament_HandleVetoAction(ent, TournamentVetoAction::Pick, args.getString(1), message)) {
 			if (!message.empty())
-				gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
+				gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
 			return;
 		}
 
 		if (!message.empty())
-			gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
+			gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
 	}
 
 	void TourneyBan(gentity_t* ent, const CommandArgs& args) {
@@ -1247,17 +1247,17 @@ Toggles the eyecam view when following other players.
 		std::string message;
 		if (!Tournament_HandleVetoAction(ent, TournamentVetoAction::Ban, args.getString(1), message)) {
 			if (!message.empty())
-				gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
+				gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
 			return;
 		}
 
 		if (!message.empty())
-			gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
+			gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message).data());
 	}
 
 	void TourneyStatus(gentity_t* ent, const CommandArgs& args) {
 		const std::string status = Tournament_GetVetoStatus();
-		gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", status).data());
+		gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", status).data());
 	}
 
 	/*
@@ -1297,7 +1297,7 @@ Toggles the eyecam view when following other players.
 			numPlayers++;
 		}
 		int averageSkill = (numPlayers > 0) ? (totalSkill / numPlayers) : 0;
-		gi.LocClient_Print(ent, PRINT_HIGH, "Your Skill Rating in {}: {} (server avg: {})\n", level.gametype_name.data(), ent->client->sess.skillRating, averageSkill);
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_5db842818f0e", level.gametype_name.data(), ent->client->sess.skillRating, averageSkill);
 	}
 
 	namespace readiness {
@@ -1323,11 +1323,11 @@ Toggles the eyecam view when following other players.
 					return;
 				case worr::server::client::ReadyResult::AlreadySet: {
 					const std::string message = std::string(G_Fmt("You are already {}.\n", readyState));
-					gi.Client_Print(ent, PRINT_HIGH, message.data());
+					gi.LocClient_Print(ent, PRINT_HIGH, message.data());
 					return;
 				}
 				case worr::server::client::ReadyResult::NoConditions:
-					gi.Client_Print(ent, PRINT_HIGH, toggle ? "You cannot toggle readiness right now.\n" : "You cannot change readiness right now.\n");
+					gi.LocClient_Print(ent, PRINT_HIGH, toggle ? "You cannot toggle readiness right now.\n" : "You cannot change readiness right now.\n");
 					return;
 }
 			}
@@ -1468,31 +1468,31 @@ Toggles the eyecam view when following other players.
 					joined << ", ";
 					joined << invalidTokens[i];
 				}
-				gi.LocClient_Print(ent, PRINT_HIGH, "Unknown weapon abbreviation(s): {}\n", joined.str().c_str());
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_669f70b66b88", joined.str().c_str());
 			}
 
 			if (capacityExceeded) {
-				gi.LocClient_Print(ent, PRINT_HIGH, "Only the first {} unique weapon preferences were kept.\n",
+				gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7d3f24d82dd1",
 				static_cast<int>(WeaponPreferenceCapacity));
 			}
 
-			gi.Client_Print(ent, PRINT_HIGH, "Weapon preferences updated.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_af29d2944da5");
 		}
 
 	} // namespace inventory
 
 	void Stats(gentity_t* ent, const CommandArgs& args) {
 		if (!Game::Has(GameFlags::CTF)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Stats are only available in CTF gametypes.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ef742dd283be");
 			return;
 		}
 		// Further implementation for displaying CTF stats would go here.
-		gi.Client_Print(ent, PRINT_HIGH, "Displaying CTF stats...\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d43d5d6d27e2");
 	}
 
 	void JoinTeam(gentity_t* ent, const CommandArgs& args) {
 		if (Tournament_IsActive()) {
-			gi.Client_Print(ent, PRINT_HIGH, "Team changes are disabled during tournaments.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f5023bb3f0ec");
 			return;
 		}
 		if (args.count() < 2) {
@@ -1500,7 +1500,7 @@ Toggles the eyecam view when following other players.
 			if (ClientIsPlaying(ent->client)) {
 				teamName = Teams_TeamName(ent->client->sess.team);
 			}
-			gi.LocClient_Print(ent, PRINT_HIGH, "You are on the {} team.\n", teamName);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_you_are_on_team", teamName);
 			return;
 		}
 
@@ -1579,7 +1579,7 @@ Toggles the eyecam view when following other players.
 		auto result = TryLaunchVote(ent, voteName, voteArg);
 		if (!result.success) {
 			if (!result.message.empty()) {
-				gi.Client_Print(ent, PRINT_HIGH, std::format("{}\n", result.message).c_str());
+				gi.LocClient_Print(ent, PRINT_HIGH, std::format("{}\n", result.message).c_str());
 			}
 			return false;
 		}
@@ -1632,7 +1632,7 @@ Toggles the eyecam view when following other players.
 		if (args.count() < 2)
 			return;
 		if (!ToggleMapFlagByCode(ent->client->ui.callvoteMap, args.getString(1))) {
-			gi.Client_Print(ent, PRINT_HIGH, "Unknown map flag.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_861cb1288a5f");
 			return;
 		}
 		RefreshCallvoteMapFlagsMenu(ent);
@@ -1746,7 +1746,7 @@ Toggles the eyecam view when following other players.
 		if (args.count() < 2)
 			return;
 		if (!ToggleMapFlagByCode(ent->client->ui.mymap, args.getString(1))) {
-			gi.Client_Print(ent, PRINT_HIGH, "Unknown map flag.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_861cb1288a5f");
 			return;
 		}
 		RefreshMyMapFlagsMenu(ent);
@@ -1799,7 +1799,7 @@ Toggles the eyecam view when following other players.
 			std::string error;
 			if (!Tournament_LoadConfig({}, &error)) {
 				if (!error.empty())
-					gi.LocClient_Print(ent, PRINT_HIGH, "Tournament load failed: {}\n", error.c_str());
+					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7b29be6b638c", error.c_str());
 				return;
 			}
 			CloseActiveMenu(ent);
@@ -1957,7 +1957,7 @@ Toggles the eyecam view when following other players.
 		std::string message;
 		if (!Tournament_ReplayGame(*parsed, message)) {
 			if (!message.empty())
-				gi.Client_Print(ent, PRINT_HIGH, std::format("{}\n", message).c_str());
+				gi.LocClient_Print(ent, PRINT_HIGH, std::format("{}\n", message).c_str());
 		}
 		CloseActiveMenu(ent);
 	}
@@ -2022,7 +2022,7 @@ Toggles the eyecam view when following other players.
 		if (!ent || !ent->client)
 			return;
 		if (TryLaunchVoteWithFeedback(ent, "forfeit", "")) {
-			gi.Client_Print(ent, PRINT_HIGH, "Forfeit vote called.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_18fcb09b23e4");
 		}
 		CloseActiveMenu(ent);
 	}
@@ -2032,7 +2032,7 @@ Toggles the eyecam view when following other players.
 		if (!ent || !ent->client)
 			return;
 		if (!ent->client->sess.admin) {
-			gi.Client_Print(ent, PRINT_HIGH, "Admin access required.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bc5186a8887c");
 			return;
 		}
 		OpenAdminSettingsMenu(ent);
@@ -2043,7 +2043,7 @@ Toggles the eyecam view when following other players.
 		if (!ent || !ent->client)
 			return;
 		if (!ent->client->sess.admin) {
-			gi.Client_Print(ent, PRINT_HIGH, "Admin access required.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bc5186a8887c");
 			return;
 		}
 		OpenAdminCommandsMenu(ent);
@@ -2051,44 +2051,44 @@ Toggles the eyecam view when following other players.
 
 	void TimeIn(gentity_t* ent, const CommandArgs& args) {
 		if (!level.timeoutActive) {
-			gi.Client_Print(ent, PRINT_HIGH, "A timeout is not currently in effect.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_09bc6a880057");
 			return;
 		}
 		if (!ent->client->sess.admin && level.timeoutOwner != ent) {
-			gi.Client_Print(ent, PRINT_HIGH, "The timeout can only be ended by the timeout caller or an admin.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_6421882515c4");
 			return;
 		}
-		gi.LocBroadcast_Print(PRINT_HIGH, "{} is resuming the match.\n", ent->client->sess.netName);
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6171c4a72be2", ent->client->sess.netName);
 		level.timeoutActive = 3_sec;
 	}
 
 	void TimeOut(gentity_t* ent, const CommandArgs& args) {
 		if (match_timeoutLength->integer <= 0) {
-			gi.Client_Print(ent, PRINT_HIGH, "Server has disabled timeouts.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7e04f97c50b2");
 			return;
 		}
 		if (level.matchState != MatchState::In_Progress) {
-			gi.Client_Print(ent, PRINT_HIGH, "Timeouts can only be issued during a match.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_a10866f58699");
 			return;
 		}
 		if (ent->client->pers.timeout_used && !ent->client->sess.admin) {
-			gi.Client_Print(ent, PRINT_HIGH, "You have already used your timeout.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_694f6046128f");
 			return;
 		}
 		if (level.timeoutActive > 0_ms) {
-			gi.Client_Print(ent, PRINT_HIGH, "A timeout is already in progress.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f92678f588fa");
 			return;
 		}
 		level.timeoutOwner = ent;
 		level.timeoutActive = GameTime::from_sec(match_timeoutLength->integer);
-		gi.LocBroadcast_Print(PRINT_CENTER, "{} called a timeout!\n{} has been granted.", ent->client->sess.netName, TimeString(match_timeoutLength->integer * 1000, false, false));
+		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_d55060a5237d", ent->client->sess.netName, TimeString(match_timeoutLength->integer * 1000, false, false));
 		ent->client->pers.timeout_used = true;
 		G_LogEvent("MATCH TIMEOUT STARTED");
 	}
 
 	void Timer(gentity_t* ent, const CommandArgs& args) {
 		ent->client->sess.pc.show_timer = !ent->client->sess.pc.show_timer;
-		gi.LocClient_Print(ent, PRINT_HIGH, "Match timer display: {}.\n", ent->client->sess.pc.show_timer ? "ON" : "OFF");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_755738c9099d", ent->client->sess.pc.show_timer ? "ON" : "OFF");
 	}
 
 	void UnHook(gentity_t* ent, const CommandArgs& args) {
@@ -2428,7 +2428,7 @@ Toggles the eyecam view when following other players.
 		const auto& angles = ent->client->ps.viewAngles;
 		std::string location = std::format("{:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f}",
 		origin[_X], origin[_Y], origin[_Z], angles[PITCH], angles[YAW], angles[ROLL]);
-		gi.LocClient_Print(ent, PRINT_HIGH, "Location: {}\n", location.c_str());
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ec08ac9fcd95", location.c_str());
 		gi.SendToClipBoard(location.c_str());
 }
 
@@ -2550,7 +2550,7 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("worr_forfeit_yes", &WorrForfeitYes, AllowDead | AllowSpectator);
 		RegisterCommand("worr_admin_menu", &WorrAdminMenu, AllowDead | AllowSpectator | AdminOnly);
 		RegisterCommand("worr_admin_commands", &WorrAdminCommands, AllowDead | AllowSpectator | AdminOnly);
-		RegisterCommand("wave", &Wave);
+		RegisterCommand("wave", &Wave, {}, true);
 		RegisterCommand("where", &Where, AllowSpectator);
 	}
 

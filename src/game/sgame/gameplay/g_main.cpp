@@ -23,6 +23,7 @@ change game behavior on the fly.*/
 #include "../g_local.hpp"
 #include "g_clients.hpp"
 #include "g_headhunters.hpp"
+#include "g_hud_blob.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -559,7 +560,7 @@ static void CheckRuleset() {
     gi.configString(CONFIG_Q3_OVERBOUNCE, pm_config.q3Overbounce ? "1" : "0");
   }
 
-  gi.LocBroadcast_Print(PRINT_HIGH, "Ruleset: {}\n",
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6d57e94076e2",
                         rs_long_name[(int)game.ruleset]);
 }
 
@@ -604,7 +605,7 @@ entity string when possible.
 */
 static void Match_SetGameType(GameType gt) {
   if (!MapSupportsGametype(gt)) {
-    gi.LocBroadcast_Print(PRINT_HIGH, "Map '{}' does not support {}.\n",
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5b21f7c73e78",
                           level.mapName.data(), Game::GetInfo(gt).long_name);
     gi.Com_PrintFmt(
         "{}: Map {} incompatible with {}, using {} fallback.\n", __FUNCTION__,
@@ -624,7 +625,7 @@ static void Match_SetGameType(GameType gt) {
 
   GT_PrecacheAssets();
   GT_SetLongName();
-  gi.LocBroadcast_Print(PRINT_CENTER, "{}", level.gametype_name.data());
+  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", level.gametype_name.data());
 
   if (canReloadEntities) {
     Match_Reset();
@@ -1639,6 +1640,7 @@ void BeginIntermission(gentity_t *targ) {
 
   if (isEndOfUnit) {
     level.intermission.endOfUnit = true;
+    G_HudBlob_ClearEOUSection();
 
     // Coop: clear all keys across units
     if (coop->integer) {
@@ -2151,10 +2153,10 @@ static void TimeoutEnd() {
   game.tournament.autoTimeoutActive = false;
 
   if (owner && owner->client) {
-    gi.LocBroadcast_Print(PRINT_HIGH, "{} is resuming the match.\n",
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6171c4a72be2",
                           owner->client->sess.netName);
   } else {
-    gi.LocBroadcast_Print(PRINT_HIGH, "Match has resumed.\n");
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5b8728eeddd3");
   }
 
   G_LogEvent("MATCH TIMEOUT ENDED");
@@ -2199,6 +2201,16 @@ static inline void G_RunFrame_(bool main_loop) {
   CheckPowerupsDisabled(); // disable unwanted powerups
   CheckRuleset();          // ruleset enforcement
   Bot_UpdateDebug();       // debug AI states
+  {
+    uint32_t hud_flags = 0;
+    if ((g_instaGib && g_instaGib->integer) ||
+        (g_nadeFest && g_nadeFest->integer)) {
+      hud_flags |= HUD_FLAG_MINHUD;
+    }
+    G_HudBlob_SetFlags(hud_flags);
+  }
+  if (!level.intermission.endOfUnit)
+    G_HudBlob_ClearEOUSection();
 
   // --- Gravity Lotto Timer ---
   if (g_gravity_lotto && g_gravity_lotto->integer &&
@@ -2319,7 +2331,7 @@ static inline void G_RunFrame_(bool main_loop) {
     if (ent->clipMask & MASK_PROJECTILE) {
       if (ent->owner && ent->owner->inUse && ent->owner->client &&
           ent->owner->client->pers.spawned) {
-        ent->s.renderFX &= ~(RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE);
+        ent->s.renderFX &= ~(RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | RF_SHELL_DOUBLE);
         ent->s.effects &= ~EF_COLOR_SHELL;
 
         if (ent->owner->client->PowerupTimer(PowerupTimer::QuadDamage) >
@@ -2329,7 +2341,7 @@ static inline void G_RunFrame_(bool main_loop) {
         }
         if (ent->owner->client->PowerupTimer(PowerupTimer::DoubleDamage) >
             level.time) {
-          ent->s.renderFX |= RF_SHELL_BLUE;
+          ent->s.renderFX |= RF_SHELL_DOUBLE;
           ent->s.effects |= EF_COLOR_SHELL;
         }
         if (ent->owner->client->PowerupTimer(PowerupTimer::Invisibility) >
@@ -2344,7 +2356,7 @@ static inline void G_RunFrame_(bool main_loop) {
           }
         }
       } else {
-        ent->s.renderFX &= ~(RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE);
+        ent->s.renderFX &= ~(RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | RF_SHELL_DOUBLE);
         ent->s.effects &= ~EF_COLOR_SHELL;
       }
     }

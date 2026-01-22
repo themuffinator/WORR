@@ -132,6 +132,8 @@ client_src = [
   'src/client/download.cpp',
   'src/client/effects.cpp',
   'src/client/entities.cpp',
+  'src/client/font.cpp',
+  'src/client/ui_font.cpp',
   'src/client/input.cpp',
   'src/client/keys.cpp',
   'src/client/locs.cpp',
@@ -322,6 +324,7 @@ sgame_src = bgame_src + [
   'src/game/sgame/gameplay/g_combat.cpp',
   'src/game/sgame/gameplay/g_domination.cpp',
   'src/game/sgame/gameplay/g_func.cpp',
+  'src/game/sgame/gameplay/g_hud_blob.cpp',
   'src/game/sgame/gameplay/g_harvester.cpp',
   'src/game/sgame/gameplay/g_headhunters.cpp',
   'src/game/sgame/gameplay/g_horde.cpp',
@@ -711,11 +714,66 @@ if curl.found()
   config.set10('USE_CURL', true)
 endif
 
-sdl3 = dependency('sdl3', version: '>= 3.4.0', required: get_option('sdl3'))
+sdl3 = dependency('sdl3',
+  version:         '>= 3.4.0',
+  required:        get_option('sdl3'),
+  fallback:        ['sdl3', 'sdl3_dep'],
+  default_options: fallback_opt,
+)
 if sdl3.found()
   client_src += 'src/unix/video/sdl.c'
   config.set('USE_SDL', 'USE_CLIENT')
 endif
+
+freetype_fallback_opt = fallback_opt + [
+  'harfbuzz=disabled',
+  'brotli=disabled',
+  'bzip2=disabled',
+  'png=disabled',
+  'zlib=internal',
+]
+freetype2 = dependency('freetype2',
+  required:        get_option('sdl3-ttf'),
+  fallback:        ['freetype2', 'freetype_dep'],
+  default_options: freetype_fallback_opt,
+)
+
+harfbuzz_fallback_opt = fallback_opt + [
+  'cpp_std=c++14',
+  'cpp_args=-D_CRT_SECURE_NO_WARNINGS',
+  'glib=disabled',
+  'gobject=disabled',
+  'cairo=disabled',
+  'chafa=disabled',
+  'icu=disabled',
+  'graphite2=disabled',
+  'freetype=enabled',
+  'fontations=disabled',
+  'gdi=disabled',
+  'directwrite=disabled',
+  'coretext=disabled',
+  'harfrust=disabled',
+  'kbts=disabled',
+  'wasm=disabled',
+  'tests=disabled',
+  'utilities=disabled',
+  'benchmark=disabled',
+  'docs=disabled',
+  'introspection=disabled',
+]
+harfbuzz = dependency('harfbuzz',
+  required:        get_option('sdl3-ttf'),
+  fallback:        ['harfbuzz', 'libharfbuzz_dep'],
+  default_options: harfbuzz_fallback_opt,
+)
+
+sdl3_ttf = dependency('sdl3_ttf',
+  required:        get_option('sdl3-ttf'),
+  fallback:        ['sdl3_ttf', 'sdl3_ttf_dep'],
+  default_options: fallback_opt,
+)
+config.set10('USE_SDL3_TTF', sdl3_ttf.found())
+config.set10('USE_HARFBUZZ', harfbuzz.found() and sdl3_ttf.found())
 
 khr_headers_dep = []
 if win32
@@ -726,6 +784,12 @@ vulkan = dependency('vulkan', required: get_option('vulkan'))
 
 common_deps = [zlib]
 client_deps = [png, curl, sdl3]
+if sdl3_ttf.found()
+  client_deps += sdl3_ttf
+endif
+if harfbuzz.found()
+  client_deps += harfbuzz
+endif
 server_deps = []
 game_deps = [fmt_dep, jsoncpp_dep]
 
@@ -857,6 +921,7 @@ endif
 openal = dependency('openal',
   version:         '>= 1.23.1',
   required:        get_option('openal'),
+  fallback:        ['openal-soft', 'openal_dep'],
   default_options: fallback_opt,
 )
 if openal.found()
@@ -955,11 +1020,20 @@ if get_option('client-gtv')
   config.set10('USE_CLIENT_GTV', true)
 endif
 
+prog_embed = find_program('embed.py')
+
+# embed loc_english.txt for builtin fallback
+loc_english_c = custom_target(
+    'loc_english.txt.c',
+    output : 'loc_english.txt.c',
+    input : 'assets/localization/loc_english.txt',
+    command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_loc_english'],
+)
+client_src += loc_english_c
+
 if get_option('client-ui')
 
   # embed worr.json
-  prog_embed = find_program('embed.py')
-
   worr_json_c = custom_target(
       'worr.json.c',
       output : 'worr.json.c',
@@ -1170,6 +1244,7 @@ cgame_all_src = cgame_src + ui_src + [
   'src/common/jsmn.c',
   'src/common/mapdb.c',
   'src/common/mdfour.c',
+  'src/common/utf8.c',
   'src/shared/shared.c',
 ]
 

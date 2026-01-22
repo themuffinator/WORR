@@ -63,6 +63,37 @@ enum class CoopRespawn {
 };
 
 // reserved general CS ranges
+constexpr int32_t HUD_BLOB_SEGMENTS = 12;
+constexpr size_t HUD_BLOB_SEGMENT_SIZE = CS_MAX_STRING_LENGTH - 1;
+constexpr size_t HUD_BLOB_MAX_SIZE = HUD_BLOB_SEGMENTS * HUD_BLOB_SEGMENT_SIZE;
+
+enum hud_blob_flag_t : uint32_t {
+	HUD_FLAG_MINHUD = 1u << 0
+};
+
+enum scoreboard_mode_t : int32_t {
+	SB_MODE_FFA = 0,
+	SB_MODE_TEAM = 1,
+	SB_MODE_DUEL = 2
+};
+
+enum scoreboard_flag_t : uint32_t {
+	SB_FLAG_TEAMS = 1u << 0,
+	SB_FLAG_DUEL = 1u << 1,
+	SB_FLAG_CTF = 1u << 2,
+	SB_FLAG_ROUNDS = 1u << 3,
+	SB_FLAG_DOMINATION = 1u << 4,
+	SB_FLAG_PROBALL = 1u << 5,
+	SB_FLAG_INTERMISSION = 1u << 6
+};
+
+enum scoreboard_row_flag_t : uint32_t {
+	SB_ROW_READY = 1u << 0,
+	SB_ROW_ELIMINATED = 1u << 1,
+	SB_ROW_FLAG_RED = 1u << 2,
+	SB_ROW_FLAG_BLUE = 1u << 3
+};
+
 enum {
 	CONFIG_MATCH_STATE = CS_GENERAL,
 	CONFIG_MATCH_STATE2,
@@ -80,6 +111,10 @@ enum {
 	CONFIG_STORY,
 	// [Paril-KEX] if 1, Quake 3 overbounce physics apply
 	CONFIG_Q3_OVERBOUNCE,
+
+	// [WORR] HUD blob for cgame-side statusbar/scoreboard/EOU data
+	CONFIG_HUD_BLOB,
+	CONFIG_HUD_BLOB_END = CONFIG_HUD_BLOB + HUD_BLOB_SEGMENTS - 1,
 
 	CONFIG_LAST
 };

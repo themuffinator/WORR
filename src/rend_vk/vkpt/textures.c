@@ -100,7 +100,7 @@ extern cvar_t* cvar_pt_nearest;
 extern cvar_t* cvar_pt_bilerp_chars;
 extern cvar_t* cvar_pt_bilerp_pics;
 
-void vkpt_textures_prefetch()
+void vkpt_textures_prefetch(void)
 {
     char * buffer = NULL;
     char const * filename = "prefetch.txt";
@@ -125,7 +125,7 @@ void vkpt_textures_prefetch()
     FS_FreeFile(buffer);
 }
 
-void vkpt_invalidate_texture_descriptors()
+void vkpt_invalidate_texture_descriptors(void)
 {
 	for (int index = 0; index < MAX_FRAMES_IN_FLIGHT; index++)
 		descriptor_set_dirty_flags[index] = 1;
@@ -159,7 +159,7 @@ static void textures_destroy_unused_set(uint32_t set_index)
 	unused_resources->buffer_num = 0;
 }
 
-void vkpt_textures_destroy_unused()
+void vkpt_textures_destroy_unused(void)
 {
 	textures_destroy_unused_set((qvk.frame_counter) % DESTROY_LATENCY);
 }
@@ -1091,7 +1091,53 @@ void IMG_ReloadAll(void)
     Com_Printf("Reloaded %d textures\n", reloaded);
 }
 
-void create_invalid_texture(void)
+bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)
+{
+	if (!handle || !pic)
+		return false;
+
+	image_t *image = r_images + handle;
+	if (!image->registration_sequence)
+		return false;
+
+	if (image->upload_width != width || image->upload_height != height)
+		return false;
+
+	size_t size = (size_t)width * (size_t)height * 4;
+	byte *copy = IMG_AllocPixels(size);
+	if (!copy)
+		return false;
+
+	memcpy(copy, pic, size);
+
+	if (image->pix_data) {
+		IMG_FreePixels(image->pix_data);
+	}
+
+	image->pix_data = copy;
+	image->pixel_format = PF_R8G8B8A8_UNORM;
+	image->processing_complete = false;
+	image_loading_dirty_flag = 1;
+
+	int index = (int)(image - r_images);
+	if (tex_image_views[index]) {
+		vkDestroyImageView(qvk.device, tex_image_views[index], NULL);
+		tex_image_views[index] = VK_NULL_HANDLE;
+	}
+	if (tex_image_views_mip0[index]) {
+		vkDestroyImageView(qvk.device, tex_image_views_mip0[index], NULL);
+		tex_image_views_mip0[index] = VK_NULL_HANDLE;
+	}
+	if (tex_images[index]) {
+		vkDestroyImage(qvk.device, tex_images[index], NULL);
+		tex_images[index] = VK_NULL_HANDLE;
+		free_device_memory(tex_device_memory_allocator, &tex_image_memory[index]);
+	}
+
+	return true;
+}
+
+static void create_invalid_texture(void)
 {
 	const VkImageCreateInfo image_create_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1170,7 +1216,7 @@ void create_invalid_texture(void)
 	VKPT_QUEUE_WAIT_IDLE(qvk.queue_graphics);
 }
 
-void destroy_invalid_texture(void)
+static void destroy_invalid_texture(void)
 {
 	vkDestroyImage(qvk.device, tex_invalid_texture_image, NULL);
 	vkDestroyImageView(qvk.device, tex_invalid_texture_image_view, NULL);
@@ -1271,7 +1317,7 @@ static void normalize_destroy(void)
 }
 
 VkResult
-vkpt_textures_initialize()
+vkpt_textures_initialize(void)
 {
 	vkpt_invalidate_texture_descriptors();
 	memset(&texture_system, 0, sizeof(texture_system));
@@ -1527,7 +1573,7 @@ destroy_tex_images(void)
 }
 
 VkResult
-vkpt_textures_destroy()
+vkpt_textures_destroy(void)
 {
 	destroy_tex_images();
 	vkDestroyDescriptorSetLayout(qvk.device, qvk.desc_set_layout_textures, NULL);
@@ -1573,7 +1619,7 @@ static VkFormat get_image_format(image_t *q_img)
 }
 
 VkResult
-vkpt_textures_end_registration()
+vkpt_textures_end_registration(void)
 {
 	if(!image_loading_dirty_flag)
 		return VK_SUCCESS;
@@ -1941,7 +1987,7 @@ vkpt_textures_end_registration()
 	return VK_SUCCESS;
 }
 
-void vkpt_textures_update_descriptor_set()
+void vkpt_textures_update_descriptor_set(void)
 {
 	if (!descriptor_set_dirty_flags[qvk.current_frame_index])
 		return;
@@ -2190,7 +2236,7 @@ static VkResult create_image(const VkImageCreateInfo *image_create_info, VkImage
 }
 
 VkResult
-vkpt_create_images()
+vkpt_create_images(void)
 {
 	VkImageCreateInfo images_create_info[NUM_IMAGES] = {
 #define IMG_DO(_name, _binding, _vkformat, _glslformat, _w, _h) \
@@ -2528,7 +2574,7 @@ VkResult vkpt_prepare_lazy_image(vkpt_lazy_image_t *lazy_image, int w, int h, Vk
 #undef TEXTURE_WRITE_DESCRIPTOR_SET
 
 VkResult
-vkpt_destroy_images()
+vkpt_destroy_images(void)
 {
 	for(int i = 0; i < NUM_VKPT_IMAGES; i++) {
 		vkDestroyImageView(qvk.device, qvk.images_views[i], NULL);

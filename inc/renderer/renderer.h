@@ -307,6 +307,9 @@ void    R_BeginRegistration(const char *map);
 qhandle_t R_RegisterModel(const char *name);
 qhandle_t R_RegisterImage(const char *name, imagetype_t type,
                           imageflags_t flags);
+qhandle_t R_RegisterRawImage(const char *name, int width, int height, byte *pic,
+                             imagetype_t type, imageflags_t flags);
+void    R_UnregisterImage(qhandle_t handle);
 void    R_SetSky(const char *name, float rotate, bool autorotate, const vec3_t axis);
 void    R_EndRegistration(void);
 
@@ -349,10 +352,14 @@ int     R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, 
 bool    R_GetPicSize(int *w, int *h, qhandle_t pic);   // returns transparency bit
 void    R_DrawPic(int x, int y, color_t color, qhandle_t pic);
 void    R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
+void    R_DrawStretchSubPic(int x, int y, int w, int h,
+                            float s1, float t1, float s2, float t2,
+                            color_t color, qhandle_t pic);
 void    R_DrawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle, int pivot_x, int pivot_y, qhandle_t pic);
 void    R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
 void    R_DrawStretchRaw(int x, int y, int w, int h);
 void    R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic);
+bool    R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic);
 void    R_TileClear(int x, int y, int w, int h, qhandle_t pic);
 void    R_DrawFill8(int x, int y, int w, int h, int c);
 void    R_DrawFill32(int x, int y, int w, int h, color_t color);
@@ -375,6 +382,9 @@ typedef struct renderer_export_s {
     void (*BeginRegistration)(const char *map);
     qhandle_t (*RegisterModel)(const char *name);
     qhandle_t (*RegisterImage)(const char *name, imagetype_t type, imageflags_t flags);
+    qhandle_t (*RegisterRawImage)(const char *name, int width, int height, byte *pic,
+                                  imagetype_t type, imageflags_t flags);
+    void (*UnregisterImage)(qhandle_t handle);
     void (*SetSky)(const char *name, float rotate, bool autorotate, const vec3_t axis);
     void (*EndRegistration)(void);
 
@@ -398,11 +408,15 @@ typedef struct renderer_export_s {
     bool (*GetPicSize)(int *w, int *h, qhandle_t pic);
     void (*DrawPic)(int x, int y, color_t color, qhandle_t pic);
     void (*DrawStretchPic)(int x, int y, int w, int h, color_t color, qhandle_t pic);
+    void (*DrawStretchSubPic)(int x, int y, int w, int h,
+                              float s1, float t1, float s2, float t2,
+                              color_t color, qhandle_t pic);
     void (*DrawStretchRotatePic)(int x, int y, int w, int h, color_t color, float angle,
                                  int pivot_x, int pivot_y, qhandle_t pic);
     void (*DrawKeepAspectPic)(int x, int y, int w, int h, color_t color, qhandle_t pic);
     void (*DrawStretchRaw)(int x, int y, int w, int h);
     void (*UpdateRawPic)(int pic_w, int pic_h, const uint32_t *pic);
+    bool (*UpdateImageRGBA)(qhandle_t handle, int width, int height, const byte *pic);
     void (*TileClear)(int x, int y, int w, int h, qhandle_t pic);
     void (*DrawFill8)(int x, int y, int w, int h, int c);
     void (*DrawFill32)(int x, int y, int w, int h, color_t color);
@@ -453,6 +467,8 @@ extern renderer_export_t re;
 #define R_BeginRegistration re.BeginRegistration
 #define R_RegisterModel re.RegisterModel
 #define R_RegisterImage re.RegisterImage
+#define R_RegisterRawImage re.RegisterRawImage
+#define R_UnregisterImage re.UnregisterImage
 #define R_SetSky re.SetSky
 #define R_EndRegistration re.EndRegistration
 
@@ -473,10 +489,12 @@ extern renderer_export_t re;
 #define R_GetPicSize re.GetPicSize
 #define R_DrawPic re.DrawPic
 #define R_DrawStretchPic re.DrawStretchPic
+#define R_DrawStretchSubPic re.DrawStretchSubPic
 #define R_DrawStretchRotatePic re.DrawStretchRotatePic
 #define R_DrawKeepAspectPic re.DrawKeepAspectPic
 #define R_DrawStretchRaw re.DrawStretchRaw
 #define R_UpdateRawPic re.UpdateRawPic
+#define R_UpdateImageRGBA re.UpdateImageRGBA
 #define R_TileClear re.TileClear
 #define R_DrawFill8 re.DrawFill8
 #define R_DrawFill32 re.DrawFill32

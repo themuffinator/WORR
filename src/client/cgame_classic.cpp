@@ -98,11 +98,40 @@ static void DrawPic(int x, int y, const char* pic)
     cgi.SCR_DrawPic(x, y, w, h, pic);
 }
 
+static inline color_t CGC_ResolveColor(int flags, color_t color)
+{
+    if (flags & (UI_ALTCOLOR | UI_XORCOLOR)) {
+        color_t alt = COLOR_RGB(255, 255, 0);
+        alt.a = color.a;
+        return alt;
+    }
+    return color;
+}
+
 static void CG_DrawString(int x, int y, int flags, size_t maxlen, const char *s, color_t color)
 {
-    while (maxlen-- && *s) {
+    size_t remaining = maxlen;
+    bool use_color_codes = Com_HasColorEscape(s, maxlen);
+    int draw_flags = flags;
+    color_t base_color = color;
+    if (use_color_codes) {
+        base_color = CGC_ResolveColor(flags, color);
+        draw_flags &= ~(UI_ALTCOLOR | UI_XORCOLOR);
+    }
+    color_t draw_color = use_color_codes ? base_color : color;
+
+    while (remaining && *s) {
+        if (use_color_codes) {
+            color_t parsed;
+            if (Com_ParseColorEscape(&s, &remaining, base_color, &parsed)) {
+                draw_color = parsed;
+                continue;
+            }
+        }
+
         byte c = *s++;
-        cgix.DrawCharEx(x, y, flags, c, color);
+        remaining--;
+        cgix.DrawCharEx(x, y, draw_flags, c, draw_color);
         x += CONCHAR_WIDTH;
     }
 }
@@ -120,10 +149,11 @@ static void CG_DrawStringEx(int x, int y, int flags, size_t maxlen, const char *
         len = maxlen;
     }
 
+    size_t visible_len = Com_StrlenNoColor(s, len);
     if ((flags & UI_CENTER) == UI_CENTER) {
-        x -= len * CONCHAR_WIDTH / 2;
+        x -= visible_len * CONCHAR_WIDTH / 2;
     } else if (flags & UI_RIGHT) {
-        x -= len * CONCHAR_WIDTH;
+        x -= visible_len * CONCHAR_WIDTH;
     }
 
     CG_DrawString(x, y, flags, maxlen, s, color);

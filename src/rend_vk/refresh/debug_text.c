@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.h"
 #include "common/math.h"
 #include "common/prompt.h"
+#include "refresh/debug.h"
 #include "refresh/refresh.h"
 #include "debug_fonts/futural.h"
 #include "debug_fonts/timesr.h"

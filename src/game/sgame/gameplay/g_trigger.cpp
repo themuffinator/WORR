@@ -1725,7 +1725,7 @@ static void camera_trigger_fire(gentity_t* self) {
 
 	// Print message to the activator
 	if (self->message)
-		gi.Center_Print(self->activator, self->message);
+		gi.LocCenter_Print(self->activator, self->message);
 
 	// Play sound
 	if (self->noiseIndex)

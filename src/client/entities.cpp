@@ -782,9 +782,9 @@ static bool CL_ShellRimlightColor(renderfx_t flags, color_t *color)
         b = 0.45f;
     }
     if (flags & RF_SHELL_DOUBLE) {
-        r = 0.9f;
-        g = 0.7f;
-        b = 0.0f;
+        r = 0.25f;
+        g = 0.88f;
+        b = 0.82f;
     }
 
     if (flags & RF_SHELL_RED)

@@ -86,7 +86,7 @@ static void vkpt_freecam_get_autosens(float *out_x, float *out_y)
 	*out_y = 1.0f / V_CalcFov(fov, 4, 3);
 }
 
-void vkpt_freecam_reset()
+void vkpt_freecam_reset(void)
 {
 	if (!freecam_active)
 		return;

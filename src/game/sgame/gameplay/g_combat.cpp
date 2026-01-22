@@ -1047,7 +1047,7 @@ void Damage(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
         attacker->client->pers.dmg_team -= 100;
         gi.LocClient_Print(
             attacker, PRINT_CENTER,
-            "You are on {} Team,\nstop attacking your team mates!\n",
+            "$g_sgame_auto_bb55246ab514",
             Teams_TeamName(attacker->client->sess.team));
       }
     }

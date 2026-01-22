@@ -65,7 +65,7 @@ static time_t latched_local_time;
 
 static int current_preset = 0;
 
-void vkpt_physical_sky_latch_local_time()
+void vkpt_physical_sky_latch_local_time(void)
 {
 	time(&latched_local_time);
 }
@@ -239,7 +239,7 @@ initializeEnvTexture(int width, int height)
 }
 
 VkResult
-vkpt_physical_sky_initialize()
+vkpt_physical_sky_initialize(void)
 {
 	current_preset = 0;
 
@@ -288,7 +288,7 @@ vkpt_physical_sky_initialize()
 }
 
 VkResult
-vkpt_physical_sky_destroy()
+vkpt_physical_sky_destroy(void)
 {
 	current_preset = 0;
 
@@ -304,16 +304,16 @@ vkpt_physical_sky_destroy()
 	return VK_SUCCESS;
 }
 
-VkResult 
-vkpt_physical_sky_beginRegistration() 
+VkResult
+vkpt_physical_sky_beginRegistration(void) 
 {
     physical_sky_planet_albedo_map = 0;
     physical_sky_planet_normal_map = 0;
     return VK_SUCCESS;
 }
 
-VkResult 
-vkpt_physical_sky_endRegistration()
+VkResult
+vkpt_physical_sky_endRegistration(void)
 {
     if (physical_sky_space->integer > 0)
     {
@@ -331,7 +331,7 @@ vkpt_physical_sky_endRegistration()
 }
 
 VkResult
-vkpt_physical_sky_create_pipelines()
+vkpt_physical_sky_create_pipelines(void)
 {
 	{
 		VkComputePipelineCreateInfo pipeline_info = {
@@ -369,7 +369,7 @@ vkpt_physical_sky_create_pipelines()
 }
 
 VkResult
-vkpt_physical_sky_destroy_pipelines()
+vkpt_physical_sky_destroy_pipelines(void)
 {
 	vkDestroyPipeline(qvk.device, pipeline_physical_sky, NULL);
 	pipeline_physical_sky = VK_NULL_HANDLE;
@@ -426,7 +426,7 @@ reset_sun_color_buffer(VkCommandBuffer cmd_buf)
 	);
 }
 
-bool vkpt_physical_sky_needs_update()
+bool vkpt_physical_sky_needs_update(void)
 {
 	return skyNeedsUpdate;
 }
@@ -523,7 +523,7 @@ process_gamepad_input(void)
 {
 }
 
-void vkpt_next_sun_preset()
+void vkpt_next_sun_preset(void)
 {
 	int preset;
 
@@ -795,13 +795,13 @@ vkpt_physical_sky_update_ubo(QVKUniformBuffer_t * ubo, const sun_light_t* light,
 // Sun & Sky presets
 //
 
-void physical_sky_cvar_changed(cvar_t *self)
+static void physical_sky_cvar_changed(cvar_t *self)
 {   // cvar callback to trigger a re-render of skybox
     skyNeedsUpdate = VK_TRUE;
     vkpt_reset_accumulation();
 }
 
-void InitialiseSkyCVars()
+void InitialiseSkyCVars(void)
 {
     static char _rgb[3] = {'r', 'g', 'b'};
 
@@ -867,7 +867,7 @@ void InitialiseSkyCVars()
 	physical_sky_brightness->changed = physical_sky_cvar_changed;
 }
 
-void UpdatePhysicalSkyCVars()
+void UpdatePhysicalSkyCVars(void)
 {
 	PhysicalSkyDesc_t const * sky = GetSkyPreset(physical_sky->integer);
 

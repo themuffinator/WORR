@@ -58,12 +58,12 @@ end
 
 background black
 font conchars
-cursor ch1
+cursor /gfx/cursor.png
 weapon w_railgun.md2
 
-color normal #0f90eb64
-color active #0f90ff64
-color selection #0f90eb64
+color normal #3e643b70
+color active #5b8a4a90
+color selection #3f6a3ab0
 color disabled #7f7f7f
 
 begin video

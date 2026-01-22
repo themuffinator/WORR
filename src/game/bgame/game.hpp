@@ -2129,6 +2129,32 @@ struct vrect_t {
 	int32_t x, y, width, height;
 };
 
+struct cg_screen_metrics_t {
+	int32_t screen_width;
+	int32_t screen_height;
+	int32_t hud_width;
+	int32_t hud_height;
+	float hud_scale;
+	float virtual_scale;
+	int32_t base_scale;
+	int32_t ui_scale;
+};
+
+struct cg_view_params_t {
+	gvec3_t vieworg;
+	gvec3_t viewangles;
+	float fov_x;
+	float fov_y;
+};
+
+struct cg_chat_input_t {
+	const char *text;
+	size_t max_chars;
+	size_t visible_chars;
+	size_t cursor_pos;
+	bool overstrike;
+};
+
 enum class text_align_t {
 	LEFT,
 	CENTER,
@@ -2229,6 +2255,20 @@ struct cgame_import_t {
 	void		(*SCR_DrawCharStretch)(int x, int y, int w, int h, int flags, int ch, const rgba_t &color);
 	void		(*SCR_WarpMouse)(int x, int y);
 	int32_t		(*SCR_DrawBindIcon)(const char *binding, int x, int y, int size, const rgba_t &color, const char **out_keyname);
+	void		(*SCR_GetScreenMetrics)(cg_screen_metrics_t *out);
+	void		(*SCR_SetScale)(float scale);
+	int32_t		(*SCR_DrawString)(int x, int y, int scale, int flags, size_t max_chars, const char *text, const rgba_t &color);
+	int32_t		(*SCR_MeasureString)(const char *text, size_t max_chars);
+	void		(*SCR_DrawStretchRotatePic)(int x, int y, int w, int h, const rgba_t &color, float angle, int pivot_x, int pivot_y, const char *name);
+	void		(*CL_GetViewParams)(cg_view_params_t *out);
+	const char	*(*CL_GetChatPrompt)(int *prompt_skip);
+	bool		(*CL_GetChatInput)(cg_chat_input_t *out);
+	void		(*CL_SetChatCursor)(size_t cursor_pos);
+	void		(*CL_SetChatVisibleChars)(size_t visible_chars);
+	int32_t		(*CL_GetKeyDest)();
+	bool		(*Key_IsDown)(int key);
+	const char	*(*CL_GetImageConfigString)(int image_index);
+	rgba_t		(*CL_GetPaletteColor)(int index);
 };
 
 //
@@ -2300,6 +2340,18 @@ struct cgame_export_t {
 	void			(*Wheel_Update)(const player_state_t *ps);
 	void			(*WeaponBar_Input)(const player_state_t *ps, button_t *cmdButtons);
 	void			(*WeaponBar_ClearInput)();
+	void			(*DrawChatHUD)(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale);
+	void			(*ChatHud_AddLine)(int32_t isplit, const char *text, bool is_chat);
+	void			(*ChatHud_Clear)(int32_t isplit);
+	void			(*ChatHud_ScrollLines)(float delta);
+	void			(*ChatHud_MouseEvent)(int x, int y);
+	void			(*ChatHud_MouseDown)(int button);
+	void			(*DrawCrosshair)(int32_t isplit, const player_state_t *ps);
+	void			(*NotifyPickupPulse)(int32_t isplit);
+	void			(*NotifyHitMarker)(int32_t isplit, int damage);
+	void			(*AddDamageDisplay)(int32_t isplit, int damage, const gvec3_t &color, const gvec3_t &dir);
+	void			(*AddPOI)(int32_t isplit, int id, int time, const gvec3_t &pos, int image, int color, int flags);
+	void			(*RemovePOI)(int32_t isplit, int id);
 
 	// Fetch named extension from cgame DLL.
 	void			*(*GetExtension)(const char *name);

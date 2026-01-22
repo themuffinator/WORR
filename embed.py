@@ -13,21 +13,27 @@ dest_dir = os.path.dirname(output_path)
 if len(dest_dir) > 0:
     os.makedirs(dest_dir, exist_ok = True)
 
-# read in the file
-in_file = open(input_path, "r")
-in_contents = in_file.read()
-in_file.close()
+# read in the file as bytes
+with open(input_path, "rb") as in_file:
+    in_contents = in_file.read()
 
 # convert
-size = len(in_contents);
-in_contents = in_contents.replace('\\', '\\\\')
-in_contents = in_contents.replace('\n', '\\n')
-in_contents = in_contents.replace('\r', '\\r')
-in_contents = in_contents.replace('"', '\\"')
+size = len(in_contents)
+chunks = []
+chunk_size = 32
+for i in range(0, size, chunk_size):
+    chunk = in_contents[i:i + chunk_size]
+    chunks.append(''.join(f'\\x{b:02x}' for b in chunk))
 
-in_contents = '#include <stddef.h>\nconst char ' + sys.argv[3] + '[] = ' + '\"' + in_contents + '\";\nconst size_t ' + sys.argv[3] + '_size = ' + str(size) + ';'
+out_lines = [
+    '#include <stddef.h>',
+    f'const char {sys.argv[3]}[] ='
+]
+out_lines.extend([f'    "{chunk}"' for chunk in chunks])
+out_lines.append(';')
+out_lines.append(f'const size_t {sys.argv[3]}_size = {size};')
+out_contents = '\n'.join(out_lines)
 
 # write
-out_file = open(output_path, "w")
-out_contents = out_file.write(in_contents)
-out_file.close()
+with open(output_path, "w", encoding="utf-8", newline="\n") as out_file:
+    out_file.write(out_contents)

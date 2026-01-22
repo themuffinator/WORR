@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 
 #include "client.h"
+#include "client/font.h"
+#include "client/ui_font.h"
 #include "system/system.h"
 #if USE_EXTERNAL_RENDERERS
 #include "renderer/renderer_api.h"
@@ -639,7 +641,7 @@ static bool R_UseRendererAPI(const char *renderer_name)
     }
 
     re = *exports;
-    Com_Printf("Loaded renderer '%s'.\n", renderer_name);
+    Com_Printf("$e_auto_cc6bb5df67a7", renderer_name);
     return true;
 }
 
@@ -826,8 +828,7 @@ void CL_InitRenderer(void)
     }
 
     if (!vid_drivers[i] && vid_driver->string[0]) {
-        Com_Printf("No such video driver: %s.\n"
-                   "Available video drivers: ", vid_driver->string);
+        Com_Printf("$e_auto_4260ac49b6ef", vid_driver->string);
         for (int j = 0; vid_drivers[j]; j++) {
             if (j)
                 Com_Printf(", ");
@@ -867,6 +868,8 @@ void CL_InitRenderer(void)
     mode_changed = 0;
 
     // Initialize the rest of graphics subsystems
+    Font_Init();
+    UI_FontInit();
     V_Init();
     SCR_Init();
     CG_Init();
@@ -893,6 +896,8 @@ void CL_ShutdownRenderer(void)
     V_Shutdown();
     SCR_Shutdown();
     UI_Shutdown();
+    UI_FontShutdown();
+    Font_Shutdown();
 
     vid_geometry->changed = NULL;
     vid_fullscreen->changed = NULL;

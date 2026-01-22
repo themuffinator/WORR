@@ -262,7 +262,7 @@ static menuSound_t Change(menuCommon_t *self)
     e = static_cast<demoEntry_t *>(m_demos.list.items[m_demos.list.curvalue]);
     switch (e->type) {
     case ENTRY_DEMO:
-        m_demos.menu.status = const_cast<char *>("Press Enter to play demo");
+        m_demos.menu.status = m_demos.status;
         break;
     default:
         m_demos.menu.status = const_cast<char *>("Press Enter to change directory");

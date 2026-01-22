@@ -4,9 +4,9 @@ namespace ui {
 
 namespace {
 
-void UpdateMenuBlurRect(bool transparent, int menuTop, int menuBottom)
+void UpdateMenuBlurRect(bool allowBlur, bool transparent, int menuTop, int menuBottom)
 {
-    if (!transparent || menuBottom <= menuTop || uis.scale <= 0.0f) {
+    if (!allowBlur || !transparent || menuBottom <= menuTop || uis.scale <= 0.0f) {
         UI_Sys_SetMenuBlurRect(nullptr);
         return;
     }
@@ -33,6 +33,9 @@ Menu::Menu(std::string name)
 {
     backgroundColor_ = uis.color.background;
     transparent_ = uis.transparent;
+    frameFill_ = COLOR_RGBA(0, 0, 0, 200);
+    frameBorder_ = COLOR_RGBA(255, 255, 255, 40);
+    framePadding_ = GenericSpacing(CONCHAR_HEIGHT);
 }
 
 void Menu::SetBackground(color_t color)
@@ -66,6 +69,15 @@ void Menu::SetLogo(qhandle_t logo, const vrect_t &rc)
     logoRect_ = rc;
 }
 
+void Menu::SetFrameStyle(bool enabled, color_t fill, color_t border, int padding, int borderWidth)
+{
+    frameEnabled_ = enabled;
+    frameFill_ = fill;
+    frameBorder_ = border;
+    framePadding_ = max(0, padding);
+    frameBorderWidth_ = max(0, borderWidth);
+}
+
 void Menu::ClearHints()
 {
     hintsLeft_.clear();
@@ -91,6 +103,21 @@ void Menu::BuildDefaultHints()
 {
     ClearHints();
     if (name_ == "main")
+        return;
+
+    if (name_ == "download_status") {
+        AddHintLeft(K_ESCAPE, "Cancel", "Esc");
+        return;
+    }
+
+    bool hasSelectable = false;
+    for (const auto &widget : widgets_) {
+        if (widget && widget->IsSelectable()) {
+            hasSelectable = true;
+            break;
+        }
+    }
+    if (!hasSelectable)
         return;
 
     AddHintLeft(K_ESCAPE, "Back", "Esc");
@@ -351,7 +378,7 @@ void Menu::OnOpen()
     UpdateStatusFromFocus();
     int menuTop = compact_ ? max(0, contentTop_ - lineHeight_) : 0;
     int menuBottom = compact_ ? min(uis.height, contentBottom_ + lineHeight_) : uis.height;
-    UpdateMenuBlurRect(transparent_, menuTop, menuBottom);
+    UpdateMenuBlurRect(allowBlur_, transparent_, menuTop, menuBottom);
 }
 
 void Menu::OnClose()
@@ -365,43 +392,45 @@ static void DrawStatusText(const std::string &text, int bottom)
     if (text.empty())
         return;
 
-    int linewidth = uis.width / CONCHAR_WIDTH;
-    int count = 0;
-    int lens[8]{};
-    const char *ptrs[8]{};
+    constexpr size_t kMaxLines = 8;
+    std::vector<std::string> lines;
+    lines.reserve(kMaxLines);
 
     const char *txt = text.c_str();
-    ptrs[0] = txt;
+    std::string line;
 
-    while (*txt) {
-        const char *p = txt;
-        while (*p > 32)
-            p++;
-        int len = static_cast<int>(p - txt);
-
-        if (count >= 8)
+    while (*txt && lines.size() < kMaxLines) {
+        while (*txt && *txt <= 32)
+            txt++;
+        if (!*txt)
             break;
 
-        if (lens[count] + len > linewidth) {
-            count++;
-            if (count >= 8)
-                break;
-            lens[count] = 0;
-            ptrs[count] = txt;
-        }
-
-        lens[count] += len;
-        txt = p;
-        while (*txt <= 32 && *txt)
+        const char *word_start = txt;
+        while (*txt && *txt > 32)
             txt++;
-        lens[count] += static_cast<int>(txt - p);
+        std::string word(word_start, txt - word_start);
+
+        std::string candidate = line.empty() ? word : (line + " " + word);
+        int candidate_width = UI_FontMeasureString(0, candidate.size(), candidate.c_str(), nullptr);
+        if (!line.empty() && candidate_width > uis.width) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = std::move(candidate);
+        }
     }
 
-    count++;
+    if (!line.empty() && lines.size() < kMaxLines)
+        lines.push_back(line);
+
+    int line_height = UI_FontLineHeight(1);
+    int count = static_cast<int>(lines.size());
     for (int l = 0; l < count; l++) {
-        int x = (uis.width - lens[l] * CONCHAR_WIDTH) / 2;
-        int y = bottom - (count - l) * CONCHAR_HEIGHT;
-        R_DrawString(x, y, 0, lens[l], ptrs[l], COLOR_WHITE, uis.fontHandle);
+        const std::string &line_text = lines[l];
+        int width = UI_FontMeasureString(0, line_text.size(), line_text.c_str(), nullptr);
+        int x = (uis.width - width) / 2;
+        int y = bottom - (count - l) * line_height;
+        UI_FontDrawString(x, y, 0, line_text.size(), line_text.c_str(), COLOR_WHITE);
     }
 }
 
@@ -413,12 +442,42 @@ void Menu::Draw()
     int menuTop = compact_ ? max(0, contentTop_ - lineHeight_) : 0;
     int menuBottom = compact_ ? min(uis.height, contentBottom_ + lineHeight_) : uis.height;
 
-    UpdateMenuBlurRect(transparent_, menuTop, menuBottom);
+    UpdateMenuBlurRect(allowBlur_, transparent_, menuTop, menuBottom);
 
     if (backgroundImage_) {
         R_DrawKeepAspectPic(0, menuTop, uis.width, menuBottom - menuTop, COLOR_WHITE, backgroundImage_);
     } else {
         R_DrawFill32(0, menuTop, uis.width, menuBottom - menuTop, backgroundColor_);
+    }
+
+    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
+    if (leftX < 0)
+        leftX = 0;
+    int centerX = uis.width / 2;
+    int contentWidth = uis.width - (leftX * 2);
+    if (contentWidth < 0)
+        contentWidth = 0;
+
+    if (frameEnabled_) {
+        int frameLeft = max(0, leftX - framePadding_);
+        int frameRight = min(uis.width, leftX + contentWidth + framePadding_);
+        int frameTop = max(0, contentTop_ - framePadding_);
+        int frameBottom = min(uis.height, contentBottom_ + framePadding_);
+        int frameWidth = frameRight - frameLeft;
+        int frameHeight = frameBottom - frameTop;
+
+        if (frameWidth > 0 && frameHeight > 0) {
+            if (frameFill_.a > 0) {
+                R_DrawFill32(frameLeft, frameTop, frameWidth, frameHeight, frameFill_);
+            }
+            if (frameBorder_.a > 0 && frameBorderWidth_ > 0) {
+                int bw = frameBorderWidth_;
+                R_DrawFill32(frameLeft, frameTop, frameWidth, bw, frameBorder_);
+                R_DrawFill32(frameLeft, frameBottom - bw, frameWidth, bw, frameBorder_);
+                R_DrawFill32(frameLeft, frameTop, bw, frameHeight, frameBorder_);
+                R_DrawFill32(frameRight - bw, frameTop, bw, frameHeight, frameBorder_);
+            }
+        }
     }
 
     if (!title_.empty()) {
@@ -432,17 +491,10 @@ void Menu::Draw()
     if (logo_)
         R_DrawPic(logoRect_.x, logoRect_.y, COLOR_WHITE, logo_);
 
-    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
-    if (leftX < 0)
-        leftX = 0;
-    int centerX = uis.width / 2;
-    int contentWidth = uis.width - (leftX * 2);
-    if (contentWidth < 0)
-        contentWidth = 0;
-
     int viewTop = contentTop_;
     int viewBottom = contentBottom_;
 
+    hoverTextInput_ = false;
     for (size_t i = 0; i < widgets_.size(); i++) {
         Widget *widget = widgets_[i].get();
         if (!widget || widget->IsHidden())
@@ -472,6 +524,13 @@ void Menu::Draw()
             combo->Layout(x, draw_y, contentWidth, lineHeight_);
         } else {
             widget->Layout(leftX, draw_y, contentWidth, lineHeight_);
+        }
+
+        if (widget->IsSelectable() &&
+            RectContains(widget->Rect(), uis.mouseCoords[0], uis.mouseCoords[1])) {
+            if (dynamic_cast<FieldWidget *>(widget) || dynamic_cast<ComboWidget *>(widget)) {
+                hoverTextInput_ = true;
+            }
         }
 
         widget->Draw(static_cast<int>(i) == focusedIndex_);

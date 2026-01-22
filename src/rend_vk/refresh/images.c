@@ -42,7 +42,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
     static int IMG_Load##x(byte *rawdata, size_t rawlen, \
         image_t *image, byte **pic)
 
-void stbi_write(void *context, void *data, int size)
+int load_img(const char *name, image_t *image);
+
+static void stbi_write(void *context, void *data, int size)
 {
 	fwrite(data, size, 1, ((screenshot_t *) context)->fp);
 }
@@ -549,7 +551,7 @@ static int create_screenshot(char *buffer, size_t size, FILE **f,
 
 static bool is_render_hdr(void)
 {
-    return R_IsHDR && R_IsHDR();
+    return R_IsHDR();
 }
 
 static void screenshot_work_cb(void *arg)
@@ -1694,6 +1696,8 @@ qhandle_t R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags
         len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
     } else if (*name == '/' || *name == '\\') {
         len = FS_NormalizePathBuffer(fullname, name + 1, sizeof(fullname));
+    } else if (type == IT_FONT && (strchr(name, '/') || strchr(name, '\\'))) {
+        len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
     } else {
         len = Q_concat(fullname, sizeof(fullname), "pics/", name);
         if (len < sizeof(fullname)) {
@@ -1744,6 +1748,7 @@ qhandle_t R_RegisterRawImage(const char *name, int width, int height, byte* pic,
     image->height = height;
     image->upload_width = width;
     image->upload_height = height;
+    image->aspect = height > 0 ? ((float)width / (float)height) : 1.0f;
 
     List_Append(&r_imageHash[hash], &image->entry);
 
@@ -1764,6 +1769,7 @@ void R_UnregisterImage(qhandle_t handle)
 
     if (image->registration_sequence)
     {
+        image->flags &= ~IF_PERMANENT;
         image->registration_sequence = -1;
         IMG_FreeUnused();
     }

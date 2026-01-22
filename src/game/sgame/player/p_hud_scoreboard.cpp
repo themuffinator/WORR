@@ -19,6 +19,7 @@ different modes like FFA, Duel, and Team Deathmatch.*/
 #include <utility>
 #include <vector>
 
+#include "../gameplay/g_hud_blob.hpp"
 #include "../g_local.hpp"
 
 /*
@@ -75,6 +76,223 @@ SortClientsByTeamAndScore
 enum class SpectatorListMode { QueuedOnly, PassiveOnly, Both };
 
 enum class PlayerEntryMode { FFA, Duel, Team };
+
+static size_t CollectActiveDuelistsByJoinTime(std::array<int, 2> &duelists);
+
+static std::string HudBlob_QuoteToken(std::string_view value) {
+  std::string cleaned;
+  cleaned.reserve(value.size());
+  bool needs_quotes = value.empty();
+
+  for (char c : value) {
+    if (c == '"' || c == '\r' || c == '\n' || c == '\t') {
+      cleaned.push_back(' ');
+      needs_quotes = true;
+      continue;
+    }
+    if (c == ' ')
+      needs_quotes = true;
+    cleaned.push_back(c);
+  }
+
+  if (!needs_quotes)
+    return cleaned;
+
+  std::string out;
+  out.reserve(cleaned.size() + 2);
+  out.push_back('"');
+  out += cleaned;
+  out.push_back('"');
+  return out;
+}
+
+static uint32_t BuildScoreboardFlags() {
+  uint32_t flags = 0;
+  if (Teams())
+    flags |= SB_FLAG_TEAMS;
+  if (Game::Has(GameFlags::OneVOne))
+    flags |= SB_FLAG_DUEL;
+  if (Game::Has(GameFlags::CTF))
+    flags |= SB_FLAG_CTF;
+  if (Game::Has(GameFlags::Rounds) || Game::Has(GameFlags::Elimination))
+    flags |= SB_FLAG_ROUNDS;
+  if (Game::Is(GameType::Domination))
+    flags |= SB_FLAG_DOMINATION;
+  if (Game::Is(GameType::ProBall))
+    flags |= SB_FLAG_PROBALL;
+  if (level.intermission.time)
+    flags |= SB_FLAG_INTERMISSION;
+  return flags;
+}
+
+static void AppendScoreboardRow(std::string &section, int clientNum, int score,
+                                int ping, int team, uint32_t rowFlags,
+                                int skinIcon) {
+  fmt::format_to(std::back_inserter(section),
+                 FMT_STRING("sb_row {} {} {} {} {} {}\n"), clientNum, score,
+                 std::min(ping, 999), team, rowFlags, skinIcon);
+}
+
+static std::string BuildScoreboardSection() {
+  scoreboard_mode_t mode = SB_MODE_FFA;
+  if (Teams() && Game::IsNot(GameType::RedRover))
+    mode = SB_MODE_TEAM;
+  else if (Game::Has(GameFlags::OneVOne))
+    mode = SB_MODE_DUEL;
+
+  const uint32_t flags = BuildScoreboardFlags();
+  const int redScore = level.teamScores[static_cast<int>(Team::Red)];
+  const int blueScore = level.teamScores[static_cast<int>(Team::Blue)];
+  const std::string gametype = HudBlob_QuoteToken(level.gametype_name.data());
+  const bool in_progress = (level.matchState == MatchState::In_Progress);
+
+  std::string section;
+  section.reserve(1024);
+  fmt::format_to(std::back_inserter(section),
+                 FMT_STRING("sb_meta {} {} {} {} {} {}\n"),
+                 static_cast<int>(mode), flags, GT_ScoreLimit(), redScore,
+                 blueScore, gametype);
+  fmt::format_to(std::back_inserter(section), FMT_STRING("sb_state {}\n"),
+                 in_progress ? 1 : 0);
+
+  if (hostname && hostname->string && hostname->string[0]) {
+    fmt::format_to(std::back_inserter(section), FMT_STRING("sb_host {}\n"),
+                   HudBlob_QuoteToken(hostname->string));
+  }
+
+  if (level.intermission.time) {
+    if (level.levelStartTime &&
+        (level.time - level.levelStartTime).seconds() > 0) {
+      const int duration =
+          (level.intermission.time - level.levelStartTime - 1_sec)
+              .milliseconds();
+      const bool showMilliseconds = (mode != SB_MODE_TEAM);
+      const std::string timeLine = HudBlob_QuoteToken(
+          G_Fmt("Total Match Time: {}",
+                TimeString(duration, showMilliseconds, false))
+              .data());
+      fmt::format_to(std::back_inserter(section), FMT_STRING("sb_time {}\n"),
+                     timeLine);
+    }
+
+    if (level.intermission.victorMessage[0]) {
+      fmt::format_to(
+          std::back_inserter(section), FMT_STRING("sb_victor {}\n"),
+          HudBlob_QuoteToken(level.intermission.victorMessage.data()));
+    }
+
+    const int frameGate = level.intermission.serverFrame + (5_sec).frames();
+    fmt::format_to(std::back_inserter(section), FMT_STRING("sb_press {}\n"),
+                   frameGate);
+  }
+
+  const auto buildRowFlags = [mode](const gclient_t *cl,
+                                    int teamIndex) -> uint32_t {
+    uint32_t rowFlags = 0;
+    if (mode == SB_MODE_TEAM) {
+      if (level.matchState == MatchState::Warmup_ReadyUp &&
+          (cl->pers.readyStatus || cl->sess.is_a_bot)) {
+        rowFlags |= SB_ROW_READY;
+      }
+      if (teamIndex == 0 && cl->pers.inventory[IT_FLAG_BLUE])
+        rowFlags |= SB_ROW_FLAG_BLUE;
+      if (teamIndex == 1 && cl->pers.inventory[IT_FLAG_RED])
+        rowFlags |= SB_ROW_FLAG_RED;
+    } else {
+      if (cl->pers.readyStatus || cl->sess.is_a_bot)
+        rowFlags |= SB_ROW_READY;
+    }
+    if (cl->eliminated)
+      rowFlags |= SB_ROW_ELIMINATED;
+    return rowFlags;
+  };
+
+  if (mode == SB_MODE_TEAM) {
+    uint8_t sorted[2][MAX_CLIENTS] = {};
+    int8_t sortedScores[2][MAX_CLIENTS] = {};
+    uint8_t total[2] = {};
+    uint8_t totalLiving[2] = {};
+    int totalScore[2] = {};
+    SortClientsByTeamAndScore(sorted, sortedScores, total, totalLiving,
+                              totalScore);
+
+    for (int team = 0; team < 2; ++team) {
+      uint8_t shown = 0;
+      for (uint8_t i = 0; i < total[team] && shown < 16; ++i) {
+        const int clientNum = sorted[team][i];
+        if (clientNum < 0 || clientNum >= static_cast<int>(game.maxClients))
+          continue;
+
+        gentity_t *cl_ent = g_entities + 1 + clientNum;
+        gclient_t *cl = &game.clients[clientNum];
+        if (!cl_ent->inUse || !cl->pers.connected)
+          continue;
+
+        AppendScoreboardRow(section, clientNum,
+                            ClientScoreForStandings(cl), cl->ping, team,
+                            buildRowFlags(cl, team), cl->sess.skinIconIndex);
+        ++shown;
+      }
+    }
+  } else if (mode == SB_MODE_DUEL) {
+    std::array<int, 2> duelists{};
+    const size_t found = CollectActiveDuelistsByJoinTime(duelists);
+    for (size_t i = 0; i < found; ++i) {
+      const int clientNum = duelists[i];
+      if (clientNum < 0 || clientNum >= static_cast<int>(game.maxClients))
+        continue;
+
+      gentity_t *cl_ent = g_entities + 1 + clientNum;
+      gclient_t *cl = &game.clients[clientNum];
+      if (!cl_ent->inUse || !cl->pers.connected)
+        continue;
+
+      AppendScoreboardRow(section, clientNum,
+                          ClientScoreForStandings(cl), cl->ping, -1,
+                          buildRowFlags(cl, -1), cl->sess.skinIconIndex);
+    }
+  } else {
+    for (uint32_t i = 0; i < game.maxClients; ++i) {
+      int clientNum = level.sortedClients[i];
+      if (clientNum < 0 || clientNum >= static_cast<int>(game.maxClients))
+        continue;
+
+      gentity_t *cl_ent = g_entities + 1 + clientNum;
+      gclient_t *cl = &game.clients[clientNum];
+      if (!cl_ent->inUse || !cl->pers.connected || !ClientIsPlaying(cl))
+        continue;
+
+      AppendScoreboardRow(section, clientNum,
+                          ClientScoreForStandings(cl), cl->ping, -1,
+                          buildRowFlags(cl, -1), cl->sess.skinIconIndex);
+    }
+  }
+
+  for (int clientIndex : level.sortedClients) {
+    if (clientIndex < 0 || clientIndex >= static_cast<int>(game.maxClients))
+      continue;
+
+    gentity_t *cl_ent = &g_entities[clientIndex + 1];
+    gclient_t *cl = &game.clients[clientIndex];
+
+    if (!cl_ent->inUse || !cl->pers.connected || cl_ent->solid != SOLID_NOT)
+      continue;
+    if (ClientIsPlaying(cl))
+      continue;
+
+    if (cl->sess.matchQueued) {
+      fmt::format_to(std::back_inserter(section),
+                     FMT_STRING("sb_queue {} {} {}\n"), clientIndex,
+                     cl->sess.matchWins, cl->sess.matchLosses);
+    } else {
+      fmt::format_to(std::back_inserter(section),
+                     FMT_STRING("sb_spec {} {} {}\n"), clientIndex,
+                     ClientScoreForStandings(cl), std::min(cl->ping, 999));
+    }
+  }
+
+  return section;
+}
 
 /*
 ===============
@@ -958,6 +1176,7 @@ void MultiplayerScoreboard(gentity_t *ent) {
   gentity_t *target =
       ent->client->follow.target ? ent->client->follow.target : ent;
 
+  G_HudBlob_SetScoreboardSection(BuildScoreboardSection());
   DeathmatchScoreboardMessage(target, target->enemy);
 
   gi.unicast(ent, true);

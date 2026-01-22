@@ -14,7 +14,7 @@ namespace Commands {
 	static void PrintState(gentity_t* ent, const CommandArgs& args, bool on_state) {
 		std::string_view s = args.getString(0);
 		if (!s.empty())
-			gi.LocClient_Print(ent, PRINT_HIGH, "{} {}\n", s.data(), on_state ? "ON" : "OFF");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3ece7f4a9682", s.data(), on_state ? "ON" : "OFF");
 	}
 
 	static void SpawnAndGiveItem(gentity_t* ent, item_id_t id, int count = 1) {
@@ -47,12 +47,12 @@ namespace Commands {
 				FoundTarget(t);
 			}
 		}
-		gi.Client_Print(ent, PRINT_HIGH, "All monsters alerted.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bb11db118ddb");
 	}
 
 	static void CheckPOI(gentity_t* ent, const CommandArgs& args) {
 		if (!level.poi.valid) {
-			gi.Client_Print(ent, PRINT_HIGH, "No POI set.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3a3880f6bc62");
 			return;
 		}
 		char pvs = gi.inPVS(ent->s.origin, level.poi.current, false) ? 'Y' : 'N';
@@ -67,7 +67,7 @@ namespace Commands {
 				entity->monsterInfo.aiFlags |= AI_FORGET_ENEMY;
 			}
 		}
-		gi.Client_Print(ent, PRINT_HIGH, "Cleared all AI enemies.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ce06c04dc91e");
 	}
 
 	static void Give(gentity_t* ent, const CommandArgs& args) {
@@ -122,22 +122,22 @@ namespace Commands {
 				FreeEntity(entity);
 			}
 		}
-		gi.Client_Print(ent, PRINT_HIGH, "All AI have been removed.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7abffd9afd6d");
 	}
 
 	static void ListEntities(gentity_t* ent, const CommandArgs& args) {
-		gi.Client_Print(ent, PRINT_HIGH, "--- Entity List ---\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_6ef7d4ffb5b3");
 		for (int i = 0; i < static_cast<int>(globals.numEntities); ++i) {
 			gentity_t* e = &g_entities[i];
 			if (e->inUse) {
 				gi.Com_PrintFmt("{}: {}\n", i, e->className);
 			}
 		}
-		gi.Client_Print(ent, PRINT_HIGH, "-------------------\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_66e3fd6685b5");
 	}
 
 	static void ListMonsters(gentity_t* ent, const CommandArgs& args) {
-		gi.Client_Print(ent, PRINT_HIGH, "--- Monster List ---\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_5646acf2df3f");
 		int count = 0;
 		for (int i = 0; i < static_cast<int>(globals.numEntities); ++i) {
 			gentity_t* e = &g_entities[i];
@@ -147,7 +147,7 @@ namespace Commands {
 			}
 		}
 		gi.Com_PrintFmt("Total monsters: {}\n", count);
-		gi.Client_Print(ent, PRINT_HIGH, "--------------------\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_a60548f61aa6");
 	}
 
 	static void NoClip(gentity_t* ent, const CommandArgs& args) {
@@ -168,7 +168,7 @@ namespace Commands {
 	static void SetPOI(gentity_t* ent, const CommandArgs& args) {
 		level.poi.current = ent->s.origin;
 		level.poi.valid = true;
-		gi.Client_Print(ent, PRINT_HIGH, "Point of Interest set to your location.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c96a217ace9a");
 	}
 
 	static void Target(gentity_t* ent, const CommandArgs& args) {
@@ -191,7 +191,7 @@ namespace Commands {
 		auto z = args.getFloat(3);
 
 		if (!x || !y || !z) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid coordinates provided.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d2a356256824");
 			return;
 		}
 		Vector3 origin = { *x, *y, *z };

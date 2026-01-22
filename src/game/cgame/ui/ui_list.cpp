@@ -2,6 +2,59 @@
 
 namespace ui {
 
+static int List_TextHeight(const ListWidget &list)
+{
+    if (list.fontSize > 0)
+        return max(1, UI_FontLineHeightSized(list.fontSize));
+    return max(CONCHAR_HEIGHT, UI_FontLineHeight(1));
+}
+
+static int List_StringWidth(const char *string, int flags, int fontSize)
+{
+    if (!string || !*string)
+        return 0;
+    int measure_flags = flags & ~(UI_CENTER | UI_RIGHT);
+    if (fontSize > 0)
+        return UI_FontMeasureStringSized(measure_flags, strlen(string), string, nullptr, fontSize);
+    return UI_FontMeasureString(measure_flags, strlen(string), string, nullptr);
+}
+
+static void List_DrawAlignedString(int x, int y, int flags, color_t color,
+                                   const char *string, int fontSize)
+{
+    if (!string || !*string)
+        return;
+
+    if (fontSize > 0) {
+        int draw_x = x;
+        if ((flags & UI_CENTER) == UI_CENTER)
+            draw_x -= List_StringWidth(string, flags, fontSize) / 2;
+        else if (flags & UI_RIGHT)
+            draw_x -= List_StringWidth(string, flags, fontSize);
+
+        UI_FontDrawStringSized(draw_x, y, flags, MAX_STRING_CHARS, string,
+                               COLOR_SETA_U8(color, 255), fontSize);
+        return;
+    }
+
+    UI_DrawString(x, y, flags, color, string);
+}
+
+static color_t List_DarkenColor(color_t color, float shade)
+{
+    float factor = Q_clipf(shade, 0.0f, 1.0f);
+    return COLOR_RGBA(Q_rint(color.r * factor),
+                      Q_rint(color.g * factor),
+                      Q_rint(color.b * factor),
+                      color.a);
+}
+
+int ListWidget::RowSpacing() const
+{
+    int spacing = rowSpacing > 0 ? rowSpacing : MLIST_SPACING;
+    return max(spacing, List_TextHeight(*this));
+}
+
 void ListWidget::ValidatePrestep()
 {
     if (prestep > numItems - maxItems)
@@ -25,10 +78,11 @@ void ListWidget::AdjustPrestep()
 void ListWidget::Init()
 {
     int avail = height;
+    int spacing = RowSpacing();
     if (mlFlags & MLF_HEADER)
-        avail -= MLIST_SPACING;
+        avail -= spacing;
 
-    maxItems = avail / MLIST_SPACING;
+    maxItems = spacing > 0 ? (avail / spacing) : 0;
     ValidatePrestep();
 }
 
@@ -65,15 +119,18 @@ void ListWidget::Sort(int offset, int (*cmpfunc)(const void *, const void *))
     }
 }
 
-static void List_DrawString(int x, int y, int flags, const ListColumn &column,
-                            color_t color, const char *string)
+static void List_DrawString(int x, int y, int rowSpacing, int textHeight, int fontSize,
+                            int flags, const ListColumn &column, color_t color,
+                            const char *string)
 {
     clipRect_t rc;
+    int spacing = max(rowSpacing, textHeight);
+    int text_y = y + (spacing - textHeight) / 2;
 
     rc.left = x;
     rc.right = x + column.width - 1;
-    rc.top = y + 1;
-    rc.bottom = y + CONCHAR_HEIGHT + 1;
+    rc.top = text_y;
+    rc.bottom = text_y + textHeight;
 
     if ((column.uiFlags & UI_CENTER) == UI_CENTER) {
         x += column.width / 2 - 1;
@@ -84,7 +141,7 @@ static void List_DrawString(int x, int y, int flags, const ListColumn &column,
     }
 
     R_SetClipRect(&rc);
-    UI_DrawString(x, y + 1, column.uiFlags | flags, color, string);
+    List_DrawAlignedString(x, text_y, column.uiFlags | flags, color, string, fontSize);
     R_SetClipRect(NULL);
 }
 
@@ -93,6 +150,8 @@ int ListWidget::DrawHeader(int drawY) const
     if (!(mlFlags & MLF_HEADER))
         return drawY;
 
+    int textHeight = List_TextHeight(*this);
+    int spacing = RowSpacing();
     int xx = x;
     for (size_t j = 0; j < columns.size(); j++) {
         if (!columns[j].width)
@@ -104,34 +163,52 @@ int ListWidget::DrawHeader(int drawY) const
             color = uis.color.active;
         }
 
-        R_DrawFill32(xx, drawY, columns[j].width - 1, MLIST_SPACING - 1, color);
+        R_DrawFill32(xx, drawY, columns[j].width - 1, spacing - 1, color);
         if (!columns[j].name.empty())
-            List_DrawString(xx, drawY, flags, columns[j], COLOR_WHITE, columns[j].name.c_str());
+            List_DrawString(xx, drawY, spacing, textHeight, fontSize, flags,
+                            columns[j], COLOR_WHITE, columns[j].name.c_str());
         xx += columns[j].width;
     }
-    return drawY + MLIST_SPACING;
+    return drawY + spacing;
 }
 
 int ListWidget::DrawItems(int drawY) const
 {
     int height_left = height;
+    int spacing = RowSpacing();
+    int textHeight = List_TextHeight(*this);
     if (mlFlags & MLF_HEADER)
-        height_left -= MLIST_SPACING;
+        height_left -= spacing;
 
     int yy = drawY;
     int end = min(numItems, prestep + maxItems);
     color_t color = COLOR_WHITE;
 
     for (int i = prestep; i < end; i++) {
-        if (yy + MLIST_SPACING > drawY + height_left)
+        if (yy + spacing > drawY + height_left)
             break;
+
+        bool selected = (i == curvalue);
+        if (alternateRows && !selected && (i & 1)) {
+            int xx = x;
+            for (size_t j = 0; j < columns.size(); j++) {
+                if (!columns[j].width)
+                    continue;
+                color_t base = uis.color.normal;
+                if (sortcol == static_cast<int>(j) && sortdir)
+                    base = uis.color.active;
+                R_DrawFill32(xx, yy, columns[j].width - 1, spacing,
+                             List_DarkenColor(base, alternateShade));
+                xx += columns[j].width;
+            }
+        }
 
         if (i == curvalue) {
             int xx = x;
             for (size_t j = 0; j < columns.size(); j++) {
                 if (!columns[j].width)
                     continue;
-                R_DrawFill32(xx, yy, columns[j].width - 1, MLIST_SPACING, uis.color.selection);
+                R_DrawFill32(xx, yy, columns[j].width - 1, spacing, uis.color.selection);
                 xx += columns[j].width;
             }
         }
@@ -145,13 +222,14 @@ int ListWidget::DrawItems(int drawY) const
             if (!*s)
                 break;
             if (columns[j].width) {
-                List_DrawString(xx, yy, 0, columns[j], color, s);
+                List_DrawString(xx, yy, spacing, textHeight, fontSize, 0,
+                                columns[j], color, s);
                 xx += columns[j].width;
             }
             s += strlen(s) + 1;
         }
 
-        yy += MLIST_SPACING;
+        yy += spacing;
     }
 
     return yy;
@@ -162,15 +240,16 @@ void ListWidget::Draw()
     int drawY = y;
     int drawHeight = height;
     int widthTotal = width;
+    int spacing = RowSpacing();
 
     if (mlFlags & MLF_HEADER) {
         drawY = DrawHeader(drawY);
-        drawHeight -= MLIST_SPACING;
+        drawHeight -= spacing;
     }
 
     if (mlFlags & MLF_SCROLLBAR) {
-        int barHeight = drawHeight - MLIST_SPACING * 2;
-        int yy = drawY + MLIST_SPACING;
+        int barHeight = drawHeight - spacing * 2;
+        int yy = drawY + spacing;
 
         R_DrawFill32(x + widthTotal - MLIST_SCROLLBAR_WIDTH, yy,
                      MLIST_SCROLLBAR_WIDTH - 1, barHeight, uis.color.normal);
@@ -207,13 +286,14 @@ void ListWidget::Draw()
 int ListWidget::HitTestRow(int mx, int my) const
 {
     int yy = y;
+    int spacing = RowSpacing();
     if (mlFlags & MLF_HEADER)
-        yy += MLIST_SPACING;
+        yy += spacing;
 
     if (my < yy)
         return -1;
 
-    int row = (my - yy) / MLIST_SPACING;
+    int row = (my - yy) / spacing;
     int index = prestep + row;
     if (index < 0 || index >= numItems)
         return -1;

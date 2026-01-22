@@ -57,7 +57,7 @@ namespace Commands {
 		const char* resolvedID = ResolveSocialID(input.data(), target);
 
 		if (!resolvedID || !*resolvedID) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid or unresolved social ID.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8b14929e06d0");
 			return;
 		}
 
@@ -65,12 +65,12 @@ namespace Commands {
 			LoadAdminList();
 			std::string playerName = GetClientConfigStore().PlayerNameForSocialID(resolvedID);
 			if (!playerName.empty()) {
-				gi.LocBroadcast_Print(PRINT_CHAT, "{} has been granted admin rights.\n", playerName.c_str());
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_e96321e5d944", playerName.c_str());
 			}
-			gi.LocClient_Print(ent, PRINT_HIGH, "Admin added: {}\n", resolvedID);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8890d5af0cc7", resolvedID);
 		}
 		else {
-			gi.Client_Print(ent, PRINT_HIGH, "Failed to write to admin.txt\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_489e4de99632");
 		}
 	}
 
@@ -85,66 +85,66 @@ namespace Commands {
 		const char* resolvedID = ResolveSocialID(input.data(), target);
 
 		if (!resolvedID || !*resolvedID) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid or unresolved social ID.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8b14929e06d0");
 			return;
 		}
 
 		if (game.adminIDs.contains(resolvedID)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Cannot ban: target is a listed admin.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_a8f3d146c7ed");
 			return;
 		}
 
 		if (host && host->client && Q_strcasecmp(resolvedID, host->client->sess.socialID) == 0) {
-			gi.Client_Print(ent, PRINT_HIGH, "Cannot ban the host.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_95bd35eafbce");
 			return;
 		}
 
 		if (AppendIDToFile("ban.txt", resolvedID)) {
 			LoadBanList();
-			gi.LocClient_Print(ent, PRINT_HIGH, "Ban added: {}\n", resolvedID);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3937f162b76a", resolvedID);
 		}
 		else {
-			gi.Client_Print(ent, PRINT_HIGH, "Failed to write to ban.txt\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8f28d33f1942");
 		}
 	}
 
 	void ForceArena(gentity_t* ent, const CommandArgs& args) {
 		if (!level.arenaTotal) {
-			gi.Client_Print(ent, PRINT_HIGH, "No arenas present in current map.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_cfef3dc739d3");
 			return;
 		}
 
 		if (args.count() < 2 || args.getString(1) == "?") {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Active arena is: {}\nTotal arenas: {}\n", level.arenaActive, level.arenaTotal);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_a1120f0db28e", level.arenaActive, level.arenaTotal);
 			return;
 		}
 
 		auto arenaNum = args.getInt(1);
 		if (!arenaNum) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Invalid number: {}\n", args.getString(1).data());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_39309b7594c7", args.getString(1).data());
 			return;
 		}
 
 		if (*arenaNum == level.arenaActive) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Arena {} is already active.\n", *arenaNum);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9c6055a483ad", *arenaNum);
 			return;
 		}
 
 		if (!CheckArenaValid(*arenaNum)) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Invalid arena number: {}\n", *arenaNum);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_4e45602a2149", *arenaNum);
 			return;
 		}
 
 		if (!ChangeArena(*arenaNum)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Failed to change arena.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_1acaa829ba8b");
 			return;
 		}
 
-		gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: Forced active arena to {}.\n", level.arenaActive);
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_816ae28d87e7", level.arenaActive);
 	}
 
 	void BalanceTeams(gentity_t* ent, const CommandArgs& args) {
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced team balancing.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_2d6b68bdde58");
 		TeamBalance(true);
 	}
 
@@ -156,15 +156,15 @@ namespace Commands {
 
 		gentity_t* targ = ClientEntFromString(args.getString(1).data());
 		if (!targ) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid client specified.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_616886d5b86e");
 			return;
 		}
 		if (targ == host) {
-			gi.Client_Print(ent, PRINT_HIGH, "You cannot kick the lobby owner.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_5e51b556e29c");
 			return;
 		}
 		if (targ->client && targ->client->sess.admin) {
-			gi.Client_Print(ent, PRINT_HIGH, "You cannot kick an admin.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_48d937cd12ff");
 			return;
 		}
 
@@ -174,11 +174,11 @@ namespace Commands {
 
 	void EndMatch(gentity_t* ent, const CommandArgs& args) {
 		if (level.matchState < MatchState::In_Progress) {
-			gi.Client_Print(ent, PRINT_HIGH, "Match has not yet begun.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_090fefe03462");
 			return;
 		}
 		if (level.intermission.time) {
-			gi.Client_Print(ent, PRINT_HIGH, "Match has already ended.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fe72b29f79ea");
 			return;
 		}
 		QueueIntermission("[ADMIN]: Forced match end.", true, false);
@@ -186,7 +186,7 @@ namespace Commands {
 
 	void ForceVote(gentity_t* ent, const CommandArgs& args) {
 		if (!level.vote.time) {
-			gi.Client_Print(ent, PRINT_HIGH, "No vote in progress.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c8822d062f68");
 			return;
 		}
 
@@ -197,12 +197,12 @@ namespace Commands {
 
 		std::string_view arg = args.getString(1);
 		if (arg.starts_with('y') || arg.starts_with('Y') || arg == "1") {
-			gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Passed the vote.\n");
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_b415cfb02d6f");
 			level.vote.executeTime = level.time + 3_sec;
 			level.vote.client = nullptr;
 		}
 		else {
-			gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Failed the vote.\n");
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_9ff89b8b7ce4");
 			level.vote.time = 0_sec;
 			level.vote.client = nullptr;
 		}
@@ -221,7 +221,7 @@ namespace Commands {
 
 		auto gt = Game::FromString(args.getString(1));
 		if (!gt) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid gametype.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_112f94340b1b");
 			return;
 		}
 
@@ -230,28 +230,28 @@ namespace Commands {
 
 	void LoadAdmins(gentity_t* ent, const CommandArgs& args) {
 		LoadAdminList();
-		gi.Client_Print(ent, PRINT_HIGH, "Admin list reloaded.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_96d5011cc198");
 	}
 
 	void LoadBans(gentity_t* ent, const CommandArgs& args) {
 		LoadBanList();
-		gi.Client_Print(ent, PRINT_HIGH, "Ban list reloaded.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_cf57ab7223d8");
 	}
 
 	void LoadMotd(gentity_t* ent, const CommandArgs& args) {
 		::LoadMotd();
-		gi.Client_Print(ent, PRINT_HIGH, "MOTD reloaded.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3ba1ef32e50d");
 	}
 
 	void LoadMapPool(gentity_t* ent, const CommandArgs& args) {
 		::LoadMapPool(ent);
 		::LoadMapCycle(ent);
-		gi.Client_Print(ent, PRINT_HIGH, "Map pool and cycle reloaded.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_b00bc3af956d");
 	}
 
 	void LoadMapCycle(gentity_t* ent, const CommandArgs& args) {
 		::LoadMapCycle(ent);
-		gi.Client_Print(ent, PRINT_HIGH, "Map cycle reloaded.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ea41db838261");
 	}
 
 	void LockTeam(gentity_t* ent, const CommandArgs& args) {
@@ -262,28 +262,28 @@ namespace Commands {
 
 		Team team = StringToTeamNum(args.getString(1).data());
 		if (team != Team::Red && team != Team::Blue) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid team specified.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9b5b7bed9ce2");
 			return;
 		}
 
 		auto team_idx = static_cast<size_t>(team);
 		if (level.locked[team_idx]) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "{} is already locked.\n", Teams_TeamName(team));
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7b5a5cf90df2", Teams_TeamName(team));
 		}
 		else {
 			level.locked[team_idx] = true;
-			gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: {} has been locked.\n", Teams_TeamName(team));
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_78c72af0ee0d", Teams_TeamName(team));
 		}
 	}
 
 	void MapRestart(gentity_t* ent, const CommandArgs& args) {
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Session reset.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_19786f0b7339");
 		std::string command = std::format("gamemap {}\n", level.mapName.data());
 		gi.AddCommandString(command.c_str());
 	}
 
 	void NextMap(gentity_t* ent, const CommandArgs& args) {
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Changing to next map.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_d7103e1a0250");
 		Match_End();
 	}
 
@@ -292,7 +292,7 @@ namespace Commands {
 			return;
 		}
 		::ReadyAll();
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced all players to ready status.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_74061502354e");
 	}
 
 	void RemoveAdmin(gentity_t* ent, const CommandArgs& args) {
@@ -306,12 +306,12 @@ namespace Commands {
 		const char* resolvedID = ResolveSocialID(input.data(), target);
 
 		if (!resolvedID || !*resolvedID) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid or unresolved social ID.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8b14929e06d0");
 			return;
 		}
 
 		if (host && host->client && Q_strcasecmp(resolvedID, host->client->sess.socialID) == 0) {
-			gi.Client_Print(ent, PRINT_HIGH, "Cannot remove admin rights from the host.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f9c062bd080b");
 			return;
 		}
 
@@ -319,12 +319,12 @@ namespace Commands {
 			LoadAdminList();
 			std::string playerName = GetClientConfigStore().PlayerNameForSocialID(resolvedID);
 			if (!playerName.empty()) {
-				gi.LocBroadcast_Print(PRINT_CHAT, "{} has lost admin rights.\n", playerName.c_str());
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_8a604d586b47", playerName.c_str());
 			}
-			gi.LocClient_Print(ent, PRINT_HIGH, "Admin removed: {}\n", resolvedID);
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_95fd409fe486", resolvedID);
 		}
 		else {
-			gi.Client_Print(ent, PRINT_HIGH, "Failed to remove from admin.txt or admin not found.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_de59735dfea3");
 		}
 	}
 
@@ -338,23 +338,23 @@ namespace Commands {
 
 		if (RemoveIDFromFile("ban.txt", id_to_remove.data())) {
 			LoadBanList();
-			gi.LocClient_Print(ent, PRINT_HIGH, "Ban removed: {}\n", id_to_remove.data());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d0090684e797", id_to_remove.data());
 		}
 		else {
-			gi.Client_Print(ent, PRINT_HIGH, "Failed to remove from ban.txt or ban not found.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_ce535a7769d1");
 		}
 	}
 
 	void ResetMatch(gentity_t* ent, const CommandArgs& args) {
 		if (level.matchState < MatchState::In_Progress) {
-			gi.Client_Print(ent, PRINT_HIGH, "Match has not yet begun.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_090fefe03462");
 			return;
 		}
 		if (level.intermission.time) {
-			gi.Client_Print(ent, PRINT_HIGH, "Match has already ended.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fe72b29f79ea");
 			return;
 		}
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced match reset.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_545849f8ced9");
 		Match_Reset();
 	}
 
@@ -366,14 +366,14 @@ namespace Commands {
 
 		auto gameNumber = args.getInt(1);
 		if (!gameNumber || *gameNumber < 1) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid game number.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_3e0e3681a64e");
 			return;
 		}
 
 		const bool confirmed = (args.count() >= 3 && (args.getString(2) == "confirm" || args.getString(2) == "yes"));
 		if (!confirmed) {
 			gi.LocClient_Print(ent, PRINT_HIGH,
-				"Replay will restart game {}. Run 'replay {} confirm' to proceed.\n",
+				"$g_sgame_auto_c662416e196d",
 				*gameNumber, *gameNumber);
 			return;
 		}
@@ -381,12 +381,12 @@ namespace Commands {
 		std::string message;
 		if (!Tournament_ReplayGame(*gameNumber, message)) {
 			if (!message.empty()) {
-				gi.Client_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message.c_str()).data());
+				gi.LocClient_Print(ent, PRINT_HIGH, G_Fmt("{}\n", message.c_str()).data());
 			}
 			return;
 		}
 
-		gi.LocClient_Print(ent, PRINT_HIGH, "Replay queued for game {}.\n", *gameNumber);
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_1f16fbced404", *gameNumber);
 	}
 
 	void Ruleset(gentity_t* ent, const CommandArgs& args) {
@@ -399,7 +399,7 @@ namespace Commands {
 
 		::Ruleset rs = RS_IndexFromString(args.getString(1).data());
 		if (rs == ::Ruleset::None) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid ruleset.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_d6b7bd7d3da7");
 			return;
 		}
 
@@ -419,15 +419,15 @@ namespace Commands {
 		const MapEntry* map = game.mapSystem.GetMapEntry(mapName);
 
 		if (!map) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "Map '{}' not found in map pool.\n", mapName.c_str());
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_356fb3f821c4", mapName.c_str());
 			return;
 		}
 
 		if (map->longName.empty()) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: Changing map to {}\n", map->filename.c_str());
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_e695a4dbed07", map->filename.c_str());
 		}
 		else {
-			gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: Changing map to {} ({})\n", map->filename.c_str(), map->longName.c_str());
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_d29ad70496c5", map->filename.c_str(), map->longName.c_str());
 		}
 
 		level.changeMap = map->filename;
@@ -442,41 +442,41 @@ namespace Commands {
 
 		gentity_t* targ = ClientEntFromString(args.getString(1).data());
 		if (!targ || !targ->inUse || !targ->client) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid client specified.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_616886d5b86e");
 			return;
 		}
 
 		Team team = StringToTeamNum(args.getString(2).data());
 		if (team == Team::None) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid team.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0e6707b5d42f");
 			return;
 		}
 
 		if (targ->client->sess.team == team) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "{} is already on the {} team.\n", targ->client->sess.netName, Teams_TeamName(team));
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_2fb1ead52da0", targ->client->sess.netName, Teams_TeamName(team));
 			return;
 		}
 
 		if ((Teams() && team == Team::Free) || (!Teams() && team != Team::Spectator && team != Team::Free)) {
-			gi.Client_Print(ent, PRINT_HIGH, "Cannot set this team in the current gametype.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_0f237b89f36f");
 			return;
 		}
 
-		gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: Moved {} to the {} team.\n", targ->client->sess.netName, Teams_TeamName(team));
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_03e82a05d734", targ->client->sess.netName, Teams_TeamName(team));
 		::SetTeam(targ, team, false, true, false);
 	}
 
 	void Shuffle(gentity_t* ent, const CommandArgs& args) {
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced team shuffle.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_886f3dd92c2c");
 		TeamSkillShuffle();
 	}
 
 	void StartMatch(gentity_t* ent, const CommandArgs& args) {
 		if (level.matchState > MatchState::Warmup_ReadyUp) {
-			gi.Client_Print(ent, PRINT_HIGH, "Match has already started.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_f8817b053646");
 			return;
 		}
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced match start.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_71f4aa9e1d60");
 		Match_Start();
 	}
 
@@ -488,17 +488,17 @@ namespace Commands {
 
 		Team team = StringToTeamNum(args.getString(1).data());
 		if (team != Team::Red && team != Team::Blue) {
-			gi.Client_Print(ent, PRINT_HIGH, "Invalid team specified.\n");
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_9b5b7bed9ce2");
 			return;
 		}
 
 		auto team_idx = static_cast<size_t>(team);
 		if (!level.locked[team_idx]) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "{} is already unlocked.\n", Teams_TeamName(team));
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_98251845a313", Teams_TeamName(team));
 		}
 		else {
 			level.locked[team_idx] = false;
-			gi.LocBroadcast_Print(PRINT_HIGH, "[ADMIN]: {} has been unlocked.\n", Teams_TeamName(team));
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_4637209e598c", Teams_TeamName(team));
 		}
 	}
 
@@ -507,7 +507,7 @@ namespace Commands {
 			return;
 		}
 		::UnReadyAll();
-		gi.Broadcast_Print(PRINT_HIGH, "[ADMIN]: Forced all players to NOT ready status.\n");
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_ceff6285cf36");
 	}
 
 

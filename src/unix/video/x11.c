@@ -795,6 +795,16 @@ static bool init_mouse(void)
     return true;
 }
 
+static void set_cursor_visible(bool visible)
+{
+    if (!x11.win)
+        return;
+
+    Cursor cursor = visible ? None : x11.empty_cursor;
+    XDefineCursor(x11.dpy, x11.win, cursor);
+    XFlush(x11.dpy);
+}
+
 static void shutdown_mouse(void)
 {
     if (x11.mouse.grabbed)
@@ -824,6 +834,8 @@ static void grab_mouse(bool grab)
     }
 
     x11.mouse.grabbed = grab;
+    bool show_cursor = !(x11.flags & QVF_FULLSCREEN) && !(Key_GetDest() & KEY_MENU);
+    set_cursor_visible(show_cursor);
 }
 
 static void warp_mouse(int x, int y)

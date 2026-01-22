@@ -47,6 +47,7 @@ typedef struct cgame_ui_import_s {
     size_t (*Com_FormatSize)(char *dest, size_t destsize, int64_t bytes);
     size_t (*Com_FormatSizeLong)(char *dest, size_t destsize, int64_t bytes);
     const char *(*Q_ErrorString)(int error);
+    const char *(*Localize)(const char *base, const char **args, size_t num_args);
 
     unsigned (*Sys_Milliseconds)(void);
 
@@ -134,6 +135,17 @@ typedef struct cgame_ui_import_s {
     void (*Re_DrawChar)(int x, int y, int flags, int ch, color_t color, qhandle_t font);
     int (*Re_DrawStringStretch)(int x, int y, int scale, int flags, size_t maxChars,
                                const char *string, color_t color, qhandle_t font);
+    int (*UI_FontDrawString)(int x, int y, int flags, size_t maxChars,
+                             const char *string, color_t color);
+    int (*UI_FontMeasureString)(int flags, size_t maxChars, const char *string,
+                                int *out_height);
+    int (*UI_FontLineHeight)(int scale);
+    int (*UI_FontDrawStringSized)(int x, int y, int flags, size_t maxChars,
+                                  const char *string, color_t color, int size);
+    int (*UI_FontMeasureStringSized)(int flags, size_t maxChars, const char *string,
+                                     int *out_height, int size);
+    int (*UI_FontLineHeightSized)(int size);
+    qhandle_t (*UI_FontLegacyHandle)(void);
     void (*Re_DrawPic)(int x, int y, color_t color, qhandle_t pic);
     void (*Re_DrawKeepAspectPic)(int x, int y, int w, int h, color_t color, qhandle_t pic);
     void (*Re_DrawFill8)(int x, int y, int w, int h, int c);

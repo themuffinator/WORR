@@ -393,7 +393,7 @@ namespace {
 	*/
 	void AnnounceCapture(gentity_t* ent, Team team, size_t index) {
 		const std::string label = PointLabel(ent, index);
-		gi.LocBroadcast_Print(PRINT_HIGH, "{} captured {}.\n", Teams_TeamName(team), label.c_str());
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_1d4769e78fe0", Teams_TeamName(team), label.c_str());
 	}
 
 	/*

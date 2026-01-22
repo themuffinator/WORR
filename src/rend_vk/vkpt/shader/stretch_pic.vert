@@ -38,7 +38,9 @@ layout(location = 1) out flat uint tex_id;
 layout(location = 2) out vec2 tex_coord;
 
 struct StretchPic {
-	float x, y, w,   h;
+	float base_x, base_y;
+	float axis_x_x, axis_x_y;
+	float axis_y_x, axis_y_y;
 	float s, t, w_s, h_t;
 	uint color, tex_handle;
 };
@@ -58,14 +60,16 @@ void
 main()
 {
 	StretchPic sp = stretch_pics[gl_InstanceIndex];
-	vec2 pos      = positions[gl_VertexIndex] * vec2(sp.w, sp.h) + vec2(sp.x, sp.y);
+	vec2 uv       = positions[gl_VertexIndex];
+	vec2 pos      = vec2(sp.base_x, sp.base_y)
+		+ uv.x * vec2(sp.axis_x_x, sp.axis_x_y)
+		+ uv.y * vec2(sp.axis_y_x, sp.axis_y_y);
 	color         = unpackUnorm4x8(sp.color);
 	
 	color = pow(color, vec4(2.4));
 
-	tex_coord     = vec2(sp.s, sp.t) + positions[gl_VertexIndex] * vec2(sp.w_s, sp.h_t);
+	tex_coord     = vec2(sp.s, sp.t) + uv * vec2(sp.w_s, sp.h_t);
 	tex_id        = sp.tex_handle;
 
 	gl_Position = vec4(pos, 0.0, 1.0);
 }
-

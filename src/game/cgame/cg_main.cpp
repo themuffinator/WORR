@@ -46,6 +46,19 @@ static void ShutdownCGame()
 void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale, int32_t playernum, const player_state_t *ps);
 void CG_TouchPics();
 layout_flags_t CG_LayoutFlags(const player_state_t *ps);
+void CG_DrawChatHUD(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale);
+void CG_ChatHud_AddLine(int32_t isplit, const char *text, bool is_chat);
+void CG_ChatHud_Clear(int32_t isplit);
+void CG_ChatHud_ScrollLines(float delta);
+void CG_ChatHud_MouseEvent(int x, int y);
+void CG_ChatHud_MouseDown(int button);
+void CG_DrawCrosshair(int32_t isplit, const player_state_t *ps);
+void CG_NotifyPickupPulse(int32_t isplit);
+void CG_NotifyHitMarker(int32_t isplit, int damage);
+void CG_AddDamageDisplay(int32_t isplit, int damage, const Vector3 &color, const Vector3 &dir);
+void CG_AddPOI(int32_t isplit, int id, int time, const Vector3 &pos, int image, int color, int flags);
+void CG_RemovePOI(int32_t isplit, int id);
+void CG_Hud_ParseConfigString(int32_t i, const char *s);
 
 int32_t CG_GetActiveWeaponWheelWeapon(const player_state_t *ps)
 {
@@ -85,6 +98,7 @@ static void CG_ParseConfigString(int32_t i, const char *s)
 		pm_config.airAccel = atoi(s);
 
 	CG_Wheel_ParseConfigString(i, s);
+	CG_Hud_ParseConfigString(i, s);
 }
 
 void CG_ParseCenterPrint (const char *str, int isplit, bool instant);
@@ -151,6 +165,18 @@ Q2GAME_API cgame_export_t *GetCGameAPI(cgame_import_t *import)
 	cglobals.Wheel_Update = CG_Wheel_Update;
 	cglobals.WeaponBar_Input = CG_WeaponBar_Input;
 	cglobals.WeaponBar_ClearInput = CG_WeaponBar_ClearInput;
+	cglobals.DrawChatHUD = CG_DrawChatHUD;
+	cglobals.ChatHud_AddLine = CG_ChatHud_AddLine;
+	cglobals.ChatHud_Clear = CG_ChatHud_Clear;
+	cglobals.ChatHud_ScrollLines = CG_ChatHud_ScrollLines;
+	cglobals.ChatHud_MouseEvent = CG_ChatHud_MouseEvent;
+	cglobals.ChatHud_MouseDown = CG_ChatHud_MouseDown;
+	cglobals.DrawCrosshair = CG_DrawCrosshair;
+	cglobals.NotifyPickupPulse = CG_NotifyPickupPulse;
+	cglobals.NotifyHitMarker = CG_NotifyHitMarker;
+	cglobals.AddDamageDisplay = CG_AddDamageDisplay;
+	cglobals.AddPOI = CG_AddPOI;
+	cglobals.RemovePOI = CG_RemovePOI;
 
 	cglobals.GetExtension = CG_GetExtension;
 

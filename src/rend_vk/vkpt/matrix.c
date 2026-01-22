@@ -185,7 +185,7 @@ create_orthographic_matrix(mat4_t matrix, float xmin, float xmax,
 }
 
 void
-create_view_matrix(mat4_t matrix, refdef_t *fd)
+create_view_matrix(mat4_t matrix, const refdef_t *fd)
 {
 	vec3_t viewaxis[3];
 	AnglesToAxis(fd->viewangles, viewaxis);

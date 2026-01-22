@@ -70,14 +70,25 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
  */
 
-#if defined(__GNUC__)
-// FSR headers define a lot of functions that aren't used
+#if defined(__clang__)
+// FSR headers define a lot of functions that aren't used.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#elif defined(__GNUC__)
+// FSR headers define a lot of functions that aren't used.
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
 #define A_CPU
 #include "fsr/ffx_a.h"
 #include "fsr/ffx_fsr1.h"
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 enum {
 	FSR_EASU_TO_RCAS,
@@ -96,7 +107,7 @@ cvar_t *cvar_flt_fsr_easu = NULL;
 cvar_t *cvar_flt_fsr_rcas = NULL;
 cvar_t *cvar_flt_fsr_sharpness = NULL;
 
-void vkpt_fsr_init_cvars()
+void vkpt_fsr_init_cvars(void)
 {
 	// FSR enable toggle
 	cvar_flt_fsr_enable = Cvar_Get("flt_fsr_enable", "0", CVAR_ARCHIVE);
@@ -109,7 +120,7 @@ void vkpt_fsr_init_cvars()
 }
 
 VkResult
-vkpt_fsr_initialize()
+vkpt_fsr_initialize(void)
 {
 	VkDescriptorSetLayout desc_set_layouts[] = {
 		qvk.desc_set_layout_ubo, qvk.desc_set_layout_textures
@@ -125,7 +136,7 @@ vkpt_fsr_initialize()
 }
 
 VkResult
-vkpt_fsr_destroy()
+vkpt_fsr_destroy(void)
 {
 	vkDestroyPipelineLayout(qvk.device, pipeline_layout_fsr, NULL);
 
@@ -133,7 +144,7 @@ vkpt_fsr_destroy()
 }
 
 VkResult
-vkpt_fsr_create_pipelines()
+vkpt_fsr_create_pipelines(void)
 {
 	for (unsigned int hdr = 0; hdr <= 1; hdr++) {
 		VkPipeline* pipeline_fsr = hdr != 0 ? pipeline_fsr_hdr : pipeline_fsr_sdr;
@@ -185,7 +196,7 @@ vkpt_fsr_create_pipelines()
 }
 	
 VkResult
-vkpt_fsr_destroy_pipelines()
+vkpt_fsr_destroy_pipelines(void)
 {
 	for(int i = 0; i < FSR_NUM_PIPELINES; i++) {
 		vkDestroyPipeline(qvk.device, pipeline_fsr_sdr[i], NULL);
@@ -194,7 +205,7 @@ vkpt_fsr_destroy_pipelines()
 	return VK_SUCCESS;
 }
 
-bool vkpt_fsr_is_enabled()
+bool vkpt_fsr_is_enabled(void)
 {
 	if (cvar_flt_fsr_enable->integer == 0)
 		return false;
@@ -210,7 +221,7 @@ bool vkpt_fsr_is_enabled()
 	return (cvar_flt_fsr_easu->integer != 0) || (cvar_flt_fsr_rcas->integer != 0);
 }
 
-bool vkpt_fsr_needs_upscale()
+bool vkpt_fsr_needs_upscale(void)
 {
 	return cvar_flt_fsr_easu->integer == 0;
 }

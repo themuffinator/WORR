@@ -56,12 +56,12 @@ void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
         draw_x -= TextWidth(string);
     }
 
-    R_DrawString(draw_x, y, flags, MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255), uis.fontHandle);
+    UI_FontDrawString(draw_x, y, flags, MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255));
 }
 
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 {
-    R_DrawChar(x, y, flags, ch, COLOR_SETA_U8(color, 255), uis.fontHandle);
+    R_DrawChar(x, y, flags, ch, COLOR_SETA_U8(color, 255), UI_FontLegacyHandle());
 }
 
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
@@ -69,8 +69,9 @@ void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
     if (!rc)
         return;
 
-    rc->height = CONCHAR_HEIGHT;
-    rc->width = TextWidth(string ? string : "");
+    int height = 0;
+    rc->width = UI_FontMeasureString(flags, MAX_STRING_CHARS, string ? string : "", &height);
+    rc->height = height > 0 ? height : CONCHAR_HEIGHT;
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         rc->x -= rc->width / 2;
@@ -156,10 +157,14 @@ static void UI_Command_ForceMenuOff()
     GetMenuSystem().ForceOff();
 }
 
+static void UI_Command_NoOp()
+{
+}
+
 static void UI_Command_PushMenu()
 {
     if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
+        Com_Printf("$cg_auto_e13d46568ae9", Cmd_Argv(0));
         return;
     }
 
@@ -171,7 +176,7 @@ static void UI_Command_PushMenu()
             menu->SetArgs(args);
         GetMenuSystem().Push(menu);
     } else {
-        Com_Printf("No such menu: %s\n", menu_name);
+        Com_Printf("$cg_auto_ad494789521e", menu_name);
     }
 }
 
@@ -193,6 +198,7 @@ static void UI_PushMenu_c(genctx_t *ctx, int argnum)
 
 static const cmdreg_t c_ui[] = {
     { "forcemenuoff", UI_Command_ForceMenuOff },
+    { "ui_nop", UI_Command_NoOp },
     { "pushmenu", UI_Command_PushMenu, UI_PushMenu_c },
     { "popmenu", UI_Command_PopMenu },
     { NULL, NULL }
@@ -224,27 +230,33 @@ void MenuSystem::Init()
     Cmd_Register(c_ui);
 
     ui_debug = Cvar_Get("ui_debug", "0", 0);
-    ui_open = Cvar_Get("ui_open", "0", 0);
+    ui_open = Cvar_Get("ui_open", "1", 0);
     ui_scale = Cvar_Get("ui_scale", "0", 0);
 
     ui_scale->changed = ui_scale_changed;
 
+    UI_ResetBindIconCache();
+
     Resize();
 
-    uis.fontHandle = R_RegisterFont("conchars");
-    uis.cursorHandle = R_RegisterPic("ch1");
+    uis.fontHandle = UI_FontLegacyHandle();
+    uis.cursorHandle = R_RegisterPic("/gfx/cursor.png");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
     uis.cursorWidth = UI_CURSOR_SIZE;
     uis.cursorHeight = UI_CURSOR_SIZE;
+    uis.cursorTextHandle = R_RegisterPic("/gfx/cursor-text.png");
+    R_GetPicSize(&uis.cursorTextWidth, &uis.cursorTextHeight, uis.cursorTextHandle);
+    uis.cursorTextWidth = UI_CURSOR_SIZE;
+    uis.cursorTextHeight = UI_CURSOR_SIZE;
 
     for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
         uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
     }
 
     uis.color.background = COLOR_RGBA(0, 0, 0, 255);
-    uis.color.normal = COLOR_RGBA(15, 128, 235, 100);
-    uis.color.active = COLOR_RGBA(15, 128, 235, 100);
-    uis.color.selection = COLOR_RGBA(15, 128, 235, 100);
+    uis.color.normal = COLOR_RGBA(62, 100, 59, 112);
+    uis.color.active = COLOR_RGBA(91, 138, 74, 144);
+    uis.color.selection = COLOR_RGBA(63, 106, 58, 176);
     uis.color.disabled = COLOR_RGBA(127, 127, 127, 255);
     Q_strlcpy(uis.weaponModel, "w_railgun.md2", sizeof(uis.weaponModel));
 
@@ -313,7 +325,7 @@ void MenuSystem::Push(MenuPage *menu)
     }
 
     if (stack_.size() >= MAX_MENU_DEPTH) {
-        Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
+        Com_EPrintf("$cg_auto_713f13864237");
         return;
     }
 
@@ -390,6 +402,9 @@ void MenuSystem::OpenMenu(uiMenu_t menu)
         if (!target)
             target = FindMenu("main");
         break;
+    case UIMENU_DOWNLOAD:
+        target = FindMenu("download_status");
+        break;
     case UIMENU_NONE:
         break;
     default:
@@ -412,12 +427,26 @@ void MenuSystem::Draw(unsigned realtime)
     R_SetScale(uis.scale);
     active_->Draw();
 
-    if (r_config.flags & QVF_FULLSCREEN) {
-        R_DrawStretchPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
-                         uis.mouseCoords[1] - uis.cursorHeight / 2,
-                         uis.cursorWidth, uis.cursorHeight,
-                         COLOR_WHITE, uis.cursorHandle);
+    bool use_text_cursor = active_ && active_->WantsTextCursor(uis.mouseCoords[0], uis.mouseCoords[1]);
+
+    qhandle_t cursor_handle = uis.cursorHandle;
+    int cursor_w = uis.cursorWidth;
+    int cursor_h = uis.cursorHeight;
+    int hotspot_x = 0;
+    int hotspot_y = 0;
+
+    if (use_text_cursor && uis.cursorTextHandle) {
+        cursor_handle = uis.cursorTextHandle;
+        cursor_w = uis.cursorTextWidth;
+        cursor_h = uis.cursorTextHeight;
+        hotspot_x = cursor_w / 2;
+        hotspot_y = cursor_h / 2;
     }
+
+    R_DrawStretchPic(uis.mouseCoords[0] - hotspot_x,
+                     uis.mouseCoords[1] - hotspot_y,
+                     cursor_w, cursor_h,
+                     COLOR_WHITE, cursor_handle);
 
     if (ui_debug->integer) {
         UI_DrawString(uis.width - 4, 4, UI_RIGHT, COLOR_WHITE,

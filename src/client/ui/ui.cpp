@@ -81,7 +81,7 @@ void UI_PushMenu(menuFrameWork_t *menu)
 
     if (i == uis.menuDepth) {
         if (uis.menuDepth >= MAX_MENU_DEPTH) {
-            Com_EPrintf("UI_PushMenu: MAX_MENU_DEPTH exceeded\n");
+            Com_EPrintf("$e_auto_713f13864237");
             return;
         }
         uis.layers[uis.menuDepth++] = menu;
@@ -262,6 +262,9 @@ void UI_OpenMenu(uiMenu_t type)
             menu = UI_FindMenu("main");
         }
         break;
+    case UIMENU_DOWNLOAD:
+        menu = UI_FindMenu("download_status");
+        break;
     case UIMENU_NONE:
         break;
     default:
@@ -344,10 +347,11 @@ bool UI_CursorInRect(const vrect_t *rect)
 // nb: all UI strings are drawn at full alpha
 void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
 {
+    size_t visible_len = Com_StrlenNoColor(string, strlen(string));
     if ((flags & UI_CENTER) == UI_CENTER) {
-        x -= strlen(string) * CONCHAR_WIDTH / 2;
+        x -= visible_len * CONCHAR_WIDTH / 2;
     } else if (flags & UI_RIGHT) {
-        x -= strlen(string) * CONCHAR_WIDTH;
+        x -= visible_len * CONCHAR_WIDTH;
     }
 
     R_DrawString(x, y, flags, MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255), uis.fontHandle);
@@ -362,7 +366,7 @@ void UI_DrawChar(int x, int y, int flags, color_t color, int ch)
 void UI_StringDimensions(vrect_t *rc, int flags, const char *string)
 {
     rc->height = CONCHAR_HEIGHT;
-    rc->width = CONCHAR_WIDTH * strlen(string);
+    rc->width = CONCHAR_WIDTH * Com_StrlenNoColor(string, strlen(string));
 
     if ((flags & UI_CENTER) == UI_CENTER) {
         rc->x -= rc->width / 2;
@@ -377,6 +381,24 @@ void UI_DrawRect8(const vrect_t *rc, int border, int c)
     R_DrawFill8(rc->x + rc->width - border, rc->y, border, rc->height, c);   // right
     R_DrawFill8(rc->x + border, rc->y, rc->width - border * 2, border, c);   // top
     R_DrawFill8(rc->x + border, rc->y + rc->height - border, rc->width - border * 2, border, c);   // bottom
+}
+
+static bool UI_HoverTextField(const menuFrameWork_t *menu)
+{
+    if (!menu)
+        return false;
+
+    for (int i = 0; i < menu->nitems; i++) {
+        menuCommon_t *item = static_cast<menuCommon_t *>(menu->items[i]);
+        if (!item || (item->flags & QMF_HIDDEN)) {
+            continue;
+        }
+        if (item->type == MTYPE_FIELD && UI_CursorInRect(&item->rect)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 //=============================================================================
@@ -480,12 +502,26 @@ void UI_Draw(unsigned realtime)
         }
     }
 
-    // draw custom cursor in fullscreen mode
-    if (r_config.flags & QVF_FULLSCREEN) {
-        R_DrawPic(uis.mouseCoords[0] - uis.cursorWidth / 2,
-                  uis.mouseCoords[1] - uis.cursorHeight / 2, 
-                  COLOR_WHITE, uis.cursorHandle);
+    bool use_text_cursor = UI_HoverTextField(uis.activeMenu);
+
+    qhandle_t cursor_handle = uis.cursorHandle;
+    int cursor_w = uis.cursorWidth;
+    int cursor_h = uis.cursorHeight;
+    int hotspot_x = 0;
+    int hotspot_y = 0;
+
+    if (use_text_cursor && uis.cursorTextHandle) {
+        cursor_handle = uis.cursorTextHandle;
+        cursor_w = uis.cursorTextWidth;
+        cursor_h = uis.cursorTextHeight;
+        hotspot_x = cursor_w / 2;
+        hotspot_y = cursor_h / 2;
     }
+
+    R_DrawStretchPic(uis.mouseCoords[0] - hotspot_x,
+                     uis.mouseCoords[1] - hotspot_y,
+                     cursor_w, cursor_h,
+                     COLOR_WHITE, cursor_handle);
 
     if (ui_debug->integer) {
         UI_DrawString(uis.width - 4, 4, UI_RIGHT,
@@ -588,7 +624,7 @@ static void UI_PushMenu_f(void)
     char *s;
 
     if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <menu>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_e13d46568ae9", Cmd_Argv(0));
         return;
     }
     s = Cmd_Argv(1);
@@ -596,7 +632,7 @@ static void UI_PushMenu_f(void)
     if (menu) {
         UI_PushMenu(menu);
     } else {
-        Com_Printf("No such menu: %s\n", s);
+        Com_Printf("$e_auto_ad494789521e", s);
     }
 }
 
@@ -651,22 +687,28 @@ void UI_Init(void)
     Cmd_Register(c_ui);
 
     ui_debug = Cvar_Get("ui_debug", "0", 0);
-    ui_open = Cvar_Get("ui_open", "0", 0);
+    ui_open = Cvar_Get("ui_open", "1", 0);
 
     UI_ModeChanged();
 
     uis.fontHandle = R_RegisterFont("conchars");
-    uis.cursorHandle = R_RegisterPic("ch1");
+    uis.cursorHandle = R_RegisterPic("/gfx/cursor.png");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
+    uis.cursorWidth = MENU_CURSOR_SIZE;
+    uis.cursorHeight = MENU_CURSOR_SIZE;
+    uis.cursorTextHandle = R_RegisterPic("/gfx/cursor-text.png");
+    R_GetPicSize(&uis.cursorTextWidth, &uis.cursorTextHeight, uis.cursorTextHandle);
+    uis.cursorTextWidth = MENU_CURSOR_SIZE;
+    uis.cursorTextHeight = MENU_CURSOR_SIZE;
 
     for (int i = 0; i < NUM_CURSOR_FRAMES; i++) {
         uis.bitmapCursors[i] = R_RegisterPic(va("m_cursor%d", i));
     }
 
     uis.color.background    = COLOR_RGBA(0,   0,   0,   255);
-    uis.color.normal        = COLOR_RGBA(15,  128, 235, 100);
-    uis.color.active        = COLOR_RGBA(15,  128, 235, 100);
-    uis.color.selection     = COLOR_RGBA(15,  128, 235, 100);
+    uis.color.normal        = COLOR_RGBA(62,  100, 59,  112);
+    uis.color.active        = COLOR_RGBA(91,  138, 74,  144);
+    uis.color.selection     = COLOR_RGBA(63,  106, 58,  176);
     uis.color.disabled      = COLOR_RGBA(127, 127, 127, 255);
 
     Q_strlcpy(uis.weaponModel, "w_railgun.md2", sizeof(uis.weaponModel));

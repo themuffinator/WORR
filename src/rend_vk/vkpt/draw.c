@@ -19,9 +19,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "common/common.h"
+#include "common/utils.h"
 #include "refresh/refresh.h"
 #include "refresh/images.h"
 
+#include <math.h>
 #include <assert.h>
 
 #include "vkpt.h"
@@ -53,7 +55,9 @@ static float hud_alpha_scale = 1.0f;
 
 static int num_stretch_pics = 0;
 typedef struct {
-	float x, y, w,   h;
+	float base_x, base_y;
+	float axis_x_x, axis_x_y;
+	float axis_y_x, axis_y_y;
 	float s, t, w_s, h_t;
 	uint32_t color, tex_handle;
 } StretchPic_t;
@@ -94,7 +98,7 @@ static VkDescriptorSet         desc_set_final_blit[MAX_FRAMES_IN_FLIGHT];
 extern cvar_t* cvar_ui_hdr_nits;
 extern cvar_t* cvar_tm_hdr_saturation_scale;
 
-VkExtent2D
+static VkExtent2D
 vkpt_draw_get_extent(void)
 {
 	return qvk.extent_unscaled;
@@ -105,24 +109,43 @@ void vkpt_draw_set_hud_alpha(float alpha)
 	hud_alpha_scale = max(0.f, min(1.f, alpha));
 }
 
+static inline StretchPic_t *alloc_stretch_pic(uint32_t color, int tex_handle)
+{
+	float alpha_scale = draw.alpha_scale * hud_alpha_scale;
+
+	if (alpha_scale <= 0.f)
+		return NULL;
+
+	if (num_stretch_pics == MAX_STRETCH_PICS) {
+		Com_EPrintf("Error: stretch pic queue full!\n");
+		assert(0);
+		return NULL;
+	}
+	assert(tex_handle);
+	StretchPic_t *sp = stretch_pic_queue + num_stretch_pics++;
+
+	if (alpha_scale < 1.f) {
+		float alpha = (color >> 24) & 0xff;
+		alpha *= alpha_scale;
+		alpha = max(0.f, min(255.f, alpha));
+		color = (color & 0xffffff) | ((int)(alpha) << 24);
+	}
+
+	sp->color = color;
+	sp->tex_handle = tex_handle;
+	if (tex_handle >= 0 && tex_handle < MAX_RIMAGES
+	&& !r_images[tex_handle].registration_sequence) {
+		sp->tex_handle = TEXNUM_WHITE;
+	}
+
+	return sp;
+}
+
 static inline void enqueue_stretch_pic(
 		float x, float y, float w, float h,
 		float s1, float t1, float s2, float t2,
 		uint32_t color, int tex_handle)
 {
-	float alpha_scale = draw.alpha_scale * hud_alpha_scale;
-
-	if (alpha_scale <= 0.f)
-		return;
-
-	if(num_stretch_pics == MAX_STRETCH_PICS) {
-		Com_EPrintf("Error: stretch pic queue full!\n");
-		assert(0);
-		return;
-	}
-	assert(tex_handle);
-	StretchPic_t *sp = stretch_pic_queue + num_stretch_pics++;
-
 	if (clip_enable)
 	{
 		if (x >= clip_rect.right || x + w <= clip_rect.left || y >= clip_rect.bottom || y + h <= clip_rect.top)
@@ -167,39 +190,104 @@ static inline void enqueue_stretch_pic(
 		}
 	}
 
+	StretchPic_t *sp = alloc_stretch_pic(color, tex_handle);
+	if (!sp)
+		return;
+
 	float width = r_config.width * draw.scale;
 	float height = r_config.height * draw.scale;
+	float scale_x = 2.0f / width;
+	float scale_y = 2.0f / height;
 
-	x = 2.0f * x / width - 1.0f;
-	y = 2.0f * y / height - 1.0f;
-
-	w = 2.0f * w / width;
-	h = 2.0f * h / height;
-
-	sp->x = x;
-	sp->y = y;
-	sp->w = w;
-	sp->h = h;
+	sp->base_x = x * scale_x - 1.0f;
+	sp->base_y = y * scale_y - 1.0f;
+	sp->axis_x_x = w * scale_x;
+	sp->axis_x_y = 0.0f;
+	sp->axis_y_x = 0.0f;
+	sp->axis_y_y = h * scale_y;
 
 	sp->s   = s1;
 	sp->t   = t1;
 	sp->w_s = s2 - s1;
 	sp->h_t = t2 - t1;
+}
 
-	if (alpha_scale < 1.f)
+static inline void enqueue_stretch_pic_rotated(
+		float x, float y, float w, float h,
+		float s1, float t1, float s2, float t2,
+		float angle, float pivot_x, float pivot_y,
+		uint32_t color, int tex_handle)
+{
+	float width = r_config.width * draw.scale;
+	float height = r_config.height * draw.scale;
+	float scale_x = 2.0f / width;
+	float scale_y = 2.0f / height;
+
+	float hw = w * 0.5f;
+	float hh = h * 0.5f;
+	float origin_x = -hw + pivot_x;
+	float origin_y = -hh + pivot_y;
+
+	float sin_a = sinf(angle);
+	float cos_a = cosf(angle);
+
+	float rot_origin_x = origin_x * cos_a - origin_y * sin_a;
+	float rot_origin_y = origin_x * sin_a + origin_y * cos_a;
+
+	float axis_x_x = w * cos_a;
+	float axis_x_y = w * sin_a;
+	float axis_y_x = -h * sin_a;
+	float axis_y_y = h * cos_a;
+
+	float base_x = rot_origin_x + x;
+	float base_y = rot_origin_y + y;
+
+	if (clip_enable)
 	{
-		float alpha = (color >> 24) & 0xff;
-		alpha *= alpha_scale;
-		alpha = max(0.f, min(255.f, alpha));
-		color = (color & 0xffffff) | ((int)(alpha) << 24);
+		float corners_x[4] = {
+			base_x,
+			base_x + axis_x_x,
+			base_x + axis_x_x + axis_y_x,
+			base_x + axis_y_x
+		};
+		float corners_y[4] = {
+			base_y,
+			base_y + axis_x_y,
+			base_y + axis_x_y + axis_y_y,
+			base_y + axis_y_y
+		};
+		float min_x = corners_x[0];
+		float max_x = corners_x[0];
+		float min_y = corners_y[0];
+		float max_y = corners_y[0];
+
+		for (int i = 1; i < 4; i++) {
+			min_x = min(min_x, corners_x[i]);
+			max_x = max(max_x, corners_x[i]);
+			min_y = min(min_y, corners_y[i]);
+			max_y = max(max_y, corners_y[i]);
+		}
+
+		if (max_x <= clip_rect.left || min_x >= clip_rect.right ||
+			max_y <= clip_rect.top || min_y >= clip_rect.bottom)
+			return;
 	}
 
-	sp->color = color;
-	sp->tex_handle = tex_handle;
-	if(tex_handle >= 0 && tex_handle < MAX_RIMAGES
-	&& !r_images[tex_handle].registration_sequence) {
-		sp->tex_handle = TEXNUM_WHITE;
-	}
+	StretchPic_t *sp = alloc_stretch_pic(color, tex_handle);
+	if (!sp)
+		return;
+
+	sp->base_x = base_x * scale_x - 1.0f;
+	sp->base_y = base_y * scale_y - 1.0f;
+	sp->axis_x_x = axis_x_x * scale_x;
+	sp->axis_x_y = axis_x_y * scale_y;
+	sp->axis_y_x = axis_y_x * scale_x;
+	sp->axis_y_y = axis_y_y * scale_y;
+
+	sp->s   = s1;
+	sp->t   = t1;
+	sp->w_s = s2 - s1;
+	sp->h_t = t2 - t1;
 }
 
 static void
@@ -257,7 +345,7 @@ create_render_pass(void)
 }
 
 VkResult
-vkpt_draw_initialize()
+vkpt_draw_initialize(void)
 {
 	num_stretch_pics = 0;
 	LOG_FUNC();
@@ -454,7 +542,7 @@ vkpt_draw_initialize()
 }
 
 VkResult
-vkpt_draw_destroy()
+vkpt_draw_destroy(void)
 {
 	LOG_FUNC();
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -472,7 +560,7 @@ vkpt_draw_destroy()
 }
 
 VkResult
-vkpt_draw_destroy_pipelines()
+vkpt_draw_destroy_pipelines(void)
 {
 	LOG_FUNC();
 	for(int i = 0; i < STRETCH_PIC_NUM_PIPELINES; i++) {
@@ -495,7 +583,7 @@ vkpt_draw_destroy_pipelines()
 }
 
 VkResult
-vkpt_draw_create_pipelines()
+vkpt_draw_create_pipelines(void)
 {
 	LOG_FUNC();
 
@@ -706,7 +794,7 @@ vkpt_draw_create_pipelines()
 }
 
 VkResult
-vkpt_draw_clear_stretch_pics()
+vkpt_draw_clear_stretch_pics(void)
 {
 	num_stretch_pics = 0;
 	return VK_SUCCESS;
@@ -885,6 +973,14 @@ R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
 }
 
 void
+R_DrawStretchSubPic(int x, int y, int w, int h,
+	float s1, float t1, float s2, float t2,
+	color_t color, qhandle_t pic)
+{
+	enqueue_stretch_pic(x, y, w, h, s1, t1, s2, t2, color.u32, pic);
+}
+
+void
 R_DrawPic(int x, int y, color_t color, qhandle_t pic)
 {
 	image_t *image = IMG_ForHandle(pic);
@@ -895,10 +991,11 @@ void
 R_DrawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle,
 	int pivot_x, int pivot_y, qhandle_t pic)
 {
-	(void)angle;
-	(void)pivot_x;
-	(void)pivot_y;
-	R_DrawStretchPic(x, y, w, h, color, pic);
+	enqueue_stretch_pic_rotated(
+		x, y, w, h,
+		0.0f, 0.0f, 1.0f, 1.0f,
+		angle, (float)pivot_x, (float)pivot_y,
+		color.u32, pic);
 }
 
 void
@@ -1012,6 +1109,16 @@ draw_char(int x, int y, int w, int h, int flags, int c, color_t color, qhandle_t
 		color.u32, font);
 }
 
+static inline color_t draw_resolve_color(int flags, color_t color)
+{
+	if (flags & (UI_ALTCOLOR | UI_XORCOLOR)) {
+		color_t alt = COLOR_RGB(255, 255, 0);
+		alt.a = color.a;
+		return alt;
+	}
+	return color;
+}
+
 void
 R_DrawChar(int x, int y, int flags, int c, color_t color, qhandle_t font)
 {
@@ -1028,9 +1135,27 @@ int
 R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, qhandle_t font)
 {
 	int sx = x;
+	size_t remaining = maxlen;
+	bool use_color_codes = Com_HasColorEscape(s, maxlen);
+	int draw_flags = flags;
+	color_t base_color = color;
+	if (use_color_codes) {
+		base_color = draw_resolve_color(flags, color);
+		draw_flags &= ~(UI_ALTCOLOR | UI_XORCOLOR);
+	}
+	color_t draw_color = use_color_codes ? base_color : color;
 
-	while(maxlen-- && *s) {
+	while(remaining && *s) {
+		if (use_color_codes) {
+			color_t parsed;
+			if (Com_ParseColorEscape(&s, &remaining, base_color, &parsed)) {
+				draw_color = parsed;
+				continue;
+			}
+		}
+
 		byte c = *s++;
+		remaining--;
 
 		if ((flags & UI_MULTILINE) && c == '\n') {
 			y += CONCHAR_HEIGHT * scale + (1.0f / draw.scale);
@@ -1038,7 +1163,7 @@ R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const cha
 			continue;
 		}
 
-		draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, color, font);
+		draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, draw_flags, c, draw_color, font);
 		x += CONCHAR_WIDTH * scale;
 	}
 
@@ -1095,12 +1220,27 @@ const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
+	static cvar_t *cl_debugFonts;
+	if (!cl_debugFonts)
+		cl_debugFonts = Cvar_Get("cl_debugFonts", "1", 0);
+	const bool debug_fonts = cl_debugFonts && cl_debugFonts->integer;
+
 	memset(font, 0, sizeof(*font));
 
 	char *buffer;
 
-	if (FS_LoadFile(filename, (void **) &buffer) < 0)
+	if (FS_LoadFile(filename, (void **) &buffer) < 0) {
+		if (debug_fonts) {
+			Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\" failed: %s\n",
+				filename ? filename : "<null>", Com_GetLastError());
+		}
 		return;
+	}
+
+	if (debug_fonts) {
+		Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\"\n",
+			filename ? filename : "<null>");
+	}
 
 	const char *data = buffer;
 
@@ -1113,6 +1253,10 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 		if (!strcmp(token, "texture")) {
 			token = COM_Parse(&data);
 			font->pic = R_RegisterFont(va("/%s", token));
+			if (debug_fonts) {
+				Com_LPrintf(PRINT_ALL, "Font: kfont texture \"%s\" handle=%d\n",
+					token ? token : "<null>", font->pic);
+			}
 		} else if (!strcmp(token, "unicode")) {
 		} else if (!strcmp(token, "mapchar")) {
 			token = COM_Parse(&data);
@@ -1150,6 +1294,11 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 	font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
 	FS_FreeFile(buffer);
+
+	if (debug_fonts) {
+		Com_LPrintf(PRINT_ALL, "Font: kfont \"%s\" loaded line_height=%d handle=%d\n",
+			filename ? filename : "<null>", font->line_height, font->pic);
+	}
 }
 
 // vim: shiftwidth=4 noexpandtab tabstop=4 cindent

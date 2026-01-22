@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include "common/utils.h"
 
 drawStatic_t draw;
 
@@ -353,6 +354,20 @@ void R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
                   color, image);
 }
 
+void R_DrawStretchSubPic(int x, int y, int w, int h,
+                         float s1, float t1, float s2, float t2,
+                         color_t color, qhandle_t pic)
+{
+    const image_t *image = IMG_ForHandle(pic);
+    float ds = image->sh - image->sl;
+    float dt = image->th - image->tl;
+
+    GL_StretchPic(x, y, w, h,
+                  image->sl + (s1 * ds), image->tl + (t1 * dt),
+                  image->sl + (s2 * ds), image->tl + (t2 * dt),
+                  color, image);
+}
+
 void R_DrawStretchRotatePic(int x, int y, int w, int h, color_t color, float angle, int pivot_x, int pivot_y, qhandle_t pic)
 {
     image_t *image = IMG_ForHandle(pic);
@@ -397,6 +412,24 @@ void R_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic)
 {
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_RAW);
     qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pic_w, pic_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pic);
+}
+
+bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)
+{
+    if (!handle || !pic)
+        return false;
+
+    image_t *image = IMG_ForHandle(handle);
+    if (!image || !image->texnum || (image->flags & IF_SCRAP))
+        return false;
+
+    if (image->upload_width != width || image->upload_height != height)
+        return false;
+
+    GL_ForceTexture(TMU_TEXTURE, image->texnum);
+    qglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pic);
+    c.texUploads++;
+    return true;
 }
 
 #define DIV64 (1.0f / 64.0f)
@@ -455,6 +488,16 @@ static inline void draw_char(int x, int y, int w, int h, int flags, int c, color
                   s + 0.0625f, t + 0.0625f, color, image);
 }
 
+static inline color_t draw_resolve_color(int flags, color_t color)
+{
+    if (flags & (UI_ALTCOLOR | UI_XORCOLOR)) {
+        color_t alt = COLOR_RGB(255, 255, 0);
+        alt.a = color.a;
+        return alt;
+    }
+    return color;
+}
+
 void R_DrawChar(int x, int y, int flags, int c, color_t color, qhandle_t font)
 {
     if (gl_fontshadow->integer > 0)
@@ -476,9 +519,27 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const
         flags |= UI_DROPSHADOW;
 
     int sx = x;
+    size_t remaining = maxlen;
+    bool use_color_codes = Com_HasColorEscape(s, maxlen);
+    int draw_flags = flags;
+    color_t base_color = color;
+    if (use_color_codes) {
+        base_color = draw_resolve_color(flags, color);
+        draw_flags &= ~(UI_ALTCOLOR | UI_XORCOLOR);
+    }
+    color_t draw_color = use_color_codes ? base_color : color;
 
-    while (maxlen-- && *s) {
+    while (remaining && *s) {
+        if (use_color_codes) {
+            color_t parsed;
+            if (Com_ParseColorEscape(&s, &remaining, base_color, &parsed)) {
+                draw_color = parsed;
+                continue;
+            }
+        }
+
         byte c = *s++;
+        remaining--;
 
         if ((flags & UI_MULTILINE) && c == '\n') {
             y += CONCHAR_HEIGHT * scale + (1.0 / draw.scale);
@@ -486,7 +547,7 @@ int R_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen, const
             continue;
         }
 
-        draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, c, color, image);
+        draw_char(x, y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, draw_flags, c, draw_color, image);
         x += CONCHAR_WIDTH * scale;
     }
 
@@ -552,12 +613,27 @@ const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
+    static cvar_t *cl_debugFonts;
+    if (!cl_debugFonts)
+        cl_debugFonts = Cvar_Get("cl_debugFonts", "1", 0);
+    const bool debug_fonts = cl_debugFonts && cl_debugFonts->integer;
+
     memset(font, 0, sizeof(*font));
 
     char *buffer;
 
-    if (FS_LoadFile(filename, (void **) &buffer) < 0)
+    if (FS_LoadFile(filename, (void **) &buffer) < 0) {
+        if (debug_fonts) {
+            Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\" failed: %s\n",
+                        filename ? filename : "<null>", Com_GetLastError());
+        }
         return;
+    }
+
+    if (debug_fonts) {
+        Com_LPrintf(PRINT_ALL, "Font: SCR_LoadKFont \"%s\"\n",
+                    filename ? filename : "<null>");
+    }
 
     const char *data = buffer;
 
@@ -570,6 +646,10 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
         if (!strcmp(token, "texture")) {
             token = COM_Parse(&data);
             font->pic = R_RegisterFont(va("/%s", token));
+            if (debug_fonts) {
+                Com_LPrintf(PRINT_ALL, "Font: kfont texture \"%s\" handle=%d\n",
+                            token ? token : "<null>", font->pic);
+            }
         } else if (!strcmp(token, "unicode")) {
         } else if (!strcmp(token, "mapchar")) {
             token = COM_Parse(&data);
@@ -607,6 +687,11 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
     font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
 
     FS_FreeFile(buffer);
+
+    if (debug_fonts) {
+        Com_LPrintf(PRINT_ALL, "Font: kfont \"%s\" loaded line_height=%d handle=%d\n",
+                    filename ? filename : "<null>", font->line_height, font->pic);
+    }
 }
 
 qhandle_t r_charset;

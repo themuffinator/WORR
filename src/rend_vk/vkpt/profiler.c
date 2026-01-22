@@ -61,7 +61,7 @@ static struct {
 } profiler_data;
 
 VkResult
-vkpt_profiler_initialize()
+vkpt_profiler_initialize(void)
 {
 	memset(&profiler_data, 0, sizeof(profiler_data));
 
@@ -75,7 +75,7 @@ vkpt_profiler_initialize()
 }
 
 VkResult
-vkpt_profiler_destroy()
+vkpt_profiler_destroy(void)
 {
 	vkDestroyQueryPool(qvk.device, profiler_data.query_pool, NULL);
 	for (int i = 0; i < NUM_PROFILER_ENTRIES; i++)

@@ -19,7 +19,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "vkpt.h"
 #include "precomputed_sky.h"
 #include "refresh/refresh.h"
+#ifndef _USE_MATH_DEFINES
 #define _USE_MATH_DEFINES
+#endif
 #include <math.h>
 
 #include <assert.h>
@@ -70,7 +72,7 @@ struct ImageGPUInfo
 
 
 
-void ReleaseInfo(struct ImageGPUInfo* Info)
+static void ReleaseInfo(struct ImageGPUInfo* Info)
 {
 	vkFreeMemory(qvk.device, Info->DeviceMemory, NULL);
 	vkDestroyImage(qvk.device, Info->Image, NULL);
@@ -100,7 +102,7 @@ float terrain_shadowmap_viewproj[16] = { 0.f };
 
 // ----------------------------------------------------------------------------
 
-VkResult UploadImage(void* FirstPixel, size_t total_size, unsigned int Width, unsigned int Height, unsigned int Depth, unsigned int ArraySize, unsigned char Cube, VkFormat PixelFormat, uint32_t Binding, struct ImageGPUInfo* Info, const char* DebugName)
+static VkResult UploadImage(void* FirstPixel, size_t total_size, unsigned int Width, unsigned int Height, unsigned int Depth, unsigned int ArraySize, unsigned char Cube, VkFormat PixelFormat, uint32_t Binding, struct ImageGPUInfo* Info, const char* DebugName)
 {
 	BufferResource_t buf_img_upload;
 	buffer_create(&buf_img_upload, total_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -281,7 +283,7 @@ VKPT_QUEUE_WAIT_IDLE(qvk.queue_graphics);
 
 #define ISBITMASK(header,r,g,b,a) ( header.RBitMask == r && header.GBitMask == g && header.BBitMask == b && header.ABitMask == a )
 
-bool LoadImageFromDDS(const char* FileName, uint32_t Binding, struct ImageGPUInfo* Info, const char* DebugName)
+static bool LoadImageFromDDS(const char* FileName, uint32_t Binding, struct ImageGPUInfo* Info, const char* DebugName)
 {
 	unsigned char* data = NULL;
 	int len = FS_LoadFile(FileName, (void**)&data);
@@ -351,17 +353,17 @@ done:
 	return retval;
 }
 
-VkDescriptorSetLayout* SkyGetDescriptorLayout()
+VkDescriptorSetLayout* SkyGetDescriptorLayout(void)
 {
 	return &uniform_precomputed_descriptor_layout;
 }
 
-VkDescriptorSet SkyGetDescriptorSet()
+VkDescriptorSet SkyGetDescriptorSet(void)
 {
 	return desc_set_precomputed_ubo;
 }
 
-VkResult
+static VkResult
 vkpt_uniform_precomputed_buffer_create(void)
 {
 	VkDescriptorSetLayoutBinding ubo_layout_binding = {
@@ -436,7 +438,7 @@ vkpt_uniform_precomputed_buffer_create(void)
 	return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 vkpt_uniform_precomputed_buffer_destroy(void)
 {
 	vkDestroyDescriptorPool(qvk.device, desc_pool_precomputed_ubo, NULL);
@@ -449,7 +451,7 @@ vkpt_uniform_precomputed_buffer_destroy(void)
 	return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 vkpt_uniform_precomputed_buffer_update(void)
 {
 	BufferResource_t *ubo = &atmosphere_params_buffer;
@@ -468,7 +470,7 @@ vkpt_uniform_precomputed_buffer_update(void)
 
 #define MATRIX(row, col) (row * 4 + col)
 
-void create_identity_matrix(float matrix[16])
+static void create_identity_matrix(float matrix[16])
 {
 	uint32_t size = 16 * sizeof(float);
 	memset(matrix, 0, size);
@@ -478,7 +480,7 @@ void create_identity_matrix(float matrix[16])
 	matrix[MATRIX(3, 3)] = 1.0f;
 }
 
-void create_look_at_matrix(float matrix[16], vec3_t EyePosition, vec3_t EyeDirection, vec3_t UpDirection)
+static void create_look_at_matrix(float matrix[16], vec3_t EyePosition, vec3_t EyeDirection, vec3_t UpDirection)
 {
 	vec3_t f; 
 	VectorNormalize2(EyeDirection, f);
@@ -513,7 +515,7 @@ void create_look_at_matrix(float matrix[16], vec3_t EyePosition, vec3_t EyeDirec
 	matrix[MATRIX(3, 2)] = -D2;
 }
 
-void
+static void
 create_centered_orthographic_matrix(float matrix[16], float xmin, float xmax,
 	float ymin, float ymax, float znear, float zfar)
 {
@@ -592,7 +594,7 @@ VkResult SkyLoadScatterParameters(SkyPreset preset)
 	return VK_SUCCESS;
 }
 
-VkResult SkyInitializeDataGPU()
+VkResult SkyInitializeDataGPU(void)
 {
 	LoadImageFromDDS("env/clouds.dds", BINDING_OFFSET_SKY_CLOUDS, &SkyClouds, "SkyClouds");
 
@@ -605,7 +607,7 @@ VkResult SkyInitializeDataGPU()
 	return VK_SUCCESS;
 }
 
-void SkyReleaseDataGPU()
+void SkyReleaseDataGPU(void)
 {
 	ReleaseInfo(&SkyTransmittance);
 	ReleaseInfo(&SkyInscatter);
@@ -674,7 +676,7 @@ extern VkPipeline              pipeline_smap;
 //				Functions
 // ----------------------------------------------------------------------------
 
-struct ShadowmapGeometry FillVertexAndIndexBuffers(const char* FileName, unsigned int SideSize, float size_km)
+static struct ShadowmapGeometry FillVertexAndIndexBuffers(const char* FileName, unsigned int SideSize, float size_km)
 {
 	struct  ShadowmapGeometry result = { 0 };
 
@@ -846,7 +848,7 @@ done:
 
 // ----------------------------------------------------------------------------
 
-void ReleaseShadowmap(struct Shadowmap* InOutShadowmap)
+static void ReleaseShadowmap(struct Shadowmap* InOutShadowmap)
 {
 	if (InOutShadowmap->DepthSampler)
 		vkDestroySampler(qvk.device, InOutShadowmap->DepthSampler, NULL);
@@ -862,7 +864,7 @@ void ReleaseShadowmap(struct Shadowmap* InOutShadowmap)
 		vkDestroyFramebuffer(qvk.device, InOutShadowmap->FrameBuffer, NULL);
 }
 
-void CreateShadowMap(struct Shadowmap* InOutShadowmap)
+static void CreateShadowMap(struct Shadowmap* InOutShadowmap)
 {
 	InOutShadowmap->DepthFormat = VK_FORMAT_D32_SFLOAT;
 	InOutShadowmap->Width = ShadowmapSize;
@@ -970,13 +972,13 @@ void CreateShadowMap(struct Shadowmap* InOutShadowmap)
 
 // ----------------------------------------------------------------------------
 
-void InitializeShadowmapResources()
+void InitializeShadowmapResources(void)
 {
 	CreateShadowMap(&ShadowmapData);
 	ShadowmapGrid = FillVertexAndIndexBuffers("env/terrain_heightmap.dds", ShadowmapGridSize, ShadowmapWorldSize);
 }
 
-void ReleaseShadowmapResources()
+void ReleaseShadowmapResources(void)
 {
 	buffer_destroy(&ShadowmapGrid.Indexes);
 	buffer_destroy(&ShadowmapGrid.Vertexes);

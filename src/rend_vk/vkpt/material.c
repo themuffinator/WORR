@@ -100,7 +100,7 @@ static qboolean is_game_custom(void)
 	return fs_game->string[0] && strcmp(fs_game->string, BASEGAME) != 0;
 }
 
-void MAT_Init()
+void MAT_Init(void)
 {
 	cmdreg_t commands[2];
 	commands[0].name = "mat";
@@ -149,7 +149,7 @@ void MAT_Init()
 	sort_and_deduplicate_materials(r_global_materials, &num_global_materials);
 }
 
-void MAT_Shutdown()
+void MAT_Shutdown(void)
 {
 	Cmd_RemoveCommand("mat");
 }
@@ -980,7 +980,7 @@ void MAT_UpdateRegistration(pbr_material_t * mat)
 }
 
 //
-int MAT_FreeUnused()
+int MAT_FreeUnused(void)
 {
 	for (uint32_t i = 0; i < MAX_PBR_MATERIALS; ++i)
 	{
@@ -1046,7 +1046,7 @@ pbr_material_t* MAT_ForSkin(image_t* image_base)
 // prints material properties on the console
 //
 
-void MAT_Print(pbr_material_t const * mat)
+static void MAT_Print(pbr_material_t const * mat)
 {
 	Com_Printf("%s:\n", mat->name);
 	Com_Printf("    texture_base %s\n", mat->filename_base);

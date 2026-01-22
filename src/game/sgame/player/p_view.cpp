@@ -718,7 +718,7 @@ static void G_CalcBlend(gentity_t* ent) {
 	}
 	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::QuadDamage), 0, 0, 1, 0.08f, "items/damage2.wav");
 	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::Haste), 1, 0.2f, 0.5f, 0.08f, "items/quadfire2.wav");
-	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::DoubleDamage), 0, 0, 1, 0.08f, "misc/ddamage2.wav");
+	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::DoubleDamage), 0.25f, 0.88f, 0.82f, 0.08f, "misc/ddamage2.wav");
 	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::EmpathyShield), 0.9f, 0.1f, 0.1f, 0.08f, "items/suit2.wav");
 	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::AntiGravBelt), 0.1f, 0.1f, 0.1f, 0.04f, "items/suit2.wav");
 	BlendPowerup(ent->client->PowerupTimer(PowerupTimer::BattleSuit), 0.9f, 0.7f, 0, 0.08f, "items/protect2.wav");
@@ -1067,7 +1067,7 @@ static void ClientSetEffects(gentity_t* ent) {
 			ent->s.effects |= EF_DUALFIRE;
 	if (ent->client->PowerupTimer(PowerupTimer::DoubleDamage) > level.time)
 		if (G_PowerUpExpiring(ent->client->PowerupTimer(PowerupTimer::DoubleDamage)))
-			ent->s.effects |= EF_QUAD;
+			ent->s.effects |= EF_DOUBLE;
 	if (ent->client->PowerupTimer(PowerupTimer::EmpathyShield) > level.time)
 		if (G_PowerUpExpiring(ent->client->PowerupTimer(PowerupTimer::EmpathyShield))) {
 			ent->s.effects |= EF_EMPATHY;

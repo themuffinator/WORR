@@ -77,6 +77,129 @@ size_t Com_FormatSizeLong(char *dest, size_t destsize, int64_t bytes);
 void Com_PageInMemory(void *buffer, size_t size);
 
 color_index_t Com_ParseColor(const char *s);
+static inline bool Com_IsColorEscapeCode(char c)
+{
+    return (c >= '0' && c <= '7') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+static inline bool Com_ColorFromEscape(char c, color_t base, color_t *out_color)
+{
+    static const color_t q3_color_table[8] = {
+        COLOR_RGBA(0, 0, 0, 255),
+        COLOR_RGBA(255, 0, 0, 255),
+        COLOR_RGBA(0, 255, 0, 255),
+        COLOR_RGBA(255, 255, 0, 255),
+        COLOR_RGBA(0, 0, 255, 255),
+        COLOR_RGBA(0, 255, 255, 255),
+        COLOR_RGBA(255, 0, 255, 255),
+        COLOR_RGBA(255, 255, 255, 255)
+    };
+    static const color_t q3_rainbow_colors[26] = {
+        COLOR_RGBA(255, 0, 0, 255),
+        COLOR_RGBA(255, 64, 0, 255),
+        COLOR_RGBA(255, 128, 0, 255),
+        COLOR_RGBA(255, 192, 0, 255),
+        COLOR_RGBA(255, 255, 0, 255),
+        COLOR_RGBA(192, 255, 0, 255),
+        COLOR_RGBA(128, 255, 0, 255),
+        COLOR_RGBA(64, 255, 0, 255),
+        COLOR_RGBA(0, 255, 0, 255),
+        COLOR_RGBA(0, 255, 64, 255),
+        COLOR_RGBA(0, 255, 128, 255),
+        COLOR_RGBA(0, 255, 192, 255),
+        COLOR_RGBA(0, 255, 255, 255),
+        COLOR_RGBA(0, 192, 255, 255),
+        COLOR_RGBA(0, 128, 255, 255),
+        COLOR_RGBA(0, 64, 255, 255),
+        COLOR_RGBA(0, 0, 255, 255),
+        COLOR_RGBA(64, 0, 255, 255),
+        COLOR_RGBA(128, 0, 255, 255),
+        COLOR_RGBA(192, 0, 255, 255),
+        COLOR_RGBA(255, 0, 255, 255),
+        COLOR_RGBA(255, 0, 192, 255),
+        COLOR_RGBA(255, 0, 128, 255),
+        COLOR_RGBA(255, 0, 64, 255),
+        COLOR_RGBA(255, 255, 255, 255),
+        COLOR_RGBA(128, 128, 128, 255)
+    };
+
+    if (!out_color)
+        return false;
+
+    if (c >= '0' && c <= '7') {
+        *out_color = q3_color_table[c - '0'];
+    } else if (c >= 'a' && c <= 'z') {
+        *out_color = q3_rainbow_colors[c - 'a'];
+    } else if (c >= 'A' && c <= 'Z') {
+        *out_color = q3_rainbow_colors[c - 'A'];
+    } else {
+        return false;
+    }
+
+    out_color->a = base.a;
+    return true;
+}
+
+static inline bool Com_ParseColorEscape(const char **string, size_t *remaining, color_t base, color_t *out_color)
+{
+    if (!string || !*string || !remaining)
+        return false;
+    if (*remaining < 2)
+        return false;
+    if (**string != '^')
+        return false;
+    if (!Com_IsColorEscapeCode((*string)[1]))
+        return false;
+
+    color_t parsed;
+    if (!Com_ColorFromEscape((*string)[1], base, &parsed))
+        return false;
+
+    *string += 2;
+    *remaining -= 2;
+    if (out_color)
+        *out_color = parsed;
+    return true;
+}
+
+static inline bool Com_HasColorEscape(const char *string, size_t maxlen)
+{
+    if (!string || !*string)
+        return false;
+
+    size_t remaining = maxlen;
+    const char *s = string;
+    while (remaining && *s) {
+        if (remaining >= 2 && *s == '^' && Com_IsColorEscapeCode(s[1]))
+            return true;
+        ++s;
+        --remaining;
+    }
+
+    return false;
+}
+
+static inline size_t Com_StrlenNoColor(const char *string, size_t maxlen)
+{
+    if (!string || !*string)
+        return 0;
+
+    size_t remaining = maxlen;
+    size_t len = 0;
+    const char *s = string;
+    while (remaining && *s) {
+        if (remaining >= 2 && *s == '^' && Com_IsColorEscapeCode(s[1])) {
+            s += 2;
+            remaining -= 2;
+            continue;
+        }
+        ++s;
+        --remaining;
+        ++len;
+    }
+
+    return len;
+}
 
 #if USE_REF
 unsigned Com_ParseExtensionString(const char *s, const char *const extnames[]);
@@ -98,6 +221,9 @@ uint32_t Com_SlowRand(void);
 #define UNICODE_UNKNOWN     0xFFFD
 #define UNICODE_MAX         0x10FFFF
 uint32_t UTF8_ReadCodePoint(const char **src);
+size_t UTF8_EncodeCodePoint(uint32_t codepoint, char *dst, size_t size);
+size_t UTF8_CountChars(const char *text, size_t bytes);
+size_t UTF8_OffsetForChars(const char *text, size_t chars);
 size_t UTF8_TranslitBuffer(char *dst, const char *src, size_t size);
 char *UTF8_TranslitString(const char *src);
 #endif

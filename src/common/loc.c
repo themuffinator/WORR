@@ -22,7 +22,284 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.h"
 #include "common/loc.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 static cvar_t *loc_file;
+static cvar_t *loc_language;
+
+#define LOC_LANG_TAG_MAX    64
+
+typedef struct {
+    const char *name;
+    const char *file;
+    const char *aliases;
+} loc_language_t;
+
+static const loc_language_t loc_languages[] = {
+    { "english", "localization/loc_english.txt", "en" },
+    { "french", "localization/loc_french.txt", "fr" },
+    { "german", "localization/loc_german.txt", "de" },
+    { "italian", "localization/loc_italian.txt", "it" },
+    { "spanish", "localization/loc_spanish.txt", "es" },
+    { "russian", "localization/loc_russian.txt", "ru" },
+    { "arabic", "localization/loc_arabic.txt", "ar" },
+    { "bulgarian", "localization/loc_bulgarian.txt", "bg" },
+    { "czech", "localization/loc_czech.txt", "cs;cz" },
+    { "danish", "localization/loc_danish.txt", "da" },
+    { "dutch", "localization/loc_dutch.txt", "nl" },
+    { "finnish", "localization/loc_finnish.txt", "fi" },
+    { "norwegian", "localization/loc_norwegian.txt", "no;nb;nn" },
+    { "polish", "localization/loc_polish.txt", "pl" },
+    { "portuguese-br", "localization/loc_portuguese_br.txt", "pt-br" },
+    { "portuguese-pt", "localization/loc_portuguese_pt.txt", "pt-pt;pt" },
+    { "swedish", "localization/loc_swedish.txt", "sv" },
+    { "turkish", "localization/loc_turkish.txt", "tr" },
+    { "chinese-traditional", "localization/loc_chinese_traditional.txt", "zh-hant;zh-hk;zh-mo;zh-tw" },
+    { "chinese-simplified", "localization/loc_chinese_simplified.txt", "zh-hans;zh-cn;zh-sg;zh-my;zh" },
+    { "japanese", "localization/loc_japanese.txt", "ja" },
+    { "korean", "localization/loc_korean.txt", "ko" },
+    { NULL, NULL, NULL }
+};
+
+static bool Loc_IsAutoLanguage(const char *value)
+{
+    return !value || !*value || !Q_strcasecmp(value, "auto") ||
+           !Q_strcasecmp(value, "default");
+}
+
+static void Loc_NormalizeTag(char *out, const char *in, size_t out_size)
+{
+    size_t i = 0;
+
+    if (!out_size) {
+        return;
+    }
+
+    for (; *in && i + 1 < out_size; ++in) {
+        char c = *in;
+        if (c == '.' || c == '@') {
+            break;
+        }
+        if (c == '_') {
+            c = '-';
+        }
+        out[i++] = Q_tolower((unsigned char)c);
+    }
+
+    out[i] = '\0';
+}
+
+static bool Loc_AliasMatch(const char *tag, const char *aliases)
+{
+    const char *start = aliases;
+
+    if (!tag || !*tag || !aliases || !*aliases) {
+        return false;
+    }
+
+    while (*start) {
+        const char *end = strchr(start, ';');
+        size_t len = end ? (size_t)(end - start) : strlen(start);
+
+        if (len > 0 && !strncmp(tag, start, len)) {
+            if (tag[len] == '\0' || tag[len] == '-') {
+                return true;
+            }
+        }
+
+        if (!end) {
+            break;
+        }
+        start = end + 1;
+    }
+
+    return false;
+}
+
+static const char *Loc_BaseName(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+#ifdef _WIN32
+    const char *bslash = strrchr(path, '\\');
+    if (bslash && (!slash || bslash > slash)) {
+        slash = bslash;
+    }
+#endif
+    return slash ? slash + 1 : path;
+}
+
+static bool Loc_FileMatches(const char *tag, const char *file)
+{
+    char normalized[LOC_LANG_TAG_MAX];
+    const char *basename = Loc_BaseName(file);
+
+    Loc_NormalizeTag(normalized, basename, sizeof(normalized));
+    return !strcmp(tag, normalized);
+}
+
+static const loc_language_t *Loc_FindLanguageByName(const char *name)
+{
+    char normalized[LOC_LANG_TAG_MAX];
+
+    if (!name || !*name) {
+        return NULL;
+    }
+
+    Loc_NormalizeTag(normalized, name, sizeof(normalized));
+
+    if (!normalized[0]) {
+        return NULL;
+    }
+
+    for (const loc_language_t *lang = loc_languages; lang->name; ++lang) {
+        if (!strcmp(normalized, lang->name) ||
+            Loc_AliasMatch(normalized, lang->aliases) ||
+            Loc_FileMatches(normalized, lang->file)) {
+            return lang;
+        }
+    }
+
+    return NULL;
+}
+
+#ifdef _WIN32
+static const char *Loc_GetWindowsLocaleTag(void)
+{
+    static char locale_tag[LOC_LANG_TAG_MAX];
+    wchar_t wtag[LOCALE_NAME_MAX_LENGTH] = { 0 };
+    int wlen = GetUserDefaultLocaleName(wtag, LOCALE_NAME_MAX_LENGTH);
+
+    if (wlen <= 0) {
+        return NULL;
+    }
+
+    if (WideCharToMultiByte(CP_UTF8, 0, wtag, -1, locale_tag,
+                            sizeof(locale_tag), NULL, NULL) <= 0) {
+        return NULL;
+    }
+
+    Loc_NormalizeTag(locale_tag, locale_tag, sizeof(locale_tag));
+
+    if (!locale_tag[0]) {
+        return NULL;
+    }
+
+    return locale_tag;
+}
+#endif
+
+static const loc_language_t *Loc_DetectLanguage(void)
+{
+#ifdef _WIN32
+    const char *tag = Loc_GetWindowsLocaleTag();
+    if (tag) {
+        return Loc_FindLanguageByName(tag);
+    }
+#endif
+
+    return NULL;
+}
+
+static const loc_language_t *Loc_SelectLanguage(void)
+{
+    const loc_language_t *lang = NULL;
+
+    if (loc_language && !Loc_IsAutoLanguage(loc_language->string)) {
+        lang = Loc_FindLanguageByName(loc_language->string);
+        if (!lang) {
+            Com_WPrintf("Unknown loc_language '%s', defaulting to English.\n",
+                        loc_language->string);
+        }
+    } else {
+        lang = Loc_DetectLanguage();
+    }
+
+    if (!lang) {
+        lang = Loc_FindLanguageByName("english");
+    }
+
+    return lang;
+}
+
+static void Loc_ApplyLanguageSetting(bool force_auto)
+{
+    const loc_language_t *lang;
+
+    if (!loc_language || !loc_file) {
+        return;
+    }
+
+    if (!force_auto && Loc_IsAutoLanguage(loc_language->string) &&
+        loc_file->default_string &&
+        strcmp(loc_file->string, loc_file->default_string) != 0) {
+        return;
+    }
+
+    lang = Loc_SelectLanguage();
+    if (!lang) {
+        return;
+    }
+
+    if (!FS_FileExists(lang->file)) {
+        const loc_language_t *fallback = Loc_FindLanguageByName("english");
+        if (fallback && FS_FileExists(fallback->file)) {
+            lang = fallback;
+        }
+    }
+
+    if (!lang || !lang->file) {
+        return;
+    }
+
+    if (!strcmp(loc_file->string, lang->file)) {
+        return;
+    }
+
+    Cvar_Set("loc_file", lang->file);
+}
+
+static const char *Loc_ResolvePath(char *out, size_t out_size)
+{
+    const char *path;
+    size_t base_len;
+
+    if (!loc_file || !loc_file->string[0]) {
+        return NULL;
+    }
+
+    path = loc_file->string;
+    if (FS_FileExists(path)) {
+        return path;
+    }
+
+    base_len = strlen(BASEGAME);
+    if (!Q_stricmpn(path, BASEGAME, base_len)) {
+        const char *rest = path + base_len;
+        if (*rest == '/' || *rest == '\\') {
+            rest++;
+            if (Q_strlcpy(out, rest, out_size) < out_size &&
+                FS_FileExists(out)) {
+                return out;
+            }
+        }
+    }
+
+    return path;
+}
+
+static void loc_file_changed(cvar_t *self)
+{
+    (void)self;
+    Loc_ReloadFile();
+}
+
+static void loc_language_changed(cvar_t *self)
+{
+    (void)self;
+    Loc_ApplyLanguageSetting(true);
+}
 
 #define MAX_LOC_KEY         64
 #define MAX_LOC_FORMAT      1024
@@ -311,13 +588,29 @@ void Loc_ReloadFile(void)
 {
     Loc_Unload();
 
-	char *buffer;
+    char *buffer = NULL;
+    char resolved_path[MAX_OSPATH];
+    const char *load_path = Loc_ResolvePath(resolved_path, sizeof(resolved_path));
 
-	FS_LoadFile(loc_file->string, (void**)&buffer);
+    if (!load_path) {
+        return;
+    }
 
-	if (!buffer) {
-		return;
-	}
+    FS_LoadFile(load_path, (void**)&buffer);
+
+    if (!buffer) {
+        const loc_language_t *fallback = Loc_FindLanguageByName("english");
+        if (fallback && strcmp(load_path, fallback->file)) {
+            Com_WPrintf("Localization file '%s' not found, falling back to English.\n",
+                        load_path);
+            load_path = fallback->file;
+            FS_LoadFile(load_path, (void**)&buffer);
+        }
+    }
+
+    if (!buffer) {
+        return;
+    }
 
     size_t num_locs = 0;
 
@@ -389,7 +682,7 @@ void Loc_ReloadFile(void)
         continue;
 
 line_error:
-        Com_WPrintf("%s (%s): %s\n", loc_file->string, loc.key, Com_GetLastError());
+        Com_WPrintf("%s (%s): %s\n", load_path, loc.key, Com_GetLastError());
     }
 
 	FS_FreeFile(buffer);
@@ -404,7 +697,13 @@ Loc_Init
 */
 void Loc_Init(void)
 {
-	loc_file = Cvar_Get("loc_file", "localization/loc_english.txt", 0);
+    loc_file = Cvar_Get("loc_file", "localization/loc_english.txt", 0);
+    loc_language = Cvar_Get("loc_language", "auto", CVAR_ARCHIVE);
 
-	Loc_ReloadFile();
+    Loc_ApplyLanguageSetting(!Loc_IsAutoLanguage(loc_language->string));
+
+    loc_file->changed = loc_file_changed;
+    loc_language->changed = loc_language_changed;
+
+    Loc_ReloadFile();
 }

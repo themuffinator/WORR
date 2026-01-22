@@ -39,6 +39,11 @@ cvar_t  *cl_maxfps;
 cvar_t  *cl_async;
 cvar_t  *r_maxfps;
 cvar_t  *cl_autopause;
+static cvar_t *ui_download_active;
+static cvar_t *ui_download_file;
+static cvar_t *ui_download_status;
+static cvar_t *ui_download_queue;
+static cvar_t *ui_download_percent;
 
 cvar_t  *cl_kickangles;
 cvar_t  *cl_rollhack;
@@ -411,7 +416,7 @@ CL_ForwardToServer_f
 static void CL_ForwardToServer_f(void)
 {
     if (cls.state < ca_connected) {
-        Com_Printf("Can't \"%s\", not connected\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_23a15e4dcb24", Cmd_Argv(0));
         return;
     }
 
@@ -499,7 +504,7 @@ void CL_CheckForResend(void)
     cls.connect_count++;
 
     if (cls.state == ca_challenging) {
-        Com_Printf("Requesting challenge... %i\n", cls.connect_count);
+        Com_Printf("$e_auto_255c3fbcc0f4", cls.connect_count);
         OOB_PRINT(NS_CLIENT, &cls.serverAddress, "getchallenge\n");
         return;
     }
@@ -507,7 +512,7 @@ void CL_CheckForResend(void)
     //
     // We have gotten a challenge from the server, so try and connect.
     //
-    Com_Printf("Requesting connection... %i\n", cls.connect_count);
+    Com_Printf("$e_auto_5514076c935f", cls.connect_count);
 
     cls.userinfo_modified = 0;
 
@@ -577,13 +582,12 @@ static void CL_Connect_f(void)
     netadr_t    address;
 
     if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <server>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_198a2158c500", Cmd_Argv(0));
         return;
     }
 
     if (Cmd_Argc() > 2) {
-        Com_Printf("Second argument to `%s' is now ignored. "
-                   "Set protocol via `cl_protocol' variable.\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_6ee119dba76f", Cmd_Argv(0));
     }
 
     server = Cmd_Argv(1);
@@ -597,7 +601,7 @@ static void CL_Connect_f(void)
     }
 
     if (!NET_StringToAdr(server, &address, PORT_SERVER)) {
-        Com_Printf("Bad server address\n");
+        Com_Printf("$e_auto_11f0de8c20e7");
         return;
     }
 
@@ -638,10 +642,10 @@ static void CL_FollowIP_f(void)
     a = &cls.recent_addr[(cls.recent_head - i - 1) & RECENT_MASK];
     if (a->type) {
         const char *s = NET_AdrToString(a);
-        Com_Printf("Following %s...\n", s);
+        Com_Printf("$e_auto_52fe84e67c1a", s);
         Cbuf_InsertText(cmd_current, va("connect %s\n", s));
     } else {
-        Com_Printf("No IP address to follow.\n");
+        Com_Printf("$e_auto_a74af888a687");
     }
 }
 
@@ -651,7 +655,7 @@ static void CL_PassiveConnect_f(void)
 
     if (cls.passive) {
         cls.passive = false;
-        Com_Printf("No longer listening for passive connections.\n");
+        Com_Printf("$e_auto_09cfc56c5ba5");
         return;
     }
 
@@ -667,8 +671,7 @@ static void CL_PassiveConnect_f(void)
     }
 
     cls.passive = true;
-    Com_Printf("Listening for passive connections at %s.\n",
-               NET_AdrToString(&address));
+    Com_Printf("$e_auto_7c1aa98fac25", NET_AdrToString(&address));
 }
 
 void CL_SendRcon(const netadr_t *adr, const char *pass, const char *cmd)
@@ -694,26 +697,23 @@ static void CL_Rcon_f(void)
     netadr_t    address;
 
     if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <command>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_fb76d1529fd3", Cmd_Argv(0));
         return;
     }
 
     if (!rcon_password->string[0]) {
-        Com_Printf("You must set 'rcon_password' before "
-                   "issuing an rcon command.\n");
+        Com_Printf("$e_auto_3cc5fe0a3654");
         return;
     }
 
     address = cls.netchan.remote_address;
     if (!address.type) {
         if (!rcon_address->string[0]) {
-            Com_Printf("You must either be connected, "
-                       "or set the 'rcon_address' cvar "
-                       "to issue rcon commands.\n");
+            Com_Printf("$e_auto_cf3a55754bf2");
             return;
         }
         if (!NET_StringToAdr(rcon_address->string, &address, PORT_SERVER)) {
-            Com_Printf("Bad address: %s\n", rcon_address->string);
+            Com_Printf("$e_auto_3995db0e9377", rcon_address->string);
             return;
         }
     }
@@ -873,13 +873,13 @@ static void CL_ServerStatus_f(void)
     if (Cmd_Argc() < 2) {
         adr = cls.netchan.remote_address;
         if (!adr.type) {
-            Com_Printf("Usage: %s [address]\n", Cmd_Argv(0));
+            Com_Printf("$e_auto_4df11c3d1cb7", Cmd_Argv(0));
             return;
         }
     } else {
         s = Cmd_Argv(1);
         if (!NET_StringToAdr(s, &adr, PORT_SERVER)) {
-            Com_Printf("Bad address: %s\n", s);
+            Com_Printf("$e_auto_3995db0e9377", s);
             return;
         }
     }
@@ -957,11 +957,11 @@ static void CL_DumpStatusResponse(const serverStatus_t *status)
 {
     int i;
 
-    Com_Printf("Status response from %s\n\n", NET_AdrToString(&net_from));
+    Com_Printf("$e_auto_47660594f0e7", NET_AdrToString(&net_from));
 
     Info_Print(status->infostring);
 
-    Com_Printf("\nNum Score Ping Name\n");
+    Com_Printf("$e_auto_5b394e95bd0d");
     for (i = 0; i < status->numPlayers; i++) {
         Com_Printf("%3i %5i %4i %s\n", i + 1,
                    status->players[i].score,
@@ -1066,7 +1066,7 @@ static void CL_Changing_f(void)
     if (cls.demo.recording)
         CL_Stop_f();
 
-    Com_Printf("Changing map...\n");
+    Com_Printf("$e_auto_cd41ea86bba9");
 
     if (!cls.demo.playback) {
         EXEC_TRIGGER(cl_changemapcmd);
@@ -1106,7 +1106,7 @@ The server is changing levels
 static void CL_Reconnect_f(void)
 {
     if (cls.demo.playback) {
-        Com_Printf("No server to reconnect to.\n");
+        Com_Printf("$e_auto_4769270aeefb");
         return;
     }
 
@@ -1121,7 +1121,7 @@ static void CL_Reconnect_f(void)
             return; // if we are downloading, we don't change!
         }
 
-        Com_Printf("Reconnecting...\n");
+        Com_Printf("$e_auto_6eed87d4d3e2");
 
         CL_ClientCommand("new");
         return;
@@ -1129,15 +1129,15 @@ static void CL_Reconnect_f(void)
 
     // issued manually at console
     if (cls.serverAddress.type == NA_UNSPECIFIED) {
-        Com_Printf("No server to reconnect to.\n");
+        Com_Printf("$e_auto_4769270aeefb");
         return;
     }
     if (cls.serverAddress.type == NA_LOOPBACK && !sv_running->integer) {
-        Com_Printf("Can not reconnect to loopback.\n");
+        Com_Printf("$e_auto_38e74046af44");
         return;
     }
 
-    Com_Printf("Reconnecting...\n");
+    Com_Printf("$e_auto_6eed87d4d3e2");
 
     cls.serverProtocol = cl_protocol->integer;
     cls.state = ca_challenging;
@@ -1196,7 +1196,7 @@ static void CL_PingServers_f(void)
             continue;
 
         if (!NET_StringToAdr(var->string, &address, PORT_SERVER)) {
-            Com_Printf("Bad address: %s\n", var->string);
+            Com_Printf("$e_auto_3995db0e9377", var->string);
             continue;
         }
 
@@ -1221,7 +1221,7 @@ static void CL_Skins_f(void)
     clientinfo_t *ci;
 
     if (cls.state < ca_precached) {
-        Com_Printf("Must be in a level to load skins.\n");
+        Com_Printf("$e_auto_1ae0c0071632");
         return;
     }
 
@@ -1340,7 +1340,7 @@ static void CL_ConnectionlessPacket(void)
             // Restrict accepted protocols if one was explicitly specified
             q2proto_protocol_t user_protocol = q2proto_protocol_from_netver(cls.serverProtocol);
             if (user_protocol == Q2P_PROTOCOL_INVALID) {
-                Com_EPrintf("Invalid protocol %d\n", cls.serverProtocol);
+                Com_EPrintf("$e_auto_a27b63711677", cls.serverProtocol);
                 return;
             }
             accepted_protocols[0] = user_protocol;
@@ -1429,8 +1429,8 @@ static void CL_ConnectionlessPacket(void)
             HTTP_SetServer(NULL);
         }
 
-        Com_Printf("Connected to %s (protocol %d).\n",
-                   NET_AdrToString(&cls.serverAddress), cls.serverProtocol);
+        Com_Printf("$e_auto_db968b79e17c", NET_AdrToString(&cls.serverAddress),
+                   cls.serverProtocol);
         Netchan_Close(&cls.netchan);
         Netchan_Setup(&cls.netchan, NS_CLIENT, type, &cls.serverAddress,
                       cls.quakePort, 1024, cls.serverProtocol);
@@ -1446,18 +1446,17 @@ static void CL_ConnectionlessPacket(void)
             Netchan_Transmit(&cls.netchan, 0, NULL, 3);
             S_StopAllSounds();
             cls.connect_count = -1;
-            Com_Printf("Loading anticheat, this may take a few moments...\n");
+            Com_Printf("$e_auto_63acd6f01865");
             SCR_UpdateScreen();
             if (!Sys_GetAntiCheatAPI()) {
-                Com_Printf("Trying to connect without anticheat.\n");
+                Com_Printf("$e_auto_9d2d506fbca0");
             } else {
-                Com_NPrintf("Anticheat loaded successfully.\n");
+                Com_NPrintf("$e_auto_b5648fb19f60");
             }
         }
 #else
         if (anticheat >= 2) {
-            Com_Printf("Anticheat required by server, "
-                       "but no anticheat support linked in.\n");
+            Com_Printf("$e_auto_1d7c8dd8349d");
         }
 #endif
 
@@ -1478,7 +1477,7 @@ static void CL_ConnectionlessPacket(void)
             return;
         }
         adr = NET_AdrToString(&net_from);
-        Com_Printf("Received passive connect from %s.\n", adr);
+        Com_Printf("$e_auto_86647dcd1eca", adr);
 
         cls.serverAddress = net_from;
         cls.serverProtocol = cl_protocol->integer;
@@ -1681,7 +1680,7 @@ static void CL_Userinfo_f(void)
 
     Cvar_BitInfo(userinfo, CVAR_USERINFO);
 
-    Com_Printf("User info settings:\n");
+    Com_Printf("$e_auto_078045195028");
     Info_Print(userinfo);
 }
 
@@ -1718,7 +1717,7 @@ static void CL_PlaySound_f(void)
     char name[MAX_QPATH];
 
     if (Cmd_Argc() < 2) {
-        Com_Printf("Usage: %s <sound> [...]\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_cdd0cd072e5b", Cmd_Argv(0));
         return;
     }
 
@@ -1831,7 +1830,7 @@ void CL_LoadFilterList(string_entry_t **list, const char *name, const char *comm
     len = FS_LoadFileEx(name, (void **)&raw, FS_TYPE_REAL, TAG_FILESYSTEM);
     if (!raw) {
         if (len != Q_ERR(ENOENT))
-            Com_EPrintf("Couldn't load %s: %s\n", name, Q_ErrorString(len));
+            Com_EPrintf("$e_auto_73e61d85e709", name, Q_ErrorString(len));
         return;
     }
 
@@ -1857,7 +1856,7 @@ void CL_LoadFilterList(string_entry_t **list, const char *name, const char *comm
                 *list = entry;
                 count++;
             } else {
-                Com_WPrintf("Oversize filter on line %d in %s\n", line, name);
+                Com_WPrintf("$e_auto_94387398dcf4", line, name);
             }
         }
 
@@ -1905,13 +1904,13 @@ static void list_ignores(const list_t *list)
     ignore_t *ignore;
 
     if (LIST_EMPTY(list)) {
-        Com_Printf("No ignore filters.\n");
+        Com_Printf("$e_auto_0ceb51b7d6b5");
         return;
     }
 
-    Com_Printf("Current ignore filters:\n");
+    Com_Printf("$e_auto_a883e09d37b0");
     LIST_FOR_EACH(ignore_t, ignore, list, entry) {
-        Com_Printf("\"%s\" (%u hit%s)\n", ignore->match,
+        Com_Printf("$e_auto_bd726af48aa6", ignore->match,
                    ignore->hits, ignore->hits == 1 ? "" : "s");
     }
 }
@@ -1928,7 +1927,7 @@ static void add_ignore(list_t *list, const char *match, size_t minlen)
 
     matchlen = strlen(match);
     if (matchlen < minlen) {
-        Com_Printf("Match string \"%s\" is too short.\n", match);
+        Com_Printf("$e_auto_9d3ce8989acb", match);
         return;
     }
 
@@ -1944,7 +1943,7 @@ static void remove_ignore(list_t *list, const char *match)
 
     ignore = find_ignore(list, match);
     if (!ignore) {
-        Com_Printf("Can't find ignore filter \"%s\"\n", match);
+        Com_Printf("$e_auto_2d29e918127d", match);
         return;
     }
 
@@ -1962,7 +1961,7 @@ static void remove_all_ignores(list_t *list)
         count++;
     }
 
-    Com_Printf("Removed %d ignore filter%s.\n", count, count == 1 ? "" : "s");
+    Com_Printf("$e_auto_7e5843912eda", count, count == 1 ? "" : "s");
     List_Init(list);
 }
 
@@ -2102,7 +2101,7 @@ static void CL_DumpClients_f(void)
     int i;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level to dump.\n");
+        Com_Printf("$e_auto_d47c2c22870e");
         return;
     }
 
@@ -2120,23 +2119,23 @@ static void dump_program(const char *text, const char *name)
     char buffer[MAX_OSPATH];
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level to dump.\n");
+        Com_Printf("$e_auto_d47c2c22870e");
         return;
     }
 
     if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: %s <filename>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_eed59e38c05c", Cmd_Argv(0));
         return;
     }
 
     if (!*text) {
-        Com_Printf("No %s to dump.\n", name);
+        Com_Printf("$e_auto_db2474c829a0", name);
         return;
     }
 
     if (FS_EasyWriteFile(buffer, sizeof(buffer), FS_MODE_WRITE | FS_FLAG_TEXT,
                          "layouts/", Cmd_Argv(1), ".txt", text, strlen(text))) {
-        Com_Printf("Dumped %s program to %s.\n", name, buffer);
+        Com_Printf("$e_auto_c82fb443bf35", name, buffer);
     }
 }
 
@@ -2189,7 +2188,7 @@ static void CL_WriteConfig_f(void)
             break;
         case 'h':
             Cmd_PrintUsage(o_writeconfig, "<filename>");
-            Com_Printf("Save current configuration into file.\n");
+            Com_Printf("$e_auto_5978ab1f0a4c");
             Cmd_PrintHelp(o_writeconfig);
             return;
         case 'm':
@@ -2202,7 +2201,7 @@ static void CL_WriteConfig_f(void)
     }
 
     if (!cmd_optarg[0]) {
-        Com_Printf("Missing filename argument.\n");
+        Com_Printf("$e_auto_901124f8c0c4");
         Cmd_PrintHint();
         return;
     }
@@ -2234,9 +2233,9 @@ static void CL_WriteConfig_f(void)
     }
 
     if (FS_CloseFile(f))
-        Com_EPrintf("Error writing %s\n", buffer);
+        Com_EPrintf("$e_auto_3240af950c4e", buffer);
     else
-        Com_Printf("Wrote %s.\n", buffer);
+        Com_Printf("$e_auto_c859496e563d", buffer);
 }
 
 static void CL_Say_c(genctx_t *ctx, int argnum)
@@ -2396,7 +2395,7 @@ static void CL_WriteConfig(void)
 
     ret = FS_OpenFile(COM_CONFIG_CFG, &f, FS_MODE_WRITE | FS_FLAG_TEXT);
     if (!f) {
-        Com_EPrintf("Couldn't open %s for writing: %s\n",
+        Com_EPrintf("$e_auto_6997f57b8941",
                     COM_CONFIG_CFG, Q_ErrorString(ret));
         return;
     }
@@ -2407,7 +2406,7 @@ static void CL_WriteConfig(void)
     Cvar_WriteVariables(f, CVAR_ARCHIVE, false);
 
     if (FS_CloseFile(f))
-        Com_EPrintf("Error writing %s\n", COM_CONFIG_CFG);
+        Com_EPrintf("$e_auto_3240af950c4e", COM_CONFIG_CFG);
 }
 
 /*
@@ -2565,14 +2564,11 @@ static void CL_RestartRenderer_f(void)
         if (Cmd_From() == FROM_STUFFTEXT)
             return;
 
-        Com_Printf("Manual `vid_restart' command ignored.\n");
+        Com_Printf("$e_auto_733d45d943d1");
         if (warned)
             return;
 
-        Com_Printf("Video settings are automatically applied by " PRODUCT ", thus manual "
-                   "`vid_restart' is never needed. To force restart of video subsystem, "
-                   "use `vid_restart force', or set `cl_allow_vid_restart' variable to 1 "
-                   "to restore old behavior of this command.\n");
+        Com_Printf("$e_auto_99880e5d83b2");
         warned = true;
         return;
     }
@@ -2591,7 +2587,7 @@ static bool allow_stufftext(const char *text)
             return true;
 
     if (cl_ignore_stufftext->integer >= 2)
-        Com_WPrintf("Ignored stufftext: %s\n", text);
+        Com_WPrintf("$e_auto_f21c677009ba", text);
 
     return false;
 }
@@ -2814,6 +2810,11 @@ static void CL_InitLocal(void)
     r_maxfps = Cvar_Get("r_maxfps", "0", 0);
     r_maxfps->changed = cl_sync_changed;
     cl_autopause = Cvar_Get("cl_autopause", "1", 0);
+    ui_download_active = Cvar_Get("ui_download_active", "0", 0);
+    ui_download_file = Cvar_Get("ui_download_file", "", 0);
+    ui_download_status = Cvar_Get("ui_download_status", "", 0);
+    ui_download_queue = Cvar_Get("ui_download_queue", "", 0);
+    ui_download_percent = Cvar_Get("ui_download_percent", "0", 0);
     cl_rollhack = Cvar_Get("cl_rollhack", "1", 0);
     cl_noglow = Cvar_Get("cl_noglow", "0", 0);
     cl_nobob = Cvar_Get("cl_nobob", "0", 0);
@@ -3235,10 +3236,10 @@ static void warn_on_fps_rounding(const cvar_t *cvar, int msec)
     if (cvar->integer == real_maxfps)
         return;
 
-    Com_WPrintf("%s value `%d' is inexact and will be rounded to `%d'.\n",
+    Com_WPrintf("$e_auto_9449d59c2dfa",
                 cvar->name, cvar->integer, real_maxfps);
     if (!warned) {
-        Com_Printf("(Set `%s' to `0' to disable this warning.)\n",
+        Com_Printf("$e_auto_e9f660ec33af",
                    cl_warn_on_fps_rounding->name);
         warned = true;
     }
@@ -3316,16 +3317,24 @@ void CL_AddHitMarker(int damage)
     if (damage <= 0)
         return;
 
-    cl.crosshair_hit_time = cls.realtime;
-    cl.crosshair_hit_damage = damage;
+    bool use_cgame = (cgame && cgame->DrawCrosshair && cgame->NotifyHitMarker);
+
+    if (use_cgame) {
+        cgame->NotifyHitMarker(0, damage);
+    } else {
+        cl.crosshair_hit_time = cls.realtime;
+        cl.crosshair_hit_damage = damage;
+    }
 
     if (!cl_hit_markers->integer)
         return;
 
     if (cl.hit_marker_frame != cl.frame.number) {
         cl.hit_marker_frame = cl.frame.number;
-        cl.hit_marker_time = cls.realtime;
-        cl.hit_marker_count++;
+        if (!use_cgame) {
+            cl.hit_marker_time = cls.realtime;
+            cl.hit_marker_count++;
+        }
 
         if (cl_hit_markers->integer > 1)
             S_StartSound(NULL, listener_entnum, 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
@@ -3340,6 +3349,88 @@ static void CL_UpdateHitMarkers(void)
     int damage = cgame->GetHitMarkerDamage(&cl.frame.ps);
     if (damage > 0)
         CL_AddHitMarker(damage);
+}
+
+static void CL_UpdateDownloadOverlay(void)
+{
+    static bool download_menu_open = false;
+
+    bool downloading = cls.download.pending > 0;
+    bool show_menu = downloading && cls.state < ca_active;
+    bool has_current = cls.download.current != NULL;
+
+    if (download_menu_open && !(Key_GetDest() & KEY_MENU))
+        download_menu_open = false;
+
+    if (ui_download_active)
+        Cvar_SetInteger(ui_download_active, show_menu ? 1 : 0, FROM_CODE);
+
+    if (downloading) {
+        if (has_current) {
+            const char *path = cls.download.current->path;
+            const char *name = strrchr(path, '/');
+            if (name)
+                name++;
+            else
+                name = path;
+
+            Cvar_SetByVar(ui_download_file, name, FROM_CODE);
+
+            int percent = Q_clip(cls.download.percent, 0, 100);
+            Cvar_SetInteger(ui_download_percent, percent, FROM_CODE);
+
+            char size[16];
+            char status[64];
+            Com_FormatSizeLong(size, sizeof(size), cls.download.position);
+            if (percent > 0) {
+                Q_snprintf(status, sizeof(status), "%d%% (%s)", percent, size);
+            } else {
+                Q_snprintf(status, sizeof(status), "%s", size);
+            }
+            Cvar_SetByVar(ui_download_status, status, FROM_CODE);
+        } else {
+            Cvar_SetByVar(ui_download_file, "Preparing downloads...", FROM_CODE);
+            Cvar_SetInteger(ui_download_percent, 0, FROM_CODE);
+            if (cls.download.pending > 0) {
+                char status[64];
+                Q_snprintf(status, sizeof(status), "Queued %d file%s",
+                           cls.download.pending,
+                           cls.download.pending == 1 ? "" : "s");
+                Cvar_SetByVar(ui_download_status, status, FROM_CODE);
+            } else {
+                Cvar_SetByVar(ui_download_status, "", FROM_CODE);
+            }
+        }
+
+        if (has_current) {
+            int remaining = cls.download.pending - 1;
+            if (remaining > 0) {
+                char queue[64];
+                Q_snprintf(queue, sizeof(queue), "%d file%s remaining",
+                           remaining, remaining == 1 ? "" : "s");
+                Cvar_SetByVar(ui_download_queue, queue, FROM_CODE);
+            } else {
+                Cvar_SetByVar(ui_download_queue, "", FROM_CODE);
+            }
+        } else {
+            Cvar_SetByVar(ui_download_queue, "", FROM_CODE);
+        }
+    } else {
+        Cvar_SetByVar(ui_download_file, "", FROM_CODE);
+        Cvar_SetByVar(ui_download_status, "", FROM_CODE);
+        Cvar_SetByVar(ui_download_queue, "", FROM_CODE);
+        Cvar_SetInteger(ui_download_percent, 0, FROM_CODE);
+    }
+
+    if (show_menu) {
+        if (!download_menu_open) {
+            UI_OpenMenu(UIMENU_DOWNLOAD);
+            download_menu_open = true;
+        }
+    } else if (download_menu_open) {
+        UI_OpenMenu(UIMENU_NONE);
+        download_menu_open = false;
+    }
 }
 
 /*
@@ -3473,6 +3564,7 @@ unsigned CL_Frame(unsigned msec)
 
     // Update hit marker status from cgame
     CL_UpdateHitMarkers();
+    CL_UpdateDownloadOverlay();
 
     UI_Frame(main_extra);
 
@@ -3637,7 +3729,7 @@ void CL_Shutdown(void)
     static bool isdown = false;
 
     if (isdown) {
-        Com_Printf("CL_Shutdown: recursive shutdown\n");
+    Com_Printf("$e_auto_2d5bd94651b7");
         return;
     }
     isdown = true;

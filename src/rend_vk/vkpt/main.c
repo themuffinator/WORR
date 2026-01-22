@@ -113,7 +113,7 @@ cvar_t *cvar_sli = NULL;
 cvar_t *cvar_dump_image = NULL;
 #endif
 
-byte cluster_debug_mask[VIS_MAX_BYTES];
+visrow_t cluster_debug_mask;
 int cluster_debug_index;
 
 #define UBO_CVAR_DO(name, default_value) cvar_t *cvar_##name;
@@ -300,12 +300,12 @@ static VkExtent2D get_screen_image_extent(void)
 	return result;
 }
 
-void vkpt_reset_accumulation()
+void vkpt_reset_accumulation(void)
 {
 	num_accumulated_frames = 0;
 }
 
-VkResult
+static VkResult
 vkpt_initialize_all(VkptInitFlags_t init_flags)
 {
 	vkDeviceWaitIdle(qvk.device);
@@ -358,7 +358,7 @@ vkpt_initialize_all(VkptInitFlags_t init_flags)
 	return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 vkpt_destroy_all(VkptInitFlags_t destroy_flags)
 {
 	vkDeviceWaitIdle(qvk.device);
@@ -387,7 +387,7 @@ vkpt_destroy_all(VkptInitFlags_t destroy_flags)
 	return VK_SUCCESS;
 }
 
-void
+static void
 vkpt_reload_shader(void)
 {
 	char buf[1024];
@@ -607,7 +607,7 @@ static bool vk_create_surface(void)
 /* use this to override file names */
 static const char *shader_module_file_names[NUM_QVK_SHADER_MODULES];
 
-void
+static void
 get_vk_extension_list(
 		const char *layer,
 		uint32_t *num_extensions,
@@ -618,7 +618,7 @@ get_vk_extension_list(
 	_VK(vkEnumerateInstanceExtensionProperties(layer, num_extensions, *ext));
 }
 
-void
+static void
 get_vk_layer_list(
 		uint32_t *num_layers,
 		VkLayerProperties **ext)
@@ -662,7 +662,7 @@ vk_debug_callback(
 	return VK_FALSE;
 }
 
-VkResult
+static VkResult
 qvkCreateDebugUtilsMessengerEXT(
 		VkInstance instance,
 		const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -676,7 +676,7 @@ qvkCreateDebugUtilsMessengerEXT(
 	return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
-VkResult
+static VkResult
 qvkDestroyDebugUtilsMessengerEXT(
 		VkInstance instance,
 		VkDebugUtilsMessengerEXT callback,
@@ -734,7 +734,7 @@ static bool pick_surface_format_sdr(picked_surface_format_t* picked_fmt, const V
 	return false;
 }
 
-VkResult
+static VkResult
 create_swapchain(void)
 {
 	num_accumulated_frames = 0;
@@ -913,7 +913,7 @@ create_swapchain(void)
 	return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 create_command_pool_and_fences(void)
 {
 	VkCommandPoolCreateInfo cmd_pool_create_info = {
@@ -973,7 +973,7 @@ append_string_list(const char** dst, uint32_t* dst_count, uint32_t dst_capacity,
 	*dst_count += src_count;
 }
 
-bool
+static bool
 init_vulkan(void)
 {
 	Com_Printf("----- init_vulkan -----\n");
@@ -1288,7 +1288,8 @@ init_vulkan(void)
 			int nfields = sscanf(cvar_min_driver_version_nvidia->string, "%u.%u", &required_major, &required_minor);
 			if (nfields == 2)
 			{
-				if (driver_major < required_major || driver_major == required_major && driver_minor < required_minor)
+				if (driver_major < required_major ||
+					(driver_major == required_major && driver_minor < required_minor))
 				{
 					Com_Error(ERR_FATAL, "This game requires NVIDIA Graphics Driver version to be at least %u.%02u, "
 						"while the installed version is %u.%02u.\nPlease update the NVIDIA Graphics Driver.",
@@ -1312,7 +1313,9 @@ init_vulkan(void)
 
 			if (nfields_present == 3 && nfields_required == 3)
 			{
-				if (present_major < required_major || present_major == required_major && present_minor < required_minor || present_major == required_major && present_minor == required_minor && present_patch < required_patch)
+				if (present_major < required_major ||
+					(present_major == required_major && present_minor < required_minor) ||
+					(present_major == required_major && present_minor == required_minor && present_patch < required_patch))
 				{
 					Com_Error(ERR_FATAL, "This game requires AMD Radeon Software version to be at least %s, while the installed version is %s.\nPlease update the AMD Radeon Software.",
 						cvar_min_driver_version_amd->string, driver_properties.driverInfo);
@@ -1754,7 +1757,7 @@ create_shader_module_from_file(const char *name, const char *enum_name, bool is_
 }
 
 VkResult
-vkpt_load_shader_modules()
+vkpt_load_shader_modules(void)
 {
 	VkResult ret = VK_SUCCESS;
 #define SHADER_MODULE_DO(a) do { \
@@ -1781,7 +1784,7 @@ vkpt_load_shader_modules()
 }
 
 VkResult
-vkpt_destroy_shader_modules()
+vkpt_destroy_shader_modules(void)
 {
 	for (int i = 0; i < NUM_QVK_SHADER_MODULES; i++)
 	{
@@ -1792,7 +1795,7 @@ vkpt_destroy_shader_modules()
 	return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 destroy_swapchain(void)
 {
 	for(int i = 0; i < qvk.num_swap_chain_images; i++) {
@@ -1813,7 +1816,7 @@ destroy_swapchain(void)
 	return VK_SUCCESS;
 }
 
-int
+static int
 destroy_vulkan(void)
 {
 	vkDeviceWaitIdle(qvk.device);
@@ -2664,13 +2667,14 @@ copy_to_dump_texture(VkCommandBuffer cmd_buf, int src_image_index)
 }
 #endif
 
-VkDescriptorSet qvk_get_current_desc_set_textures()
+VkDescriptorSet qvk_get_current_desc_set_textures(void)
 {
 	return (qvk.frame_counter & 1) ? qvk.desc_set_textures_odd : qvk.desc_set_textures_even;
 }
 
 static void
-process_render_feedback(ref_feedback_t *feedback, mleaf_t* viewleaf, bool* sun_visible, float* adapted_luminance)
+process_render_feedback(ref_feedback_t *feedback, const mleaf_t* viewleaf,
+						bool* sun_visible, float* adapted_luminance)
 {
 	if (viewleaf)
 		feedback->viewcluster = viewleaf->cluster;
@@ -2740,6 +2744,39 @@ static bool is_accumulation_rendering_active(void)
 	return cl_paused->integer == 2 && sv_paused->integer && cvar_pt_accumulation_rendering->integer > 0;
 }
 
+static inline bool draw_is_color_escape(char c)
+{
+	if (c >= '0' && c <= '7')
+		return true;
+	if (c >= 'a' && c <= 'z')
+		return true;
+	if (c >= 'A' && c <= 'Z')
+		return true;
+	return false;
+}
+
+static size_t draw_strlen_no_color(const char *string, size_t maxlen)
+{
+	if (!string || !*string)
+		return 0;
+
+	size_t remaining = maxlen;
+	size_t len = 0;
+	const char *s = string;
+	while (remaining && *s) {
+		if (remaining >= 2 && *s == '^' && draw_is_color_escape(s[1])) {
+			s += 2;
+			remaining -= 2;
+			continue;
+		}
+		++s;
+		--remaining;
+		++len;
+	}
+
+	return len;
+}
+
 static int draw_string_aligned(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color)
 {
 	size_t len = strlen(s);
@@ -2748,10 +2785,11 @@ static int draw_string_aligned(int x, int y, int scale, int flags, size_t maxlen
 		len = maxlen;
 	}
 
+	size_t visible_len = draw_strlen_no_color(s, len);
 	if ((flags & UI_CENTER) == UI_CENTER) {
-		x -= (int)(len * CONCHAR_WIDTH * scale) / 2;
+		x -= (int)(visible_len * CONCHAR_WIDTH * scale) / 2;
 	} else if (flags & UI_RIGHT) {
-		x -= (int)(len * CONCHAR_WIDTH * scale);
+		x -= (int)(visible_len * CONCHAR_WIDTH * scale);
 	}
 
 	return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, vkpt_hud_font);
@@ -2918,14 +2956,16 @@ prepare_camera(const vec3_t position, const vec3_t direction, mat4_t data)
 }
 
 static void
-prepare_viewmatrix(refdef_t *fd)
+prepare_viewmatrix(const refdef_t *fd)
 {
 	create_view_matrix(vkpt_refdef.view_matrix, fd);
 	inverse(vkpt_refdef.view_matrix, vkpt_refdef.view_matrix_inv);
 }
 
 static void
-prepare_ubo(refdef_t *fd, mleaf_t* viewleaf, const reference_mode_t* ref_mode, const vec3_t sky_matrix[3], bool render_world)
+prepare_ubo(const refdef_t *fd, const mleaf_t* viewleaf,
+			const reference_mode_t* ref_mode,
+			const vec3_t sky_matrix[3], bool render_world)
 {
 	const bsp_mesh_t* wm = &vkpt_refdef.bsp_mesh_world;
 
@@ -3201,12 +3241,12 @@ R_RenderFrame(const refdef_t *fd)
 			memset(vkpt_refdef.prev_lightstyles, 0, sizeof(vkpt_refdef.prev_lightstyles));
 	}
 
-	mleaf_t* viewleaf = bsp_world_model ? BSP_PointLeaf(bsp_world_model->nodes, fd->vieworg) : NULL;
+	const mleaf_t* viewleaf = bsp_world_model ? BSP_PointLeaf(bsp_world_model->nodes, fd->vieworg) : NULL;
 	
 	bool sun_visible_prev = false;
 	static float prev_adapted_luminance = 0.f;
 	float adapted_luminance = 0.f;
-	process_render_feedback(&fd->feedback, viewleaf, &sun_visible_prev, &adapted_luminance);
+	process_render_feedback(&vkpt_refdef.fd->feedback, viewleaf, &sun_visible_prev, &adapted_luminance);
 
 	// Sometimes, the readback returns 1.0 luminance instead of the real value.
 	// Ignore these mysterious spikes.
@@ -3941,12 +3981,13 @@ vkpt_show_pvs(void)
 
 	if (vkpt_refdef.fd->feedback.lookatcluster < 0)
 	{
-		memset(cluster_debug_mask, 0, sizeof(cluster_debug_mask));
+		memset(&cluster_debug_mask, 0, sizeof(cluster_debug_mask));
 		cluster_debug_index = -1;
 		return;
 	}
 
-	BSP_ClusterVis(bsp_world_model, cluster_debug_mask, vkpt_refdef.fd->feedback.lookatcluster, DVIS_PVS);
+	BSP_ClusterVis(bsp_world_model, &cluster_debug_mask,
+				   vkpt_refdef.fd->feedback.lookatcluster, DVIS_PVS);
 	cluster_debug_index = vkpt_refdef.fd->feedback.lookatcluster;
 }
 
@@ -4554,9 +4595,6 @@ R_SetSky(const char *name, float rotate, bool autorotate, const vec3_t axis)
 	Z_Free(data);
 }
 
-void R_AddDecal(decal_t *d)
-{ }
-
 void
 R_BeginRegistration(const char *name)
 {
@@ -4613,7 +4651,7 @@ R_BeginRegistration(const char *name)
 	vkpt_tone_mapping_request_reset();
 	vkpt_light_buffer_reset_counts();
 
-	memset(cluster_debug_mask, 0, sizeof(cluster_debug_mask));
+	memset(&cluster_debug_mask, 0, sizeof(cluster_debug_mask));
 	cluster_debug_index = -1;
 
 	drs_last_frame_world = false;

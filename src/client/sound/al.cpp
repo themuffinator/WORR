@@ -29,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // Quake units per second (1 unit ~= 1 inch).
 static constexpr float AL_DOPPLER_SPEED = 13500.0f;
+static constexpr float AL_DOPPLER_TELEPORT_DISTANCE = 1024.0f;
 
 static cvar_t       *al_reverb;
 static cvar_t       *al_reverb_lerp_time;
@@ -1135,9 +1136,16 @@ static bool AL_GetEntityVelocity(int entnum, vec3_t velocity)
     float dt = dt_ms * 0.001f;
     vec3_t instant;
     VectorSubtract(origin, state->origin, instant);
+    float distance = VectorLength(instant);
+    if (distance > AL_DOPPLER_TELEPORT_DISTANCE) {
+        VectorCopy(origin, state->origin);
+        VectorClear(state->velocity);
+        state->time = now;
+        return true;
+    }
     VectorScale(instant, 1.0f / dt, instant);
 
-    float speed = VectorLength(instant);
+    float speed = distance / dt;
     float max_speed = al_doppler_max_speed ? Cvar_ClampValue(al_doppler_max_speed, 0.0f, 20000.0f) : 0.0f;
     if (max_speed > 0.0f && speed > max_speed) {
         float scale = max_speed / speed;
@@ -1281,6 +1289,10 @@ static void AL_PlayChannel(channel_t *ch)
     qalSourcef(ch->srcnum, AL_REFERENCE_DISTANCE, SOUND_FULLVOLUME);
     qalSourcef(ch->srcnum, AL_MAX_DISTANCE, 8192);
     qalSourcef(ch->srcnum, AL_ROLLOFF_FACTOR, AL_GetRolloffFactor(ch->dist_mult));
+    qalSourcei(ch->srcnum, AL_SOURCE_RELATIVE, AL_FALSE);
+    if (s_source_spatialize) {
+        qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
+    }
 
     if (cl.bsp && s_reverb_slot && al_reverb->integer) {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
@@ -1405,7 +1417,8 @@ static void AL_MergeLoopSounds(void)
         if (!sounds[i])
             continue;
 
-        sfx = S_SfxForHandle(cl.sound_precache[sounds[i]]);
+        const int sound_handle = sounds[i];
+        sfx = S_SfxForHandle(cl.sound_precache[sound_handle]);
         if (!sfx)
             continue;       // bad sound effect
         sc = sfx->cache;
@@ -1421,7 +1434,7 @@ static void AL_MergeLoopSounds(void)
         bool has_doppler = AL_EntityHasDoppler(ent);
         if (!has_doppler) {
             for (j = i + 1; j < cl.frame.numEntities; j++) {
-                if (sounds[j] != sounds[i])
+                if (sounds[j] != sound_handle)
                     continue;
                 num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
                 if (AL_EntityHasDoppler(&cl.entityStates[num])) {
@@ -1433,13 +1446,17 @@ static void AL_MergeLoopSounds(void)
 
         if (has_doppler) {
             for (j = i; j < cl.frame.numEntities; j++) {
-                if (sounds[j] != sounds[i])
+                if (sounds[j] != sound_handle)
                     continue;
                 num = (cl.frame.firstEntity + j) & PARSE_ENTITIES_MASK;
-                AL_AddLoopSoundEntity(&cl.entityStates[num], sfx, sc, true);
+                const entity_state_t *ent_j = &cl.entityStates[num];
+                if (!AL_EntityHasDoppler(ent_j))
+                    continue;
+                AL_AddLoopSoundEntity(ent_j, sfx, sc, true);
                 sounds[j] = 0;
             }
-            continue;
+            if (!sounds[i])
+                continue;
         }
 
         left_total = right_total = 0.0f;
@@ -1473,7 +1490,7 @@ static void AL_MergeLoopSounds(void)
         left_total += left;
         right_total += right;
         for (j = i + 1; j < cl.frame.numEntities; j++) {
-            if (sounds[j] != sounds[i])
+            if (sounds[j] != sound_handle)
                 continue;
             sounds[j] = 0;  // don't check this again later
 

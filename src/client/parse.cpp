@@ -952,9 +952,49 @@ static bool CL_IsMatchAnnouncement(int level)
     return base_level == PRINT_HIGH || base_level == PRINT_TTS;
 }
 
+static const char kObituaryMetaTag[] = "OBIT";
+static const char kObituaryMetaStart = '\x1e';
+static const char kObituaryMetaSep = '\x1f';
+
+static const char *CL_SkipObituaryMetadata(const char *msg)
+{
+    if (!msg || msg[0] != kObituaryMetaStart)
+        return msg;
+    if (strncmp(msg + 1, kObituaryMetaTag, 4) != 0)
+        return msg;
+    const char *cursor = msg + 1 + 4;
+    if (*cursor != kObituaryMetaSep)
+        return msg;
+    cursor++;
+
+    const char *sep = strchr(cursor, kObituaryMetaSep);
+    if (!sep)
+        return msg;
+    cursor = sep + 1;
+    sep = strchr(cursor, kObituaryMetaSep);
+    if (!sep)
+        return msg;
+    cursor = sep + 1;
+    sep = strchr(cursor, kObituaryMetaStart);
+    if (!sep)
+        return msg;
+    return sep + 1;
+}
+
 static void CL_HandlePrint(int level, char *s)
 {
     const char *fmt;
+    char cgame_buf[MAX_STRING_CHARS];
+    char visible_buf[MAX_STRING_CHARS];
+    const char *visible = CL_SkipObituaryMetadata(s);
+    const char *cgame_msg = s;
+
+    if (visible != s) {
+        Q_strlcpy(cgame_buf, s, sizeof(cgame_buf));
+        Q_strlcpy(visible_buf, visible, sizeof(visible_buf));
+        Q_strlcpy(s, visible_buf, MAX_STRING_CHARS);
+        cgame_msg = cgame_buf;
+    }
 
     if (level != PRINT_CHAT) {
         if (cl_cgame_notify->integer && CL_IsMatchAnnouncement(level)) {
@@ -969,7 +1009,7 @@ static void CL_HandlePrint(int level, char *s)
             } else {
                 if (cl_cgame_notify->integer) {
                     Con_SkipNotify(true);
-                    cgame->NotifyMessage(0, s, level == PRINT_CHAT);
+                    cgame->NotifyMessage(0, cgame_msg, level == PRINT_CHAT);
                 }
                 Com_Printf("%s", s);
             }

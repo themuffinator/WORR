@@ -3017,7 +3017,7 @@ If "private", only the activator gets the message. If no checks, all clients get
 */
 static USE(target_print_use) (gentity_t* ent, gentity_t* other, gentity_t* activator) -> void {
 	if (activator && activator->client && ent->spawnFlags.has(4_spawnflag)) {
-		gi.LocClient_Print(activator, PRINT_CENTER, "{}", ent->message);
+		gi.LocClient_Print(activator, PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
 		return;
 	}
 
@@ -3029,7 +3029,7 @@ static USE(target_print_use) (gentity_t* ent, gentity_t* other, gentity_t* activ
 		return;
 	}
 
-	gi.LocBroadcast_Print(PRINT_CENTER, "{}", ent->message);
+	gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
 }
 
 void SP_target_print(gentity_t* ent) {

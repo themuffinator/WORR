@@ -1,5 +1,7 @@
 #include "ui/ui_internal.h"
 
+#include <cstring>
+
 namespace {
 
 typedef struct {
@@ -296,19 +298,26 @@ int DrawKeyCap(int x, int y, int height, color_t color, const char *label)
     return width;
 }
 
-int DrawHintItem(int x, int y, int height, const UiHint &hint, color_t key_color, color_t text_color)
+int DrawHintItem(int x, int y, int text_height, int icon_height, const UiHint &hint,
+                 color_t key_color, color_t text_color)
 {
     const char *key_label = hint.keyLabel.empty() ? nullptr : hint.keyLabel.c_str();
-    int key_w = UI_DrawKeyIcon(x, y, height, key_color, hint.key, key_label);
+    int icon_y = y - (icon_height - text_height) / 2;
+    int key_w = UI_DrawKeyIcon(x, icon_y, icon_height, key_color, hint.key, key_label);
 
     int text_x = x + key_w + kHintPadding;
-    int text_y = y + (height - CONCHAR_HEIGHT) / 2;
+    int text_y = y + (text_height - CONCHAR_HEIGHT) / 2;
     UI_DrawString(text_x, text_y, UI_LEFT, text_color, hint.label.c_str());
 
     return key_w + kHintPadding + TextWidth(hint.label);
 }
 
 } // namespace
+
+void UI_ResetBindIconCache(void)
+{
+    memset(ui_bind_icon_cache, 0, sizeof(ui_bind_icon_cache));
+}
 
 int UI_DrawKeyIcon(int x, int y, int height, color_t color, int keynum, const char *label)
 {
@@ -350,15 +359,15 @@ int UI_DrawHintBar(const std::vector<UiHint> &left, const std::vector<UiHint> &r
         return 0;
 
     int height = CONCHAR_HEIGHT;
-    int icon_height = max(1, height - 2);
-    int y = bottom - height + 1;
+    int icon_height = max(1, height * 2);
+    int y = bottom - height + 1 - (height / 2);
 
     color_t key_color = uis.color.normal;
     color_t text_color = COLOR_WHITE;
 
     int x = kHintPadding;
     for (size_t i = 0; i < left.size(); i++) {
-        x += DrawHintItem(x, y, icon_height, left[i], key_color, text_color);
+        x += DrawHintItem(x, y, height, icon_height, left[i], key_color, text_color);
         if (i + 1 < left.size())
             x += kHintGap;
     }
@@ -377,7 +386,7 @@ int UI_DrawHintBar(const std::vector<UiHint> &left, const std::vector<UiHint> &r
 
         int rx = max(kHintPadding, uis.width - kHintPadding - total);
         for (size_t i = 0; i < right.size(); i++) {
-            rx += DrawHintItem(rx, y, icon_height, right[i], key_color, text_color);
+            rx += DrawHintItem(rx, y, height, icon_height, right[i], key_color, text_color);
             if (i + 1 < right.size())
                 rx += kHintGap;
         }

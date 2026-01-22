@@ -91,7 +91,7 @@ extern cvar_t* cvar_pt_enable_particles;
 extern cvar_t* cvar_pt_particle_emissive;
 extern cvar_t* cvar_pt_projection;
 
-void cast_u32_to_f32_color(int color_index, const color_t* pcolor, float* color_f32, float hdr_factor)
+static void cast_u32_to_f32_color(int color_index, const color_t* pcolor, float* color_f32, float hdr_factor)
 {
 	color_t color;
 	if (color_index < 0)
@@ -103,7 +103,7 @@ void cast_u32_to_f32_color(int color_index, const color_t* pcolor, float* color_
 		color_f32[i] = hdr_factor * decode_srgb(color.u8[i]);
 }
 
-bool initialize_transparency()
+bool initialize_transparency(void)
 {
 	cvar_pt_particle_size = Cvar_Get("pt_particle_size", "0.5", 0);
 	cvar_pt_beam_width = Cvar_Get("pt_beam_width", "1.0", 0);
@@ -139,7 +139,7 @@ bool initialize_transparency()
 	return true;
 }
 
-void destroy_transparency()
+void destroy_transparency(void)
 {
 	vkDestroyBufferView(qvk.device, transparency.particle_color_buffer_view, NULL);
 	vkDestroyBufferView(qvk.device, transparency.beam_color_buffer_view, NULL);
@@ -257,22 +257,22 @@ void vkpt_get_beam_aabb_buffer(
 	*num_aabbs = transparency.beam_num;
 }
 
-VkBufferView get_transparency_particle_color_buffer_view()
+VkBufferView get_transparency_particle_color_buffer_view(void)
 {
 	return transparency.particle_color_buffer_view;
 }
 
-VkBufferView get_transparency_beam_color_buffer_view()
+VkBufferView get_transparency_beam_color_buffer_view(void)
 {
 	return transparency.beam_color_buffer_view;
 }
 
-VkBufferView get_transparency_sprite_info_buffer_view()
+VkBufferView get_transparency_sprite_info_buffer_view(void)
 {
 	return transparency.sprite_info_buffer_view;
 }
 
-VkBufferView get_transparency_beam_intersect_buffer_view()
+VkBufferView get_transparency_beam_intersect_buffer_view(void)
 {
 	return transparency.beam_intersect_buffer_view;
 }

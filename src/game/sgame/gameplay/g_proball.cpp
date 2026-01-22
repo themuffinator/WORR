@@ -640,10 +640,10 @@ void AnnounceGoal(const gentity_t* scorer, Team team,
 
 	if (scorer && scorer->client) {
 		gi.LocBroadcast_Print(
-		    PRINT_HIGH, "{} scores for the {} at {}!\n",
+		    PRINT_HIGH, "$g_sgame_auto_e342cbc26110",
 		    scorer->client->sess.netName, teamName, goalLabel);
 	} else {
-		gi.LocBroadcast_Print(PRINT_HIGH, "{} scores!\n", teamName);
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_bc02a46f44d7", teamName);
 	}
 
 	AnnouncerSound(world, team == Team::Red ? "red_scores" : "blue_scores");
@@ -673,7 +673,7 @@ void AwardAssist(LevelLocals::ProBallState& state, gentity_t* scorer,
 	assistPlayer->client->pers.match.proBallAssists++;
 	level.match.proBallAssists++;
 
-	gi.LocBroadcast_Print(PRINT_HIGH, "Assist: {}\n",
+	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5fa5290e5143",
 			      assistPlayer->client->sess.netName);
 }
 
@@ -857,14 +857,14 @@ void RunFrame() {
 		const contents_t contents = gi.pointContents(origin);
 		if (contents & (CONTENTS_LAVA | CONTENTS_SLIME)) {
 			gi.LocBroadcast_Print(PRINT_HIGH,
-					      "Ball reset (hazard).\n");
+					      "$g_sgame_auto_4e45efe183a4");
 			ResetBallToSpawn(state);
 			return;
 		}
 
 		if (origin.z < world->absMin.z - 64.0f) {
 			gi.LocBroadcast_Print(PRINT_HIGH,
-					      "Ball reset (fell out).\n");
+					      "$g_sgame_auto_f102c8e1b423");
 			ResetBallToSpawn(state);
 			return;
 		}
@@ -873,7 +873,7 @@ void RunFrame() {
 			if (PointInVolume(origin, oob)) {
 				gi.LocBroadcast_Print(
 				    PRINT_HIGH,
-				    "Ball reset (out of bounds).\n");
+				    "$g_sgame_auto_a4ad0a671eee");
 				ResetBallToSpawn(state);
 				return;
 			}
@@ -1038,7 +1038,7 @@ bool DropBall(gentity_t* carrier, gentity_t* instigator, bool forced) {
 		gi.linkEntity(state.ballEntity);
 	}
 
-	gi.LocBroadcast_Print(PRINT_HIGH, "{} drops the ball!\n",
+	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_683c14fe132b",
 			      carrier->client->sess.netName);
 	return true;
 }
@@ -1058,7 +1058,7 @@ bool ThrowBall(gentity_t* carrier, const Vector3& origin, const Vector3& dir) {
 	if (!Ball_Pass(carrier, origin, dir))
 		return false;
 
-	gi.LocBroadcast_Print(PRINT_HIGH, "{} throws the ball!\n",
+	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_841bf21fa102",
 			      carrier->client->sess.netName);
 	return true;
 }
@@ -1205,14 +1205,14 @@ static TOUCH(OutOfBoundsTouch)(gentity_t* self, gentity_t* other,
 
 	if (other == state.ballEntity) {
 		gi.LocBroadcast_Print(PRINT_HIGH,
-				      "Ball reset (out of bounds).\n");
+				      "$g_sgame_auto_a4ad0a671eee");
 		ResetBallToSpawn(state);
 		return;
 	}
 
 	if (other && other->client && PlayerHasBall(other)) {
 		gi.LocBroadcast_Print(PRINT_HIGH,
-				      "Ball reset (out of bounds).\n");
+				      "$g_sgame_auto_a4ad0a671eee");
 		ResetCarrierInventory(other);
 		ResetBallToSpawn(state);
 	}

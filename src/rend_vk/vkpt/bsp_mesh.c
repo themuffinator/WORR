@@ -796,12 +796,6 @@ typedef struct {
 } poly_t;
 
 static inline float
-dot2(point2_t* a, point2_t* b)
-{
-	return a->x * b->x + a->y * b->y;
-}
-
-static inline float
 cross2(point2_t* a, point2_t* b)
 {
 	return a->x * b->y - a->y * b->x;
@@ -1395,7 +1389,7 @@ is_model_masked(bsp_mesh_t *wm, bsp_model_t *model)
 	return false;
 }
 
-void
+static void
 append_aabb(const VboPrimitive* primitives, uint32_t numprims, float* aabb_min, float* aabb_max)
 {
 	for (uint32_t prim_idx = 0; prim_idx < numprims; prim_idx++)
@@ -1423,7 +1417,7 @@ append_aabb(const VboPrimitive* primitives, uint32_t numprims, float* aabb_min, 
 	}
 }
 
-void
+static void
 compute_aabb(const VboPrimitive* primitives, uint32_t numprims, float* aabb_min, float* aabb_max)
 {
 	VectorSet(aabb_min, FLT_MAX, FLT_MAX, FLT_MAX);
@@ -1432,7 +1426,7 @@ compute_aabb(const VboPrimitive* primitives, uint32_t numprims, float* aabb_min,
 	append_aabb(primitives, numprims, aabb_min, aabb_max);
 }
 
-void
+static void
 compute_world_tangents(bsp_t* bsp, bsp_mesh_t* wm)
 {
 	if (bsp->basisvectors)

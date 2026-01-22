@@ -752,6 +752,91 @@ uint32_t UTF8_ReadCodePoint(const char **src)
     return code;
 }
 
+size_t UTF8_EncodeCodePoint(uint32_t codepoint, char *dst, size_t size)
+{
+    if (!dst || !size)
+        return 0;
+
+    if (codepoint <= 0x7F) {
+        dst[0] = (char)codepoint;
+        return 1;
+    }
+
+    if (codepoint <= 0x7FF) {
+        if (size < 2)
+            return 0;
+        dst[0] = (char)(0xC0 | ((codepoint >> 6) & 0x1F));
+        dst[1] = (char)(0x80 | (codepoint & 0x3F));
+        return 2;
+    }
+
+    if (codepoint <= 0xFFFF) {
+        if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+            return 0;
+        if (size < 3)
+            return 0;
+        dst[0] = (char)(0xE0 | ((codepoint >> 12) & 0x0F));
+        dst[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        dst[2] = (char)(0x80 | (codepoint & 0x3F));
+        return 3;
+    }
+
+    if (codepoint <= UNICODE_MAX) {
+        if (size < 4)
+            return 0;
+        dst[0] = (char)(0xF0 | ((codepoint >> 18) & 0x07));
+        dst[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+        dst[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        dst[3] = (char)(0x80 | (codepoint & 0x3F));
+        return 4;
+    }
+
+    return 0;
+}
+
+size_t UTF8_CountChars(const char *text, size_t bytes)
+{
+    size_t count = 0;
+    const char *ptr = text;
+    const char *end = text ? text + bytes : NULL;
+
+    if (!text)
+        return 0;
+
+    while (ptr < end && *ptr) {
+        const char *next = ptr;
+        uint32_t code = UTF8_ReadCodePoint(&next);
+        if (!code)
+            break;
+        if (next > end)
+            break;
+        ptr = next;
+        count++;
+    }
+
+    return count;
+}
+
+size_t UTF8_OffsetForChars(const char *text, size_t chars)
+{
+    size_t offset = 0;
+    const char *ptr = text;
+
+    if (!text)
+        return 0;
+
+    for (size_t i = 0; i < chars && *ptr; i++) {
+        const char *next = ptr;
+        uint32_t code = UTF8_ReadCodePoint(&next);
+        if (!code)
+            break;
+        offset += (size_t)(next - ptr);
+        ptr = next;
+    }
+
+    return offset;
+}
+
 static const char *UTF8_TranslitCode(uint32_t code)
 {
     int left = 0;

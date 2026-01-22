@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.h"
 #include <hidusage.h>
+#include <imm.h>
 
 win_state_t     win;
 
@@ -29,8 +30,26 @@ static cvar_t   *win_noresize;
 static cvar_t   *win_notitle;
 static cvar_t   *win_alwaysontop;
 static cvar_t   *win_noborder;
+static UINT     win_char_codepage;
 
 static void     Win_ClipCursor(void);
+static void     win_utf8_reset(void);
+static void     win_clear_char_state(void);
+
+typedef struct {
+    char bytes[4];
+    int len;
+    int needed;
+} win_utf8_state_t;
+
+static win_utf8_state_t win_utf8_state;
+static wchar_t win_pending_surrogate;
+static bool win_ctrl_pending;
+static WPARAM win_ctrl_pending_wparam;
+static LPARAM win_ctrl_pending_lparam;
+static bool win_altgr_active;
+static int win_suppress_char_scancode;
+static bool win_ime_ignore_char;
 
 /*
 ===============================================================================
@@ -500,6 +519,12 @@ static void Win_Activate(WPARAM wParam)
         }
     }
 
+    if (!LOWORD(wParam)) {
+        win_clear_char_state();
+        win_ctrl_pending = false;
+        win_altgr_active = false;
+    }
+
     if (active == ACT_ACTIVATED) {
         SetForegroundWindow(win.wnd);
     }
@@ -589,23 +614,376 @@ static const byte scantokey[2][96] = {
     }
 };
 
-// Map from windows to quake keynums
-static void legacy_key_event(WPARAM wParam, LPARAM lParam, bool down)
+static void win_utf8_reset(void)
+{
+    win_utf8_state.len = 0;
+    win_utf8_state.needed = 0;
+}
+
+static void win_clear_char_state(void)
+{
+    win_utf8_reset();
+    win_pending_surrogate = 0;
+    win_suppress_char_scancode = 0;
+    win_ime_ignore_char = false;
+}
+
+static int win_utf8_expected(unsigned char lead)
+{
+    if ((lead & 0xE0) == 0xC0) {
+        return 2;
+    }
+    if ((lead & 0xF0) == 0xE0) {
+        return 3;
+    }
+    if ((lead & 0xF8) == 0xF0) {
+        return 4;
+    }
+    return 0;
+}
+
+static void win_emit_codepoint(uint32_t codepoint)
+{
+    if (codepoint < 32 || (codepoint >= 0x7F && codepoint < 0xA0) || codepoint > UNICODE_MAX)
+        return;
+    if (codepoint == UNICODE_UNKNOWN)
+        return;
+    if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+        return;
+    Key_CharEvent((int)codepoint);
+}
+
+static void win_emit_wchar(wchar_t ch)
+{
+    if (ch >= 0xD800 && ch <= 0xDBFF) {
+        win_pending_surrogate = ch;
+        return;
+    }
+
+    if (ch >= 0xDC00 && ch <= 0xDFFF) {
+        if (win_pending_surrogate) {
+            uint32_t codepoint = 0x10000
+                                 + (((uint32_t)win_pending_surrogate - 0xD800) << 10)
+                                 + ((uint32_t)ch - 0xDC00);
+            win_pending_surrogate = 0;
+            win_emit_codepoint(codepoint);
+        }
+        return;
+    }
+
+    win_pending_surrogate = 0;
+    win_emit_codepoint((uint32_t)ch);
+}
+
+static void win_emit_utf8_bytes(const char *utf8, size_t len)
+{
+    if (!utf8 || len == 0 || len > 4)
+        return;
+
+    char temp[5];
+    memcpy(temp, utf8, len);
+    temp[len] = 0;
+
+    const char *src = temp;
+    uint32_t codepoint = UTF8_ReadCodePoint(&src);
+    if (!codepoint || codepoint == UNICODE_UNKNOWN)
+        return;
+
+    win_emit_codepoint(codepoint);
+}
+
+static void win_utf8_feed(unsigned char byte)
+{
+    if (!win_utf8_state.len) {
+        int needed = win_utf8_expected(byte);
+        if (!needed) {
+            return;
+        }
+        win_utf8_state.bytes[0] = (char)byte;
+        win_utf8_state.len = 1;
+        win_utf8_state.needed = needed;
+        return;
+    }
+
+    if ((byte & 0xC0) != 0x80) {
+        win_utf8_reset();
+        int needed = win_utf8_expected(byte);
+        if (!needed) {
+            return;
+        }
+        win_utf8_state.bytes[0] = (char)byte;
+        win_utf8_state.len = 1;
+        win_utf8_state.needed = needed;
+        return;
+    }
+
+    win_utf8_state.bytes[win_utf8_state.len++] = (char)byte;
+    if (win_utf8_state.len < win_utf8_state.needed) {
+        return;
+    }
+
+    win_emit_utf8_bytes(win_utf8_state.bytes, (size_t)win_utf8_state.needed);
+    win_utf8_reset();
+}
+
+static HKL win_get_keyboard_layout(void)
+{
+    if (win.keyboard_layout)
+        return win.keyboard_layout;
+    return GetKeyboardLayout(0);
+}
+
+static int win_translate_scancode(LPARAM lParam)
 {
     int scancode = (lParam >> 16) & 255;
     int extended = (lParam >> 24) & 1;
-    int result = 0;
+    int key = 0;
 
-    if (scancode < 96)
-        result = scantokey[extended][scancode];
+    if (scancode < 96) {
+        key = scantokey[extended][scancode];
+    }
+
+    return key;
+}
+
+static int win_translate_char_key(WPARAM wParam)
+{
+    HKL layout = win_get_keyboard_layout();
+    UINT mapped = MapVirtualKeyEx((UINT)wParam, MAPVK_VK_TO_CHAR, layout);
+    int key;
+
+    if (!mapped) {
+        return 0;
+    }
+
+    if (mapped & 0x8000) {
+        return 0;
+    }
+
+    if (mapped > 0xFF) {
+        Com_DPrintf("%s: character U+%04X outside bindable range (vk %#lx)\n",
+                    __func__, mapped, (unsigned long)wParam);
+        return 0;
+    }
+
+    key = (int)(mapped & 0xFF);
+    if (key >= 'A' && key <= 'Z') {
+        key = key - 'A' + 'a';
+    }
+
+    if (key < K_ASCIIFIRST || key >= K_ASCIILAST) {
+        return 0;
+    }
+
+    return key;
+}
+
+static int win_translate_vk(WPARAM wParam, LPARAM lParam)
+{
+    bool extended = ((lParam >> 24) & 1) != 0;
+
+    switch (wParam) {
+    case VK_BACK:
+        return K_BACKSPACE;
+    case VK_TAB:
+        return K_TAB;
+    case VK_RETURN:
+        return extended ? K_KP_ENTER : K_ENTER;
+    case VK_PAUSE:
+        return K_PAUSE;
+    case VK_CAPITAL:
+        return K_CAPSLOCK;
+    case VK_ESCAPE:
+        return K_ESCAPE;
+    case VK_SPACE:
+        return K_SPACE;
+    case VK_PRIOR:
+        return extended ? K_PGUP : K_KP_PGUP;
+    case VK_NEXT:
+        return extended ? K_PGDN : K_KP_PGDN;
+    case VK_END:
+        return extended ? K_END : K_KP_END;
+    case VK_HOME:
+        return extended ? K_HOME : K_KP_HOME;
+    case VK_LEFT:
+        return extended ? K_LEFTARROW : K_KP_LEFTARROW;
+    case VK_UP:
+        return extended ? K_UPARROW : K_KP_UPARROW;
+    case VK_RIGHT:
+        return extended ? K_RIGHTARROW : K_KP_RIGHTARROW;
+    case VK_DOWN:
+        return extended ? K_DOWNARROW : K_KP_DOWNARROW;
+    case VK_INSERT:
+        return extended ? K_INS : K_KP_INS;
+    case VK_DELETE:
+        return extended ? K_DEL : K_KP_DEL;
+    case VK_NUMLOCK:
+        return K_NUMLOCK;
+    case VK_SCROLL:
+        return K_SCROLLOCK;
+    case VK_LSHIFT:
+        return K_LSHIFT;
+    case VK_RSHIFT:
+        return K_RSHIFT;
+    case VK_SHIFT: {
+        UINT scancode = (lParam >> 16) & 255;
+        UINT vk = MapVirtualKeyEx(scancode, MAPVK_VSC_TO_VK_EX, win_get_keyboard_layout());
+        return (vk == VK_RSHIFT) ? K_RSHIFT : K_LSHIFT;
+    }
+    case VK_LCONTROL:
+        return K_LCTRL;
+    case VK_RCONTROL:
+        return K_RCTRL;
+    case VK_CONTROL:
+        return extended ? K_RCTRL : K_LCTRL;
+    case VK_LMENU:
+        return K_LALT;
+    case VK_RMENU:
+        return K_RALT;
+    case VK_MENU:
+        return extended ? K_RALT : K_LALT;
+    case VK_LWIN:
+        return K_LWINKEY;
+    case VK_RWIN:
+        return K_RWINKEY;
+    case VK_APPS:
+        return K_MENU;
+    case VK_SNAPSHOT:
+        return K_PRINTSCREEN;
+    case VK_F1:
+        return K_F1;
+    case VK_F2:
+        return K_F2;
+    case VK_F3:
+        return K_F3;
+    case VK_F4:
+        return K_F4;
+    case VK_F5:
+        return K_F5;
+    case VK_F6:
+        return K_F6;
+    case VK_F7:
+        return K_F7;
+    case VK_F8:
+        return K_F8;
+    case VK_F9:
+        return K_F9;
+    case VK_F10:
+        return K_F10;
+    case VK_F11:
+        return K_F11;
+    case VK_F12:
+        return K_F12;
+    case VK_NUMPAD0:
+        return K_KP_INS;
+    case VK_NUMPAD1:
+        return K_KP_END;
+    case VK_NUMPAD2:
+        return K_KP_DOWNARROW;
+    case VK_NUMPAD3:
+        return K_KP_PGDN;
+    case VK_NUMPAD4:
+        return K_KP_LEFTARROW;
+    case VK_NUMPAD5:
+        return K_KP_5;
+    case VK_NUMPAD6:
+        return K_KP_RIGHTARROW;
+    case VK_NUMPAD7:
+        return K_KP_HOME;
+    case VK_NUMPAD8:
+        return K_KP_UPARROW;
+    case VK_NUMPAD9:
+        return K_KP_PGUP;
+    case VK_DECIMAL:
+        return K_KP_DEL;
+    case VK_DIVIDE:
+        return K_KP_SLASH;
+    case VK_MULTIPLY:
+        return K_KP_MULTIPLY;
+    case VK_SUBTRACT:
+        return K_KP_MINUS;
+    case VK_ADD:
+        return K_KP_PLUS;
+    default:
+        break;
+    }
+
+    int key = win_translate_char_key(wParam);
+    if (key) {
+        return key;
+    }
+
+    return win_translate_scancode(lParam);
+}
+
+// Map from windows to quake keynums
+static void legacy_key_event(WPARAM wParam, LPARAM lParam, bool down)
+{
+    int result = win_translate_vk(wParam, lParam);
 
     if (!result) {
-        Com_DPrintf("%s: unknown %sscancode %d\n",
-                    __func__, extended ? "extended " : "", scancode);
+        int scancode = (lParam >> 16) & 255;
+        int extended = (lParam >> 24) & 1;
+        Com_DPrintf("%s: unknown %sscancode %d (vk %#lx)\n",
+                    __func__, extended ? "extended " : "", scancode, (unsigned long)wParam);
         return;
     }
 
     Key_Event2(result, down, win.lastMsgTime);
+}
+
+static void win_flush_pending_ctrl(void)
+{
+    if (!win_ctrl_pending)
+        return;
+
+    legacy_key_event(win_ctrl_pending_wparam, win_ctrl_pending_lparam, true);
+    win_ctrl_pending = false;
+}
+
+static void win_clear_char_suppress(LPARAM lParam)
+{
+    int scancode = (lParam >> 16) & 255;
+
+    if (win_suppress_char_scancode && win_suppress_char_scancode == scancode)
+        win_suppress_char_scancode = 0;
+}
+
+static void win_char_event(WPARAM wParam, LPARAM lParam)
+{
+    if (win_suppress_char_scancode) {
+        int scancode = (lParam >> 16) & 255;
+        if (scancode == win_suppress_char_scancode) {
+            win_suppress_char_scancode = 0;
+            return;
+        }
+    }
+
+    if (wParam <= 0xFF) {
+        unsigned char byte = (unsigned char)wParam;
+        win_pending_surrogate = 0;
+        if (byte < 0x80) {
+            win_utf8_reset();
+            win_emit_codepoint(byte);
+            return;
+        }
+
+        if (win_char_codepage == CP_UTF8) {
+            win_utf8_feed(byte);
+            return;
+        }
+
+        win_utf8_reset();
+        wchar_t ch = 0;
+        if (MultiByteToWideChar(win_char_codepage, MB_PRECOMPOSED,
+                                (const char *)&byte, 1, &ch, 1) == 1) {
+            win_emit_wchar(ch);
+        }
+        return;
+    }
+
+    win_utf8_reset();
+    win_emit_wchar((wchar_t)wParam);
 }
 
 static void mouse_wheel_event(int delta)
@@ -827,6 +1205,11 @@ static LRESULT WINAPI Win_MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
         Win_Activate(wParam);
         break;
 
+    case WM_INPUTLANGCHANGE:
+        win.keyboard_layout = (HKL)lParam;
+        win_char_codepage = GetACP();
+        return FALSE;
+
     case WM_WINDOWPOSCHANGING:
         pos_changing_event(hWnd, (WINDOWPOS *)lParam);
         break;
@@ -854,17 +1237,120 @@ static LRESULT WINAPI Win_MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
         break;
 
     case WM_KEYDOWN:
-    case WM_SYSKEYDOWN:
+    case WM_SYSKEYDOWN: {
+        bool extended = ((lParam >> 24) & 1) != 0;
+        int scancode = (lParam >> 16) & 255;
+
+        if (wParam == VK_CONTROL && !extended) {
+            if (!win_altgr_active && !win_ctrl_pending) {
+                win_ctrl_pending = true;
+                win_ctrl_pending_wparam = wParam;
+                win_ctrl_pending_lparam = lParam;
+            }
+            return FALSE;
+        }
+
+        if (wParam == VK_MENU && extended) {
+            if (win_ctrl_pending) {
+                win_ctrl_pending = false;
+                win_altgr_active = true;
+            }
+        } else {
+            win_flush_pending_ctrl();
+        }
+
+        if (scancode == 0x29 && !Key_IsDown(K_SHIFT) && !(lParam & BIT(30))) {
+            win_suppress_char_scancode = scancode;
+        }
+
         legacy_key_event(wParam, lParam, true);
         return FALSE;
+    }
 
     case WM_KEYUP:
-    case WM_SYSKEYUP:
+    case WM_SYSKEYUP: {
+        bool extended = ((lParam >> 24) & 1) != 0;
+
+        if (wParam == VK_CONTROL && !extended) {
+            if (win_altgr_active) {
+                win_ctrl_pending = false;
+                return FALSE;
+            }
+
+            if (win_ctrl_pending) {
+                legacy_key_event(win_ctrl_pending_wparam, win_ctrl_pending_lparam, true);
+                win_ctrl_pending = false;
+            }
+
+            legacy_key_event(wParam, lParam, false);
+            return FALSE;
+        }
+
+        if (wParam == VK_MENU && extended) {
+            win_altgr_active = false;
+        }
+
+        win_flush_pending_ctrl();
         legacy_key_event(wParam, lParam, false);
+        return FALSE;
+    }
+
+    case WM_SYSDEADCHAR:
+    case WM_DEADCHAR:
+        win_clear_char_suppress(lParam);
         return FALSE;
 
     case WM_SYSCHAR:
     case WM_CHAR:
+        win_char_event(wParam, lParam);
+        return FALSE;
+
+    case WM_IME_STARTCOMPOSITION:
+        win_ime_ignore_char = false;
+        break;
+
+    case WM_IME_ENDCOMPOSITION:
+        win_ime_ignore_char = false;
+        break;
+
+    case WM_IME_COMPOSITION:
+        if (lParam & GCS_RESULTSTR) {
+            HIMC imc = ImmGetContext(hWnd);
+            if (imc) {
+                LONG bytes = ImmGetCompositionStringW(imc, GCS_RESULTSTR, NULL, 0);
+                if (bytes > 0) {
+                    size_t count = (size_t)bytes / sizeof(wchar_t);
+                    wchar_t *buffer = (wchar_t *)Z_Malloc((size_t)bytes + sizeof(wchar_t));
+                    if (buffer) {
+                        LONG read = ImmGetCompositionStringW(imc, GCS_RESULTSTR, buffer, bytes);
+                        if (read > 0) {
+                            size_t read_count = (size_t)read / sizeof(wchar_t);
+                            if (read_count > count)
+                                read_count = count;
+                            buffer[read_count] = 0;
+                            win_utf8_reset();
+                            win_pending_surrogate = 0;
+                            for (size_t i = 0; i < read_count; i++) {
+                                win_emit_wchar(buffer[i]);
+                            }
+                            win_ime_ignore_char = true;
+                        }
+                        Z_Free(buffer);
+                    }
+                }
+                ImmReleaseContext(hWnd, imc);
+            }
+            return FALSE;
+        }
+        break;
+
+    case WM_IME_CHAR:
+        if (win_ime_ignore_char) {
+            return FALSE;
+        }
+        win_utf8_reset();
+        win_pending_surrogate = 0;
+        win_emit_wchar((wchar_t)wParam);
         return FALSE;
 
     case WM_ERASEBKGND:
@@ -953,6 +1439,9 @@ void Win_Init(void)
     win_noborder->changed = win_style_changed;
 
     win_disablewinkey_changed(win_disablewinkey);
+    Key_SetCharEvents(false);
+    win.keyboard_layout = GetKeyboardLayout(0);
+    win_char_codepage = GetACP();
 
     win.GetDpiForWindow = (PVOID)GetProcAddress(GetModuleHandle("user32"), "GetDpiForWindow");
 
@@ -1063,8 +1552,14 @@ static void Win_DeAcquireMouse(void)
     ClipCursor(NULL);
     ReleaseCapture();
 
-    while (ShowCursor(TRUE) < 0)
-        ;
+    bool show_cursor = !(Key_GetDest() & KEY_MENU);
+    if (show_cursor) {
+        while (ShowCursor(TRUE) < 0)
+            ;
+    } else {
+        while (ShowCursor(FALSE) >= 0)
+            ;
+    }
 }
 
 bool Win_GetMouseMotion(int *dx, int *dy)

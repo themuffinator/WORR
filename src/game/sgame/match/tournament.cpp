@@ -1088,7 +1088,7 @@ bool Tournament_StartVetoIfReady() {
   game.tournament.vetoHomeTurn = true;
   gi.LocBroadcast_Print(
       PRINT_CENTER,
-      ".Tournament veto is ready. Home side picks or bans first.");
+      "$g_sgame_auto_deae43bd450e");
   OpenTournamentVetoMenuForCurrent();
   return true;
 }
@@ -1160,13 +1160,13 @@ bool Tournament_HandleVetoAction(gentity_t *ent, TournamentVetoAction action,
     game.tournament.mapBans.emplace_back(mapName);
     const std::string sideLabel =
         VetoSideLabel(game.tournament.vetoHomeTurn);
-    gi.LocBroadcast_Print(PRINT_HIGH, "{} banned {}.", sideLabel.c_str(),
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_2085c3233e87", sideLabel.c_str(),
                           mapName.data());
   } else {
     game.tournament.mapPicks.emplace_back(mapName);
     const std::string sideLabel =
         VetoSideLabel(game.tournament.vetoHomeTurn);
-    gi.LocBroadcast_Print(PRINT_HIGH, "{} picked {}.", sideLabel.c_str(),
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_0e9bc18b10a8", sideLabel.c_str(),
                           mapName.data());
   }
 
@@ -1180,7 +1180,7 @@ bool Tournament_HandleVetoAction(gentity_t *ent, TournamentVetoAction action,
     game.tournament.vetoComplete = true;
     FinalizeVetoOrder();
     message = "Tournament veto complete.";
-    gi.LocBroadcast_Print(PRINT_CENTER, ".Tournament veto complete.");
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_2af37c0641e8");
 
     if (!game.tournament.mapOrder.empty()) {
       const std::string &firstMap = game.tournament.mapOrder.front();
@@ -1194,7 +1194,7 @@ bool Tournament_HandleVetoAction(gentity_t *ent, TournamentVetoAction action,
 
   message = CurrentVetoPrompt();
   if (!message.empty())
-    gi.LocBroadcast_Print(PRINT_HIGH, "{}", message.c_str());
+    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_bf21a9e8fbc5", message.c_str());
   OpenTournamentVetoMenuForCurrent();
   return true;
 }

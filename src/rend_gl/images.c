@@ -2138,6 +2138,8 @@ qhandle_t R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags
         if (type == IT_PIC && len < sizeof(fullname)) {
             len = COM_DefaultExtension(fullname, ".pcx", sizeof(fullname));
         }
+    } else if (type == IT_FONT && (strchr(name, '/') || strchr(name, '\\'))) {
+        len = FS_NormalizePathBuffer(fullname, name, sizeof(fullname));
     } else {
         len = Q_concat(fullname, sizeof(fullname), "pics/", name);
         if (len < sizeof(fullname)) {
@@ -2155,6 +2157,64 @@ qhandle_t R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags
         return image - r_images;
 
     return 0;
+}
+
+qhandle_t R_RegisterRawImage(const char *name, int width, int height, byte *pic,
+                             imagetype_t type, imageflags_t flags)
+{
+    image_t *image;
+    unsigned hash;
+    size_t len = strlen(name);
+
+    if (!*name) {
+        return 0;
+    }
+
+    hash = FS_HashPathLen(name, len, RIMAGES_HASH);
+
+    if ((image = lookup_image(name, type, hash, len)) != NULL) {
+        image->flags |= flags & IF_PERMANENT;
+        image->registration_sequence = r_registration_sequence;
+        return image - r_images;
+    }
+
+    image = alloc_image();
+    if (!image) {
+        return 0;
+    }
+
+    memcpy(image->name, name, len + 1);
+    image->baselen = len;
+    image->type = type;
+    image->flags = flags;
+    image->registration_sequence = r_registration_sequence;
+    image->last_modified = 0;
+    image->width = width;
+    image->height = height;
+    image->upload_width = width;
+    image->upload_height = height;
+    image->aspect = height > 0 ? ((float)width / (float)height) : 1.0f;
+
+    List_Append(&r_imageHash[hash], &image->entry);
+
+    IMG_Load(image, pic);
+    Z_Free(pic);
+
+    return image - r_images;
+}
+
+void R_UnregisterImage(qhandle_t handle)
+{
+    if (!handle)
+        return;
+
+    image_t *image = r_images + handle;
+
+    if (image->name[0]) {
+        image->flags &= ~IF_PERMANENT;
+        image->registration_sequence = -1;
+        IMG_FreeUnused();
+    }
 }
 
 /*

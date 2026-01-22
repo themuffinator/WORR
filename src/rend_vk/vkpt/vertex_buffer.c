@@ -198,16 +198,12 @@ static void build_model_blas(VkCommandBuffer cmd_buf, model_geometry_t* info, si
 
 	assert(buffer->address);
 
-	uint32_t total_prims = 0;
-
 	for (uint32_t index = 0; index < info->num_geometries; index++)
 	{
 		VkAccelerationStructureGeometryKHR* geometry = info->geometries + index;
 
 		geometry->geometry.triangles.vertexData.deviceAddress = buffer->address
 			+ info->prim_offsets[index] * sizeof(prim_positions_t) + first_vertex_offset;
-
-		total_prims += info->prim_counts[index];
 	}
 
 	VkAccelerationStructureBuildGeometryInfoKHR blasBuildinfo = {
@@ -465,7 +461,7 @@ static int cluster_light_counts[MAX_MAP_CLUSTERS];
 static int light_list_tails[MAX_MAP_CLUSTERS];
 static int max_model_lights;
 
-void vkpt_light_buffer_reset_counts()
+void vkpt_light_buffer_reset_counts(void)
 {
 	max_model_lights = 0;
 }
@@ -936,7 +932,7 @@ void vkpt_vertex_buffer_invalidate_static_model_vbos(int material_index)
 }
 
 VkResult
-vkpt_vertex_buffer_upload_models()
+vkpt_vertex_buffer_upload_models(void)
 {
 	bool any_models_to_upload = false;
 
@@ -1167,7 +1163,7 @@ vkpt_vertex_buffer_upload_models()
 	return VK_SUCCESS;
 }
 
-void create_primbuf(void)
+static void create_primbuf(void)
 {
 	int primbuf_size = Cvar_ClampInteger(cvar_pt_primbuf, PRIMBUF_SIZE_MIN, PRIMBUF_SIZE_MAX);
 
@@ -1206,7 +1202,7 @@ void create_primbuf(void)
 	current_primbuf_size = primbuf_size;
 }
 
-void destroy_primbuf(void)
+static void destroy_primbuf(void)
 {
 	buffer_destroy(&qvk.buf_primitive_instanced);
 	buffer_destroy(&qvk.buf_positions_instanced);
@@ -1230,7 +1226,7 @@ void vkpt_vertex_buffer_ensure_primbuf_size(uint32_t prim_count)
 }
 
 VkResult
-vkpt_vertex_buffer_create()
+vkpt_vertex_buffer_create(void)
 {
 	char primbuf_initial_value[16];
 	Q_snprintf(primbuf_initial_value, sizeof(primbuf_initial_value), "%d", PRIMBUF_SIZE_DEFAULT);
@@ -1464,7 +1460,7 @@ vkpt_readback(ReadbackBuffer* dst)
 }
 
 VkResult
-vkpt_vertex_buffer_destroy()
+vkpt_vertex_buffer_destroy(void)
 {
 	vkDestroyDescriptorPool(qvk.device, desc_pool_vertex_buffer, NULL);
 	vkDestroyDescriptorSetLayout(qvk.device, qvk.desc_set_layout_vertex_buffer, NULL);
@@ -1570,7 +1566,7 @@ VkResult vkpt_light_buffers_create(bsp_mesh_t *bsp_mesh)
 	return VK_SUCCESS;
 }
 
-VkResult vkpt_light_buffers_destroy()
+VkResult vkpt_light_buffers_destroy(void)
 {
 	for (int frame = 0; frame < NUM_LIGHT_STATS_BUFFERS; frame++)
 	{
@@ -1586,7 +1582,7 @@ VkResult vkpt_light_buffers_destroy()
 }
 
 VkResult
-vkpt_vertex_buffer_create_pipelines()
+vkpt_vertex_buffer_create_pipelines(void)
 {
 	assert(!pipeline_instance_geometry);
 	assert(!pipeline_animate_materials);
@@ -1628,7 +1624,7 @@ vkpt_vertex_buffer_create_pipelines()
 }
 
 VkResult
-vkpt_vertex_buffer_destroy_pipelines()
+vkpt_vertex_buffer_destroy_pipelines(void)
 {
 	assert(pipeline_instance_geometry);
 	assert(pipeline_animate_materials);

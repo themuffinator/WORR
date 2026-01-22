@@ -295,7 +295,7 @@ void Horde_RunSpawning() {
 				level.horde_num_monsters_to_spawn--;
 
 				if (!level.horde_num_monsters_to_spawn) {
-					//gi.Broadcast_Print(PRINT_CENTER, "All monsters spawned.\nClean up time!");
+					//gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_2d1890aa73e2");
 					level.horde_all_spawned = true;
 				}
 			}

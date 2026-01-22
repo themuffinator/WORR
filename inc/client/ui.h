@@ -29,7 +29,8 @@ typedef enum {
     UIMENU_NONE,
     UIMENU_DEFAULT,
     UIMENU_MAIN,
-    UIMENU_GAME
+    UIMENU_GAME,
+    UIMENU_DOWNLOAD
 } uiMenu_t;
 
 #if USE_UI

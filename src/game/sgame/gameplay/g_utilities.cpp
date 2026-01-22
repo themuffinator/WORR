@@ -196,9 +196,9 @@ void PrintActivationMessage(gentity_t *ent, gentity_t *activator,
     return;
 
   if (coop_global && coop->integer)
-    gi.LocBroadcast_Print(PRINT_CENTER, "{}", ent->message);
+    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
   else
-    gi.LocCenter_Print(activator, "{}", ent->message);
+    gi.LocCenter_Print(activator, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
 
   // [Paril-KEX] allow non-noisy centerprints
   if (ent->noiseIndex >= 0) {
@@ -1285,9 +1285,8 @@ void BroadcastReadyReminderMessage() {
       continue;
     if (ec->client->pers.readyStatus)
       continue;
-    // gi.LocCenter_Print(ec, "%bind:+wheel2:Use Compass to toggle your ready
-    // status.%.MATCH IS IN WARMUP\nYou are NOT ready.");
-    gi.LocCenter_Print(ec, "%bind:+wheel2:$map_item_wheel%Use Compass to "
+    // gi.LocCenter_Print(ec, "$g_sgame_auto_b04903a16097");
+    gi.LocCenter_Print(ec, "$g_sgame_auto_f2847a84ee65"
                            "Ready.\n.MATCH IS IN WARMUP\nYou are NOT ready.");
   }
 }
@@ -1623,7 +1622,7 @@ void ApplyGravityLotto() {
   gi.cvarSet("g_gravity", G_Fmt("{}", newGravity).data());
 
   // Announce to all players
-  gi.LocBroadcast_Print(PRINT_HIGH, "Gravity Lotto: Gravity changed to {}!\n",
+  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6e168f11d447",
                         newGravity);
 }
 
@@ -2119,17 +2118,17 @@ bool ReadyConditions(gentity_t *ent, bool admin_cmd) {
   case WarmupState::Too_Few_Players: {
     int minp = Game::Has(GameFlags::OneVOne) ? 2 : minplayers->integer;
     int req = minp - level.pop.num_playing_clients;
-    gi.LocClient_Print(ent, PRINT_HIGH, "{}{} more player{} present.\n", reason,
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_e0c04282a5bb", reason,
                        req, req > 1 ? "s are" : " is");
     break;
   }
   case WarmupState::Teams_Imbalanced:
-    gi.LocClient_Print(ent, PRINT_HIGH, "{}teams are balanced.\n", reason);
+    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fd5213927702", reason);
     break;
   default:
     gi.LocClient_Print(
         ent, PRINT_HIGH,
-        "You cannot use this command at this stage of the match.\n");
+        "$g_sgame_auto_ebb0ea2e2155");
     break;
   }
   return false;
@@ -2209,13 +2208,13 @@ int TeamBalance(bool force) {
         if (cl->sess.queuedTeam == targetTeam)
           continue;
         cl->sess.queuedTeam = targetTeam;
-        gi.Client_Print(
+        gi.LocClient_Print(
             ent, PRINT_CENTER,
             G_Fmt(
                 "Team balance queued.\nYou will join the {} team next round.\n",
                 Teams_TeamName(targetTeam))
                 .data());
-        gi.Broadcast_Print(
+        gi.LocBroadcast_Print(
             PRINT_HIGH,
             G_Fmt("{} will swap to the {} team when the next round begins.\n",
                   cl->pers.netName, Teams_TeamName(targetTeam))
@@ -2223,19 +2222,19 @@ int TeamBalance(bool force) {
       } else {
         cl->sess.team = targetTeam;
         ClientRespawn(ent);
-        gi.Client_Print(ent, PRINT_CENTER,
-                        "You have changed teams to rebalance the game.\n");
+        gi.LocClient_Print(ent, PRINT_CENTER,
+                        "$g_sgame_auto_dcd63279a234");
       }
       delta--;
       switched++;
     }
     if (switched) {
       if (queueSwap)
-        gi.Broadcast_Print(
+        gi.LocBroadcast_Print(
             PRINT_HIGH,
-            "Team balance changes are queued for the next round.\n");
+            "$g_sgame_auto_fb957bc77f51");
       else
-        gi.Broadcast_Print(PRINT_HIGH, "Teams have been balanced.\n");
+        gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_ce0b7adee297");
       return switched;
     }
   }

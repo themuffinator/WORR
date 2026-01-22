@@ -758,11 +758,11 @@ void G_MonsterKilled(gentity_t* self) {
 #if defined(_DEBUG) && defined(KEX_PLATFORM_WINPC)
 			__debugbreak();
 #endif
-			gi.Center_Print(&g_entities[1], "found missing monster?");
+			gi.LocCenter_Print(&g_entities[1], "$g_sgame_auto_b47bd9a029b1");
 		}
 
 		if (level.campaign.killedMonsters == level.campaign.totalMonsters) {
-			gi.Center_Print(&g_entities[1], "all monsters dead");
+			gi.LocCenter_Print(&g_entities[1], "$g_sgame_auto_c3a37071c0f2");
 		}
 	}
 }

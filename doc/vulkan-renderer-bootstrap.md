@@ -33,11 +33,10 @@ load without immediate failures.
 ## Current Limitations
 - The renderer still stubs all actual draw paths (models, world, particles, 2D UI).
 - Image/texture management and pipeline/shader creation are not implemented yet.
-- SDL-native window handles are not supported for Vulkan surface creation.
 - No validation layer or debug utils integration is enabled.
 
 ## Next Implementation Steps
 1. Implement image decoding + texture upload (parity with `src/rend_gl/images.c`).
 2. Build pipelines for world surfaces, models, particles, and 2D UI.
 3. Port lightmap, fog, bloom, and debug draw features.
-4. Add validation/debug toggles and platform-specific surface support for SDL.
+4. Add validation/debug toggles and any remaining platform-specific surface support gaps.

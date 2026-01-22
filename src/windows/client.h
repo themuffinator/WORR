@@ -101,6 +101,7 @@ typedef struct {
     int     center_x, center_y;
 
     bool    alttab_disabled;
+    HKL     keyboard_layout;
 
     enum {
         MODE_SIZE       = BIT(0),

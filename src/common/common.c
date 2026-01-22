@@ -32,6 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/field.h"
 #include "common/fifo.h"
 #include "common/files.h"
+#include "common/loc.h"
 #include "common/math.h"
 #include "common/mdfour.h"
 #include "common/msg.h"
@@ -430,7 +431,9 @@ void Com_LPrintf(print_type_t type, const char *fmt, ...)
 {
     va_list     argptr;
     char        msg[MAXPRINTMSG];
+    char        localized_fmt[MAX_STRING_CHARS];
     size_t      len;
+    const char  *format = fmt;
 
     // may be entered recursively only once
     if (com_printEntered >= 2) {
@@ -439,8 +442,13 @@ void Com_LPrintf(print_type_t type, const char *fmt, ...)
 
     com_printEntered++;
 
+    if (fmt && fmt[0] == '$') {
+        Loc_Localize(fmt, false, NULL, 0, localized_fmt, sizeof(localized_fmt));
+        format = localized_fmt;
+    }
+
     va_start(argptr, fmt);
-    len = Q_vscnprintf(msg, sizeof(msg), fmt, argptr);
+    len = Q_vscnprintf(msg, sizeof(msg), format, argptr);
     va_end(argptr);
 
     if (type == PRINT_ERROR && !com_errorEntered && len) {
@@ -517,6 +525,8 @@ do the appropriate things.
 void Com_Error(error_type_t code, const char *fmt, ...)
 {
     char            msg[MAXERRORMSG];
+    char            localized_fmt[MAX_STRING_CHARS];
+    const char      *format = fmt;
     va_list         argptr;
     size_t          len;
 
@@ -532,8 +542,13 @@ void Com_Error(error_type_t code, const char *fmt, ...)
 
     com_errorEntered = true;
 
+    if (fmt && fmt[0] == '$') {
+        Loc_Localize(fmt, false, NULL, 0, localized_fmt, sizeof(localized_fmt));
+        format = localized_fmt;
+    }
+
     va_start(argptr, fmt);
-    len = Q_vscnprintf(msg, sizeof(msg), fmt, argptr);
+    len = Q_vscnprintf(msg, sizeof(msg), format, argptr);
     va_end(argptr);
 
     // save error msg

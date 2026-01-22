@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_scrn.c -- master for renderer, status bar, console, chat, notify, etc
 
 #include "client.h"
+#include "client/font.h"
 
 static cvar_t   *scr_viewsize;
 static cvar_t   *scr_showpause;
@@ -45,6 +46,7 @@ static cvar_t   *scr_alpha;
 static cvar_t   *scr_demobar;
 static cvar_t   *scr_font;
 static cvar_t   *scr_scale;
+static const float k_scr_ttf_letter_spacing = 0.06f;
 
 static cvar_t   *scr_crosshair;
 
@@ -76,6 +78,8 @@ static cvar_t   *scr_poi_edge_frac;
 static cvar_t   *scr_poi_max_scale;
 
 static cvar_t   *scr_safe_zone;
+
+static void scr_font_changed(cvar_t *self);
 
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
@@ -184,6 +188,40 @@ static int SCR_GetUiScaleInt(void)
     return ui_scale_int;
 }
 
+static float SCR_GetFontPixelScale(void)
+{
+    int base_scale_int = SCR_GetBaseScaleInt();
+    float hud_scale = scr.hud_scale > 0.0f ? scr.hud_scale : 1.0f;
+
+    return (float)base_scale_int / hud_scale;
+}
+
+static bool SCR_UseScrFont(qhandle_t font)
+{
+    if (!scr.font)
+        return false;
+    return !font || font == scr.font_pic;
+}
+
+static int SCR_MeasureFontString(const char *text, size_t max_chars)
+{
+    if (!text || !*text)
+        return 0;
+
+    if (scr.font)
+        return Font_MeasureString(scr.font, 1, 0, max_chars, text, nullptr);
+
+    size_t len = strlen(text);
+    if (len > max_chars)
+        len = max_chars;
+    return (int)Com_StrlenNoColor(text, len) * CONCHAR_WIDTH;
+}
+
+int SCR_MeasureString(const char *text, size_t max_chars)
+{
+    return SCR_MeasureFontString(text, max_chars);
+}
+
 /*
 ==============
 SCR_DrawStringStretch
@@ -198,10 +236,21 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
         len = maxlen;
     }
 
+    if (SCR_UseScrFont(font)) {
+        int text_width = Font_MeasureString(scr.font, scale, flags, len, s, nullptr);
+        if ((flags & UI_CENTER) == UI_CENTER) {
+            x -= text_width / 2;
+        } else if (flags & UI_RIGHT) {
+            x -= text_width;
+        }
+        return Font_DrawString(scr.font, x, y, scale, flags, len, s, color);
+    }
+
+    size_t visible_len = Com_StrlenNoColor(s, len);
     if ((flags & UI_CENTER) == UI_CENTER) {
-        x -= (len * CONCHAR_WIDTH * scale) / 2;
+        x -= (visible_len * CONCHAR_WIDTH * scale) / 2;
     } else if (flags & UI_RIGHT) {
-        x -= len * CONCHAR_WIDTH * scale;
+        x -= visible_len * CONCHAR_WIDTH * scale;
     }
 
     return R_DrawStringStretch(x, y, scale, flags, maxlen, s, color, font);
@@ -682,6 +731,11 @@ static float SCR_CalcCrosshairPulseScale(unsigned start_time, unsigned duration_
 
 void SCR_NotifyPickupPulse(void)
 {
+    if (cgame && cgame->DrawCrosshair && cgame->NotifyPickupPulse) {
+        cgame->NotifyPickupPulse(0);
+        return;
+    }
+
     if (!cl_crosshair_pulse || !cl_crosshair_pulse->integer)
         return;
 
@@ -818,8 +872,7 @@ DEMO BAR
 static void draw_progress_bar(float progress, bool paused, int framenum)
 {
     char buffer[16];
-    int x, w, h;
-    size_t len;
+    int w, h;
 
     w = Q_rint(scr.hud_width * progress);
     h = Q_rint(CONCHAR_HEIGHT / scr.hud_scale);
@@ -834,16 +887,15 @@ static void draw_progress_bar(float progress, bool paused, int framenum)
     w = Q_rint(scr.hud_width * scr.hud_scale);
     h = Q_rint(scr.hud_height * scr.hud_scale);
 
-    len = Q_scnprintf(buffer, sizeof(buffer), "%.f%%", progress * 100);
-    x = (w - len * CONCHAR_WIDTH) / 2;
-    R_DrawString(x, h, 0, MAX_STRING_CHARS, buffer, COLOR_WHITE, scr.font_pic);
+    Q_scnprintf(buffer, sizeof(buffer), "%.f%%", progress * 100);
+    SCR_DrawString(w / 2, h, UI_CENTER, COLOR_WHITE, buffer);
 
     if (scr_demobar->integer > 1) {
         int sec = framenum / BASE_FRAMERATE;
         int min = sec / 60; sec %= 60;
 
         Q_scnprintf(buffer, sizeof(buffer), "%d:%02d.%d", min, sec, framenum % BASE_FRAMERATE);
-        R_DrawString(0, h, 0, MAX_STRING_CHARS, buffer, COLOR_WHITE, scr.font_pic);
+        SCR_DrawString(0, h, 0, COLOR_WHITE, buffer);
     }
 
     if (paused) {
@@ -1444,27 +1496,39 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
     if (layout->prompt_skip >= layout->max_chars)
         return;
 
-    int text_x = layout->input_x + layout->prompt_skip * CONCHAR_WIDTH;
-    int text_w = (layout->max_chars - layout->prompt_skip) * CONCHAR_WIDTH;
+    const char *prompt = Con_GetChatPromptText(NULL);
+    int prompt_width = SCR_MeasureFontString(prompt, layout->prompt_skip);
+    int text_x = layout->input_x + prompt_width;
+    int text_w = layout->width - prompt_width;
 
     if (scr_notify_mouse_x < text_x || scr_notify_mouse_x >= text_x + text_w)
         return;
 
-    size_t cursorPos = field->cursorPos;
-    size_t offset = 0;
-    if (cursorPos >= field->visibleChars) {
-        cursorPos = field->visibleChars - 1;
-        offset = field->cursorPos - cursorPos;
+    size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
+    size_t offset_chars = 0;
+    if (cursor_chars >= field->visibleChars) {
+        offset_chars = cursor_chars - (field->visibleChars - 1);
     }
 
-    int click_chars = (scr_notify_mouse_x - text_x) / CONCHAR_WIDTH;
-    if (click_chars < 0)
-        click_chars = 0;
-    if ((size_t)click_chars >= field->visibleChars)
-        click_chars = (int)field->visibleChars - 1;
-
+    size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
+    const char *text = field->text + offset;
     size_t len = strlen(field->text);
-    size_t new_pos = offset + (size_t)click_chars;
+    size_t available_chars = UTF8_CountChars(text, strlen(text));
+    size_t max_chars = min(field->visibleChars, available_chars);
+    int click_x = scr_notify_mouse_x - text_x;
+    if (click_x < 0)
+        click_x = 0;
+
+    size_t click_bytes = 0;
+    for (size_t i = 0; i < max_chars; ++i) {
+        size_t len_bytes = UTF8_OffsetForChars(text, i + 1);
+        int width = SCR_MeasureFontString(text, len_bytes);
+        if (width > click_x)
+            break;
+        click_bytes = len_bytes;
+    }
+
+    size_t new_pos = offset + click_bytes;
     if (new_pos > len)
         new_pos = len;
     if (new_pos >= field->maxChars)
@@ -1472,8 +1536,48 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
     field->cursorPos = new_pos;
 }
 
+static void SCR_DrawInputField(const inputField_t *field, int x, int y, int flags,
+                               size_t max_chars, color_t color)
+{
+    if (!field || !scr.font)
+        return;
+    if (!field->maxChars || !field->visibleChars)
+        return;
+
+    size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
+    size_t offset_chars = 0;
+    if (cursor_chars >= field->visibleChars) {
+        offset_chars = cursor_chars - (field->visibleChars - 1);
+    }
+
+    size_t draw_chars = field->visibleChars;
+    if (draw_chars > max_chars)
+        draw_chars = max_chars;
+
+    size_t cursor_chars_visible = (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
+    if (cursor_chars_visible > draw_chars)
+        cursor_chars_visible = draw_chars;
+
+    size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
+    const char *text = field->text + offset;
+    size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
+    size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars_visible);
+    Font_DrawString(scr.font, x, y, 1, flags, draw_len, text, color);
+
+    if ((flags & UI_DRAWCURSOR) && (com_localTime & BIT(8))) {
+        int cursor_x = x + SCR_MeasureFontString(text, cursor_bytes);
+        int cursor_ch = Key_GetOverstrikeMode() ? 11 : '_';
+        R_DrawChar(cursor_x, y, flags, cursor_ch, color, scr.font_pic);
+    }
+}
+
 void SCR_ClearChatHUD_f(void)
 {
+    if (cgame && cgame->ChatHud_Clear) {
+        cgame->ChatHud_Clear(0);
+        return;
+    }
+
     memset(scr_notify_lines, 0, sizeof(scr_notify_lines));
     scr_notify_head = 0;
     scr_notify_scroll = 0.0f;
@@ -1486,6 +1590,11 @@ void SCR_ClearChatHUD_f(void)
 
 void SCR_AddToNotifyHUD(const char *text, bool is_chat)
 {
+    if (cgame && cgame->ChatHud_AddLine) {
+        cgame->ChatHud_AddLine(0, text, is_chat);
+        return;
+    }
+
     notifyline_t *line;
     char *p;
 
@@ -1510,6 +1619,11 @@ void SCR_AddToChatHUD(const char *text)
 
 void SCR_NotifyScrollLines(float delta)
 {
+    if (cgame && cgame->ChatHud_ScrollLines) {
+        cgame->ChatHud_ScrollLines(delta);
+        return;
+    }
+
     if (!(cls.key_dest & KEY_MESSAGE))
         return;
 
@@ -1518,6 +1632,11 @@ void SCR_NotifyScrollLines(float delta)
 
 void SCR_NotifyMouseEvent(int x, int y)
 {
+    if (cgame && cgame->ChatHud_MouseEvent) {
+        cgame->ChatHud_MouseEvent(x, y);
+        return;
+    }
+
     if (!scr.initialized) {
         return;
     }
@@ -1537,6 +1656,11 @@ void SCR_NotifyMouseEvent(int x, int y)
 
 void SCR_NotifyMouseDown(int button)
 {
+    if (cgame && cgame->ChatHud_MouseDown) {
+        cgame->ChatHud_MouseDown(button);
+        return;
+    }
+
     if (button != K_MOUSE1)
         return;
     if (!(cls.key_dest & KEY_MESSAGE))
@@ -1634,8 +1758,9 @@ static void SCR_DrawChatHUD(color_t base_color)
             if (scr_chathud->integer == 2 && line->is_chat)
                 flags |= UI_ALTCOLOR;
 
-            R_DrawString(scr_notify_layout.x, Q_rint(y), flags, scr_notify_layout.max_chars,
-                         line->text, color, scr.font_pic);
+            SCR_DrawStringStretch(scr_notify_layout.x, Q_rint(y), 1, flags,
+                                  scr_notify_layout.max_chars, line->text, color,
+                                  scr.font_pic);
         }
     }
 
@@ -1644,6 +1769,7 @@ static void SCR_DrawChatHUD(color_t base_color)
         const char *prompt = Con_GetChatPromptText(&prompt_skip);
         prompt_skip = SCR_ClampNotifyPromptSkip(prompt_skip, scr_notify_layout.max_chars);
         scr_notify_layout.prompt_skip = prompt_skip;
+        int prompt_width = SCR_MeasureFontString(prompt, prompt_skip);
 
         int visible_chars = scr_notify_layout.max_chars - prompt_skip;
         if (visible_chars < 1)
@@ -1654,11 +1780,12 @@ static void SCR_DrawChatHUD(color_t base_color)
             field->visibleChars = min((size_t)visible_chars, field->maxChars);
         }
 
-        R_DrawString(scr_notify_layout.input_x, scr_notify_layout.input_y, 0,
-                     scr_notify_layout.max_chars, prompt, base_color, scr.font_pic);
+        SCR_DrawStringStretch(scr_notify_layout.input_x, scr_notify_layout.input_y, 1, 0,
+                              scr_notify_layout.max_chars, prompt, base_color, scr.font_pic);
         if (field) {
-            IF_Draw(field, scr_notify_layout.input_x + prompt_skip * CONCHAR_WIDTH,
-                    scr_notify_layout.input_y, UI_DRAWCURSOR, scr.font_pic);
+            SCR_DrawInputField(field, scr_notify_layout.input_x + prompt_width,
+                               scr_notify_layout.input_y, UI_DRAWCURSOR,
+                               scr_notify_layout.max_chars - prompt_skip, COLOR_WHITE);
         }
     }
 
@@ -1748,7 +1875,7 @@ static void SCR_DrawDebugStats(void)
         if (cl.oldframe.ps.stats[i] != cl.frame.ps.stats[i]) {
             color = COLOR_RED;
         }
-        R_DrawString(x, y, 0, MAX_STRING_CHARS, buffer, color, scr.font_pic);
+        SCR_DrawString(x, y, 0, color, buffer);
         y += CONCHAR_HEIGHT;
     }
 }
@@ -1776,13 +1903,13 @@ static void SCR_DrawDebugPmove(void)
     if (i > PM_FREEZE)
         i = PM_FREEZE;
 
-    R_DrawString(x, y, 0, MAX_STRING_CHARS, types[i], COLOR_WHITE, scr.font_pic);
+    SCR_DrawString(x, y, 0, COLOR_WHITE, types[i]);
     y += CONCHAR_HEIGHT;
 
     j = cl.frame.ps.pmove.pm_flags;
     for (i = 0; i < 8; i++) {
         if (j & (1 << i)) {
-            x = R_DrawString(x, y, 0, MAX_STRING_CHARS, flags[i], COLOR_WHITE, scr.font_pic);
+            x = SCR_DrawString(x, y, 0, COLOR_WHITE, flags[i]);
             x += CONCHAR_WIDTH;
         }
     }
@@ -1995,17 +2122,31 @@ void SCR_ModeChanged(void)
     Con_CheckResize();
     UI_ModeChanged();
     cls.disable_screen = 0;
-    if (scr.initialized)
+    if (scr.initialized) {
         scr.hud_scale = R_ClampScale(scr_scale);
+        scr_font_changed(scr_font);
+    }
 }
 
 static void scr_font_changed(cvar_t *self)
 {
-    scr.font_pic = R_RegisterFont(self->string);
-    if (!scr.font_pic && strcmp(self->string, self->default_string)) {
-        Cvar_Reset(self);
-        scr.font_pic = R_RegisterFont(self->default_string);
+    if (scr.font) {
+        Font_Free(scr.font);
+        scr.font = nullptr;
     }
+
+    float pixel_scale = SCR_GetFontPixelScale();
+    scr.font = Font_Load(self->string, CONCHAR_HEIGHT, pixel_scale, 0,
+                         "fonts/qfont.kfont", "conchars.png");
+
+    if (!scr.font && strcmp(self->string, self->default_string)) {
+        Cvar_Reset(self);
+        scr.font = Font_Load(self->default_string, CONCHAR_HEIGHT, pixel_scale, 0,
+                             "fonts/qfont.kfont", "conchars.png");
+    }
+
+    Font_SetLetterSpacing(scr.font, k_scr_ttf_letter_spacing);
+    scr.font_pic = Font_LegacyHandle(scr.font);
 }
 
 /*
@@ -2066,6 +2207,8 @@ void SCR_RegisterMedia(void)
 static void scr_scale_changed(cvar_t *self)
 {
     scr.hud_scale = R_ClampScale(self);
+    if (scr.initialized && scr_font)
+        scr_font_changed(scr_font);
 }
 
 
@@ -2233,7 +2376,7 @@ void SCR_Init(void)
     scr_viewsize = Cvar_Get("viewsize", "100", CVAR_ARCHIVE);
     scr_showpause = Cvar_Get("scr_showpause", "1", 0);
     scr_demobar = Cvar_Get("scr_demobar", "1", 0);
-    scr_font = Cvar_Get("scr_font", "conchars", 0);
+    scr_font = Cvar_Get("scr_font", "fonts/RussoOne-Regular.ttf", 0);
     scr_font->changed = scr_font_changed;
     scr_scale = Cvar_Get("scr_scale", "0", 0);
     scr_scale->changed = scr_scale_changed;
@@ -2301,6 +2444,11 @@ void SCR_Init(void)
 void SCR_Shutdown(void)
 {
     Cmd_Deregister(scr_cmds);
+    if (scr.font) {
+        Font_Free(scr.font);
+        scr.font = nullptr;
+    }
+    scr.font_pic = 0;
     scr.initialized = false;
 }
 
@@ -2485,6 +2633,11 @@ new_entry:
 
 void SCR_AddToDamageDisplay(int damage, const vec3_t color, const vec3_t dir)
 {
+    if (cgame && cgame->DrawCrosshair && cgame->AddDamageDisplay) {
+        cgame->AddDamageDisplay(0, damage, color, dir);
+        return;
+    }
+
     if (!scr_damage_indicators->integer) {
         return;
     }
@@ -2533,6 +2686,11 @@ static void SCR_DrawDamageDisplays(color_t base_color)
 
 void SCR_RemovePOI(int id)
 {
+    if (cgame && cgame->DrawCrosshair && cgame->RemovePOI) {
+        cgame->RemovePOI(0, id);
+        return;
+    }
+
     if (!scr_pois->integer)
         return;
 
@@ -2555,6 +2713,11 @@ void SCR_RemovePOI(int id)
 
 void SCR_AddPOI(int id, int time, const vec3_t p, int image, int color, int flags)
 {
+    if (cgame && cgame->DrawCrosshair && cgame->AddPOI) {
+        cgame->AddPOI(0, id, time, p, image, color, flags);
+        return;
+    }
+
     if (!scr_pois->integer)
         return;
 
@@ -2880,7 +3043,11 @@ static void SCR_Draw2D(void)
     color_t color = COLOR_SETA_F(COLOR_WHITE, Cvar_ClampValue(scr_alpha, 0, 1));
 
     // crosshair has its own color and alpha
-    SCR_DrawCrosshair(color);
+    if (cgame && cgame->DrawCrosshair) {
+        cgame->DrawCrosshair(0, &cl.frame.ps);
+    } else {
+        SCR_DrawCrosshair(color);
+    }
 
     if (scr_timegraph->integer)
         SCR_DebugGraph(cls.frametime * 300, 0xdc);
@@ -2899,7 +3066,11 @@ static void SCR_Draw2D(void)
 
     SCR_DrawObjects(color);
 
-    SCR_DrawChatHUD(color);
+    if (cgame && cgame->DrawChatHUD) {
+        cgame->DrawChatHUD(0, hud_rect, hud_safe, 1);
+    } else {
+        SCR_DrawChatHUD(color);
+    }
 
     SCR_DrawTurtle(color);
 

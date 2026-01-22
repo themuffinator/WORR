@@ -7,11 +7,11 @@ Vote
 	*/
 	inline void Vote(gentity_t* ent, const CommandArgs& args) {
 	if (!level.vote.time) {
-	gi.Client_Print(ent, PRINT_HIGH, "No vote in progress.\n");
+	gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c8822d062f68");
 	return;
 	}
 	if (ent->client->pers.voted != 0) {
-		gi.Client_Print(ent, PRINT_HIGH, "You have already voted.\n");
+		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_519c01fd3ad9");
 		return;
 	}
 	if (args.count() < 2) {
@@ -22,7 +22,7 @@ Vote
 	std::string asciiError;
 	if (!ValidatePrintableASCII(args.getString(1), "Vote choice", asciiError)) {
 	asciiError.push_back('\n');
-	gi.Client_Print(ent, PRINT_HIGH, asciiError.c_str());
+	gi.LocClient_Print(ent, PRINT_HIGH, asciiError.c_str());
 	PrintUsage(ent, args, "<yes|no>", "", "Casts your vote.");
 	return;
 	}
@@ -53,5 +53,5 @@ Vote
 		return;
 	}
 
-	gi.Client_Print(ent, PRINT_HIGH, "Vote cast.\n");
+	gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_566730adb0c3");
 	}

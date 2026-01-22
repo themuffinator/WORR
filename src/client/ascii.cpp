@@ -298,7 +298,7 @@ static void SCR_ScoreShot_f(void)
     int i, ret;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
@@ -317,14 +317,14 @@ static void SCR_ScoreShot_f(void)
                 break;
             }
             if (ret != Q_ERR(EEXIST)) {
-                Com_EPrintf("Couldn't exclusively open %s for writing: %s\n",
+                Com_EPrintf("$e_auto_73287ca7dcec",
                             path, Q_ErrorString(ret));
                 return;
             }
         }
 
         if (i == 1000) {
-            Com_EPrintf("All scoreshot slots are full.\n");
+            Com_EPrintf("$e_auto_ee0c7925449b");
             return;
         }
     }
@@ -340,9 +340,9 @@ static void SCR_ScoreShot_f(void)
     FS_Write(buffer, sizeof(buffer), f);
 
     if (FS_CloseFile(f))
-        Com_EPrintf("Error writing %s\n", path);
+        Com_EPrintf("$e_auto_3240af950c4e", path);
     else
-        Com_Printf("Wrote %s.\n", path);
+        Com_Printf("$e_auto_c859496e563d", path);
 }
 
 static void SCR_ScoreDump_f(void)
@@ -351,7 +351,7 @@ static void SCR_ScoreDump_f(void)
     int i;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 

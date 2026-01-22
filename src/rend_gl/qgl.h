@@ -19,8 +19,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #if USE_SDL
+#if defined(__has_include)
+#if __has_include(<SDL3/SDL_opengl.h>)
 #include <SDL3/SDL_opengl.h>
+#elif __has_include(<SDL_opengl.h>)
+#include <SDL_opengl.h>
 #else
+#define QGL_FALLBACK_GL_HEADERS 1
+#endif
+#else
+#include <SDL3/SDL_opengl.h>
+#endif
+#endif
+
+#if !USE_SDL || defined(QGL_FALLBACK_GL_HEADERS)
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>

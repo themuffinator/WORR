@@ -34,6 +34,17 @@ extern "C" void UI_Sys_UpdateGameDir(void);
 extern "C" void UI_Sys_UpdateTimes(void);
 extern "C" void UI_Sys_UpdateNetFrom(void);
 extern "C" void UI_Sys_SetMenuBlurRect(const clipRect_t *rect);
+extern "C" int UI_FontDrawString(int x, int y, int flags, size_t maxChars,
+                                 const char *string, color_t color);
+extern "C" int UI_FontMeasureString(int flags, size_t maxChars, const char *string,
+                                    int *out_height);
+extern "C" int UI_FontLineHeight(int scale);
+extern "C" int UI_FontDrawStringSized(int x, int y, int flags, size_t maxChars,
+                                      const char *string, color_t color, int size);
+extern "C" int UI_FontMeasureStringSized(int flags, size_t maxChars, const char *string,
+                                         int *out_height, int size);
+extern "C" int UI_FontLineHeightSized(int size);
+extern "C" qhandle_t UI_FontLegacyHandle(void);
 char *SV_GetSaveInfo(const char *dir);
 void UI_SetClipboardData(const char *text);
 
@@ -41,7 +52,7 @@ void UI_SetClipboardData(const char *text);
 #define NUM_CURSOR_FRAMES 15
 #define CURSOR_WIDTH 32
 #define CURSOR_OFFSET 25
-#define UI_CURSOR_SIZE 16
+#define UI_CURSOR_SIZE 12
 #define MAX_COLUMNS 8
 #define SLIDER_RANGE 10
 #define MAX_PLAYERMODELS 1024
@@ -123,6 +134,9 @@ struct UiState {
     qhandle_t cursorHandle = 0;
     int cursorWidth = 0;
     int cursorHeight = 0;
+    qhandle_t cursorTextHandle = 0;
+    int cursorTextWidth = 0;
+    int cursorTextHeight = 0;
     qhandle_t bitmapCursors[NUM_CURSOR_FRAMES]{};
 
     UiColors color{};
@@ -147,12 +161,16 @@ inline bool RectContains(const vrect_t &rect, int x, int y)
 
 inline int TextWidth(const char *s)
 {
-    return static_cast<int>(strlen(s)) * CONCHAR_WIDTH;
+    if (!s || !*s)
+        return 0;
+    return UI_FontMeasureString(0, strlen(s), s, nullptr);
 }
 
 inline int TextWidth(const std::string &s)
 {
-    return static_cast<int>(s.size()) * CONCHAR_WIDTH;
+    if (s.empty())
+        return 0;
+    return UI_FontMeasureString(0, s.size(), s.c_str(), nullptr);
 }
 
 inline int GenericSpacing(int x)
@@ -175,6 +193,7 @@ public:
     virtual void StatusEvent(const serverStatus_t *status) { (void)status; }
     virtual void ErrorEvent(const netadr_t *from) { (void)from; }
     virtual bool IsTransparent() const { return uis.transparent; }
+    virtual bool WantsTextCursor(int x, int y) const { (void)x; (void)y; return false; }
 };
 
 class Widget {
@@ -240,6 +259,7 @@ public:
     Sound CharEvent(int ch) override;
     void MouseEvent(int x, int y, bool down) override;
     bool IsTransparent() const override { return transparent_; }
+    bool WantsTextCursor(int x, int y) const override { (void)x; (void)y; return hoverTextInput_; }
 
     void AddWidget(std::unique_ptr<Widget> widget);
 
@@ -247,12 +267,14 @@ public:
     void SetStatus(std::string status) { status_ = std::move(status); }
     void SetCompact(bool compact) { compact_ = compact; }
     void SetTransparent(bool transparent) { transparent_ = transparent; }
+    void SetAllowBlur(bool allow) { allowBlur_ = allow; }
     void SetBackground(color_t color);
     void SetBackgroundImage(qhandle_t image, bool transparent);
     void SetBanner(qhandle_t banner, const vrect_t &rc);
     void SetPlaque(qhandle_t plaque, const vrect_t &rc);
     void SetLogo(qhandle_t logo, const vrect_t &rc);
     void SetCloseCommand(std::string command) { closeCommand_ = std::move(command); }
+    void SetFrameStyle(bool enabled, color_t fill, color_t border, int padding, int borderWidth);
     void ClearHints();
     void AddHintLeft(int key, std::string label, std::string keyLabel = {});
     void AddHintRight(int key, std::string label, std::string keyLabel = {});
@@ -261,6 +283,7 @@ public:
     int ContentTop() const { return contentTop_; }
     int ContentBottom() const { return contentBottom_; }
     int ContentHeight() const { return contentHeight_; }
+    bool HoverTextInput() const { return hoverTextInput_; }
 
 private:
     void BuildDefaultHints();
@@ -280,6 +303,12 @@ private:
 
     bool compact_ = false;
     bool transparent_ = false;
+    bool allowBlur_ = true;
+    bool frameEnabled_ = false;
+    int framePadding_ = 0;
+    int frameBorderWidth_ = 1;
+    color_t frameFill_{};
+    color_t frameBorder_{};
 
     qhandle_t backgroundImage_ = 0;
     color_t backgroundColor_{};
@@ -304,6 +333,7 @@ private:
     std::vector<UiHint> hintsRight_;
     std::vector<int> itemYs_;
     std::vector<int> itemHeights_;
+    bool hoverTextInput_ = false;
 };
 
 class ActionWidget : public Widget {
@@ -431,6 +461,17 @@ private:
     bool value_ = false;
     bool modified_ = false;
     SwitchStyle style_ = SwitchStyle::Toggle;
+};
+
+class ProgressWidget : public Widget {
+public:
+    ProgressWidget(cvar_t *cvar, float minValue, float maxValue);
+    void Draw(bool focused) const override;
+
+private:
+    cvar_t *cvar_ = nullptr;
+    float minValue_ = 0.0f;
+    float maxValue_ = 100.0f;
 };
 
 class ImageSpinWidget : public SpinWidget {
@@ -575,6 +616,10 @@ public:
     int y = 0;
     int width = 0;
     int height = 0;
+    int rowSpacing = 0;
+    int fontSize = 0;
+    bool alternateRows = false;
+    float alternateShade = 0.8f;
 
     std::vector<void *> items;
     int numItems = 0;
@@ -601,6 +646,7 @@ public:
     void Draw();
 
 private:
+    int RowSpacing() const;
     void ValidatePrestep();
     void AdjustPrestep();
     int DrawHeader(int y) const;
@@ -651,6 +697,7 @@ int UI_DrawKeyIcon(int x, int y, int height, color_t color, int keynum, const ch
 int UI_GetKeyIconWidth(int height, int keynum, const char *label);
 int UI_DrawHintBar(const std::vector<UiHint> &left, const std::vector<UiHint> &right, int bottom);
 int UI_GetHintBarHeight(const std::vector<UiHint> &left, const std::vector<UiHint> &right);
+void UI_ResetBindIconCache(void);
 
 void PlayerModel_Load();
 void PlayerModel_Free();

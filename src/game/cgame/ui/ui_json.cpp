@@ -95,7 +95,7 @@ static void AddExpandedItems(const char *token, std::vector<std::string> &out)
             data = temp;
             macro->function(temp, len + 1);
         } else {
-            Com_Printf("Expanded line exceeded %i chars, discarded.\n", INT_MAX);
+            Com_Printf("$cg_auto_4f734c250891", INT_MAX);
             return;
         }
     } else {
@@ -195,6 +195,36 @@ static std::string StripQuotes(const std::string &value)
             return value.substr(1, value.size() - 2);
     }
     return value;
+}
+
+static bool IsMatchMenuName(const std::string &name)
+{
+    if (name.empty())
+        return false;
+
+    if (!Q_stricmp(name.c_str(), "join") ||
+        !Q_stricmp(name.c_str(), "map_selector") ||
+        !Q_stricmp(name.c_str(), "match_stats")) {
+        return true;
+    }
+
+    static const char *prefixes[] = {
+        "dm_",
+        "callvote_",
+        "mymap_",
+        "forfeit_",
+        "admin_",
+        "setup_",
+        "tourney_",
+        "vote_"
+    };
+
+    for (const char *prefix : prefixes) {
+        if (!Q_strncasecmp(name.c_str(), prefix, strlen(prefix)))
+            return true;
+    }
+
+    return false;
 }
 
 static bool ParseConditionString(const std::string &raw, MenuCondition *out)
@@ -446,6 +476,15 @@ static std::unique_ptr<Widget> BuildWidget(const MenuItemData &item)
         sw->SetStyle(SwitchStyle::Checkbox);
         sw->SetStatus(item.status);
         widget = std::move(sw);
+    } else if (item.type == "progress") {
+        cvar_t *cvar = Cvar_WeakGet(item.cvar.c_str());
+        float minValue = item.minValue;
+        float maxValue = item.maxValue;
+        if (maxValue <= minValue) {
+            minValue = 0.0f;
+            maxValue = 100.0f;
+        }
+        widget = std::make_unique<ProgressWidget>(cvar, minValue, maxValue);
     } else if (item.type == "bind") {
         widget = std::make_unique<KeyBindWidget>(item.label, item.command, item.status,
                                                  item.altStatus.empty() ? "Press the desired key, Escape to cancel" : item.altStatus);
@@ -668,6 +707,14 @@ static void ParseMenu(json_parse_t *parser)
     std::string closeCommand;
     bool compact = false;
     bool transparent = false;
+    bool allowBlur = true;
+    bool allowBlurSet = false;
+    bool frame = false;
+    bool frameSet = false;
+    int framePadding = GenericSpacing(CONCHAR_HEIGHT);
+    int frameBorderWidth = 1;
+    color_t frameFill = COLOR_RGBA(0, 0, 0, 200);
+    color_t frameBorder = COLOR_RGBA(255, 255, 255, 40);
 
     std::unique_ptr<Menu> menu;
 
@@ -722,6 +769,41 @@ static void ParseMenu(json_parse_t *parser)
                 } else if (Json_Strcmp(parser, "transparent") == 0) {
                     Json_Next(parser);
                     transparent = Json_ReadBool(parser);
+                } else if (Json_Strcmp(parser, "blur") == 0) {
+                    Json_Next(parser);
+                    allowBlur = Json_ReadBool(parser);
+                    allowBlurSet = true;
+                } else if (Json_Strcmp(parser, "frame") == 0) {
+                    Json_Next(parser);
+                    frameSet = true;
+                    if (parser->pos->type == JSMN_OBJECT) {
+                        frame = true;
+                        jsmntok_t *frame_obj = Json_EnsureNext(parser, JSMN_OBJECT);
+                        for (int f = 0; f < frame_obj->size; f++) {
+                            if (Json_Strcmp(parser, "fill") == 0) {
+                                Json_Next(parser);
+                                std::string value = Json_ReadString(parser);
+                                SCR_ParseColor(value.c_str(), &frameFill);
+                            } else if (Json_Strcmp(parser, "border") == 0) {
+                                Json_Next(parser);
+                                std::string value = Json_ReadString(parser);
+                                SCR_ParseColor(value.c_str(), &frameBorder);
+                            } else if (Json_Strcmp(parser, "padding") == 0) {
+                                Json_Next(parser);
+                                framePadding = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "borderWidth") == 0) {
+                                Json_Next(parser);
+                                frameBorderWidth = static_cast<int>(Json_ReadNumber(parser));
+                            } else {
+                                Json_Next(parser);
+                                Json_SkipToken(parser);
+                            }
+                        }
+                    } else if (parser->pos->type == JSMN_PRIMITIVE) {
+                        frame = Json_ReadBool(parser);
+                    } else {
+                        Json_SkipToken(parser);
+                    }
                 } else {
                     Json_Next(parser);
                     Json_SkipToken(parser);
@@ -748,7 +830,7 @@ static void ParseMenu(json_parse_t *parser)
     if (!feeder.empty()) {
         auto feeder_menu = CreateFeederMenu(feeder);
         if (!feeder_menu) {
-            Com_WPrintf("Unknown menu feeder '%s'\n", feeder.c_str());
+            Com_WPrintf("$cg_auto_38449524bdfb", feeder.c_str());
             return;
         }
         GetMenuSystem().RegisterMenu(std::move(feeder_menu));
@@ -764,6 +846,12 @@ static void ParseMenu(json_parse_t *parser)
         menu->SetCompact(true);
     if (transparent)
         menu->SetTransparent(true);
+    if (!allowBlurSet && IsMatchMenuName(name))
+        allowBlur = false;
+    menu->SetAllowBlur(allowBlur);
+    if (frameSet && frame) {
+        menu->SetFrameStyle(true, frameFill, frameBorder, framePadding, frameBorderWidth);
+    }
     if (!closeCommand.empty())
         menu->SetCloseCommand(std::move(closeCommand));
 
@@ -818,7 +906,16 @@ static void ParseGlobals(json_parse_t *parser)
             }
         } else if (Json_Strcmp(parser, "font") == 0) {
             Json_Next(parser);
-            uis.fontHandle = R_RegisterFont(Json_ReadString(parser).c_str());
+            std::string value = Json_ReadString(parser);
+            const char *font_value = value.c_str();
+            if (!value.empty() && value[0] == '$') {
+                const char *cvar_name = value.c_str() + 1;
+                cvar_t *ref = Cvar_FindVar(cvar_name);
+                font_value = (ref && ref->string) ? ref->string : "";
+            }
+            if (font_value && *font_value)
+                Cvar_Set("ui_font", font_value);
+            uis.fontHandle = UI_FontLegacyHandle();
         } else if (Json_Strcmp(parser, "cursor") == 0) {
             Json_Next(parser);
             uis.cursorHandle = R_RegisterPic(Json_ReadString(parser).c_str());
@@ -860,7 +957,7 @@ bool UI_LoadJsonMenus(const char *path)
 {
     json_parse_t parser{};
     if (Json_ErrorHandler(parser)) {
-        Com_WPrintf("Failed to load %s: %s (%s)\n", path, parser.error, parser.error_loc);
+        Com_WPrintf("$cg_auto_bf1a859155a3", path, parser.error, parser.error_loc);
         Json_Free(&parser);
         return false;
     }

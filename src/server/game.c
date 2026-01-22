@@ -151,6 +151,89 @@ clear:
     SZ_Clear(&msg_write);
 }
 
+static const char kObituaryMetaTag[] = "OBIT";
+static const char kObituaryMetaStart = '\x1e';
+static const char kObituaryMetaSep = '\x1f';
+
+static bool SV_ParseObituaryBase(const char *base, char *out_key,
+                                 size_t out_key_size,
+                                 const char **out_loc_base)
+{
+    if (!base || base[0] != kObituaryMetaStart)
+        return false;
+    if (strncmp(base + 1, kObituaryMetaTag, 4) != 0)
+        return false;
+    const char *cursor = base + 1 + 4;
+    if (*cursor != kObituaryMetaSep)
+        return false;
+    cursor++;
+
+    const char *key_start = cursor;
+    const char *key_end = strchr(cursor, kObituaryMetaSep);
+    if (!key_end)
+        return false;
+
+    size_t key_len = (size_t)(key_end - key_start);
+    if (out_key && out_key_size > 0) {
+        if (key_len >= out_key_size)
+            key_len = out_key_size - 1;
+        memcpy(out_key, key_start, key_len);
+        out_key[key_len] = '\0';
+    }
+    if (out_loc_base)
+        *out_loc_base = key_end + 1;
+    return true;
+}
+
+static void SV_BuildObituaryPrefix(char *out, size_t out_size, const char *key,
+                                   const char *victim, const char *killer)
+{
+    Q_strlcpy(out, "\x1eOBIT\x1f", out_size);
+    if (key)
+        Q_strlcat(out, key, out_size);
+    Q_strlcat(out, "\x1f", out_size);
+    if (victim)
+        Q_strlcat(out, victim, out_size);
+    Q_strlcat(out, "\x1f", out_size);
+    if (killer)
+        Q_strlcat(out, killer, out_size);
+    Q_strlcat(out, "\x1e", out_size);
+}
+
+static const char *SV_SkipObituaryMetadata(const char *msg)
+{
+    if (!msg || msg[0] != kObituaryMetaStart)
+        return msg;
+    if (strncmp(msg + 1, kObituaryMetaTag, 4) != 0)
+        return msg;
+    const char *cursor = msg + 1 + 4;
+    if (*cursor != kObituaryMetaSep)
+        return msg;
+    cursor++;
+
+    const char *sep = strchr(cursor, kObituaryMetaSep);
+    if (!sep)
+        return msg;
+    cursor = sep + 1;
+    sep = strchr(cursor, kObituaryMetaSep);
+    if (!sep)
+        return msg;
+    cursor = sep + 1;
+    sep = strchr(cursor, kObituaryMetaStart);
+    if (!sep)
+        return msg;
+    return sep + 1;
+}
+
+static size_t SV_CopyVisiblePrint(const char *msg, char *out, size_t out_size)
+{
+    const char *visible = SV_SkipObituaryMetadata(msg);
+    size_t len = Q_strlcpy(out, visible, out_size);
+    if (len >= out_size)
+        len = out_size ? out_size - 1 : 0;
+    return len;
+}
+
 /*
 =================
 PF_bprintf
@@ -162,8 +245,10 @@ Archived in MVD stream.
 void PF_Broadcast_Print(int level, const char *msg)
 {
     char        string[MAX_STRING_CHARS];
+    char        visible[MAX_STRING_CHARS];
     client_t    *client;
     size_t      len;
+    size_t      visible_len;
     int         i;
 
     len = Q_strlcpy(string, msg, sizeof(string));
@@ -172,7 +257,8 @@ void PF_Broadcast_Print(int level, const char *msg)
         return;
     }
 
-    SV_MvdBroadcastPrint(level, string);
+    visible_len = SV_CopyVisiblePrint(string, visible, sizeof(visible));
+    SV_MvdBroadcastPrint(level, visible);
 
     q2proto_svc_message_t message = {.type = Q2P_SVC_PRINT, .print = {0}};
     message.print.level = level;
@@ -183,9 +269,9 @@ void PF_Broadcast_Print(int level, const char *msg)
     // echo to console
     if (COM_DEDICATED) {
         // mask off high bits
-        for (i = 0; i < len; i++)
-            string[i] &= 127;
-        Com_Printf("%s", string);
+        for (i = 0; i < visible_len; i++)
+            visible[i] &= 127;
+        Com_Printf("%s", visible);
     }
 
     FOR_EACH_CLIENT(client) {
@@ -804,19 +890,35 @@ static void PF_Loc_Print(edict_t* ent, int level, const char* base, const char**
          etc etc. It only occurs for BROADCAST prints.
      */
 
-    char string[MAX_STRING_CHARS];
-    Loc_Localize(base, true, args, num_args, string, sizeof(string));
+    char obit_key[MAX_STRING_CHARS] = "";
+    const char *loc_base = base;
+    const bool is_obit = SV_ParseObituaryBase(base, obit_key, sizeof(obit_key), &loc_base);
+
+    char localized[MAX_STRING_CHARS];
+    Loc_Localize(loc_base, true, args, num_args, localized, sizeof(localized));
     
     // HACK: check for missing "say/say_team"
     if (ent && svs.scan_for_say_cmd) {
-        size_t h = Com_HashString(string, MAX_STRING_CHARS);
+        size_t h = Com_HashString(localized, MAX_STRING_CHARS);
 
-        if ((h == SAY_CMD_HASH && !Q_strcasecmp(string, SAY_CMD_RESULT)) ||
-            (h == SAY_TEAM_CMD_HASH && !Q_strcasecmp(string, SAY_TEAM_CMD_RESULT))) {
+        if ((h == SAY_CMD_HASH && !Q_strcasecmp(localized, SAY_CMD_RESULT)) ||
+            (h == SAY_TEAM_CMD_HASH && !Q_strcasecmp(localized, SAY_TEAM_CMD_RESULT))) {
             svs.server_supplied_say = true;
             Com_DPrintf("Server-supplied `say`/`say_team` enabled\n");
             return;
         }
+    }
+
+    char string[MAX_STRING_CHARS];
+    if (is_obit) {
+        const char *victim = (args && num_args > 0) ? args[0] : "";
+        const char *killer = (args && num_args > 1) ? args[1] : "";
+        char meta[MAX_STRING_CHARS];
+        SV_BuildObituaryPrefix(meta, sizeof(meta), obit_key, victim, killer);
+        Q_strlcpy(string, meta, sizeof(string));
+        Q_strlcat(string, localized, sizeof(string));
+    } else {
+        Q_strlcpy(string, localized, sizeof(string));
     }
 
     if (level & PRINT_BROADCAST) {

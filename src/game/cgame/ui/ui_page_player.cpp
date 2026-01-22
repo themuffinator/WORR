@@ -65,6 +65,7 @@ public:
     Sound KeyEvent(int key) override;
     Sound CharEvent(int ch) override;
     void MouseEvent(int x, int y, bool down) override;
+    bool WantsTextCursor(int x, int y) const override;
 
 private:
     void ReloadMedia();
@@ -452,7 +453,7 @@ void PlayerConfigPage::OnOpen()
     if (!uis.numPlayerModels) {
         PlayerModel_Load();
         if (!uis.numPlayerModels) {
-            Com_Printf("No player models found.\n");
+            Com_Printf("$cg_auto_f0e9a2b48b82");
             return;
         }
     }
@@ -570,6 +571,13 @@ Sound PlayerConfigPage::CharEvent(int ch)
 void PlayerConfigPage::MouseEvent(int x, int y, bool down)
 {
     menu_.MouseEvent(x, y, down);
+}
+
+bool PlayerConfigPage::WantsTextCursor(int x, int y) const
+{
+    (void)x;
+    (void)y;
+    return menu_.HoverTextInput();
 }
 
 void PlayerConfigPage::Draw()

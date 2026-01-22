@@ -145,7 +145,7 @@ typedef struct {
 	} while(0)
 
 VkResult
-vkpt_pt_init()
+vkpt_pt_init(void)
 {
 	VkPhysicalDeviceAccelerationStructurePropertiesKHR accel_struct_properties = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR,
@@ -769,7 +769,7 @@ append_blas(QvkGeometryInstance_t *instances, uint32_t *num_instances, accel_str
 	++*num_instances;
 }
 
-void vkpt_pt_reset_instances()
+void vkpt_pt_reset_instances(void)
 {
 	g_num_instances = 0;
 }
@@ -1196,7 +1196,7 @@ vkpt_pt_trace_lighting(VkCommandBuffer cmd_buf, float num_bounce_rays)
 }
 
 VkResult
-vkpt_pt_destroy()
+vkpt_pt_destroy(void)
 {
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
@@ -1215,7 +1215,7 @@ vkpt_pt_destroy()
 }
 
 VkResult
-vkpt_pt_create_pipelines()
+vkpt_pt_create_pipelines(void)
 {
 	VkSpecializationMapEntry specEntry = {
 		.constantID = 0,
@@ -1473,7 +1473,7 @@ vkpt_pt_create_pipelines()
 }
 
 VkResult
-vkpt_pt_destroy_pipelines()
+vkpt_pt_destroy_pipelines(void)
 {
 	buffer_destroy(&buf_shader_binding_table);
 

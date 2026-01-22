@@ -29,6 +29,8 @@ extern "C" {
 #define CONCHAR_WIDTH  8
 #define CONCHAR_HEIGHT 8
 
+typedef struct font_s font_t;
+
 void CL_PreInit(void);
 
 void SCR_DebugGraph(float value, int color);

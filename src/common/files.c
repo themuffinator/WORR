@@ -66,10 +66,12 @@ typedef struct {
     extern const size_t res_##n##_size;
 
 FORWARD_EMBEDDED_FILE(worr_json);
+FORWARD_EMBEDDED_FILE(loc_english);
 
 static const builtin_file_t builtin_files[] = {
 #if USE_CLIENT
     { "worr.json", res_worr_json, &res_worr_json_size },
+    { "localization/loc_english.txt", res_loc_english, &res_loc_english_size },
 #endif
     { NULL }
 };
@@ -1992,7 +1994,7 @@ int FS_LastModified(const char *file, uint64_t *last_modified)
             return Q_ERR(ENAMETOOLONG);
         }
 
-        struct stat st;
+        Q_STATBUF st;
         if (os_stat(fullpath, &st) == 0) {
             if (last_modified)
                 *last_modified = (uint64_t)st.st_mtime;

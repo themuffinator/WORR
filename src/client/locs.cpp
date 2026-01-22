@@ -71,7 +71,7 @@ void LOC_LoadLocations(void)
     ret = FS_LoadFile(path, (void **)&buffer);
     if (!buffer) {
         if (ret != Q_ERR(ENOENT)) {
-            Com_EPrintf("Couldn't load %s: %s\n", path, Q_ErrorString(ret));
+            Com_EPrintf("$e_auto_73e61d85e709", path, Q_ErrorString(ret));
         }
         return;
     }
@@ -90,7 +90,7 @@ void LOC_LoadLocations(void)
         argc = Cmd_Argc();
         if (argc) {
             if (argc < 4) {
-                Com_WPrintf("Line %d is incomplete in %s\n", line, path);
+                Com_WPrintf("$e_auto_eb3969f72a8c", line, path);
             } else {
                 loc = LOC_Alloc(Cmd_RawArgsFrom(3));
                 loc->origin[0] = Q_atof(Cmd_Argv(0)) * 0.125f;
@@ -252,12 +252,12 @@ static void LOC_Add_f(void)
     location_t *loc;
 
     if (Cmd_Argc() < 3) {
-        Com_Printf("Usage: %s <name>\n", Cmd_ArgsRange(0, 1));
+        Com_Printf("$e_auto_fb31cd542948", Cmd_ArgsRange(0, 1));
         return;
     }
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
@@ -265,7 +265,7 @@ static void LOC_Add_f(void)
     VectorCopy(cl.playerEntityOrigin, loc->origin);
     List_Append(&cl_locations, &loc->entry);
 
-    Com_Printf("Added location %s at %s\n", loc->name, vtos(loc->origin));
+    Com_Printf("$e_auto_2b6a11d27c8c", loc->name, vtos(loc->origin));
 }
 
 static void LOC_Delete_f(void)
@@ -273,17 +273,17 @@ static void LOC_Delete_f(void)
     location_t *loc;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
     loc = LOC_FindClosest(cl.playerEntityOrigin);
     if (!loc) {
-        Com_Printf("No closest location.\n");
+        Com_Printf("$e_auto_bc1de37034da");
         return;
     }
 
-    Com_Printf("Deleted location %s at %s\n", loc->name, vtos(loc->origin));
+    Com_Printf("$e_auto_eaa7f653a97a", loc->name, vtos(loc->origin));
     List_Remove(&loc->entry);
     Z_Free(loc);
 }
@@ -293,18 +293,18 @@ static void LOC_Set_f(void)
     location_t *oldloc, *newloc;
 
     if (Cmd_Argc() < 3) {
-        Com_Printf("Usage: %s <name>\n", Cmd_ArgsRange(0, 1));
+        Com_Printf("$e_auto_fb31cd542948", Cmd_ArgsRange(0, 1));
         return;
     }
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
     oldloc = LOC_FindClosest(cl.playerEntityOrigin);
     if (!oldloc) {
-        Com_Printf("No closest location.\n");
+        Com_Printf("$e_auto_bc1de37034da");
         return;
     }
 
@@ -313,7 +313,7 @@ static void LOC_Set_f(void)
     List_Link(oldloc->entry.prev, oldloc->entry.next, &newloc->entry);
     Z_Free(oldloc);
 
-    Com_Printf("Renamed location at %s to %s\n", vtos(newloc->origin), newloc->name);
+    Com_Printf("$e_auto_65920d22627c", vtos(newloc->origin), newloc->name);
 }
 
 static void LOC_List_f(void)
@@ -322,22 +322,22 @@ static void LOC_List_f(void)
     int count;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
     if (LIST_EMPTY(&cl_locations)) {
-        Com_Printf("No locations to list.\n");
+        Com_Printf("$e_auto_a15ec000714d");
         return;
     }
 
     count = 0;
     LIST_FOR_EACH(location_t, loc, &cl_locations, entry) {
-        Com_Printf("%s at %s\n", loc->name, vtos(loc->origin));
+        Com_Printf("$e_auto_248efcc4ac89", loc->name, vtos(loc->origin));
         count++;
     }
 
-    Com_Printf("%d location%s listed\n", count, count == 1 ? "" : "s");
+    Com_Printf("$e_auto_68f038d32388", count, count == 1 ? "" : "s");
 }
 
 static void LOC_Save_f(void)
@@ -349,12 +349,12 @@ static void LOC_Save_f(void)
     int count;
 
     if (cls.state != ca_active) {
-        Com_Printf("Must be in a level.\n");
+        Com_Printf("$e_auto_56b7f769dcc1");
         return;
     }
 
     if (LIST_EMPTY(&cl_locations)) {
-        Com_Printf("No locations to write.\n");
+        Com_Printf("$e_auto_9dd09167f01d");
         return;
     }
 
@@ -380,9 +380,9 @@ static void LOC_Save_f(void)
     }
 
     if (FS_CloseFile(f))
-        Com_EPrintf("Error writing %s\n", buffer);
+        Com_EPrintf("$e_auto_3240af950c4e", buffer);
     else
-        Com_Printf("Wrote %d location%s to %s\n",
+        Com_Printf("$e_auto_ff47f8618ad9",
                    count, count == 1 ? "" : "s", buffer);
 }
 
@@ -412,7 +412,7 @@ static void LOC_Cmd_f(void)
     else if (!strcmp(cmd, "save"))
         LOC_Save_f();
     else
-        Com_Printf("Usage: %s <add|del|set|list|save>\n", Cmd_Argv(0));
+        Com_Printf("$e_auto_d506e504b1d3", Cmd_Argv(0));
 }
 
 static const cmdreg_t c_loc[] = {

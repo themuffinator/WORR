@@ -69,6 +69,25 @@ void IF_Replace(inputField_t *field, const char *text)
 
 #if USE_CLIENT
 
+static size_t IF_ByteLength(const inputField_t *field)
+{
+    return field ? strlen(field->text) : 0;
+}
+
+static size_t IF_CursorChars(const inputField_t *field)
+{
+    if (!field)
+        return 0;
+    return UTF8_CountChars(field->text, field->cursorPos);
+}
+
+static size_t IF_OffsetForChars(const inputField_t *field, size_t chars)
+{
+    if (!field)
+        return 0;
+    return UTF8_OffsetForChars(field->text, chars);
+}
+
 /*
 ================
 IF_KeyEvent
@@ -82,55 +101,83 @@ bool IF_KeyEvent(inputField_t *field, int key)
     Q_assert(field->cursorPos < field->maxChars);
 
     if (key == K_DEL && Key_IsDown(K_CTRL)) {
-        size_t pos = field->cursorPos;
+        size_t cursor_chars = IF_CursorChars(field);
+        size_t total_chars = UTF8_CountChars(field->text, IF_ByteLength(field));
+        size_t chars = cursor_chars;
 
         // kill leading whitespace
-        while (field->text[pos] && field->text[pos] <= 32) {
-            pos++;
+        while (chars < total_chars) {
+            size_t offset = IF_OffsetForChars(field, chars);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (!c || c > 32)
+                break;
+            chars++;
         }
 
         // kill this word
-        while (field->text[pos] > 32) {
-            pos++;
+        while (chars < total_chars) {
+            size_t offset = IF_OffsetForChars(field, chars);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (!c || c <= 32)
+                break;
+            chars++;
         }
-        Q_assert(pos < sizeof(field->text));
-        memmove(field->text + field->cursorPos, field->text + pos,
-                sizeof(field->text) - pos);
+
+        size_t end = IF_OffsetForChars(field, chars);
+        memmove(field->text + field->cursorPos, field->text + end,
+                sizeof(field->text) - end);
         return true;
     }
 
     if ((key == K_BACKSPACE || key == 'w') && Key_IsDown(K_CTRL)) {
-        size_t pos = field->cursorPos;
+        size_t cursor_chars = IF_CursorChars(field);
+        size_t chars = cursor_chars;
 
         // kill trailing whitespace
-        while (field->cursorPos > 0 && field->text[field->cursorPos - 1] <= 32) {
-            field->cursorPos--;
+        while (chars > 0) {
+            size_t offset = IF_OffsetForChars(field, chars - 1);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (c > 32)
+                break;
+            chars--;
         }
 
         // kill this word
-        while (field->cursorPos > 0 && field->text[field->cursorPos - 1] > 32) {
-            field->cursorPos--;
+        while (chars > 0) {
+            size_t offset = IF_OffsetForChars(field, chars - 1);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (c <= 32)
+                break;
+            chars--;
         }
-        memmove(field->text + field->cursorPos, field->text + pos,
-                sizeof(field->text) - pos);
+
+        size_t start = IF_OffsetForChars(field, chars);
+        memmove(field->text + start, field->text + field->cursorPos,
+                sizeof(field->text) - field->cursorPos);
+        field->cursorPos = start;
         return true;
     }
 
     if (key == K_DEL) {
-        if (field->text[field->cursorPos]) {
-            memmove(field->text + field->cursorPos,
-                    field->text + field->cursorPos + 1,
-                    sizeof(field->text) - field->cursorPos - 1);
+        size_t len = IF_ByteLength(field);
+        if (field->cursorPos < len) {
+            size_t cursor_chars = IF_CursorChars(field);
+            size_t next = IF_OffsetForChars(field, cursor_chars + 1);
+            memmove(field->text + field->cursorPos, field->text + next,
+                    sizeof(field->text) - next);
         }
         return true;
     }
 
     if (key == K_BACKSPACE || (key == 'h' && Key_IsDown(K_CTRL))) {
         if (field->cursorPos > 0) {
-            memmove(field->text + field->cursorPos - 1,
-                    field->text + field->cursorPos,
-                    sizeof(field->text) - field->cursorPos);
-            field->cursorPos--;
+            size_t cursor_chars = IF_CursorChars(field);
+            if (cursor_chars > 0) {
+                size_t prev = IF_OffsetForChars(field, cursor_chars - 1);
+                memmove(field->text + prev, field->text + field->cursorPos,
+                        sizeof(field->text) - field->cursorPos);
+                field->cursorPos = prev;
+            }
         }
         return true;
     }
@@ -154,35 +201,66 @@ bool IF_KeyEvent(inputField_t *field, int key)
     }
 
     if ((key == K_LEFTARROW && Key_IsDown(K_CTRL)) || (key == 'b' && Key_IsDown(K_ALT))) {
-        while (field->cursorPos > 0 && field->text[field->cursorPos - 1] <= 32) {
-            field->cursorPos--;
+        size_t cursor_chars = IF_CursorChars(field);
+        size_t chars = cursor_chars;
+
+        while (chars > 0) {
+            size_t offset = IF_OffsetForChars(field, chars - 1);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (c > 32)
+                break;
+            chars--;
         }
-        while (field->cursorPos > 0 && field->text[field->cursorPos - 1] > 32) {
-            field->cursorPos--;
+        while (chars > 0) {
+            size_t offset = IF_OffsetForChars(field, chars - 1);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (c <= 32)
+                break;
+            chars--;
         }
+
+        field->cursorPos = IF_OffsetForChars(field, chars);
         return true;
     }
 
     if ((key == K_RIGHTARROW && Key_IsDown(K_CTRL)) || (key == 'f' && Key_IsDown(K_ALT))) {
-        while (field->text[field->cursorPos] && field->text[field->cursorPos] <= 32) {
-            field->cursorPos++;
+        size_t cursor_chars = IF_CursorChars(field);
+        size_t total_chars = UTF8_CountChars(field->text, IF_ByteLength(field));
+        size_t chars = cursor_chars;
+
+        while (chars < total_chars) {
+            size_t offset = IF_OffsetForChars(field, chars);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (!c || c > 32)
+                break;
+            chars++;
         }
-        while (field->text[field->cursorPos] > 32) {
-            field->cursorPos++;
+        while (chars < total_chars) {
+            size_t offset = IF_OffsetForChars(field, chars);
+            unsigned char c = (unsigned char)field->text[offset];
+            if (!c || c <= 32)
+                break;
+            chars++;
         }
+
+        field->cursorPos = IF_OffsetForChars(field, chars);
         goto check;
     }
 
     if (key == K_LEFTARROW || (key == 'b' && Key_IsDown(K_CTRL))) {
         if (field->cursorPos > 0) {
-            field->cursorPos--;
+            size_t cursor_chars = IF_CursorChars(field);
+            if (cursor_chars > 0)
+                field->cursorPos = IF_OffsetForChars(field, cursor_chars - 1);
         }
         return true;
     }
 
     if (key == K_RIGHTARROW || (key == 'f' && Key_IsDown(K_CTRL))) {
-        if (field->text[field->cursorPos]) {
-            field->cursorPos++;
+        size_t len = IF_ByteLength(field);
+        if (field->cursorPos < len) {
+            size_t cursor_chars = IF_CursorChars(field);
+            field->cursorPos = IF_OffsetForChars(field, cursor_chars + 1);
         }
         goto check;
     }
@@ -193,7 +271,7 @@ bool IF_KeyEvent(inputField_t *field, int key)
     }
 
     if (key == K_END || (key == 'e' && Key_IsDown(K_CTRL))) {
-        field->cursorPos = strlen(field->text);
+        field->cursorPos = IF_ByteLength(field);
         goto check;
     }
 
@@ -206,6 +284,7 @@ bool IF_KeyEvent(inputField_t *field, int key)
 
 check:
     field->cursorPos = min(field->cursorPos, field->maxChars - 1);
+    field->cursorPos = min(field->cursorPos, IF_ByteLength(field));
     return true;
 }
 
@@ -221,27 +300,54 @@ bool IF_CharEvent(inputField_t *field, int key)
     }
     Q_assert(field->cursorPos < field->maxChars);
 
-    if (key < 32 || key > 127) {
+    if (key < 32) {
         return false;   // non printable
     }
 
-    if (field->cursorPos == field->maxChars - 1) {
-        // buffer limit was reached, just replace the last character
-        field->text[field->cursorPos] = key;
-        return true;
+    if ((uint32_t)key > UNICODE_MAX) {
+        return false;
     }
 
-    if (Key_GetOverstrikeMode()) {
-        // replace the character at cursor and advance
-        field->text[field->cursorPos++] = key;
-        return true;
+    char encoded[4];
+    size_t encoded_len = UTF8_EncodeCodePoint((uint32_t)key, encoded, sizeof(encoded));
+    if (!encoded_len) {
+        return false;
     }
 
-    // insert new character at cursor position
-    memmove(field->text + field->cursorPos + 1,
-            field->text + field->cursorPos,
-            sizeof(field->text) - field->cursorPos - 1);
-    field->text[field->cursorPos++] = key;
+    size_t len = IF_ByteLength(field);
+    if (field->cursorPos > len)
+        field->cursorPos = len;
+
+    if (Key_GetOverstrikeMode() && field->cursorPos < len) {
+        size_t cursor_chars = IF_CursorChars(field);
+        size_t next = IF_OffsetForChars(field, cursor_chars + 1);
+        memmove(field->text + field->cursorPos, field->text + next,
+                sizeof(field->text) - next);
+        len = IF_ByteLength(field);
+    }
+
+    if (len + encoded_len >= field->maxChars) {
+        if (field->cursorPos < len) {
+            size_t cursor_chars = IF_CursorChars(field);
+            size_t next = IF_OffsetForChars(field, cursor_chars + 1);
+            memmove(field->text + field->cursorPos, field->text + next,
+                    sizeof(field->text) - next);
+            len = IF_ByteLength(field);
+        }
+    }
+
+    if (len + encoded_len >= field->maxChars) {
+        return false;
+    }
+
+    if (!Key_GetOverstrikeMode()) {
+        memmove(field->text + field->cursorPos + encoded_len,
+                field->text + field->cursorPos,
+                sizeof(field->text) - field->cursorPos - encoded_len);
+    }
+
+    memcpy(field->text + field->cursorPos, encoded, encoded_len);
+    field->cursorPos += encoded_len;
     field->text[field->maxChars] = 0;
 
     return true;
@@ -260,6 +366,7 @@ int IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font)
     const char *text = field->text;
     size_t cursorPos = field->cursorPos;
     size_t offset = 0;
+    size_t cursor_chars = UTF8_CountChars(field->text, cursorPos);
     int ret;
 
     if (!field->maxChars || !field->visibleChars) {
@@ -268,18 +375,23 @@ int IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font)
 
     Q_assert(cursorPos < field->maxChars);
 
-    // scroll horizontally
-    if (cursorPos >= field->visibleChars) {
-        cursorPos = field->visibleChars - 1;
-        offset = field->cursorPos - cursorPos;
+    // scroll horizontally (codepoint-aware)
+    if (cursor_chars >= field->visibleChars) {
+        size_t offset_chars = cursor_chars - (field->visibleChars - 1);
+        offset = UTF8_OffsetForChars(text, offset_chars);
+        cursorPos = field->cursorPos - offset;
     }
 
+    text += offset;
+    size_t draw_len = UTF8_OffsetForChars(text, field->visibleChars);
+    size_t cursor_chars_visible = UTF8_CountChars(text, cursorPos);
+
     // draw text
-    ret = R_DrawString(x, y, flags, field->visibleChars, text + offset, COLOR_WHITE, font);
+    ret = R_DrawString(x, y, flags, draw_len, text, COLOR_WHITE, font);
 
     // draw blinking cursor
     if (flags & UI_DRAWCURSOR && com_localTime & BIT(8)) {
-        R_DrawChar(x + cursorPos * CONCHAR_WIDTH, y, flags,
+        R_DrawChar(x + cursor_chars_visible * CONCHAR_WIDTH, y, flags,
                    Key_GetOverstrikeMode() ? 11 : '_', COLOR_WHITE, font);
     }
 

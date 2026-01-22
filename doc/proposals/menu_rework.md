@@ -6,7 +6,7 @@ To completely overhaul the existing menu system (`worr.json` in the cgame UI) to
 ## 2. Design Philosophy
 
 *   **Brevity & Context:** The **Main Menu** should be a visual centerpiece, distinct from the **In-Game Menu**, which should be functional, unobtrusive, and focused on quick adjustments.
-*   **Modernity vs Retro:** The default aesthetic must be **Modern**—sleek, responsive, and using high-quality assets. A **Retro Theme** option should be available to mimic the classic look for purists.
+*   **Modernity vs Retro:** The default aesthetic must be **Modern** - sleek, responsive, and using high-quality assets. Retro theme support is deferred for now (leave hooks for later).
 *   **Widescreen First:** Leverage horizontal space. Categories on the left, content on the right.
 *   **Adaptability:** The layout must gracefully reflow for 4:3 aspect ratios without losing functionality.
 *   **Intelligent Traversal:** Use tabs and pages to reduce deep nesting while keeping related options together.
@@ -46,16 +46,17 @@ To completely overhaul the existing menu system (`worr.json` in the cgame UI) to
 
 ### 4.3. In-Game Menu (Overlay)
 *   **Style:** Modal Overlay.
-*   **Background:** Screen blur or heavy darken (`gl_polyblend` style).
+*   **Background:** UI blur via menu style (`style.blur`) or a dark frame fill/transparent overlay, not tied to renderer postfx.
 *   **Position:** Left-aligned or Centered card (approx 400-600px width).
 *   **Structure:**
     *   **Header:** Server Name / Map Name.
     *   **Quick Actions:** Resume, Server Info, Vote, Settings (opens full settings modal), Disconnect.
     *   **Footer:** Current time / Connection status.
+*   **Preservation:** Keep existing `setup_*`, `vote_menu`, `map_selector`, and `match_stats` flows and restyle them in-place.
 
 ## 5. Navigation & Widget Usage
 
-To facilitate elegant traversal, generic widgets are replaced with specialized ones. **Drop-down Lists** are preferred over archaic spin controls for selection. The current JSON menu system supports a defined set of item types, so proposed widgets below are mapped to JSON types (see §5.2) or explicitly listed as extensions needed (see §11).
+To facilitate elegant traversal, generic widgets are replaced with specialized ones. **Drop-down Lists** are preferred over archaic spin controls for selection. The current JSON menu system supports a defined set of item types, so proposed widgets below are mapped to JSON types (see Section 5.2) or explicitly listed as extensions needed (see Section 11).
 
 *   **Tabs / Categories:**
     *   *Usage:* Top of the "Settings" menu to switch between Video, Audio, Input, etc.
@@ -78,12 +79,12 @@ To facilitate elegant traversal, generic widgets are replaced with specialized o
 ### 5.2. Widget-to-JSON Mapping (Current Engine)
 The cgame UI uses JSON-defined widgets. Proposed widgets map to JSON item types as follows:
 
-*   **Tabs / Categories:** Model as a top-level "Settings" page containing actions that push sub-pages (Video/Audio/Input/etc.). If true tabs are required, add a `tabs` menu style and a tab widget extension (see §11).
-*   **Drop-Down Lists:** Use `values`, `strings`, or `pairs` items to represent discrete choices. These currently render as selection lists; to achieve actual drop-down behavior, extend the widget to render an expanded overlay list (see §11).
+*   **Tabs / Categories:** Model as a top-level "Settings" page containing actions that push sub-pages (Video/Audio/Input/etc.). If true tabs are required, add a `tabs` menu style and a tab widget extension (see Section 11).
+*   **Drop-Down Lists:** Prefer the existing `dropdown` item type (uses `DropdownWidget`). It currently renders inline with an arrow; extend it to draw an expanded overlay list. Use `values`/`strings`/`pairs` only as legacy fallbacks (see Section 11).
 *   **Smart Lists:** Use `feeder` pages (servers/demos/players) and `list` page handling. The server/demo browsers already provide list widgets.
 *   **Visual Sliders:** Use `range` items with `min/max/step` and render as filled bars. This requires slider styling updates in widget draw.
-*   **Palette Picker:** Not supported by JSON yet; requires a `palette` item type and widget (see §11).
-*   **Toggle Switch:** Use `toggle` or `switch` item types; update draw to use switch visuals.
+*   **Palette Picker:** Not supported by JSON yet; requires a `palette` item type and widget (see Section 11).
+*   **Toggle Switch:** Prefer `switch` or `checkbox` (SwitchWidget already exists). Reserve `toggle` for legacy yes/no spin behavior.
 *   **Key Binder:** Use `bind` items.
 
 ## 6. Detailed Menu Tree & Cvars
@@ -151,25 +152,25 @@ The cgame UI uses JSON-defined widgets. Proposed widgets map to JSON item types 
         *   Fixed FOV (15)
         *   Quad Drop (14)
 *   **Map Vote:**
-    *   *List:* Visual list of available maps (`maps/*.bsp`).
-    *   *Action:* "Call Vote" or "Force" (if admin).
+    *   *List:* Use server-provided map lists (`$$com_maplist`) or `ui_mapselector_option_*` cvars rather than local `maps/*.bsp`.
+    *   *Action:* "Call Vote" or "Force" (if admin), keeping the dedicated `map_selector` modal.
 
 ### 6.3. Settings Hierarchy
 
-The core settings menu is a hub that pushes category pages for quick access, with optional tabs if a single-page layout is preferred (see §11).
+The core settings menu is a hub that pushes category pages for quick access, with optional tabs if a single-page layout is preferred (see Section 11).
 
 #### **A. Video (`pushmenu video`)**
 *   **Display:**
-    *   Mode: `vid_fullscreen` (Drop-down: Windowed/Fullscreen).
-    *   Resolution: `vid_mode` (Drop-down).
+    *   Video Mode: `vid_fullscreen` (Drop-down: "windowed" + `$$vid_modelist` entries).
     *   FOV Scaling: `cl_adjustfov` (Drop-down: Vert-/Hor+).
     *   Brightness: `vid_gamma` (Slider).
     *   HW Gamma: `vid_hwgamma` (Toggle).
-    *   Contrast: `gl_contrast` (Slider).
+    *   Color Correction: `gl_color_correction` (Toggle).
+    *   Contrast: `gl_color_contrast` (Slider, enableIf `gl_color_correction=1`).
     *   VSync: `gl_swapinterval` (Toggle).
-    *   UI Scale: `ui_scale` (Slider).
-    *   Console Scale: `con_scale` (Slider).
-    *   Screen Scale: `scr_scale` (Slider).
+    *   UI Scale: `ui_scale` (Drop-down/pairs; 0=auto).
+    *   Console Scale: `con_scale` (Drop-down/pairs; 0=auto).
+    *   Screen Scale: `scr_scale` (Drop-down/pairs; 0=auto).
 *   **Quality:**
     *   Texture Quality: `gl_picmip` (Drop-down: High/Med/Low).
     *   Filtering: `gl_texturemode` (Drop-down).
@@ -181,7 +182,7 @@ The core settings menu is a hub that pushes category pages for quick access, wit
     *   Lightmap Bright: `gl_brightness` (Slider).
 *   **Advanced / Effects:**
     *   Shaders: `gl_shaders` (Toggle).
-    *   Bloom: `gl_bloom_sigma` (Slider).
+    *   Bloom: `gl_bloom` (Toggle) with `gl_bloom_intensity`/`gl_bloom_threshold` sliders; `gl_bloom_sigma` as optional advanced control.
     *   Dynamic Lights: `gl_dynamic` (Drop-down).
     *   Shadows: `gl_shadows` (Drop-down).
     *   Cel-Shading: `gl_celshading` (Drop-down).
@@ -234,8 +235,8 @@ The core settings menu is a hub that pushes category pages for quick access, wit
 This new menu consolidates all visual customization for entities.
 *   **Preview Area:** A large, rotating 3D model viewport (model preview widget) showing the effect of settings on: "Enemy", "Teammate", or "Self".
 *   **Visibility:**
-    *   Brightskins (Enemy): `cl_brightskins_enemy_color` (Palette).
-    *   Brightskins (Team): `cl_brightskins_team_color` (Palette).
+    *   Brightskins (Enemy): `cl_brightskins_enemy_color` (Palette, color string).
+    *   Brightskins (Team): `cl_brightskins_team_color` (Palette, color string).
     *   Brightskins Custom: `cl_brightskins_custom` (Toggle).
     *   Dead Skins: `cl_brightskins_dead` (Toggle).
 *   **Outlines & Rimlighting:**
@@ -244,8 +245,8 @@ This new menu consolidates all visual customization for entities.
     *   Enemy Rimlight: `cl_enemy_rimlight` (Slider 0-1).
     *   Self Rimlight: `cl_enemy_rimlight_self` (Slider 0-1).
 *   **Models:**
-    *   Force Enemy Model: `cl_force_enemy_model` (Drop-down list of available models).
-    *   Force Team Model: `cl_force_team_model` (Drop-down).
+    *   Force Enemy Model: `cl_force_enemy_model` (Drop-down list of `model/skin` values from a full scan of `players/`).
+    *   Force Team Model: `cl_force_team_model` (Drop-down list from the same scan).
 
 #### **F. Controls (`pushmenu keys`)**
 *   **Categories:** Movement, Combat, Interaction, Communication, UI.
@@ -254,14 +255,14 @@ This new menu consolidates all visual customization for entities.
 *   **Crosshair:**
     *   Type: `crosshair` (Image grid / tiles).
     *   Size: `cl_crosshairSize`.
-    *   Color: `cl_crosshairColor` (Palette).
+    *   Color: `cl_crosshairColor` (Indexed 1-26; map palette swatches to indices).
     *   Brightness: `cl_crosshairBrightness` (Slider).
     *   Color by Health: `cl_crosshairHealth` (Toggle).
     *   Hit Style: `cl_crosshairHitStyle`.
     *   Hit Color: `cl_crosshairHitColor`.
     *   Hit Time: `cl_crosshairHitTime`.
     *   Pickup Pulse: `cl_crosshairPulse` (Toggle).
-    *   Preview: Live preview widget (see §11 for crosshair tile selector).
+    *   Preview: Live preview widget (see Section 11 for crosshair tile selector).
 *   **HUD:**
     *   Screen Size: `viewsize`.
     *   Ping Graph: `scr_lag_draw`.
@@ -269,7 +270,7 @@ This new menu consolidates all visual customization for entities.
     *   HUD Opacity: `scr_alpha`.
     *   Console Opacity: `con_alpha`.
     *   Scales: `scr_scale`, `con_scale`, `ui_scale`.
-    *   HUD Elements: `scr_draw2d` (Toggle/selector).
+    *   HUD Elements: `scr_draw2d` (Selector 0-3; dropdown/pairs).
     *   Status/Chat: `con_notifytime` (Slider).
 *   **Railgun:**
     *   Type: `cl_railtrail_type`.
@@ -320,17 +321,17 @@ This new menu consolidates all visual customization for entities.
     *   Update `worr.json` under `src/game/cgame/ui/` to implement the menu tree and settings.
     *   Use `globals.font` to set typography.
 2.  **Enhance JSON Widgets:**
-    *   Update `ui_widgets.cpp` to render filled sliders and toggle switch visuals.
-    *   Extend JSON schema and widget support for palette picking and drop-down overlays (see §11).
+    *   Update `ui_widgets.cpp` to render filled sliders and refine `switch`/`checkbox` visuals.
+    *   Extend `DropdownWidget` for overlay lists; add a palette picker widget and crosshair grid support (see Section 11).
 3.  **Conditional Logic in JSON:**
-    *   Use JSON `show` / `enable` / `default` condition strings in `worr.json`.
+    *   Use JSON `showIf` / `enableIf` / `defaultIf` condition strings in `worr.json`.
     *   Implement any additional condition types in `ui_conditions.cpp` if required.
 
 ## 8. Deep Dive: Conditional & Complex Items
 
 ### 8.1. Conditional & Renderer-Specific Logic (JSON)
-*   **Menu JSON:** `"show": "cvar:gl_shaders==1"` or `"enable": "cvar:gl_dynamic==1"`
-*   **Code:** JSON conditions are parsed in `ui_json.cpp` and evaluated in `ui_conditions.cpp`. If a `show` condition fails, the widget is hidden; if `enable` fails, it is drawn disabled and input is ignored.
+*   **Menu JSON:** `"showIf": "cvar:gl_shaders==1"` or `"enableIf": "cvar:gl_dynamic==1"`
+*   **Code:** JSON conditions are parsed in `ui_json.cpp` and evaluated in `ui_conditions.cpp`. If a `showIf` condition fails, the widget is hidden; if `enableIf` fails, it is drawn disabled and input is ignored.
 
 ### 8.2. Expanded Item Examples
 *   **Player Visuals Preview:**
@@ -361,7 +362,7 @@ This new menu consolidates all visual customization for entities.
 The following widgets or behaviors are not currently in the JSON menu system and need implementation:
 
 *   **Palette Picker:** A `palette` item type to pick colors for crosshair/rail. Requires JSON parsing, widget drawing, and input (possibly a popover grid of color swatches).
-*   **Drop-Down Overlay Lists:** `values/strings/pairs` currently render as standard selectable lists; implement an expanded drop-down overlay with scroll support and z-ordering.
+*   **Drop-Down Overlay Lists:** `dropdown` currently renders inline with an arrow; implement an expanded overlay list with scroll support and z-ordering.
 *   **Crosshair Tile Selector:** A scrollable grid of crosshair previews (image tiles) for `crosshair` selection. Similar to `imagevalues` but with a grid layout, hover preview, and optional page controls.
 *   **Tabs/Segmented Control:** Optional tab bar widget at the top of Settings if a single-page tabbed UI is desired instead of separate pages.
 *   **Model Preview Widget:** `model_preview` widget that renders the player model in-menu, with configuration based on cvars.
