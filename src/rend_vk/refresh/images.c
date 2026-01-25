@@ -467,6 +467,94 @@ static cvar_t *r_screenshot_async;
 static cvar_t* r_screenshot_compression;
 static cvar_t* r_screenshot_message;
 static cvar_t *r_screenshot_template;
+static cvar_t *r_screenshot_format_legacy;
+static cvar_t *r_screenshot_quality_legacy;
+static cvar_t *r_screenshot_async_legacy;
+static cvar_t *r_screenshot_compression_legacy;
+static cvar_t *r_screenshot_message_legacy;
+static cvar_t *r_screenshot_template_legacy;
+
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+} r_screenshot_alias_t;
+
+static bool r_screenshot_alias_syncing;
+
+static r_screenshot_alias_t r_screenshot_aliases[] = {
+    { &r_screenshot_format, &r_screenshot_format_legacy },
+    { &r_screenshot_async, &r_screenshot_async_legacy },
+    { &r_screenshot_quality, &r_screenshot_quality_legacy },
+    { &r_screenshot_compression, &r_screenshot_compression_legacy },
+    { &r_screenshot_message, &r_screenshot_message_legacy },
+    { &r_screenshot_template, &r_screenshot_template_legacy },
+};
+
+static void r_screenshot_alias_changed(cvar_t *self)
+{
+    if (r_screenshot_alias_syncing)
+        return;
+
+    r_screenshot_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            break;
+        }
+    }
+
+    r_screenshot_alias_syncing = false;
+}
+
+static void r_screenshot_alias_sync_defaults(void)
+{
+    if (r_screenshot_alias_syncing)
+        return;
+
+    r_screenshot_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    r_screenshot_alias_syncing = false;
+}
+
+static void r_screenshot_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = r_screenshot_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = r_screenshot_alias_changed;
+    }
+
+    r_screenshot_alias_sync_defaults();
+}
 
 static int suffix_pos(const char *s, int ch)
 {
@@ -1459,6 +1547,54 @@ static void print_error(const char *name, imageflags_t flags, int err)
     Com_LPrintf(level, "Couldn't load %s: %s\n", name, msg);
 }
 
+static inline bool img_path_char_ok(int c)
+{
+    if (!Q_isprint(c))
+        return false;
+#ifdef _WIN32
+    if (strchr("<>:\"|?*", c))
+        return false;
+#endif
+    return true;
+}
+
+static bool img_path_has_invalid_chars(const char *name, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        int c = (unsigned char)name[i];
+        if (!c)
+            break;
+        if (!img_path_char_ok(c))
+            return true;
+    }
+    return false;
+}
+
+static size_t img_sanitize_path(char *dst, size_t size, const char *src, size_t len)
+{
+    size_t out = 0;
+
+    if (!size)
+        return 0;
+
+    for (size_t i = 0; i < len; i++) {
+        int c = (unsigned char)src[i];
+        if (!c)
+            break;
+        if (!img_path_char_ok(c))
+            continue;
+        if (out + 1 >= size)
+            break;
+        dst[out++] = (char)c;
+    }
+
+    while (out > 0 && (unsigned char)dst[out - 1] <= ' ')
+        out--;
+
+    dst[out] = 0;
+    return out;
+}
+
 // finds or loads the given image, adding it to the hash table.
 static image_t *find_or_load_image(const char *name, size_t len,
                                    imagetype_t type, imageflags_t flags)
@@ -1467,6 +1603,40 @@ static image_t *find_or_load_image(const char *name, size_t len,
     byte            *pic;
     unsigned        hash;
     int             ret = Q_ERR(ENOENT);
+    char            trimmed[MAX_QPATH];
+    size_t          trimmed_len;
+    char            sanitized[MAX_QPATH];
+    size_t          sanitized_len;
+
+    trimmed_len = len;
+    if (trimmed_len >= MAX_QPATH) {
+        ret = Q_ERR(ENAMETOOLONG);
+        goto fail;
+    }
+
+    while (trimmed_len > 0 && (unsigned char)name[trimmed_len - 1] <= ' ')
+        trimmed_len--;
+    if (trimmed_len == 0) {
+        ret = Q_ERR_INVALID_PATH;
+        goto fail;
+    }
+
+    if (trimmed_len != len) {
+        memcpy(trimmed, name, trimmed_len);
+        trimmed[trimmed_len] = 0;
+        name = trimmed;
+        len = trimmed_len;
+    }
+
+    if (img_path_has_invalid_chars(name, len)) {
+        sanitized_len = img_sanitize_path(sanitized, sizeof(sanitized), name, len);
+        if (sanitized_len == 0) {
+            ret = Q_ERR_INVALID_PATH;
+            goto fail;
+        }
+        name = sanitized;
+        len = sanitized_len;
+    }
 
     Q_assert(len < MAX_QPATH);
 
@@ -1917,12 +2087,26 @@ void IMG_Init(void)
     r_texture_formats_changed(r_texture_formats);
     r_texture_overrides = Cvar_Get("r_texture_overrides", "-1", CVAR_FILES);
 
-    r_screenshot_format = Cvar_Get("gl_screenshot_format", "png", CVAR_ARCHIVE);
-    r_screenshot_async = Cvar_Get("gl_screenshot_async", "1", 0);
-    r_screenshot_quality = Cvar_Get("gl_screenshot_quality", "100", CVAR_ARCHIVE);
-    r_screenshot_compression = Cvar_Get("gl_screenshot_compression", "6", CVAR_ARCHIVE);
-    r_screenshot_message = Cvar_Get("gl_screenshot_message", "0", CVAR_ARCHIVE);
-    r_screenshot_template = Cvar_Get("gl_screenshot_template", "quakeXXX", 0);
+    r_screenshot_format = Cvar_Get("r_screenshot_format", "png", CVAR_ARCHIVE);
+    r_screenshot_format_legacy = Cvar_Get("gl_screenshot_format", r_screenshot_format->string,
+                                          CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_screenshot_async = Cvar_Get("r_screenshot_async", "1", 0);
+    r_screenshot_async_legacy = Cvar_Get("gl_screenshot_async", r_screenshot_async->string,
+                                         CVAR_NOARCHIVE);
+    r_screenshot_quality = Cvar_Get("r_screenshot_quality", "100", CVAR_ARCHIVE);
+    r_screenshot_quality_legacy = Cvar_Get("gl_screenshot_quality", r_screenshot_quality->string,
+                                           CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_screenshot_compression = Cvar_Get("r_screenshot_compression", "6", CVAR_ARCHIVE);
+    r_screenshot_compression_legacy = Cvar_Get("gl_screenshot_compression",
+                                               r_screenshot_compression->string,
+                                               CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_screenshot_message = Cvar_Get("r_screenshot_message", "0", CVAR_ARCHIVE);
+    r_screenshot_message_legacy = Cvar_Get("gl_screenshot_message", r_screenshot_message->string,
+                                           CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_screenshot_template = Cvar_Get("r_screenshot_template", "quakeXXX", 0);
+    r_screenshot_template_legacy = Cvar_Get("gl_screenshot_template", r_screenshot_template->string,
+                                            CVAR_NOARCHIVE);
+    r_screenshot_alias_register();
 
     Cmd_Register(img_cmd);
 

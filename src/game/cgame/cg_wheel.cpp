@@ -2408,7 +2408,7 @@ void CG_WeaponBar_Init(void)
     wb_timeout = cgi.cvar("wc_timeout", "400", CVAR_NOFLAGS);
     wb_lock_time = cgi.cvar("wc_lock_time", "300", CVAR_NOFLAGS);
     wb_ammo_scale = cgi.cvar("wc_ammo_scale", "0.66", CVAR_NOFLAGS);
-    wb_mode = cgi.cvar("cl_weaponBar", "5", CVAR_ARCHIVE);
+    wb_mode = cgi.cvar("cl_weapon_bar", "5", CVAR_ARCHIVE);
 
     cg_wheel.weapon_bar.state = WHEEL_CLOSED;
     cg_wheel.weapon_bar.selected = -1;

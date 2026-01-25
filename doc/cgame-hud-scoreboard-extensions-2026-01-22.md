@@ -32,7 +32,7 @@
   - Ready icons (FFA/Duel + team ready-up) and flag icons for carriers.
   - Spectator sections for duel/team modes (queued + passive).
 - EOU layout is reconstructed from `eou_*` lines using `start_table/table_row`.
-- `cl_hud_cgame` still gates the cgame-side scoreboard/EOU render path.
+- `cg_hud_cgame` still gates the cgame-side scoreboard/EOU render path.
 
 ## Compatibility
 - Legacy servers/demos continue to use `CS_STATUSBAR` and `svc_layout`.

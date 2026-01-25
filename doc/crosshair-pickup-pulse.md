@@ -9,5 +9,5 @@ Detection logic:
 - Only local player sounds on CHAN_ITEM are considered.
 - Sound names containing "pkup.wav" or "_health.wav" are treated as pickup
   events (covers weapon/ammo/armor/health pickup sounds).
-- When detected, the pickup pulse start time is reset (cl_crosshairPulse
+- When detected, the pickup pulse start time is reset (cl_crosshair_pulse
   still gates the effect).

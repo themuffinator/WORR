@@ -23,8 +23,8 @@ Weapon-related keys map to existing item/weapon icons (for example `w_shotgun`, 
 
 ## Rendering Rules
 - Max entries: 4
-- Lifespan: `cl_obituary_time` (default 3000 ms; values under 100 are treated as seconds)
-- Fade: last `cl_obituary_fade` ms (default 200 ms; values under 100 are treated as seconds)
-- Placement: top-left of the HUD, offset below notify lines (`scr_maxlines`)
+- Lifespan: `cg_obituary_time` (default 3000 ms; values under 100 are treated as seconds)
+- Fade: last `cg_obituary_fade` ms (default 200 ms; values under 100 are treated as seconds)
+- Placement: top-left of the HUD, offset below notify lines (`cg_maxlines`)
 - Icons are drawn at the current font line height; if an icon is missing, the label text is drawn instead.
 - Line positions animate smoothly as entries shift.

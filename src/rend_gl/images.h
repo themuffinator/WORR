@@ -46,7 +46,7 @@ typedef enum {
 #if USE_JPG
     IM_JPG,
 #endif
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
     IM_PNG,
 #endif
     IM_MAX

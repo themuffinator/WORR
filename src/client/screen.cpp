@@ -27,6 +27,12 @@ static cvar_t   *scr_showstats;
 static cvar_t   *scr_showpmove;
 #endif
 static cvar_t   *scr_showturtle;
+static cvar_t   *scr_showpause_legacy;
+#if USE_DEBUG
+static cvar_t   *scr_showstats_legacy;
+static cvar_t   *scr_showpmove_legacy;
+#endif
+static cvar_t   *scr_showturtle_legacy;
 
 static cvar_t   *scr_netgraph;
 static cvar_t   *scr_timegraph;
@@ -41,12 +47,24 @@ static cvar_t   *scr_lag_y;
 static cvar_t   *scr_lag_draw;
 static cvar_t   *scr_lag_min;
 static cvar_t   *scr_lag_max;
+static cvar_t   *cg_lagometer;
 static cvar_t   *scr_alpha;
+static cvar_t   *scr_draw2d_legacy;
+static cvar_t   *scr_lag_x_legacy;
+static cvar_t   *scr_lag_y_legacy;
+static cvar_t   *scr_lag_draw_legacy;
+static cvar_t   *scr_lag_min_legacy;
+static cvar_t   *scr_lag_max_legacy;
+static cvar_t   *scr_alpha_legacy;
 
 static cvar_t   *scr_demobar;
 static cvar_t   *scr_font;
 static cvar_t   *scr_scale;
+static cvar_t   *scr_demobar_legacy;
+static cvar_t   *scr_font_legacy;
+static cvar_t   *scr_scale_legacy;
 static const float k_scr_ttf_letter_spacing = 0.06f;
+static const char k_scr_ui_font_path[] = "fonts/AtkinsonHyperLegible-Regular.otf";
 
 static cvar_t   *scr_crosshair;
 
@@ -55,6 +73,11 @@ static cvar_t   *scr_chathud_lines;
 static cvar_t   *scr_chathud_time;
 static cvar_t   *scr_chathud_x;
 static cvar_t   *scr_chathud_y;
+static cvar_t   *scr_chathud_legacy;
+static cvar_t   *scr_chathud_lines_legacy;
+static cvar_t   *scr_chathud_time_legacy;
+static cvar_t   *scr_chathud_x_legacy;
+static cvar_t   *scr_chathud_y_legacy;
 
 static cvar_t   *cl_crosshair_brightness;
 static cvar_t   *cl_crosshair_color;
@@ -64,22 +87,39 @@ static cvar_t   *cl_crosshair_hit_style;
 static cvar_t   *cl_crosshair_hit_time;
 static cvar_t   *cl_crosshair_pulse;
 static cvar_t   *cl_crosshair_size;
+static cvar_t   *cl_crosshair_brightness_legacy;
+static cvar_t   *cl_crosshair_color_legacy;
+static cvar_t   *cl_crosshair_health_legacy;
+static cvar_t   *cl_crosshair_hit_color_legacy;
+static cvar_t   *cl_crosshair_hit_style_legacy;
+static cvar_t   *cl_crosshair_hit_time_legacy;
+static cvar_t   *cl_crosshair_pulse_legacy;
+static cvar_t   *cl_crosshair_size_legacy;
 
 static cvar_t   *ch_x;
 static cvar_t   *ch_y;
 
 static cvar_t   *scr_hit_marker_time;
+static cvar_t   *scr_hit_marker_time_legacy;
 
 static cvar_t   *scr_damage_indicators;
 static cvar_t   *scr_damage_indicator_time;
+static cvar_t   *scr_damage_indicators_legacy;
+static cvar_t   *scr_damage_indicator_time_legacy;
 
 static cvar_t   *scr_pois;
 static cvar_t   *scr_poi_edge_frac;
 static cvar_t   *scr_poi_max_scale;
+static cvar_t   *scr_pois_legacy;
+static cvar_t   *scr_poi_edge_frac_legacy;
+static cvar_t   *scr_poi_max_scale_legacy;
 
 static cvar_t   *scr_safe_zone;
+static cvar_t   *scr_safe_zone_legacy;
 
 static void scr_font_changed(cvar_t *self);
+static void scr_scale_changed(cvar_t *self);
+static void scr_ui_font_reload(void);
 
 // nb: this is dumb but C doesn't allow
 // `(T) { }` to count as a constant
@@ -198,9 +238,9 @@ static float SCR_GetFontPixelScale(void)
 
 static bool SCR_UseScrFont(qhandle_t font)
 {
-    if (!scr.font)
+    if (!scr.ui_font)
         return false;
-    return !font || font == scr.font_pic;
+    return !font || font == scr.ui_font_pic;
 }
 
 static int SCR_MeasureFontString(const char *text, size_t max_chars)
@@ -208,8 +248,8 @@ static int SCR_MeasureFontString(const char *text, size_t max_chars)
     if (!text || !*text)
         return 0;
 
-    if (scr.font)
-        return Font_MeasureString(scr.font, 1, 0, max_chars, text, nullptr);
+    if (scr.ui_font)
+        return Font_MeasureString(scr.ui_font, 1, 0, max_chars, text, nullptr);
 
     size_t len = strlen(text);
     if (len > max_chars)
@@ -237,13 +277,13 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
     }
 
     if (SCR_UseScrFont(font)) {
-        int text_width = Font_MeasureString(scr.font, scale, flags, len, s, nullptr);
+        int text_width = Font_MeasureString(scr.ui_font, scale, flags, len, s, nullptr);
         if ((flags & UI_CENTER) == UI_CENTER) {
             x -= text_width / 2;
         } else if (flags & UI_RIGHT) {
             x -= text_width;
         }
-        return Font_DrawString(scr.font, x, y, scale, flags, len, s, color);
+        return Font_DrawString(scr.ui_font, x, y, scale, flags, len, s, color);
     }
 
     size_t visible_len = Com_StrlenNoColor(s, len);
@@ -969,9 +1009,40 @@ static struct {
     unsigned head;
 } lag;
 
+#define LAGOMETER_SAMPLES       128
+#define LAGOMETER_RATE_DELAYED  BIT(0)
+#define MAX_LAGOMETER_PING      900
+#define MAX_LAGOMETER_RANGE     300
+
+typedef struct {
+    int frameSamples[LAGOMETER_SAMPLES];
+    int frameCount;
+    unsigned snapshotFlags[LAGOMETER_SAMPLES];
+    int snapshotSamples[LAGOMETER_SAMPLES];
+    int snapshotCount;
+} lagometer_t;
+
+static lagometer_t lagometer;
+
 void SCR_LagClear(void)
 {
     lag.head = 0;
+    memset(&lagometer, 0, sizeof(lagometer));
+}
+
+static void SCR_LagometerAddFrameInfo(void)
+{
+    int offset = cl.time - cl.servertime;
+    lagometer.frameSamples[lagometer.frameCount & (LAGOMETER_SAMPLES - 1)] = offset;
+    lagometer.frameCount++;
+}
+
+static void SCR_LagometerAddSnapshotInfo(int ping, unsigned flags)
+{
+    int index = lagometer.snapshotCount & (LAGOMETER_SAMPLES - 1);
+    lagometer.snapshotSamples[index] = ping;
+    lagometer.snapshotFlags[index] = flags;
+    lagometer.snapshotCount++;
 }
 
 void SCR_LagSample(void)
@@ -979,6 +1050,7 @@ void SCR_LagSample(void)
     int i = cls.netchan.incoming_acknowledged & CMD_MASK;
     client_history_t *h = &cl.history[i];
     unsigned ping;
+    unsigned raw_ping;
 
     h->rcvd = cls.realtime;
     if (!h->cmdNumber || h->rcvd < h->sent) {
@@ -986,16 +1058,21 @@ void SCR_LagSample(void)
     }
 
     ping = h->rcvd - h->sent;
+    raw_ping = ping;
     for (i = 0; i < cls.netchan.dropped; i++) {
         lag.samples[lag.head % LAG_WIDTH] = ping | LAG_CRIT_BIT;
         lag.head++;
+        SCR_LagometerAddSnapshotInfo(-1, 0);
     }
 
+    unsigned snapshot_flags = 0;
     if (cl.frameflags & FF_SUPPRESSED) {
+        snapshot_flags |= LAGOMETER_RATE_DELAYED;
         ping |= LAG_WARN_BIT;
     }
     lag.samples[lag.head % LAG_WIDTH] = ping;
     lag.head++;
+    SCR_LagometerAddSnapshotInfo((int)raw_ping, snapshot_flags);
 }
 
 static void SCR_LagDraw(int x, int y)
@@ -1032,6 +1109,85 @@ static void SCR_LagDraw(int x, int y)
     }
 }
 
+static void SCR_DrawLagometer(int x, int y)
+{
+    static const color_t lagometer_bg = COLOR_RGBA(0, 0, 0, 96);
+    static const color_t lagometer_blue = COLOR_RGBA(0, 0, 255, 255);
+    static const color_t lagometer_yellow = COLOR_RGBA(255, 255, 0, 255);
+    static const color_t lagometer_green = COLOR_RGBA(0, 255, 0, 255);
+    static const color_t lagometer_red = COLOR_RGBA(255, 0, 0, 255);
+    int a, i;
+    float v;
+    float mid;
+    float range;
+    float vscale;
+
+    R_DrawFill32(x, y, LAG_WIDTH, LAG_HEIGHT, lagometer_bg);
+
+    range = (float)LAG_HEIGHT / 3.0f;
+    mid = y + range;
+    vscale = range / (float)MAX_LAGOMETER_RANGE;
+
+    for (a = 0; a < LAG_WIDTH; a++) {
+        i = (lagometer.frameCount - 1 - a) & (LAGOMETER_SAMPLES - 1);
+        v = lagometer.frameSamples[i] * vscale;
+        if (v > 0.0f) {
+            if (v > range) {
+                v = range;
+            }
+            int h = Q_rint(v);
+            if (h > 0) {
+                R_DrawFill32(x + LAG_WIDTH - a - 1, Q_rint(mid - v), 1, h, lagometer_yellow);
+            }
+        } else if (v < 0.0f) {
+            v = -v;
+            if (v > range) {
+                v = range;
+            }
+            int h = Q_rint(v);
+            if (h > 0) {
+                R_DrawFill32(x + LAG_WIDTH - a - 1, Q_rint(mid), 1, h, lagometer_blue);
+            }
+        }
+    }
+
+    range = (float)LAG_HEIGHT / 2.0f;
+    vscale = range / (float)MAX_LAGOMETER_PING;
+
+    for (a = 0; a < LAG_WIDTH; a++) {
+        i = (lagometer.snapshotCount - 1 - a) & (LAGOMETER_SAMPLES - 1);
+        v = (float)lagometer.snapshotSamples[i];
+        if (v > 0.0f) {
+            color_t color = (lagometer.snapshotFlags[i] & LAGOMETER_RATE_DELAYED)
+                ? lagometer_yellow
+                : lagometer_green;
+            v *= vscale;
+            if (v > range) {
+                v = range;
+            }
+            int h = Q_rint(v);
+            if (h > 0) {
+                R_DrawFill32(x + LAG_WIDTH - a - 1, Q_rint(y + LAG_HEIGHT - v), 1, h, color);
+            }
+        } else if (v < 0.0f) {
+            int h = Q_rint(range);
+            if (h > 0) {
+                R_DrawFill32(x + LAG_WIDTH - a - 1, Q_rint(y + LAG_HEIGHT - range), 1, h, lagometer_red);
+            }
+        }
+    }
+
+    if (!cls.demo.playback) {
+        char ping_text[16];
+        Q_snprintf(ping_text, sizeof(ping_text), "%ums", cls.measure.ping);
+        SCR_DrawString(x + 1, y, 0, COLOR_WHITE, ping_text);
+    }
+
+    if (cl_predict && !cl_predict->integer) {
+        SCR_DrawString(x + LAG_WIDTH - 1, y, UI_RIGHT, COLOR_WHITE, "snc");
+    }
+}
+
 static void SCR_DrawNet(color_t base_color)
 {
     int x = scr_lag_x->integer;
@@ -1045,7 +1201,9 @@ static void SCR_DrawNet(color_t base_color)
     }
 
     // draw ping graph
-    if (scr_lag_draw->integer) {
+    if (cg_lagometer && cg_lagometer->integer > 0 && !sv_running->integer) {
+        SCR_DrawLagometer(x, y);
+    } else if (scr_lag_draw->integer) {
         if (scr_lag_draw->integer > 1) {
             R_DrawFill8(x, y, LAG_WIDTH, LAG_HEIGHT, 4);
         }
@@ -1408,6 +1566,49 @@ static int SCR_ClampNotifyPromptSkip(int prompt_skip, int max_chars)
     return prompt_skip;
 }
 
+static void SCR_DrawNotifyChatLine(int x, int y, int flags, size_t maxlen,
+                                   const char *s, color_t color)
+{
+    if (!scr.ui_font || !s || !*s) {
+        SCR_DrawStringStretch(x, y, 1, flags, maxlen, s, color, scr.ui_font_pic);
+        return;
+    }
+
+    size_t len = strlen(s);
+    if (len > maxlen)
+        len = maxlen;
+
+    const char *colon = (const char *)memchr(s, ':', len);
+    if (!colon || colon == s) {
+        Font_DrawString(scr.ui_font, x, y, 1, flags, len, s, color);
+        return;
+    }
+
+    size_t name_len = (size_t)(colon - s);
+    size_t rest_len = len - name_len;
+
+    char name_buf[MAX_STRING_CHARS];
+    char rest_buf[MAX_STRING_CHARS];
+    name_len = min(name_len, sizeof(name_buf) - 1);
+    rest_len = min(rest_len, sizeof(rest_buf) - 1);
+
+    memcpy(name_buf, s, name_len);
+    name_buf[name_len] = '\0';
+    memcpy(rest_buf, colon, rest_len);
+    rest_buf[rest_len] = '\0';
+
+    const int bold_extra = max(2, scr.hud_scale > 0.0f ? Q_rint(scr.hud_scale) : 1);
+    const int name_width = Font_MeasureString(scr.ui_font, 1, flags, name_len, name_buf, nullptr);
+    const int bold_flags = flags & ~UI_DROPSHADOW;
+
+    Font_DrawString(scr.ui_font, x, y, 1, flags, name_len, name_buf, color);
+    for (int i = 1; i <= bold_extra; ++i) {
+        Font_DrawString(scr.ui_font, x + i, y, 1, bold_flags, name_len, name_buf, color);
+    }
+    Font_DrawString(scr.ui_font, x + name_width + bold_extra, y, 1, flags,
+                    rest_len, rest_buf, color);
+}
+
 static void SCR_BuildNotifyLayout(scr_notify_layout_t *layout, int total_lines, int max_visible, bool message_active)
 {
     int safe_x, safe_y, safe_w, safe_h;
@@ -1512,7 +1713,6 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
 
     size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
     const char *text = field->text + offset;
-    size_t len = strlen(field->text);
     size_t available_chars = UTF8_CountChars(text, strlen(text));
     size_t max_chars = min(field->visibleChars, available_chars);
     int click_x = scr_notify_mouse_x - text_x;
@@ -1529,17 +1729,13 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
     }
 
     size_t new_pos = offset + click_bytes;
-    if (new_pos > len)
-        new_pos = len;
-    if (new_pos >= field->maxChars)
-        new_pos = field->maxChars - 1;
-    field->cursorPos = new_pos;
+    IF_SetCursor(field, new_pos, Key_IsDown(K_SHIFT));
 }
 
 static void SCR_DrawInputField(const inputField_t *field, int x, int y, int flags,
                                size_t max_chars, color_t color)
 {
-    if (!field || !scr.font)
+    if (!field || !scr.ui_font)
         return;
     if (!field->maxChars || !field->visibleChars)
         return;
@@ -1562,12 +1758,52 @@ static void SCR_DrawInputField(const inputField_t *field, int x, int y, int flag
     const char *text = field->text + offset;
     size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
     size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars_visible);
-    Font_DrawString(scr.font, x, y, 1, flags, draw_len, text, color);
+    if (field->selecting && field->selectionAnchor != field->cursorPos) {
+        size_t sel_start = min(field->selectionAnchor, field->cursorPos);
+        size_t sel_end = max(field->selectionAnchor, field->cursorPos);
+        size_t sel_start_chars = UTF8_CountChars(field->text, sel_start);
+        size_t sel_end_chars = UTF8_CountChars(field->text, sel_end);
+        size_t sel_start_visible = (sel_start_chars > offset_chars)
+            ? (sel_start_chars - offset_chars)
+            : 0;
+        size_t sel_end_visible = (sel_end_chars > offset_chars)
+            ? (sel_end_chars - offset_chars)
+            : 0;
+        if (sel_start_visible > draw_chars)
+            sel_start_visible = draw_chars;
+        if (sel_end_visible > draw_chars)
+            sel_end_visible = draw_chars;
+
+        if (sel_end_visible > sel_start_visible) {
+            size_t sel_start_bytes = UTF8_OffsetForChars(text, sel_start_visible);
+            size_t sel_end_bytes = UTF8_OffsetForChars(text, sel_end_visible);
+            int sel_start_x = x + SCR_MeasureFontString(text, sel_start_bytes);
+            int sel_end_x = x + SCR_MeasureFontString(text, sel_end_bytes);
+            int sel_w = max(0, sel_end_x - sel_start_x);
+            int text_h = Font_LineHeight(scr.ui_font, 1);
+            color_t highlight = COLOR_RGBA(80, 120, 200, 120);
+            R_DrawFill32(sel_start_x, y, sel_w, text_h, highlight);
+        }
+    }
+    Font_DrawString(scr.ui_font, x, y, 1, flags, draw_len, text, color);
 
     if ((flags & UI_DRAWCURSOR) && (com_localTime & BIT(8))) {
         int cursor_x = x + SCR_MeasureFontString(text, cursor_bytes);
-        int cursor_ch = Key_GetOverstrikeMode() ? 11 : '_';
-        R_DrawChar(cursor_x, y, flags, cursor_ch, color, scr.font_pic);
+        size_t next_chars = min(draw_chars, cursor_chars_visible + 1);
+        size_t next_bytes = UTF8_OffsetForChars(text, next_chars);
+        int next_x = x + SCR_MeasureFontString(text, next_bytes);
+        int cursor_w = max(0, next_x - cursor_x);
+        int text_h = Font_LineHeight(scr.ui_font, 1);
+        if (Key_GetOverstrikeMode()) {
+            int width = max(2, cursor_w);
+            if (width < 2)
+                width = max(2, text_h / 2);
+            color_t fill = COLOR_SETA_U8(color, 160);
+            R_DrawFill32(cursor_x, y, width, text_h, fill);
+        } else {
+            color_t fill = COLOR_SETA_U8(color, 220);
+            R_DrawFill32(cursor_x, y, 1, text_h, fill);
+        }
     }
 }
 
@@ -1758,9 +1994,13 @@ static void SCR_DrawChatHUD(color_t base_color)
             if (scr_chathud->integer == 2 && line->is_chat)
                 flags |= UI_ALTCOLOR;
 
-            SCR_DrawStringStretch(scr_notify_layout.x, Q_rint(y), 1, flags,
-                                  scr_notify_layout.max_chars, line->text, color,
-                                  scr.font_pic);
+            if (line->is_chat)
+                SCR_DrawNotifyChatLine(scr_notify_layout.x, Q_rint(y), flags,
+                                       scr_notify_layout.max_chars, line->text, color);
+            else
+                SCR_DrawStringStretch(scr_notify_layout.x, Q_rint(y), 1, flags,
+                                      scr_notify_layout.max_chars, line->text, color,
+                                      scr.ui_font_pic);
         }
     }
 
@@ -1781,7 +2021,7 @@ static void SCR_DrawChatHUD(color_t base_color)
         }
 
         SCR_DrawStringStretch(scr_notify_layout.input_x, scr_notify_layout.input_y, 1, 0,
-                              scr_notify_layout.max_chars, prompt, base_color, scr.font_pic);
+                              scr_notify_layout.max_chars, prompt, base_color, scr.ui_font_pic);
         if (field) {
             SCR_DrawInputField(field, scr_notify_layout.input_x + prompt_width,
                                scr_notify_layout.input_y, UI_DRAWCURSOR,
@@ -2066,6 +2306,198 @@ static void cl_crosshair_size_changed(cvar_t *self)
     scr.hit_marker_height = Q_rint(h * hit_marker_scale);
 }
 
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+    xchanged_t changed;
+} cvar_alias_pair_t;
+
+static bool cl_screen_alias_syncing;
+
+static cvar_alias_pair_t cl_screen_aliases[] = {
+    { &scr_showpause, &scr_showpause_legacy, NULL },
+#if USE_DEBUG
+    { &scr_showstats, &scr_showstats_legacy, NULL },
+    { &scr_showpmove, &scr_showpmove_legacy, NULL },
+#endif
+    { &scr_showturtle, &scr_showturtle_legacy, NULL },
+    { &scr_demobar, &scr_demobar_legacy, NULL },
+    { &scr_font, &scr_font_legacy, scr_font_changed },
+    { &scr_scale, &scr_scale_legacy, scr_scale_changed },
+    { &scr_chathud, &scr_chathud_legacy, NULL },
+    { &scr_chathud_lines, &scr_chathud_lines_legacy, NULL },
+    { &scr_chathud_time, &scr_chathud_time_legacy, cl_timeout_changed },
+    { &scr_chathud_x, &scr_chathud_x_legacy, NULL },
+    { &scr_chathud_y, &scr_chathud_y_legacy, NULL },
+    { &scr_draw2d, &scr_draw2d_legacy, NULL },
+    { &scr_lag_x, &scr_lag_x_legacy, NULL },
+    { &scr_lag_y, &scr_lag_y_legacy, NULL },
+    { &scr_lag_draw, &scr_lag_draw_legacy, NULL },
+    { &scr_lag_min, &scr_lag_min_legacy, NULL },
+    { &scr_lag_max, &scr_lag_max_legacy, NULL },
+    { &scr_alpha, &scr_alpha_legacy, NULL },
+    { &scr_hit_marker_time, &scr_hit_marker_time_legacy, NULL },
+    { &scr_damage_indicators, &scr_damage_indicators_legacy, NULL },
+    { &scr_damage_indicator_time, &scr_damage_indicator_time_legacy, NULL },
+    { &scr_pois, &scr_pois_legacy, NULL },
+    { &scr_poi_edge_frac, &scr_poi_edge_frac_legacy, NULL },
+    { &scr_poi_max_scale, &scr_poi_max_scale_legacy, NULL },
+    { &scr_safe_zone, &scr_safe_zone_legacy, NULL },
+};
+
+static void cl_screen_alias_changed(cvar_t *self)
+{
+    if (cl_screen_alias_syncing)
+        return;
+
+    cl_screen_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_screen_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_screen_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+    }
+
+    cl_screen_alias_syncing = false;
+}
+
+static void cl_screen_alias_sync_defaults(void)
+{
+    if (cl_screen_alias_syncing)
+        return;
+
+    cl_screen_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_screen_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_screen_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    cl_screen_alias_syncing = false;
+}
+
+static void cl_screen_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(cl_screen_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_screen_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = cl_screen_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = cl_screen_alias_changed;
+    }
+
+    cl_screen_alias_sync_defaults();
+}
+
+static bool cl_crosshair_alias_syncing;
+
+static cvar_alias_pair_t cl_crosshair_aliases[] = {
+    { &cl_crosshair_brightness, &cl_crosshair_brightness_legacy, NULL },
+    { &cl_crosshair_color, &cl_crosshair_color_legacy, NULL },
+    { &cl_crosshair_health, &cl_crosshair_health_legacy, NULL },
+    { &cl_crosshair_hit_color, &cl_crosshair_hit_color_legacy, NULL },
+    { &cl_crosshair_hit_style, &cl_crosshair_hit_style_legacy, NULL },
+    { &cl_crosshair_hit_time, &cl_crosshair_hit_time_legacy, NULL },
+    { &cl_crosshair_pulse, &cl_crosshair_pulse_legacy, NULL },
+    { &cl_crosshair_size, &cl_crosshair_size_legacy, cl_crosshair_size_changed },
+};
+
+static void cl_crosshair_alias_changed(cvar_t *self)
+{
+    if (cl_crosshair_alias_syncing)
+        return;
+
+    cl_crosshair_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_crosshair_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_crosshair_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+    }
+
+    cl_crosshair_alias_syncing = false;
+}
+
+static void cl_crosshair_alias_sync_defaults(void)
+{
+    if (cl_crosshair_alias_syncing)
+        return;
+
+    cl_crosshair_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_crosshair_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_crosshair_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    cl_crosshair_alias_syncing = false;
+}
+
+static void cl_crosshair_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(cl_crosshair_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_crosshair_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = cl_crosshair_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = cl_crosshair_alias_changed;
+    }
+
+    cl_crosshair_alias_sync_defaults();
+}
+
 static void scr_crosshair_changed(cvar_t *self)
 {
     if (self->integer > 0) {
@@ -2130,6 +2562,10 @@ void SCR_ModeChanged(void)
 
 static void scr_font_changed(cvar_t *self)
 {
+    if (scr.ui_font == scr.font) {
+        scr.ui_font = nullptr;
+        scr.ui_font_pic = 0;
+    }
     if (scr.font) {
         Font_Free(scr.font);
         scr.font = nullptr;
@@ -2147,6 +2583,30 @@ static void scr_font_changed(cvar_t *self)
 
     Font_SetLetterSpacing(scr.font, k_scr_ttf_letter_spacing);
     scr.font_pic = Font_LegacyHandle(scr.font);
+
+    scr_ui_font_reload();
+}
+
+static void scr_ui_font_reload(void)
+{
+    if (scr.ui_font && scr.ui_font != scr.font) {
+        Font_Free(scr.ui_font);
+        scr.ui_font = nullptr;
+    }
+    if (scr.ui_font == scr.font)
+        scr.ui_font = nullptr;
+
+    float pixel_scale = SCR_GetFontPixelScale();
+    scr.ui_font = Font_Load(k_scr_ui_font_path, CONCHAR_HEIGHT, pixel_scale, 0,
+                            "fonts/qfont.kfont", "conchars.png");
+    if (!scr.ui_font) {
+        scr.ui_font = scr.font;
+        scr.ui_font_pic = scr.font_pic;
+        return;
+    }
+
+    Font_SetLetterSpacing(scr.ui_font, k_scr_ttf_letter_spacing);
+    scr.ui_font_pic = Font_LegacyHandle(scr.ui_font);
 }
 
 /*
@@ -2374,11 +2834,15 @@ SCR_Init
 void SCR_Init(void)
 {
     scr_viewsize = Cvar_Get("viewsize", "100", CVAR_ARCHIVE);
-    scr_showpause = Cvar_Get("scr_showpause", "1", 0);
-    scr_demobar = Cvar_Get("scr_demobar", "1", 0);
-    scr_font = Cvar_Get("scr_font", "fonts/RussoOne-Regular.ttf", 0);
+    scr_showpause = Cvar_Get("cl_showpause", "1", 0);
+    scr_showpause_legacy = Cvar_Get("scr_showpause", scr_showpause->string, CVAR_NOARCHIVE);
+    scr_demobar = Cvar_Get("cl_demobar", "1", 0);
+    scr_demobar_legacy = Cvar_Get("scr_demobar", scr_demobar->string, CVAR_NOARCHIVE);
+    scr_font = Cvar_Get("cl_font", "fonts/RussoOne-Regular.ttf", 0);
+    scr_font_legacy = Cvar_Get("scr_font", scr_font->string, CVAR_NOARCHIVE);
     scr_font->changed = scr_font_changed;
-    scr_scale = Cvar_Get("scr_scale", "0", 0);
+    scr_scale = Cvar_Get("cl_scale", "0", 0);
+    scr_scale_legacy = Cvar_Get("scr_scale", scr_scale->string, CVAR_NOARCHIVE);
     scr_scale->changed = scr_scale_changed;
     scr_crosshair = Cvar_Get("crosshair", "3", CVAR_ARCHIVE);
     scr_crosshair->changed = scr_crosshair_changed;
@@ -2390,48 +2854,90 @@ void SCR_Init(void)
     scr_graphscale = Cvar_Get("graphscale", "1", 0);
     scr_graphshift = Cvar_Get("graphshift", "0", 0);
 
-    scr_chathud = Cvar_Get("scr_chathud", "1", 0);
-    scr_chathud_lines = Cvar_Get("scr_chathud_lines", "4", 0);
-    scr_chathud_time = Cvar_Get("scr_chathud_time", "0", 0);
+    scr_chathud = Cvar_Get("cl_chathud", "1", 0);
+    scr_chathud_legacy = Cvar_Get("scr_chathud", scr_chathud->string, CVAR_NOARCHIVE);
+    scr_chathud_lines = Cvar_Get("cl_chathud_lines", "4", 0);
+    scr_chathud_lines_legacy = Cvar_Get("scr_chathud_lines", scr_chathud_lines->string, CVAR_NOARCHIVE);
+    scr_chathud_time = Cvar_Get("cl_chathud_time", "0", 0);
+    scr_chathud_time_legacy = Cvar_Get("scr_chathud_time", scr_chathud_time->string, CVAR_NOARCHIVE);
     scr_chathud_time->changed = cl_timeout_changed;
-    scr_chathud_time->changed(scr_chathud_time);
-    scr_chathud_x = Cvar_Get("scr_chathud_x", "8", 0);
-    scr_chathud_y = Cvar_Get("scr_chathud_y", "-64", 0);
+    scr_chathud_x = Cvar_Get("cl_chathud_x", "8", 0);
+    scr_chathud_x_legacy = Cvar_Get("scr_chathud_x", scr_chathud_x->string, CVAR_NOARCHIVE);
+    scr_chathud_y = Cvar_Get("cl_chathud_y", "-64", 0);
+    scr_chathud_y_legacy = Cvar_Get("scr_chathud_y", scr_chathud_y->string, CVAR_NOARCHIVE);
 
-    cl_crosshair_brightness = Cvar_Get("cl_crosshairBrightness", "1.0", CVAR_ARCHIVE);
-    cl_crosshair_color = Cvar_Get("cl_crosshairColor", "25", CVAR_ARCHIVE);
-    cl_crosshair_health = Cvar_Get("cl_crosshairHealth", "0", CVAR_ARCHIVE);
-    cl_crosshair_hit_color = Cvar_Get("cl_crosshairHitColor", "1", CVAR_ARCHIVE);
-    cl_crosshair_hit_style = Cvar_Get("cl_crosshairHitStyle", "2", CVAR_ARCHIVE);
-    cl_crosshair_hit_time = Cvar_Get("cl_crosshairHitTime", "200", CVAR_ARCHIVE);
-    cl_crosshair_pulse = Cvar_Get("cl_crosshairPulse", "1", CVAR_ARCHIVE);
-    cl_crosshair_size = Cvar_Get("cl_crosshairSize", "32", CVAR_ARCHIVE);
-    cl_crosshair_size->changed = cl_crosshair_size_changed;
+    cl_crosshair_brightness = Cvar_Get("cl_crosshair_brightness", "1.0", CVAR_ARCHIVE);
+    cl_crosshair_brightness_legacy = Cvar_Get("cl_crosshairBrightness", cl_crosshair_brightness->string,
+                                              CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_color = Cvar_Get("cl_crosshair_color", "25", CVAR_ARCHIVE);
+    cl_crosshair_color_legacy = Cvar_Get("cl_crosshairColor", cl_crosshair_color->string,
+                                         CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_health = Cvar_Get("cl_crosshair_health", "0", CVAR_ARCHIVE);
+    cl_crosshair_health_legacy = Cvar_Get("cl_crosshairHealth", cl_crosshair_health->string,
+                                          CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_hit_color = Cvar_Get("cl_crosshair_hit_color", "1", CVAR_ARCHIVE);
+    cl_crosshair_hit_color_legacy = Cvar_Get("cl_crosshairHitColor", cl_crosshair_hit_color->string,
+                                             CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_hit_style = Cvar_Get("cl_crosshair_hit_style", "2", CVAR_ARCHIVE);
+    cl_crosshair_hit_style_legacy = Cvar_Get("cl_crosshairHitStyle", cl_crosshair_hit_style->string,
+                                             CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_hit_time = Cvar_Get("cl_crosshair_hit_time", "200", CVAR_ARCHIVE);
+    cl_crosshair_hit_time_legacy = Cvar_Get("cl_crosshairHitTime", cl_crosshair_hit_time->string,
+                                            CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_pulse = Cvar_Get("cl_crosshair_pulse", "1", CVAR_ARCHIVE);
+    cl_crosshair_pulse_legacy = Cvar_Get("cl_crosshairPulse", cl_crosshair_pulse->string,
+                                         CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_size = Cvar_Get("cl_crosshair_size", "32", CVAR_ARCHIVE);
+    cl_crosshair_size_legacy = Cvar_Get("cl_crosshairSize", cl_crosshair_size->string,
+                                        CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_crosshair_alias_register();
     ch_x = Cvar_Get("ch_x", "0", 0);
     ch_y = Cvar_Get("ch_y", "0", 0);
 
-    scr_draw2d = Cvar_Get("scr_draw2d", "2", 0);
-    scr_showturtle = Cvar_Get("scr_showturtle", "1", 0);
-    scr_lag_x = Cvar_Get("scr_lag_x", "-1", 0);
-    scr_lag_y = Cvar_Get("scr_lag_y", "-1", 0);
-    scr_lag_draw = Cvar_Get("scr_lag_draw", "0", 0);
-    scr_lag_min = Cvar_Get("scr_lag_min", "0", 0);
-    scr_lag_max = Cvar_Get("scr_lag_max", "200", 0);
-    scr_alpha = Cvar_Get("scr_alpha", "1", 0);
+    scr_draw2d = Cvar_Get("cl_draw2d", "2", 0);
+    scr_draw2d_legacy = Cvar_Get("scr_draw2d", scr_draw2d->string, CVAR_NOARCHIVE);
+    scr_showturtle = Cvar_Get("cl_showturtle", "1", 0);
+    scr_showturtle_legacy = Cvar_Get("scr_showturtle", scr_showturtle->string, CVAR_NOARCHIVE);
+    scr_lag_x = Cvar_Get("cl_lag_x", "-1", 0);
+    scr_lag_x_legacy = Cvar_Get("scr_lag_x", scr_lag_x->string, CVAR_NOARCHIVE);
+    scr_lag_y = Cvar_Get("cl_lag_y", "-1", 0);
+    scr_lag_y_legacy = Cvar_Get("scr_lag_y", scr_lag_y->string, CVAR_NOARCHIVE);
+    scr_lag_draw = Cvar_Get("cl_lag_draw", "0", 0);
+    scr_lag_draw_legacy = Cvar_Get("scr_lag_draw", scr_lag_draw->string, CVAR_NOARCHIVE);
+    scr_lag_min = Cvar_Get("cl_lag_min", "0", 0);
+    scr_lag_min_legacy = Cvar_Get("scr_lag_min", scr_lag_min->string, CVAR_NOARCHIVE);
+    scr_lag_max = Cvar_Get("cl_lag_max", "200", 0);
+    scr_lag_max_legacy = Cvar_Get("scr_lag_max", scr_lag_max->string, CVAR_NOARCHIVE);
+    cg_lagometer = Cvar_Get("cg_lagometer", "1", CVAR_ARCHIVE);
+    scr_alpha = Cvar_Get("cl_alpha", "1", 0);
+    scr_alpha_legacy = Cvar_Get("scr_alpha", scr_alpha->string, CVAR_NOARCHIVE);
 #if USE_DEBUG
-    scr_showstats = Cvar_Get("scr_showstats", "0", 0);
-    scr_showpmove = Cvar_Get("scr_showpmove", "0", 0);
+    scr_showstats = Cvar_Get("cl_showstats", "0", 0);
+    scr_showstats_legacy = Cvar_Get("scr_showstats", scr_showstats->string, CVAR_NOARCHIVE);
+    scr_showpmove = Cvar_Get("cl_showpmove", "0", 0);
+    scr_showpmove_legacy = Cvar_Get("scr_showpmove", scr_showpmove->string, CVAR_NOARCHIVE);
 #endif
 
-    scr_hit_marker_time = Cvar_Get("scr_hit_marker_time", "500", 0);
+    scr_hit_marker_time = Cvar_Get("cl_hit_marker_time", "500", 0);
+    scr_hit_marker_time_legacy = Cvar_Get("scr_hit_marker_time", scr_hit_marker_time->string, CVAR_NOARCHIVE);
     
-    scr_damage_indicators = Cvar_Get("scr_damage_indicators", "1", 0);
-    scr_damage_indicator_time = Cvar_Get("scr_damage_indicator_time", "1000", 0);
+    scr_damage_indicators = Cvar_Get("cl_damage_indicators", "1", 0);
+    scr_damage_indicators_legacy = Cvar_Get("scr_damage_indicators", scr_damage_indicators->string, CVAR_NOARCHIVE);
+    scr_damage_indicator_time = Cvar_Get("cl_damage_indicator_time", "1000", 0);
+    scr_damage_indicator_time_legacy = Cvar_Get("scr_damage_indicator_time",
+                                                scr_damage_indicator_time->string, CVAR_NOARCHIVE);
 
-    scr_pois = Cvar_Get("scr_pois", "1", 0);
-    scr_poi_edge_frac = Cvar_Get("scr_poi_edge_frac", "0.15", 0);
-    scr_poi_max_scale = Cvar_Get("scr_poi_max_scale", "1.0", 0);
-    scr_safe_zone = Cvar_Get("scr_safe_zone", "0.02", 0);
+    scr_pois = Cvar_Get("cl_pois", "1", 0);
+    scr_pois_legacy = Cvar_Get("scr_pois", scr_pois->string, CVAR_NOARCHIVE);
+    scr_poi_edge_frac = Cvar_Get("cl_poi_edge_frac", "0.15", 0);
+    scr_poi_edge_frac_legacy = Cvar_Get("scr_poi_edge_frac", scr_poi_edge_frac->string, CVAR_NOARCHIVE);
+    scr_poi_max_scale = Cvar_Get("cl_poi_max_scale", "1.0", 0);
+    scr_poi_max_scale_legacy = Cvar_Get("scr_poi_max_scale", scr_poi_max_scale->string, CVAR_NOARCHIVE);
+    scr_safe_zone = Cvar_Get("cl_safe_zone", "0.02", 0);
+    scr_safe_zone_legacy = Cvar_Get("scr_safe_zone", scr_safe_zone->string, CVAR_NOARCHIVE);
+
+    cl_screen_alias_register();
+    cl_timeout_changed(scr_chathud_time);
 
     Cmd_Register(scr_cmds);
 
@@ -2444,11 +2950,16 @@ void SCR_Init(void)
 void SCR_Shutdown(void)
 {
     Cmd_Deregister(scr_cmds);
+    if (scr.ui_font && scr.ui_font != scr.font) {
+        Font_Free(scr.ui_font);
+        scr.ui_font = nullptr;
+    }
     if (scr.font) {
         Font_Free(scr.font);
         scr.font = nullptr;
     }
     scr.font_pic = 0;
+    scr.ui_font_pic = 0;
     scr.initialized = false;
 }
 
@@ -3120,6 +3631,8 @@ static void SCR_DrawActive(void)
 
     // draw 3D game view
     V_RenderView();
+
+    SCR_LagometerAddFrameInfo();
 
     // draw all 2D elements
     SCR_Draw2D();

@@ -351,6 +351,7 @@ sgame_src = bgame_src + [
   'src/game/sgame/gameplay/g_weapon.cpp',
   'src/game/sgame/match/match_logging.cpp',
   'src/game/sgame/match/match_state.cpp',
+  'src/game/sgame/match/match_setup.cpp',
   'src/game/sgame/match/tournament.cpp',
   'src/game/sgame/menu/menu_page_admin_commands.cpp',
   'src/game/sgame/menu/menu_page_admin.cpp',
@@ -361,7 +362,6 @@ sgame_src = bgame_src + [
   'src/game/sgame/menu/menu_page_matchinfo.cpp',
   'src/game/sgame/menu/menu_page_matchstats.cpp',
   'src/game/sgame/menu/menu_page_mymap.cpp',
-  'src/game/sgame/menu/menu_page_setup.cpp',
   'src/game/sgame/menu/menu_page_tournament.cpp',
   'src/game/sgame/menu/menu_page_voting.cpp',
   'src/game/sgame/menu/menu_page_welcome.cpp',
@@ -676,6 +676,7 @@ fallback_opt = ['default_library=static']
 game_fallback_opt = fallback_opt + [
   'b_vscrt=static_from_buildtype',
   'buildtype=' + get_option('buildtype'),
+  'cpp_std=c++17',
 ]
 
 fmt_dep = dependency('fmt', default_options: game_fallback_opt)
@@ -696,12 +697,18 @@ png = dependency('libpng',
   required:        get_option('libpng'),
   default_options: fallback_opt,
 )
-if png.found()
+use_stb_png = not png.found()
+if png.found() or use_stb_png
   texture_formats += 'png'
 endif
 
 config.set10('USE_ZLIB', zlib.found())
 config.set10('USE_PNG', png.found())
+config.set10('USE_STB_PNG', use_stb_png)
+
+if use_stb_png
+  renderer_src += 'src/rend_vk/refresh/stb/stb.c'
+endif
 
 curl = dependency('libcurl',
   version:         '>= 7.68.0',

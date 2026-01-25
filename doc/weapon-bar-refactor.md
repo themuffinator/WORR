@@ -1,12 +1,12 @@
-# Weapon Bar Refactor and cl_weaponBar
+# Weapon Bar Refactor and cl_weapon_bar
 
 ## Summary
 The former "carousel" weapon bar UI has been split out of `wheel.c` into a
 dedicated weapon bar module and renamed throughout to "weapon bar". This
-adds a Quake Live-style `cl_weaponBar` cvar with multiple display modes,
+adds a Quake Live-style `cl_weapon_bar` cvar with multiple display modes,
 including static left/right/center positions and two timed variants.
 
-## New cvar: cl_weaponBar
+## New cvar: cl_weapon_bar
 Default: `5` (Quake II Rerelease timed weapon bar).
 
 Values and behavior:

@@ -214,7 +214,6 @@ static bool IsMatchMenuName(const std::string &name)
         "mymap_",
         "forfeit_",
         "admin_",
-        "setup_",
         "tourney_",
         "vote_"
     };
@@ -511,6 +510,10 @@ static std::unique_ptr<Widget> BuildWidget(const MenuItemData &item)
         if (!item.label.empty())
             blank->SetLabel(item.label);
         widget = std::move(blank);
+    } else if (item.type == "heading") {
+        auto heading = std::make_unique<HeadingWidget>();
+        heading->SetLabel(item.label);
+        widget = std::move(heading);
     } else if (item.type == "imagevalues") {
         cvar_t *cvar = Cvar_WeakGet(item.cvar.c_str());
         auto image = std::make_unique<ImageSpinWidget>(item.label, cvar,

@@ -1215,9 +1215,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 				return;
 
 			if (player->client->initialMenu.frozen && !player->client->initialMenu.hostSetupDone) {
-				OpenSetupWelcomeMenu(player);
 				player->client->initialMenu.hostSetupDone = true;
-				return;
 			}
 
 			if (!player->client->initialMenu.frozen && g_owner_push_scores->integer) {

@@ -83,6 +83,7 @@ static cvar_t *con_notifylines;
 static cvar_t *con_clock;
 static cvar_t *con_height;
 static cvar_t *con_speed;
+static cvar_t *con_speed_legacy;
 static cvar_t *con_alpha;
 static cvar_t *con_scale;
 static cvar_t *con_font;
@@ -96,6 +97,50 @@ static cvar_t *con_auto_chat;
 static cvar_t *ui_download_active;
 static cvar_t *con_fontscale;
 static cvar_t *con_fontsize;
+
+static bool con_speed_alias_syncing;
+
+static void con_speed_alias_changed(cvar_t *self)
+{
+  if (con_speed_alias_syncing)
+    return;
+
+  con_speed_alias_syncing = true;
+
+  if (self == con_speed && con_speed_legacy)
+    Cvar_SetByVar(con_speed_legacy, con_speed->string, FROM_CODE);
+  else if (self == con_speed_legacy && con_speed)
+    Cvar_SetByVar(con_speed, con_speed_legacy->string, FROM_CODE);
+
+  con_speed_alias_syncing = false;
+}
+
+static void con_speed_alias_sync_defaults(void)
+{
+  if (con_speed_alias_syncing)
+    return;
+
+  con_speed_alias_syncing = true;
+
+  if (con_speed && con_speed_legacy) {
+    if (!(con_speed->flags & CVAR_MODIFIED) && (con_speed_legacy->flags & CVAR_MODIFIED))
+      Cvar_SetByVar(con_speed, con_speed_legacy->string, FROM_CODE);
+    else
+      Cvar_SetByVar(con_speed_legacy, con_speed->string, FROM_CODE);
+  }
+
+  con_speed_alias_syncing = false;
+}
+
+static void con_speed_alias_register(void)
+{
+  if (con_speed)
+    con_speed->changed = con_speed_alias_changed;
+  if (con_speed_legacy)
+    con_speed_legacy->changed = con_speed_alias_changed;
+
+  con_speed_alias_sync_defaults();
+}
 
 static float Con_GetFontPixelScale(void);
 static int Con_FontCharWidth(void);
@@ -491,7 +536,9 @@ void Con_Init(void) {
   con_notifylines = Cvar_Get("con_notifylines", "4", 0);
   con_clock = Cvar_Get("con_clock", "0", 0);
   con_height = Cvar_Get("con_height", "0.66", 0);
-  con_speed = Cvar_Get("scr_conspeed", "3", 0);
+  con_speed = Cvar_Get("con_speed", "3", 0);
+  con_speed_legacy = Cvar_Get("scr_conspeed", con_speed->string, CVAR_NOARCHIVE);
+  con_speed_alias_register();
   con_alpha = Cvar_Get("con_alpha", "1", 0);
   con_scale = Cvar_Get("con_scale", "0", 0);
   con_scale->changed = con_width_changed;
@@ -822,16 +869,56 @@ static int Con_DrawInputField(const inputField_t *field, int x, int y,
   if (draw_chars > max_chars)
     draw_chars = max_chars;
   size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
+  size_t cursor_chars_visible =
+      (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
+  if (cursor_chars_visible > draw_chars)
+    cursor_chars_visible = draw_chars;
+
+  if (field->selecting && field->selectionAnchor != field->cursorPos) {
+    size_t sel_start = min(field->selectionAnchor, field->cursorPos);
+    size_t sel_end = max(field->selectionAnchor, field->cursorPos);
+    size_t sel_start_chars = UTF8_CountChars(field->text, sel_start);
+    size_t sel_end_chars = UTF8_CountChars(field->text, sel_end);
+    size_t sel_start_visible =
+        (sel_start_chars > offset_chars) ? (sel_start_chars - offset_chars) : 0;
+    size_t sel_end_visible =
+        (sel_end_chars > offset_chars) ? (sel_end_chars - offset_chars) : 0;
+    if (sel_start_visible > draw_chars)
+      sel_start_visible = draw_chars;
+    if (sel_end_visible > draw_chars)
+      sel_end_visible = draw_chars;
+
+    if (sel_end_visible > sel_start_visible) {
+      size_t sel_start_bytes = UTF8_OffsetForChars(text, sel_start_visible);
+      size_t sel_end_bytes = UTF8_OffsetForChars(text, sel_end_visible);
+      int sel_start_x = x + Con_MeasureString(text, sel_start_bytes);
+      int sel_end_x = x + Con_MeasureString(text, sel_end_bytes);
+      int sel_w = max(0, sel_end_x - sel_start_x);
+      color_t highlight = COLOR_RGBA(80, 120, 200, 120);
+      int char_height = Con_FontCharHeight();
+      R_DrawFill32(sel_start_x, y, sel_w, char_height, highlight);
+    }
+  }
 
   int end_x = Font_DrawString(con.font, x, y, 1, flags, draw_len, text, color);
 
   if ((flags & UI_DRAWCURSOR) && (com_localTime & BIT(8))) {
     int cursor_x = x + Con_MeasureString(text, cursor_bytes);
-    int cursor_ch = Key_GetOverstrikeMode() ? 11 : '_';
-    int char_width = Con_FontCharWidth();
     int char_height = Con_FontCharHeight();
-    R_DrawStretchChar(cursor_x, y, char_width, char_height, flags, cursor_ch,
-                      color, con.charsetImage);
+    size_t next_chars = min(draw_chars, cursor_chars_visible + 1);
+    size_t next_bytes = UTF8_OffsetForChars(text, next_chars);
+    int next_x = x + Con_MeasureString(text, next_bytes);
+    int cursor_w = max(0, next_x - cursor_x);
+    if (Key_GetOverstrikeMode()) {
+      int width = max(2, cursor_w);
+      if (width < 2)
+        width = max(2, char_height / 2);
+      color_t fill = COLOR_SETA_U8(color, 160);
+      R_DrawFill32(cursor_x, y, width, char_height, fill);
+    } else {
+      color_t fill = COLOR_SETA_U8(color, 220);
+      R_DrawFill32(cursor_x, y, 1, char_height, fill);
+    }
   }
 
   return end_x;
@@ -1010,6 +1097,11 @@ static void Con_DrawSolidConsole(void) {
   if (cls.download.current && show_download_bar) {
     char pos[16], suf[32];
     int n, j;
+    bool use_legacy_bar = !con.font || Font_IsLegacy(con.font);
+    char bar_left = use_legacy_bar ? '\x80' : '[';
+    char bar_fill = use_legacy_bar ? '\x81' : '=';
+    char bar_right = use_legacy_bar ? '\x82' : ']';
+    char bar_marker = use_legacy_bar ? '\x83' : '>';
 
     if ((text = strrchr(cls.download.current->path, '/')) != NULL)
       text++;
@@ -1034,17 +1126,17 @@ static void Con_DrawSolidConsole(void) {
     }
     Q_strlcat(buffer, ": ", sizeof(buffer));
     i = strlen(buffer);
-    buffer[i++] = '\x80';
+    buffer[i++] = bar_left;
     // where's the dot go?
     n = y * cls.download.percent / 100;
     for (j = 0; j < y; j++) {
       if (j == n) {
-        buffer[i++] = '\x83';
+        buffer[i++] = bar_marker;
       } else {
-        buffer[i++] = '\x81';
+        buffer[i++] = bar_fill;
       }
     }
-    buffer[i++] = '\x82';
+    buffer[i++] = bar_right;
     buffer[i] = 0;
 
     Q_strlcat(buffer, suf, sizeof(buffer));

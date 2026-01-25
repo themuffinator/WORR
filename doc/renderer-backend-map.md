@@ -4,7 +4,7 @@
 
 ### Entry points and call flow
 - `src/client/renderer.c`: loads external renderer DLLs when enabled, registers `r_renderer`, wires `renderer_import_t`, and owns the `renderer_export_t re` shim.
-- `src/client/renderer.c`: `CL_InitRenderer` selects a `vid_driver` and calls `R_Init(true)`; `CL_ShutdownRenderer` calls `R_Shutdown(true)`.
+- `src/client/renderer.c`: `CL_InitRenderer` selects a `r_driver` and calls `R_Init(true)`; `CL_ShutdownRenderer` calls `R_Shutdown(true)`.
 - `src/client/precache.c`: `CL_PrepRefresh` -> `R_BeginRegistration`, followed by `R_EndRegistration` after precache completes.
 - `src/client/screen.c`: per-frame flow: `R_BeginFrame` -> `R_RenderFrame` -> `R_EndFrame`.
 - `src/rend_gl/main.c`: owns `R_Init`, `R_Shutdown`, `R_BeginRegistration`, `R_EndRegistration`, `R_BeginFrame`, `R_RenderFrame`, `R_EndFrame`.

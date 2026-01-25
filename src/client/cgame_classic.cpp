@@ -51,8 +51,9 @@ static cgame_q2pro_extended_support_ext_t cgix;
 static const cs_remap_t *csr;
 static int max_stats;
 
-static cvar_t   *scr_centertime;
-static cvar_t   *scr_draw2d;
+static cvar_t   *cg_centertime;
+static cvar_t   *scr_centertime_legacy;
+static cvar_t   *cl_draw2d;
 
 static cvar_t   *cl_crosshair_size;
 static cvar_t   *ch_x;
@@ -64,6 +65,50 @@ static int      scr_center_lines;
 
 static color_t  ui_color;
 
+static bool cg_centertime_alias_syncing;
+
+static void cg_centertime_alias_changed(cvar_t *self)
+{
+    if (cg_centertime_alias_syncing)
+        return;
+
+    cg_centertime_alias_syncing = true;
+
+    if (self == cg_centertime && scr_centertime_legacy)
+        Cvar_SetByVar(scr_centertime_legacy, cg_centertime->string, FROM_CODE);
+    else if (self == scr_centertime_legacy && cg_centertime)
+        Cvar_SetByVar(cg_centertime, scr_centertime_legacy->string, FROM_CODE);
+
+    cg_centertime_alias_syncing = false;
+}
+
+static void cg_centertime_alias_sync_defaults(void)
+{
+    if (cg_centertime_alias_syncing)
+        return;
+
+    cg_centertime_alias_syncing = true;
+
+    if (cg_centertime && scr_centertime_legacy) {
+        if (!(cg_centertime->flags & CVAR_MODIFIED) && (scr_centertime_legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(cg_centertime, scr_centertime_legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(scr_centertime_legacy, cg_centertime->string, FROM_CODE);
+    }
+
+    cg_centertime_alias_syncing = false;
+}
+
+static void cg_centertime_alias_register(void)
+{
+    if (cg_centertime)
+        cg_centertime->changed = cg_centertime_alias_changed;
+    if (scr_centertime_legacy)
+        scr_centertime_legacy->changed = cg_centertime_alias_changed;
+
+    cg_centertime_alias_sync_defaults();
+}
+
 static void CGC_Init(void)
 {
     /* We don't consider rerelease servers here and assume the appropriate
@@ -71,10 +116,12 @@ static void CGC_Init(void)
     csr = cgix.IsExtendedServer() ? &cs_remap_q2pro_new : &cs_remap_old;
     max_stats = cgix.GetMaxStats();
 
-    scr_centertime = cgi.cvar("scr_centertime", "2.5", 0);
-    scr_draw2d = cgi.cvar("scr_draw2d", "2", 0);
+    cg_centertime = cgi.cvar("cg_centertime", "2.5", 0);
+    scr_centertime_legacy = cgi.cvar("scr_centertime", cg_centertime->string, CVAR_NOARCHIVE);
+    cg_centertime_alias_register();
+    cl_draw2d = cgi.cvar("cl_draw2d", "2", 0);
 
-    cl_crosshair_size = cgi.cvar("cl_crosshairSize", "32", 0);
+    cl_crosshair_size = cgi.cvar("cl_crosshair_size", "32", 0);
     ch_x = cgi.cvar("ch_x", "0", 0);
     ch_y = cgi.cvar("ch_y", "0", 0);
 
@@ -83,7 +130,7 @@ static void CGC_Init(void)
 
 static void CGC_Shutdown(void)
 {
-    scr_draw2d = NULL;
+    cl_draw2d = NULL;
     cl_crosshair_size = NULL;
     ch_x = NULL;
     ch_y = NULL;
@@ -770,7 +817,7 @@ static void SCR_ExecuteLayoutString(vrect_t hud_vrect, const char *s, int32_t pl
 // The status bar is a small layout program that is based on the stats array
 static void draw_stats(vrect_t hud_vrect, int32_t playernum, const player_state_t *ps)
 {
-    if (scr_draw2d->integer <= 1)
+    if (cl_draw2d->integer <= 1)
         return;
     if (ps->stats[STAT_LAYOUTS] & LAYOUTS_HIDE_HUD)
         return;
@@ -780,7 +827,7 @@ static void draw_stats(vrect_t hud_vrect, int32_t playernum, const player_state_
 
 static void SCR_DrawLayout(vrect_t hud_vrect, const cg_server_data_t *data, int32_t playernum, const player_state_t *ps)
 {
-    if (scr_draw2d->integer == 3 /*&& !Key_IsDown(K_F1)*/)
+    if (cl_draw2d->integer == 3 /*&& !Key_IsDown(K_F1)*/)
         return;     // turn off for GTV
 
     /*if (cls.demo.playback && Key_IsDown(K_F1))
@@ -872,9 +919,9 @@ static void SCR_DrawCenterString(vrect_t hud_vrect)
     int y;
     float alpha;
 
-    Cvar_ClampValue(scr_centertime, 0.3f, 10.0f);
+    Cvar_ClampValue(cg_centertime, 0.3f, 10.0f);
 
-    alpha = SCR_FadeAlpha(scr_centertime_start, scr_centertime->value * 1000, 300);
+    alpha = SCR_FadeAlpha(scr_centertime_start, cg_centertime->value * 1000, 300);
     if (!alpha) {
         return;
     }

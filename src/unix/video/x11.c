@@ -484,13 +484,13 @@ static void set_mode(void)
 {
     x11.configured = false;
     if (!x11.mapped) {
-        if (vid_fullscreen->integer && x11.atom.fs) {
+        if (r_fullscreen->integer && x11.atom.fs) {
             XChangeProperty(x11.dpy, x11.win, x11.atom.wm_state, XA_ATOM, 32,
                             PropModeAppend, (unsigned char *)&x11.atom.fs, 1);
         }
         XMapWindow(x11.dpy, x11.win);
         x11.mapped = true;
-    } else if (vid_fullscreen->integer) {
+    } else if (r_fullscreen->integer) {
         set_fullscreen(true);
     } else if (x11.flags & QVF_FULLSCREEN) {
         set_fullscreen(false);
@@ -605,8 +605,8 @@ static void property_event(XPropertyEvent *event)
     if (was_fs != fs)
         mode_changed();
 
-    if ((bool)vid_fullscreen->integer != fs)
-        Cvar_SetInteger(vid_fullscreen, fs, FROM_CODE);
+    if ((bool)r_fullscreen->integer != fs)
+        Cvar_SetInteger(r_fullscreen, fs, FROM_CODE);
 
     if (hidden)
         CL_Activate(ACT_MINIMIZED);

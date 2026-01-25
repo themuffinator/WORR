@@ -458,13 +458,13 @@ con_auto_chat::
 Game Screen
 ~~~~~~~~~~~
 
-scr_draw2d::
+cl_draw2d::
     Toggles drawing of 2D elements on the screen. Default value is 2.
       - 0 — do not draw anything
       - 1 — do not draw stats program
       - 2 — draw everything
 
-scr_showturtle::
+cl_showturtle::
     Toggles drawing of various network error conditions at the lower left
     corner of the screen. Default value is 1 (draw all errors except of
     SUPPRESSED, CLIENTDROP and SERVERDROP). Values higher than 1 draw all
@@ -488,111 +488,111 @@ OLDENT::     Server sent a delta compressed frame whose entities are too
              old and can't be recovered.
 ************************
 
-scr_demobar::
+cl_demobar::
     Toggles drawing of progress bar at the bottom of the screen during demo
     playback. Default value is 1.
       - 0 — do not draw demo bar
       - 1 — draw demo bar and demo completion percentage
       - 2 — draw demo bar, demo completion percentage and current demo time
 
-scr_showpause::
+cl_showpause::
     Toggles drawing of pause indicator on the screen. Default value is 1.
       - 0 — do not draw pause indicator
       - 1 — draw pic in center of the screen
       - 2 — draw text in demo bar (visible only during demo playback)
 
-scr_scale::
+cl_scale::
     Scaling factor of the HUD elements. Default value is 0 (automatically scale
     depending on current display resolution). Set to 1 to disable scaling.
 
-scr_alpha::
+cl_alpha::
     Opacity of the HUD elements. 0 is fully transparent, 1 is opaque. Default
     value is 1.
 
-scr_font::
-    Font used for drawing HUD text. Default value is "conchars".
+cl_font::
+    Font used for drawing HUD text. Default value is "fonts/RussoOne-Regular.ttf".
 
-scr_lag_draw::
+cl_lag_draw::
     Toggles drawing of small (48x48 pixels) ping graph on the screen. Default
     value is 0.
       - 0 — do not draw graph
       - 1 — draw transparent graph
       - 2 — overlay graph on gray background
 
-scr_lag_x::
+cl_lag_x::
     Absolute value of this cvar specifies horizontal placement of the ping graph,
     counted in pixels from the screen edge. Negative values align graph to the right
     edge of the screen instead of the left edge. Default value is -1.
 
-scr_lag_y::
+cl_lag_y::
     Absolute value of this cvar specifies vertical placement of the ping graph,
     counted in pixels from the screen edge. Negative values align graph to the bottom
     edge of the screen intead of the top edge. Default value is -1.
 
-scr_lag_min::
+cl_lag_min::
     Specifies ping graph offset by defining the minimum value that can be
     displayed. Default value is 0.
 
-scr_lag_max::
+cl_lag_max::
     Specifies ping graph scale by defining the maximum value that can be
     displayed. Default value is 200.
 
-scr_chathud::
+cl_chathud::
     Toggles drawing of the client notification area. Default value is 1.
       - 0 - do not draw notifications
       - 1 - draw notifications in normal color
       - 2 - draw chat notifications in alternative color
 
-scr_chathud_lines::
+cl_chathud_lines::
     Deprecated. Notification area uses fixed line counts (4 normally, 8 while
     message mode is active).
 
-scr_chathud_time::
+cl_chathud_time::
     Deprecated. Notifications expire after 4 seconds, fading out over the last
     200 ms.
 
-scr_chathud_x::
+cl_chathud_x::
     Deprecated. Notification placement is anchored to the HUD safe zone.
 
-scr_chathud_y::
+cl_chathud_y::
     Deprecated. Notification placement is anchored to the HUD safe zone.
 
-cl_crosshairBrightness::
+cl_crosshair_brightness::
     Brightness of the crosshair. 0.0 = darkest, 1.0 = brightest. Default value
     is 1.0.
 
-cl_crosshairColor::
+cl_crosshair_color::
     Crosshair color index (1-26) using the Quake Live palette. Default value
     is 25. See `doc/quake-live-crosshair-cvars.md` for the palette chart.
 
-cl_crosshairHealth::
+cl_crosshair_health::
     Colors the crosshair based on the health statistic. This overrides
-    `cl_crosshairColor`. Default value is 0 (use static color).
+    `cl_crosshair_color`. Default value is 0 (use static color).
 
-cl_crosshairHitColor::
+cl_crosshair_hit_color::
     Crosshair hit color index (1-26) used by hit styles 2, 5, and 8. Default
     value is 1.
 
-cl_crosshairHitStyle::
+cl_crosshair_hit_style::
     Controls crosshair hit feedback. Default value is 2.
       - 0 - off
       - 1 - colorize based on damage dealt
-      - 2 - colorize to `cl_crosshairHitColor`
+      - 2 - colorize to `cl_crosshair_hit_color`
       - 3 - pulse (large pulse)
       - 4 - damage color + pulse (large)
       - 5 - hit color + pulse (large)
-      - 6 - pulse (small, matches `cl_crosshairPulse`)
+      - 6 - pulse (small, matches `cl_crosshair_pulse`)
       - 7 - damage color + pulse (small)
       - 8 - hit color + pulse (small)
 
-cl_crosshairHitTime::
+cl_crosshair_hit_time::
     Time, in milliseconds, the crosshair hit effect is displayed. Default
     value is 200.
 
-cl_crosshairPulse::
+cl_crosshair_pulse::
     Enables crosshair pulsing when items are picked up. Default value is 1.
 
-cl_crosshairSize::
+cl_crosshair_size::
     Size of crosshair, measured in pixels. Also scales hit marker sizing.
     Default value is 32.
 
@@ -604,7 +604,7 @@ ch_y::
     the default position in center of the game screen. Default values are 0
     (draw in center).
 
-scr_hit_marker_time::
+cl_hit_marker_time::
     Hit marker visibility time in milliseconds. Hit marker is only visible if
     crosshair is visible. Default value is 500.
 
@@ -619,31 +619,31 @@ Video mode change no longer requires ‘vid_restart’ and is nearly instant.  I
 windowed mode, size as well as position of the main window can be changed
 freely.
 
-vid_modelist::
+r_modelist::
     Space separated list of fullscreen video modes. Both _freq_ and _bpp_
     parameters are optional. Full syntax is: 'WxH[@freq][:bpp] [...]'. Default
     value is "640x480 800x600 1024x768". On Linux, _freq_ parameter is currently
     ignored. Special keyword ‘desktop’ means to use default desktop video mode.
 
-vid_fullscreen::
+r_fullscreen::
     If set to non zero _value_, run in the specified fullscreen mode. This way,
     _value_ acts as index into the list of video modes specified by
-    ‘vid_modelist’. Default value is 0, which means to run in windowed mode.
+    ‘r_modelist’. Default value is 0, which means to run in windowed mode.
 
-vid_geometry::
+r_geometry::
     Size and optional position of the main window on virtual desktop.
     Full syntax is: `WxH[+X+Y]`. Default value is "640x480".
 
-vid_flip_on_switch::
+win_flip_on_switch::
     On Windows, specifies if original video mode is automatically restored when
     switching from fullscreen WORR to another application or desktop.  Default
     value is 0 (don't switch video modes).
 
-vid_hwgamma::
+r_hwgamma::
     Instructs the video driver to use hardware gamma correction for
-    implementing ‘vid_gamma’.  Default value is 0 (use software gamma).
+    implementing ‘r_gamma’.  Default value is 0 (use software gamma).
 
-vid_driver::
+r_driver::
     Specifies which video driver to use. Default value is empty (detect
     automatically). Possible video drivers are (not all of them are typically
     available at the same time, depending on how client was compiled):
@@ -658,8 +658,8 @@ vid_driver::
 The following lines define 2 video modes: 640x480 and 800x600 at 75 Hz vertical refresh and
 32 bit framebuffer depth, and select the last 800x600 mode.
 --------------------
-/set vid_modelist "640x480@75:32 800x600@75:32"
-/set vid_fullscreen 2
+/set r_modelist "640x480@75:32 800x600@75:32"
+/set r_fullscreen 2
 --------------------
 ====================
 
@@ -948,26 +948,26 @@ gl_profile::
 NOTE: Using OpenGL compatibility profile is recommended. Some features may not
 work in more restricted profiles, or performance may be suboptimal.
 
-gl_screenshot_format::
+r_screenshot_format::
     Specifies image format ‘screenshot’ command uses. Possible values are
     "png", "jpg" and "tga". Default value is "jpg".
 
-gl_screenshot_quality::
+r_screenshot_quality::
     Specifies image quality of JPG screenshots. Values range from 0 (worst
     quality) to 100 (best quality). Default value is 90.
 
-gl_screenshot_compression::
+r_screenshot_compression::
     Specifies compression level of PNG screenshots. Values range from 0 (no
     compression) to 9 (best compression). Default value is 6.
 
-gl_screenshot_async::
+r_screenshot_async::
     Specifies if screenshots are saved in background thread to avoid pausing
     the client. Default value is 1.
      - 0 — save screenshots synchronously
      - 1 — save PNG screenshots in background thread
      - 2 — save JPG and PNG screenshots in background thread
 
-gl_screenshot_template::
+r_screenshot_template::
     Specifies filename template in "fileXXX" format for ‘screenshot’ command.
     Template must contain at least 3 and at most 9 consecutive ‘X’ in the last
     component. Template may contain slashes to save under subdirectory. Default
@@ -1616,21 +1616,21 @@ Screenshots
 screenshot [format]::
     Standard command to take a screenshot. If _format_ argument is given,
     takes the screenshot in this format. Otherwise, takes in the format
-    specified by ‘gl_screenshot_format’ variable. File name is picked up
-    automatically from template specified by ‘gl_screenshot_template’
+    specified by ‘r_screenshot_format’ variable. File name is picked up
+    automatically from template specified by ‘r_screenshot_template’
     variable.
 
 screenshotpng [filename] [compression]::
     Takes the screenshot in PNG format. If _filename_ argument is given, saves
     the screenshot into ‘screenshots/_filename_.png’. Otherwise, file name is
     picked up automatically. If _compression_ argument is given, saves with this
-    compression level. Otherwise, saves with ‘gl_screenshot_compression’ level.
+    compression level. Otherwise, saves with ‘r_screenshot_compression’ level.
 
 screenshotjpg [filename] [quality]::
     Takes the screenshot in JPG format. If _filename_ argument is given, saves
     the screenshot into ‘screenshots/_filename_.jpg’. Otherwise, file name is
     picked up automatically. If _quality_ argument is given, saves with this
-    quality level. Otherwise, saves with ‘gl_screenshot_quality’ level.
+    quality level. Otherwise, saves with ‘r_screenshot_quality’ level.
 
 screenshottga [filename]::
     Takes the screenshot in TGA format. If _filename_ argument is given, saves

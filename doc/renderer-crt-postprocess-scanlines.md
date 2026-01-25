@@ -7,7 +7,7 @@ previous modulation only darkened alternating lines to ~43% intensity, which was
 not visually distinct against the game’s lighting and post effects.
 
 ## Fix
-- Strengthened scanline modulation by mapping `r_crt_hardScan` to a deeper
+- Strengthened scanline modulation by mapping `r_crt_hard_scan` to a deeper
   alternating-line attenuation using `exp2(hardScan * 0.25)`.
 - Added `crt_params2.w` as a scanline scale factor, computed from
   `r_config.height / glr.render_height`, to keep scanline spacing aligned when

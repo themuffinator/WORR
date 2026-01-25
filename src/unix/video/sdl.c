@@ -49,6 +49,52 @@ static struct {
     SDL_WindowFlags focus_hack;
 } sdl;
 
+static cvar_t *r_hwgamma;
+static cvar_t *vid_hwgamma_legacy;
+static bool sdl_hwgamma_alias_syncing;
+
+static void sdl_hwgamma_alias_changed(cvar_t *self)
+{
+    if (sdl_hwgamma_alias_syncing)
+        return;
+
+    sdl_hwgamma_alias_syncing = true;
+
+    if (self == r_hwgamma && vid_hwgamma_legacy)
+        Cvar_SetByVar(vid_hwgamma_legacy, r_hwgamma->string, FROM_CODE);
+    else if (self == vid_hwgamma_legacy && r_hwgamma)
+        Cvar_SetByVar(r_hwgamma, vid_hwgamma_legacy->string, FROM_CODE);
+
+    sdl_hwgamma_alias_syncing = false;
+}
+
+static void sdl_hwgamma_alias_sync_defaults(void)
+{
+    if (sdl_hwgamma_alias_syncing)
+        return;
+
+    sdl_hwgamma_alias_syncing = true;
+
+    if (r_hwgamma && vid_hwgamma_legacy) {
+        if (!(r_hwgamma->flags & CVAR_MODIFIED) && (vid_hwgamma_legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(r_hwgamma, vid_hwgamma_legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(vid_hwgamma_legacy, r_hwgamma->string, FROM_CODE);
+    }
+
+    sdl_hwgamma_alias_syncing = false;
+}
+
+static void sdl_hwgamma_alias_register(void)
+{
+    if (r_hwgamma)
+        r_hwgamma->changed = sdl_hwgamma_alias_changed;
+    if (vid_hwgamma_legacy)
+        vid_hwgamma_legacy->changed = sdl_hwgamma_alias_changed;
+
+    sdl_hwgamma_alias_sync_defaults();
+}
+
 typedef struct {
     SDL_Gamepad     *pad;
     SDL_JoystickID  instance_id;
@@ -146,16 +192,87 @@ static void mode_changed(void)
     SCR_ModeChanged();
 }
 
+static SDL_DisplayID sdl_display_from_cvar(bool *invalid)
+{
+    SDL_DisplayID display_id = 0;
+    int num_displays = 0;
+
+    if (invalid)
+        *invalid = false;
+
+    if (!r_display || !r_display->string[0] || !strcmp(r_display->string, "0"))
+        return 0;
+
+    SDL_DisplayID *displays = SDL_GetDisplays(&num_displays);
+    if (!displays || num_displays < 1) {
+        if (invalid)
+            *invalid = true;
+        SDL_free(displays);
+        return 0;
+    }
+
+    char *end = NULL;
+    long index = strtol(r_display->string, &end, 10);
+    if (end && *end == '\0') {
+        if (index == 0) {
+            SDL_free(displays);
+            return 0;
+        }
+        if (index > 0 && index <= num_displays) {
+            display_id = displays[index - 1];
+        } else if (invalid) {
+            *invalid = true;
+        }
+        SDL_free(displays);
+        return display_id;
+    }
+
+    for (int i = 0; i < num_displays; i++) {
+        const char *name = SDL_GetDisplayName(displays[i]);
+        if (name && !Q_strcasecmp(name, r_display->string)) {
+            display_id = displays[i];
+            break;
+        }
+    }
+
+    if (!display_id && invalid)
+        *invalid = true;
+
+    SDL_free(displays);
+    return display_id;
+}
+
+static SDL_DisplayID sdl_select_display_id(void)
+{
+    bool invalid = false;
+    SDL_DisplayID display_id = sdl_display_from_cvar(&invalid);
+
+    if (display_id)
+        return display_id;
+
+    if (invalid) {
+        Com_WPrintf("Invalid r_display '%s', using primary display.\n",
+                    r_display ? r_display->string : "");
+        display_id = SDL_GetPrimaryDisplay();
+        if (!display_id && sdl.window)
+            display_id = SDL_GetDisplayForWindow(sdl.window);
+        return display_id;
+    }
+
+    display_id = SDL_GetDisplayForWindow(sdl.window);
+    if (!display_id)
+        display_id = SDL_GetPrimaryDisplay();
+    return display_id;
+}
+
 static void set_mode(void)
 {
     vrect_t rc;
     int freq;
 
-    SDL_DisplayID display_id = SDL_GetDisplayForWindow(sdl.window);
-    if (!display_id)
-        display_id = SDL_GetPrimaryDisplay();
+    SDL_DisplayID display_id = sdl_select_display_id();
 
-    if (vid_fullscreen->integer) {
+    if (r_fullscreen->integer) {
         if (VID_GetFullscreen(&rc, &freq, NULL)) {
             SDL_DisplayMode mode = {0};
 
@@ -238,7 +355,7 @@ static char *get_mode_list(void)
     char *buf;
     int i, num_modes;
 
-    SDL_DisplayID display_id = SDL_GetPrimaryDisplay();
+    SDL_DisplayID display_id = sdl_select_display_id();
     modes = SDL_GetFullscreenDisplayModes(display_id, &num_modes);
     if (!modes || num_modes < 1)
         return Z_CopyString(VID_MODELIST);
@@ -265,6 +382,13 @@ static char *get_mode_list(void)
     SDL_free(modes);
 
     return buf;
+}
+
+static void sdl_refresh_modelist(void)
+{
+    char *modelist = get_mode_list();
+    VID_SetModeList(modelist);
+    Z_Free(modelist);
 }
 
 static int get_dpi_scale(void)
@@ -368,10 +492,12 @@ static bool init(void)
         SDL_DestroySurface(icon);
     }
 
-    cvar_t *vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_RENDERER);
-    if (vid_hwgamma->integer) {
+    r_hwgamma = Cvar_Get("r_hwgamma", "0", CVAR_RENDERER);
+    vid_hwgamma_legacy = Cvar_Get("vid_hwgamma", r_hwgamma->string, CVAR_RENDERER | CVAR_NOARCHIVE);
+    sdl_hwgamma_alias_register();
+    if (r_hwgamma->integer) {
         Com_Printf("...hardware gamma not supported by SDL3\n");
-        Cvar_Reset(vid_hwgamma);
+        Cvar_Reset(r_hwgamma);
     }
 
     Com_Printf("Using SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
@@ -438,6 +564,15 @@ static void window_event(SDL_WindowEvent *event)
             rc.y = event->data2;
             VID_SetGeometry(&rc);
         }
+        break;
+    case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+        if (!(flags & SDL_WINDOW_FULLSCREEN)) {
+            SDL_GetWindowPosition(sdl.window, &rc.x, &rc.y);
+            SDL_GetWindowSize(sdl.window, &rc.width, &rc.height);
+            VID_SetGeometry(&rc);
+        }
+        sdl_refresh_modelist();
+        mode_changed();
         break;
 
     case SDL_EVENT_WINDOW_RESIZED:

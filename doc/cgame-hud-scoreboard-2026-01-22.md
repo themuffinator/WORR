@@ -23,7 +23,7 @@ Notes:
 ## Client parse and draw
 - `CG_Hud_ParseBlob` reads `hud_flags`, `sb_meta`, and `sb_row`.
 - `CG_DrawScoreboardFromBlob` builds a layout string using `client`/`ctf` tokens.
-- Scoreboard drawing is gated by `cl_hud_cgame` and `LAYOUTS_LAYOUT`, with a
+- Scoreboard drawing is gated by `cg_hud_cgame` and `LAYOUTS_LAYOUT`, with a
   fallback to the legacy layout string when blob data is missing.
 
 ## Compatibility

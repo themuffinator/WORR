@@ -80,16 +80,6 @@ namespace Commands {
 	void WorrMyMapFlag(gentity_t* ent, const CommandArgs& args);
 	void WorrMyMapClear(gentity_t* ent, const CommandArgs& args);
 	void WorrMyMapQueue(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupWelcome(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupStart(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupFormat(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupMaxPlayers(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupGametype(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupModifier(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupLength(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupType(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupBestOf(gentity_t* ent, const CommandArgs& args);
-	void WorrSetupSkip(gentity_t* ent, const CommandArgs& args);
 	void WorrTourneyInfo(gentity_t* ent, const CommandArgs& args);
 	void WorrTourneyMaps(gentity_t* ent, const CommandArgs& args);
 	void WorrTourneyVeto(gentity_t* ent, const CommandArgs& args);
@@ -1774,130 +1764,6 @@ Toggles the eyecam view when following other players.
 		QueueMyMapRequest(ent, args.getString(1), flagArgs);
 	}
 
-	void WorrSetupWelcome(gentity_t* ent, const CommandArgs& args) {
-		(void)args;
-		OpenSetupWelcomeMenu(ent);
-	}
-
-	void WorrSetupStart(gentity_t* ent, const CommandArgs& args) {
-		(void)args;
-		OpenSetupMatchFormatMenu(ent);
-	}
-
-	void WorrSetupFormat(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupMatchFormatMenu(ent);
-			return;
-		}
-
-		const std::string_view value = args.getString(1);
-		ent->client->ui.setup.format = std::string(value);
-
-		if (value == "tournament") {
-			std::string error;
-			if (!Tournament_LoadConfig({}, &error)) {
-				if (!error.empty())
-					gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_7b29be6b638c", error.c_str());
-				return;
-			}
-			CloseActiveMenu(ent);
-			if (ent->client->initialMenu.frozen)
-				OpenJoinMenu(ent);
-			return;
-		}
-
-		OpenSetupMaxPlayersMenu(ent);
-	}
-
-	void WorrSetupMaxPlayers(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupMaxPlayersMenu(ent);
-			return;
-		}
-		auto parsed = CommandArgs::ParseInt(args.getString(1));
-		if (!parsed)
-			return;
-		ent->client->ui.setup.maxPlayers = *parsed;
-		OpenSetupGametypeMenu(ent);
-	}
-
-	void WorrSetupGametype(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupGametypeMenu(ent);
-			return;
-		}
-		ent->client->ui.setup.gametype = std::string(args.getString(1));
-		if (auto gt = Game::FromString(ent->client->ui.setup.gametype)) {
-			if (HasFlag(Game::GetInfo(*gt).flags, GameFlags::OneVOne))
-				ent->client->ui.setup.maxPlayers = 2;
-		}
-		OpenSetupModifierMenu(ent);
-	}
-
-	void WorrSetupModifier(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupModifierMenu(ent);
-			return;
-		}
-		ent->client->ui.setup.modifier = std::string(args.getString(1));
-		OpenSetupMatchLengthMenu(ent);
-	}
-
-	void WorrSetupLength(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupMatchLengthMenu(ent);
-			return;
-		}
-		ent->client->ui.setup.length = std::string(args.getString(1));
-		OpenSetupMatchTypeMenu(ent);
-	}
-
-	void WorrSetupType(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupMatchTypeMenu(ent);
-			return;
-		}
-		const std::string_view value = args.getString(1);
-		ent->client->ui.setup.type = std::string(value);
-		if (value == "tournament") {
-			OpenSetupBestOfMenu(ent);
-			return;
-		}
-		FinishSetupWizard(ent);
-	}
-
-	void WorrSetupBestOf(gentity_t* ent, const CommandArgs& args) {
-		if (!ent || !ent->client)
-			return;
-		if (args.count() < 2) {
-			OpenSetupBestOfMenu(ent);
-			return;
-		}
-		ent->client->ui.setup.bestOf = std::string(args.getString(1));
-		FinishSetupWizard(ent);
-	}
-
-	void WorrSetupSkip(gentity_t* ent, const CommandArgs& args) {
-		(void)args;
-		if (!ent || !ent->client)
-			return;
-		CloseActiveMenu(ent);
-		if (ent->client->initialMenu.frozen)
-			OpenJoinMenu(ent);
-	}
-
 	void WorrTourneyInfo(gentity_t* ent, const CommandArgs& args) {
 		(void)args;
 		OpenTournamentInfoMenu(ent);
@@ -2521,16 +2387,6 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("worr_mymap_flag", &WorrMyMapFlag, AllowDead | AllowSpectator);
 		RegisterCommand("worr_mymap_clear", &WorrMyMapClear, AllowDead | AllowSpectator);
 		RegisterCommand("worr_mymap_queue", &WorrMyMapQueue, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_welcome", &WorrSetupWelcome, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_start", &WorrSetupStart, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_format", &WorrSetupFormat, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_maxplayers", &WorrSetupMaxPlayers, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_gametype", &WorrSetupGametype, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_modifier", &WorrSetupModifier, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_length", &WorrSetupLength, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_type", &WorrSetupType, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_bestof", &WorrSetupBestOf, AllowDead | AllowSpectator);
-		RegisterCommand("worr_setup_skip", &WorrSetupSkip, AllowDead | AllowSpectator);
 		RegisterCommand("worr_tourney_info", &WorrTourneyInfo, AllowDead | AllowSpectator);
 		RegisterCommand("worr_tourney_maps", &WorrTourneyMaps, AllowDead | AllowSpectator);
 		RegisterCommand("worr_tourney_veto", &WorrTourneyVeto, AllowDead | AllowSpectator);

@@ -57,6 +57,8 @@ cvar_t *cvar_profiler_samples = NULL;
 cvar_t *cvar_profiler_scale = NULL;
 cvar_t *cvar_hdr = NULL;
 cvar_t *cvar_vsync = NULL;
+static cvar_t *vid_hdr_legacy = NULL;
+static cvar_t *vid_vsync_legacy = NULL;
 cvar_t *cvar_pt_caustics = NULL;
 cvar_t *cvar_pt_enable_nodraw = NULL;
 cvar_t *cvar_pt_enable_surface_lights = NULL;
@@ -112,6 +114,84 @@ cvar_t *cvar_sli = NULL;
 #ifdef VKPT_IMAGE_DUMPS
 cvar_t *cvar_dump_image = NULL;
 #endif
+
+typedef struct {
+	cvar_t **primary;
+	cvar_t **legacy;
+} vk_cvar_alias_pair_t;
+
+static bool vk_cvar_alias_syncing;
+
+static vk_cvar_alias_pair_t vk_cvar_aliases[] = {
+	{ &cvar_vsync, &vid_vsync_legacy },
+	{ &cvar_hdr, &vid_hdr_legacy },
+};
+
+static void vk_cvar_alias_changed(cvar_t *self)
+{
+	if (vk_cvar_alias_syncing)
+		return;
+
+	vk_cvar_alias_syncing = true;
+
+	for (size_t i = 0; i < q_countof(vk_cvar_aliases); i++) {
+		vk_cvar_alias_pair_t *pair = &vk_cvar_aliases[i];
+		cvar_t *primary = *pair->primary;
+		cvar_t *legacy = *pair->legacy;
+
+		if (!primary || !legacy)
+			continue;
+
+		if (self == primary) {
+			Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+			break;
+		}
+
+		if (self == legacy) {
+			Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+			break;
+		}
+	}
+
+	vk_cvar_alias_syncing = false;
+}
+
+static void vk_cvar_alias_sync_defaults(void)
+{
+	if (vk_cvar_alias_syncing)
+		return;
+
+	vk_cvar_alias_syncing = true;
+
+	for (size_t i = 0; i < q_countof(vk_cvar_aliases); i++) {
+		vk_cvar_alias_pair_t *pair = &vk_cvar_aliases[i];
+		cvar_t *primary = *pair->primary;
+		cvar_t *legacy = *pair->legacy;
+
+		if (!primary || !legacy)
+			continue;
+
+		if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+			Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+		else
+			Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+	}
+
+	vk_cvar_alias_syncing = false;
+}
+
+static void vk_cvar_alias_register(void)
+{
+	for (size_t i = 0; i < q_countof(vk_cvar_aliases); i++) {
+		vk_cvar_alias_pair_t *pair = &vk_cvar_aliases[i];
+		if (*pair->primary)
+			(*pair->primary)->changed = vk_cvar_alias_changed;
+		if (*pair->legacy)
+			(*pair->legacy)->changed = vk_cvar_alias_changed;
+	}
+
+	vk_cvar_alias_sync_defaults();
+}
 
 visrow_t cluster_debug_mask;
 int cluster_debug_index;
@@ -3221,6 +3301,10 @@ R_RenderFrame(const refdef_t *fd)
 
 	vkpt_refdef.fd = (refdef_t *)fd;
 	bool render_world = (fd->rdflags & RDF_NOWORLDMODEL) == 0;
+	if (!render_world) {
+		temporal_frame_valid = false;
+		num_accumulated_frames = 0;
+	}
 
 	static float previous_time = -1.f;
 	float frame_time = min(1.f, max(0.f, fd->time - previous_time));
@@ -4043,9 +4127,11 @@ R_Init(bool total)
 	cvar_profiler = Cvar_Get("profiler", "0", 0);
 	cvar_profiler_samples = Cvar_Get("profiler_samples", "60", CVAR_ARCHIVE);
 	cvar_profiler_scale = Cvar_Get("profiler_scale", "1", CVAR_ARCHIVE);
-	cvar_vsync = Cvar_Get("vid_vsync", "0", CVAR_ARCHIVE);
-	cvar_vsync->changed = NULL; // in case the GL renderer has set it
-	cvar_hdr = Cvar_Get("vid_hdr", "0", CVAR_ARCHIVE);
+	cvar_vsync = Cvar_Get("vk_vsync", "0", CVAR_ARCHIVE);
+	vid_vsync_legacy = Cvar_Get("vid_vsync", cvar_vsync->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
+	cvar_hdr = Cvar_Get("vk_hdr", "0", CVAR_ARCHIVE);
+	vid_hdr_legacy = Cvar_Get("vid_hdr", cvar_hdr->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
+	vk_cvar_alias_register();
 	cvar_pt_caustics = Cvar_Get("pt_caustics", "1", CVAR_ARCHIVE);
 	cvar_pt_enable_nodraw = Cvar_Get("pt_enable_nodraw", "0", 0);
 	/* Synthesize materials for surfaces with LIGHT flag.

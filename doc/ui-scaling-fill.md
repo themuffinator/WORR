@@ -14,20 +14,20 @@ while keeping all HUD and UI elements on the same virtual scaling path.
   - `virtual_width  = canvas_width / base_scale`
   - `virtual_height = canvas_height / base_scale`
 
-## Additional Scaling (`scr_scale`)
-- `scr_scale` multiplies the base scale:
-  - `ui_scale = floor(base_scale * scr_scale)` when `scr_scale` is non-zero.
-  - `ui_scale = base_scale` when `scr_scale` is `0`.
+## Additional Scaling (`cl_scale`)
+- `cl_scale` multiplies the base scale:
+  - `ui_scale = floor(base_scale * cl_scale)` when `cl_scale` is non-zero.
+  - `ui_scale = base_scale` when `cl_scale` is `0`.
 - The renderer uses:
   - `R_SetScale(base_scale / ui_scale)`
   - This keeps pixels-per-unit equal to `ui_scale`.
 
 ## Crosshair Scaling
-- `cl_crosshairSize` sets a pixel size target for crosshair sizing.
-- Default: `cl_crosshairSize = 32`.
-- Crosshair size applies `cl_crosshairSize` after the integer UI scale is
+- `cl_crosshair_size` sets a pixel size target for crosshair sizing.
+- Default: `cl_crosshair_size = 32`.
+- Crosshair size applies `cl_crosshair_size` after the integer UI scale is
   calculated, using pixel-space sizing to avoid double-scaling.
-- `cl_crosshairSize` also scales hit marker sizing via `cl_crosshairSize / 32`.
+- `cl_crosshair_size` also scales hit marker sizing via `cl_crosshair_size / 32`.
 
 ## Files
 - `src/rend_gl/draw.c`

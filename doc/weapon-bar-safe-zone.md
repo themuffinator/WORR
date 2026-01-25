@@ -1,7 +1,7 @@
 # Weapon Bar Safe Zone Support
 
 ## Summary
-All weapon bar modes now respect `scr_safe_zone`. Placement and clamping
+All weapon bar modes now respect `cl_safe_zone`. Placement and clamping
 are calculated within the safe region so bars stay inside the configured
 HUD margins.
 
@@ -13,5 +13,5 @@ HUD margins.
   safe top edge.
 
 ## Notes
-Safe zone margins are derived from `scr_safe_zone` using the same fraction
+Safe zone margins are derived from `cl_safe_zone` using the same fraction
 as other HUD elements.

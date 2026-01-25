@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shared/shared.h"
 #include "common/common.h"
 #include "common/field.h"
+#include "common/zone.h"
 #include "client/client.h"
 #include "client/keys.h"
 #include "client/video.h"
@@ -38,6 +39,8 @@ void IF_Init(inputField_t *field, size_t visibleChars, size_t maxChars)
     memset(field, 0, sizeof(*field));
     field->maxChars = min(maxChars, sizeof(field->text) - 1);
     field->visibleChars = min(visibleChars, field->maxChars);
+    field->selectionAnchor = 0;
+    field->selecting = false;
 }
 
 /*
@@ -49,6 +52,8 @@ void IF_Clear(inputField_t *field)
 {
     memset(field->text, 0, sizeof(field->text));
     field->cursorPos = 0;
+    field->selectionAnchor = 0;
+    field->selecting = false;
 }
 
 /*
@@ -65,6 +70,34 @@ void IF_Replace(inputField_t *field, const char *text)
         field->text[0] = 0;
         field->cursorPos = 0;
     }
+    field->selectionAnchor = field->cursorPos;
+    field->selecting = false;
+}
+
+void IF_SetCursor(inputField_t *field, size_t pos, bool extendSelection)
+{
+    if (!field || !field->maxChars)
+        return;
+
+    size_t len = strlen(field->text);
+    if (pos > len)
+        pos = len;
+    if (pos >= field->maxChars)
+        pos = field->maxChars - 1;
+
+    if (extendSelection) {
+        if (!field->selecting) {
+            field->selectionAnchor = field->cursorPos;
+            field->selecting = true;
+        }
+    } else {
+        field->selecting = false;
+        field->selectionAnchor = pos;
+    }
+
+    field->cursorPos = pos;
+    if (field->selecting && field->selectionAnchor == field->cursorPos)
+        field->selecting = false;
 }
 
 #if USE_CLIENT
@@ -88,6 +121,84 @@ static size_t IF_OffsetForChars(const inputField_t *field, size_t chars)
     return UTF8_OffsetForChars(field->text, chars);
 }
 
+static bool IF_HasSelection(const inputField_t *field)
+{
+    return field && field->selecting && field->selectionAnchor != field->cursorPos;
+}
+
+static void IF_ClearSelection(inputField_t *field)
+{
+    if (!field)
+        return;
+    field->selecting = false;
+    field->selectionAnchor = field->cursorPos;
+}
+
+static void IF_DeleteSelection(inputField_t *field)
+{
+    if (!IF_HasSelection(field))
+        return;
+
+    size_t start = min(field->selectionAnchor, field->cursorPos);
+    size_t end = max(field->selectionAnchor, field->cursorPos);
+    memmove(field->text + start, field->text + end, sizeof(field->text) - end);
+    field->cursorPos = start;
+    IF_ClearSelection(field);
+}
+
+static void IF_SelectAll(inputField_t *field)
+{
+    if (!field)
+        return;
+    size_t len = IF_ByteLength(field);
+    field->selectionAnchor = 0;
+    field->cursorPos = min(len, field->maxChars - 1);
+    field->selecting = field->cursorPos > 0;
+}
+
+static void IF_CopySelection(const inputField_t *field)
+{
+    if (!vid || !vid->set_clipboard_data || !field)
+        return;
+
+    if (!IF_HasSelection(field)) {
+        vid->set_clipboard_data(field->text);
+        return;
+    }
+
+    size_t start = min(field->selectionAnchor, field->cursorPos);
+    size_t end = max(field->selectionAnchor, field->cursorPos);
+    if (end <= start)
+        return;
+
+    size_t len = min(end - start, sizeof(field->text) - 1);
+    char temp[MAX_FIELD_TEXT];
+    memcpy(temp, field->text + start, len);
+    temp[len] = 0;
+    vid->set_clipboard_data(temp);
+}
+
+static bool IF_PasteClipboard(inputField_t *field)
+{
+    if (!vid || !vid->get_clipboard_data || !field)
+        return false;
+
+    char *cbd = vid->get_clipboard_data();
+    if (!cbd)
+        return false;
+
+    for (char *s = cbd; *s; ++s) {
+        int c = *s;
+        if (c == '\r' || c == '\n') {
+            continue;
+        }
+        IF_CharEvent(field, c);
+    }
+
+    Z_Free(cbd);
+    return true;
+}
+
 /*
 ================
 IF_KeyEvent
@@ -100,7 +211,38 @@ bool IF_KeyEvent(inputField_t *field, int key)
     }
     Q_assert(field->cursorPos < field->maxChars);
 
-    if (key == K_DEL && Key_IsDown(K_CTRL)) {
+    bool shift = Key_IsDown(K_SHIFT);
+    bool ctrl = Key_IsDown(K_CTRL);
+    bool alt = Key_IsDown(K_ALT);
+
+    if (IF_HasSelection(field)) {
+        if (key == K_DEL || key == K_BACKSPACE || (key == 'h' && ctrl)) {
+            IF_DeleteSelection(field);
+            return true;
+        }
+    }
+
+    if (ctrl) {
+        if (key == 'a') {
+            IF_SelectAll(field);
+            return true;
+        }
+        if (key == 'c') {
+            IF_CopySelection(field);
+            return true;
+        }
+        if (key == 'x') {
+            IF_CopySelection(field);
+            IF_DeleteSelection(field);
+            return true;
+        }
+        if (key == 'v') {
+            IF_PasteClipboard(field);
+            return true;
+        }
+    }
+
+    if (key == K_DEL && ctrl) {
         size_t cursor_chars = IF_CursorChars(field);
         size_t total_chars = UTF8_CountChars(field->text, IF_ByteLength(field));
         size_t chars = cursor_chars;
@@ -126,10 +268,11 @@ bool IF_KeyEvent(inputField_t *field, int key)
         size_t end = IF_OffsetForChars(field, chars);
         memmove(field->text + field->cursorPos, field->text + end,
                 sizeof(field->text) - end);
+        IF_ClearSelection(field);
         return true;
     }
 
-    if ((key == K_BACKSPACE || key == 'w') && Key_IsDown(K_CTRL)) {
+    if ((key == K_BACKSPACE || key == 'w') && ctrl) {
         size_t cursor_chars = IF_CursorChars(field);
         size_t chars = cursor_chars;
 
@@ -155,6 +298,7 @@ bool IF_KeyEvent(inputField_t *field, int key)
         memmove(field->text + start, field->text + field->cursorPos,
                 sizeof(field->text) - field->cursorPos);
         field->cursorPos = start;
+        IF_ClearSelection(field);
         return true;
     }
 
@@ -166,10 +310,11 @@ bool IF_KeyEvent(inputField_t *field, int key)
             memmove(field->text + field->cursorPos, field->text + next,
                     sizeof(field->text) - next);
         }
+        IF_ClearSelection(field);
         return true;
     }
 
-    if (key == K_BACKSPACE || (key == 'h' && Key_IsDown(K_CTRL))) {
+    if (key == K_BACKSPACE || (key == 'h' && ctrl)) {
         if (field->cursorPos > 0) {
             size_t cursor_chars = IF_CursorChars(field);
             if (cursor_chars > 0) {
@@ -179,28 +324,25 @@ bool IF_KeyEvent(inputField_t *field, int key)
                 field->cursorPos = prev;
             }
         }
+        IF_ClearSelection(field);
         return true;
     }
 
-    if (key == 'u' && Key_IsDown(K_CTRL)) {
+    if (key == 'u' && ctrl) {
         memmove(field->text, field->text + field->cursorPos,
                 sizeof(field->text) - field->cursorPos);
         field->cursorPos = 0;
+        IF_ClearSelection(field);
         return true;
     }
 
-    if (key == 'k' && Key_IsDown(K_CTRL)) {
+    if (key == 'k' && ctrl) {
         field->text[field->cursorPos] = 0;
+        IF_ClearSelection(field);
         return true;
     }
 
-    if (key == 'c' && Key_IsDown(K_CTRL)) {
-        if (vid && vid->set_clipboard_data)
-            vid->set_clipboard_data(field->text);
-        return true;
-    }
-
-    if ((key == K_LEFTARROW && Key_IsDown(K_CTRL)) || (key == 'b' && Key_IsDown(K_ALT))) {
+    if ((key == K_LEFTARROW && ctrl) || (key == 'b' && alt)) {
         size_t cursor_chars = IF_CursorChars(field);
         size_t chars = cursor_chars;
 
@@ -219,11 +361,11 @@ bool IF_KeyEvent(inputField_t *field, int key)
             chars--;
         }
 
-        field->cursorPos = IF_OffsetForChars(field, chars);
+        IF_SetCursor(field, IF_OffsetForChars(field, chars), shift);
         return true;
     }
 
-    if ((key == K_RIGHTARROW && Key_IsDown(K_CTRL)) || (key == 'f' && Key_IsDown(K_ALT))) {
+    if ((key == K_RIGHTARROW && ctrl) || (key == 'f' && alt)) {
         size_t cursor_chars = IF_CursorChars(field);
         size_t total_chars = UTF8_CountChars(field->text, IF_ByteLength(field));
         size_t chars = cursor_chars;
@@ -243,36 +385,36 @@ bool IF_KeyEvent(inputField_t *field, int key)
             chars++;
         }
 
-        field->cursorPos = IF_OffsetForChars(field, chars);
-        goto check;
+        IF_SetCursor(field, IF_OffsetForChars(field, chars), shift);
+        return true;
     }
 
-    if (key == K_LEFTARROW || (key == 'b' && Key_IsDown(K_CTRL))) {
+    if (key == K_LEFTARROW || (key == 'b' && ctrl)) {
         if (field->cursorPos > 0) {
             size_t cursor_chars = IF_CursorChars(field);
             if (cursor_chars > 0)
-                field->cursorPos = IF_OffsetForChars(field, cursor_chars - 1);
+                IF_SetCursor(field, IF_OffsetForChars(field, cursor_chars - 1), shift);
         }
         return true;
     }
 
-    if (key == K_RIGHTARROW || (key == 'f' && Key_IsDown(K_CTRL))) {
+    if (key == K_RIGHTARROW || (key == 'f' && ctrl)) {
         size_t len = IF_ByteLength(field);
         if (field->cursorPos < len) {
             size_t cursor_chars = IF_CursorChars(field);
-            field->cursorPos = IF_OffsetForChars(field, cursor_chars + 1);
+            IF_SetCursor(field, IF_OffsetForChars(field, cursor_chars + 1), shift);
         }
-        goto check;
-    }
-
-    if (key == K_HOME || (key == 'a' && Key_IsDown(K_CTRL))) {
-        field->cursorPos = 0;
         return true;
     }
 
-    if (key == K_END || (key == 'e' && Key_IsDown(K_CTRL))) {
-        field->cursorPos = IF_ByteLength(field);
-        goto check;
+    if (key == K_HOME) {
+        IF_SetCursor(field, 0, shift);
+        return true;
+    }
+
+    if (key == K_END || (key == 'e' && ctrl)) {
+        IF_SetCursor(field, IF_ByteLength(field), shift);
+        return true;
     }
 
     if (key == K_INS) {
@@ -281,11 +423,6 @@ bool IF_KeyEvent(inputField_t *field, int key)
     }
 
     return false;
-
-check:
-    field->cursorPos = min(field->cursorPos, field->maxChars - 1);
-    field->cursorPos = min(field->cursorPos, IF_ByteLength(field));
-    return true;
 }
 
 /*
@@ -313,6 +450,9 @@ bool IF_CharEvent(inputField_t *field, int key)
     if (!encoded_len) {
         return false;
     }
+
+    if (IF_HasSelection(field))
+        IF_DeleteSelection(field);
 
     size_t len = IF_ByteLength(field);
     if (field->cursorPos > len)
@@ -349,6 +489,7 @@ bool IF_CharEvent(inputField_t *field, int key)
     memcpy(field->text + field->cursorPos, encoded, encoded_len);
     field->cursorPos += encoded_len;
     field->text[field->maxChars] = 0;
+    IF_ClearSelection(field);
 
     return true;
 }
@@ -366,6 +507,7 @@ int IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font)
     const char *text = field->text;
     size_t cursorPos = field->cursorPos;
     size_t offset = 0;
+    size_t offset_chars = 0;
     size_t cursor_chars = UTF8_CountChars(field->text, cursorPos);
     int ret;
 
@@ -377,7 +519,7 @@ int IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font)
 
     // scroll horizontally (codepoint-aware)
     if (cursor_chars >= field->visibleChars) {
-        size_t offset_chars = cursor_chars - (field->visibleChars - 1);
+        offset_chars = cursor_chars - (field->visibleChars - 1);
         offset = UTF8_OffsetForChars(text, offset_chars);
         cursorPos = field->cursorPos - offset;
     }
@@ -385,6 +527,27 @@ int IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font)
     text += offset;
     size_t draw_len = UTF8_OffsetForChars(text, field->visibleChars);
     size_t cursor_chars_visible = UTF8_CountChars(text, cursorPos);
+
+    if (IF_HasSelection(field)) {
+        size_t sel_start = min(field->selectionAnchor, field->cursorPos);
+        size_t sel_end = max(field->selectionAnchor, field->cursorPos);
+        size_t sel_start_chars = UTF8_CountChars(field->text, sel_start);
+        size_t sel_end_chars = UTF8_CountChars(field->text, sel_end);
+        size_t sel_start_visible = (sel_start_chars > offset_chars) ? (sel_start_chars - offset_chars) : 0;
+        size_t sel_end_visible = (sel_end_chars > offset_chars) ? (sel_end_chars - offset_chars) : 0;
+
+        if (sel_start_visible > field->visibleChars)
+            sel_start_visible = field->visibleChars;
+        if (sel_end_visible > field->visibleChars)
+            sel_end_visible = field->visibleChars;
+
+        if (sel_end_visible > sel_start_visible) {
+            int sel_x = x + (int)sel_start_visible * CONCHAR_WIDTH;
+            int sel_w = (int)(sel_end_visible - sel_start_visible) * CONCHAR_WIDTH;
+            color_t highlight = COLOR_RGBA(80, 120, 200, 120);
+            R_DrawFill32(sel_x, y, sel_w, CONCHAR_HEIGHT, highlight);
+        }
+    }
 
     // draw text
     ret = R_DrawString(x, y, flags, draw_len, text, COLOR_WHITE, font);

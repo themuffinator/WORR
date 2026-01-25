@@ -1,7 +1,7 @@
 # Obituary Feed Time Units Compatibility (2026-01-22)
 
 ## Problem
-The kill feed appeared to show only one entry at a time when `cl_obituary_time`
+The kill feed appeared to show only one entry at a time when `cg_obituary_time`
 was configured with small values (for example `3`), because the cvar was
 interpreted strictly as milliseconds and clamped as an integer. That made
 entries expire almost immediately.
@@ -16,9 +16,9 @@ This avoids accidental 3–5 ms lifetimes while preserving existing configs that
 already use millisecond values like `3000` or `200`.
 
 ## Examples
-- `cl_obituary_time 3` => 3000 ms
-- `cl_obituary_fade 0.2` => 200 ms
-- `cl_obituary_time 3000` => 3000 ms (legacy)
+- `cg_obituary_time 3` => 3000 ms
+- `cg_obituary_fade 0.2` => 200 ms
+- `cg_obituary_time 3000` => 3000 ms (legacy)
 
 ## Files
 - src/game/cgame/cg_draw.cpp

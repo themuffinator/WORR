@@ -129,6 +129,14 @@ void Sys_AddDefaultConfig(void)
     }
 }
 
+#if USE_CLIENT
+void Sys_SetTaskbarProgress(sys_taskbar_progress_t state, int percent)
+{
+    (void)state;
+    (void)percent;
+}
+#endif
+
 void Sys_Sleep(int msec)
 {
     struct timespec req = {

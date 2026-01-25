@@ -21,7 +21,7 @@ SDL Video Backend Changes
 - Event handling now uses SDL_EVENT_* constants and SDL3 event structs.
 - Relative mouse mode uses SDL_SetWindowRelativeMouseMode and related APIs.
 - Cursor visibility uses SDL_ShowCursor/SDL_HideCursor.
-- SDL3 removed window gamma ramp APIs; the SDL driver disables vid_hwgamma and logs.
+- SDL3 removed window gamma ramp APIs; the SDL driver disables r_hwgamma and logs.
 
 SDL Audio Backend Changes
 =========================
@@ -33,7 +33,7 @@ SDL Audio Backend Changes
 
 Behavior Notes
 ==============
-- vid_hwgamma is not supported by the SDL backend under SDL3.
+- r_hwgamma is not supported by the SDL backend under SDL3.
 - The SDL DMA driver mixes 16-bit stereo at the configured s_khz rate; SDL handles
   device conversion if the hardware format differs.
 - Window close requests are handled via SDL_EVENT_WINDOW_CLOSE_REQUESTED.

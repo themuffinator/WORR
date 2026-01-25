@@ -14,6 +14,6 @@
 - `cl_menu_bokeh_blur` (default `0.85`, flags `CVAR_ARCHIVE`) controls the blur strength; `0` disables it.
 
 ## Notes
-- Requires `r_dof` to be enabled; respects `r_dofBlurRange` and `r_dofFocusDistance` auto values.
+- Requires `r_dof` to be enabled; respects `r_dof_blur_range` and `r_dof_focus_distance` auto values.
 - Only applies when the world is actively rendered, so front-end menus without a valid frame remain unaffected.
 - Masked menu blur behavior is documented in `doc/menu-bokeh-blur-masked.md`.

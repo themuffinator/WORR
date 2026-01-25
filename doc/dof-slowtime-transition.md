@@ -7,8 +7,8 @@
 
 ## Cvars
 - `r_dof` enables DOF rendering (default `1`, flags `CVAR_ARCHIVE | CVAR_LATCH`).
-- `r_dofBlurRange` overrides the blur range in world units (default `0.0`, flags `CVAR_SERVERINFO`).
-- `r_dofFocusDistance` overrides the focus distance in world units (default `0.0`, flags `CVAR_SERVERINFO`).
+- `r_dof_blur_range` overrides the blur range in world units (default `0.0`, flags `CVAR_SERVERINFO`).
+- `r_dof_focus_distance` overrides the focus distance in world units (default `0.0`, flags `CVAR_SERVERINFO`).
 - When either override is `0.0`, the shader uses an auto value (focus from center depth, range from focus).
 
 ## Slow-Time Driver

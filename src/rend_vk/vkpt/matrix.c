@@ -75,12 +75,8 @@ create_viewweapon_matrix(mat4_t matrix, entity_t *e)
 	if (cl_gunfov->value > 0) {
 		float gunfov_x, gunfov_y;
 		gunfov_x = Cvar_ClampValue(cl_gunfov, 30, 160);
-		if (cl_adjustfov->integer) {
-			gunfov_y = V_CalcFov(gunfov_x, 4, 3);
-			gunfov_x = V_CalcFov(gunfov_y, vkpt_refdef.fd->height, vkpt_refdef.fd->width);
-		} else {
-			gunfov_y = V_CalcFov(gunfov_x, vkpt_refdef.fd->width, vkpt_refdef.fd->height);
-		}
+		gunfov_y = V_CalcFov(gunfov_x, 4, 3);
+		gunfov_x = V_CalcFov(gunfov_y, vkpt_refdef.fd->height, vkpt_refdef.fd->width);
 
 		/* Construct a matrix for the viewweapon entity so, after projection and all,
 		 * it appears to be rendered with the gun FOV (which may differ from the view FOV). */

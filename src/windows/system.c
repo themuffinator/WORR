@@ -35,6 +35,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <versionhelpers.h>
 #endif
 
+#if USE_CLIENT
+#include <objbase.h>
+#include <shobjidl.h>
+#endif
+
 #if defined(_WIN32)
 // Hint hybrid-GPU drivers to prefer the discrete adapter.
 __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
@@ -53,6 +58,15 @@ static atomic_int               errorEntered;
 
 static LARGE_INTEGER            timer_freq;
 static DWORD                    main_thread_id;
+
+#if USE_CLIENT
+static ITaskbarList3            *taskbar_list;
+static bool                     taskbar_ready;
+static bool                     taskbar_com_initialized;
+static HWND                     taskbar_hwnd;
+static sys_taskbar_progress_t   taskbar_last_state = SYS_TASKBAR_PROGRESS_NONE;
+static int                      taskbar_last_percent = -1;
+#endif
 
 static cvar_t                   *sys_exitonerror;
 
@@ -877,6 +891,119 @@ void Sys_Error(const char *error, ...)
     exit(1);
 }
 
+#if USE_CLIENT
+static bool taskbar_init(void)
+{
+    HRESULT hr;
+
+    if (taskbar_ready) {
+        return taskbar_list != NULL;
+    }
+
+    taskbar_ready = true;
+
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (SUCCEEDED(hr)) {
+        taskbar_com_initialized = true;
+    } else if (hr != RPC_E_CHANGED_MODE) {
+        return false;
+    }
+
+    hr = CoCreateInstance(&CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_ITaskbarList3, (void **)&taskbar_list);
+    if (FAILED(hr)) {
+        if (taskbar_com_initialized) {
+            CoUninitialize();
+            taskbar_com_initialized = false;
+        }
+        taskbar_list = NULL;
+        return false;
+    }
+
+    hr = taskbar_list->lpVtbl->HrInit(taskbar_list);
+    if (FAILED(hr)) {
+        taskbar_list->lpVtbl->Release(taskbar_list);
+        taskbar_list = NULL;
+        if (taskbar_com_initialized) {
+            CoUninitialize();
+            taskbar_com_initialized = false;
+        }
+        return false;
+    }
+
+    return true;
+}
+
+static void taskbar_shutdown(void)
+{
+    if (taskbar_list) {
+        taskbar_list->lpVtbl->Release(taskbar_list);
+        taskbar_list = NULL;
+    }
+
+    if (taskbar_com_initialized) {
+        CoUninitialize();
+        taskbar_com_initialized = false;
+    }
+
+    taskbar_ready = false;
+    taskbar_hwnd = NULL;
+    taskbar_last_state = SYS_TASKBAR_PROGRESS_NONE;
+    taskbar_last_percent = -1;
+}
+
+void Sys_SetTaskbarProgress(sys_taskbar_progress_t state, int percent)
+{
+    TBPFLAG flag;
+
+    if (!taskbar_init()) {
+        return;
+    }
+
+    if (!win.wnd) {
+        return;
+    }
+
+    if (state == SYS_TASKBAR_PROGRESS_NORMAL) {
+        percent = Q_clip(percent, 0, 100);
+    } else {
+        percent = -1;
+    }
+
+    if (win.wnd != taskbar_hwnd) {
+        taskbar_hwnd = win.wnd;
+        taskbar_last_state = SYS_TASKBAR_PROGRESS_NONE;
+        taskbar_last_percent = -1;
+    }
+
+    if (state == taskbar_last_state && percent == taskbar_last_percent) {
+        return;
+    }
+
+    switch (state) {
+    case SYS_TASKBAR_PROGRESS_INDETERMINATE:
+        flag = TBPF_INDETERMINATE;
+        break;
+    case SYS_TASKBAR_PROGRESS_NORMAL:
+        flag = TBPF_NORMAL;
+        break;
+    case SYS_TASKBAR_PROGRESS_NONE:
+    default:
+        flag = TBPF_NOPROGRESS;
+        break;
+    }
+
+    taskbar_list->lpVtbl->SetProgressState(taskbar_list, win.wnd, flag);
+    if (state == SYS_TASKBAR_PROGRESS_NORMAL) {
+        taskbar_list->lpVtbl->SetProgressValue(taskbar_list, win.wnd,
+                                               (ULONGLONG)percent, 100);
+    }
+
+    taskbar_last_state = state;
+    taskbar_last_percent = percent;
+}
+#endif
+
 /*
 ================
 Sys_Quit
@@ -889,6 +1016,10 @@ void Sys_Quit(void)
 #if USE_WINSVC
     if (statusHandle)
         longjmp(exitBuf, 1);
+#endif
+
+#if USE_CLIENT
+    taskbar_shutdown();
 #endif
 
     exit(0);

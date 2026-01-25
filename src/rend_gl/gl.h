@@ -85,6 +85,7 @@ typedef uint64_t glStateBits_t;
 
 #define MAX_SHADOWMAP_LIGHTS    16
 #define SHADOWMAP_FACE_COUNT    6
+#define MAX_CSM_CASCADES        4
 
 // framebuffers
 #define FBO_COUNT   6
@@ -132,11 +133,16 @@ typedef struct {
     GLuint          shadowmap_tex;
     GLuint          shadowmap_depth;
     GLuint          shadowmap_cache_tex;                                        // Cached static light shadows
+    GLuint          sun_shadowmap_fbo;
+    GLuint          sun_shadowmap_tex;
+    GLuint          sun_shadowmap_depth;
     bool            shadowmap_cache_dirty[MAX_SHADOWMAP_LIGHTS * SHADOWMAP_FACE_COUNT];
     vec3_t          shadowmap_cache_origins[MAX_SHADOWMAP_LIGHTS];              // Cached light origins for invalidation
     float           shadowmap_cache_radius[MAX_SHADOWMAP_LIGHTS];
     vec4_t          shadowmap_cache_cone[MAX_SHADOWMAP_LIGHTS];
     bool            shadowmap_cache_is_spot[MAX_SHADOWMAP_LIGHTS];
+    uint32_t        shadowmap_cache_caster_hash[MAX_SHADOWMAP_LIGHTS];
+    bool            shadowmap_cache_caster_valid[MAX_SHADOWMAP_LIGHTS];
     uint32_t        shadowmap_cache_scene_hash;
     bool            shadowmap_cache_scene_valid;
     GLuint          warp_program;
@@ -159,6 +165,8 @@ typedef struct {
     int             shadowmap_size;
     int             shadowmap_layers;
     int             shadowmap_max_lights;
+    int             sun_shadowmap_size;
+    int             sun_shadowmap_cascades;
     float           sintab[256];
     byte            latlngtab[NUMVERTEXNORMALS][2];
     byte            lightstylemap[MAX_LIGHTSTYLES];
@@ -166,10 +174,19 @@ typedef struct {
     hash_map_t      *queries;
     hash_map_t      *programs;
     bool            shadowmap_ok;
+    bool            shadowmap_use_mipmaps;
+    bool            sun_shadowmap_ok;
+    bool            sun_shadowmap_use_mipmaps;
     bool            hdr_active;
     bool            postfx_bloom_mrt;
     bool            postfx_dof;
 } glStatic_t;
+
+typedef enum {
+    SHADOW_MODE_NONE = 0,
+    SHADOW_MODE_LIGHT,
+    SHADOW_MODE_SUN
+} shadowMode_t;
 
 typedef struct {
     refdef_t        fd;
@@ -209,10 +226,23 @@ typedef struct {
     bool            framebuffer_ok;
     bool            framebuffer_bound;
     bool            shadow_pass;
+    const dlight_t *shadow_light;
+    shadowMode_t    shadow_mode;
+    vec3_t          shadow_bounds[2];
     int             shadow_light_count;
     int             shadow_light_indices[MAX_SHADOWMAP_LIGHTS];
     int             shadowmap_index[MAX_DLIGHTS];
     bool            shadowmap_is_spot[MAX_DLIGHTS];
+    int             csm_cascades;
+    vec4_t          csm_splits;
+    vec3_t          sun_dir;
+    float           sun_intensity;
+    vec3_t          sun_color;
+    float           csm_pad;
+    mat4_t          csm_matrix[MAX_CSM_CASCADES];
+    vec3_t          csm_vieworg[MAX_CSM_CASCADES];
+    mat4_t          csm_proj[MAX_CSM_CASCADES];
+    vec3_t          csm_bounds[MAX_CSM_CASCADES][2];
 } glRefdef_t;
 
 typedef enum {
@@ -318,10 +348,33 @@ extern cvar_t *gl_shadowmap_size;
 extern cvar_t *gl_shadowmap_lights;
 extern cvar_t *gl_shadowmap_dynamic;
 extern cvar_t *gl_shadowmap_cache;
+extern cvar_t *gl_shadowmap_cache_mode;
 extern cvar_t *gl_shadowmap_bias;
+extern cvar_t *gl_shadow_bias_slope;
+extern cvar_t *gl_shadow_normal_offset;
+extern cvar_t *gl_shadow_vsm_bleed;
+extern cvar_t *gl_shadow_vsm_min_variance;
+extern cvar_t *gl_shadow_evsm_exponent;
+extern cvar_t *gl_shadow_vsm_mipmaps;
+extern cvar_t *gl_shadow_pcss_blocker_samples;
+extern cvar_t *gl_shadow_pcss_filter_samples;
 extern cvar_t *gl_shadowmap_softness;
 extern cvar_t *gl_shadowmap_filter;
 extern cvar_t *gl_shadowmap_quality;
+extern cvar_t *gl_sun_enable;
+extern cvar_t *gl_sun_dir;
+extern cvar_t *gl_sun_color;
+extern cvar_t *gl_sun_intensity;
+extern cvar_t *gl_csm_cascades;
+extern cvar_t *gl_csm_lambda;
+extern cvar_t *gl_csm_resolution;
+extern cvar_t *gl_csm_blend;
+extern cvar_t *gl_shadow_debug;
+extern cvar_t *gl_shadow_debug_light;
+extern cvar_t *gl_shadow_debug_freeze;
+extern cvar_t *gl_shadow_bias_scale;
+extern cvar_t *gl_shadow_pcss_max_lights;
+extern cvar_t *gl_shadow_alpha_mode;
 #if USE_MD5
 extern cvar_t *gl_md5_load;
 extern cvar_t *gl_md5_use;
@@ -792,6 +845,7 @@ typedef enum {
     TMU_LIGHTMAP,
     TMU_GLOWMAP,
     TMU_SHADOWMAP,
+    TMU_SHADOWMAP_CSM,
     TMU_REFRACT,
     TMU_EXPOSURE,
     TMU_LUT,
@@ -866,6 +920,8 @@ typedef struct {
     vec4_t      vieworg; // w = dof strength
     vec4_t      shadow_params; // x = 1/size, y = bias, z = softness, w = shadow depth scale
     vec4_t      shadow_params2; // x = method, y = quality, z = vcm bleed, w = vcm min variance
+    vec4_t      shadow_params3; // x = slope bias, y = normal offset, z = evsm exponent, w = shadow mode
+    vec4_t      shadow_params4; // x = pcss blocker samples, y = pcss filter samples, zw = pad
     vec4_t      crt_params; // x = hard pix, y = hard scan, z = bright boost, w = linear gamma
     vec4_t      crt_params2; // x = mask dark, y = mask light, z = mask type, w = pad
     vec4_t      crt_texel; // x = inv width, y = inv height, z = width, w = height
@@ -879,6 +935,12 @@ typedef struct {
     vec4_t      postfx_split_highlight; // rgb = highlight tint, w = pad
     vec4_t      postfx_split_params; // x = strength, y = balance, zw = pad
     vec4_t      postfx_lut; // x = intensity, y = size, z = inv width, w = inv height
+    vec4_t      viewdir; // xyz = view forward, w = pad
+    vec4_t      sun_dir; // xyz = direction to sun, w = enabled
+    vec4_t      sun_color; // rgb = color, w = intensity
+    vec4_t      csm_splits; // cascade split distances
+    vec4_t      csm_params; // x = 1/size, y = cascade count, zw = pad
+    mat4_t      csm_matrix[MAX_CSM_CASCADES];
 } glUniformBlock_t;
 
 typedef struct {
@@ -1121,6 +1183,8 @@ bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
                          bool postfx_active, bool hdr_requested);
 bool GL_InitShadowmaps(int size, int layers);
 void GL_ShutdownShadowmaps(void);
+bool GL_InitSunShadowmaps(int size, int cascades);
+void GL_ShutdownSunShadowmaps(void);
 void GL_EnsureRefractionTexture(int w, int h);
 
 extern cvar_t *gl_intensity;

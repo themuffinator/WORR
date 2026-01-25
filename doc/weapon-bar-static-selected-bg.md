@@ -6,9 +6,9 @@ currently selected weapon. Non-selected weapons render without a tile
 background.
 
 ## Affected modes
-- `cl_weaponBar 1` (static left)
-- `cl_weaponBar 2` (static right)
-- `cl_weaponBar 3` (static center, horizontal tiles)
+- `cl_weapon_bar 1` (static left)
+- `cl_weapon_bar 2` (static right)
+- `cl_weapon_bar 3` (static center, horizontal tiles)
 
 ## Details
 - Background color: RGBA 96,96,96,160.

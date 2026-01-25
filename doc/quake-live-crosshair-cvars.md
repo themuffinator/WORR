@@ -2,34 +2,34 @@
 
 ## Summary
 - Adds the Quake Live crosshair cvars using the `cl_` prefix.
-- Replaces `crosshairscale` and `ch_scale` with `cl_crosshairSize`.
-- `cl_crosshairSize` also drives hit marker sizing.
+- Replaces `crosshairscale` and `ch_scale` with `cl_crosshair_size`.
+- `cl_crosshair_size` also drives hit marker sizing.
 - Replaces legacy `ch_*` crosshair color channels with palette + brightness controls.
 - Implements hit styles, palette coloring, and pulse behavior.
 
 ## Cvars
-- `cl_crosshairBrightness` (0.0-1.0, default 1.0)
+- `cl_crosshair_brightness` (0.0-1.0, default 1.0)
   - Multiplies the RGB channels of the active crosshair color.
-- `cl_crosshairColor` (1-26, default 25)
+- `cl_crosshair_color` (1-26, default 25)
   - Selects the base crosshair color from the Quake Live palette.
-- `cl_crosshairHealth` (0/1, default 0)
-  - When enabled, health-based coloring overrides `cl_crosshairColor`.
-- `cl_crosshairHitColor` (1-26, default 1)
+- `cl_crosshair_health` (0/1, default 0)
+  - When enabled, health-based coloring overrides `cl_crosshair_color`.
+- `cl_crosshair_hit_color` (1-26, default 1)
   - Palette index used by hit styles 2, 5, and 8.
-- `cl_crosshairHitStyle` (0-8, default 2)
+- `cl_crosshair_hit_style` (0-8, default 2)
   - Defines hit feedback behavior. See the Hit Styles section.
-- `cl_crosshairHitTime` (milliseconds, default 200)
+- `cl_crosshair_hit_time` (milliseconds, default 200)
   - Duration for the hit effect (color and pulse) when a hit is registered.
-- `cl_crosshairPulse` (0/1, default 1)
+- `cl_crosshair_pulse` (0/1, default 1)
   - Enables pulsing when items are picked up.
-- `cl_crosshairSize` (pixels, default 32)
+- `cl_crosshair_size` (pixels, default 32)
   - Base crosshair size in pixel units before UI scaling. Also scales hit marker
-    sizing via `cl_crosshairSize / 32`.
+    sizing via `cl_crosshair_size / 32`.
 
 ## Hit Styles
 - 0 - Off.
 - 1 - Colorize crosshair based on damage dealt.
-- 2 - Colorize to `cl_crosshairHitColor`.
+- 2 - Colorize to `cl_crosshair_hit_color`.
 - 3 - Pulse the crosshair (large pulse).
 - 4 - Damage color + large pulse.
 - 5 - Hit color + large pulse.
@@ -43,8 +43,8 @@ Damage-based colorization uses a green-to-red gradient:
 - `color = (255 * t, 255 * (1 - t), 0)`
 
 ## Pulse Behavior
-- Item pickup pulse duration is 200ms when `cl_crosshairPulse` is enabled.
-- Hit pulses use `cl_crosshairHitTime` for their duration (default 200ms).
+- Item pickup pulse duration is 200ms when `cl_crosshair_pulse` is enabled.
+- Hit pulses use `cl_crosshair_hit_time` for their duration (default 200ms).
 - Large pulse scales to 1.5x, small pulse scales to 1.25x.
 - When pickup and hit pulses overlap, the larger scale is applied.
 

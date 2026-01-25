@@ -387,6 +387,92 @@ static void GL_MarkLeaves(void)
     }
 }
 
+static bool GL_BoxIntersectsSphere(const vec3_t mins, const vec3_t maxs, const vec3_t center, float radius)
+{
+    float dist2 = 0.0f;
+
+    for (int i = 0; i < 3; i++) {
+        if (center[i] < mins[i]) {
+            float d = mins[i] - center[i];
+            dist2 += d * d;
+        } else if (center[i] > maxs[i]) {
+            float d = center[i] - maxs[i];
+            dist2 += d * d;
+        }
+    }
+
+    return dist2 <= radius * radius;
+}
+
+static bool GL_BoxIntersectsBox(const vec3_t mins, const vec3_t maxs, const vec3_t test_mins, const vec3_t test_maxs)
+{
+    return !(maxs[0] < test_mins[0] || mins[0] > test_maxs[0] ||
+             maxs[1] < test_mins[1] || mins[1] > test_maxs[1] ||
+             maxs[2] < test_mins[2] || mins[2] > test_maxs[2]);
+}
+
+static void GL_MarkShadowNodes_r(mnode_t *node, const vec3_t center, float radius)
+{
+    if (!GL_BoxIntersectsSphere(node->mins, node->maxs, center, radius))
+        return;
+
+    if (node->visframe != glr.visframe) {
+        node->visframe = glr.visframe;
+        glr.nodes_visible++;
+    }
+
+    if (!node->plane)
+        return;
+
+    GL_MarkShadowNodes_r(node->children[0], center, radius);
+    GL_MarkShadowNodes_r(node->children[1], center, radius);
+}
+
+static void GL_MarkShadowNodesBox_r(mnode_t *node, const vec3_t mins, const vec3_t maxs)
+{
+    if (!GL_BoxIntersectsBox(node->mins, node->maxs, mins, maxs))
+        return;
+
+    if (node->visframe != glr.visframe) {
+        node->visframe = glr.visframe;
+        glr.nodes_visible++;
+    }
+
+    if (!node->plane)
+        return;
+
+    GL_MarkShadowNodesBox_r(node->children[0], mins, maxs);
+    GL_MarkShadowNodesBox_r(node->children[1], mins, maxs);
+}
+
+static void GL_MarkShadowLeaves(const dlight_t *dl)
+{
+    const bsp_t *bsp = gl_static.world.cache;
+    if (!bsp)
+        return;
+
+    float radius = dl->sphere[3];
+    if (radius <= 0.0f)
+        return;
+
+    glr.visframe++;
+    glr.nodes_visible = 0;
+
+    GL_MarkShadowNodes_r(bsp->nodes, dl->sphere, radius);
+}
+
+static void GL_MarkShadowBox(const vec3_t bounds[2])
+{
+    const bsp_t *bsp = gl_static.world.cache;
+    if (!bsp)
+        return;
+
+    glr.visframe++;
+    glr.nodes_visible = 0;
+
+    GL_MarkShadowNodesBox_r(bsp->nodes, bounds[0], bounds[1]);
+}
+
 #define BACKFACE_EPSILON    0.01f
 
 void GL_DrawBspModel(mmodel_t *model)
@@ -591,7 +677,13 @@ void GL_DrawWorld(void)
 
     tess.dlight_bits = 0;
 
-    GL_MarkLeaves();
+    if (glr.shadow_pass) {
+        if (glr.shadow_mode == SHADOW_MODE_SUN)
+            GL_MarkShadowBox(glr.shadow_bounds);
+        else if (glr.shadow_light)
+            GL_MarkShadowLeaves(glr.shadow_light);
+    } else
+        GL_MarkLeaves();
 
     if (!glr.shadow_pass)
         GL_MarkLights();
@@ -605,8 +697,10 @@ void GL_DrawWorld(void)
 
     GL_ClearSolidFaces();
 
-    GL_WorldNode_r(gl_static.world.cache->nodes,
-                   gl_cull_nodes->integer ? NODE_CLIPPED : NODE_UNCLIPPED);
+    int clip_mode = gl_cull_nodes->integer ? NODE_CLIPPED : NODE_UNCLIPPED;
+    if (glr.shadow_pass && glr.shadow_mode == SHADOW_MODE_SUN)
+        clip_mode = NODE_UNCLIPPED;
+    GL_WorldNode_r(gl_static.world.cache->nodes, clip_mode);
 
     if (!glr.shadow_pass && gl_dynamic->integer)
         GL_UploadLightmaps();

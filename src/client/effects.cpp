@@ -1902,9 +1902,6 @@ CL_AddShadowLights
 */
 void CL_AddShadowLights(void)
 {
-    const int max_pvs_shadowlights = min((int)cl.csr.max_shadowlights, MAX_DLIGHTS);
-    int pvs_shadowlights = 0;
-
     for (size_t i = 0; i < cl.csr.max_shadowlights; i++) {
         if (!*cl.configstrings[cl.csr.shadowlights + i])
             continue;
@@ -1921,11 +1918,6 @@ void CL_AddShadowLights(void)
             state = &cl.baselines[entnum];
         else
             continue;
-        if (ent->serverframe == cl.frame.number) {
-            if (pvs_shadowlights >= max_pvs_shadowlights)
-                continue;
-            pvs_shadowlights++;
-        }
 
         color_t color;
         if (!state->skinnum)

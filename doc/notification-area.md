@@ -7,7 +7,7 @@ The client HUD now renders a bottom-left notification area that combines player 
 - Anchor: bottom-left of the HUD safe zone.
 - Stack: newest messages render closest to the bottom, pushing older lines upward.
 - Message box: rendered at the bottom of the area, with notifications directly above.
-- Safe zone: both the message list and input box are offset by `scr_safe_zone`.
+- Safe zone: both the message list and input box are offset by `cl_safe_zone`.
 
 ## Visibility Rules
 - Max visible notifications: 4 during normal play.
@@ -25,6 +25,6 @@ The client HUD now renders a bottom-left notification area that combines player 
 - Clicking in the input box positions the caret within the current message.
 
 ## Cvars and Compatibility Notes
-- `scr_chathud` now defaults to `1` to enable the new notification area by default.
-- `scr_chathud_lines`, `scr_chathud_time`, `scr_chathud_x`, and `scr_chathud_y` are no longer used for layout or timing; the notification area uses fixed rules above.
+- `cl_chathud` now defaults to `1` to enable the new notification area by default.
+- `cl_chathud_lines`, `cl_chathud_time`, `cl_chathud_x`, and `cl_chathud_y` are no longer used for layout or timing; the notification area uses fixed rules above.
 - Legacy console notify overlays are no longer drawn in-game; the HUD area replaces them.

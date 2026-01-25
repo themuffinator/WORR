@@ -26,7 +26,9 @@ const mat4_t gl_identity = { [0] = 1, [5] = 1, [10] = 1, [15] = 1 };
 
 static inline GLenum GL_TextureTarget(glTmu_t tmu)
 {
-    return (tmu == TMU_SHADOWMAP) ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
+    if (tmu == TMU_SHADOWMAP || tmu == TMU_SHADOWMAP_CSM)
+        return GL_TEXTURE_2D_ARRAY;
+    return GL_TEXTURE_2D;
 }
 
 // for uploading
@@ -302,7 +304,30 @@ void GL_Setup3D(void)
     // clear both wanted & active dlight bits
     gls.dlight_bits = glr.ppl_dlight_bits = 0;
 
-    qglClear(GL_DEPTH_BUFFER_BIT | gl_static.stencil_buffer_bit);
+    GLbitfield clear_bits = GL_DEPTH_BUFFER_BIT | gl_static.stencil_buffer_bit;
+    if (glr.fd.rdflags & RDF_NOWORLDMODEL) {
+        clear_bits |= GL_COLOR_BUFFER_BIT;
+        GLint viewport[4] = {0, 0, 0, 0};
+        GLint scissor_box[4] = {0, 0, 0, 0};
+        GLboolean scissor_enabled = qglIsEnabled(GL_SCISSOR_TEST);
+        qglGetIntegerv(GL_VIEWPORT, viewport);
+        if (viewport[2] > 0 && viewport[3] > 0) {
+            if (scissor_enabled)
+                qglGetIntegerv(GL_SCISSOR_BOX, scissor_box);
+            else
+                qglEnable(GL_SCISSOR_TEST);
+            qglScissor(viewport[0], viewport[1], viewport[2], viewport[3]);
+            qglClear(clear_bits);
+            if (scissor_enabled) {
+                qglScissor(scissor_box[0], scissor_box[1], scissor_box[2], scissor_box[3]);
+            } else {
+                qglDisable(GL_SCISSOR_TEST);
+            }
+            return;
+        }
+    }
+
+    qglClear(clear_bits);
 }
 
 void GL_DrawOutlines(GLsizei count, GLenum type, const void *indices)

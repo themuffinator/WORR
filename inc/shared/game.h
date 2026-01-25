@@ -674,6 +674,8 @@ typedef struct
     void(*SCR_SetAltTypeface)(bool enabled);
     void (*SCR_DrawFontString)(const char *str, int x, int y, int scale, const rgba_t *color, bool shadow, text_align_t align);
     cg_vec2_t (*SCR_MeasureFontString)(const char *str, int scale);
+    void (*SCR_DrawCenterFontString)(const char *str, int x, int y, int scale, const rgba_t *color, bool shadow, text_align_t align);
+    cg_vec2_t (*SCR_MeasureCenterFontString)(const char *str, int scale);
     float (*SCR_FontLineHeight)(int scale);
 
     // [Paril-KEX] for legacy text input (not used in lobbies)

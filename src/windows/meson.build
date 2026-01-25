@@ -6,6 +6,8 @@ client_src += files('client.c', 'wgl.c')
 common_deps += cc.find_library('ws2_32')
 client_deps += cc.find_library('opengl32')
 client_deps += cc.find_library('imm32')
+client_deps += cc.find_library('ole32')
+client_deps += cc.find_library('uuid')
 
 rc_args = ['-DHAVE_CONFIG_H']
 rc_inc = meson.project_build_root()

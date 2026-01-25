@@ -35,9 +35,9 @@ obit_kill_thunderbolt, obit_kill_thunderbolt_discharge, obit_self_thunderbolt_di
 - Entries store draw_y and animate toward target positions for smooth line transitions.
 
 ## Cvars
-- cl_obituary_time (ms by default; values under 100 are treated as seconds)
-- cl_obituary_fade (ms by default; values under 100 are treated as seconds)
-- Setting cl_obituary_time to 0 disables the feed.
+- cg_obituary_time (ms by default; values under 100 are treated as seconds)
+- cg_obituary_fade (ms by default; values under 100 are treated as seconds)
+- Setting cg_obituary_time to 0 disables the feed.
 
 ## Files
 - src/game/sgame/player/p_client.cpp

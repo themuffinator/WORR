@@ -1150,12 +1150,10 @@ static void setup_weaponmodel(void)
 {
 #if defined(RENDERER_DLL)
     float gunfov = 0.0f;
-    int adjustfov = 0;
     int gun = 0;
     int hand = 0;
 #else
     extern cvar_t   *info_hand;
-    extern cvar_t   *cl_adjustfov;
     extern cvar_t   *cl_gunfov;
     extern cvar_t   *cl_gun;
 #endif
@@ -1171,7 +1169,6 @@ static void setup_weaponmodel(void)
         gunfov = (float)Cvar_VariableInteger("cl_gunfov");
 
     if (Cvar_VariableInteger) {
-        adjustfov = Cvar_VariableInteger("cl_adjustfov");
         gun = Cvar_VariableInteger("cl_gun");
         hand = Cvar_VariableInteger("hand");
     }
@@ -1182,12 +1179,8 @@ static void setup_weaponmodel(void)
         else if (gunfov > 160.0f)
             gunfov = 160.0f;
         fov_x = gunfov;
-        if (adjustfov) {
-            fov_y = V_CalcFov(fov_x, 4, 3);
-            fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
-        } else {
-            fov_y = V_CalcFov(fov_x, glr.fd.width, glr.fd.height);
-        }
+        fov_y = V_CalcFov(fov_x, 4, 3);
+        fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
     }
 
     if ((hand == 1 && gun == 1) || gun == 3) {
@@ -1197,12 +1190,8 @@ static void setup_weaponmodel(void)
 #else
     if (cl_gunfov && cl_gunfov->value > 0) {
         fov_x = Cvar_ClampValue(cl_gunfov, 30, 160);
-        if (cl_adjustfov && cl_adjustfov->integer) {
-            fov_y = V_CalcFov(fov_x, 4, 3);
-            fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
-        } else {
-            fov_y = V_CalcFov(fov_x, glr.fd.width, glr.fd.height);
-        }
+        fov_y = V_CalcFov(fov_x, 4, 3);
+        fov_x = V_CalcFov(fov_y, glr.fd.height, glr.fd.width);
     }
 
     if (cl_gun && info_hand &&

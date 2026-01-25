@@ -47,7 +47,8 @@ static cvar_t *gl_round_down;
 static cvar_t *gl_picmip;
 static cvar_t *r_picmip;
 static cvar_t *r_nomip;
-static cvar_t *r_picmipFilter;
+static cvar_t *r_picmip_filter;
+static cvar_t *r_picmip_filter_legacy;
 static cvar_t *gl_downsample_skins;
 static cvar_t *gl_gamma_scale_pics;
 static cvar_t *gl_bilerp_chars;
@@ -59,6 +60,7 @@ static cvar_t *gl_texturebits;
 static cvar_t *gl_anisotropy;
 static cvar_t *gl_saturation;
 static cvar_t *gl_gamma;
+static cvar_t *vid_gamma_legacy;
 static cvar_t *gl_invert;
 static cvar_t *gl_partshape;
 static cvar_t *gl_cubemaps;
@@ -68,6 +70,8 @@ cvar_t *gl_intensity;
 
 static bool gl_picmip_syncing;
 static bool gl_intensity_syncing;
+static bool r_picmip_filter_syncing;
+static bool gl_gamma_alias_syncing;
 
 static int GL_UpscaleLevel(int width, int height, imagetype_t type, imageflags_t flags);
 static void GL_Upload32(byte *data, int width, int height, int baselevel, imagetype_t type, imageflags_t flags, const image_t *image);
@@ -145,6 +149,32 @@ static void gl_sync_picmip_defaults(void)
         Cvar_SetByVar(gl_picmip, r_picmip->string, FROM_CODE);
 }
 
+static void r_picmip_filter_changed(cvar_t *self)
+{
+    if (r_picmip_filter_syncing)
+        return;
+
+    r_picmip_filter_syncing = true;
+    if (self == r_picmip_filter && r_picmip_filter_legacy)
+        Cvar_SetByVar(r_picmip_filter_legacy, r_picmip_filter->string, FROM_CODE);
+    else if (self == r_picmip_filter_legacy && r_picmip_filter)
+        Cvar_SetByVar(r_picmip_filter, r_picmip_filter_legacy->string, FROM_CODE);
+    r_picmip_filter_syncing = false;
+}
+
+static void r_sync_picmip_filter_defaults(void)
+{
+    if (!r_picmip_filter || !r_picmip_filter_legacy || r_picmip_filter_syncing)
+        return;
+
+    r_picmip_filter_syncing = true;
+    if (!(r_picmip_filter->flags & CVAR_MODIFIED) && (r_picmip_filter_legacy->flags & CVAR_MODIFIED))
+        Cvar_SetByVar(r_picmip_filter, r_picmip_filter_legacy->string, FROM_CODE);
+    else
+        Cvar_SetByVar(r_picmip_filter_legacy, r_picmip_filter->string, FROM_CODE);
+    r_picmip_filter_syncing = false;
+}
+
 static bool gl_is_player_skin(const image_t *image)
 {
     if (!image || image->type != IT_SKIN)
@@ -155,7 +185,7 @@ static bool gl_is_player_skin(const image_t *image)
 
 static bool gl_should_picmip(imagetype_t type, const image_t *image)
 {
-    int filter = r_picmipFilter ? r_picmipFilter->integer : 0;
+    int filter = r_picmip_filter ? r_picmip_filter->integer : 0;
 
     if (r_nomip && r_nomip->integer && type != IT_WALL)
         return false;
@@ -1113,6 +1143,53 @@ static void gl_gamma_changed(cvar_t *self)
         vid->update_gamma(gammatable);
 }
 
+static void gl_gamma_alias_changed(cvar_t *self)
+{
+    if (gl_gamma_alias_syncing)
+        return;
+
+    gl_gamma_alias_syncing = true;
+
+    if (self == gl_gamma && vid_gamma_legacy) {
+        Cvar_SetByVar(vid_gamma_legacy, gl_gamma->string, FROM_CODE);
+        if (r_config.flags & QVF_GAMMARAMP)
+            gl_gamma_changed(gl_gamma);
+    } else if (self == vid_gamma_legacy && gl_gamma) {
+        Cvar_SetByVar(gl_gamma, vid_gamma_legacy->string, FROM_CODE);
+        if (r_config.flags & QVF_GAMMARAMP)
+            gl_gamma_changed(gl_gamma);
+    }
+
+    gl_gamma_alias_syncing = false;
+}
+
+static void gl_gamma_alias_sync_defaults(void)
+{
+    if (gl_gamma_alias_syncing)
+        return;
+
+    gl_gamma_alias_syncing = true;
+
+    if (gl_gamma && vid_gamma_legacy) {
+        if (!(gl_gamma->flags & CVAR_MODIFIED) && (vid_gamma_legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(gl_gamma, vid_gamma_legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(vid_gamma_legacy, gl_gamma->string, FROM_CODE);
+    }
+
+    gl_gamma_alias_syncing = false;
+}
+
+static void gl_gamma_alias_register(void)
+{
+    if (gl_gamma)
+        gl_gamma->changed = gl_gamma_alias_changed;
+    if (vid_gamma_legacy)
+        vid_gamma_legacy->changed = gl_gamma_alias_changed;
+
+    gl_gamma_alias_sync_defaults();
+}
+
 void GL_RebuildGammaTables(void)
 {
     if (!gl_gamma)
@@ -1749,6 +1826,7 @@ static bool GL_InitShadowmapsFormat(int size, int layers, const shadowmap_format
     GL_ClearErrors();
 
     GL_ShutdownShadowmaps();
+    GL_ShutdownSunShadowmaps();
 
     qglGenTextures(1, &gl_static.shadowmap_tex);
     qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.shadowmap_tex);
@@ -1804,8 +1882,60 @@ static bool GL_InitShadowmapsFormat(int size, int layers, const shadowmap_format
     memset(gl_static.shadowmap_cache_radius, 0, sizeof(gl_static.shadowmap_cache_radius));
     memset(gl_static.shadowmap_cache_cone, 0, sizeof(gl_static.shadowmap_cache_cone));
     memset(gl_static.shadowmap_cache_is_spot, 0, sizeof(gl_static.shadowmap_cache_is_spot));
+    memset(gl_static.shadowmap_cache_caster_hash, 0, sizeof(gl_static.shadowmap_cache_caster_hash));
+    memset(gl_static.shadowmap_cache_caster_valid, 0, sizeof(gl_static.shadowmap_cache_caster_valid));
     gl_static.shadowmap_cache_scene_hash = 0;
     gl_static.shadowmap_cache_scene_valid = false;
+    gl_static.shadowmap_use_mipmaps = false;
+
+    return true;
+}
+
+static bool GL_InitSunShadowmapsFormat(int size, int layers, const shadowmap_format_t *fmt)
+{
+    GL_ClearErrors();
+
+    GL_ShutdownSunShadowmaps();
+
+    qglGenTextures(1, &gl_static.sun_shadowmap_tex);
+    qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.sun_shadowmap_tex);
+    qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, fmt->internal_format, size, size, layers, 0, fmt->format, fmt->type, NULL);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (gl_config.caps & QGL_CAP_TEXTURE_MAX_LEVEL)
+        qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 0);
+
+    qglGenFramebuffers(1, &gl_static.sun_shadowmap_fbo);
+    qglGenRenderbuffers(1, &gl_static.sun_shadowmap_depth);
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.sun_shadowmap_fbo);
+    qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.sun_shadowmap_tex, 0, 0);
+
+    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.sun_shadowmap_depth);
+    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
+    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
+    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gl_static.sun_shadowmap_depth);
+
+    {
+        static const GLenum draw_buffers[1] = { GL_COLOR_ATTACHMENT0 };
+        qglDrawBuffers(1, draw_buffers);
+    }
+
+    if (!GL_CheckFramebufferStatus(true, "FBO_SUN_SHADOWMAP", size, size,
+                                   fmt->format, fmt->type, fmt->internal_format)) {
+        GL_ShutdownSunShadowmaps();
+        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return false;
+    }
+
+    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    gl_static.sun_shadowmap_size = size;
+    gl_static.sun_shadowmap_cascades = layers;
+    gl_static.sun_shadowmap_ok = true;
+    gl_static.sun_shadowmap_use_mipmaps = false;
 
     return true;
 }
@@ -1840,6 +1970,36 @@ bool GL_InitShadowmaps(int size, int layers)
     return false;
 }
 
+bool GL_InitSunShadowmaps(int size, int cascades)
+{
+    if (!gl_static.use_shaders || !qglTexImage3D || !qglFramebufferTextureLayer)
+        return false;
+
+    if (size <= 0 || cascades <= 0)
+        return false;
+
+    static const shadowmap_format_t formats[] = {
+        { GL_RG16F, GL_RG, GL_HALF_FLOAT, "RG16F" },
+        { GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, "RGBA16F" },
+        { GL_RG16, GL_RG, GL_UNSIGNED_SHORT, "RG16" },
+        { GL_RG8, GL_RG, GL_UNSIGNED_BYTE, "RG8" },
+        { GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, "RGBA8" }
+    };
+
+    for (size_t i = 0; i < q_countof(formats); i++) {
+        if (GL_InitSunShadowmapsFormat(size, cascades, &formats[i])) {
+            if (i > 0) {
+                Com_WPrintf("Sun shadowmap format %s unavailable, using %s.\n",
+                            formats[0].label, formats[i].label);
+            }
+            return true;
+        }
+    }
+
+    Com_WPrintf("Sun shadowmap formats unavailable, disabling sun shadows.\n");
+    return false;
+}
+
 void GL_ShutdownShadowmaps(void)
 {
     if (gls.texnums[TMU_SHADOWMAP] == gl_static.shadowmap_tex ||
@@ -1870,13 +2030,42 @@ void GL_ShutdownShadowmaps(void)
     gl_static.shadowmap_layers = 0;
     gl_static.shadowmap_max_lights = 0;
     gl_static.shadowmap_ok = false;
+    gl_static.shadowmap_use_mipmaps = false;
     memset(gl_static.shadowmap_cache_dirty, 0, sizeof(gl_static.shadowmap_cache_dirty));
     memset(gl_static.shadowmap_cache_origins, 0, sizeof(gl_static.shadowmap_cache_origins));
     memset(gl_static.shadowmap_cache_radius, 0, sizeof(gl_static.shadowmap_cache_radius));
     memset(gl_static.shadowmap_cache_cone, 0, sizeof(gl_static.shadowmap_cache_cone));
     memset(gl_static.shadowmap_cache_is_spot, 0, sizeof(gl_static.shadowmap_cache_is_spot));
+    memset(gl_static.shadowmap_cache_caster_hash, 0, sizeof(gl_static.shadowmap_cache_caster_hash));
+    memset(gl_static.shadowmap_cache_caster_valid, 0, sizeof(gl_static.shadowmap_cache_caster_valid));
     gl_static.shadowmap_cache_scene_hash = 0;
     gl_static.shadowmap_cache_scene_valid = false;
+}
+
+void GL_ShutdownSunShadowmaps(void)
+{
+    if (gls.texnums[TMU_SHADOWMAP_CSM] == gl_static.sun_shadowmap_tex)
+        gls.texnums[TMU_SHADOWMAP_CSM] = 0;
+
+    if (gl_static.sun_shadowmap_tex) {
+        qglDeleteTextures(1, &gl_static.sun_shadowmap_tex);
+        gl_static.sun_shadowmap_tex = 0;
+    }
+
+    if (gl_static.sun_shadowmap_fbo) {
+        qglDeleteFramebuffers(1, &gl_static.sun_shadowmap_fbo);
+        gl_static.sun_shadowmap_fbo = 0;
+    }
+
+    if (gl_static.sun_shadowmap_depth) {
+        qglDeleteRenderbuffers(1, &gl_static.sun_shadowmap_depth);
+        gl_static.sun_shadowmap_depth = 0;
+    }
+
+    gl_static.sun_shadowmap_size = 0;
+    gl_static.sun_shadowmap_cascades = 0;
+    gl_static.sun_shadowmap_ok = false;
+    gl_static.sun_shadowmap_use_mipmaps = false;
 }
 
 static void gl_partshape_changed(cvar_t *self)
@@ -1911,27 +2100,33 @@ void GL_InitImages(void)
     gl_picmip = Cvar_Get("gl_picmip", "0", CVAR_FILES);
     r_picmip = Cvar_Get("r_picmip", gl_picmip->string, CVAR_ARCHIVE | CVAR_FILES);
     r_nomip = Cvar_Get("r_nomip", "0", CVAR_ARCHIVE | CVAR_FILES);
-    r_picmipFilter = Cvar_Get("r_picmipFilter", "3", CVAR_ARCHIVE | CVAR_FILES);
+    r_picmip_filter = Cvar_Get("r_picmip_filter", "3", CVAR_ARCHIVE | CVAR_FILES);
+    r_picmip_filter_legacy = Cvar_Get("r_picmipFilter", r_picmip_filter->string,
+                                      CVAR_ARCHIVE | CVAR_FILES | CVAR_NOARCHIVE);
     gl_sync_picmip_defaults();
     gl_picmip->changed = gl_picmip_sync;
     r_picmip->changed = gl_picmip_sync;
+    r_picmip_filter->changed = r_picmip_filter_changed;
+    r_picmip_filter_legacy->changed = r_picmip_filter_changed;
+    r_sync_picmip_filter_defaults();
     gl_downsample_skins = Cvar_Get("gl_downsample_skins", "1", CVAR_FILES);
     gl_gamma_scale_pics = Cvar_Get("gl_gamma_scale_pics", "0", CVAR_FILES);
     gl_upscale_pcx = Cvar_Get("gl_upscale_pcx", "0", CVAR_FILES);
     gl_saturation = Cvar_Get("gl_saturation", "1", CVAR_FILES);
     gl_intensity = Cvar_Get("intensity", "1", 0);
     gl_invert = Cvar_Get("gl_invert", "0", CVAR_FILES);
-    gl_gamma = Cvar_Get("vid_gamma", "1", CVAR_ARCHIVE);
+    gl_gamma = Cvar_Get("r_gamma", "1", CVAR_ARCHIVE);
+    vid_gamma_legacy = Cvar_Get("vid_gamma", gl_gamma->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
     gl_partshape = Cvar_Get("gl_partshape", "0", 0);
     gl_partshape->changed = gl_partshape_changed;
     gl_cubemaps = Cvar_Get("gl_cubemaps", "1", CVAR_FILES);
 
-    if (r_config.flags & QVF_GAMMARAMP) {
-        gl_gamma->changed = gl_gamma_changed;
+    if (r_config.flags & QVF_GAMMARAMP)
         gl_gamma->flags &= ~CVAR_FILES;
-    } else {
+    else
         gl_gamma->flags |= CVAR_FILES;
-    }
+
+    gl_gamma_alias_register();
 
     if (gl_static.use_shaders)
         gl_intensity->flags &= ~CVAR_FILES;
@@ -2003,6 +2198,8 @@ void GL_ShutdownImages(void)
     gl_texturemode->generator = NULL;
     gl_anisotropy->changed = NULL;
     gl_gamma->changed = NULL;
+    if (vid_gamma_legacy)
+        vid_gamma_legacy->changed = NULL;
     gl_partshape->changed = NULL;
 
     GL_ShutdownShadowmaps();

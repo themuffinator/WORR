@@ -26,6 +26,104 @@ void UpdateMenuBlurRect(bool allowBlur, bool transparent, int menuTop, int menuB
     UI_Sys_SetMenuBlurRect(&rect);
 }
 
+struct ColumnLayout {
+    bool active = false;
+    int labelWidth = 0;
+    int valueX = 0;
+    int valueWidth = 0;
+};
+
+static ColumnLayout ComputeColumnLayout(const std::vector<std::unique_ptr<Widget>> &widgets,
+                                        int leftX, int contentWidth)
+{
+    ColumnLayout layout;
+    if (contentWidth <= 0)
+        return layout;
+
+    int max_label_width = 0;
+    int count = 0;
+    for (const auto &widget : widgets) {
+        if (!widget || widget->IsHidden() || !widget->UsesColumns())
+            continue;
+        const char *label = widget->LabelText();
+        if (!label || !*label)
+            continue;
+        max_label_width = max(max_label_width, TextWidth(label));
+        count++;
+    }
+
+    if (!count)
+        return layout;
+
+    int gap = GenericSpacing(CONCHAR_WIDTH);
+    int min_value = max(CONCHAR_WIDTH * 12, Q_rint(contentWidth * 0.3f));
+    int max_label_allowed = contentWidth - min_value - gap;
+    if (max_label_allowed < 0)
+        max_label_allowed = max(0, contentWidth - gap);
+
+    int min_label = Q_rint(contentWidth * 0.38f);
+    int max_label_ratio = Q_rint(contentWidth * 0.6f);
+
+    int label_width = max(max_label_width, min_label);
+    label_width = min(label_width, max_label_allowed);
+    label_width = min(label_width, max_label_ratio);
+    label_width = max(0, label_width);
+
+    layout.active = true;
+    layout.labelWidth = label_width;
+    layout.valueX = leftX + label_width + gap;
+    layout.valueWidth = max(0, contentWidth - (label_width + gap));
+    return layout;
+}
+
+static void ApplyColumnLayout(const ColumnLayout &layout,
+                              const std::vector<std::unique_ptr<Widget>> &widgets)
+{
+    for (const auto &widget : widgets) {
+        if (!widget)
+            continue;
+        if (layout.active && widget->UsesColumns() && !widget->IsHidden()) {
+            widget->SetColumns(layout.labelWidth, layout.valueX, layout.valueWidth);
+        } else {
+            widget->ClearColumns();
+        }
+    }
+}
+
+static Widget *FindExpandedOverlay(const std::vector<std::unique_ptr<Widget>> &widgets)
+{
+    for (const auto &widget : widgets) {
+        if (!widget)
+            continue;
+        if (auto *dropdown = dynamic_cast<DropdownWidget *>(widget.get())) {
+            if (dropdown->IsExpanded())
+                return dropdown;
+        }
+        if (auto *image = dynamic_cast<ImageSpinWidget *>(widget.get())) {
+            if (image->IsExpanded())
+                return image;
+        }
+    }
+    return nullptr;
+}
+
+static bool UpdateExpandedHover(const std::vector<std::unique_ptr<Widget>> &widgets, int x, int y)
+{
+    for (const auto &widget : widgets) {
+        if (!widget)
+            continue;
+        if (auto *dropdown = dynamic_cast<DropdownWidget *>(widget.get())) {
+            if (dropdown->IsExpanded())
+                return dropdown->HoverAt(x, y);
+        }
+        if (auto *image = dynamic_cast<ImageSpinWidget *>(widget.get())) {
+            if (image->IsExpanded())
+                return image->HoverAt(x, y);
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 Menu::Menu(std::string name)
@@ -292,6 +390,9 @@ int Menu::HitTest(int x, int y)
     if (contentWidth < 0)
         contentWidth = 0;
 
+    ColumnLayout columns = ComputeColumnLayout(widgets_, leftX, contentWidth);
+    ApplyColumnLayout(columns, widgets_);
+
     for (size_t i = 0; i < widgets_.size(); i++) {
         Widget *widget = widgets_[i].get();
         if (!widget || widget->IsHidden() || !widget->IsSelectable())
@@ -434,6 +535,114 @@ static void DrawStatusText(const std::string &text, int bottom)
     }
 }
 
+static std::vector<std::string> WrapTooltipLines(const std::string &text, int maxWidth, size_t maxLines)
+{
+    std::vector<std::string> lines;
+    if (text.empty() || maxWidth <= 0 || maxLines == 0)
+        return lines;
+
+    lines.reserve(maxLines);
+
+    const char *ptr = text.c_str();
+    std::string line;
+
+    while (*ptr && lines.size() < maxLines) {
+        while (*ptr && *ptr <= 32)
+            ptr++;
+        if (!*ptr)
+            break;
+
+        const char *word_start = ptr;
+        while (*ptr && *ptr > 32)
+            ptr++;
+
+        std::string word(word_start, ptr - word_start);
+        std::string candidate = line.empty() ? word : (line + " " + word);
+        int width = UI_FontMeasureString(0, candidate.size(), candidate.c_str(), nullptr);
+        if (!line.empty() && width > maxWidth) {
+            lines.push_back(line);
+            line = std::move(word);
+        } else {
+            line = std::move(candidate);
+        }
+    }
+
+    if (!line.empty() && lines.size() < maxLines)
+        lines.push_back(line);
+
+    return lines;
+}
+
+static void DrawTooltipPanel(int x, int y, int width, int height)
+{
+    if (width <= 0 || height <= 0)
+        return;
+
+    color_t shadow = COLOR_RGBA(0, 0, 0, 120);
+    R_DrawFill32(x + 2, y + 2, width, height, shadow);
+
+    color_t fill = COLOR_RGBA(10, 12, 16, 230);
+    color_t border = COLOR_SETA_U8(uis.color.active, 220);
+    R_DrawFill32(x, y, width, height, fill);
+    R_DrawFill32(x, y, width, 1, border);
+    R_DrawFill32(x, y + height - 1, width, 1, border);
+    R_DrawFill32(x, y, 1, height, border);
+    R_DrawFill32(x + width - 1, y, 1, height, border);
+
+    if (width > 2 && height > 2) {
+        color_t highlight = COLOR_RGBA(255, 255, 255, 25);
+        R_DrawFill32(x + 1, y + 1, width - 2, 1, highlight);
+    }
+}
+
+static void DrawCursorTooltip(const std::string &text, int mouseX, int mouseY, int hintHeight)
+{
+    if (text.empty())
+        return;
+
+    int max_width = max(CONCHAR_WIDTH * 18, uis.width / 3);
+    max_width = min(max_width, max(1, uis.width - (CONCHAR_WIDTH * 4)));
+
+    constexpr size_t kMaxLines = 6;
+    std::vector<std::string> lines = WrapTooltipLines(text, max_width, kMaxLines);
+    if (lines.empty())
+        return;
+
+    int line_height = max(1, UI_FontLineHeight(1));
+    int text_width = 0;
+    for (const auto &line : lines) {
+        int width = UI_FontMeasureString(0, line.size(), line.c_str(), nullptr);
+        text_width = max(text_width, width);
+    }
+
+    int padding = max(4, CONCHAR_WIDTH / 2);
+    int box_w = text_width + padding * 2;
+    int box_h = static_cast<int>(lines.size()) * line_height + padding * 2;
+
+    int offset = max(8, CONCHAR_WIDTH);
+    int x = mouseX + offset;
+    int y = mouseY + offset;
+    int bottom_limit = max(0, uis.height - hintHeight);
+
+    if (x + box_w > uis.width)
+        x = mouseX - box_w - offset;
+    if (x < 0)
+        x = 0;
+    if (y + box_h > bottom_limit)
+        y = mouseY - box_h - offset;
+    if (y < 0)
+        y = 0;
+
+    DrawTooltipPanel(x, y, box_w, box_h);
+
+    int draw_x = x + padding;
+    int draw_y = y + padding;
+    for (const auto &line : lines) {
+        UI_FontDrawString(draw_x, draw_y, 0, line.size(), line.c_str(), COLOR_WHITE);
+        draw_y += line_height;
+    }
+}
+
 void Menu::Draw()
 {
     Layout();
@@ -457,6 +666,9 @@ void Menu::Draw()
     int contentWidth = uis.width - (leftX * 2);
     if (contentWidth < 0)
         contentWidth = 0;
+
+    ColumnLayout columns = ComputeColumnLayout(widgets_, leftX, contentWidth);
+    ApplyColumnLayout(columns, widgets_);
 
     if (frameEnabled_) {
         int frameLeft = max(0, leftX - framePadding_);
@@ -495,6 +707,8 @@ void Menu::Draw()
     int viewBottom = contentBottom_;
 
     hoverTextInput_ = false;
+    std::string hover_status;
+    bool overlay_open = FindExpandedOverlay(widgets_) != nullptr;
     for (size_t i = 0; i < widgets_.size(); i++) {
         Widget *widget = widgets_[i].get();
         if (!widget || widget->IsHidden())
@@ -526,10 +740,13 @@ void Menu::Draw()
             widget->Layout(leftX, draw_y, contentWidth, lineHeight_);
         }
 
-        if (widget->IsSelectable() &&
+        if (!overlay_open &&
             RectContains(widget->Rect(), uis.mouseCoords[0], uis.mouseCoords[1])) {
             if (dynamic_cast<FieldWidget *>(widget) || dynamic_cast<ComboWidget *>(widget)) {
                 hoverTextInput_ = true;
+            }
+            if (hover_status.empty() && !widget->Status().empty()) {
+                hover_status = widget->Status();
             }
         }
 
@@ -543,14 +760,37 @@ void Menu::Draw()
         int bar_h = viewHeight;
         int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
 
-        R_DrawFill32(bar_x, bar_y, bar_w, bar_h, uis.color.normal);
+        color_t track = COLOR_SETA_U8(uis.color.normal, 120);
+        color_t border = COLOR_SETA_U8(uis.color.selection, 160);
+        R_DrawFill32(bar_x, bar_y, bar_w, bar_h, track);
+        R_DrawFill32(bar_x, bar_y, bar_w, 1, border);
+        R_DrawFill32(bar_x, bar_y + bar_h - 1, bar_w, 1, border);
+        R_DrawFill32(bar_x, bar_y, 1, bar_h, border);
+        R_DrawFill32(bar_x + bar_w - 1, bar_y, 1, bar_h, border);
 
         float pageFrac = static_cast<float>(viewHeight) / contentHeight_;
         float scrollFrac = static_cast<float>(scrollY_) / (contentHeight_ - viewHeight);
         int thumb_h = max(6, Q_rint(bar_h * pageFrac));
         int thumb_y = bar_y + Q_rint((bar_h - thumb_h) * scrollFrac);
-        R_DrawFill32(bar_x, thumb_y, bar_w, thumb_h, uis.color.selection);
+        color_t thumb = COLOR_SETA_U8(uis.color.active, 200);
+        R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
     }
+
+    for (const auto &widget : widgets_) {
+        if (!widget || widget->IsHidden())
+            continue;
+        if (auto *dropdown = dynamic_cast<DropdownWidget *>(widget.get())) {
+            dropdown->DrawOverlay();
+            continue;
+        }
+        if (auto *image = dynamic_cast<ImageSpinWidget *>(widget.get())) {
+            image->DrawOverlay();
+            continue;
+        }
+    }
+
+    if (!overlay_open && !hover_status.empty())
+        DrawCursorTooltip(hover_status, uis.mouseCoords[0], uis.mouseCoords[1], hintHeight);
 
     DrawStatusText(status_, uis.height - hintHeight);
     UI_DrawHintBar(hintsLeft_, hintsRight_, uis.height);
@@ -560,6 +800,14 @@ Sound Menu::KeyEvent(int key)
 {
     if (widgets_.empty())
         return Sound::NotHandled;
+
+    if (Widget *overlay = FindExpandedOverlay(widgets_)) {
+        Sound sound = overlay->KeyEvent(key);
+        if (sound != Sound::NotHandled)
+            return sound;
+        if (key != K_MOUSE1)
+            return Sound::NotHandled;
+    }
 
     if (key == K_ESCAPE || key == K_MOUSE2) {
         if (!closeCommand_.empty()) {
@@ -635,6 +883,17 @@ void Menu::MouseEvent(int x, int y, bool down)
     (void)down;
     if (uis.keywait)
         return;
+
+    if (FindExpandedOverlay(widgets_)) {
+        UpdateExpandedHover(widgets_, x, y);
+        return;
+    }
+
+    bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+    if (auto *slider = dynamic_cast<SliderWidget *>(FocusedWidget())) {
+        if (slider->HandleMouseDrag(x, y, mouse_down))
+            return;
+    }
 
     int hit = HitTest(x, y);
     if (hit >= 0) {

@@ -39,6 +39,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <png.h>
 #endif // USE_PNG
 
+#if USE_STB_PNG
+#include "../rend_vk/refresh/stb/stb_image.h"
+#include "../rend_vk/refresh/stb/stb_image_write.h"
+#endif
+
 #if USE_JPG
 #include <jpeglib.h>
 #endif
@@ -1151,7 +1156,111 @@ fail:
     return ret;
 }
 
-#endif // USE_PNG
+#elif USE_STB_PNG
+
+static void stbi_write_gl(void *context, void *data, int size)
+{
+    screenshot_t *s = context;
+
+    fwrite(data, size, 1, s->fp);
+}
+
+IMG_LOAD(PNG)
+{
+    static const unsigned char png_sig[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n' };
+    int w, h, comp;
+    byte *data;
+    byte *pixels;
+    size_t size;
+
+    if (rawlen < sizeof(png_sig))
+        return Q_ERR_FILE_TOO_SMALL;
+
+    if (memcmp(rawdata, png_sig, sizeof(png_sig)) != 0)
+        return Q_ERR_UNKNOWN_FORMAT;
+
+    if (!stbi_info_from_memory(rawdata, (int)rawlen, &w, &h, &comp)) {
+        const char *reason = stbi_failure_reason();
+        Com_SetLastError(reason ? reason : "stbi_info failed");
+        return Q_ERR_INVALID_FORMAT;
+    }
+
+    if (check_image_size((unsigned)w, (unsigned)h)) {
+        Com_SetLastError("Invalid image dimensions");
+        return Q_ERR_INVALID_FORMAT;
+    }
+
+    data = stbi_load_from_memory(rawdata, (int)rawlen, &w, &h, &comp, 4);
+    if (!data) {
+        const char *reason = stbi_failure_reason();
+        Com_SetLastError(reason ? reason : "stbi_load failed");
+        return Q_ERR_LIBRARY_ERROR;
+    }
+
+    size = (size_t)w * (size_t)h * 4u;
+    pixels = IMG_AllocPixels(size);
+    memcpy(pixels, data, size);
+    stbi_image_free(data);
+
+    image->upload_width = image->width = w;
+    image->upload_height = image->height = h;
+
+    if (comp == 1 || comp == 3)
+        image->flags |= IF_OPAQUE;
+
+    *pic = pixels;
+    return Q_ERR_SUCCESS;
+}
+
+static int IMG_SavePNG(const screenshot_t *s)
+{
+    byte *pixels = s->pixels;
+    byte *converted = NULL;
+    int rowbytes = s->rowbytes;
+    int comp = s->bpp;
+    int prev_compression = stbi_write_png_compression_level;
+    int ret;
+
+    if (s->bpp == 4) {
+        rowbytes = s->width * 3;
+        converted = malloc((size_t)rowbytes * (size_t)s->height);
+        if (!converted)
+            return Q_ERR(ENOMEM);
+
+        for (int y = 0; y < s->height; y++) {
+            const byte *src = s->pixels + y * s->rowbytes;
+            byte *dst = converted + y * rowbytes;
+
+            for (int x = 0; x < s->width; x++) {
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                src += 4;
+                dst += 3;
+            }
+        }
+
+        pixels = converted;
+        comp = 3;
+    }
+
+    stbi_flip_vertically_on_write(1);
+    stbi_write_png_compression_level = Q_clip(s->param, 0, 9);
+    ret = stbi_write_png_to_func(stbi_write_gl, (void *)s,
+                                 s->width, s->height, comp, pixels, rowbytes);
+    stbi_write_png_compression_level = prev_compression;
+
+    if (converted)
+        free(converted);
+
+    if (ret)
+        return Q_ERR_SUCCESS;
+
+    Com_SetLastError(stbi_failure_reason());
+    return Q_ERR_LIBRARY_ERROR;
+}
+
+#endif // USE_PNG || USE_STB_PNG
 
 /*
 =========================================================
@@ -1161,19 +1270,111 @@ SCREEN SHOTS
 =========================================================
 */
 
-#if USE_JPG || USE_PNG
+#if USE_JPG || USE_PNG || USE_STB_PNG
 static cvar_t *r_screenshot_format;
+static cvar_t *r_screenshot_format_legacy;
 static cvar_t *r_screenshot_async;
+static cvar_t *r_screenshot_async_legacy;
 #endif
 #if USE_JPG
 static cvar_t *r_screenshot_quality;
+static cvar_t *r_screenshot_quality_legacy;
 #endif
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
 static cvar_t *r_screenshot_compression;
+static cvar_t *r_screenshot_compression_legacy;
 #endif
 
-#if USE_TGA || USE_JPG || USE_PNG
+#if USE_TGA || USE_JPG || USE_PNG || USE_STB_PNG
 static cvar_t *r_screenshot_template;
+static cvar_t *r_screenshot_template_legacy;
+
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+} r_screenshot_alias_t;
+
+static bool r_screenshot_alias_syncing;
+
+static r_screenshot_alias_t r_screenshot_aliases[] = {
+#if USE_JPG || USE_PNG || USE_STB_PNG
+    { &r_screenshot_format, &r_screenshot_format_legacy },
+    { &r_screenshot_async, &r_screenshot_async_legacy },
+#endif
+#if USE_JPG
+    { &r_screenshot_quality, &r_screenshot_quality_legacy },
+#endif
+#if USE_PNG || USE_STB_PNG
+    { &r_screenshot_compression, &r_screenshot_compression_legacy },
+#endif
+    { &r_screenshot_template, &r_screenshot_template_legacy },
+};
+
+static void r_screenshot_alias_changed(cvar_t *self)
+{
+    if (r_screenshot_alias_syncing)
+        return;
+
+    r_screenshot_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            break;
+        }
+    }
+
+    r_screenshot_alias_syncing = false;
+}
+
+static void r_screenshot_alias_sync_defaults(void)
+{
+    if (r_screenshot_alias_syncing)
+        return;
+
+    r_screenshot_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    r_screenshot_alias_syncing = false;
+}
+
+static void r_screenshot_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(r_screenshot_aliases); i++) {
+        r_screenshot_alias_t *pair = &r_screenshot_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = r_screenshot_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = r_screenshot_alias_changed;
+    }
+
+    r_screenshot_alias_sync_defaults();
+}
 
 static int suffix_pos(const char *s, int ch)
 {
@@ -1357,7 +1558,7 @@ static void make_screenshot(const char *name, const char *ext,
     }
 }
 
-#endif // USE_TGA || USE_JPG || USE_PNG
+#endif // USE_TGA || USE_JPG || USE_PNG || USE_STB_PNG
 
 /*
 ==================
@@ -1371,7 +1572,7 @@ if no formats are available.
 */
 static void IMG_ScreenShot_f(void)
 {
-#if USE_JPG || USE_PNG
+#if USE_JPG || USE_PNG || USE_STB_PNG
     const char *s;
 
     if (Cmd_Argc() > 2) {
@@ -1394,7 +1595,7 @@ static void IMG_ScreenShot_f(void)
     }
 #endif
 
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
     if (*s == 'p') {
         make_screenshot(NULL, ".png", IMG_SavePNG,
                         r_screenshot_async->integer > 0,
@@ -1451,7 +1652,7 @@ static void IMG_ScreenShotJPG_f(void)
 }
 #endif
 
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
 static void IMG_ScreenShotPNG_f(void)
 {
     int compression;
@@ -1500,12 +1701,12 @@ static const struct {
 #if USE_JPG
     { "jpg", IMG_LoadJPG },
 #endif
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
     { "png", IMG_LoadPNG }
 #endif
 };
 
-#if USE_PNG || USE_JPG || USE_TGA
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
 static imageformat_t    img_search[IM_MAX];
 static int              img_total;
 
@@ -1690,7 +1891,7 @@ static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
     return ret < 0 ? ret : fmt;
 }
 
-#if USE_PNG || USE_JPG || USE_TGA
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
 
 static int try_replace_ext(imageformat_t fmt, image_t *image, byte **pic)
 {
@@ -1817,7 +2018,7 @@ static bool need_override_image(imagetype_t type, imageformat_t fmt)
     return r_texture_overrides->integer & (1 << type);
 }
 
-#endif // USE_PNG || USE_JPG || USE_TGA
+#endif // USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
 
 static void print_error(const char *name, imageflags_t flags, int err)
 {
@@ -1854,7 +2055,7 @@ static int load_image_data(image_t *image, imageformat_t fmt, bool need_dimensio
 {
     int ret;
 
-#if USE_PNG || USE_JPG || USE_TGA
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
     if (fmt == IM_MAX) {
         // unknown extension, but give it a chance to load anyway
         ret = try_other_formats(IM_MAX, image, pic);
@@ -1950,6 +2151,54 @@ static void load_special_image(image_t *image, byte **pic) {
     p[0] = p[1] = p[2] = p[3] = 0xFF;
 }
 
+static inline bool img_path_char_ok(int c)
+{
+    if (!Q_isprint(c))
+        return false;
+#ifdef _WIN32
+    if (strchr("<>:\"|?*", c))
+        return false;
+#endif
+    return true;
+}
+
+static bool img_path_has_invalid_chars(const char *name, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        int c = (unsigned char)name[i];
+        if (!c)
+            break;
+        if (!img_path_char_ok(c))
+            return true;
+    }
+    return false;
+}
+
+static size_t img_sanitize_path(char *dst, size_t size, const char *src, size_t len)
+{
+    size_t out = 0;
+
+    if (!size)
+        return 0;
+
+    for (size_t i = 0; i < len; i++) {
+        int c = (unsigned char)src[i];
+        if (!c)
+            break;
+        if (!img_path_char_ok(c))
+            continue;
+        if (out + 1 >= size)
+            break;
+        dst[out++] = (char)c;
+    }
+
+    while (out > 0 && (unsigned char)dst[out - 1] <= ' ')
+        out--;
+
+    dst[out] = 0;
+    return out;
+}
+
 // finds or loads the given image, adding it to the hash table.
 static image_t *find_or_load_image(const char *name, size_t len,
                                    imagetype_t type, imageflags_t flags)
@@ -1960,6 +2209,40 @@ static image_t *find_or_load_image(const char *name, size_t len,
     size_t          baselen;
     imageformat_t   fmt;
     int             ret;
+    char            trimmed[MAX_QPATH];
+    size_t          trimmed_len;
+    char            sanitized[MAX_QPATH];
+    size_t          sanitized_len;
+
+    trimmed_len = len;
+    if (trimmed_len >= MAX_QPATH) {
+        ret = Q_ERR(ENAMETOOLONG);
+        goto fail;
+    }
+
+    while (trimmed_len > 0 && (unsigned char)name[trimmed_len - 1] <= ' ')
+        trimmed_len--;
+    if (trimmed_len == 0) {
+        ret = Q_ERR_INVALID_PATH;
+        goto fail;
+    }
+
+    if (trimmed_len != len) {
+        memcpy(trimmed, name, trimmed_len);
+        trimmed[trimmed_len] = 0;
+        name = trimmed;
+        len = trimmed_len;
+    }
+
+    if (img_path_has_invalid_chars(name, len)) {
+        sanitized_len = img_sanitize_path(sanitized, sizeof(sanitized), name, len);
+        if (sanitized_len == 0) {
+            ret = Q_ERR_INVALID_PATH;
+            goto fail;
+        }
+        name = sanitized;
+        len = sanitized_len;
+    }
 
     Q_assert(len < MAX_QPATH);
     baselen = COM_FileExtension(name) - name;
@@ -2337,7 +2620,7 @@ static const cmdreg_t img_cmd[] = {
 #if USE_JPG
     { "screenshotjpg", IMG_ScreenShotJPG_f },
 #endif
-#if USE_PNG
+#if USE_PNG || USE_STB_PNG
     { "screenshotpng", IMG_ScreenShotPNG_f },
 #endif
 
@@ -2350,29 +2633,42 @@ void IMG_Init(void)
 
     Q_assert(!r_numImages);
 
-#if USE_PNG || USE_JPG || USE_TGA
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
     r_override_textures = Cvar_Get("r_override_textures", "1", CVAR_FILES);
     r_texture_formats = Cvar_Get("r_texture_formats", R_TEXTURE_FORMATS, 0);
     r_texture_formats->changed = r_texture_formats_changed;
     r_texture_formats_changed(r_texture_formats);
     r_texture_overrides = Cvar_Get("r_texture_overrides", "-1", CVAR_FILES);
 
+#if USE_PNG || USE_STB_PNG
+    r_screenshot_format = Cvar_Get("r_screenshot_format", "png", 0);
+    r_screenshot_format_legacy = Cvar_Get("gl_screenshot_format", r_screenshot_format->string,
+                                          CVAR_NOARCHIVE);
+#elif USE_JPG
+    r_screenshot_format = Cvar_Get("r_screenshot_format", "jpg", 0);
+    r_screenshot_format_legacy = Cvar_Get("gl_screenshot_format", r_screenshot_format->string,
+                                          CVAR_NOARCHIVE);
+#endif
+#if USE_JPG || USE_PNG || USE_STB_PNG
+    r_screenshot_async = Cvar_Get("r_screenshot_async", "1", 0);
+    r_screenshot_async_legacy = Cvar_Get("gl_screenshot_async", r_screenshot_async->string,
+                                         CVAR_NOARCHIVE);
+#endif
 #if USE_JPG
-    r_screenshot_format = Cvar_Get("gl_screenshot_format", "jpg", 0);
-#elif USE_PNG
-    r_screenshot_format = Cvar_Get("gl_screenshot_format", "png", 0);
+    r_screenshot_quality = Cvar_Get("r_screenshot_quality", "90", 0);
+    r_screenshot_quality_legacy = Cvar_Get("gl_screenshot_quality", r_screenshot_quality->string,
+                                           CVAR_NOARCHIVE);
 #endif
-#if USE_JPG || USE_PNG
-    r_screenshot_async = Cvar_Get("gl_screenshot_async", "1", 0);
+#if USE_PNG || USE_STB_PNG
+    r_screenshot_compression = Cvar_Get("r_screenshot_compression", "6", 0);
+    r_screenshot_compression_legacy = Cvar_Get("gl_screenshot_compression",
+                                               r_screenshot_compression->string, CVAR_NOARCHIVE);
 #endif
-#if USE_JPG
-    r_screenshot_quality = Cvar_Get("gl_screenshot_quality", "90", 0);
-#endif
-#if USE_PNG
-    r_screenshot_compression = Cvar_Get("gl_screenshot_compression", "6", 0);
-#endif
-    r_screenshot_template = Cvar_Get("gl_screenshot_template", "quakeXXX", 0);
-#endif // USE_PNG || USE_JPG || USE_TGA
+    r_screenshot_template = Cvar_Get("r_screenshot_template", "quakeXXX", 0);
+    r_screenshot_template_legacy = Cvar_Get("gl_screenshot_template", r_screenshot_template->string,
+                                            CVAR_NOARCHIVE);
+    r_screenshot_alias_register();
+#endif // USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
 
     r_glowmaps = Cvar_Get("r_glowmaps", "1", CVAR_FILES);
 

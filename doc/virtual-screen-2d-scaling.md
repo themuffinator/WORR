@@ -46,6 +46,6 @@ draws.
 - `uis.canvas_width/height` preserves resolution-based layout decisions.
 
 ## Scaling CVars
-- `scr_scale`, `ui_scale`, and `con_scale` multiply the base UI scale.
+- `cl_scale`, `ui_scale`, and `con_scale` multiply the base UI scale.
 - The resulting UI scale is floored to an integer to avoid fractional sizing.
 - Auto scale (`0`) keeps the base UI scale with no extra multiplier.

@@ -30,10 +30,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 // Console variables that we need to access from this module
-cvar_t      *vid_geometry;
-cvar_t      *vid_modelist;
-cvar_t      *vid_fullscreen;
-cvar_t      *_vid_fullscreen;
+cvar_t      *r_display;
+cvar_t      *r_geometry;
+cvar_t      *r_modelist;
+cvar_t      *r_fullscreen;
+cvar_t      *_r_fullscreen;
+cvar_t      *r_fullscreen_exclusive;
+static cvar_t *r_driver;
+static cvar_t *vid_display_legacy;
+static cvar_t *vid_geometry_legacy;
+static cvar_t *vid_modelist_legacy;
+static cvar_t *vid_fullscreen_legacy;
+static cvar_t *_vid_fullscreen_legacy;
+static cvar_t *vid_fullscreen_exclusive_legacy;
+static cvar_t *vid_driver_legacy;
 
 const vid_driver_t  *vid;
 
@@ -73,6 +83,100 @@ static cvar_t *r_renderer;
 
 static int  mode_changed;
 
+static void r_geometry_changed(cvar_t *self);
+static void r_fullscreen_changed(cvar_t *self);
+static void r_fullscreen_exclusive_changed(cvar_t *self);
+static void r_modelist_changed(cvar_t *self);
+static void r_display_changed(cvar_t *self);
+
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+    xchanged_t changed;
+} vid_cvar_alias_t;
+
+static bool vid_cvar_alias_syncing;
+
+static vid_cvar_alias_t vid_cvar_aliases[] = {
+    { &r_fullscreen, &vid_fullscreen_legacy, r_fullscreen_changed },
+    { &_r_fullscreen, &_vid_fullscreen_legacy, NULL },
+    { &r_fullscreen_exclusive, &vid_fullscreen_exclusive_legacy, r_fullscreen_exclusive_changed },
+    { &r_display, &vid_display_legacy, r_display_changed },
+    { &r_geometry, &vid_geometry_legacy, r_geometry_changed },
+    { &r_modelist, &vid_modelist_legacy, r_modelist_changed },
+    { &r_driver, &vid_driver_legacy, NULL },
+};
+
+static void vid_cvar_alias_changed(cvar_t *self)
+{
+    if (vid_cvar_alias_syncing)
+        return;
+
+    vid_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(vid_cvar_aliases); i++) {
+        vid_cvar_alias_t *pair = &vid_cvar_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            if (pair->changed)
+                pair->changed(primary);
+            break;
+        }
+    }
+
+    vid_cvar_alias_syncing = false;
+}
+
+static void vid_cvar_alias_sync_defaults(void)
+{
+    if (vid_cvar_alias_syncing)
+        return;
+
+    vid_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(vid_cvar_aliases); i++) {
+        vid_cvar_alias_t *pair = &vid_cvar_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    vid_cvar_alias_syncing = false;
+}
+
+static void vid_cvar_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(vid_cvar_aliases); i++) {
+        vid_cvar_alias_t *pair = &vid_cvar_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = vid_cvar_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = vid_cvar_alias_changed;
+    }
+
+    vid_cvar_alias_sync_defaults();
+}
+
 /*
 ==========================================================================
 
@@ -102,10 +206,10 @@ bool VID_GetFullscreen(vrect_t *rc, int *freq_p, int *depth_p)
     if (depth_p)
         *depth_p = 0;
 
-    if (!vid_modelist || !vid_fullscreen)
+    if (!r_modelist || !r_fullscreen)
         return false;
 
-    s = vid_modelist->string;
+    s = r_modelist->string;
     while (Q_isspace(*s))
         s++;
     if (!*s)
@@ -140,13 +244,13 @@ bool VID_GetFullscreen(vrect_t *rc, int *freq_p, int *depth_p)
                 }
             }
         }
-        if (mode == vid_fullscreen->integer) {
+        if (mode == r_fullscreen->integer) {
             break;
         }
         while (Q_isspace(*s))
             s++;
         if (!*s) {
-            Com_DPrintf("Mode %d not found\n", vid_fullscreen->integer);
+            Com_DPrintf("Mode %d not found\n", r_fullscreen->integer);
             return false;
         }
         mode++;
@@ -185,10 +289,10 @@ bool VID_GetGeometry(vrect_t *rc)
     rc->width = 640;
     rc->height = 480;
 
-    if (!vid_geometry)
+    if (!r_geometry)
         return false;
 
-    s = vid_geometry->string;
+    s = r_geometry->string;
     if (!*s)
         return false;
 
@@ -224,26 +328,38 @@ void VID_SetGeometry(const vrect_t *rc)
 {
     char buffer[MAX_QPATH];
 
-    if (!vid_geometry)
+    if (!r_geometry)
         return;
 
     Q_snprintf(buffer, sizeof(buffer), "%dx%d%+d%+d",
                rc->width, rc->height, rc->x, rc->y);
-    Cvar_SetByVar(vid_geometry, buffer, FROM_CODE);
+    Cvar_SetByVar(r_geometry, buffer, FROM_CODE);
+}
+
+void VID_SetModeList(const char *modelist)
+{
+    if (!r_modelist || !modelist)
+        return;
+
+    if (strcmp(modelist, r_modelist->string)) {
+        Cvar_SetByVar(r_modelist, modelist, FROM_CODE);
+    }
+
+    mode_changed |= MODE_MODELIST;
 }
 
 void VID_ToggleFullscreen(void)
 {
-    if (!vid_fullscreen || !_vid_fullscreen)
+    if (!r_fullscreen || !_r_fullscreen)
         return;
 
-    if (!vid_fullscreen->integer) {
-        if (!_vid_fullscreen->integer) {
-            Cvar_Set("_vid_fullscreen", "1");
+    if (!r_fullscreen->integer) {
+        if (!_r_fullscreen->integer) {
+            Cvar_Set("_r_fullscreen", "1");
         }
-        Cbuf_AddText(&cmd_buffer, "set vid_fullscreen $_vid_fullscreen\n");
+        Cbuf_AddText(&cmd_buffer, "set r_fullscreen $_r_fullscreen\n");
     } else {
-        Cbuf_AddText(&cmd_buffer, "set vid_fullscreen 0\n");
+        Cbuf_AddText(&cmd_buffer, "set r_fullscreen 0\n");
     }
 }
 
@@ -729,11 +845,11 @@ void CL_RunRenderer(void)
     if (mode_changed) {
         if (mode_changed & MODE_FULLSCREEN) {
             vid->set_mode();
-            if (vid_fullscreen->integer) {
-                Cvar_Set("_vid_fullscreen", vid_fullscreen->string);
+            if (r_fullscreen->integer) {
+                Cvar_Set("_r_fullscreen", r_fullscreen->string);
             }
         } else {
-            if (vid_fullscreen->integer) {
+            if (r_fullscreen->integer) {
                 if (mode_changed & MODE_MODELIST) {
                     vid->set_mode();
                 }
@@ -755,19 +871,36 @@ void CL_RunRenderer(void)
     }
 }
 
-static void vid_geometry_changed(cvar_t *self)
+static void r_geometry_changed(cvar_t *self)
 {
     mode_changed |= MODE_GEOMETRY;
 }
 
-static void vid_fullscreen_changed(cvar_t *self)
+static void r_fullscreen_changed(cvar_t *self)
 {
     mode_changed |= MODE_FULLSCREEN;
 }
 
-static void vid_modelist_changed(cvar_t *self)
+static void r_fullscreen_exclusive_changed(cvar_t *self)
+{
+    mode_changed |= MODE_FULLSCREEN;
+}
+
+static void r_modelist_changed(cvar_t *self)
 {
     mode_changed |= MODE_MODELIST;
+}
+
+static void r_display_changed(cvar_t *self)
+{
+    if (!vid || !vid->get_mode_list)
+        return;
+
+    char *modelist = vid->get_mode_list();
+    VID_SetModeList(modelist);
+    Z_Free(modelist);
+
+    mode_changed |= MODE_FULLSCREEN;
 }
 
 static void vid_driver_g(genctx_t *ctx)
@@ -797,22 +930,43 @@ void CL_InitRenderer(void)
     if (!R_LoadExternalRenderer(renderer_name)) {
         Com_Error(ERR_FATAL, "Couldn't load renderer '%s': %s", renderer_name, Com_GetLastError());
     }
+    Cvar_Get("r_ref", renderer_name, CVAR_ROM);
     Cvar_Get("vid_ref", renderer_name, CVAR_ROM);
 #else
+    Cvar_Get("r_ref", "opengl", CVAR_ROM);
     Cvar_Get("vid_ref", "opengl", CVAR_ROM);
 #endif
 
     // Create the video variables so we know how to start the graphics drivers
-    cvar_t *vid_driver = Cvar_Get("vid_driver", "", CVAR_RENDERER);
-    vid_driver->generator = vid_driver_g;
-    vid_fullscreen = Cvar_Get("vid_fullscreen", "0", CVAR_ARCHIVE);
-    _vid_fullscreen = Cvar_Get("_vid_fullscreen", "1", CVAR_ARCHIVE);
-    vid_geometry = Cvar_Get("vid_geometry", VID_GEOMETRY, CVAR_ARCHIVE);
+    r_driver = Cvar_Get("r_driver", "", CVAR_RENDERER);
+    r_driver->generator = vid_driver_g;
+    vid_driver_legacy = Cvar_Get("vid_driver", r_driver->string, CVAR_RENDERER | CVAR_NOARCHIVE);
+    vid_driver_legacy->generator = vid_driver_g;
+    r_fullscreen = Cvar_Get("r_fullscreen", "0", CVAR_ARCHIVE);
+    vid_fullscreen_legacy = Cvar_Get("vid_fullscreen", r_fullscreen->string,
+                                     CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    _r_fullscreen = Cvar_Get("_r_fullscreen", "1", CVAR_ARCHIVE);
+    _vid_fullscreen_legacy = Cvar_Get("_vid_fullscreen", _r_fullscreen->string,
+                                      CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_fullscreen_exclusive = Cvar_Get("r_fullscreen_exclusive", "1", CVAR_ARCHIVE);
+    vid_fullscreen_exclusive_legacy = Cvar_Get("vid_fullscreen_exclusive", r_fullscreen_exclusive->string,
+                                               CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_display = Cvar_Get("r_display", "0", CVAR_ARCHIVE);
+    vid_display_legacy = Cvar_Get("vid_display", r_display->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    r_geometry = Cvar_Get("r_geometry", VID_GEOMETRY, CVAR_ARCHIVE);
+    vid_geometry_legacy = Cvar_Get("vid_geometry", r_geometry->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
 
-    if (vid_fullscreen->integer) {
-        Cvar_Set("_vid_fullscreen", vid_fullscreen->string);
-    } else if (!_vid_fullscreen->integer) {
-        Cvar_Set("_vid_fullscreen", "1");
+    r_geometry->changed = r_geometry_changed;
+    r_fullscreen->changed = r_fullscreen_changed;
+    r_fullscreen_exclusive->changed = r_fullscreen_exclusive_changed;
+    r_display->changed = r_display_changed;
+
+    vid_cvar_alias_register();
+
+    if (r_fullscreen->integer) {
+        Cvar_Set("_r_fullscreen", r_fullscreen->string);
+    } else if (!_r_fullscreen->integer) {
+        Cvar_Set("_r_fullscreen", "1");
     }
 
     Com_SetLastError("No available video driver");
@@ -820,15 +974,15 @@ void CL_InitRenderer(void)
     // Try to initialize selected driver first
     bool ok = false;
     for (i = 0; vid_drivers[i]; i++) {
-        if (!strcmp(vid_drivers[i]->name, vid_driver->string)) {
+        if (!strcmp(vid_drivers[i]->name, r_driver->string)) {
             vid = vid_drivers[i];
             ok = R_Init(true);
             break;
         }
     }
 
-    if (!vid_drivers[i] && vid_driver->string[0]) {
-        Com_Printf("$e_auto_4260ac49b6ef", vid_driver->string);
+    if (!vid_drivers[i] && r_driver->string[0]) {
+        Com_Printf("$e_auto_4260ac49b6ef", r_driver->string);
         for (int j = 0; vid_drivers[j]; j++) {
             if (j)
                 Com_Printf(", ");
@@ -847,23 +1001,23 @@ void CL_InitRenderer(void)
             if ((ok = R_Init(true)))
                 break;
         }
-        Cvar_Reset(vid_driver);
+        Cvar_Reset(r_driver);
     }
 
     if (!ok)
         Com_Error(ERR_FATAL, "Couldn't initialize renderer: %s", Com_GetLastError());
 
     modelist = vid->get_mode_list();
-    vid_modelist = Cvar_Get("vid_modelist", modelist, 0);
+    r_modelist = Cvar_Get("r_modelist", modelist, 0);
+    vid_modelist_legacy = Cvar_Get("vid_modelist", r_modelist->string, CVAR_NOARCHIVE);
     Z_Free(modelist);
+
+    r_modelist->changed = r_modelist_changed;
+    vid_cvar_alias_register();
 
     vid->set_mode();
 
     cls.ref_initialized = true;
-
-    vid_geometry->changed = vid_geometry_changed;
-    vid_fullscreen->changed = vid_fullscreen_changed;
-    vid_modelist->changed = vid_modelist_changed;
 
     mode_changed = 0;
 
@@ -899,9 +1053,11 @@ void CL_ShutdownRenderer(void)
     UI_FontShutdown();
     Font_Shutdown();
 
-    vid_geometry->changed = NULL;
-    vid_fullscreen->changed = NULL;
-    vid_modelist->changed = NULL;
+    r_geometry->changed = NULL;
+    r_fullscreen->changed = NULL;
+    r_fullscreen_exclusive->changed = NULL;
+    r_modelist->changed = NULL;
+    r_display->changed = NULL;
 
     R_Shutdown(true);
 #if USE_EXTERNAL_RENDERERS

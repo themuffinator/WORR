@@ -1220,10 +1220,10 @@ const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 
 void SCR_LoadKFont(kfont_t *font, const char *filename)
 {
-	static cvar_t *cl_debugFonts;
-	if (!cl_debugFonts)
-		cl_debugFonts = Cvar_Get("cl_debugFonts", "1", 0);
-	const bool debug_fonts = cl_debugFonts && cl_debugFonts->integer;
+	static cvar_t *cl_debug_fonts;
+	if (!cl_debug_fonts)
+		cl_debug_fonts = Cvar_Get("cl_debug_fonts", "1", 0);
+	const bool debug_fonts = cl_debug_fonts && cl_debug_fonts->integer;
 
 	memset(font, 0, sizeof(*font));
 

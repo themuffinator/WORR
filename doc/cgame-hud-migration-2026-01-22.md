@@ -12,7 +12,7 @@
 
 ## Phase 1 (Implemented Here): Cgame-owned Statusbar
 - Cgame builds the statusbar layout locally (mirrors `g_statusbar.cpp` logic) and draws it with `CG_ExecuteLayoutString`.
-- Gated behind `cl_hud_cgame` to avoid behavior changes by default.
+- Gated behind `cg_hud_cgame` to avoid behavior changes by default.
 - Layout still uses `STAT_*` values and configstrings already populated by the server.
 
 ## HUD Blob (CS_GENERAL) Design
@@ -42,7 +42,7 @@ Flags (initial):
 
 ## Compatibility & Fallback Rules
 - Legacy servers/demos: blob absent => `CS_STATUSBAR` + `svc_layout` paths remain unchanged.
-- New HUD paths are opt-in via `cl_hud_cgame` or blob flags when implemented server-side.
+- New HUD paths are opt-in via `cg_hud_cgame` or blob flags when implemented server-side.
 - `svc_layout` stays in use for scoreboard/EOU/help until cgame replacements are complete.
 
 ## Next Steps

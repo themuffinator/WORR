@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // list.h
 //
 
+#include <stddef.h>
+
 typedef struct list_s {
     struct list_s   *next; // head
     struct list_s   *prev; // tail

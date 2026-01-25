@@ -500,7 +500,7 @@ static void frame_configure(struct libdecor_frame *frame,
     libdecor_state_free(state);
 
     if (libdecor_frame_is_floating(wl.frame))
-        Cvar_SetByVar(vid_geometry, va("%dx%d", width, height), FROM_CODE);
+        Cvar_SetByVar(r_geometry, va("%dx%d", width, height), FROM_CODE);
 
     mode_changed();
 }
@@ -842,7 +842,7 @@ fail:
 
 static void set_mode(void)
 {
-    if (vid_fullscreen->integer)
+    if (r_fullscreen->integer)
         libdecor_frame_set_fullscreen(wl.frame, NULL);
     else
         libdecor_frame_unset_fullscreen(wl.frame);

@@ -207,6 +207,7 @@ public:
     virtual Sound Activate() { return Sound::NotHandled; }
     virtual void OnOpen() {}
     virtual void OnClose() {}
+    virtual bool UsesColumns() const { return false; }
     bool IsSelectable() const { return selectable_ && !IsHidden() && !IsDisabled(); }
     bool IsHidden() const { return hidden_ || hiddenByCondition_; }
     bool IsDisabled() const { return disabled_ || disabledByCondition_; }
@@ -227,6 +228,12 @@ public:
     void SetDefaultConditions(std::vector<MenuCondition> conditions);
     void UpdateConditions();
     bool IsDefault() const { return default_ || defaultByCondition_; }
+    bool UseColumns() const { return useColumns_; }
+    int ColumnLabelWidth() const { return columnLabelWidth_; }
+    int ColumnValueX() const { return columnValueX_; }
+    int ColumnValueWidth() const { return columnValueWidth_; }
+    void SetColumns(int labelWidth, int valueX, int valueWidth);
+    void ClearColumns();
 
 protected:
     vrect_t rect_{};
@@ -245,6 +252,10 @@ protected:
     class Menu *owner_ = nullptr;
     cvar_t *labelCvar_ = nullptr;
     mutable std::string labelCache_{};
+    int columnLabelWidth_ = 0;
+    int columnValueX_ = 0;
+    int columnValueWidth_ = 0;
+    bool useColumns_ = false;
 };
 
 class Menu : public MenuPage {
@@ -377,14 +388,23 @@ public:
     Sound KeyEvent(int key) override;
     void OnOpen() override;
     void OnClose() override;
+    bool HandleMouseDrag(int mx, int my, bool mouseDown);
+    bool IsDragging() const { return dragging_; }
+    bool UsesColumns() const override { return true; }
 
 private:
+    void ValueRect(int *out_x, int *out_w) const;
+    bool SetValueFromMouse(int mx, int value_x, int value_w);
+
     cvar_t *cvar_;
     float minValue_;
     float maxValue_;
     float step_;
     float curValue_ = 0.0f;
     bool modified_ = false;
+    mutable float hoverFrac_ = 0.0f;
+    mutable unsigned hoverTime_ = 0;
+    bool dragging_ = false;
 };
 
 enum class SpinType {
@@ -404,6 +424,7 @@ public:
     Sound KeyEvent(int key) override;
     void OnOpen() override;
     void OnClose() override;
+    bool UsesColumns() const override { return true; }
 
     void AddOption(std::string label);
     void AddOption(std::string label, std::string value);
@@ -433,6 +454,28 @@ class DropdownWidget : public SpinWidget {
 public:
     DropdownWidget(std::string label, cvar_t *cvar, SpinType type);
     void Draw(bool focused) const override;
+    void DrawOverlay() const;
+    Sound Activate() override;
+    Sound KeyEvent(int key) override;
+    void OnClose() override;
+    bool IsExpanded() const { return expanded_; }
+    bool HoverAt(int mx, int my);
+
+private:
+    void OpenList();
+    void CloseList(bool accept);
+    void EnsureListVisible(int visibleCount);
+    vrect_t ComputeListRect(int visibleCount, int rowHeight, int *out_scroll_width) const;
+    int ComputeVisibleCount(int rowHeight) const;
+    int ValueX(const char *label) const;
+    int ValueWidth(int valueX) const;
+    int HitTestList(int mx, int my, const vrect_t &listRect, int rowHeight, int visibleCount,
+                    int scrollWidth) const;
+
+    bool expanded_ = false;
+    int listStart_ = 0;
+    int listCursor_ = -1;
+    int openValue_ = -1;
 };
 
 enum class SwitchStyle {
@@ -449,6 +492,7 @@ public:
     void OnOpen() override;
     void OnClose() override;
     void SetStyle(SwitchStyle style) { style_ = style; }
+    bool UsesColumns() const override { return true; }
 
 private:
     void Toggle();
@@ -480,16 +524,37 @@ public:
                     int width, int height);
     int Height(int lineHeight) const override;
     void Draw(bool focused) const override;
+    void DrawOverlay() const;
+    Sound Activate() override;
+    Sound KeyEvent(int key) override;
     void OnOpen() override;
     void OnClose() override;
+    bool IsExpanded() const { return expanded_; }
+    bool HoverAt(int mx, int my);
 
 private:
+    void OpenList();
+    void CloseList(bool accept);
+    void EnsureListVisible(int visibleRows, int columns);
+    int ValueX(const char *label) const;
+    int ValueWidth(int valueX) const;
+    int ComputeColumns(int tileWidth, int valueWidth, int scrollWidth) const;
+    int ComputeVisibleRows(int rowHeight) const;
+    vrect_t ComputeListRect(int visibleRows, int columns, int rowHeight,
+                            int *out_scroll_width) const;
+    int HitTestList(int mx, int my, const vrect_t &listRect, int rowHeight,
+                    int visibleRows, int columns, int scrollWidth) const;
+
     std::string path_;
     std::string filter_;
     int previewWidth_;
     int previewHeight_;
     char **entries_ = nullptr;
     int entryCount_ = 0;
+    bool expanded_ = false;
+    int listStart_ = 0;
+    int listCursor_ = -1;
+    int openValue_ = -1;
 };
 
 class FieldWidget : public Widget {
@@ -503,6 +568,7 @@ public:
     void OnClose() override;
     bool Center() const { return center_; }
     const char *Text() const { return field_.text; }
+    bool UsesColumns() const override { return !center_; }
 
 private:
     bool TestChar(int ch) const;
@@ -525,6 +591,7 @@ public:
     void OnOpen() override;
     void OnClose() override;
     bool Center() const { return center_; }
+    bool UsesColumns() const override { return !center_; }
 
     void AddOption(std::string value);
     void ClearOptions();
@@ -553,6 +620,7 @@ public:
     Sound KeyEvent(int key) override;
     void OnOpen() override;
     void OnClose() override;
+    bool UsesColumns() const override { return true; }
 
 private:
     void RefreshBindings();
@@ -570,6 +638,13 @@ private:
 class SeparatorWidget : public Widget {
 public:
     SeparatorWidget();
+    void Draw(bool focused) const override;
+};
+
+class HeadingWidget : public Widget {
+public:
+    HeadingWidget();
+    int Height(int lineHeight) const override;
     void Draw(bool focused) const override;
 };
 

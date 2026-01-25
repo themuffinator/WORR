@@ -47,6 +47,7 @@ cvar_t   *cl_adjustfov;
 
 int         r_numdlights;
 dlight_t    r_dlights[MAX_DLIGHTS];
+static float r_dlight_scores[MAX_DLIGHTS];
 
 int         r_numentities;
 entity_t    r_entities[MAX_ENTITIES];
@@ -72,6 +73,30 @@ static void V_ClearScene(void)
     r_numdlights = 0;
     r_numentities = 0;
     r_numparticles = 0;
+    memset(r_dlight_scores, 0, sizeof(r_dlight_scores));
+}
+
+static float V_DlightScore(const vec3_t origin, float radius, float intensity)
+{
+    float dist2 = DistanceSquared(origin, cl.refdef.vieworg);
+    return (intensity * radius) / (dist2 + 1.0f);
+}
+
+static int V_ReserveDlightSlot(float score)
+{
+    if (r_numdlights < MAX_DLIGHTS)
+        return r_numdlights++;
+
+    int worst = 0;
+    for (int i = 1; i < r_numdlights; i++) {
+        if (r_dlight_scores[i] < r_dlight_scores[worst])
+            worst = i;
+    }
+
+    if (score <= r_dlight_scores[worst])
+        return -1;
+
+    return worst;
 }
 
 /*
@@ -160,18 +185,24 @@ void V_AddLightEx(cl_shadow_light_t *light)
 {
     dlight_t    *dl;
 
-    if (r_numdlights >= MAX_DLIGHTS)
-        return;
-    
     float fade = fade_distance_to_light((const vec2_t) { light->fade_start, light->fade_end }, light->origin, cl.refdef.vieworg);
 
     if (fade <= 0.0f)
         return;
 
-    dl = &r_dlights[r_numdlights++];
+    float intensity = light->intensity *
+                      (light->lightstyle == -1 ? 1.0f : r_lightstyles[light->lightstyle].white) *
+                      fade;
+    float score = V_DlightScore(light->origin, light->radius, intensity);
+    int slot = V_ReserveDlightSlot(score);
+    if (slot < 0)
+        return;
+
+    dl = &r_dlights[slot];
+    r_dlight_scores[slot] = score;
     VectorCopy(light->origin, dl->origin);
     dl->radius = light->radius;
-    dl->intensity = light->intensity * (light->lightstyle == -1 ? 1.0f : r_lightstyles[light->lightstyle].white) * fade;
+    dl->intensity = intensity;
     dl->color[0] = light->color.r / 255.f;
     dl->color[1] = light->color.g / 255.f;
     dl->color[2] = light->color.b / 255.f;
@@ -205,9 +236,13 @@ void V_AddLight(const vec3_t org, float intensity, float r, float g, float b)
 {
     dlight_t    *dl;
 
-    if (r_numdlights >= MAX_DLIGHTS)
+    float score = V_DlightScore(org, intensity, 1.0f);
+    int slot = V_ReserveDlightSlot(score);
+    if (slot < 0)
         return;
-    dl = &r_dlights[r_numdlights++];
+
+    dl = &r_dlights[slot];
+    r_dlight_scores[slot] = score;
     VectorCopy(org, dl->origin);
     dl->radius = intensity;
     dl->intensity = 1.0f;
@@ -588,14 +623,9 @@ void V_RenderView(void)
         cl.refdef.width = scr.vrect.width;
         cl.refdef.height = scr.vrect.height;
 
-        // adjust for non-4/3 screens
-        if (cl_adjustfov->integer) {
-            cl.refdef.fov_y = cl.fov_y;
-            cl.refdef.fov_x = V_CalcFov(cl.refdef.fov_y, cl.refdef.height, cl.refdef.width);
-        } else {
-            cl.refdef.fov_x = cl.fov_x;
-            cl.refdef.fov_y = V_CalcFov(cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
-        }
+        // adjust for non-4/3 screens (always Hor+)
+        cl.refdef.fov_y = cl.fov_y;
+        cl.refdef.fov_x = V_CalcFov(cl.refdef.fov_y, cl.refdef.height, cl.refdef.width);
 
         cl.refdef.frametime = cls.frametime;
         cl.refdef.time = cl.time * 0.001f;
@@ -772,7 +802,7 @@ void V_Init(void)
     cl_add_blend->changed = cl_add_blend_changed;
     cl_menu_bokeh_blur = Cvar_Get("cl_menu_bokeh_blur", "0.85", CVAR_ARCHIVE);
 
-    cl_adjustfov = Cvar_Get("cl_adjustfov", "1", 0);
+    cl_adjustfov = Cvar_Get("cl_adjustfov", "1", CVAR_ROM);
 }
 
 void V_Shutdown(void)

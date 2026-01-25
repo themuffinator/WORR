@@ -9,7 +9,7 @@
 ## Cvars and Defaults
 - `con_font`: `fonts/RobotoMono-Regular.ttf`
 - `ui_font`: `fonts/NotoSansKR-Regular.otf`
-- `scr_font`: `fonts/RussoOne-Regular.ttf`
+- `cl_font`: `fonts/RussoOne-Regular.ttf`
 
 Each cvar accepts a TTF/OTF, `.kfont`, or legacy font image path.
 
@@ -26,7 +26,7 @@ Missing glyphs in a valid TTF/OTF also fall back to kfont and then legacy.
 - Menu UI uses `UI_Font*` helpers to draw, measure, and provide a legacy handle for cursor glyphs.
 
 ## Scaling and DPI
-- Font pixel sizes scale from the virtual 640x480 basis and respect `scr_scale`, `con_scale`, and `ui_scale`.
+- Font pixel sizes scale from the virtual 640x480 basis and respect `cl_scale`, `con_scale`, and `ui_scale`.
 - The loader snaps to integer pixel scale to keep text crisp at high DPI.
 
 ## UI Notes

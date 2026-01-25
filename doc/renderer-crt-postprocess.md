@@ -7,12 +7,12 @@
 ## CVars
 - r_crtmode (CVAR_ARCHIVE, default 0)
 - r_crt_brightboost (CVAR_SERVERINFO, default 1.5)
-- r_crt_hardPix (CVAR_SERVERINFO, default -8.0)
-- r_crt_hardScan (CVAR_SERVERINFO, default -8.0)
-- r_crt_maskDark (CVAR_SERVERINFO, default 0.5)
-- r_crt_maskLight (CVAR_SERVERINFO, default 1.5)
-- r_crt_scaleInLinearGamma (CVAR_ARCHIVE, default 1.0)
-- r_crt_shadowMask (CVAR_ARCHIVE, default 0.0)
+- r_crt_hard_pix (CVAR_SERVERINFO, default -8.0)
+- r_crt_hard_scan (CVAR_SERVERINFO, default -8.0)
+- r_crt_mask_dark (CVAR_SERVERINFO, default 0.5)
+- r_crt_mask_light (CVAR_SERVERINFO, default 1.5)
+- r_crt_scale_in_linear_gamma (CVAR_ARCHIVE, default 1.0)
+- r_crt_shadow_mask (CVAR_ARCHIVE, default 0.0)
 
 ## Pipeline changes
 - GL_BindFramebuffer treats r_crtmode as a postprocess flag and reinitializes framebuffer resources on toggle.

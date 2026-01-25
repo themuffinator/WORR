@@ -161,16 +161,16 @@ The core settings menu is a hub that pushes category pages for quick access, wit
 
 #### **A. Video (`pushmenu video`)**
 *   **Display:**
-    *   Video Mode: `vid_fullscreen` (Drop-down: "windowed" + `$$vid_modelist` entries).
+    *   Video Mode: `r_fullscreen` (Drop-down: "windowed" + `$$r_modelist` entries).
     *   FOV Scaling: `cl_adjustfov` (Drop-down: Vert-/Hor+).
-    *   Brightness: `vid_gamma` (Slider).
-    *   HW Gamma: `vid_hwgamma` (Toggle).
+    *   Brightness: `r_gamma` (Slider).
+    *   HW Gamma: `r_hwgamma` (Toggle).
     *   Color Correction: `gl_color_correction` (Toggle).
     *   Contrast: `gl_color_contrast` (Slider, enableIf `gl_color_correction=1`).
     *   VSync: `gl_swapinterval` (Toggle).
     *   UI Scale: `ui_scale` (Drop-down/pairs; 0=auto).
     *   Console Scale: `con_scale` (Drop-down/pairs; 0=auto).
-    *   Screen Scale: `scr_scale` (Drop-down/pairs; 0=auto).
+    *   Screen Scale: `cl_scale` (Drop-down/pairs; 0=auto).
 *   **Quality:**
     *   Texture Quality: `gl_picmip` (Drop-down: High/Med/Low).
     *   Filtering: `gl_texturemode` (Drop-down).
@@ -254,23 +254,23 @@ This new menu consolidates all visual customization for entities.
 #### **G. Gameplay / HUD (`pushmenu game_options`)**
 *   **Crosshair:**
     *   Type: `crosshair` (Image grid / tiles).
-    *   Size: `cl_crosshairSize`.
-    *   Color: `cl_crosshairColor` (Indexed 1-26; map palette swatches to indices).
-    *   Brightness: `cl_crosshairBrightness` (Slider).
-    *   Color by Health: `cl_crosshairHealth` (Toggle).
-    *   Hit Style: `cl_crosshairHitStyle`.
-    *   Hit Color: `cl_crosshairHitColor`.
-    *   Hit Time: `cl_crosshairHitTime`.
-    *   Pickup Pulse: `cl_crosshairPulse` (Toggle).
+    *   Size: `cl_crosshair_size`.
+    *   Color: `cl_crosshair_color` (Indexed 1-26; map palette swatches to indices).
+    *   Brightness: `cl_crosshair_brightness` (Slider).
+    *   Color by Health: `cl_crosshair_health` (Toggle).
+    *   Hit Style: `cl_crosshair_hit_style`.
+    *   Hit Color: `cl_crosshair_hit_color`.
+    *   Hit Time: `cl_crosshair_hit_time`.
+    *   Pickup Pulse: `cl_crosshair_pulse` (Toggle).
     *   Preview: Live preview widget (see Section 11 for crosshair tile selector).
 *   **HUD:**
     *   Screen Size: `viewsize`.
-    *   Ping Graph: `scr_lag_draw`.
-    *   Demo Bar: `scr_demobar`.
-    *   HUD Opacity: `scr_alpha`.
+    *   Ping Graph: `cl_lag_draw`.
+    *   Demo Bar: `cl_demobar`.
+    *   HUD Opacity: `cl_alpha`.
     *   Console Opacity: `con_alpha`.
-    *   Scales: `scr_scale`, `con_scale`, `ui_scale`.
-    *   HUD Elements: `scr_draw2d` (Selector 0-3; dropdown/pairs).
+    *   Scales: `cl_scale`, `con_scale`, `ui_scale`.
+    *   HUD Elements: `cl_draw2d` (Selector 0-3; dropdown/pairs).
     *   Status/Chat: `con_notifytime` (Slider).
 *   **Railgun:**
     *   Type: `cl_railtrail_type`.
@@ -299,14 +299,14 @@ This new menu consolidates all visual customization for entities.
 #### **I. Screen (`pushmenu screen`)**
 *   **Scaling & Visibility:**
     *   Screen Size: `viewsize`.
-    *   HUD Opacity: `scr_alpha`.
+    *   HUD Opacity: `cl_alpha`.
     *   Console Opacity: `con_alpha`.
-    *   HUD Scale: `scr_scale`.
+    *   HUD Scale: `cl_scale`.
     *   Console Scale: `con_scale`.
     *   Menu Scale: `ui_scale`.
 *   **Status & Graphs:**
-    *   Ping Graph: `scr_lag_draw` (Toggle).
-    *   Demo Bar: `scr_demobar` (Drop-down).
+    *   Ping Graph: `cl_lag_draw` (Toggle).
+    *   Demo Bar: `cl_demobar` (Drop-down).
 *   **Crosshair Setup:**
     *   Crosshair Menu (`pushmenu crosshair`) for image tiles and hit-feedback settings.
 

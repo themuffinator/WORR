@@ -33,12 +33,17 @@ cvar_t  *cl_gunfov;
 cvar_t  *cl_gun_x;
 cvar_t  *cl_gun_y;
 cvar_t  *cl_gun_z;
-cvar_t  *cl_weaponBar;
+cvar_t  *cl_weapon_bar;
 cvar_t  *cl_warn_on_fps_rounding;
 cvar_t  *cl_maxfps;
 cvar_t  *cl_async;
 cvar_t  *r_maxfps;
 cvar_t  *cl_autopause;
+static cvar_t *cl_weapon_bar_legacy;
+static cvar_t *cl_debug_fonts;
+static cvar_t *cl_debug_fonts_legacy;
+static cvar_t *cl_font_glyph_cache_size;
+static cvar_t *cl_font_glyph_cache_size_legacy;
 static cvar_t *ui_download_active;
 static cvar_t *ui_download_file;
 static cvar_t *ui_download_status;
@@ -2714,6 +2719,85 @@ void cl_timeout_changed(cvar_t *self)
     self->integer = 1000 * Cvar_ClampValue(self, 0, 24 * 24 * 60 * 60);
 }
 
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+} cvar_alias_pair_t;
+
+static bool cl_alias_syncing;
+
+static cvar_alias_pair_t cl_aliases[] = {
+    { &cl_weapon_bar, &cl_weapon_bar_legacy },
+    { &cl_debug_fonts, &cl_debug_fonts_legacy },
+    { &cl_font_glyph_cache_size, &cl_font_glyph_cache_size_legacy },
+};
+
+static void cl_alias_changed(cvar_t *self)
+{
+    if (cl_alias_syncing)
+        return;
+
+    cl_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            break;
+        }
+    }
+
+    cl_alias_syncing = false;
+}
+
+static void cl_alias_sync_defaults(void)
+{
+    if (cl_alias_syncing)
+        return;
+
+    cl_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cl_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    cl_alias_syncing = false;
+}
+
+static void cl_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(cl_aliases); i++) {
+        cvar_alias_pair_t *pair = &cl_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = cl_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = cl_alias_changed;
+    }
+
+    cl_alias_sync_defaults();
+}
+
 static const cmdreg_t c_client[] = {
     { "cmd", CL_ForwardToServer_f },
     { "pause", CL_Pause_f },
@@ -2794,7 +2878,14 @@ static void CL_InitLocal(void)
     cl_gun_x = Cvar_Get("cl_gun_x", "0", 0);
     cl_gun_y = Cvar_Get("cl_gun_y", "0", 0);
     cl_gun_z = Cvar_Get("cl_gun_z", "0", 0);
-    cl_weaponBar = Cvar_Get("cl_weaponBar", "5", CVAR_ARCHIVE);
+    cl_weapon_bar = Cvar_Get("cl_weapon_bar", "5", CVAR_ARCHIVE);
+    cl_weapon_bar_legacy = Cvar_Get("cl_weaponBar", cl_weapon_bar->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    cl_debug_fonts = Cvar_Get("cl_debug_fonts", "1", 0);
+    cl_debug_fonts_legacy = Cvar_Get("cl_debugFonts", cl_debug_fonts->string, CVAR_NOARCHIVE);
+    cl_font_glyph_cache_size = Cvar_Get("cl_font_glyph_cache_size", "2000", 0);
+    cl_font_glyph_cache_size_legacy = Cvar_Get("cl_fontGlyphCacheSize",
+                                               cl_font_glyph_cache_size->string, CVAR_NOARCHIVE);
+    cl_alias_register();
     cl_footsteps = Cvar_Get("cl_footsteps", "1", 0);
     cl_footsteps->changed = cl_footsteps_changed;
     cl_noskins = Cvar_Get("cl_noskins", "0", 0);
@@ -3358,6 +3449,8 @@ static void CL_UpdateDownloadOverlay(void)
     bool downloading = cls.download.pending > 0;
     bool show_menu = downloading && cls.state < ca_active;
     bool has_current = cls.download.current != NULL;
+    sys_taskbar_progress_t taskbar_state = SYS_TASKBAR_PROGRESS_NONE;
+    int taskbar_percent = 0;
 
     if (download_menu_open && !(Key_GetDest() & KEY_MENU))
         download_menu_open = false;
@@ -3421,6 +3514,25 @@ static void CL_UpdateDownloadOverlay(void)
         Cvar_SetByVar(ui_download_queue, "", FROM_CODE);
         Cvar_SetInteger(ui_download_percent, 0, FROM_CODE);
     }
+
+    if (downloading) {
+        if (has_current) {
+            int percent = Q_clip(cls.download.percent, 0, 100);
+            if (percent > 0) {
+                taskbar_state = SYS_TASKBAR_PROGRESS_NORMAL;
+                taskbar_percent = percent;
+            } else if (cls.download.position > 0) {
+                taskbar_state = SYS_TASKBAR_PROGRESS_INDETERMINATE;
+            } else {
+                taskbar_state = SYS_TASKBAR_PROGRESS_NORMAL;
+                taskbar_percent = 0;
+            }
+        } else {
+            taskbar_state = SYS_TASKBAR_PROGRESS_INDETERMINATE;
+        }
+    }
+
+    Sys_SetTaskbarProgress(taskbar_state, taskbar_percent);
 
     if (show_menu) {
         if (!download_menu_open) {

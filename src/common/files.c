@@ -300,17 +300,26 @@ Checks for bad (OS specific) and mixed case characters in path.
 path_valid_t FS_ValidatePath(const char *s)
 {
     path_valid_t res = PATH_VALID;
+    size_t len;
+    size_t i;
 
     if (!*s)
         return PATH_INVALID;
 
-    do {
-        if (!validate_char(*s))
+    len = strlen(s);
+    while (len > 0 && (unsigned char)s[len - 1] <= ' ')
+        len--;
+    if (len == 0)
+        return PATH_INVALID;
+
+    for (i = 0; i < len; i++) {
+        int c = (unsigned char)s[i];
+        if (!validate_char(c))
             return PATH_INVALID;
 
-        if (Q_isupper(*s))
+        if (Q_isupper(c))
             res = PATH_MIXED_CASE;
-    } while (*++s);
+    }
 
     return res;
 }

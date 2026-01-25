@@ -233,6 +233,11 @@ cvar_t *g_level_rulesets;
 cvar_t *match_maps_list;
 cvar_t *match_maps_listShuffle;
 cvar_t *match_lock;
+cvar_t *match_setup_active;
+cvar_t *match_setup_format;
+cvar_t *match_setup_gametype;
+cvar_t *match_setup_modifier;
+cvar_t *match_setup_maxplayers;
 cvar_t *match_setup_length;
 cvar_t *match_setup_type;
 cvar_t *match_setup_bestof;
@@ -1159,6 +1164,13 @@ static void InitGame() {
   g_mapspawn_no_plasmabeam =
       gi.cvar("g_mapspawn_no_plasmabeam", "0", CVAR_NOFLAGS);
   match_lock = gi.cvar("match_lock", "0", CVAR_SERVERINFO);
+  match_setup_active = gi.cvar("match_setup_active", "0", CVAR_NOFLAGS);
+  match_setup_format = gi.cvar("match_setup_format", "regular", CVAR_NOFLAGS);
+  match_setup_gametype = gi.cvar("match_setup_gametype", "ffa", CVAR_NOFLAGS);
+  match_setup_modifier =
+      gi.cvar("match_setup_modifier", "standard", CVAR_NOFLAGS);
+  match_setup_maxplayers =
+      gi.cvar("match_setup_maxplayers", "8", CVAR_NOFLAGS);
   match_setup_length = gi.cvar("match_setup_length", "standard", CVAR_NOFLAGS);
   match_setup_type = gi.cvar("match_setup_type", "standard", CVAR_NOFLAGS);
   match_setup_bestof = gi.cvar("match_setup_bestof", "bo1", CVAR_NOFLAGS);
@@ -1205,6 +1217,8 @@ static void InitGame() {
       gi.cvar("g_warmup_ready_percentage", "0.51f", CVAR_NOFLAGS);
   g_weaponProjection = gi.cvar("g_weapon_projection", "0", CVAR_NOFLAGS);
   g_weapon_respawn_time = gi.cvar("g_weapon_respawn_time", "30", CVAR_NOFLAGS);
+
+  MatchSetup_ApplyStartConfig();
 
   g_maps_pool_file = gi.cvar("g_maps_pool_file", "mapdb.json", CVAR_NOFLAGS);
   g_maps_cycle_file =

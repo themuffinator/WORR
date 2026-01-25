@@ -1215,6 +1215,18 @@ static void CL_AddPacketEntities(void)
                 V_AddLight(ent.origin, 225, 1.0f, 1.0f, 0.0f);
             else if (effects & EF_TRACKERTRAIL)
                 V_AddLight(ent.origin, 225, -1.0f, -1.0f, -1.0f);
+            // Add a shadow-only entity so first-person players still cast shadows.
+            {
+                const effects_t shadow_skip_effects =
+                    EF_ROCKET | EF_BLASTER | EF_HYPERBLASTER | EF_BFG | EF_TRAP |
+                    EF_TRACKERTRAIL | EF_TRACKER | EF_IONRIPPER | EF_PLASMA |
+                    EF_BLUEHYPERBLASTER | EF_GRENADE_LIGHT;
+                entity_t shadow_ent = ent;
+                shadow_ent.flags = renderfx | RF_VIEWERMODEL;
+                if (effects & shadow_skip_effects)
+                    shadow_ent.flags |= RF_NOSHADOW;
+                V_AddEntity(&shadow_ent);
+            }
             goto skip;
         }
 

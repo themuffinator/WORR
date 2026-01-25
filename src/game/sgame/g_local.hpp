@@ -4180,6 +4180,11 @@ extern cvar_t *g_level_rulesets;
 extern cvar_t *match_maps_list;
 extern cvar_t *match_maps_listShuffle;
 extern cvar_t *match_lock;
+extern cvar_t *match_setup_active;
+extern cvar_t *match_setup_format;
+extern cvar_t *match_setup_gametype;
+extern cvar_t *match_setup_modifier;
+extern cvar_t *match_setup_maxplayers;
 extern cvar_t *match_setup_length;
 extern cvar_t *match_setup_type;
 extern cvar_t *match_setup_bestof;
@@ -5192,6 +5197,7 @@ void CheckDMExitRules();
 int GT_ScoreLimit();
 const char *GT_ScoreLimitString();
 void ChangeGametype(GameType gt);
+void MatchSetup_ApplyStartConfig();
 void Match_End();
 void Match_UpdateDuelRecords();
 
@@ -5602,16 +5608,6 @@ constexpr GameTime COOP_DAMAGE_RESPAWN_TIME = 2000_ms;
 // time after firing that we can't respawn on a player for
 constexpr GameTime COOP_DAMAGE_FIRING_TIME = 2500_ms;
 
-struct MatchSetupState {
-  std::string format = "regular";
-  std::string gametype = "ffa";
-  std::string modifier = "standard";
-  int maxPlayers = 8;
-  std::string length = "standard";
-  std::string type = "standard";
-  std::string bestOf = "bo1";
-};
-
 struct UiMapFlagState {
   uint16_t enableFlags = 0;
   uint16_t disableFlags = 0;
@@ -5623,7 +5619,6 @@ enum class UiListKind : uint8_t {
   CallvoteGametype,
   CallvoteArena,
   MyMap,
-  SetupGametype,
   TournamentPick,
   TournamentBan,
   TournamentReplay
@@ -5644,8 +5639,6 @@ struct UiMenuState {
   GameTime mapSelectorNextUpdate = 0_ms;
   bool matchStatsActive = false;
   GameTime matchStatsNextUpdate = 0_ms;
-  MatchSetupState setup{};
-  bool setupActive = false;
 };
 
 // this structure is cleared on each ClientSpawn(),
@@ -6662,8 +6655,7 @@ inline bool IsUiMenuOpen(const gclient_t *cl) {
     return false;
   return cl->initialMenu.dmWelcomeActive || cl->initialMenu.dmJoinActive ||
          cl->ui.voteActive || cl->ui.mapSelectorActive ||
-         cl->ui.matchStatsActive || cl->ui.setupActive ||
-         cl->ui.list.kind != UiListKind::None;
+         cl->ui.matchStatsActive || cl->ui.list.kind != UiListKind::None;
 }
 
 inline bool IsUiMenuOpen(const gentity_t *ent) {
@@ -6673,11 +6665,9 @@ inline bool IsUiMenuOpen(const gentity_t *ent) {
 inline bool IsBlockingUiMenuOpen(const gclient_t *cl) {
   if (!cl)
     return false;
-  if (cl->initialMenu.dmWelcomeActive || cl->initialMenu.dmJoinActive ||
-      cl->ui.setupActive)
+  if (cl->initialMenu.dmWelcomeActive || cl->initialMenu.dmJoinActive)
     return true;
-  return cl->ui.list.kind == UiListKind::SetupGametype ||
-         cl->ui.list.kind == UiListKind::TournamentPick ||
+  return cl->ui.list.kind == UiListKind::TournamentPick ||
          cl->ui.list.kind == UiListKind::TournamentBan ||
          cl->ui.list.kind == UiListKind::TournamentReplay;
 }
@@ -6693,7 +6683,6 @@ inline void CloseActiveMenu(gentity_t *ent) {
   ent->client->ui.voteActive = false;
   ent->client->ui.mapSelectorActive = false;
   ent->client->ui.matchStatsActive = false;
-  ent->client->ui.setupActive = false;
   ent->client->ui.list.kind = UiListKind::None;
   ent->client->ui.list.page = 0;
   ent->client->initialMenu.dmWelcomeActive = false;
@@ -6735,15 +6724,6 @@ void RefreshMatchStatsMenu(gentity_t *ent);
 void OpenMapSelectorMenu(gentity_t *ent);
 void RefreshMapSelectorMenu(gentity_t *ent);
 void OpenForfeitMenu(gentity_t *ent);
-void OpenSetupWelcomeMenu(gentity_t *ent);
-void OpenSetupMatchFormatMenu(gentity_t *ent);
-void OpenSetupMaxPlayersMenu(gentity_t *ent);
-void OpenSetupGametypeMenu(gentity_t *ent);
-void OpenSetupModifierMenu(gentity_t *ent);
-void OpenSetupMatchLengthMenu(gentity_t *ent);
-void OpenSetupMatchTypeMenu(gentity_t *ent);
-void OpenSetupBestOfMenu(gentity_t *ent);
-void FinishSetupWizard(gentity_t *ent);
 void OpenPlayerWelcomeMenu(gentity_t *ent);
 void OpenDmWelcomeMenu(gentity_t *ent);
 void OpenDmJoinMenu(gentity_t *ent);

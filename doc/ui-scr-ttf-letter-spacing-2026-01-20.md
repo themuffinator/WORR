@@ -16,10 +16,10 @@
 - New API: `Font_SetLetterSpacing(font_t *font, float spacing)`.
 - `Font_DrawString` and `Font_MeasureString` add tracking between adjacent TTF
   glyphs when `letter_spacing > 0`.
-- `scr_font` and `ui_font` apply the spacing factor after font load.
+- `cl_font` and `ui_font` apply the spacing factor after font load.
 
 ## Files Updated
 - `src/client/font.cpp` (letter spacing storage and render/measure logic)
 - `inc/client/font.h` (new API declaration)
-- `src/client/screen.cpp` (apply spacing to `scr_font`)
+- `src/client/screen.cpp` (apply spacing to `cl_font`)
 - `src/client/ui_font.cpp` (apply spacing to `ui_font`)

@@ -60,6 +60,16 @@ void    Sys_SaveHistory(void);
 #define Sys_SaveHistory()               (void)0
 #endif
 
+#if USE_CLIENT
+typedef enum {
+    SYS_TASKBAR_PROGRESS_NONE,
+    SYS_TASKBAR_PROGRESS_INDETERMINATE,
+    SYS_TASKBAR_PROGRESS_NORMAL
+} sys_taskbar_progress_t;
+
+void    Sys_SetTaskbarProgress(sys_taskbar_progress_t state, int percent);
+#endif
+
 q_noreturn q_printf(1, 2)
 void    Sys_Error(const char *error, ...);
 

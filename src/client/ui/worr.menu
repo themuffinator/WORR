@@ -69,12 +69,13 @@ color disabled #7f7f7f
 begin video
     //title "Video Setup"
     banner m_banner_video
-    values "video mode" vid_fullscreen windowed $$vid_modelist
-    values "fov scaling" cl_adjustfov vert- hor+
+    values "video mode" r_fullscreen windowed $$r_modelist
+    pairs "fullscreen type" r_fullscreen_exclusive exclusive 1 borderless 0
+    field --width 18 --status "0 = auto, or enter display name" "display" r_display
     toggle "vertical sync" gl_swapinterval
     pairs "anti-aliasing" gl_multisamples no 0 "2x MSAA" 2 "4x MSAA" 4 "8x MSAA" 8
-    range "texture gamma" vid_gamma 1.3 0.3
-    toggle "hardware gamma" vid_hwgamma
+    range "texture gamma" r_gamma 1.3 0.3
+    toggle "hardware gamma" r_hwgamma
     range "texture quality" gl_picmip 3 0 -1
     pairs "texture filter" gl_texturemode \
         nearest GL_NEAREST \
@@ -148,26 +149,26 @@ begin crosshair
     title "Crosshair Setup"
     //values "crosshair type" crosshair none cross dot angle
     imagevalues "crosshair type" crosshair "pics" "ch*" 64 64
-    range "crosshair size" cl_crosshairSize 4 64 1
-    range "crosshair brightness" cl_crosshairBrightness 0 1 0.05
-    range "crosshair color" cl_crosshairColor 1 26 1
-    toggle "color by health" cl_crosshairHealth
-    values "hit style" cl_crosshairHitStyle \
+    range "crosshair size" cl_crosshair_size 4 64 1
+    range "crosshair brightness" cl_crosshair_brightness 0 1 0.05
+    range "crosshair color" cl_crosshair_color 1 26 1
+    toggle "color by health" cl_crosshair_health
+    values "hit style" cl_crosshair_hit_style \
         off "damage color" "hit color" "pulse (large)" "damage + pulse" \
         "hit color + pulse" "pulse (small)" "damage + small pulse" "hit color + small pulse"
-    range "hit color" cl_crosshairHitColor 1 26 1
-    range "hit time (ms)" cl_crosshairHitTime 0 1000 10
-    toggle "pickup pulse" cl_crosshairPulse
+    range "hit color" cl_crosshair_hit_color 1 26 1
+    range "hit time (ms)" cl_crosshair_hit_time 0 1000 10
+    toggle "pickup pulse" cl_crosshair_pulse
 end
 
 begin screen
     title "Screen Setup"
     range "screen size" viewsize 40 100 10
-    toggle "ping graph" scr_lag_draw
-    values "demo bar" scr_demobar no yes verbose
-    range "HUD opacity" scr_alpha 0 1
+    toggle "lagometer" cg_lagometer
+    values "demo bar" cl_demobar no yes verbose
+    range "HUD opacity" cl_alpha 0 1
     range "console opacity" con_alpha 0 1
-    pairs "HUD scale" scr_scale auto 0 1x 1 2x 2 4x 4
+    pairs "HUD scale" cl_scale auto 0 1x 1 2x 2 4x 4
     pairs "console scale" con_scale auto 0 1x 1 2x 2 4x 4
     pairs "menu scale" ui_scale auto 0 1x 1 2x 2 4x 4
     blank

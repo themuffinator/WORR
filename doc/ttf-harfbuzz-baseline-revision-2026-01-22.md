@@ -33,7 +33,7 @@
 
 ## Testing Guidance
 - Verify baseline alignment on mixed-case strings (AaBbCc...), digits, and
-  punctuation in `scr_font` and UI text.
+  punctuation in `cl_font` and UI text.
 - Check color-coded strings and multi-line text for consistent spacing.
 - Compare against kfont/legacy fallbacks to confirm consistent vertical
   alignment when glyphs are missing.

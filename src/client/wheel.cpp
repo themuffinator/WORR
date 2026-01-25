@@ -38,7 +38,7 @@ static void draw_scaled_string(int x, int y, float scale, int flags, color_t col
     }
 
     for (int i = 0; i < len; i++, x += char_w) {
-        R_DrawStretchChar(x, y, char_w, char_h, flags, text[i], color, scr.font_pic);
+        R_DrawStretchChar(x, y, char_w, char_h, flags, text[i], color, scr.ui_font_pic);
     }
 }
 

@@ -243,22 +243,6 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
     }
     break;
   }
-  case UiListKind::SetupGametype: {
-    title = "Match Setup";
-    subtitle = "Gametype";
-    const auto &setup = ent->client->ui.setup;
-    header = fmt::format("Current: {}", setup.gametype);
-    if (auto gt = Game::FromString(setup.gametype))
-      header = fmt::format("Current: {}", Game::GetInfo(*gt).long_name);
-
-    for (const auto &mode : GAME_MODES) {
-      if (mode.type == GameType::None)
-        continue;
-      entries.push_back({ std::string(mode.long_name),
-                          fmt::format("worr_setup_gametype {}", mode.short_name) });
-    }
-    break;
-  }
   case UiListKind::TournamentPick:
   case UiListKind::TournamentBan: {
     title = (listState.kind == UiListKind::TournamentPick) ? "*Pick a Map*"

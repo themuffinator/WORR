@@ -13,11 +13,11 @@ This document records the updates applied to `doc/proposals/menu_rework.md` afte
 - Updated widget guidance to prefer the existing `dropdown` item type and `switch`/`checkbox` for toggles; noted that overlay dropdown behavior still needs implementation work.
 
 3) Cvar corrections and accuracy
-- Replaced `vid_mode` with the actual `vid_fullscreen` + `$$vid_modelist` modelist behavior.
+- Replaced `vid_mode` with the actual `r_fullscreen` + `$$r_modelist` modelist behavior.
 - Replaced `gl_contrast` with `gl_color_contrast` and added `gl_color_correction` as the gating toggle.
-- Clarified that `ui_scale`, `con_scale`, and `scr_scale` should be represented as dropdown/pairs (0 = auto).
+- Clarified that `ui_scale`, `con_scale`, and `cl_scale` should be represented as dropdown/pairs (0 = auto).
 - Reframed bloom to use `gl_bloom` with `gl_bloom_intensity`/`gl_bloom_threshold` (optional `gl_bloom_sigma` as advanced).
-- Clarified `scr_draw2d` as a selector (0-3), not a binary toggle.
+- Clarified `cl_draw2d` as a selector (0-3), not a binary toggle.
 
 4) Data sources for lists and palettes
 - Map vote list now points at `$$com_maplist` or `ui_mapselector_option_*` cvars instead of local `maps/*.bsp`.

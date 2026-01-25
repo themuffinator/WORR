@@ -19,14 +19,8 @@
         {
           "type": "dropdown",
           "label": "video mode",
-          "cvar": "vid_fullscreen",
-          "items": ["windowed", "$$vid_modelist"]
-        },
-        {
-          "type": "dropdown",
-          "label": "fov scaling",
-          "cvar": "cl_adjustfov",
-          "items": ["vert-", "hor+"]
+          "cvar": "r_fullscreen",
+          "items": ["windowed", "$$r_modelist"]
         },
         { "type": "checkbox", "label": "vertical sync", "cvar": "gl_swapinterval" },
         {
@@ -40,8 +34,8 @@
             { "label": "8x MSAA", "value": "8" }
           ]
         },
-        { "type": "range", "label": "texture gamma", "cvar": "vid_gamma", "min": 1.3, "max": 0.3 },
-        { "type": "checkbox", "label": "hardware gamma", "cvar": "vid_hwgamma" },
+        { "type": "range", "label": "texture gamma", "cvar": "r_gamma", "min": 1.3, "max": 0.3 },
+        { "type": "checkbox", "label": "hardware gamma", "cvar": "r_hwgamma" },
         { "type": "range", "label": "texture quality", "cvar": "gl_picmip", "min": 3, "max": 0, "step": -1 },
         {
           "type": "dropdown",
@@ -130,6 +124,7 @@
         { "type": "action", "label": "sound setup", "command": "pushmenu sound" },
         { "type": "action", "label": "effects setup", "command": "pushmenu effects" },
         { "type": "action", "label": "screen setup", "command": "pushmenu screen" },
+        { "type": "action", "label": "language", "command": "pushmenu language" },
         { "type": "action", "label": "download options", "command": "pushmenu downloads" },
         { "type": "action", "label": "address book", "command": "pushmenu addressbook" }
       ]
@@ -235,14 +230,14 @@
           "imageWidth": 64,
           "imageHeight": 64
         },
-        { "type": "range", "label": "crosshair size", "cvar": "cl_crosshairSize", "min": 4, "max": 64, "step": 1 },
-        { "type": "range", "label": "crosshair brightness", "cvar": "cl_crosshairBrightness", "min": 0, "max": 1, "step": 0.05 },
-        { "type": "range", "label": "crosshair color", "cvar": "cl_crosshairColor", "min": 1, "max": 26, "step": 1 },
-        { "type": "checkbox", "label": "color by health", "cvar": "cl_crosshairHealth" },
+        { "type": "range", "label": "crosshair size", "cvar": "cl_crosshair_size", "min": 4, "max": 64, "step": 1 },
+        { "type": "range", "label": "crosshair brightness", "cvar": "cl_crosshair_brightness", "min": 0, "max": 1, "step": 0.05 },
+        { "type": "range", "label": "crosshair color", "cvar": "cl_crosshair_color", "min": 1, "max": 26, "step": 1 },
+        { "type": "checkbox", "label": "color by health", "cvar": "cl_crosshair_health" },
         {
           "type": "values",
           "label": "hit style",
-          "cvar": "cl_crosshairHitStyle",
+          "cvar": "cl_crosshair_hit_style",
           "items": [
             "off",
             "damage color",
@@ -255,9 +250,9 @@
             "hit color + small pulse"
           ]
         },
-        { "type": "range", "label": "hit color", "cvar": "cl_crosshairHitColor", "min": 1, "max": 26, "step": 1 },
-        { "type": "range", "label": "hit time (ms)", "cvar": "cl_crosshairHitTime", "min": 0, "max": 1000, "step": 10 },
-        { "type": "checkbox", "label": "pickup pulse", "cvar": "cl_crosshairPulse" }
+        { "type": "range", "label": "hit color", "cvar": "cl_crosshair_hit_color", "min": 1, "max": 26, "step": 1 },
+        { "type": "range", "label": "hit time (ms)", "cvar": "cl_crosshair_hit_time", "min": 0, "max": 1000, "step": 10 },
+        { "type": "checkbox", "label": "pickup pulse", "cvar": "cl_crosshair_pulse" }
       ]
     },
     {
@@ -265,19 +260,19 @@
       "title": "Screen Setup",
       "items": [
         { "type": "range", "label": "screen size", "cvar": "viewsize", "min": 40, "max": 100, "step": 10 },
-        { "type": "checkbox", "label": "ping graph", "cvar": "scr_lag_draw" },
+        { "type": "checkbox", "label": "lagometer", "cvar": "cg_lagometer" },
         {
           "type": "dropdown",
           "label": "demo bar",
-          "cvar": "scr_demobar",
+          "cvar": "cl_demobar",
           "items": ["no", "yes", "verbose"]
         },
-        { "type": "range", "label": "HUD opacity", "cvar": "scr_alpha", "min": 0, "max": 1 },
+        { "type": "range", "label": "HUD opacity", "cvar": "cl_alpha", "min": 0, "max": 1 },
         { "type": "range", "label": "console opacity", "cvar": "con_alpha", "min": 0, "max": 1 },
         {
           "type": "dropdown",
           "label": "HUD scale",
-          "cvar": "scr_scale",
+          "cvar": "cl_scale",
           "pairs": [
             { "label": "auto", "value": "0" },
             { "label": "1x", "value": "1" },
@@ -309,6 +304,42 @@
         },
         { "type": "blank" },
         { "type": "action", "label": "crosshair setup...", "align": "left", "command": "pushmenu crosshair" }
+      ]
+    },
+    {
+      "name": "language",
+      "title": "Language",
+      "items": [
+        {
+          "type": "dropdown",
+          "label": "language",
+          "cvar": "loc_language",
+          "pairs": [
+            { "label": "auto (system)", "value": "auto" },
+            { "label": "English", "value": "english" },
+            { "label": "French", "value": "french" },
+            { "label": "German", "value": "german" },
+            { "label": "Italian", "value": "italian" },
+            { "label": "Spanish", "value": "spanish" },
+            { "label": "Russian", "value": "russian" },
+            { "label": "Arabic", "value": "arabic" },
+            { "label": "Bulgarian", "value": "bulgarian" },
+            { "label": "Czech", "value": "czech" },
+            { "label": "Danish", "value": "danish" },
+            { "label": "Dutch", "value": "dutch" },
+            { "label": "Finnish", "value": "finnish" },
+            { "label": "Norwegian", "value": "norwegian" },
+            { "label": "Polish", "value": "polish" },
+            { "label": "Portuguese (Brazil)", "value": "portuguese-br" },
+            { "label": "Portuguese (Portugal)", "value": "portuguese-pt" },
+            { "label": "Swedish", "value": "swedish" },
+            { "label": "Turkish", "value": "turkish" },
+            { "label": "Chinese (Traditional)", "value": "chinese-traditional" },
+            { "label": "Chinese (Simplified)", "value": "chinese-simplified" },
+            { "label": "Japanese", "value": "japanese" },
+            { "label": "Korean", "value": "korean" }
+          ]
+        }
       ]
     },
     {
@@ -403,13 +434,129 @@
           "cvar": "coop",
           "items": ["deathmatch", "cooperative"]
         },
+        { "type": "field", "label": "host name", "cvar": "hostname", "width": 16 },
+        { "type": "blank" },
+        {
+          "type": "action",
+          "label": "Match Setup",
+          "align": "left",
+          "selectable": false,
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "match format",
+          "cvar": "match_setup_format",
+          "pairs": [
+            { "label": "Regular", "value": "regular" },
+            { "label": "Practice", "value": "practice" },
+            { "label": "Marathon", "value": "marathon" },
+            { "label": "Tournament", "value": "tournament" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "gametype",
+          "cvar": "match_setup_gametype",
+          "pairs": [
+            { "label": "Free For All", "value": "ffa" },
+            { "label": "Duel", "value": "duel" },
+            { "label": "Team Deathmatch", "value": "tdm" },
+            { "label": "Domination", "value": "dom" },
+            { "label": "Capture The Flag", "value": "ctf" },
+            { "label": "Clan Arena", "value": "ca" },
+            { "label": "One Flag", "value": "oneflag" },
+            { "label": "Harvester", "value": "har" },
+            { "label": "Overload", "value": "overload" },
+            { "label": "Freeze Tag", "value": "ft" },
+            { "label": "CaptureStrike", "value": "strike" },
+            { "label": "Red Rover", "value": "rr" },
+            { "label": "Last Man Standing", "value": "lms" },
+            { "label": "Last Team Standing", "value": "lts" },
+            { "label": "Horde Mode", "value": "horde" },
+            { "label": "Head Hunters", "value": "hh" },
+            { "label": "ProBall", "value": "ball" },
+            { "label": "Gauntlet", "value": "gauntlet" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "modifier",
+          "cvar": "match_setup_modifier",
+          "pairs": [
+            { "label": "Standard", "value": "standard" },
+            { "label": "InstaGib", "value": "instagib" },
+            { "label": "Vampiric Damage", "value": "vampiric" },
+            { "label": "Frenzy", "value": "frenzy" },
+            { "label": "Gravity Lotto", "value": "gravity_lotto" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "max players",
+          "cvar": "match_setup_maxplayers",
+          "pairs": [
+            { "label": "2", "value": "2" },
+            { "label": "4", "value": "4" },
+            { "label": "6", "value": "6" },
+            { "label": "8", "value": "8" },
+            { "label": "12", "value": "12" },
+            { "label": "16", "value": "16" },
+            { "label": "24", "value": "24" },
+            { "label": "32", "value": "32" },
+            { "label": "64", "value": "64" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "match length",
+          "cvar": "match_setup_length",
+          "pairs": [
+            { "label": "Short", "value": "short" },
+            { "label": "Standard", "value": "standard" },
+            { "label": "Long", "value": "long" },
+            { "label": "Endurance", "value": "endurance" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "match type",
+          "cvar": "match_setup_type",
+          "pairs": [
+            { "label": "Casual", "value": "casual" },
+            { "label": "Standard", "value": "standard" },
+            { "label": "Competitive", "value": "competitive" },
+            { "label": "Tournament", "value": "tournament" }
+          ],
+          "showIf": ["coop=0"]
+        },
+        {
+          "type": "dropdown",
+          "label": "best of",
+          "cvar": "match_setup_bestof",
+          "pairs": [
+            { "label": "BO1", "value": "bo1" },
+            { "label": "BO3", "value": "bo3" },
+            { "label": "BO5", "value": "bo5" },
+            { "label": "BO7", "value": "bo7" },
+            { "label": "BO9", "value": "bo9" }
+          ],
+          "showIf": ["coop=0", "match_setup_type=tournament"]
+        },
+        { "type": "blank", "showIf": ["coop=0"] },
         {
           "type": "field",
           "label": "time limit",
           "cvar": "timelimit",
           "integer": true,
           "width": 3,
-          "status": "0 - no time limit"
+          "status": "0 - no time limit",
+          "showIf": ["coop=1"]
         },
         {
           "type": "field",
@@ -417,17 +564,30 @@
           "cvar": "fraglimit",
           "integer": true,
           "width": 3,
-          "status": "0 - no frag limit"
+          "status": "0 - no frag limit",
+          "showIf": ["coop=1"]
         },
-        { "type": "field", "label": "max players", "cvar": "maxclients", "integer": true, "width": 3 },
-        { "type": "field", "label": "host name", "cvar": "hostname", "width": 16 },
+        {
+          "type": "field",
+          "label": "max players",
+          "cvar": "maxclients",
+          "integer": true,
+          "width": 3,
+          "showIf": ["coop=1"]
+        },
         { "type": "blank" },
-        { "type": "action", "label": "deathmatch flags...", "align": "left", "command": "pushmenu gameflags", "showIf": ["coop=0"] },
+        {
+          "type": "action",
+          "label": "deathmatch flags...",
+          "align": "left",
+          "command": "pushmenu gameflags",
+          "showIf": ["coop=0"]
+        },
         {
           "type": "action",
           "label": "begin game!",
           "align": "left",
-          "command": "forcemenuoff; if $coop == 1 then deathmatch 0 else deathmatch 1; map $_ui_nextserver force"
+          "command": "forcemenuoff; if $coop == 1 then \"match_setup_active 0; deathmatch 0; coop 1\" else \"match_setup_active 1; deathmatch 1; coop 0; maxplayers $match_setup_maxplayers; maxclients $match_setup_maxplayers\"; map $_ui_nextserver force"
         }
       ]
     },
@@ -438,7 +598,7 @@
         { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+http://q2servers.com/?raw=2\"" },
         { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
         { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
-        { "type": "action", "label": "start server", "command": "pushmenu startserver" }
+        { "type": "action", "label": "start server", "command": "if $match_setup_format == \"\" then match_setup_format regular; if $match_setup_gametype == \"\" then match_setup_gametype ffa; if $match_setup_modifier == \"\" then match_setup_modifier standard; if $match_setup_length == \"\" then match_setup_length standard; if $match_setup_type == \"\" then match_setup_type standard; if $match_setup_bestof == \"\" then match_setup_bestof bo1; if $match_setup_maxplayers == \"\" then match_setup_maxplayers 8; pushmenu startserver" }
       ]
     },
     {
@@ -944,11 +1104,11 @@
       "name": "keys",
       "title": "Key Bindings",
       "items": [
-        { "type": "blank", "label": "combat" },
+        { "type": "heading", "label": "combat" },
         { "type": "bind", "label": "attack", "command": "+attack" },
         { "type": "bind", "label": "next weapon", "command": "weapnext" },
         { "type": "bind", "label": "previous weapon", "command": "weapprev" },
-        { "type": "blank", "label": "movement" },
+        { "type": "heading", "label": "movement" },
         { "type": "bind", "label": "walk forward", "command": "+forward" },
         { "type": "bind", "label": "backpedal", "command": "+back" },
         { "type": "bind", "label": "run", "command": "+speed" },
@@ -956,13 +1116,13 @@
         { "type": "bind", "label": "step right", "command": "+moveright" },
         { "type": "bind", "label": "up / jump", "command": "+moveup" },
         { "type": "bind", "label": "down / crouch", "command": "+movedown" },
-        { "type": "blank", "label": "inventory" },
+        { "type": "heading", "label": "inventory" },
         { "type": "bind", "label": "inventory", "command": "inven" },
         { "type": "bind", "label": "use item", "command": "invuse" },
         { "type": "bind", "label": "drop item", "command": "invdrop" },
         { "type": "bind", "label": "prev item", "command": "invprev" },
         { "type": "bind", "label": "next item", "command": "invnext" },
-        { "type": "blank", "label": "interface" },
+        { "type": "heading", "label": "interface" },
         { "type": "bind", "label": "help computer", "command": "help" },
         { "type": "bind", "label": "pause game", "command": "pause" },
         { "type": "bind", "label": "scoreboard", "command": "score" },
@@ -1314,10 +1474,7 @@
       "items": [
         { "type": "action", "label": "*Admin Menu*", "align": "center", "selectable": false },
         { "type": "blank" },
-        { "type": "action", "label": "Match Setup owns game settings.", "align": "left", "selectable": false },
-        { "type": "action", "label": "Use Reset State to rerun.", "align": "left", "selectable": false },
-        { "type": "blank" },
-        { "type": "action", "label": "Reset State", "align": "left", "command": "worr_setup_welcome" },
+        { "type": "action", "label": "Match settings are set on server start.", "align": "left", "selectable": false },
         { "type": "action", "label": "Replay Game", "align": "left", "command": "worr_tourney_replay_menu", "showIf": ["ui_admin_show_replay=1"] },
         { "type": "action", "label": "Admin Commands", "align": "left", "command": "pushmenu admin_commands" },
         { "type": "blank" },
@@ -1448,108 +1605,6 @@
         { "type": "action", "label": "usage: unready_all", "align": "left", "selectable": false },
         { "type": "blank" },
         { "type": "action", "label": "Back", "align": "left", "command": "popmenu" }
-      ]
-    },
-    {
-      "name": "setup_welcome",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Welcome to", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_title", "align": "center", "selectable": false, "showIf": ["ui_setup_title"] },
-        { "type": "blank" },
-        { "type": "action", "label": "Match Setup", "align": "left", "command": "worr_setup_start", "default": true },
-        { "type": "action", "label": "Skip", "align": "left", "command": "worr_setup_skip" }
-      ]
-    },
-    {
-      "name": "setup_format",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Match Format", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "Regular", "align": "left", "command": "worr_setup_format regular", "default": true },
-        { "type": "action", "label": "Practice", "align": "left", "command": "worr_setup_format practice" },
-        { "type": "action", "label": "Marathon", "align": "left", "command": "worr_setup_format marathon" },
-        { "type": "action", "label": "Tournament", "align": "left", "command": "worr_setup_format tournament", "showIf": ["ui_setup_show_tournament=1"] }
-      ]
-    },
-    {
-      "name": "setup_maxplayers",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Max Players", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "2", "align": "left", "command": "worr_setup_maxplayers 2", "showIf": ["ui_setup_maxplayers_limit>=2"], "defaultIf": ["ui_setup_default=2"] },
-        { "type": "action", "label": "4", "align": "left", "command": "worr_setup_maxplayers 4", "showIf": ["ui_setup_maxplayers_limit>=4"], "defaultIf": ["ui_setup_default=4"] },
-        { "type": "action", "label": "6", "align": "left", "command": "worr_setup_maxplayers 6", "showIf": ["ui_setup_maxplayers_limit>=6"], "defaultIf": ["ui_setup_default=6"] },
-        { "type": "action", "label": "8", "align": "left", "command": "worr_setup_maxplayers 8", "showIf": ["ui_setup_maxplayers_limit>=8"], "defaultIf": ["ui_setup_default=8"] },
-        { "type": "action", "label": "12", "align": "left", "command": "worr_setup_maxplayers 12", "showIf": ["ui_setup_maxplayers_limit>=12"], "defaultIf": ["ui_setup_default=12"] },
-        { "type": "action", "label": "16", "align": "left", "command": "worr_setup_maxplayers 16", "showIf": ["ui_setup_maxplayers_limit>=16"], "defaultIf": ["ui_setup_default=16"] },
-        { "type": "action", "label": "24", "align": "left", "command": "worr_setup_maxplayers 24", "showIf": ["ui_setup_maxplayers_limit>=24"], "defaultIf": ["ui_setup_default=24"] },
-        { "type": "action", "label": "32", "align": "left", "command": "worr_setup_maxplayers 32", "showIf": ["ui_setup_maxplayers_limit>=32"], "defaultIf": ["ui_setup_default=32"] },
-        { "type": "action", "label": "64", "align": "left", "command": "worr_setup_maxplayers 64", "showIf": ["ui_setup_maxplayers_limit>=64"], "defaultIf": ["ui_setup_default=64"] }
-      ]
-    },
-    {
-      "name": "setup_modifier",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Modifiers", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_modifier standard", "default": true },
-        { "type": "action", "label": "InstaGib", "align": "left", "command": "worr_setup_modifier instagib" },
-        { "type": "action", "label": "Vampiric Damage", "align": "left", "command": "worr_setup_modifier vampiric" },
-        { "type": "action", "label": "Frenzy", "align": "left", "command": "worr_setup_modifier frenzy" },
-        { "type": "action", "label": "Gravity Lotto", "align": "left", "command": "worr_setup_modifier gravity_lotto" }
-      ]
-    },
-    {
-      "name": "setup_length",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Match Length", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "Short", "align": "left", "command": "worr_setup_length short" },
-        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_length standard", "default": true },
-        { "type": "action", "label": "Long", "align": "left", "command": "worr_setup_length long" },
-        { "type": "action", "label": "Endurance", "align": "left", "command": "worr_setup_length endurance" }
-      ]
-    },
-    {
-      "name": "setup_type",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Match Type", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "Casual", "align": "left", "command": "worr_setup_type casual" },
-        { "type": "action", "label": "Standard", "align": "left", "command": "worr_setup_type standard", "default": true },
-        { "type": "action", "label": "Competitive", "align": "left", "command": "worr_setup_type competitive" },
-        { "type": "action", "label": "Tournament", "align": "left", "command": "worr_setup_type tournament" }
-      ]
-    },
-    {
-      "name": "setup_bestof",
-      "style": { "compact": true, "transparent": true },
-      "items": [
-        { "type": "action", "label": "Match Setup", "align": "center", "selectable": false },
-        { "type": "action", "label": "Best Of", "align": "center", "selectable": false },
-        { "type": "action", "labelCvar": "ui_setup_current", "align": "center", "selectable": false, "showIf": ["ui_setup_current"] },
-        { "type": "blank" },
-        { "type": "action", "label": "BO1", "align": "left", "command": "worr_setup_bestof bo1" },
-        { "type": "action", "label": "BO3", "align": "left", "command": "worr_setup_bestof bo3", "default": true },
-        { "type": "action", "label": "BO5", "align": "left", "command": "worr_setup_bestof bo5" },
-        { "type": "action", "label": "BO7", "align": "left", "command": "worr_setup_bestof bo7" },
-        { "type": "action", "label": "BO9", "align": "left", "command": "worr_setup_bestof bo9" }
       ]
     },
     {

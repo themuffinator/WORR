@@ -2232,6 +2232,8 @@ struct cgame_import_t {
 	void		(*SCR_SetAltTypeface)(bool enabled);
 	void		(*SCR_DrawFontString)(const char *str, int x, int y, int scale, const rgba_t &color, bool shadow, text_align_t align);
 	Vector2		(*SCR_MeasureFontString)(const char *str, int scale);
+	void		(*SCR_DrawCenterFontString)(const char *str, int x, int y, int scale, const rgba_t &color, bool shadow, text_align_t align);
+	Vector2		(*SCR_MeasureCenterFontString)(const char *str, int scale);
 	float		(*SCR_FontLineHeight)(int scale);
 
 	// [Paril-KEX] for legacy text input (not used in lobbies)

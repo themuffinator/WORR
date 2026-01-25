@@ -22,8 +22,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 win_state_t     win;
 
-static cvar_t   *vid_flip_on_switch;
-static cvar_t   *vid_hwgamma;
+static cvar_t   *win_flip_on_switch;
+static cvar_t   *vid_flip_on_switch_legacy;
+static cvar_t   *r_hwgamma;
+static cvar_t   *vid_hwgamma_legacy;
 static cvar_t   *win_noalttab;
 static cvar_t   *win_disablewinkey;
 static cvar_t   *win_noresize;
@@ -31,6 +33,84 @@ static cvar_t   *win_notitle;
 static cvar_t   *win_alwaysontop;
 static cvar_t   *win_noborder;
 static UINT     win_char_codepage;
+
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+} win_cvar_alias_pair_t;
+
+static bool win_cvar_alias_syncing;
+
+static win_cvar_alias_pair_t win_cvar_aliases[] = {
+    { &win_flip_on_switch, &vid_flip_on_switch_legacy },
+    { &r_hwgamma, &vid_hwgamma_legacy },
+};
+
+static void win_cvar_alias_changed(cvar_t *self)
+{
+    if (win_cvar_alias_syncing)
+        return;
+
+    win_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(win_cvar_aliases); i++) {
+        win_cvar_alias_pair_t *pair = &win_cvar_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (self == primary) {
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+            break;
+        }
+
+        if (self == legacy) {
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+            break;
+        }
+    }
+
+    win_cvar_alias_syncing = false;
+}
+
+static void win_cvar_alias_sync_defaults(void)
+{
+    if (win_cvar_alias_syncing)
+        return;
+
+    win_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(win_cvar_aliases); i++) {
+        win_cvar_alias_pair_t *pair = &win_cvar_aliases[i];
+        cvar_t *primary = *pair->primary;
+        cvar_t *legacy = *pair->legacy;
+
+        if (!primary || !legacy)
+            continue;
+
+        if (!(primary->flags & CVAR_MODIFIED) && (legacy->flags & CVAR_MODIFIED))
+            Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+        else
+            Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+    }
+
+    win_cvar_alias_syncing = false;
+}
+
+static void win_cvar_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(win_cvar_aliases); i++) {
+        win_cvar_alias_pair_t *pair = &win_cvar_aliases[i];
+        if (*pair->primary)
+            (*pair->primary)->changed = win_cvar_alias_changed;
+        if (*pair->legacy)
+            (*pair->legacy)->changed = win_cvar_alias_changed;
+    }
+
+    win_cvar_alias_sync_defaults();
+}
 
 static void     Win_ClipCursor(void);
 static void     win_utf8_reset(void);
@@ -142,6 +222,11 @@ static void Win_ModeChanged(void)
 {
     R_ModeChanged(win.rc.width, win.rc.height, win.flags);
     SCR_ModeChanged();
+}
+
+static bool win_fullscreen_exclusive(void)
+{
+    return !r_fullscreen_exclusive || r_fullscreen_exclusive->integer;
 }
 
 static int modecmp(const void *p1, const void *p2)
@@ -302,7 +387,7 @@ static LONG set_fullscreen_mode(void)
 
     EnumDisplaySettings(NULL, ENUM_REGISTRY_SETTINGS, &desktop);
 
-    // parse vid_modelist specification
+    // parse r_modelist specification
     if (VID_GetFullscreen(&win.rc, &freq, &depth)) {
         Com_DPrintf("...setting fullscreen mode: %dx%d\n",
                     win.rc.width, win.rc.height);
@@ -364,6 +449,33 @@ static LONG set_fullscreen_mode(void)
     return ret;
 }
 
+static void set_borderless_mode(void)
+{
+    MONITORINFO mi = { .cbSize = sizeof(mi) };
+    HMONITOR monitor = MonitorFromWindow(win.wnd, MONITOR_DEFAULTTONEAREST);
+
+    if (GetMonitorInfoA(monitor, &mi)) {
+        win.rc.x = mi.rcMonitor.left;
+        win.rc.y = mi.rcMonitor.top;
+        win.rc.width = mi.rcMonitor.right - mi.rcMonitor.left;
+        win.rc.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+    } else {
+        win.rc.x = 0;
+        win.rc.y = 0;
+        win.rc.width = GetSystemMetrics(SM_CXSCREEN);
+        win.rc.height = GetSystemMetrics(SM_CYSCREEN);
+    }
+
+    Com_DPrintf("...setting borderless fullscreen mode: %dx%d%+d%+d\n",
+                win.rc.width, win.rc.height, win.rc.x, win.rc.y);
+
+    memset(&win.dm, 0, sizeof(win.dm));
+    win.flags |= QVF_FULLSCREEN;
+    Win_SetPosition();
+    Win_ModeChanged();
+    win.mode_changed = 0;
+}
+
 int Win_GetDpiScale(void)
 {
     if (win.GetDpiForWindow) {
@@ -384,7 +496,13 @@ Win_SetMode
 void Win_SetMode(void)
 {
     // set full screen mode if requested
-    if (vid_fullscreen->integer > 0) {
+    if (r_fullscreen->integer > 0) {
+        if (!win_fullscreen_exclusive()) {
+            ChangeDisplaySettings(NULL, 0);
+            set_borderless_mode();
+            return;
+        }
+
         LONG ret;
 
         ret = set_fullscreen_mode();
@@ -403,12 +521,12 @@ void Win_SetMode(void)
         }
 
         // fall back to windowed mode
-        Cvar_Reset(vid_fullscreen);
+        Cvar_Reset(r_fullscreen);
     }
 
     ChangeDisplaySettings(NULL, 0);
 
-    // parse vid_geometry specification
+    // parse r_geometry specification
     VID_GetGeometry(&win.rc);
 
     Com_DPrintf("...setting windowed mode: %dx%d%+d%+d\n",
@@ -508,7 +626,7 @@ static void Win_Activate(WPARAM wParam)
             ShowWindow(win.wnd, SW_MINIMIZE);
         }
 
-        if (vid_flip_on_switch->integer) {
+        if (win_flip_on_switch->integer && win_fullscreen_exclusive()) {
             if (active == ACT_ACTIVATED) {
                 if (!mode_is_current(&win.dm)) {
                     ChangeDisplaySettings(&win.dm, CDS_FULLSCREEN);
@@ -1230,7 +1348,7 @@ static LRESULT WINAPI Win_MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
         case SC_MAXIMIZE:
             if (win_noborder->integer)
                 break; // default maximize
-            if (!vid_fullscreen->integer)
+            if (!r_fullscreen->integer)
                 VID_ToggleFullscreen();
             return FALSE;
         }
@@ -1423,8 +1541,11 @@ void Win_Init(void)
     WNDCLASSEXA wc;
 
     // register variables
-    vid_flip_on_switch = Cvar_Get("vid_flip_on_switch", "0", 0);
-    vid_hwgamma = Cvar_Get("vid_hwgamma", "0", CVAR_RENDERER);
+    win_flip_on_switch = Cvar_Get("win_flip_on_switch", "0", 0);
+    vid_flip_on_switch_legacy = Cvar_Get("vid_flip_on_switch", win_flip_on_switch->string, CVAR_NOARCHIVE);
+    r_hwgamma = Cvar_Get("r_hwgamma", "0", CVAR_RENDERER);
+    vid_hwgamma_legacy = Cvar_Get("vid_hwgamma", r_hwgamma->string, CVAR_RENDERER | CVAR_NOARCHIVE);
+    win_cvar_alias_register();
     win_noalttab = Cvar_Get("win_noalttab", "0", CVAR_ARCHIVE);
     win_noalttab->changed = win_noalttab_changed;
     win_disablewinkey = Cvar_Get("win_disablewinkey", "0", 0);
@@ -1475,14 +1596,14 @@ void Win_Init(void)
     }
 
     // init gamma ramp
-    if (vid_hwgamma->integer) {
+    if (r_hwgamma->integer) {
         if (GetDeviceGammaRamp(win.dc, win.gamma_orig)) {
             Com_DPrintf("...enabling hardware gamma\n");
             win.flags |= QVF_GAMMARAMP;
             memcpy(win.gamma_cust, win.gamma_orig, sizeof(win.gamma_cust));
         } else {
             Com_DPrintf("...hardware gamma not supported\n");
-            Cvar_Set("vid_hwgamma", "0");
+            Cvar_Set("r_hwgamma", "0");
         }
     }
 }

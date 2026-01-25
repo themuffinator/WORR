@@ -7,7 +7,7 @@
 - Mouse grab stays active in message mode, with SDL/Wayland handling updated for scroll and drag input.
 
 ## Details
-Safe zone margins are derived from `scr_safe_zone` and clamped to 0.0-0.5, matching other HUD elements.
+Safe zone margins are derived from `cl_safe_zone` and clamped to 0.0-0.5, matching other HUD elements.
 The bottom anchor is lifted by two status bar icon heights to avoid overlapping the layout program.
 Prompt spacing now uses the prompt string length (with a trailing space), and the skip is clamped to
 leave at least one visible input character.

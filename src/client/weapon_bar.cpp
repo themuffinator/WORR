@@ -65,7 +65,7 @@ static void WeaponBar_GetScaledSize(qhandle_t pic, float scale, int *out_w, int 
 
 static float WeaponBar_GetSafeFrac(void)
 {
-    float safe = Cvar_VariableValue("scr_safe_zone");
+    float safe = Cvar_VariableValue("cl_safe_zone");
 
     return Q_clipf(safe, 0.0f, 0.5f);
 }
@@ -144,7 +144,7 @@ static void WeaponBar_DrawScaledString(int x, int y, float scale, int flags, col
     }
 
     for (int i = 0; i < len; i++, x += char_w) {
-        R_DrawStretchChar(x, y, char_w, char_h, flags, text[i], color, scr.font_pic);
+        R_DrawStretchChar(x, y, char_w, char_h, flags, text[i], color, scr.ui_font_pic);
     }
 }
 
@@ -245,10 +245,10 @@ static int WeaponBar_ClampMode(int mode)
 
 static int WeaponBar_GetMode(void)
 {
-    if (!cl_weaponBar)
+    if (!cl_weapon_bar)
         return WEAPON_BAR_TIMED_Q2R;
 
-    return WeaponBar_ClampMode(cl_weaponBar->integer);
+    return WeaponBar_ClampMode(cl_weapon_bar->integer);
 }
 
 static void WeaponBar_ApplyMode(int mode)

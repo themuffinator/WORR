@@ -16,7 +16,7 @@ shared color escape parsing across client and renderer.
   immediately even under cache eviction pressure.
 
 ### Glyph cache LRU eviction
-- Implemented an LRU list for TTF glyphs (`font_ttf_t::lru`) and a new cvar `cl_fontGlyphCacheSize`
+- Implemented an LRU list for TTF glyphs (`font_ttf_t::lru`) and a new cvar `cl_font_glyph_cache_size`
   (default 2000) to cap the glyph cache size.
 - On overflow, the least-recently-used glyph is evicted; if a suitable evicted slot fits a new
   glyph, it is reused to avoid unnecessary atlas growth when possible.
@@ -52,6 +52,6 @@ shared color escape parsing across client and renderer.
 
 ## Suggested Tests
 - Load console/menu/centerprint with the default TTF fonts and verify immediate readability.
-- Run `cl_fontGlyphCacheSize 128` and spam chat with mixed ASCII/CJK to ensure fallback and
+- Run `cl_font_glyph_cache_size 128` and spam chat with mixed ASCII/CJK to ensure fallback and
   kerning remain correct.
 - Compare `Font_MeasureString` sizing before/after kerning on tight UI labels.

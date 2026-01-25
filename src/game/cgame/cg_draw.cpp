@@ -104,20 +104,28 @@ static constexpr rgba_t q3_rainbow_colors[26] = {
     { 128, 128, 128, 255 }
 };
 
-static cvar_t *scr_usekfont;
-static cvar_t *scr_alpha;
-static cvar_t *scr_chathud;
+static cvar_t *cg_usekfont;
+static cvar_t *cg_usekfont_legacy;
+static cvar_t *cl_alpha;
+static cvar_t *cl_chathud;
 
-static cvar_t *scr_centertime;
-static cvar_t *scr_printspeed;
+static cvar_t *cg_centertime;
+static cvar_t *cg_centertime_legacy;
+static cvar_t *cg_printspeed;
+static cvar_t *cg_printspeed_legacy;
 static cvar_t *cl_notifytime;
-static cvar_t *scr_maxlines;
+static cvar_t *cg_maxlines;
+static cvar_t *cg_maxlines_legacy;
 static cvar_t *con_notifytime;
 static cvar_t *con_notifylines;
 static cvar_t *ui_acc_contrast;
 static cvar_t* ui_acc_alttypeface;
-static cvar_t *cl_obituary_time;
-static cvar_t *cl_obituary_fade;
+static cvar_t *cg_obituary_time;
+static cvar_t *cg_obituary_time_legacy;
+static cvar_t *cg_obituary_fade;
+static cvar_t *cg_obituary_fade_legacy;
+static cvar_t *cg_draw_fps;
+static cvar_t *cg_draw_fps_legacy;
 
 // static temp data used for hud
 static struct
@@ -296,10 +304,17 @@ struct cg_eou_data_t {
     bool layout_dirty = true;
 };
 
+struct cg_fps_state_t {
+    uint64_t last_time = 0;
+    int frames = 0;
+    int value = 0;
+};
+
 static cg_hud_blob_t cg_hud_blob;
 static cg_hud_state_t cg_hud_state;
 static cg_scoreboard_data_t cg_scoreboard;
 static cg_eou_data_t cg_eou;
+static cg_fps_state_t cg_fps_state;
 
 void CG_ClearCenterprint(int32_t isplit)
 {
@@ -645,10 +660,10 @@ static int CG_GetEffectiveNotifyLines(void)
         return 0;
     if (con_notifytime && con_notifytime->value <= 0.0f)
         return 0;
-    if (!scr_maxlines || scr_maxlines->integer <= 0)
+    if (!cg_maxlines || cg_maxlines->integer <= 0)
         return 0;
 
-    int max_lines = min((int)MAX_NOTIFY, scr_maxlines->integer);
+    int max_lines = min((int)MAX_NOTIFY, cg_maxlines->integer);
     if (con_notifylines && con_notifylines->integer > 0)
         max_lines = min(max_lines, con_notifylines->integer);
 
@@ -981,12 +996,12 @@ static uint64_t CG_ObituaryCvarMs(cvar_t *var, uint64_t fallback_ms, int max_ms)
 
 static uint64_t CG_Obituary_LifetimeMs()
 {
-    return CG_ObituaryCvarMs(cl_obituary_time, OBITUARY_LIFETIME_DEFAULT_MS, OBITUARY_LIFETIME_MAX_MS);
+    return CG_ObituaryCvarMs(cg_obituary_time, OBITUARY_LIFETIME_DEFAULT_MS, OBITUARY_LIFETIME_MAX_MS);
 }
 
 static uint64_t CG_Obituary_FadeMs()
 {
-    return CG_ObituaryCvarMs(cl_obituary_fade, OBITUARY_FADE_DEFAULT_MS, OBITUARY_FADE_MAX_MS);
+    return CG_ObituaryCvarMs(cg_obituary_fade, OBITUARY_FADE_DEFAULT_MS, OBITUARY_FADE_MAX_MS);
 }
 
 static void CG_AdvanceObituaryValue(float &value, float target, float speed)
@@ -1045,6 +1060,10 @@ static void CG_AddObituary(hud_data_t &data, const cl_obituary_t &entry)
 }
 
 // draw notifies
+static int CG_GetBoldExtraPixels(int scale);
+static void CG_DrawBoldFontString(const char *text, int x, int y, int scale,
+                                  const rgba_t &color, bool shadow, text_align_t align);
+
 static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
 {
     auto &data = hud_data[isplit];
@@ -1083,7 +1102,23 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
         if (!msg.is_active)
             break;
 
-        cgi.SCR_DrawFontString(msg.message.c_str(), (hud_vrect.x * scale) + hud_safe.x, y, scale, msg.is_chat ? alt_color : rgba_white, true, text_align_t::LEFT);
+        const rgba_t &color = msg.is_chat ? alt_color : rgba_white;
+        const char *text = msg.message.c_str();
+        const char *colon = msg.is_chat ? strchr(text, ':') : nullptr;
+
+        if (colon && colon != text) {
+            std::string name(text, static_cast<size_t>(colon - text));
+            const char *rest = colon;
+            const int bold_extra = CG_GetBoldExtraPixels(scale);
+            const int name_width = cgi.SCR_MeasureFontString(name.c_str(), scale).x;
+
+            CG_DrawBoldFontString(name.c_str(), (hud_vrect.x * scale) + hud_safe.x, y, scale,
+                                  color, true, text_align_t::LEFT);
+            cgi.SCR_DrawFontString(rest, (hud_vrect.x * scale) + hud_safe.x + name_width + bold_extra,
+                                   y, scale, color, true, text_align_t::LEFT);
+        } else {
+            cgi.SCR_DrawFontString(text, (hud_vrect.x * scale) + hud_safe.x, y, scale, color, true, text_align_t::LEFT);
+        }
         y += 10 * scale;
     }
 
@@ -1097,6 +1132,22 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
 
         if (cgi.CL_GetTextInput(&input_msg, &input_team))
             cgi.SCR_DrawFontString(G_Fmt("{}: {}", input_team ? "say_team" : "say", input_msg).data(), (hud_vrect.x * scale) + hud_safe.x, y, scale, rgba_white, true, text_align_t::LEFT);
+    }
+}
+
+static int CG_GetBoldExtraPixels(int scale)
+{
+    int draw_scale = scale > 0 ? scale : 1;
+    return draw_scale <= 1 ? 2 : draw_scale;
+}
+
+static void CG_DrawBoldFontString(const char *text, int x, int y, int scale,
+                                  const rgba_t &color, bool shadow, text_align_t align)
+{
+    const int bold_extra = CG_GetBoldExtraPixels(scale);
+    cgi.SCR_DrawFontString(text, x, y, scale, color, shadow, align);
+    for (int i = 1; i <= bold_extra; ++i) {
+        cgi.SCR_DrawFontString(text, x + i, y, scale, color, false, align);
     }
 }
 
@@ -1116,6 +1167,7 @@ static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_saf
     const int icon_size = max(1, line_height);
     const int padding = max(2, 4 * scale);
     const int spacing = max(1, 2 * scale);
+    const int bold_extra = CG_GetBoldExtraPixels(scale);
 
     const int x = (hud_vrect.x * scale) + hud_safe.x;
     float y = (hud_vrect.y * scale) + hud_safe.y;
@@ -1153,8 +1205,8 @@ static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_saf
 
         if (entry.has_killer)
         {
-            cgi.SCR_DrawFontString(entry.killer.c_str(), draw_x, draw_y, scale, color, true, text_align_t::LEFT);
-            draw_x += cgi.SCR_MeasureFontString(entry.killer.c_str(), scale).x + padding;
+            CG_DrawBoldFontString(entry.killer.c_str(), draw_x, draw_y, scale, color, true, text_align_t::LEFT);
+            draw_x += cgi.SCR_MeasureFontString(entry.killer.c_str(), scale).x + padding + bold_extra;
         }
 
         bool drew_icon = false;
@@ -1182,9 +1234,42 @@ static void CG_DrawObituaries(int32_t isplit, vrect_t hud_vrect, vrect_t hud_saf
             draw_x += cgi.SCR_MeasureFontString(entry.label.c_str(), scale).x + padding;
         }
 
-        cgi.SCR_DrawFontString(entry.victim.c_str(), draw_x, draw_y, scale, color, true, text_align_t::LEFT);
+        CG_DrawBoldFontString(entry.victim.c_str(), draw_x, draw_y, scale, color, true, text_align_t::LEFT);
         y += (float)(line_height + spacing);
     }
+}
+
+static int CG_UpdateFPSValue(int32_t isplit)
+{
+    if (isplit != 0)
+        return cg_fps_state.value;
+
+    const uint64_t now = cgi.CL_ClientRealTime();
+    if (!cg_fps_state.last_time)
+        cg_fps_state.last_time = now;
+
+    cg_fps_state.frames++;
+    const uint64_t elapsed = now - cg_fps_state.last_time;
+    if (elapsed >= 1000) {
+        cg_fps_state.value = static_cast<int>((cg_fps_state.frames * 1000) / elapsed);
+        cg_fps_state.frames = 0;
+        cg_fps_state.last_time = now;
+    }
+
+    return cg_fps_state.value;
+}
+
+static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale)
+{
+    if (!cg_draw_fps || cg_draw_fps->integer <= 0)
+        return;
+
+    const int fps_value = CG_UpdateFPSValue(isplit);
+    const std::string text = G_Fmt("{} fps", fps_value).data();
+    const int x = ((hud_vrect.x + hud_vrect.width) * scale) - hud_safe.x;
+    const int y = (hud_vrect.y * scale) + hud_safe.y;
+
+    cgi.SCR_DrawFontString(text.c_str(), x, y, scale, rgba_white, true, text_align_t::RIGHT);
 }
 
 /*
@@ -1639,7 +1724,7 @@ void CG_DrawChatHUD(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t
     if (isplit < 0 || isplit >= (int32_t)chat_hud.size())
         return;
 
-    if (!scr_chathud || scr_chathud->integer == 0) {
+    if (!cl_chathud || cl_chathud->integer == 0) {
         const int key_dest = cgi.CL_GetKeyDest ? cgi.CL_GetKeyDest() : 0;
         if (!(key_dest & CHAT_KEYDEST_MESSAGE))
             return;
@@ -1680,8 +1765,8 @@ void CG_DrawChatHUD(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t
     }
 
     rgba_t base_color = rgba_white;
-    if (scr_alpha)
-        base_color.a = (uint8_t)Q_clip(Q_rint(255.0f * Cvar_ClampValue(scr_alpha, 0, 1)), 0, 255);
+    if (cl_alpha)
+        base_color.a = (uint8_t)Q_clip(Q_rint(255.0f * Cvar_ClampValue(cl_alpha, 0, 1)), 0, 255);
 
     if (total > 0) {
         float scroll_pixels = hud.scroll * CONCHAR_HEIGHT;
@@ -1700,7 +1785,7 @@ void CG_DrawChatHUD(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int32_t
             color.a = static_cast<uint8_t>(Q_rint((float)color.a * draw_lines[i].alpha));
 
             int flags = 0;
-            if (scr_chathud && scr_chathud->integer == 2 && line->is_chat)
+            if (cl_chathud && cl_chathud->integer == 2 && line->is_chat)
                 flags |= UI_ALTCOLOR;
 
             if (cgi.SCR_DrawString)
@@ -1806,9 +1891,9 @@ static const rgba_t ql_crosshair_colors[26] = {
 };
 
 static cvar_t *scr_crosshair;
-static cvar_t *scr_hit_marker_time;
-static cvar_t *scr_damage_indicators;
-static cvar_t *scr_damage_indicator_time;
+static cvar_t *cl_hit_marker_time;
+static cvar_t *cl_damage_indicators;
+static cvar_t *cl_damage_indicator_time;
 static cvar_t *cl_crosshair_brightness;
 static cvar_t *cl_crosshair_color;
 static cvar_t *cl_crosshair_health;
@@ -1820,9 +1905,9 @@ static cvar_t *cl_crosshair_size;
 static cvar_t *cl_hit_markers;
 static cvar_t *ch_x;
 static cvar_t *ch_y;
-static cvar_t *scr_pois;
-static cvar_t *scr_poi_edge_frac;
-static cvar_t *scr_poi_max_scale;
+static cvar_t *cl_pois;
+static cvar_t *cl_poi_edge_frac;
+static cvar_t *cl_poi_max_scale;
 
 struct cg_damage_entry_t {
     int damage = 0;
@@ -2072,13 +2157,13 @@ static void CG_DrawHitMarker(cg_crosshair_state_t &state, const rgba_t &base_col
 {
     if (!state.hit_marker_count)
         return;
-    if (!scr_hit_marker_time || scr_hit_marker_time->integer <= 0) {
+    if (!cl_hit_marker_time || cl_hit_marker_time->integer <= 0) {
         state.hit_marker_count = 0;
         return;
     }
 
     uint64_t now = cgi.CL_ClientRealTime();
-    uint64_t life = (uint64_t)scr_hit_marker_time->integer;
+    uint64_t life = (uint64_t)cl_hit_marker_time->integer;
     if (now - state.hit_marker_time > life) {
         state.hit_marker_count = 0;
         return;
@@ -2141,7 +2226,7 @@ void CG_AddDamageDisplay(int32_t isplit, int damage, const Vector3 &color, const
 {
     if (isplit < 0 || isplit >= (int32_t)crosshair_state.size())
         return;
-    if (!scr_damage_indicators || !scr_damage_indicators->integer)
+    if (!cl_damage_indicators || !cl_damage_indicators->integer)
         return;
 
     auto &state = crosshair_state[isplit];
@@ -2150,16 +2235,16 @@ void CG_AddDamageDisplay(int32_t isplit, int damage, const Vector3 &color, const
     entry->damage += damage;
     entry->color = (entry->color + color).normalized();
     entry->dir = dir;
-    entry->time = cgi.CL_ClientRealTime() + (uint64_t)scr_damage_indicator_time->integer;
+    entry->time = cgi.CL_ClientRealTime() + (uint64_t)cl_damage_indicator_time->integer;
 }
 
 static void CG_DrawDamageDisplays(cg_crosshair_state_t &state, const rgba_t &base_color)
 {
-    if (!scr_damage_indicators || !scr_damage_indicators->integer)
+    if (!cl_damage_indicators || !cl_damage_indicators->integer)
         return;
 
     uint64_t now = cgi.CL_ClientRealTime();
-    if (!scr_damage_indicator_time || scr_damage_indicator_time->value <= 0.0f)
+    if (!cl_damage_indicator_time || cl_damage_indicator_time->value <= 0.0f)
         return;
 
     cg_view_params_t view{};
@@ -2176,7 +2261,7 @@ static void CG_DrawDamageDisplays(cg_crosshair_state_t &state, const rgba_t &bas
         if (entry.time <= now)
             continue;
 
-        float frac = (float)(entry.time - now) / scr_damage_indicator_time->value;
+        float frac = (float)(entry.time - now) / cl_damage_indicator_time->value;
         Vector3 angles = VectorToAngles(entry.dir);
         float damage_yaw = angles.y;
         float yaw_diff = DEG2RAD((my_yaw - damage_yaw) - 180.0f);
@@ -2223,7 +2308,7 @@ void CG_RemovePOI(int32_t isplit, int id)
 {
     if (isplit < 0 || isplit >= (int32_t)poi_state.size())
         return;
-    if (!scr_pois || !scr_pois->integer)
+    if (!cl_pois || !cl_pois->integer)
         return;
 
     if (id == 0) {
@@ -2245,7 +2330,7 @@ void CG_AddPOI(int32_t isplit, int id, int time, const Vector3 &pos, int image, 
 {
     if (isplit < 0 || isplit >= (int32_t)poi_state.size())
         return;
-    if (!scr_pois || !scr_pois->integer)
+    if (!cl_pois || !cl_pois->integer)
         return;
     if (!cgi.CL_ClientTime)
         return;
@@ -2316,7 +2401,7 @@ static void CG_DrawPOIs(int32_t isplit)
 {
     if (isplit < 0 || isplit >= (int32_t)poi_state.size())
         return;
-    if (!scr_pois || !scr_pois->integer)
+    if (!cl_pois || !cl_pois->integer)
         return;
     if (!cgi.CL_ClientTime || !cgi.CL_GetViewParams || !cgi.SCR_GetScreenMetrics || !cgi.SCR_DrawColorPic)
         return;
@@ -2344,8 +2429,8 @@ static void CG_DrawPOIs(int32_t isplit)
     float max_height = metrics.hud_height * 0.75f;
 
     uint8_t base_alpha = 255;
-    if (scr_alpha)
-        base_alpha = static_cast<uint8_t>(Q_rint(255.0f * Cvar_ClampValue(scr_alpha, 0.0f, 1.0f)));
+    if (cl_alpha)
+        base_alpha = static_cast<uint8_t>(Q_rint(255.0f * Cvar_ClampValue(cl_alpha, 0.0f, 1.0f)));
 
     auto &pois = poi_state[isplit];
     for (auto &poi : pois) {
@@ -2385,8 +2470,8 @@ static void CG_DrawPOIs(int32_t isplit)
         }
 
         float scale = 1.0f;
-        if (scr_poi_max_scale && scr_poi_edge_frac && scr_poi_max_scale->value != 1.0f) {
-            float edge_dist = min(metrics.hud_width, metrics.hud_height) * scr_poi_edge_frac->value;
+        if (cl_poi_max_scale && cl_poi_edge_frac && cl_poi_max_scale->value != 1.0f) {
+            float edge_dist = min(metrics.hud_width, metrics.hud_height) * cl_poi_edge_frac->value;
 
             for (int axis = 0; axis < 2; ++axis) {
                 float extent = (axis == 0) ? (float)metrics.hud_width : (float)metrics.hud_height;
@@ -2401,8 +2486,8 @@ static void CG_DrawPOIs(int32_t isplit)
                     continue;
                 }
 
-                scale = Q_clipf(1.0f + (1.0f - frac) * (scr_poi_max_scale->value - 1.0f),
-                                scale, scr_poi_max_scale->value);
+                scale = Q_clipf(1.0f + (1.0f - frac) * (cl_poi_max_scale->value - 1.0f),
+                                scale, cl_poi_max_scale->value);
             }
         }
 
@@ -2547,8 +2632,8 @@ void CG_DrawCrosshair(int32_t isplit, const player_state_t *ps)
         }
     }
 
-    if (scr_alpha)
-        crosshair_color.a = static_cast<uint8_t>(Q_rint(crosshair_color.a * Cvar_ClampValue(scr_alpha, 0, 1)));
+    if (cl_alpha)
+        crosshair_color.a = static_cast<uint8_t>(Q_rint(crosshair_color.a * Cvar_ClampValue(cl_alpha, 0, 1)));
 
     if (cgi.SCR_SetScale)
         cgi.SCR_SetScale((float)metrics.base_scale);
@@ -2692,15 +2777,15 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
 
         vec2_t size;
         
-        if (scr_usekfont->integer)
+        if (cg_usekfont->integer)
             size = cgi.SCR_MeasureFontString(line, scale);
         int visible_width = width;
-        if (!scr_usekfont->integer)
+        if (!cg_usekfont->integer)
             visible_width = static_cast<int>(CG_StrlenNoColor(line, static_cast<size_t>(width)));
 
         if (centerwidth)
         {
-            if (!scr_usekfont->integer)
+            if (!cg_usekfont->integer)
                 x = margin + ((centerwidth - visible_width*CONCHAR_WIDTH*scale))/2;
             else
                 x = margin + ((centerwidth - size.x))/2;
@@ -2708,7 +2793,7 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
         else
             x = margin;
 
-        if (!scr_usekfont->integer)
+        if (!cg_usekfont->integer)
         {
             rgba_t base_color = _xor ? alt_color : rgba_white;
             CG_DrawStringColored(x, y, scale, line, base_color, shadow);
@@ -2723,11 +2808,61 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
         {
             string++;   // skip the \n
             x = margin;
-            if (!scr_usekfont->integer)
+            if (!cg_usekfont->integer)
                 y += CONCHAR_WIDTH * scale;
             else
                 // TODO
                 y += 10 * scale;//size.y;
+        }
+    }
+
+    return x;
+}
+
+static int CG_DrawCenterHUDString (const char *string, int x, int y, int centerwidth, int _xor, int scale, bool shadow = true)
+{
+    int margin = x;
+    char line[1024];
+
+    while (*string) {
+        int width = 0;
+        while (*string && *string != '\n')
+            line[width++] = *string++;
+        line[width] = 0;
+
+        vec2_t size;
+
+        if (cg_usekfont->integer)
+            size = cgi.SCR_MeasureCenterFontString(line, scale);
+        int visible_width = width;
+        if (!cg_usekfont->integer)
+            visible_width = static_cast<int>(CG_StrlenNoColor(line, static_cast<size_t>(width)));
+
+        if (centerwidth) {
+            if (!cg_usekfont->integer)
+                x = margin + ((centerwidth - visible_width * CONCHAR_WIDTH * scale)) / 2;
+            else
+                x = margin + ((centerwidth - size.x)) / 2;
+        } else {
+            x = margin;
+        }
+
+        if (!cg_usekfont->integer) {
+            rgba_t base_color = _xor ? alt_color : rgba_white;
+            CG_DrawStringColored(x, y, scale, line, base_color, shadow);
+        } else {
+            cgi.SCR_DrawCenterFontString(line, x, y - (font_y_offset * scale), scale,
+                                         _xor ? alt_color : rgba_white, true, text_align_t::LEFT);
+            x += size.x;
+        }
+
+        if (*string) {
+            string++;
+            x = margin;
+            if (!cg_usekfont->integer)
+                y += CONCHAR_WIDTH * scale;
+            else
+                y += 10 * scale;
         }
     }
 
@@ -2963,7 +3098,7 @@ void CG_ParseCenterPrint (const char *str, int isplit, bool instant) // [Sam-KEX
         return;
     }
 
-    center.time_tick = cgi.CL_ClientRealTime() + (scr_printspeed->value * 1000);
+    center.time_tick = cgi.CL_ClientRealTime() + (cg_printspeed->value * 1000);
     center.instant = instant;
     center.finished = false;
     center.current_line = 0;
@@ -2981,7 +3116,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
     else
         y += 48 * scale;
 
-    int lineHeight = (scr_usekfont->integer ? 10 : 8) * scale;
+    int lineHeight = (cg_usekfont->integer ? 10 : 8) * scale;
     if (ui_acc_alttypeface->integer) lineHeight *= 1.5f;
 
     // easy!
@@ -2995,12 +3130,12 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
 
             if (ui_acc_contrast->integer && line.length())
             {
-                vec2_t sz = cgi.SCR_MeasureFontString(line.c_str(), scale);
+                vec2_t sz = cgi.SCR_MeasureCenterFontString(line.c_str(), scale);
                 sz.x += 10; // extra padding for black bars
                 int barY = ui_acc_alttypeface->integer ? y - 8 : y;
                 cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), barY, sz.x, lineHeight, "_white", rgba_black);
             }
-            CG_DrawHUDString(line.c_str(), (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
+            CG_DrawCenterHUDString(line.c_str(), (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
 
             cgi.SCR_SetAltTypeface(false);
 
@@ -3016,7 +3151,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
         if (!center.finished)
         {
             center.finished = true;
-            center.time_off = cgi.CL_ClientRealTime() + (scr_centertime->value * 1000);
+            center.time_off = cgi.CL_ClientRealTime() + (cg_centertime->value * 1000);
         }
 
         return;
@@ -3030,7 +3165,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
     {
         if (center.time_tick < t)
         {
-            center.time_tick = t + (scr_printspeed->value * 1000);
+            center.time_tick = t + (cg_printspeed->value * 1000);
             center.line_count = FindEndOfUTF8Codepoint(center.lines[center.current_line], center.line_count + 1);
 
             if (center.line_count == std::string::npos)
@@ -3042,7 +3177,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
                 {
                     center.current_line--;
                     center.finished = true;
-                    center.time_off = t + (scr_centertime->value * 1000);
+                    center.time_off = t + (cg_centertime->value * 1000);
                 }
             }
         }
@@ -3068,14 +3203,14 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
 
         if (ui_acc_contrast->integer && line.length())
         {
-            vec2_t sz = cgi.SCR_MeasureFontString(line.c_str(), scale);
+            vec2_t sz = cgi.SCR_MeasureCenterFontString(line.c_str(), scale);
             sz.x += 10; // extra padding for black bars
             int barY = ui_acc_alttypeface->integer ? y - 8 : y;
             cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), barY, sz.x, lineHeight, "_white", rgba_black);
         }
         
         if (buffer[0])
-            blinky_x = CG_DrawHUDString(buffer, (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
+            blinky_x = CG_DrawCenterHUDString(buffer, (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
         else
             blinky_x = (hud_vrect.width / 2) * scale;
 
@@ -3379,19 +3514,19 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             {
                 ping = atoi(token);
 
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x + 32 * scale, y, scale, cgi.CL_GetClientName(value));
                 else
                     cgi.SCR_DrawFontString(cgi.CL_GetClientName(value), x + 32 * scale, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
                 
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x + 32 * scale, y + 10 * scale, scale, G_Fmt("{}", score).data(), true);
                 else
                     cgi.SCR_DrawFontString(G_Fmt("{}", score).data(), x + 32 * scale, y + (10 - font_y_offset) * scale, scale, rgba_white, true, text_align_t::LEFT);
 
                 cgi.SCR_DrawPic(x + 96 * scale, y + 10 * scale, 9 * scale, 9 * scale, "ping");
                 
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x + 73 * scale + 32 * scale, y + 10 * scale, scale, G_Fmt("{}", ping).data());
                 else
                     cgi.SCR_DrawFontString (G_Fmt("{}", ping).data(), x + 107 * scale, y + (10 - font_y_offset) * scale, scale, rgba_white, true, text_align_t::LEFT);
@@ -3583,7 +3718,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x, y, scale, cgi.get_configString(index));
                 else
                     cgi.SCR_DrawFontString(cgi.get_configString(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3604,7 +3739,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             token = COM_Parse (&s);
             if (!skip_depth)
             {
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x, y, scale, token);
                 else
                     cgi.SCR_DrawFontString(token, x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3625,7 +3760,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             token = COM_Parse (&s);
             if (!skip_depth)
             {
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x, y, scale, token, true);
                 else
                     cgi.SCR_DrawFontString(token, x, y - (font_y_offset * scale), scale, alt_color, true, text_align_t::LEFT);
@@ -3697,7 +3832,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x, y, scale, cgi.Localize(cgi.get_configString(index), nullptr, 0));
                 else
                     cgi.SCR_DrawFontString(cgi.Localize(cgi.get_configString(index), nullptr, 0), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3722,7 +3857,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
                 const char *s = cgi.Localize(cgi.get_configString(index), nullptr, 0);
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x - (static_cast<int>(CG_StrlenNoColor(s, strlen(s))) * CONCHAR_WIDTH * scale), y, scale, s);
                 else
                 {
@@ -3823,7 +3958,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             
             if (!skip_depth)
             {
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x, y, scale, cgi.Localize(arg_tokens[0], arg_buffers, num_args));
                 else
                     cgi.SCR_DrawFontString(cgi.Localize(arg_tokens[0], arg_buffers, num_args), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3883,10 +4018,10 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 int xOffs = 0;
                 if (rightAlign)
                 {
-                    xOffs = scr_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
+                    xOffs = cg_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
                 }
 
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString (x - xOffs, y, scale, locStr, green);
                 else
                     cgi.SCR_DrawFontString(locStr, x - xOffs, y - (font_y_offset * scale), scale, green ? alt_color : rgba_white, true, text_align_t::LEFT);
@@ -3913,8 +4048,8 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 arg_buffers[0] = G_Fmt("{:02}:{:02}", (remaining_ms / 1000) / 60, (remaining_ms / 1000) % 60).data();
 
                 const char *locStr = cgi.Localize("$g_score_time", arg_buffers, 1);
-                int xOffs = scr_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
-                if (!scr_usekfont->integer)
+                int xOffs = cg_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
+                if (!cg_usekfont->integer)
                     CG_DrawString (x - xOffs, y, scale, locStr, green);
                 else
                     cgi.SCR_DrawFontString(locStr, x - xOffs, y - (font_y_offset * scale), scale, green ? alt_color : rgba_white, true, text_align_t::LEFT);
@@ -4034,7 +4169,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                     cgi.Com_Error("Bad stat_string index");
                 index = ps->stats[index] - 1;
 
-                if (!scr_usekfont->integer)
+                if (!cg_usekfont->integer)
                     CG_DrawString(x, y, scale, cgi.CL_GetClientName(index));
                 else
                     cgi.SCR_DrawFontString(cgi.CL_GetClientName(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -4098,9 +4233,118 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
         cgi.Com_Error("if with no matching endif");
 }
 
-static cvar_t *cl_skipHud;
+static cvar_t *cg_skip_hud;
+static cvar_t *cg_skip_hud_legacy;
 static cvar_t *cl_paused;
-static cvar_t *cl_hud_cgame;
+static cvar_t *cg_hud_cgame;
+static cvar_t *cg_hud_cgame_legacy;
+
+typedef struct {
+    cvar_t **primary;
+    cvar_t **legacy;
+    uint32_t primary_modified;
+    uint32_t legacy_modified;
+} cg_cvar_alias_pair_t;
+
+static bool cg_cvar_alias_syncing;
+
+static cg_cvar_alias_pair_t cg_cvar_aliases[] = {
+    { &cg_skip_hud, &cg_skip_hud_legacy },
+    { &cg_hud_cgame, &cg_hud_cgame_legacy },
+    { &cg_obituary_time, &cg_obituary_time_legacy },
+    { &cg_obituary_fade, &cg_obituary_fade_legacy },
+    { &cg_draw_fps, &cg_draw_fps_legacy },
+    { &cg_usekfont, &cg_usekfont_legacy },
+    { &cg_centertime, &cg_centertime_legacy },
+    { &cg_printspeed, &cg_printspeed_legacy },
+    { &cg_maxlines, &cg_maxlines_legacy },
+};
+
+static void cg_cvar_alias_apply(cvar_t **target, cvar_t *source)
+{
+    if (!target || !*target || !source)
+        return;
+    if (!(*target)->string || !source->string)
+        return;
+    if (!strcmp((*target)->string, source->string))
+        return;
+
+    cvar_t *updated = cgi.cvarSet((*target)->name, source->string);
+    if (updated)
+        *target = updated;
+}
+
+static void cg_cvar_alias_update_pair(cg_cvar_alias_pair_t *pair)
+{
+    cvar_t *primary = *pair->primary;
+    cvar_t *legacy = *pair->legacy;
+
+    if (!primary || !legacy)
+        return;
+
+    const bool primary_changed = (primary->modifiedCount != pair->primary_modified);
+    const bool legacy_changed = (legacy->modifiedCount != pair->legacy_modified);
+
+    if (primary_changed || legacy_changed) {
+        if (primary_changed && !legacy_changed) {
+            cg_cvar_alias_apply(pair->legacy, primary);
+        } else if (legacy_changed && !primary_changed) {
+            cg_cvar_alias_apply(pair->primary, legacy);
+        } else if (strcmp(primary->string, legacy->string)) {
+            if (legacy->modifiedCount >= primary->modifiedCount)
+                cg_cvar_alias_apply(pair->primary, legacy);
+            else
+                cg_cvar_alias_apply(pair->legacy, primary);
+        }
+    } else if (strcmp(primary->string, legacy->string)) {
+        if (legacy->modifiedCount >= primary->modifiedCount)
+            cg_cvar_alias_apply(pair->primary, legacy);
+        else
+            cg_cvar_alias_apply(pair->legacy, primary);
+    }
+
+    pair->primary_modified = primary->modifiedCount;
+    pair->legacy_modified = legacy->modifiedCount;
+}
+
+static void cg_cvar_alias_sync_defaults(void)
+{
+    if (cg_cvar_alias_syncing)
+        return;
+
+    cg_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cg_cvar_aliases); i++)
+        cg_cvar_alias_update_pair(&cg_cvar_aliases[i]);
+
+    cg_cvar_alias_syncing = false;
+}
+
+static void cg_cvar_alias_register(void)
+{
+    for (size_t i = 0; i < q_countof(cg_cvar_aliases); i++) {
+        cg_cvar_alias_pair_t *pair = &cg_cvar_aliases[i];
+        if (*pair->primary)
+            pair->primary_modified = (*pair->primary)->modifiedCount;
+        if (*pair->legacy)
+            pair->legacy_modified = (*pair->legacy)->modifiedCount;
+    }
+
+    cg_cvar_alias_sync_defaults();
+}
+
+static void cg_cvar_alias_update(void)
+{
+    if (cg_cvar_alias_syncing)
+        return;
+
+    cg_cvar_alias_syncing = true;
+
+    for (size_t i = 0; i < q_countof(cg_cvar_aliases); i++)
+        cg_cvar_alias_update_pair(&cg_cvar_aliases[i]);
+
+    cg_cvar_alias_syncing = false;
+}
 
 /*
 ================
@@ -4164,7 +4408,7 @@ static void CG_DrawInventory(const player_state_t *ps, const std::array<int16_t,
                 cgi.SCR_DrawChar(x-8, y, scale, 15, false);
         }
 
-        if (!scr_usekfont->integer)
+        if (!cg_usekfont->integer)
         {
             CG_DrawString(x, y, scale,
                 G_Fmt("{:3} {}", inventory[item],
@@ -4785,6 +5029,8 @@ extern uint64_t cgame_init_time;
 
 void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale, int32_t playernum, const player_state_t *ps)
 {
+    cg_cvar_alias_update();
+
     if (cgi.CL_InAutoDemoLoop())
     {
         if (cl_paused->integer) return; // demo is paused, menu is open
@@ -4797,8 +5043,8 @@ void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect
     }
 
     // draw HUD
-    if (!cl_skipHud->integer && !(ps->stats[STAT_LAYOUTS] & LAYOUTS_HIDE_HUD)) {
-        if (cl_hud_cgame && cl_hud_cgame->integer) {
+    if (!cg_skip_hud->integer && !(ps->stats[STAT_LAYOUTS] & LAYOUTS_HIDE_HUD)) {
+        if (cg_hud_cgame && cg_hud_cgame->integer) {
             const std::string layout = CG_BuildStatusbarLayout(ps);
             CG_ExecuteLayoutString(layout.c_str(), hud_vrect, hud_safe, scale, playernum, ps);
         } else {
@@ -4817,7 +5063,7 @@ void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect
 
     // svc_layout still drawn with hud off
     bool drew_layout = false;
-    if (cl_hud_cgame && cl_hud_cgame->integer) {
+    if (cg_hud_cgame && cg_hud_cgame->integer) {
         drew_layout = CG_DrawEOUFromBlob(hud_vrect, hud_safe, scale,
                                          playernum, ps);
         if (!drew_layout) {
@@ -4834,6 +5080,7 @@ void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect
 
     CG_WeaponBar_Draw(ps, hud_vrect, hud_safe, scale);
     CG_Wheel_Draw(ps, hud_vrect, hud_safe, scale);
+    CG_DrawFPS(isplit, hud_vrect, hud_safe, scale);
 }
 
 /*
@@ -4862,40 +5109,52 @@ void CG_TouchPics()
 void CG_InitScreen()
 {
     cl_paused = cgi.cvar("paused", "0", CVAR_NOFLAGS);
-    cl_skipHud = cgi.cvar("cl_skipHud", "0", CVAR_ARCHIVE);
-    cl_hud_cgame = cgi.cvar("cl_hud_cgame", "0", CVAR_ARCHIVE);
-    scr_usekfont = cgi.cvar("scr_usekfont", "1", CVAR_NOFLAGS);
-    scr_alpha = cgi.cvar("scr_alpha", "1", CVAR_NOFLAGS);
-    scr_chathud = cgi.cvar("scr_chathud", "1", CVAR_NOFLAGS);
+    cg_skip_hud = cgi.cvar("cg_skip_hud", "0", CVAR_ARCHIVE);
+    cg_skip_hud_legacy = cgi.cvar("cl_skipHud", cg_skip_hud->string, CVAR_NOFLAGS);
+    cg_hud_cgame = cgi.cvar("cg_hud_cgame", "0", CVAR_ARCHIVE);
+    cg_hud_cgame_legacy = cgi.cvar("cl_hud_cgame", cg_hud_cgame->string, CVAR_NOFLAGS);
+    cg_draw_fps = cgi.cvar("cg_draw_fps", "0", CVAR_ARCHIVE);
+    cg_draw_fps_legacy = cgi.cvar("cg_drawFPS", cg_draw_fps->string, CVAR_NOFLAGS);
+    cg_usekfont = cgi.cvar("cg_usekfont", "1", CVAR_NOFLAGS);
+    cg_usekfont_legacy = cgi.cvar("scr_usekfont", cg_usekfont->string, CVAR_NOFLAGS);
+    cl_alpha = cgi.cvar("cl_alpha", "1", CVAR_NOFLAGS);
+    cl_chathud = cgi.cvar("cl_chathud", "1", CVAR_NOFLAGS);
 
-    scr_centertime  = cgi.cvar ("scr_centertime", "5.0",  CVAR_ARCHIVE); // [Sam-KEX] Changed from 2.5
-    scr_printspeed  = cgi.cvar ("scr_printspeed", "0.04", CVAR_NOFLAGS); // [Sam-KEX] Changed from 8
+    cg_centertime  = cgi.cvar ("cg_centertime", "5.0",  CVAR_ARCHIVE); // [Sam-KEX] Changed from 2.5
+    cg_centertime_legacy = cgi.cvar("scr_centertime", cg_centertime->string, CVAR_NOFLAGS);
+    cg_printspeed  = cgi.cvar ("cg_printspeed", "0.04", CVAR_NOFLAGS); // [Sam-KEX] Changed from 8
+    cg_printspeed_legacy = cgi.cvar("scr_printspeed", cg_printspeed->string, CVAR_NOFLAGS);
     cl_notifytime   = cgi.cvar ("cl_notifytime", "5.0",   CVAR_ARCHIVE);
-    scr_maxlines    = cgi.cvar ("scr_maxlines", "4",      CVAR_ARCHIVE);
+    cg_maxlines    = cgi.cvar ("cg_maxlines", "4",      CVAR_ARCHIVE);
+    cg_maxlines_legacy = cgi.cvar("scr_maxlines", cg_maxlines->string, CVAR_NOFLAGS);
     con_notifytime  = cgi.cvar ("con_notifytime", "0",    CVAR_NOFLAGS);
     con_notifylines = cgi.cvar ("con_notifylines", "4",   CVAR_NOFLAGS);
-    cl_obituary_time = cgi.cvar("cl_obituary_time", "3000", CVAR_ARCHIVE);
-    cl_obituary_fade = cgi.cvar("cl_obituary_fade", "200", CVAR_ARCHIVE);
+    cg_obituary_time = cgi.cvar("cg_obituary_time", "3000", CVAR_ARCHIVE);
+    cg_obituary_time_legacy = cgi.cvar("cl_obituary_time", cg_obituary_time->string, CVAR_NOFLAGS);
+    cg_obituary_fade = cgi.cvar("cg_obituary_fade", "200", CVAR_ARCHIVE);
+    cg_obituary_fade_legacy = cgi.cvar("cl_obituary_fade", cg_obituary_fade->string, CVAR_NOFLAGS);
     ui_acc_contrast = cgi.cvar ("ui_acc_contrast", "0",   CVAR_NOFLAGS);
     ui_acc_alttypeface = cgi.cvar("ui_acc_alttypeface", "0", CVAR_NOFLAGS);
     scr_crosshair = cgi.cvar("crosshair", "3", CVAR_ARCHIVE);
-    cl_crosshair_brightness = cgi.cvar("cl_crosshairBrightness", "1.0", CVAR_ARCHIVE);
-    cl_crosshair_color = cgi.cvar("cl_crosshairColor", "25", CVAR_ARCHIVE);
-    cl_crosshair_health = cgi.cvar("cl_crosshairHealth", "0", CVAR_ARCHIVE);
-    cl_crosshair_hit_color = cgi.cvar("cl_crosshairHitColor", "1", CVAR_ARCHIVE);
-    cl_crosshair_hit_style = cgi.cvar("cl_crosshairHitStyle", "2", CVAR_ARCHIVE);
-    cl_crosshair_hit_time = cgi.cvar("cl_crosshairHitTime", "200", CVAR_ARCHIVE);
-    cl_crosshair_pulse = cgi.cvar("cl_crosshairPulse", "1", CVAR_ARCHIVE);
-    cl_crosshair_size = cgi.cvar("cl_crosshairSize", "32", CVAR_ARCHIVE);
+    cl_crosshair_brightness = cgi.cvar("cl_crosshair_brightness", "1.0", CVAR_ARCHIVE);
+    cl_crosshair_color = cgi.cvar("cl_crosshair_color", "25", CVAR_ARCHIVE);
+    cl_crosshair_health = cgi.cvar("cl_crosshair_health", "0", CVAR_ARCHIVE);
+    cl_crosshair_hit_color = cgi.cvar("cl_crosshair_hit_color", "1", CVAR_ARCHIVE);
+    cl_crosshair_hit_style = cgi.cvar("cl_crosshair_hit_style", "2", CVAR_ARCHIVE);
+    cl_crosshair_hit_time = cgi.cvar("cl_crosshair_hit_time", "200", CVAR_ARCHIVE);
+    cl_crosshair_pulse = cgi.cvar("cl_crosshair_pulse", "1", CVAR_ARCHIVE);
+    cl_crosshair_size = cgi.cvar("cl_crosshair_size", "32", CVAR_ARCHIVE);
     cl_hit_markers = cgi.cvar("cl_hit_markers", "2", CVAR_NOFLAGS);
     ch_x = cgi.cvar("ch_x", "0", CVAR_NOFLAGS);
     ch_y = cgi.cvar("ch_y", "0", CVAR_NOFLAGS);
-    scr_hit_marker_time = cgi.cvar("scr_hit_marker_time", "500", CVAR_NOFLAGS);
-    scr_damage_indicators = cgi.cvar("scr_damage_indicators", "1", CVAR_NOFLAGS);
-    scr_damage_indicator_time = cgi.cvar("scr_damage_indicator_time", "1000", CVAR_NOFLAGS);
-    scr_pois = cgi.cvar("scr_pois", "1", CVAR_NOFLAGS);
-    scr_poi_edge_frac = cgi.cvar("scr_poi_edge_frac", "0.15", CVAR_NOFLAGS);
-    scr_poi_max_scale = cgi.cvar("scr_poi_max_scale", "1.0", CVAR_NOFLAGS);
+    cl_hit_marker_time = cgi.cvar("cl_hit_marker_time", "500", CVAR_NOFLAGS);
+    cl_damage_indicators = cgi.cvar("cl_damage_indicators", "1", CVAR_NOFLAGS);
+    cl_damage_indicator_time = cgi.cvar("cl_damage_indicator_time", "1000", CVAR_NOFLAGS);
+    cl_pois = cgi.cvar("cl_pois", "1", CVAR_NOFLAGS);
+    cl_poi_edge_frac = cgi.cvar("cl_poi_edge_frac", "0.15", CVAR_NOFLAGS);
+    cl_poi_max_scale = cgi.cvar("cl_poi_max_scale", "1.0", CVAR_NOFLAGS);
+
+    cg_cvar_alias_register();
 
     CG_Hud_Reset();
 
@@ -4903,4 +5162,9 @@ void CG_InitScreen()
     chat_hud = {};
     crosshair_state = {};
     poi_state = {};
+    cg_fps_state = {};
 }
+
+
+
+

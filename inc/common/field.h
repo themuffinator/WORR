@@ -32,6 +32,8 @@ typedef struct {
     size_t  maxChars;
     size_t  visibleChars;
     size_t  cursorPos;
+    size_t  selectionAnchor;
+    bool    selecting;
 } inputField_t;
 
 bool        IF_KeyEvent(inputField_t *field, int key);
@@ -39,6 +41,7 @@ bool        IF_CharEvent(inputField_t *field, int key);
 void        IF_Init(inputField_t *field, size_t visibleChars, size_t maxChars);
 void        IF_Clear(inputField_t *field);
 void        IF_Replace(inputField_t *field, const char *text);
+void        IF_SetCursor(inputField_t *field, size_t pos, bool extendSelection);
 int         IF_Draw(const inputField_t *field, int x, int y, int flags, qhandle_t font);
 
 #ifdef __cplusplus

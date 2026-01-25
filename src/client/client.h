@@ -598,7 +598,7 @@ extern cvar_t   *cl_gunfov;
 extern cvar_t   *cl_gun_x;
 extern cvar_t   *cl_gun_y;
 extern cvar_t   *cl_gun_z;
-extern cvar_t   *cl_weaponBar;
+extern cvar_t   *cl_weapon_bar;
 extern cvar_t   *cl_predict;
 extern cvar_t   *cl_footsteps;
 extern cvar_t   *cl_noskins;
@@ -1152,6 +1152,8 @@ typedef struct {
     qhandle_t   net_pic;
     qhandle_t   font_pic;
     font_t      *font;
+    qhandle_t   ui_font_pic;
+    font_t      *ui_font;
 
     int         canvas_width, canvas_height;
     float       virtual_scale;
@@ -1190,7 +1192,7 @@ bool    SCR_GetBindIconForKey(int keynum, qhandle_t *pic, int *w, int *h);
 int     SCR_DrawBindIcon(const char *binding, int x, int y, int size, color_t color, const char **out_keyname);
 
 #define SCR_DrawString(x, y, flags, color, string) \
-    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string, color, scr.font_pic)
+    SCR_DrawStringStretch(x, y, 1, flags, MAX_STRING_CHARS, string, color, scr.ui_font_pic)
 
 void    SCR_ClearChatHUD_f(void);
 void    SCR_AddToChatHUD(const char *text);

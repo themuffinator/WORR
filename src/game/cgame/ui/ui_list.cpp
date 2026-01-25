@@ -251,8 +251,15 @@ void ListWidget::Draw()
         int barHeight = drawHeight - spacing * 2;
         int yy = drawY + spacing;
 
-        R_DrawFill32(x + widthTotal - MLIST_SCROLLBAR_WIDTH, yy,
-                     MLIST_SCROLLBAR_WIDTH - 1, barHeight, uis.color.normal);
+        int bar_x = x + widthTotal - MLIST_SCROLLBAR_WIDTH;
+        int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
+        color_t track = COLOR_SETA_U8(uis.color.normal, 120);
+        color_t border = COLOR_SETA_U8(uis.color.selection, 160);
+        R_DrawFill32(bar_x, yy, bar_w, barHeight, track);
+        R_DrawFill32(bar_x, yy, bar_w, 1, border);
+        R_DrawFill32(bar_x, yy + barHeight - 1, bar_w, 1, border);
+        R_DrawFill32(bar_x, yy, 1, barHeight, border);
+        R_DrawFill32(bar_x + bar_w - 1, yy, 1, barHeight, border);
 
         float pageFrac = 1.0f;
         float prestepFrac = 0.0f;
@@ -261,11 +268,10 @@ void ListWidget::Draw()
             prestepFrac = static_cast<float>(prestep) / numItems;
         }
 
-        R_DrawFill32(x + widthTotal - MLIST_SCROLLBAR_WIDTH,
-                     yy + Q_rint(barHeight * prestepFrac),
-                     MLIST_SCROLLBAR_WIDTH - 1,
-                     Q_rint(barHeight * pageFrac),
-                     uis.color.selection);
+        int thumb_h = max(6, Q_rint(barHeight * pageFrac));
+        int thumb_y = yy + Q_rint((barHeight - thumb_h) * prestepFrac);
+        color_t thumb = COLOR_SETA_U8(uis.color.active, 200);
+        R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
     }
 
     int xx = x;

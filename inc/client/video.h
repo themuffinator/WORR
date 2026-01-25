@@ -84,16 +84,19 @@ typedef struct {
     bool (*get_native_window)(vid_native_window_t *out);
 } vid_driver_t;
 
-extern cvar_t       *vid_geometry;
-extern cvar_t       *vid_modelist;
-extern cvar_t       *vid_fullscreen;
-extern cvar_t       *_vid_fullscreen;
+extern cvar_t       *r_display;
+extern cvar_t       *r_geometry;
+extern cvar_t       *r_modelist;
+extern cvar_t       *r_fullscreen;
+extern cvar_t       *_r_fullscreen;
+extern cvar_t       *r_fullscreen_exclusive;
 
 extern const vid_driver_t   *vid;
 
 bool VID_GetFullscreen(vrect_t *rc, int *freq_p, int *depth_p);
 bool VID_GetGeometry(vrect_t *rc);
 void VID_SetGeometry(const vrect_t *rc);
+void VID_SetModeList(const char *modelist);
 void VID_ToggleFullscreen(void);
 
 #ifdef __cplusplus

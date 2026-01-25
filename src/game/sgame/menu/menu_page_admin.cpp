@@ -1,10 +1,9 @@
 /*Copyright (c) 2024 The DarkMatter Project
 Licensed under the GNU General Public License 2.0.
 
-menu_page_admin.cpp (Menu Page - Admin) now acts as a navigation hub for
-administrative tooling. It reminds admins that match tuning is handled through
-the match setup wizard, offers an explicit reset back into that wizard, and
-provides access to the new command reference page.
+menu_page_admin.cpp (Menu Page - Admin) acts as a navigation hub for
+administrative tooling. It exposes tournament replay controls when available
+and provides access to the command reference page.
 */
 
 #include "../g_local.hpp"

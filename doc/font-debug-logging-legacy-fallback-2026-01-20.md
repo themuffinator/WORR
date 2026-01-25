@@ -1,7 +1,7 @@
 Font Debug Logging and Legacy Fallback Path
 
 Overview
-- Added a `cl_debugFonts` cvar (default `1`) to print font detection and load
+- Added a `cl_debug_fonts` cvar (default `1`) to print font detection and load
   details during startup and reloads.
 - Updated the legacy fallback font image to `conchars.png` so the fallback
   goes through the normal `pics/` lookup path (pak0.pak).
