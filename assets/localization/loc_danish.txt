@@ -5290,7 +5290,7 @@ g_sgame_auto_0e9bc18b10a8 = "{} plukket {}."
 
 g_sgame_auto_0f237b89f36f = "Kan ikke indstille dette hold i den aktuelle spiltype. \n"
 
-g_sgame_auto_0f9ab3ba943c = "[ADMIN]: Kortvalg mislykkedes; tjek"
+admin_map_selection_failed_prefix = "[ADMIN]: Kortvalg mislykkedes; tjek"
 
 g_sgame_auto_0fe4295ce9e6 = "brug: impuls < 0.. 255 > \n"
 
@@ -5300,11 +5300,11 @@ g_sgame_auto_11b7029218ae = "Afstemning vedtaget. \n"
 
 g_sgame_auto_12d256604a40 = "Score grænse er sat til {}. \n"
 
-g_sgame_auto_12ef9f85f0bd = ".Ingen kortafstemning tilgængelig. \n Genstarter nuværende kort: {} \n"
+match_map_vote_unavailable_restart = ".Ingen kortafstemning tilgængelig. \n Genstarter nuværende kort: {} \n"
 
 g_sgame_auto_13161b3d1478 = "Afstemning er deaktiveret på denne server. \n"
 
-g_sgame_auto_1369af5fa8ea = "{} stemt for kort {} \n"
+match_map_vote_cast = "{} stemt for kort {} \n"
 
 g_sgame_auto_139b351ebd95 = "Du har allerede administrative rettigheder. \n"
 
@@ -5320,7 +5320,7 @@ g_sgame_auto_18fcb09b23e4 = "Forfeit afstemning kaldes. \n"
 
 g_sgame_auto_19786f0b7339 = "[ADMIN]: Session nulstillet. \n"
 
-g_sgame_auto_19ede381a411 = "Flertalsafstemning opdaget - færdiggørelse tidligt... \n"
+match_map_vote_majority = "Flertalsafstemning opdaget - færdiggørelse tidligt... \n"
 
 g_sgame_auto_1acaa829ba8b = "Kunne ikke ændre arena. \n"
 
@@ -5332,13 +5332,13 @@ g_sgame_auto_1d4769e78fe0 = "{} fanget {}. \n"
 
 g_sgame_auto_1e4996f3f794 = "{} frog meddelelser. \n"
 
-g_sgame_auto_1ecd89958d33 = "[MapPool] Indlæst {} kort {} fra \"{}\". Skippet {} non-DM"
+mappool_load_summary_prefix = "[MapPool] Indlæst {} kort {} fra \"{}\". Skippet {} non-DM"
 
 g_sgame_auto_1f16fbced404 = "Replay queued for game {}. \n"
 
 g_sgame_auto_1f39f05237ce = "{} dråber {} {}! \n"
 
-g_sgame_auto_1f442d9cde11 = "[MapCycle] Market {} kort, der kan cykle, ignoreres {} ukendte indgange. \n"
+mapcycle_marked_cycleable_summary = "[MapCycle] Market {} kort, der kan cykle, ignoreres {} ukendte indgange. \n"
 
 g_sgame_auto_2085c3233e87 = "{} forbudt {}."
 
@@ -5440,13 +5440,13 @@ g_sgame_auto_4e45602a2149 = "Ugyldigt arenanummer: {} \n"
 
 g_sgame_auto_4e45efe183a4 = "Boldreset (fare). \n"
 
-g_sgame_auto_501d9d3c3fe1 = ".Kortafstemning færdig! \n Næste kort: {} ({}) \n"
+match_map_vote_complete = ".Kortafstemning færdig! \n Næste kort: {} ({}) \n"
 
 g_sgame_auto_512197de4dc8 = "Runde træk! \n"
 
 g_sgame_auto_519c01fd3ad9 = "Du har allerede stemt. \n"
 
-g_sgame_auto_535dd80f8240 = "Kortafstemning mislykkedes. \n Tilfældigt valgt: {} ({}) \n"
+match_map_vote_failed_random_select = "Kortafstemning mislykkedes. \n Tilfældigt valgt: {} ({}) \n"
 
 g_sgame_auto_545849f8ced9 = "[ADMIN]: Tvungen match nulstilles. \n"
 
@@ -5584,7 +5584,7 @@ g_sgame_auto_8890d5af0cc7 = "Tilsat admin: {} \n"
 
 g_sgame_auto_891c05d361d0 = "Faldende flag er blevet deaktiveret på denne server. \n"
 
-g_sgame_auto_895252feff84 = "[MapPool] JSON fortolkning mislykkedes: {} \n"
+mappool_json_parse_failed = "[MapPool] JSON fortolkning mislykkedes: {} \n"
 
 g_sgame_auto_8a604d586b47 = "{} har mistet admin rettigheder. \n"
 
@@ -5602,7 +5602,7 @@ g_sgame_auto_8f2d7f078423 = "impuls 9: alle våben tildelt \n"
 
 g_sgame_auto_8f54bfa61bb5 = "Ugyldig eller ikke- afspilende klient angivet. \n"
 
-g_sgame_auto_8f788aea4ba0 = "[MapPool] Fjernet {} i kø forespørgsel {} refererende"
+mappool_removed_requests_prefix = "[MapPool] Fjernet {} i kø forespørgsel {} refererende"
 
 g_sgame_auto_9049813cef3c = "Kort '{}' er allerede i spillet kø. \n"
 
@@ -5610,7 +5610,7 @@ g_sgame_auto_90b352aba65b = "Indlæser IP- filtre fra {}. \n"
 
 g_sgame_auto_90ed2d4ab1ff = "[SKUFFLE]: Skillbaseret {} ({}) - repawning in {} s. \n"
 
-g_sgame_auto_92b75a8a3a53 = "Kortafstemning mislykkedes. \n Ingen kort tilgængelige til næste"
+match_map_vote_failed_no_maps_prefix = "Kortafstemning mislykkedes. \n Ingen kort tilgængelige til næste"
 
 g_sgame_auto_93bfb36db106 = "\n Klienter ({}): \n"
 
@@ -5656,7 +5656,7 @@ g_sgame_auto_a60548f61aa6 = "------------------ \n"
 
 g_sgame_auto_a6db76c1e482 = "Tilfældig rulle (1- {}): {} \n"
 
-g_sgame_auto_a863201cae91 = "[MapPool] Kunne ikke åbne filen: {} \n"
+mappool_file_open_failed = "[MapPool] Kunne ikke åbne filen: {} \n"
 
 g_sgame_auto_a8f3d146c7ed = "Kan ikke forbyde: Målet er en opført admin. \n"
 
@@ -5664,15 +5664,15 @@ g_sgame_auto_aa6c0d95b39c = "{} er blevet en admin. \n"
 
 g_sgame_auto_aa87f5ca778d = "{} forbinder. (SR: {}) \n"
 
-g_sgame_auto_aba33e33156a = "[MapCycle] Ugyldig g _ maps _ cycle _ file: {}. Brug {}. \n"
+mapcycle_invalid_cycle_file = "[MapCycle] Ugyldig g _ maps _ cycle _ file: {}. Brug {}. \n"
 
 g_sgame_auto_ac22248ce11b = "Arena {} er ikke tilgængelig. \n"
 
-g_sgame_auto_adc83b19e793 = "\n"
+format_blank_line = "\n"
 
 g_sgame_auto_af29d2944da5 = "Våbenpræferencer opdateret. \n"
 
-g_sgame_auto_af5d04591c5b = "[MapPool] Skipping indgang {} {} {}: {} \n"
+mappool_skip_entry = "[MapPool] Skipping indgang {} {} {}: {} \n"
 
 g_sgame_auto_b00bc3af956d = "Kort pool og cyklus genbelastet. \n"
 
@@ -5718,7 +5718,7 @@ g_sgame_auto_bc02a46f44d7 = "{} scorer! \n"
 
 g_sgame_auto_bc5186a8887c = "Admin- adgang påkrævet. \n"
 
-g_sgame_auto_bf21a9e8fbc5 = "{}"
+format_passthrough = "{}"
 
 g_sgame_auto_bf247978f8d5 = "Våben falder ikke under våbenophold. \n"
 
@@ -5726,7 +5726,7 @@ g_sgame_auto_c06989704e08 = "Samlet cykelstikkort: {} \n"
 
 g_sgame_auto_c1b6c1827a61 = "{} \n Begynder i..."
 
-g_sgame_auto_c23f4c0c976c = "\n {} kort {} matchet filter: {} \n"
+maplist_filter_match_summary = "\n {} kort {} matchet filter: {} \n"
 
 g_sgame_auto_c29829d27a76 = "%bind:+wheel2:Brug kompas til at skifte din klar status.% .MATCH ER I WARMUP \n {} er IKKE klar."
 
@@ -5742,7 +5742,7 @@ g_sgame_auto_c662416e196d = "Replay vil genstarte spillet {}. Kør 'spil igen {}
 
 g_sgame_auto_c79065397faf = "Fandt ikke {}. \n"
 
-g_sgame_auto_c7f9001a3958 = "[MapCycle] Kunne ikke åbne filen: {} \n"
+mapcycle_file_open_failed = "[MapCycle] Kunne ikke åbne filen: {} \n"
 
 g_sgame_auto_c80b31662070 = "Kun administratorer kan bruge denne kommando. \n"
 
@@ -5776,7 +5776,7 @@ g_sgame_auto_d03340fdcc18 = "Stem timet ud. \n"
 
 g_sgame_auto_d037994285e0 = ". {} sætte en stopper for {} s \n rampage!"
 
-g_sgame_auto_d0cdf8fb0240 = ".Ingen kortafstemning tilgængelig. \n Næste kort: {} ({}) \n"
+match_map_vote_unavailable_next = ".Ingen kortafstemning tilgængelig. \n Næste kort: {} ({}) \n"
 
 g_sgame_auto_d1d00cfb9080 = "Filterliste: \n"
 
@@ -5824,7 +5824,7 @@ g_sgame_auto_de59735dfea3 = "Kunne ikke fjerne fra admin.txt eller admin ikke fu
 
 g_sgame_auto_deae43bd450e = "Turneringsveto er klar. Hjemmeside vælger eller forbyder først."
 
-g_sgame_auto_e076d979db35 = "Afstemningen er begyndt for næste kort! \n Du har {} sekunder til at stemme. \n"
+match_map_vote_started = "Afstemningen er begyndt for næste kort! \n Du har {} sekunder til at stemme. \n"
 
 g_sgame_auto_e0876bd2cf55 = ".Der skal være {} + spillere i kampen \n for at hente dette: ("
 
@@ -5852,7 +5852,7 @@ g_sgame_auto_e96321e5d944 = "{} er blevet tildelt admin rettigheder. \n"
 
 g_sgame_auto_e9691a6f20ec = "{} TEAM KAPTURERET flag! (fanget af {}) \n"
 
-g_sgame_auto_ea3a23fdef34 = "[MapPool] JSON skal indeholde et 'kort' array. \n"
+mappool_json_missing_maps_array = "[MapPool] JSON skal indeholde et 'kort' array. \n"
 
 g_sgame_auto_ea41db838261 = "Kort cyklus genbelastet. \n"
 
@@ -5864,7 +5864,7 @@ g_sgame_auto_ebb9672c8db9 = "{} fragmenteret {} 's flagskib!"
 
 g_sgame_auto_ec08ac9fcd95 = "Sted: {} \n"
 
-g_sgame_auto_ed23801259d6 = "[MapPool] Kort pool fil ikke fundet: {} \n"
+mappool_file_not_found = "[MapPool] Kort pool fil ikke fundet: {} \n"
 
 g_sgame_auto_ed3b6b55b6b1 = "KORT INFO: \n filnavn: {} \n"
 
@@ -6018,7 +6018,7 @@ e_auto_3f32e987a006 = "Kan ikke finde udløser \"%s\" = \"%s\"\\ n"
 
 e_auto_51d307fee76e = "Anvendelse: hvis < exprr > < op > < exprr > [then] < command > [other < command >]\\ n"
 
-e_auto_45ddf1902a53 = "Kan ikke bruge '%s' med ikke-numeriske udtryk\\ n"
+misc_cant_use_numeric_expressions = "Kan ikke bruge '%s' med ikke-numeriske udtryk\\ n"
 
 e_auto_d4de46d59515 = "Ukendt operatør '%s'\\ n"
 
@@ -6334,3 +6334,6 @@ e_auto_e13d46568ae9 = "Brug: %s < menu >\\ n"
 
 e_auto_ad494789521e = "Ingen sådan menu: %s\\ n"
 
+
+
+

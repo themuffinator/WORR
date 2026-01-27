@@ -10582,7 +10582,7 @@ g_sgame_auto_0f237b89f36f = "无法在当前游戏类型中设置此团队 。 \
 
 
 
-g_sgame_auto_0f9ab3ba943c = "[ADMIN]:地图选择失败;检查"
+admin_map_selection_failed_prefix = "[ADMIN]:地图选择失败;检查"
 
 
 
@@ -10602,7 +10602,7 @@ g_sgame_auto_12d256604a40 = "得分限制已设定为{}.\n"
 
 
 
-g_sgame_auto_12ef9f85f0bd = "无地图投票。 \n 重新启动当前映射 : {}%ph1>"
+match_map_vote_unavailable_restart = "无地图投票。 \n 重新启动当前映射 : {}%ph1>"
 
 
 
@@ -10610,7 +10610,7 @@ g_sgame_auto_13161b3d1478 = "此服务器上的投票已禁用 。 \n"
 
 
 
-g_sgame_auto_1369af5fa8ea = "{} 投票支持地图 {}%ph0>"
+match_map_vote_cast = "{} 投票支持地图 {}%ph0>"
 
 
 
@@ -10642,7 +10642,7 @@ g_sgame_auto_19786f0b7339 = "[ADMIN]:会话重设.\n"
 
 
 
-g_sgame_auto_19ede381a411 = "检测到多数选票 - 提前确定... \n"
+match_map_vote_majority = "检测到多数选票 - 提前确定... \n"
 
 
 
@@ -10666,7 +10666,7 @@ g_sgame_auto_1e4996f3f794 = "{} 破碎消息 。 \n"
 
 
 
-g_sgame_auto_1ecd89958d33 = "[mapPool]从'{}装入{}地图{}. 跳过 {} 非 DM"
+mappool_load_summary_prefix = "[mapPool]从'{}装入{}地图{}. 跳过 {} 非 DM"
 
 
 
@@ -10678,7 +10678,7 @@ g_sgame_auto_1f39f05237ce = "{} 滴入 {} {} ! \n"
 
 
 
-g_sgame_auto_1f442d9cde11 = "[mapCycle]标记为{}可循环的地图,忽略{}未知条目.\n"
+mapcycle_marked_cycleable_summary = "[mapCycle]标记为{}可循环的地图,忽略{}未知条目.\n"
 
 
 
@@ -10882,7 +10882,7 @@ g_sgame_auto_4e45efe183a4 = "球重置( 危险) 。\n"
 
 
 
-g_sgame_auto_501d9d3c3fe1 = ".map 投票完成 !\n 下一张地图:{} ({})\n"
+match_map_vote_complete = ".map 投票完成 !\n 下一张地图:{} ({})\n"
 
 
 
@@ -10894,7 +10894,7 @@ g_sgame_auto_519c01fd3ad9 = "你已经投了票。\n"
 
 
 
-g_sgame_auto_535dd80f8240 = ".map 投票失败。\n 随机选择:{} ({})\n"
+match_map_vote_failed_random_select = ".map 投票失败。\n 随机选择:{} ({})\n"
 
 
 
@@ -11170,7 +11170,7 @@ g_sgame_auto_891c05d361d0 = "此服务器已禁用降旗 。 \n"
 
 
 
-g_sgame_auto_895252feff84 = "[MapPool] JSON解析失败:{}\n"
+mappool_json_parse_failed = "[MapPool] JSON解析失败:{}\n"
 
 
 
@@ -11206,7 +11206,7 @@ g_sgame_auto_8f54bfa61bb5 = "指定无效或非播放客户端 。\n"
 
 
 
-g_sgame_auto_8f788aea4ba0 = "[地图] 删除 {} 队列请求{} 引用"
+mappool_removed_requests_prefix = "[地图] 删除 {} 队列请求{} 引用"
 
 
 
@@ -11222,7 +11222,7 @@ g_sgame_auto_90ed2d4ab1ff = "[SHUFFLE]:基于技能的{}({})-在{}s中重生.\n.
 
 
 
-g_sgame_auto_92b75a8a3a53 = ". 地图投票失败. \n (韩语) 下一个没有可用的地图"
+match_map_vote_failed_no_maps_prefix = ". 地图投票失败. \n (韩语) 下一个没有可用的地图"
 
 
 
@@ -11314,7 +11314,7 @@ g_sgame_auto_a6db76c1e482 = "随机卷(1-{}):{}><p0>"
 
 
 
-g_sgame_auto_a863201cae91 = "[mapPool] 打开文件失败 : {}%ph0>"
+mappool_file_open_failed = "[mapPool] 打开文件失败 : {}%ph0>"
 
 
 
@@ -11330,7 +11330,7 @@ g_sgame_auto_aa87f5ca778d = "{} 连接。 (SR: {}) \n"
 
 
 
-g_sgame_auto_aba33e33156a = "[mapCycle] 无效 g maps cycle  file: {}. 使用 {}. \n"
+mapcycle_invalid_cycle_file = "[mapCycle] 无效 g maps cycle  file: {}. 使用 {}. \n"
 
 
 
@@ -11338,7 +11338,7 @@ g_sgame_auto_ac22248ce11b = "竞技场{}不可用。\n"
 
 
 
-g_sgame_auto_adc83b19e793 = "\n (英语)."
+format_blank_line = "\n (英语)."
 
 
 
@@ -11346,7 +11346,7 @@ g_sgame_auto_af29d2944da5 = "更新武器首选项。\n"
 
 
 
-g_sgame_auto_af5d04591c5b = "[mapPool] 跳过条目{}{}{}:{}\n"
+mappool_skip_entry = "[mapPool] 跳过条目{}{}{}:{}\n"
 
 
 
@@ -11438,7 +11438,7 @@ g_sgame_auto_bc5186a8887c = "需要管理员访问。\n"
 
 
 
-g_sgame_auto_bf21a9e8fbc5 = "{} (英语)."
+format_passthrough = "{} (英语)."
 
 
 
@@ -11454,7 +11454,7 @@ g_sgame_auto_c1b6c1827a61 = "{}\n开始在..."
 
 
 
-g_sgame_auto_c23f4c0c976c = "\n{} 映射{} 匹配的过滤器 : {}\n"
+maplist_filter_match_summary = "\n{} 映射{} 匹配的过滤器 : {}\n"
 
 
 
@@ -11486,7 +11486,7 @@ g_sgame_auto_c79065397faf = "没有找到{}.\n"
 
 
 
-g_sgame_auto_c7f9001a3958 = "[MapCycle] 打开文件失败 : {}%ph0>"
+mapcycle_file_open_failed = "[MapCycle] 打开文件失败 : {}%ph0>"
 
 
 
@@ -11554,7 +11554,7 @@ g_sgame_auto_d037994285e0 = ".{}结束{}的\n页面!"
 
 
 
-g_sgame_auto_d0cdf8fb0240 = ".没有地图选票。\n下一张地图:{}({})\n"
+match_map_vote_unavailable_next = ".没有地图选票。\n下一张地图:{}({})\n"
 
 
 
@@ -11650,7 +11650,7 @@ g_sgame_auto_deae43bd450e = ". . . . . 母方先选或禁止."
 
 
 
-g_sgame_auto_e076d979db35 = "下一张地图的投票已经开始! \n 您有 {} 秒可以投票 。 \n"
+match_map_vote_started = "下一张地图的投票已经开始! \n 您有 {} 秒可以投票 。 \n"
 
 
 
@@ -11706,7 +11706,7 @@ g_sgame_auto_e9691a6f20ec = "{} TEAM 控制了国旗! (由 {} 捕获) \n"
 
 
 
-g_sgame_auto_ea3a23fdef34 = "[mapPool] JSON必须包含一个'maps'阵列. \n"
+mappool_json_missing_maps_array = "[mapPool] JSON必须包含一个'maps'阵列. \n"
 
 
 
@@ -11730,7 +11730,7 @@ g_sgame_auto_ec08ac9fcd95 = "地点: {}\n"
 
 
 
-g_sgame_auto_ed23801259d6 = "[mapPool] 地图池文件未找到 : {}\n"
+mappool_file_not_found = "[mapPool] 地图池文件未找到 : {}\n"
 
 
 
@@ -12038,7 +12038,7 @@ e_auto_51d307fee76e = "用法:如果 < expr > < op > < expr > [当时] < command
 
 
 
-e_auto_45ddf1902a53 = "无法使用非数字表达式的“ %s ”\\n"
+misc_cant_use_numeric_expressions = "无法使用非数字表达式的“ %s ”\\n"
 
 
 
@@ -12670,3 +12670,6 @@ e_auto_ad494789521e = "无此菜单 : %s\\n"
 
 
 
+
+
+

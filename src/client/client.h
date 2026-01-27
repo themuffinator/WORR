@@ -1075,6 +1075,7 @@ void Con_Close(bool force);
 void Con_Popup(bool force);
 void Con_SkipNotify(bool skip);
 void Con_RegisterMedia(void);
+void Con_RendererShutdown(void);
 void Con_CheckResize(void);
 const char *Con_GetChatPromptText(int *skip_chars);
 inputField_t *Con_GetChatInputField(void);

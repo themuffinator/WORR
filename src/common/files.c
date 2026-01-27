@@ -67,11 +67,53 @@ typedef struct {
 
 FORWARD_EMBEDDED_FILE(worr_json);
 FORWARD_EMBEDDED_FILE(loc_english);
+FORWARD_EMBEDDED_FILE(loc_french);
+FORWARD_EMBEDDED_FILE(loc_german);
+FORWARD_EMBEDDED_FILE(loc_italian);
+FORWARD_EMBEDDED_FILE(loc_spanish);
+FORWARD_EMBEDDED_FILE(loc_russian);
+FORWARD_EMBEDDED_FILE(loc_arabic);
+FORWARD_EMBEDDED_FILE(loc_bulgarian);
+FORWARD_EMBEDDED_FILE(loc_czech);
+FORWARD_EMBEDDED_FILE(loc_danish);
+FORWARD_EMBEDDED_FILE(loc_dutch);
+FORWARD_EMBEDDED_FILE(loc_finnish);
+FORWARD_EMBEDDED_FILE(loc_norwegian);
+FORWARD_EMBEDDED_FILE(loc_polish);
+FORWARD_EMBEDDED_FILE(loc_portuguese_br);
+FORWARD_EMBEDDED_FILE(loc_portuguese_pt);
+FORWARD_EMBEDDED_FILE(loc_swedish);
+FORWARD_EMBEDDED_FILE(loc_turkish);
+FORWARD_EMBEDDED_FILE(loc_chinese_traditional);
+FORWARD_EMBEDDED_FILE(loc_chinese_simplified);
+FORWARD_EMBEDDED_FILE(loc_japanese);
+FORWARD_EMBEDDED_FILE(loc_korean);
 
 static const builtin_file_t builtin_files[] = {
 #if USE_CLIENT
     { "worr.json", res_worr_json, &res_worr_json_size },
     { "localization/loc_english.txt", res_loc_english, &res_loc_english_size },
+    { "localization/loc_french.txt", res_loc_french, &res_loc_french_size },
+    { "localization/loc_german.txt", res_loc_german, &res_loc_german_size },
+    { "localization/loc_italian.txt", res_loc_italian, &res_loc_italian_size },
+    { "localization/loc_spanish.txt", res_loc_spanish, &res_loc_spanish_size },
+    { "localization/loc_russian.txt", res_loc_russian, &res_loc_russian_size },
+    { "localization/loc_arabic.txt", res_loc_arabic, &res_loc_arabic_size },
+    { "localization/loc_bulgarian.txt", res_loc_bulgarian, &res_loc_bulgarian_size },
+    { "localization/loc_czech.txt", res_loc_czech, &res_loc_czech_size },
+    { "localization/loc_danish.txt", res_loc_danish, &res_loc_danish_size },
+    { "localization/loc_dutch.txt", res_loc_dutch, &res_loc_dutch_size },
+    { "localization/loc_finnish.txt", res_loc_finnish, &res_loc_finnish_size },
+    { "localization/loc_norwegian.txt", res_loc_norwegian, &res_loc_norwegian_size },
+    { "localization/loc_polish.txt", res_loc_polish, &res_loc_polish_size },
+    { "localization/loc_portuguese_br.txt", res_loc_portuguese_br, &res_loc_portuguese_br_size },
+    { "localization/loc_portuguese_pt.txt", res_loc_portuguese_pt, &res_loc_portuguese_pt_size },
+    { "localization/loc_swedish.txt", res_loc_swedish, &res_loc_swedish_size },
+    { "localization/loc_turkish.txt", res_loc_turkish, &res_loc_turkish_size },
+    { "localization/loc_chinese_traditional.txt", res_loc_chinese_traditional, &res_loc_chinese_traditional_size },
+    { "localization/loc_chinese_simplified.txt", res_loc_chinese_simplified, &res_loc_chinese_simplified_size },
+    { "localization/loc_japanese.txt", res_loc_japanese, &res_loc_japanese_size },
+    { "localization/loc_korean.txt", res_loc_korean, &res_loc_korean_size },
 #endif
     { NULL }
 };

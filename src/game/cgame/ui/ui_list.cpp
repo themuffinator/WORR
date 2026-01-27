@@ -49,6 +49,87 @@ static color_t List_DarkenColor(color_t color, float shade)
                       color.a);
 }
 
+static void List_DrawPanel(int x, int y, int width, int height, color_t fill,
+                           color_t border, int borderWidth)
+{
+    if (width <= 0 || height <= 0)
+        return;
+
+    if (fill.a > 0)
+        R_DrawFill32(x, y, width, height, fill);
+    if (border.a > 0 && borderWidth > 0) {
+        R_DrawFill32(x, y, width, borderWidth, border);
+        R_DrawFill32(x, y + height - borderWidth, width, borderWidth, border);
+        R_DrawFill32(x, y, borderWidth, height, border);
+        R_DrawFill32(x + width - borderWidth, y, borderWidth, height, border);
+    }
+}
+
+bool ListWidget::ScrollbarMetrics(int *bar_x, int *bar_y, int *bar_w, int *bar_h,
+                                  int *arrow_h, int *track_y, int *track_h,
+                                  int *thumb_y, int *thumb_h) const
+{
+    if (!(mlFlags & MLF_SCROLLBAR))
+        return false;
+
+    int bx = x + width - MLIST_SCROLLBAR_WIDTH;
+    int bw = MLIST_SCROLLBAR_WIDTH - 1;
+    int by = y;
+    int bh = height;
+    if (bw <= 0 || bh <= 0)
+        return false;
+
+    int spacing = RowSpacing();
+    int arrows = max(MLIST_SCROLLBAR_WIDTH, spacing);
+    arrows = min(arrows, bh / 2);
+    if (arrows < 1)
+        arrows = max(1, bh / 2);
+
+    int ty = by + arrows;
+    int th = max(0, bh - arrows * 2);
+
+    int thumbh = th;
+    int thumby = ty;
+    if (th > 0) {
+        float pageFrac = 1.0f;
+        float prestepFrac = 0.0f;
+        if (numItems > 0 && maxItems > 0 && numItems > maxItems) {
+            pageFrac = static_cast<float>(maxItems) / static_cast<float>(numItems);
+            int maxStart = max(0, numItems - maxItems);
+            if (maxStart > 0)
+                prestepFrac = static_cast<float>(prestep) / static_cast<float>(maxStart);
+        }
+        pageFrac = Q_clipf(pageFrac, 0.0f, 1.0f);
+        prestepFrac = Q_clipf(prestepFrac, 0.0f, 1.0f);
+
+        thumbh = max(6, Q_rint(th * pageFrac));
+        if (thumbh > th)
+            thumbh = th;
+        thumby = ty + Q_rint((th - thumbh) * prestepFrac);
+    }
+
+    if (bar_x)
+        *bar_x = bx;
+    if (bar_y)
+        *bar_y = by;
+    if (bar_w)
+        *bar_w = bw;
+    if (bar_h)
+        *bar_h = bh;
+    if (arrow_h)
+        *arrow_h = arrows;
+    if (track_y)
+        *track_y = ty;
+    if (track_h)
+        *track_h = th;
+    if (thumb_y)
+        *thumb_y = thumby;
+    if (thumb_h)
+        *thumb_h = thumbh;
+
+    return true;
+}
+
 int ListWidget::RowSpacing() const
 {
     int spacing = rowSpacing > 0 ? rowSpacing : MLIST_SPACING;
@@ -83,6 +164,7 @@ void ListWidget::Init()
         avail -= spacing;
 
     maxItems = spacing > 0 ? (avail / spacing) : 0;
+    scrollDragging = false;
     ValidatePrestep();
 }
 
@@ -239,7 +321,6 @@ void ListWidget::Draw()
 {
     int drawY = y;
     int drawHeight = height;
-    int widthTotal = width;
     int spacing = RowSpacing();
 
     if (mlFlags & MLF_HEADER) {
@@ -248,30 +329,43 @@ void ListWidget::Draw()
     }
 
     if (mlFlags & MLF_SCROLLBAR) {
-        int barHeight = drawHeight - spacing * 2;
-        int yy = drawY + spacing;
+        int bar_x = 0;
+        int bar_y = 0;
+        int bar_w = 0;
+        int bar_h = 0;
+        int arrow_h = 0;
+        int track_y = 0;
+        int track_h = 0;
+        int thumb_y = 0;
+        int thumb_h = 0;
+        if (ScrollbarMetrics(&bar_x, &bar_y, &bar_w, &bar_h, &arrow_h,
+                             &track_y, &track_h, &thumb_y, &thumb_h)) {
+            color_t track = COLOR_SETA_U8(uis.color.normal, 180);
+            color_t border = COLOR_SETA_U8(uis.color.selection, 200);
+            List_DrawPanel(bar_x, bar_y, bar_w, bar_h, track, border, 1);
 
-        int bar_x = x + widthTotal - MLIST_SCROLLBAR_WIDTH;
-        int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
-        color_t track = COLOR_SETA_U8(uis.color.normal, 120);
-        color_t border = COLOR_SETA_U8(uis.color.selection, 160);
-        R_DrawFill32(bar_x, yy, bar_w, barHeight, track);
-        R_DrawFill32(bar_x, yy, bar_w, 1, border);
-        R_DrawFill32(bar_x, yy + barHeight - 1, bar_w, 1, border);
-        R_DrawFill32(bar_x, yy, 1, barHeight, border);
-        R_DrawFill32(bar_x + bar_w - 1, yy, 1, barHeight, border);
+            if (arrow_h > 1) {
+                color_t arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+                List_DrawPanel(bar_x + 1, bar_y + 1, max(1, bar_w - 2),
+                               max(1, arrow_h - 2), arrow_fill, COLOR_A(0), 0);
+                List_DrawPanel(bar_x + 1, bar_y + bar_h - arrow_h + 1,
+                               max(1, bar_w - 2), max(1, arrow_h - 2),
+                               arrow_fill, COLOR_A(0), 0);
 
-        float pageFrac = 1.0f;
-        float prestepFrac = 0.0f;
-        if (numItems > maxItems) {
-            pageFrac = static_cast<float>(maxItems) / numItems;
-            prestepFrac = static_cast<float>(prestep) / numItems;
+                int text_h = List_TextHeight(*this);
+                int up_y = bar_y + (arrow_h - text_h) / 2;
+                int down_y = bar_y + bar_h - arrow_h + (arrow_h - text_h) / 2;
+                int mid_x = bar_x + bar_w / 2;
+                UI_DrawString(mid_x, up_y, UI_CENTER, uis.color.active, "^");
+                UI_DrawString(mid_x, down_y, UI_CENTER, uis.color.active, "v");
+            }
+
+            if (track_h > 0 && thumb_h > 0) {
+                color_t thumb = COLOR_SETA_U8(uis.color.active, 220);
+                List_DrawPanel(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h,
+                               thumb, COLOR_SETA_U8(uis.color.active, 255), 1);
+            }
         }
-
-        int thumb_h = max(6, Q_rint(barHeight * pageFrac));
-        int thumb_y = yy + Q_rint((barHeight - thumb_h) * prestepFrac);
-        color_t thumb = COLOR_SETA_U8(uis.color.active, 200);
-        R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
     }
 
     int xx = x;
@@ -296,6 +390,12 @@ int ListWidget::HitTestRow(int mx, int my) const
     if (mlFlags & MLF_HEADER)
         yy += spacing;
 
+    int max_x = x + width;
+    if (mlFlags & MLF_SCROLLBAR)
+        max_x -= MLIST_SCROLLBAR_WIDTH;
+
+    if (mx < x || mx >= max_x)
+        return -1;
     if (my < yy)
         return -1;
 
@@ -404,6 +504,8 @@ Sound ListWidget::KeyEvent(int key)
             return onActivate(this);
         return Sound::In;
     case K_MOUSE1:
+        if (HandleMouseDrag(uis.mouseCoords[0], uis.mouseCoords[1], true))
+            return Sound::Move;
         return ClickAt(uis.mouseCoords[0], uis.mouseCoords[1]);
     default:
         break;
@@ -422,6 +524,82 @@ void ListWidget::HoverAt(int mx, int my)
     if (onChange)
         onChange(this);
     AdjustPrestep();
+}
+
+bool ListWidget::HandleMouseDrag(int mx, int my, bool mouseDown)
+{
+    if (!(mlFlags & MLF_SCROLLBAR)) {
+        scrollDragging = false;
+        return false;
+    }
+
+    int bar_x = 0;
+    int bar_y = 0;
+    int bar_w = 0;
+    int bar_h = 0;
+    int arrow_h = 0;
+    int track_y = 0;
+    int track_h = 0;
+    int thumb_y = 0;
+    int thumb_h = 0;
+    if (!ScrollbarMetrics(&bar_x, &bar_y, &bar_w, &bar_h, &arrow_h,
+                          &track_y, &track_h, &thumb_y, &thumb_h)) {
+        scrollDragging = false;
+        return false;
+    }
+
+    if (!mouseDown) {
+        scrollDragging = false;
+        return false;
+    }
+
+    bool in_bar = mx >= bar_x && mx < bar_x + bar_w && my >= bar_y && my < bar_y + bar_h;
+    if (!scrollDragging && in_bar) {
+        if (my < bar_y + arrow_h) {
+            prestep -= 1;
+            ValidatePrestep();
+            return true;
+        }
+        if (my >= bar_y + bar_h - arrow_h) {
+            prestep += 1;
+            ValidatePrestep();
+            return true;
+        }
+        if (track_h > 0) {
+            if (my >= thumb_y && my < thumb_y + thumb_h) {
+                scrollDragging = true;
+                scrollDragOffset = my - thumb_y;
+                return true;
+            }
+            if (my < thumb_y) {
+                prestep -= max(1, maxItems);
+                ValidatePrestep();
+                return true;
+            }
+            if (my >= thumb_y + thumb_h) {
+                prestep += max(1, maxItems);
+                ValidatePrestep();
+                return true;
+            }
+        }
+    }
+
+    if (!scrollDragging)
+        return false;
+
+    int maxStart = max(0, numItems - maxItems);
+    if (maxStart <= 0 || track_h <= 0 || thumb_h <= 0) {
+        scrollDragging = false;
+        prestep = 0;
+        return true;
+    }
+
+    int new_thumb = Q_clip(my - scrollDragOffset, track_y, track_y + track_h - thumb_h);
+    float frac = static_cast<float>(new_thumb - track_y) /
+        static_cast<float>(max(1, track_h - thumb_h));
+    prestep = Q_clip(Q_rint(frac * maxStart), 0, maxStart);
+    ValidatePrestep();
+    return true;
 }
 
 } // namespace ui

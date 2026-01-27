@@ -114,8 +114,52 @@ static const color_t kRainbowColors[26] = {
     COLOR_RGBA(128, 128, 128, 255)
 };
 
+static size_t InputFieldClampChars(const char *text, size_t max_chars)
+{
+    if (!text)
+        return 0;
+    size_t available = UTF8_CountChars(text, strlen(text));
+    if (max_chars)
+        available = min(available, max_chars);
+    return available;
+}
+
+static size_t InputFieldCharsForWidth(const char *text, size_t max_chars, int pixel_width)
+{
+    if (!text || pixel_width <= 0 || max_chars == 0)
+        return 0;
+
+    size_t available = InputFieldClampChars(text, max_chars);
+    size_t chars = 0;
+    while (chars < available) {
+        size_t next_bytes = UTF8_OffsetForChars(text, chars + 1);
+        int width = UI_FontMeasureString(0, next_bytes, text, nullptr);
+        if (width > pixel_width)
+            break;
+        chars++;
+    }
+    return chars;
+}
+
+static size_t InputFieldOffsetForWidth(const char *text, size_t cursor_chars, int pixel_width)
+{
+    if (!text || pixel_width <= 0)
+        return 0;
+
+    size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars);
+    for (size_t start = 0; start < cursor_chars; ++start) {
+        size_t start_bytes = UTF8_OffsetForChars(text, start);
+        size_t len_bytes = cursor_bytes - start_bytes;
+        int width = UI_FontMeasureString(0, len_bytes, text + start_bytes, nullptr);
+        if (width <= pixel_width)
+            return start;
+    }
+    return cursor_chars;
+}
+
 static int DrawInputFieldText(const inputField_t *field, int x, int y, int flags,
-                              size_t max_chars, int *out_cursor_x, int *out_cursor_w)
+                              int pixel_width, size_t max_chars,
+                              int *out_cursor_x, int *out_cursor_w)
 {
     if (out_cursor_x)
         *out_cursor_x = x;
@@ -124,22 +168,24 @@ static int DrawInputFieldText(const inputField_t *field, int x, int y, int flags
     if (!field || !field->maxChars || !field->visibleChars)
         return 0;
 
+    size_t total_chars = InputFieldClampChars(field->text, max_chars);
     size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
-    size_t offset_chars = 0;
-    if (cursor_chars >= field->visibleChars) {
-        offset_chars = cursor_chars - (field->visibleChars - 1);
-    }
+    if (cursor_chars > total_chars)
+        cursor_chars = total_chars;
 
-    size_t draw_chars = field->visibleChars;
-    if (draw_chars > max_chars)
-        draw_chars = max_chars;
+    size_t offset_chars = InputFieldOffsetForWidth(field->text, cursor_chars, pixel_width);
+    if (offset_chars > total_chars)
+        offset_chars = total_chars;
+
+    size_t remaining_chars = (offset_chars < total_chars) ? (total_chars - offset_chars) : 0;
+    size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
+    const char *text = field->text + offset;
+    size_t draw_chars = InputFieldCharsForWidth(text, remaining_chars, pixel_width);
 
     size_t cursor_chars_visible = (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
     if (cursor_chars_visible > draw_chars)
         cursor_chars_visible = draw_chars;
 
-    size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
-    const char *text = field->text + offset;
     size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
     size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars_visible);
 
@@ -148,6 +194,10 @@ static int DrawInputFieldText(const inputField_t *field, int x, int y, int flags
         size_t sel_end = max(field->selectionAnchor, field->cursorPos);
         size_t sel_start_chars = UTF8_CountChars(field->text, sel_start);
         size_t sel_end_chars = UTF8_CountChars(field->text, sel_end);
+        if (sel_start_chars > total_chars)
+            sel_start_chars = total_chars;
+        if (sel_end_chars > total_chars)
+            sel_end_chars = total_chars;
         size_t sel_start_visible = (sel_start_chars > offset_chars)
             ? (sel_start_chars - offset_chars)
             : 0;
@@ -184,21 +234,56 @@ static int DrawInputFieldText(const inputField_t *field, int x, int y, int flags
     return end_x;
 }
 
-static size_t InputFieldCursorFromMouse(const inputField_t *field, int mouse_x, int text_x)
+static void UpdateInputFieldVisibleChars(inputField_t *field, int pixel_width)
+{
+    if (!field || !field->maxChars)
+        return;
+
+    int char_w = UI_FontMeasureString(0, 1, "i", nullptr);
+    if (char_w <= 0)
+        char_w = CONCHAR_WIDTH;
+    int visible = max(1, pixel_width / char_w);
+    if (visible > static_cast<int>(field->maxChars))
+        visible = static_cast<int>(field->maxChars);
+    field->visibleChars = static_cast<size_t>(visible);
+}
+
+static int InputFieldCharWidth()
+{
+    int char_w = UI_FontMeasureString(0, 1, "M", nullptr);
+    if (char_w <= 0)
+        char_w = CONCHAR_WIDTH;
+    return char_w;
+}
+
+static int InputFieldBoxWidth(int chars, bool includeArrow)
+{
+    int char_w = InputFieldCharWidth();
+    int box_w = max(1, chars * char_w);
+    if (includeArrow)
+        box_w += char_w;
+    return box_w;
+}
+
+static size_t InputFieldCursorFromMouse(const inputField_t *field, int mouse_x,
+                                        int text_x, int pixel_width)
 {
     if (!field || !field->maxChars || !field->visibleChars)
         return 0;
 
+    size_t total_chars = InputFieldClampChars(field->text, field->maxChars);
     size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
-    size_t offset_chars = 0;
-    if (cursor_chars >= field->visibleChars) {
-        offset_chars = cursor_chars - (field->visibleChars - 1);
-    }
+    if (cursor_chars > total_chars)
+        cursor_chars = total_chars;
+
+    size_t offset_chars = InputFieldOffsetForWidth(field->text, cursor_chars, pixel_width);
+    if (offset_chars > total_chars)
+        offset_chars = total_chars;
 
     size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
     const char *text = field->text + offset;
-    size_t available_chars = UTF8_CountChars(text, strlen(text));
-    size_t max_chars = min(field->visibleChars, available_chars);
+    size_t remaining_chars = (offset_chars < total_chars) ? (total_chars - offset_chars) : 0;
+    size_t max_chars = InputFieldCharsForWidth(text, remaining_chars, pixel_width);
     int click_x = mouse_x - text_x;
     if (click_x < 0)
         click_x = 0;
@@ -266,6 +351,14 @@ static void DrawControlBox(int x, int y, int width, int height, bool focused, bo
         color_t highlight = COLOR_RGBA(255, 255, 255, focused ? 60 : 30);
         R_DrawFill32(x + 1, y + 1, width - 2, 1, highlight);
     }
+}
+
+static color_t WidgetContrastText(color_t background)
+{
+    int lum = (background.r * 54 + background.g * 183 + background.b * 19) >> 8;
+    if (lum > 140)
+        return COLOR_RGBA(0, 0, 0, 255);
+    return COLOR_WHITE;
 }
 
 static void DrawRowHighlight(int x, int y, int width, int height, bool focused, bool disabled)
@@ -590,8 +683,6 @@ bool SliderWidget::HandleMouseDrag(int mx, int my, bool mouseDown)
         dragging_ = false;
         return false;
     }
-    if (!dragging_)
-        return false;
     if (!mouseDown) {
         dragging_ = false;
         return false;
@@ -599,6 +690,12 @@ bool SliderWidget::HandleMouseDrag(int mx, int my, bool mouseDown)
     int value_x = 0;
     int value_w = 0;
     ValueRect(&value_x, &value_w);
+    vrect_t value_rect{ value_x, rect_.y, value_w, rect_.height };
+    if (!dragging_) {
+        if (!RectContains(value_rect, mx, my))
+            return false;
+        dragging_ = true;
+    }
     SetValueFromMouse(mx, value_x, value_w);
     return true;
 }
@@ -1031,6 +1128,9 @@ void DropdownWidget::Draw(bool focused) const
     int text_left = value_x + padding;
     int text_right = value_x + value_w - padding - arrow_area;
     std::string value = CurrentLabel();
+    color_t box_base = disabled ? uis.color.disabled : uis.color.normal;
+    color_t box_fill = COLOR_SETA_U8(box_base, disabled ? 70 : 110);
+    color_t value_color = disabled ? uis.color.disabled : WidgetContrastText(box_fill);
     if (text_right > text_left) {
         clipRect_t clip{};
         clip.left = text_left;
@@ -1038,7 +1138,7 @@ void DropdownWidget::Draw(bool focused) const
         clip.top = box_y;
         clip.bottom = box_y + box_h;
         R_SetClipRect(&clip);
-        UI_DrawString(text_left, text_y, UI_LEFT, color, value.c_str());
+        UI_DrawString(text_left, text_y, UI_LEFT, value_color, value.c_str());
         R_SetClipRect(NULL);
     }
 
@@ -1093,6 +1193,13 @@ void DropdownWidget::DrawOverlay() const
             R_DrawFill32(inner_x, row_y, inner_w, row_height, shade);
         }
 
+        color_t row_fill = COLOR_SETA_U8(uis.color.normal, 255);
+        if (index == draw_cursor)
+            row_fill = COLOR_SETA_U8(uis.color.selection, 255);
+        else if (i & 1)
+            row_fill = COLOR_SETA_U8(uis.color.normal, 255);
+
+        color_t text_color = WidgetContrastText(row_fill);
         int row_text_y = row_y + (row_height - text_h) / 2;
         clipRect_t clip{};
         clip.left = inner_x + list_padding;
@@ -1100,7 +1207,7 @@ void DropdownWidget::DrawOverlay() const
         clip.top = row_y;
         clip.bottom = row_y + row_height;
         R_SetClipRect(&clip);
-        UI_DrawString(inner_x + list_padding, row_text_y, UI_LEFT, uis.color.normal,
+        UI_DrawString(inner_x + list_padding, row_text_y, UI_LEFT, text_color,
                       labels_[index].c_str());
         R_SetClipRect(NULL);
     }
@@ -1661,18 +1768,22 @@ void ProgressWidget::Draw(bool focused) const
 }
 
 ImageSpinWidget::ImageSpinWidget(std::string label, cvar_t *cvar, std::string path,
-                                 std::string filter, int width, int height)
+                                 std::string filter, int width, int height,
+                                 bool numericValues, std::string valuePrefix)
     : SpinWidget(std::move(label), cvar, SpinType::String)
     , path_(std::move(path))
     , filter_(std::move(filter))
     , previewWidth_(width)
     , previewHeight_(height)
+    , numericValues_(numericValues)
+    , valuePrefix_(std::move(valuePrefix))
 {
 }
 
 int ImageSpinWidget::Height(int lineHeight) const
 {
-    return lineHeight + GenericSpacing(previewHeight_);
+    int preview_h = previewHeight_ > 0 ? GenericSpacing(previewHeight_) : 0;
+    return max(lineHeight, preview_h);
 }
 
 void ImageSpinWidget::OnOpen()
@@ -1688,21 +1799,39 @@ void ImageSpinWidget::OnOpen()
         }
     }
 
-    const char *val = cvar_ ? cvar_->string : "";
-    size_t val_len = strlen(val);
     curValue_ = -1;
 
     size_t path_offset = path_.size();
     if (path_offset && path_[path_offset - 1] != '/')
         path_offset++;
 
+    int target_value = 0;
+    if (numericValues_ && cvar_) {
+        target_value = cvar_->integer;
+        if (target_value <= 0 && cvar_->string && *cvar_->string) {
+            int parsed = 0;
+            if (ParseEntryValue(cvar_->string, &parsed))
+                target_value = parsed;
+        }
+    }
+
     for (int i = 0; i < entryCount_; i++) {
         const char *file_value = entries_[i] + path_offset;
         const char *dot = strchr(file_value, '.');
         size_t file_len = dot ? static_cast<size_t>(dot - file_value) : strlen(file_value);
-        if (!Q_strncasecmp(val, file_value, max(val_len, file_len))) {
-            curValue_ = i;
-            break;
+        if (numericValues_) {
+            int parsed = 0;
+            if (ParseEntryValue(file_value, &parsed) && parsed == target_value) {
+                curValue_ = i;
+                break;
+            }
+        } else {
+            const char *val = cvar_ ? cvar_->string : "";
+            size_t val_len = strlen(val);
+            if (!Q_strncasecmp(val, file_value, max(val_len, file_len))) {
+                curValue_ = i;
+                break;
+            }
         }
     }
 
@@ -1723,7 +1852,13 @@ void ImageSpinWidget::OnClose()
         const char *file_value = entries_[curValue_] + path_offset;
         const char *dot = strchr(file_value, '.');
         size_t file_len = dot ? static_cast<size_t>(dot - file_value) : strlen(file_value);
-        Cvar_SetEx(cvar_->name, va("%.*s", static_cast<int>(file_len), file_value), FROM_MENU);
+        if (numericValues_) {
+            int parsed = 0;
+            if (ParseEntryValue(file_value, &parsed))
+                Cvar_SetInteger(cvar_, parsed, FROM_MENU);
+        } else {
+            Cvar_SetEx(cvar_->name, va("%.*s", static_cast<int>(file_len), file_value), FROM_MENU);
+        }
     }
     if (entries_) {
         FS_FreeList((void **)entries_);
@@ -1739,12 +1874,8 @@ void ImageSpinWidget::Draw(bool focused) const
     if (focused && !disabled)
         color = uis.color.active;
 
-    int preview_h = previewHeight_ > 0 ? GenericSpacing(previewHeight_) : 0;
-    int header_h = rect_.height - preview_h;
-    if (header_h <= 0)
-        header_h = rect_.height;
-
     int header_y = rect_.y;
+    int header_h = rect_.height;
     const char *label = LabelText();
     int text_y = WidgetTextY(header_y, header_h);
     if (label && *label) {
@@ -1765,22 +1896,51 @@ void ImageSpinWidget::Draw(bool focused) const
     int value_x = ValueX(label);
     int value_w = ValueWidth(value_x);
     value_w = max(1, value_w);
-    int box_h = min(header_h, max(8, WidgetTextHeight() + 6));
-    int box_y = header_y + (header_h - box_h) / 2;
+    int box_h = max(1, header_h);
+    int box_y = header_y;
     DrawControlBox(value_x, box_y, value_w, box_h, focused, disabled);
 
     int padding = WidgetPadding();
     int arrow_area = (value_w >= CONCHAR_WIDTH * 6) ? (CONCHAR_WIDTH * 2) : 0;
-    int text_left = value_x + padding;
-    int text_right = value_x + value_w - padding - arrow_area;
-    if (text_right > text_left) {
+    int content_left = value_x + padding;
+    int content_right = value_x + value_w - padding - arrow_area;
+    int content_w = max(0, content_right - content_left);
+    int content_h = max(0, box_h - padding * 2);
+
+    bool drew_image = false;
+    if (curValue_ >= 0 && curValue_ < entryCount_ && content_w > 0 && content_h > 0) {
+        qhandle_t pic = R_RegisterTempPic(va("/%s", entries_[curValue_]));
+        int w = 0;
+        int h = 0;
+        R_GetPicSize(&w, &h, pic);
+        if (w > 0 && h > 0) {
+            int target_w = previewWidth_ > 0 ? previewWidth_ : w;
+            int target_h = previewHeight_ > 0 ? previewHeight_ : h;
+            target_w = min(target_w, content_w);
+            target_h = min(target_h, content_h);
+            if (target_w > 0 && target_h > 0) {
+                float scale_w = static_cast<float>(target_w) / w;
+                float scale_h = static_cast<float>(target_h) / h;
+                float scale = min(scale_w, scale_h);
+                int draw_w = max(1, Q_rint(w * scale));
+                int draw_h = max(1, Q_rint(h * scale));
+                int draw_x = content_left + (content_w - draw_w) / 2;
+                int draw_y = box_y + (box_h - draw_h) / 2;
+                R_DrawStretchPic(draw_x, draw_y, draw_w, draw_h, COLOR_WHITE, pic);
+                drew_image = true;
+            }
+        }
+    }
+
+    if (!drew_image && content_right > content_left) {
+        color_t value_color = disabled ? uis.color.disabled : COLOR_WHITE;
         clipRect_t clip{};
-        clip.left = text_left;
-        clip.right = text_right - 1;
+        clip.left = content_left;
+        clip.right = content_right - 1;
         clip.top = box_y;
         clip.bottom = box_y + box_h;
         R_SetClipRect(&clip);
-        UI_DrawString(text_left, text_y, UI_LEFT, color, CurrentLabel().c_str());
+        UI_DrawString(content_left, text_y, UI_LEFT, value_color, CurrentLabel().c_str());
         R_SetClipRect(NULL);
     }
 
@@ -1793,34 +1953,6 @@ void ImageSpinWidget::Draw(bool focused) const
         UI_DrawChar(divider_x + CONCHAR_WIDTH + (CONCHAR_WIDTH / 2), text_y, UI_LEFT, color, '>');
     }
 
-    if (curValue_ < 0 || curValue_ >= entryCount_)
-        return;
-    if (preview_h <= 0)
-        return;
-
-    qhandle_t pic = R_RegisterTempPic(va("/%s", entries_[curValue_]));
-    int w = 0;
-    int h = 0;
-    R_GetPicSize(&w, &h, pic);
-    if (w <= 0 || h <= 0)
-        return;
-
-    int target_w = previewWidth_ > 0 ? previewWidth_ : w;
-    int target_h = previewHeight_ > 0 ? previewHeight_ : h;
-    target_w = min(target_w, value_w);
-    target_h = min(target_h, preview_h);
-    if (target_w <= 0 || target_h <= 0)
-        return;
-
-    float scale_w = static_cast<float>(target_w) / w;
-    float scale_h = static_cast<float>(target_h) / h;
-    float scale = min(scale_w, scale_h);
-    int draw_w = max(1, Q_rint(w * scale));
-    int draw_h = max(1, Q_rint(h * scale));
-
-    int draw_x = value_x + (value_w - draw_w) / 2;
-    int draw_y = header_y + header_h + (preview_h - draw_h) / 2;
-    R_DrawStretchPic(draw_x, draw_y, draw_w, draw_h, COLOR_WHITE, pic);
 }
 
 void ImageSpinWidget::DrawOverlay() const
@@ -1883,11 +2015,27 @@ void ImageSpinWidget::DrawOverlay() const
             DrawPanel(tile_x, row_y, tile_w, tile_h, tile_fill, tile_border, 1);
 
             qhandle_t pic = R_RegisterTempPic(va("/%s", entries_[index]));
-            int img_w = previewWidth_ > 0 ? previewWidth_ : tile_w - tile_pad * 2;
-            int img_h = previewHeight_ > 0 ? previewHeight_ : tile_h - tile_pad * 2;
-            int img_x = tile_x + (tile_w - img_w) / 2;
-            int img_y = row_y + (tile_h - img_h) / 2;
-            R_DrawStretchPic(img_x, img_y, img_w, img_h, COLOR_WHITE, pic);
+            int w = 0;
+            int h = 0;
+            R_GetPicSize(&w, &h, pic);
+            int img_area_w = max(1, tile_w - tile_pad * 2);
+            int img_area_h = max(1, tile_h - tile_pad * 2);
+            if (w > 0 && h > 0 && img_area_w > 0 && img_area_h > 0) {
+                int target_w = previewWidth_ > 0 ? previewWidth_ : w;
+                int target_h = previewHeight_ > 0 ? previewHeight_ : h;
+                target_w = min(target_w, img_area_w);
+                target_h = min(target_h, img_area_h);
+                if (target_w > 0 && target_h > 0) {
+                    float scale_w = static_cast<float>(target_w) / w;
+                    float scale_h = static_cast<float>(target_h) / h;
+                    float scale = min(scale_w, scale_h);
+                    int draw_w = max(1, Q_rint(w * scale));
+                    int draw_h = max(1, Q_rint(h * scale));
+                    int img_x = tile_x + (tile_w - draw_w) / 2;
+                    int img_y = row_y + (tile_h - draw_h) / 2;
+                    R_DrawStretchPic(img_x, img_y, draw_w, draw_h, COLOR_WHITE, pic);
+                }
+            }
         }
     }
 
@@ -2224,7 +2372,7 @@ int ImageSpinWidget::ComputeVisibleRows(int rowHeight) const
     if (entryCount_ <= 0)
         return 0;
 
-    constexpr int kMaxVisibleRows = 3;
+    constexpr int kMaxVisibleRows = 4;
     int max_visible = kMaxVisibleRows;
     int below = uis.height - (rect_.y + rect_.height);
     int above = rect_.y;
@@ -2305,6 +2453,43 @@ int ImageSpinWidget::HitTestList(int mx, int my, const vrect_t &listRect, int ro
     return index;
 }
 
+bool ImageSpinWidget::ParseEntryValue(const char *file_value, int *out_value) const
+{
+    if (!numericValues_ || !file_value || !*file_value)
+        return false;
+
+    const char *dot = strchr(file_value, '.');
+    size_t file_len = dot ? static_cast<size_t>(dot - file_value) : strlen(file_value);
+    if (!file_len)
+        return false;
+
+    char name_buf[MAX_QPATH];
+    size_t copy_len = min(file_len, sizeof(name_buf) - 1);
+    memcpy(name_buf, file_value, copy_len);
+    name_buf[copy_len] = '\0';
+
+    const char *scan = name_buf;
+    if (!valuePrefix_.empty()) {
+        size_t prefix_len = valuePrefix_.size();
+        if (copy_len < prefix_len)
+            return false;
+        if (Q_strncasecmp(scan, valuePrefix_.c_str(), prefix_len) != 0)
+            return false;
+        scan += prefix_len;
+    } else {
+        while (*scan && !Q_isdigit(*scan))
+            scan++;
+    }
+
+    if (!*scan || !Q_isdigit(*scan))
+        return false;
+
+    int parsed = atoi(scan);
+    if (out_value)
+        *out_value = parsed;
+    return true;
+}
+
 FieldWidget::FieldWidget(std::string label, cvar_t *cvar, int width, bool center,
                          bool numeric, bool integer)
     : cvar_(cvar)
@@ -2323,6 +2508,23 @@ void FieldWidget::Layout(int x, int y, int width, int lineHeight)
     rect_.width = width;
     rect_.height = Height(lineHeight);
     rect_.x = center_ ? x - width / 2 : x;
+
+    int draw_x = center_ ? rect_.x + rect_.width / 2 : rect_.x;
+    int value_x = draw_x;
+    const char *label = LabelText();
+    if (label && *label && !center_) {
+        value_x = UseColumns() ? ColumnValueX() : (value_x + TextWidth(label) + WidgetGap());
+    }
+
+    int box_w = InputFieldBoxWidth(width_, false);
+    if (!center_) {
+        int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - value_x);
+        if (max_w > 0)
+            box_w = min(box_w, max_w);
+    }
+
+    int inner_w = max(1, box_w - WidgetPadding() * 2);
+    UpdateInputFieldVisibleChars(&field_, inner_w);
 }
 
 void FieldWidget::OnOpen()
@@ -2351,7 +2553,7 @@ Sound FieldWidget::KeyEvent(int key)
             x = UseColumns() ? ColumnValueX() : (x + TextWidth(label) + WidgetGap());
         }
 
-        int box_w = max(1, width_ * CONCHAR_WIDTH);
+        int box_w = InputFieldBoxWidth(width_, false);
         if (!center_) {
             int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - x);
             if (max_w > 0)
@@ -2368,7 +2570,8 @@ Sound FieldWidget::KeyEvent(int key)
 
         if (RectContains(box_rect, uis.mouseCoords[0], uis.mouseCoords[1])) {
             int text_x = box_x + WidgetPadding();
-            size_t new_pos = InputFieldCursorFromMouse(&field_, uis.mouseCoords[0], text_x);
+            int text_w = max(1, box_w - WidgetPadding() * 2);
+            size_t new_pos = InputFieldCursorFromMouse(&field_, uis.mouseCoords[0], text_x, text_w);
             IF_SetCursor(&field_, new_pos, Key_IsDown(K_SHIFT));
             return Sound::Move;
         }
@@ -2431,7 +2634,7 @@ void FieldWidget::Draw(bool focused) const
     }
 
     int flags = center_ ? UI_CENTER : UI_LEFT;
-    int box_w = max(1, width_ * CONCHAR_WIDTH);
+    int box_w = InputFieldBoxWidth(width_, false);
     if (!center_) {
         int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - x);
         if (max_w > 0)
@@ -2445,13 +2648,14 @@ void FieldWidget::Draw(bool focused) const
 
     int cursor_x = box_x + WidgetPadding();
     int cursor_w = 0;
+    int text_w = max(1, box_w - WidgetPadding() * 2);
     clipRect_t clip{};
     clip.left = box_x + 1;
     clip.right = box_x + box_w - 1;
     clip.top = box_y;
     clip.bottom = box_y + box_h;
     R_SetClipRect(&clip);
-    DrawInputFieldText(&field_, cursor_x, text_y, flags, field_.visibleChars,
+    DrawInputFieldText(&field_, cursor_x, text_y, flags, text_w, field_.maxChars,
                        &cursor_x, &cursor_w);
     if (focused && !disabled && ((uis.realtime >> 8) & 1)) {
         DrawInputCursor(cursor_x, text_y, WidgetTextHeight(), cursor_w,
@@ -2478,6 +2682,27 @@ void ComboWidget::Layout(int x, int y, int width, int lineHeight)
     rect_.width = width;
     rect_.height = Height(lineHeight);
     rect_.x = center_ ? x - width / 2 : x;
+
+    int draw_x = center_ ? rect_.x + rect_.width / 2 : rect_.x;
+    int value_x = draw_x;
+    const char *label = LabelText();
+    if (label && *label && !center_) {
+        value_x = UseColumns() ? ColumnValueX() : (value_x + TextWidth(label) + WidgetGap());
+    }
+
+    int box_w = InputFieldBoxWidth(width_, true);
+    if (!center_) {
+        int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - value_x);
+        if (max_w > 0)
+            box_w = min(box_w, max_w);
+    }
+
+    int arrow_area = min(CONCHAR_WIDTH * 2, max(0, box_w - 2));
+    if (arrow_area < CONCHAR_WIDTH)
+        arrow_area = 0;
+
+    int inner_w = max(1, box_w - WidgetPadding() * 2 - arrow_area);
+    UpdateInputFieldVisibleChars(&field_, inner_w);
 }
 
 void ComboWidget::OnOpen()
@@ -2560,7 +2785,7 @@ Sound ComboWidget::KeyEvent(int key)
             x = UseColumns() ? ColumnValueX() : (x + TextWidth(label) + WidgetGap());
         }
 
-        int box_w = max(1, width_ * CONCHAR_WIDTH + CONCHAR_WIDTH);
+        int box_w = InputFieldBoxWidth(width_, true);
         if (!center_) {
             int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - x);
             if (max_w > 0)
@@ -2577,7 +2802,11 @@ Sound ComboWidget::KeyEvent(int key)
 
         if (RectContains(box_rect, uis.mouseCoords[0], uis.mouseCoords[1])) {
             int text_x = box_x + WidgetPadding();
-            size_t new_pos = InputFieldCursorFromMouse(&field_, uis.mouseCoords[0], text_x);
+            int arrow_area = min(CONCHAR_WIDTH * 2, max(0, box_w - 2));
+            if (arrow_area < CONCHAR_WIDTH)
+                arrow_area = 0;
+            int text_w = max(1, box_w - WidgetPadding() * 2 - arrow_area);
+            size_t new_pos = InputFieldCursorFromMouse(&field_, uis.mouseCoords[0], text_x, text_w);
             IF_SetCursor(&field_, new_pos, Key_IsDown(K_SHIFT));
             return Sound::Move;
         }
@@ -2639,7 +2868,7 @@ void ComboWidget::Draw(bool focused) const
     }
 
     int flags = center_ ? UI_CENTER : UI_LEFT;
-    int box_w = max(1, width_ * CONCHAR_WIDTH + CONCHAR_WIDTH);
+    int box_w = InputFieldBoxWidth(width_, true);
     if (!center_) {
         int max_w = UseColumns() ? ColumnValueWidth() : (rect_.x + rect_.width - x);
         if (max_w > 0)
@@ -2662,13 +2891,14 @@ void ComboWidget::Draw(bool focused) const
 
     int cursor_x = box_x + WidgetPadding();
     int cursor_w = 0;
+    int text_w = max(1, box_w - WidgetPadding() * 2 - arrow_area);
     clipRect_t clip{};
     clip.left = box_x + 1;
     clip.right = (arrow_area > 0) ? (arrow_x - 1) : (box_x + box_w - 1);
     clip.top = box_y;
     clip.bottom = box_y + box_h;
     R_SetClipRect(&clip);
-    DrawInputFieldText(&field_, cursor_x, text_y, flags, field_.visibleChars,
+    DrawInputFieldText(&field_, cursor_x, text_y, flags, text_w, field_.maxChars,
                        &cursor_x, &cursor_w);
     if (focused && !disabled && ((uis.realtime >> 8) & 1)) {
         DrawInputCursor(cursor_x, text_y, WidgetTextHeight(), cursor_w,

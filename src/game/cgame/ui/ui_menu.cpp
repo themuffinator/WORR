@@ -136,6 +136,20 @@ Menu::Menu(std::string name)
     framePadding_ = GenericSpacing(CONCHAR_HEIGHT);
 }
 
+void Menu::SetLayoutBounds(int leftX, int contentWidth)
+{
+    customLayout_ = true;
+    customLeftX_ = max(0, leftX);
+    customContentWidth_ = max(0, contentWidth);
+}
+
+void Menu::ClearLayoutBounds()
+{
+    customLayout_ = false;
+    customLeftX_ = 0;
+    customContentWidth_ = 0;
+}
+
 void Menu::SetBackground(color_t color)
 {
     backgroundImage_ = 0;
@@ -380,15 +394,31 @@ void Menu::Layout()
     EnsureVisible(focusedIndex_);
 }
 
+void Menu::GetLayoutBounds(int *leftX, int *centerX, int *contentWidth) const
+{
+    int lx = customLayout_ ? customLeftX_ : (uis.width / 2 - (CONCHAR_WIDTH * 16));
+    if (lx < 0)
+        lx = 0;
+
+    int max_width = max(0, uis.width - lx);
+    int cw = customLayout_ ? min(customContentWidth_, max_width) : (uis.width - (lx * 2));
+    if (cw < 0)
+        cw = 0;
+
+    if (leftX)
+        *leftX = lx;
+    if (contentWidth)
+        *contentWidth = cw;
+    if (centerX)
+        *centerX = lx + cw / 2;
+}
+
 int Menu::HitTest(int x, int y)
 {
-    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
-    if (leftX < 0)
-        leftX = 0;
-    int centerX = uis.width / 2;
-    int contentWidth = uis.width - (leftX * 2);
-    if (contentWidth < 0)
-        contentWidth = 0;
+    int leftX = 0;
+    int centerX = 0;
+    int contentWidth = 0;
+    GetLayoutBounds(&leftX, &centerX, &contentWidth);
 
     ColumnLayout columns = ComputeColumnLayout(widgets_, leftX, contentWidth);
     ApplyColumnLayout(columns, widgets_);
@@ -448,6 +478,108 @@ void Menu::EnsureVisible(int index)
     scrollY_ = max(scrollY_, 0);
     int maxScroll = max(0, contentHeight_ - (viewBottom - viewTop));
     scrollY_ = min(scrollY_, maxScroll);
+}
+
+bool Menu::HandleScrollBarPress(int mx, int my)
+{
+    int viewHeight = contentBottom_ - contentTop_;
+    int maxScroll = max(0, contentHeight_ - viewHeight);
+    if (viewHeight <= 0 || maxScroll <= 0)
+        return false;
+
+    int bar_x = uis.width - MLIST_SCROLLBAR_WIDTH;
+    int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
+    int bar_y = contentTop_;
+    int bar_h = viewHeight;
+    if (bar_w <= 0 || bar_h <= 0)
+        return false;
+
+    if (mx < bar_x || mx >= bar_x + bar_w || my < bar_y || my >= bar_y + bar_h)
+        return false;
+
+    int arrow_h = max(MLIST_SCROLLBAR_WIDTH, lineHeight_);
+    arrow_h = min(arrow_h, bar_h / 2);
+    if (arrow_h < 1)
+        arrow_h = max(1, bar_h / 2);
+
+    int track_y = bar_y + arrow_h;
+    int track_h = max(0, bar_h - arrow_h * 2);
+    if (track_h <= 0)
+        return true;
+
+    float pageFrac = static_cast<float>(viewHeight) / contentHeight_;
+    float scrollFrac = static_cast<float>(scrollY_) / maxScroll;
+    int thumb_h = max(6, Q_rint(track_h * pageFrac));
+    if (thumb_h > track_h)
+        thumb_h = track_h;
+    int thumb_y = track_y + Q_rint((track_h - thumb_h) * scrollFrac);
+
+    if (my < bar_y + arrow_h) {
+        scrollY_ = max(0, scrollY_ - lineHeight_);
+        return true;
+    }
+    if (my >= bar_y + bar_h - arrow_h) {
+        scrollY_ = min(maxScroll, scrollY_ + lineHeight_);
+        return true;
+    }
+    if (my >= thumb_y && my < thumb_y + thumb_h) {
+        scrollDragging_ = true;
+        scrollDragOffset_ = my - thumb_y;
+        return true;
+    }
+    if (my < thumb_y) {
+        scrollY_ = max(0, scrollY_ - viewHeight);
+        return true;
+    }
+    if (my >= thumb_y + thumb_h) {
+        scrollY_ = min(maxScroll, scrollY_ + viewHeight);
+        return true;
+    }
+
+    return true;
+}
+
+bool Menu::HandleScrollBarDrag(int mx, int my, bool mouseDown)
+{
+    int viewHeight = contentBottom_ - contentTop_;
+    int maxScroll = max(0, contentHeight_ - viewHeight);
+    if (viewHeight <= 0 || maxScroll <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    if (!mouseDown) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    if (!scrollDragging_)
+        return false;
+
+    int bar_h = viewHeight;
+    int bar_y = contentTop_;
+    int arrow_h = max(MLIST_SCROLLBAR_WIDTH, lineHeight_);
+    arrow_h = min(arrow_h, bar_h / 2);
+    if (arrow_h < 1)
+        arrow_h = max(1, bar_h / 2);
+
+    int track_y = bar_y + arrow_h;
+    int track_h = max(0, bar_h - arrow_h * 2);
+    if (track_h <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    float pageFrac = static_cast<float>(viewHeight) / contentHeight_;
+    int thumb_h = max(6, Q_rint(track_h * pageFrac));
+    if (thumb_h > track_h)
+        thumb_h = track_h;
+
+    int new_thumb = Q_clip(my - scrollDragOffset_, track_y, track_y + track_h - thumb_h);
+    float frac = static_cast<float>(new_thumb - track_y) /
+        static_cast<float>(max(1, track_h - thumb_h));
+    scrollY_ = Q_clip(Q_rint(frac * maxScroll), 0, maxScroll);
+    return true;
 }
 
 void Menu::OnOpen()
@@ -659,13 +791,10 @@ void Menu::Draw()
         R_DrawFill32(0, menuTop, uis.width, menuBottom - menuTop, backgroundColor_);
     }
 
-    int leftX = uis.width / 2 - (CONCHAR_WIDTH * 16);
-    if (leftX < 0)
-        leftX = 0;
-    int centerX = uis.width / 2;
-    int contentWidth = uis.width - (leftX * 2);
-    if (contentWidth < 0)
-        contentWidth = 0;
+    int leftX = 0;
+    int centerX = 0;
+    int contentWidth = 0;
+    GetLayoutBounds(&leftX, &centerX, &contentWidth);
 
     ColumnLayout columns = ComputeColumnLayout(widgets_, leftX, contentWidth);
     ApplyColumnLayout(columns, widgets_);
@@ -754,26 +883,53 @@ void Menu::Draw()
     }
 
     int viewHeight = contentBottom_ - contentTop_;
-    if (contentHeight_ > viewHeight && viewHeight > 0) {
+    int maxScroll = max(0, contentHeight_ - viewHeight);
+    if (viewHeight > 0 && maxScroll > 0) {
         int bar_x = uis.width - MLIST_SCROLLBAR_WIDTH;
+        int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
         int bar_y = contentTop_;
         int bar_h = viewHeight;
-        int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
+        int arrow_h = max(MLIST_SCROLLBAR_WIDTH, lineHeight_);
+        arrow_h = min(arrow_h, bar_h / 2);
+        if (arrow_h < 1)
+            arrow_h = max(1, bar_h / 2);
 
-        color_t track = COLOR_SETA_U8(uis.color.normal, 120);
-        color_t border = COLOR_SETA_U8(uis.color.selection, 160);
+        int track_y = bar_y + arrow_h;
+        int track_h = max(0, bar_h - arrow_h * 2);
+
+        color_t track = COLOR_SETA_U8(uis.color.normal, 180);
+        color_t border = COLOR_SETA_U8(uis.color.selection, 200);
         R_DrawFill32(bar_x, bar_y, bar_w, bar_h, track);
         R_DrawFill32(bar_x, bar_y, bar_w, 1, border);
         R_DrawFill32(bar_x, bar_y + bar_h - 1, bar_w, 1, border);
         R_DrawFill32(bar_x, bar_y, 1, bar_h, border);
         R_DrawFill32(bar_x + bar_w - 1, bar_y, 1, bar_h, border);
 
-        float pageFrac = static_cast<float>(viewHeight) / contentHeight_;
-        float scrollFrac = static_cast<float>(scrollY_) / (contentHeight_ - viewHeight);
-        int thumb_h = max(6, Q_rint(bar_h * pageFrac));
-        int thumb_y = bar_y + Q_rint((bar_h - thumb_h) * scrollFrac);
-        color_t thumb = COLOR_SETA_U8(uis.color.active, 200);
-        R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
+        if (arrow_h > 1) {
+            color_t arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+            R_DrawFill32(bar_x + 1, bar_y + 1, max(1, bar_w - 2),
+                         max(1, arrow_h - 2), arrow_fill);
+            R_DrawFill32(bar_x + 1, bar_y + bar_h - arrow_h + 1,
+                         max(1, bar_w - 2), max(1, arrow_h - 2), arrow_fill);
+
+            int text_h = max(1, UI_FontLineHeight(1));
+            int up_y = bar_y + (arrow_h - text_h) / 2;
+            int down_y = bar_y + bar_h - arrow_h + (arrow_h - text_h) / 2;
+            int mid_x = bar_x + bar_w / 2;
+            UI_DrawString(mid_x, up_y, UI_CENTER, uis.color.active, "^");
+            UI_DrawString(mid_x, down_y, UI_CENTER, uis.color.active, "v");
+        }
+
+        if (track_h > 0) {
+            float pageFrac = static_cast<float>(viewHeight) / contentHeight_;
+            float scrollFrac = static_cast<float>(scrollY_) / maxScroll;
+            int thumb_h = max(6, Q_rint(track_h * pageFrac));
+            if (thumb_h > track_h)
+                thumb_h = track_h;
+            int thumb_y = track_y + Q_rint((track_h - thumb_h) * scrollFrac);
+            color_t thumb = COLOR_SETA_U8(uis.color.active, 220);
+            R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
+        }
     }
 
     for (const auto &widget : widgets_) {
@@ -845,6 +1001,8 @@ Sound Menu::KeyEvent(int key)
     }
 
     if (key == K_MOUSE1) {
+        if (HandleScrollBarPress(uis.mouseCoords[0], uis.mouseCoords[1]))
+            return Sound::Move;
         int hit = HitTest(uis.mouseCoords[0], uis.mouseCoords[1]);
         if (hit < 0)
             return Sound::NotHandled;
@@ -890,6 +1048,8 @@ void Menu::MouseEvent(int x, int y, bool down)
     }
 
     bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+    if (HandleScrollBarDrag(x, y, mouse_down))
+        return;
     if (auto *slider = dynamic_cast<SliderWidget *>(FocusedWidget())) {
         if (slider->HandleMouseDrag(x, y, mouse_down))
             return;
@@ -899,6 +1059,12 @@ void Menu::MouseEvent(int x, int y, bool down)
     if (hit >= 0) {
         focusedIndex_ = hit;
         UpdateStatusFromFocus();
+        if (mouse_down) {
+            if (auto *slider = dynamic_cast<SliderWidget *>(FocusedWidget())) {
+                if (slider->HandleMouseDrag(x, y, mouse_down))
+                    return;
+            }
+        }
     }
 }
 

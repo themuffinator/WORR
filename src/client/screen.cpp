@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.h"
 #include "client/font.h"
+#include "client/ui_font.h"
 
 static cvar_t   *scr_viewsize;
 static cvar_t   *scr_showpause;
@@ -1669,6 +1670,49 @@ static void SCR_SetNotifyScrollFromThumb(const scr_notify_layout_t *layout, int 
     scr_notify_scroll_target = frac * scr_notify_scroll_max;
 }
 
+static size_t SCR_InputClampChars(const char *text, size_t max_chars)
+{
+    if (!text)
+        return 0;
+    size_t available = UTF8_CountChars(text, strlen(text));
+    if (max_chars)
+        available = min(available, max_chars);
+    return available;
+}
+
+static size_t SCR_InputCharsForWidth(const char *text, size_t max_chars, int pixel_width)
+{
+    if (!text || pixel_width <= 0 || max_chars == 0)
+        return 0;
+
+    size_t available = SCR_InputClampChars(text, max_chars);
+    size_t chars = 0;
+    while (chars < available) {
+        size_t next_bytes = UTF8_OffsetForChars(text, chars + 1);
+        int width = SCR_MeasureFontString(text, next_bytes);
+        if (width > pixel_width)
+            break;
+        chars++;
+    }
+    return chars;
+}
+
+static size_t SCR_InputOffsetForWidth(const char *text, size_t cursor_chars, int pixel_width)
+{
+    if (!text || pixel_width <= 0)
+        return 0;
+
+    size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars);
+    for (size_t start = 0; start < cursor_chars; ++start) {
+        size_t start_bytes = UTF8_OffsetForChars(text, start);
+        size_t len_bytes = cursor_bytes - start_bytes;
+        int width = SCR_MeasureFontString(text + start_bytes, len_bytes);
+        if (width <= pixel_width)
+            return start;
+    }
+    return cursor_chars;
+}
+
 static void SCR_UpdateNotifyDrag(const scr_notify_layout_t *layout, bool message_active)
 {
     if (!scr_notify_drag) {
@@ -1700,21 +1744,24 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
     const char *prompt = Con_GetChatPromptText(NULL);
     int prompt_width = SCR_MeasureFontString(prompt, layout->prompt_skip);
     int text_x = layout->input_x + prompt_width;
-    int text_w = layout->width - prompt_width;
+    int text_w = max(0, layout->width - prompt_width);
 
     if (scr_notify_mouse_x < text_x || scr_notify_mouse_x >= text_x + text_w)
         return;
 
+    size_t total_chars = SCR_InputClampChars(field->text, field->maxChars);
     size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
-    size_t offset_chars = 0;
-    if (cursor_chars >= field->visibleChars) {
-        offset_chars = cursor_chars - (field->visibleChars - 1);
-    }
+    if (cursor_chars > total_chars)
+        cursor_chars = total_chars;
+
+    size_t offset_chars = SCR_InputOffsetForWidth(field->text, cursor_chars, text_w);
+    if (offset_chars > total_chars)
+        offset_chars = total_chars;
 
     size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
     const char *text = field->text + offset;
-    size_t available_chars = UTF8_CountChars(text, strlen(text));
-    size_t max_chars = min(field->visibleChars, available_chars);
+    size_t remaining_chars = (offset_chars < total_chars) ? (total_chars - offset_chars) : 0;
+    size_t max_chars = SCR_InputCharsForWidth(text, remaining_chars, text_w);
     int click_x = scr_notify_mouse_x - text_x;
     if (click_x < 0)
         click_x = 0;
@@ -1733,22 +1780,24 @@ static void SCR_NotifySetChatCursorFromMouse(const scr_notify_layout_t *layout)
 }
 
 static void SCR_DrawInputField(const inputField_t *field, int x, int y, int flags,
-                               size_t max_chars, color_t color)
+                               int pixel_width, size_t max_chars, color_t color)
 {
     if (!field || !scr.ui_font)
         return;
     if (!field->maxChars || !field->visibleChars)
         return;
 
+    size_t total_chars = SCR_InputClampChars(field->text, max_chars);
     size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
-    size_t offset_chars = 0;
-    if (cursor_chars >= field->visibleChars) {
-        offset_chars = cursor_chars - (field->visibleChars - 1);
-    }
+    if (cursor_chars > total_chars)
+        cursor_chars = total_chars;
+    size_t offset_chars = SCR_InputOffsetForWidth(field->text, cursor_chars, pixel_width);
+    if (offset_chars > total_chars)
+        offset_chars = total_chars;
 
-    size_t draw_chars = field->visibleChars;
-    if (draw_chars > max_chars)
-        draw_chars = max_chars;
+    size_t remaining_chars = (offset_chars < total_chars) ? (total_chars - offset_chars) : 0;
+    size_t draw_chars = SCR_InputCharsForWidth(field->text + UTF8_OffsetForChars(field->text, offset_chars),
+                                               remaining_chars, pixel_width);
 
     size_t cursor_chars_visible = (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
     if (cursor_chars_visible > draw_chars)
@@ -2023,8 +2072,9 @@ static void SCR_DrawChatHUD(color_t base_color)
         SCR_DrawStringStretch(scr_notify_layout.input_x, scr_notify_layout.input_y, 1, 0,
                               scr_notify_layout.max_chars, prompt, base_color, scr.ui_font_pic);
         if (field) {
+            int text_w = max(0, scr_notify_layout.width - prompt_width);
             SCR_DrawInputField(field, scr_notify_layout.input_x + prompt_width,
-                               scr_notify_layout.input_y, UI_DRAWCURSOR,
+                               scr_notify_layout.input_y, UI_DRAWCURSOR, text_w,
                                scr_notify_layout.max_chars - prompt_skip, COLOR_WHITE);
         }
     }
@@ -2552,6 +2602,8 @@ void SCR_ModeChanged(void)
     scr.canvas_width = r_config.width;
     scr.canvas_height = r_config.height;
     Con_CheckResize();
+    if (cls.ref_initialized)
+        UI_FontModeChanged();
     UI_ModeChanged();
     cls.disable_screen = 0;
     if (scr.initialized) {

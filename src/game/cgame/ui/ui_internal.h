@@ -279,6 +279,8 @@ public:
     void SetCompact(bool compact) { compact_ = compact; }
     void SetTransparent(bool transparent) { transparent_ = transparent; }
     void SetAllowBlur(bool allow) { allowBlur_ = allow; }
+    void SetLayoutBounds(int leftX, int contentWidth);
+    void ClearLayoutBounds();
     void SetBackground(color_t color);
     void SetBackgroundImage(qhandle_t image, bool transparent);
     void SetBanner(qhandle_t banner, const vrect_t &rc);
@@ -306,6 +308,9 @@ private:
     Widget *FocusedWidget();
     const Widget *FocusedWidget() const;
     void UpdateStatusFromFocus();
+    void GetLayoutBounds(int *leftX, int *centerX, int *contentWidth) const;
+    bool HandleScrollBarPress(int mx, int my);
+    bool HandleScrollBarDrag(int mx, int my, bool mouseDown);
 
     std::string name_;
     std::string title_;
@@ -345,6 +350,11 @@ private:
     std::vector<int> itemYs_;
     std::vector<int> itemHeights_;
     bool hoverTextInput_ = false;
+    bool customLayout_ = false;
+    int customLeftX_ = 0;
+    int customContentWidth_ = 0;
+    bool scrollDragging_ = false;
+    int scrollDragOffset_ = 0;
 };
 
 class ActionWidget : public Widget {
@@ -521,7 +531,8 @@ private:
 class ImageSpinWidget : public SpinWidget {
 public:
     ImageSpinWidget(std::string label, cvar_t *cvar, std::string path, std::string filter,
-                    int width, int height);
+                    int width, int height, bool numericValues = false,
+                    std::string valuePrefix = {});
     int Height(int lineHeight) const override;
     void Draw(bool focused) const override;
     void DrawOverlay() const;
@@ -544,6 +555,7 @@ private:
                             int *out_scroll_width) const;
     int HitTestList(int mx, int my, const vrect_t &listRect, int rowHeight,
                     int visibleRows, int columns, int scrollWidth) const;
+    bool ParseEntryValue(const char *file_value, int *out_value) const;
 
     std::string path_;
     std::string filter_;
@@ -555,6 +567,8 @@ private:
     int listStart_ = 0;
     int listCursor_ = -1;
     int openValue_ = -1;
+    bool numericValues_ = false;
+    std::string valuePrefix_;
 };
 
 class FieldWidget : public Widget {
@@ -718,6 +732,7 @@ public:
     void Sort(int offset, int (*cmpfunc)(const void *, const void *));
     Sound KeyEvent(int key);
     void HoverAt(int mx, int my);
+    bool HandleMouseDrag(int mx, int my, bool mouseDown);
     void Draw();
 
 private:
@@ -728,6 +743,12 @@ private:
     int DrawItems(int y) const;
     int HitTestRow(int mx, int my) const;
     Sound ClickAt(int mx, int my);
+    bool ScrollbarMetrics(int *bar_x, int *bar_y, int *bar_w, int *bar_h,
+                          int *arrow_h, int *track_y, int *track_h,
+                          int *thumb_y, int *thumb_h) const;
+
+    bool scrollDragging = false;
+    int scrollDragOffset = 0;
 };
 
 class MenuSystem {

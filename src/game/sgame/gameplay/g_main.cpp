@@ -630,7 +630,7 @@ static void Match_SetGameType(GameType gt) {
 
   GT_PrecacheAssets();
   GT_SetLongName();
-  gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", level.gametype_name.data());
+  gi.LocBroadcast_Print(PRINT_CENTER, "$format_passthrough", level.gametype_name.data());
 
   if (canReloadEntities) {
     Match_Reset();
@@ -2488,3 +2488,4 @@ void G_PrepFrame() {
     globals.serverFlags |= SERVER_FLAG_INTERMISSION;
   }
 }
+

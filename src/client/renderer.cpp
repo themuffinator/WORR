@@ -1051,6 +1051,7 @@ void CL_ShutdownRenderer(void)
     SCR_Shutdown();
     UI_Shutdown();
     UI_FontShutdown();
+    Con_RendererShutdown();
     Font_Shutdown();
 
     r_geometry->changed = NULL;

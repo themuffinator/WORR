@@ -17,6 +17,7 @@ struct MenuItemData {
     std::string imageSelected;
     std::string path;
     std::string filter;
+    std::string valuePrefix;
     std::string slot;
     std::vector<std::string> items;
     std::vector<std::pair<std::string, std::string>> pairs;
@@ -518,7 +519,8 @@ static std::unique_ptr<Widget> BuildWidget(const MenuItemData &item)
         cvar_t *cvar = Cvar_WeakGet(item.cvar.c_str());
         auto image = std::make_unique<ImageSpinWidget>(item.label, cvar,
                                                        item.path, item.filter,
-                                                       item.imageWidth, item.imageHeight);
+                                                       item.imageWidth, item.imageHeight,
+                                                       item.numeric, item.valuePrefix);
         image->SetStatus(item.status);
         widget = std::move(image);
     } else if (item.type == "episode_selector") {
@@ -676,6 +678,9 @@ static bool ParseMenuItem(json_parse_t *parser, Menu &menu)
         } else if (Json_Strcmp(parser, "filter") == 0) {
             Json_Next(parser);
             data.filter = Json_ReadString(parser);
+        } else if (Json_Strcmp(parser, "valuePrefix") == 0) {
+            Json_Next(parser);
+            data.valuePrefix = Json_ReadString(parser);
         } else if (Json_Strcmp(parser, "imageWidth") == 0) {
             Json_Next(parser);
             data.imageWidth = static_cast<int>(Json_ReadNumber(parser));

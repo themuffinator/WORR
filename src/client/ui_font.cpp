@@ -131,6 +131,14 @@ void UI_FontInit(void)
     UI_FontEnsure();
 }
 
+void UI_FontModeChanged(void)
+{
+    ui_last_width = -1;
+    ui_last_height = -1;
+    ui_pixel_scale = 0.0f;
+    UI_FontEnsure();
+}
+
 void UI_FontShutdown(void)
 {
     font_t *old_font = ui_font_handle;

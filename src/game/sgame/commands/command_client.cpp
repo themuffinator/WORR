@@ -1024,7 +1024,7 @@ Displays connected clients, optionally sorted by score or time played.
 				ClientScoreForStandings(cl), timePlayed);
 		}
 
-		gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "$g_sgame_auto_adc83b19e793");
+		gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY, "$format_blank_line");
 	}
 
 /*
@@ -2475,4 +2475,6 @@ Toggles the eyecam view when following other players.
 	}
 
 } // namespace Commands
+
+
 

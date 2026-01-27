@@ -664,7 +664,7 @@ static void Cmd_If_f(void)
     } else if (!strcmp(op, "<")) {
         if (!numeric) {
 error:
-            Com_Printf("$e_auto_45ddf1902a53", op);
+            Com_Printf("$misc_cant_use_numeric_expressions", op);
             return;
         }
         matched = Q_atof(a) < Q_atof(b);

@@ -2130,7 +2130,7 @@ static TOUCH(door_touch) (gentity_t* self, gentity_t* other, const trace_t& tr, 
 
 	self->touch_debounce_time = level.time + 5_sec;
 
-	gi.LocCenter_Print(other, "$g_sgame_auto_bf21a9e8fbc5", self->message);
+	gi.LocCenter_Print(other, "$format_passthrough", self->message);
 	gi.sound(other, CHAN_AUTO, gi.soundIndex("misc/talk1.wav"), 1, ATTN_NORM, 0);
 }
 
@@ -4923,4 +4923,5 @@ void SP_func_clock(gentity_t* self) {
 	else
 		self->nextThink = level.time + 1_sec;
 }
+
 

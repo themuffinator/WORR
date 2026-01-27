@@ -1029,14 +1029,45 @@ endif
 
 prog_embed = find_program('embed.py')
 
-# embed loc_english.txt for builtin fallback
-loc_english_c = custom_target(
-    'loc_english.txt.c',
-    output : 'loc_english.txt.c',
-    input : 'assets/localization/loc_english.txt',
-    command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_loc_english'],
-)
-client_src += loc_english_c
+# embed localization files for builtin fallback
+loc_files = [
+  'assets/localization/loc_english.txt',
+  'assets/localization/loc_french.txt',
+  'assets/localization/loc_german.txt',
+  'assets/localization/loc_italian.txt',
+  'assets/localization/loc_spanish.txt',
+  'assets/localization/loc_russian.txt',
+  'assets/localization/loc_arabic.txt',
+  'assets/localization/loc_bulgarian.txt',
+  'assets/localization/loc_czech.txt',
+  'assets/localization/loc_danish.txt',
+  'assets/localization/loc_dutch.txt',
+  'assets/localization/loc_finnish.txt',
+  'assets/localization/loc_norwegian.txt',
+  'assets/localization/loc_polish.txt',
+  'assets/localization/loc_portuguese_br.txt',
+  'assets/localization/loc_portuguese_pt.txt',
+  'assets/localization/loc_swedish.txt',
+  'assets/localization/loc_turkish.txt',
+  'assets/localization/loc_chinese_traditional.txt',
+  'assets/localization/loc_chinese_simplified.txt',
+  'assets/localization/loc_japanese.txt',
+  'assets/localization/loc_korean.txt',
+]
+
+foreach loc_file : loc_files
+  loc_parts = loc_file.split('/')
+  loc_name = loc_parts[loc_parts.length() - 1]
+  loc_base = loc_name.replace('.txt', '')
+  loc_output = '@0@.c'.format(loc_name)
+  loc_target = custom_target(
+      loc_base + '_embed',
+      output : loc_output,
+      input : loc_file,
+      command : [prog_embed, '@INPUT@', '@OUTPUT@', 'res_' + loc_base],
+  )
+  client_src += loc_target
+endforeach
 
 if get_option('client-ui')
 

@@ -291,7 +291,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
       }
 
       float shadow_point(vec3 light_dir, float dist, float radius,
-                         float shadow_index, float bias) {
+                         float shadow_index, float bias, int method) {
         if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
           return 1.0;
 
@@ -302,7 +302,6 @@ static void write_dynamic_lights(sizebuf_t *buf) {
         float base_texel = u_shadow_params.x;
         float softness = max(u_shadow_params.z, 0.0);
         float texel = base_texel * softness;
-        int method = int(u_shadow_params2.x + 0.5);
         int quality = int(u_shadow_params2.y + 0.5);
         int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
         int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
@@ -327,7 +326,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
 
       float shadow_spot(vec3 light_vec, float dist, float radius,
                         float shadow_index, vec3 spot_dir, float spot_cos,
-                        float bias) {
+                        float bias, int method) {
         if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
           return 1.0;
 
@@ -356,7 +355,6 @@ static void write_dynamic_lights(sizebuf_t *buf) {
         float base_texel = u_shadow_params.x;
         float softness = max(u_shadow_params.z, 0.0);
         float texel = base_texel * softness;
-        int method = int(u_shadow_params2.x + 0.5);
         int quality = int(u_shadow_params2.y + 0.5);
         int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
         int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
@@ -513,7 +511,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
           float shadow_dist = length(shadow_vec);
 
           vec3 light_pos = base_light_pos;
-          if (light_cone == 0.0)
+          if (light_cone == 0.0 && dlights[i].shadow.x < 0.0)
             light_pos += v_norm * 16.0;
 
           vec3 light_dir = light_pos - v_world_pos;
@@ -532,6 +530,9 @@ static void write_dynamic_lights(sizebuf_t *buf) {
           float bias =
               (u_shadow_params.y + u_shadow_params3.x * (1.0 - lambert)) *
               u_shadow_params4.z;
+          int method = int(u_shadow_params2.x + 0.5);
+          if (method == 4 && dlights[i].shadow.z < 0.5)
+            method = 1;
 
           if (light_cone != 0.0) {
             float mag = -dot(dir, dlights[i].cone.xyz);
@@ -539,12 +540,12 @@ static void write_dynamic_lights(sizebuf_t *buf) {
           }
 
           if (dlights[i].shadow.y > 0.5) {
-            result *= shadow_spot(shadow_vec, shadow_dist, dlights[i].radius,
+            result *= shadow_spot(shadow_vec, shadow_dist, radius,
                                   dlights[i].shadow.x, dlights[i].cone.xyz,
-                                  light_cone, bias);
+                                  light_cone, bias, method);
           } else {
-            result *= shadow_point(shadow_vec, shadow_dist, dlights[i].radius,
-                                   dlights[i].shadow.x, bias);
+            result *= shadow_point(shadow_vec, shadow_dist, radius,
+                                   dlights[i].shadow.x, bias, method);
           }
 
           shade += result;
@@ -555,7 +556,8 @@ static void write_dynamic_lights(sizebuf_t *buf) {
           float lambert = max(dot(v_norm, sun_dir), 0.0);
           if (lambert > 0.0) {
             float bias =
-                u_shadow_params.y + u_shadow_params3.x * (1.0 - lambert);
+                (u_shadow_params.y + u_shadow_params3.x * (1.0 - lambert)) *
+                u_shadow_params4.z;
             float shadow = shadow_csm(receiver_pos, bias);
             shade += u_sun_color.rgb * u_sun_color.a * lambert * shadow;
           }

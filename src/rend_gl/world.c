@@ -387,6 +387,16 @@ static void GL_MarkLeaves(void)
     }
 }
 
+void GL_UpdateViewPVS(void)
+{
+    if (!gl_static.world.cache)
+        return;
+    if (glr.fd.rdflags & RDF_NOWORLDMODEL)
+        return;
+
+    GL_MarkLeaves();
+}
+
 static bool GL_BoxIntersectsSphere(const vec3_t mins, const vec3_t maxs, const vec3_t center, float radius)
 {
     float dist2 = 0.0f;

@@ -1194,7 +1194,7 @@ bool Tournament_HandleVetoAction(gentity_t *ent, TournamentVetoAction action,
 
   message = CurrentVetoPrompt();
   if (!message.empty())
-    gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_bf21a9e8fbc5", message.c_str());
+    gi.LocBroadcast_Print(PRINT_HIGH, "$format_passthrough", message.c_str());
   OpenTournamentVetoMenuForCurrent();
   return true;
 }
@@ -1237,3 +1237,4 @@ bool Tournament_GetNextMap(std::string &mapName) {
   mapName = game.tournament.mapOrder[index];
   return !mapName.empty();
 }
+

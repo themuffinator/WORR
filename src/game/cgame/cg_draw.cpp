@@ -1269,7 +1269,26 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
     const int x = ((hud_vrect.x + hud_vrect.width) * scale) - hud_safe.x;
     const int y = (hud_vrect.y * scale) + hud_safe.y;
 
-    cgi.SCR_DrawFontString(text.c_str(), x, y, scale, rgba_white, true, text_align_t::RIGHT);
+    const int scale_factor = 2;
+    float hud_scale = 1.0f;
+    if (cgi.SCR_GetScreenMetrics) {
+        cg_screen_metrics_t metrics{};
+        cgi.SCR_GetScreenMetrics(&metrics);
+        if (metrics.hud_scale > 0.0f)
+            hud_scale = metrics.hud_scale;
+    }
+
+    if (cgi.SCR_SetScale && scale_factor > 1 && hud_scale > 0.0f) {
+        float coord_scale = 1.0f / (scale_factor * hud_scale);
+        cgi.SCR_SetScale(1.0f / scale_factor);
+        cgi.SCR_DrawFontString(text.c_str(), Q_rint(x * coord_scale),
+                               Q_rint(y * coord_scale), scale,
+                               rgba_white, true, text_align_t::RIGHT);
+        cgi.SCR_SetScale(hud_scale);
+    } else {
+        cgi.SCR_DrawFontString(text.c_str(), x, y, scale, rgba_white, true,
+                               text_align_t::RIGHT);
+    }
 }
 
 /*

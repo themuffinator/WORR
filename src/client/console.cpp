@@ -793,6 +793,13 @@ void Con_RegisterMedia(void) {
   }
 }
 
+void Con_RendererShutdown(void) {
+  con.font = nullptr;
+  con.font_pixel_scale = 0.0f;
+  con.charsetImage = 0;
+  con.backImage = 0;
+}
+
 /*
 ==============================================================================
 
@@ -846,6 +853,48 @@ const char *Con_GetChatPromptText(int *skip_chars) {
 
 inputField_t *Con_GetChatInputField(void) { return &con.chatPrompt.inputLine; }
 
+static size_t Con_InputClampChars(const char *text, size_t max_chars) {
+  if (!text)
+    return 0;
+  size_t available = UTF8_CountChars(text, strlen(text));
+  if (max_chars)
+    available = min(available, max_chars);
+  return available;
+}
+
+static size_t Con_InputCharsForWidth(const char *text, size_t max_chars,
+                                     int pixel_width) {
+  if (!text || pixel_width <= 0 || max_chars == 0)
+    return 0;
+
+  size_t available = Con_InputClampChars(text, max_chars);
+  size_t chars = 0;
+  while (chars < available) {
+    size_t next_bytes = UTF8_OffsetForChars(text, chars + 1);
+    int width = Con_MeasureString(text, next_bytes);
+    if (width > pixel_width)
+      break;
+    chars++;
+  }
+  return chars;
+}
+
+static size_t Con_InputOffsetForWidth(const char *text, size_t cursor_chars,
+                                      int pixel_width) {
+  if (!text || pixel_width <= 0)
+    return 0;
+
+  size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars);
+  for (size_t start = 0; start < cursor_chars; ++start) {
+    size_t start_bytes = UTF8_OffsetForChars(text, start);
+    size_t len_bytes = cursor_bytes - start_bytes;
+    int width = Con_MeasureString(text + start_bytes, len_bytes);
+    if (width <= pixel_width)
+      return start;
+  }
+  return cursor_chars;
+}
+
 static int Con_DrawInputField(const inputField_t *field, int x, int y,
                               int flags, size_t max_chars, color_t color) {
   if (!field)
@@ -855,24 +904,29 @@ static int Con_DrawInputField(const inputField_t *field, int x, int y,
   if (!con.font)
     return IF_Draw(field, x, y, flags, con.charsetImage);
 
+  int pixel_width = max(0, con.vidWidth - x);
+  size_t total_chars = Con_InputClampChars(field->text, max_chars);
   size_t cursor_chars = UTF8_CountChars(field->text, field->cursorPos);
-  size_t offset_chars = 0;
-  if (cursor_chars >= field->visibleChars) {
-    offset_chars = cursor_chars - (field->visibleChars - 1);
-  }
+  if (cursor_chars > total_chars)
+    cursor_chars = total_chars;
+  size_t offset_chars = Con_InputOffsetForWidth(field->text, cursor_chars,
+                                                pixel_width);
+  if (offset_chars > total_chars)
+    offset_chars = total_chars;
 
+  size_t remaining_chars = (offset_chars < total_chars)
+                               ? (total_chars - offset_chars)
+                               : 0;
   size_t offset = UTF8_OffsetForChars(field->text, offset_chars);
-  size_t cursor_bytes = field->cursorPos - offset;
   const char *text = field->text + offset;
-
-  size_t draw_chars = field->visibleChars;
-  if (draw_chars > max_chars)
-    draw_chars = max_chars;
+  size_t draw_chars = Con_InputCharsForWidth(text, remaining_chars,
+                                             pixel_width);
   size_t draw_len = UTF8_OffsetForChars(text, draw_chars);
   size_t cursor_chars_visible =
       (cursor_chars > offset_chars) ? (cursor_chars - offset_chars) : 0;
   if (cursor_chars_visible > draw_chars)
     cursor_chars_visible = draw_chars;
+  size_t cursor_bytes = UTF8_OffsetForChars(text, cursor_chars_visible);
 
   if (field->selecting && field->selectionAnchor != field->cursorPos) {
     size_t sel_start = min(field->selectionAnchor, field->cursorPos);

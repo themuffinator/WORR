@@ -27,6 +27,7 @@ extern "C" {
 
 void UI_FontInit(void);
 void UI_FontShutdown(void);
+void UI_FontModeChanged(void);
 
 int UI_FontDrawString(int x, int y, int flags, size_t max_chars,
                       const char *string, color_t color);

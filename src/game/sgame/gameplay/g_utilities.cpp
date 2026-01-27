@@ -196,9 +196,9 @@ void PrintActivationMessage(gentity_t *ent, gentity_t *activator,
     return;
 
   if (coop_global && coop->integer)
-    gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
+    gi.LocBroadcast_Print(PRINT_CENTER, "$format_passthrough", ent->message);
   else
-    gi.LocCenter_Print(activator, "$g_sgame_auto_bf21a9e8fbc5", ent->message);
+    gi.LocCenter_Print(activator, "$format_passthrough", ent->message);
 
   // [Paril-KEX] allow non-noisy centerprints
   if (ent->noiseIndex >= 0) {
@@ -2319,3 +2319,4 @@ Team PickTeam(int ignore_client_num) {
   // otherwise just randomly select a team
   return brandom() ? Team::Red : Team::Blue;
 }
+

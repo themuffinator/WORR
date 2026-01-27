@@ -1277,7 +1277,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		if (cl->sess.motdModificationCount != game.motdModificationCount) {
 			if (level.time >= cl->sess.teamJoinTime + delay) {
 				if (g_showmotd->integer && game.motd.size()) {
-					gi.LocCenter_Print(ent, "$g_sgame_auto_bf21a9e8fbc5", game.motd.c_str());
+					gi.LocCenter_Print(ent, "$format_passthrough", game.motd.c_str());
 					delay += 5_sec;
 					cl->sess.motdModificationCount = game.motdModificationCount;
 				}
@@ -1728,3 +1728,4 @@ ReadyResult ClientSessionServiceImpl::OnReadyToggled(gentity_t* ent, bool state,
 		return ReadyResult::Success;}
 
 } // namespace worr::server::client
+

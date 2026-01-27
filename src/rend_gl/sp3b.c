@@ -438,7 +438,8 @@ static void shader_load_lights(void) {
     gls.u_dlights.lights[i].cone[3] = dl->conecos;
     gls.u_dlights.lights[i].shadow[0] = (float)glr.shadowmap_index[n];
     gls.u_dlights.lights[i].shadow[1] = glr.shadowmap_is_spot[n] ? 1.0f : 0.0f;
-    gls.u_dlights.lights[i].shadow[2] = 0.0f;
+    gls.u_dlights.lights[i].shadow[2] =
+        glr.shadowmap_pcss[n] ? 1.0f : 0.0f;
     gls.u_dlights.lights[i].shadow[3] = 0.0f;
 
     i++;

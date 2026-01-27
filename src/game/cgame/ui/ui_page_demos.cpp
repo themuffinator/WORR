@@ -652,6 +652,9 @@ Sound DemoBrowserPage::KeyEvent(int key)
 void DemoBrowserPage::MouseEvent(int x, int y, bool down)
 {
     (void)down;
+    bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+    if (list_.HandleMouseDrag(x, y, mouse_down))
+        return;
     list_.HoverAt(x, y);
 }
 

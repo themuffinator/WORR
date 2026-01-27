@@ -113,7 +113,7 @@ void MapSelectorFinalize() {
     level.changeMap = filename;
 
     gi.LocBroadcast_Print(PRINT_CENTER,
-                          "$g_sgame_auto_501d9d3c3fe1", filename,
+                          "$match_map_vote_complete", filename,
                           longName);
 
     AnnouncerSound(world, "vote_passed");
@@ -122,7 +122,7 @@ void MapSelectorFinalize() {
     if (fallback) {
       level.changeMap = fallback->filename.c_str();
       gi.LocBroadcast_Print(
-          PRINT_CENTER, "$g_sgame_auto_535dd80f8240",
+          PRINT_CENTER, "$match_map_vote_failed_random_select",
           fallback->filename.c_str(),
           fallback->longName.empty() ? fallback->filename.c_str()
                                      : fallback->longName.c_str());
@@ -140,11 +140,11 @@ void MapSelectorFinalize() {
       level.changeMap = safeMap;
 
       gi.LocBroadcast_Print(PRINT_CENTER,
-                            "$g_sgame_auto_92b75a8a3a53"
+                            "$match_map_vote_failed_no_maps_prefix"
                             "match. Replaying {}.\n",
                             level.changeMap.c_str());
       gi.LocBroadcast_Print(PRINT_HIGH,
-                            "$g_sgame_auto_0f9ab3ba943c"
+                            "$admin_map_selection_failed_prefix"
                             "mapcycle/configuration. Fallback map: {}.\n",
                             level.changeMap.c_str());
     }
@@ -281,12 +281,12 @@ void MapSelectorBegin() {
       level.changeMap = fallback->filename.c_str();
 
       gi.LocBroadcast_Print(PRINT_CENTER,
-                            "$g_sgame_auto_d0cdf8fb0240",
+                            "$match_map_vote_unavailable_next",
                             fallback->filename.c_str(), longName);
     } else {
       level.changeMap = level.mapName.data();
       gi.LocBroadcast_Print(
-          PRINT_CENTER, "$g_sgame_auto_12ef9f85f0bd",
+          PRINT_CENTER, "$match_map_vote_unavailable_restart",
           level.changeMap.data());
     }
 
@@ -309,7 +309,7 @@ void MapSelectorBegin() {
 
   gi.LocBroadcast_Print(
       PRINT_HIGH,
-      "$g_sgame_auto_e076d979db35",
+      "$match_map_vote_started",
       MAP_SELECTOR_DURATION.seconds());
   AnnouncerSound(world, "vote_now");
 }
@@ -350,7 +350,7 @@ void MapSelector_CastVote(gentity_t *ent, int voteIndex) {
                                                : candidate->longName.c_str())
                 : candidateId.c_str();
 
-  gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_1369af5fa8ea",
+  gi.LocBroadcast_Print(PRINT_HIGH, "$match_map_vote_cast",
                         ent->client->sess.netName, mapName);
 
   // Mark menu dirty to update HUD/bar
@@ -361,7 +361,7 @@ void MapSelector_CastVote(gentity_t *ent, int voteIndex) {
   for (int i = 0; i < 3; ++i) {
     if (!ms.candidates[i].empty() && ms.voteCounts[i] > totalVoters / 2) {
       gi.LocBroadcast_Print(PRINT_HIGH,
-                         "$g_sgame_auto_19ede381a411");
+                         "$match_map_vote_majority");
       MapSelectorFinalize();
       level.intermission.postIntermissionTime =
           level.time; // allow countdown to continue cleanly
@@ -424,12 +424,12 @@ int PrintMapList(gentity_t *ent, bool cycleOnly) {
         (pos + lastNewline) < message.length())
       part = message.substr(pos, lastNewline + 1);
 
-    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bf21a9e8fbc5", part.c_str());
+    gi.LocClient_Print(ent, PRINT_HIGH, "$format_passthrough", part.c_str());
     pos += part.length();
   }
 
   if (printedCount > 0)
-    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_adc83b19e793");
+    gi.LocClient_Print(ent, PRINT_HIGH, "$format_blank_line");
 
   return printedCount;
 }
@@ -546,7 +546,7 @@ void LoadMapPool(gentity_t *ent) {
   if (!location.exists) {
     if (entClient)
       gi.LocClient_Print(ent, PRINT_HIGH,
-                         "$g_sgame_auto_ed23801259d6",
+                         "$mappool_file_not_found",
                          location.path.c_str());
     return;
   }
@@ -554,7 +554,7 @@ void LoadMapPool(gentity_t *ent) {
   std::ifstream file(location.path, std::ifstream::binary);
   if (!file.is_open()) {
     if (entClient)
-      gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_a863201cae91",
+      gi.LocClient_Print(ent, PRINT_HIGH, "$mappool_file_open_failed",
                          location.path.c_str());
     gi.Com_PrintFmt("{}: failed to open map pool file '{}'.\n", __FUNCTION__,
                     location.path.c_str());
@@ -567,7 +567,7 @@ void LoadMapPool(gentity_t *ent) {
 
   if (!Json::parseFromStream(builder, file, &root, &errs)) {
     if (entClient)
-      gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_895252feff84",
+      gi.LocClient_Print(ent, PRINT_HIGH, "$mappool_json_parse_failed",
                          errs.c_str());
     gi.Com_PrintFmt("{}: JSON parsing failed for '{}': {}\n", __FUNCTION__,
                     location.path.c_str(), errs.c_str());
@@ -577,7 +577,7 @@ void LoadMapPool(gentity_t *ent) {
   if (!root.isMember("maps") || !root["maps"].isArray()) {
     if (entClient)
       gi.LocClient_Print(ent, PRINT_HIGH,
-                      "$g_sgame_auto_ea3a23fdef34");
+                      "$mappool_json_missing_maps_array");
     gi.Com_PrintFmt("{}: JSON missing 'maps' array in '{}'.\n", __FUNCTION__,
                     location.path.c_str());
     return;
@@ -590,7 +590,7 @@ void LoadMapPool(gentity_t *ent) {
       const bool hasName = bspName && bspName[0];
       if (entClient)
         gi.LocClient_Print(ent, PRINT_HIGH,
-                           "$g_sgame_auto_af5d04591c5b",
+                           "$mappool_skip_entry",
                            hasName ? " '" : "", hasName ? bspName : "",
                            hasName ? "'" : "", reason.c_str());
       gi.Com_PrintFmt("{}: skipping map pool entry{}{}{} ({})\n", __FUNCTION__,
@@ -700,7 +700,7 @@ void LoadMapPool(gentity_t *ent) {
 
   if (entClient) {
     gi.LocClient_Print(ent, PRINT_HIGH,
-                       "$g_sgame_auto_1ecd89958d33"
+                       "$mappool_load_summary_prefix"
                        "or invalid entr{}.\n",
                        loaded, (loaded == 1 ? "" : "s"), location.path.c_str(),
                        skipped, (skipped == 1 ? "y" : "ies"));
@@ -716,7 +716,7 @@ void LoadMapPool(gentity_t *ent) {
 
     if (entClient) {
       gi.LocClient_Print(ent, PRINT_HIGH,
-                         "$g_sgame_auto_8f788aea4ba0"
+                         "$mappool_removed_requests_prefix"
                          "missing maps: {}\n",
                          removedRequests.size(),
                          (removedRequests.size() == 1 ? "" : "s"),
@@ -755,7 +755,7 @@ void LoadMapCycle(gentity_t *ent) {
     if (entClient) {
       gi.LocClient_Print(
           ent, PRINT_HIGH,
-          "$g_sgame_auto_aba33e33156a",
+          "$mapcycle_invalid_cycle_file",
           rejectReason.c_str(), defaultCycleFile);
     }
   }
@@ -766,7 +766,7 @@ void LoadMapCycle(gentity_t *ent) {
   if (!file.is_open()) {
     if (ent && ent->client)
       gi.LocClient_Print(ent, PRINT_HIGH,
-                         "$g_sgame_auto_c7f9001a3958",
+                         "$mapcycle_file_open_failed",
                          location.path.c_str());
     return;
   }
@@ -804,7 +804,7 @@ void LoadMapCycle(gentity_t *ent) {
   if (entClient)
     gi.LocClient_Print(
         ent, PRINT_HIGH,
-        "$g_sgame_auto_1f442d9cde11",
+        "$mapcycle_marked_cycleable_summary",
         matched, unmatched);
 }
 
@@ -1207,15 +1207,17 @@ int PrintMapListFiltered(gentity_t *ent, bool cycleOnly,
         (pos + lastNewline) < message.length())
       part = message.substr(pos, lastNewline + 1);
 
-    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_bf21a9e8fbc5", part.c_str());
+    gi.LocClient_Print(ent, PRINT_HIGH, "$format_passthrough", part.c_str());
     pos += part.length();
   }
 
   if (!filterQuery.empty()) {
-    gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c23f4c0c976c",
+    gi.LocClient_Print(ent, PRINT_HIGH, "$maplist_filter_match_summary",
                        printedCount, printedCount == 1 ? "" : "s",
                        filterQuery.c_str());
   }
 
   return printedCount;
 }
+
+

@@ -22,7 +22,8 @@ struct PreviewStage {
 static const PreviewStage kPreviewStages[] = {
     { FRAME_stand01, FRAME_stand40, 120, 2, 0, false, false },
     { FRAME_run1, FRAME_run6, 90, 4, 0, false, false },
-    { FRAME_attack1, FRAME_attack8, 80, 2, 0, true, true },
+    { FRAME_pain301, FRAME_pain304, 90, 1, 0, false, true },
+    { FRAME_attack1, FRAME_attack8, 80, 2, 0, true, false },
     { FRAME_crstnd01, FRAME_crstnd19, 120, 1, 0, false, false },
     { FRAME_crattak1, FRAME_crattak9, 80, 1, 0, true, false },
     { FRAME_death101, FRAME_death106, 120, 1, 1200, false, false }
@@ -36,23 +37,6 @@ static bool IsPlayerWeaponModel(const char *name)
     if (!Q_stricmp(name, "weapon.md2"))
         return true;
     return !Q_strncasecmp(name, "w_", 2);
-}
-
-static std::string WeaponLabelFromFilename(const char *name)
-{
-    if (!name || !*name)
-        return "weapon";
-
-    char scratch[MAX_QPATH];
-    COM_StripExtension(scratch, name, sizeof(scratch));
-
-    const char *label = scratch;
-    if (!Q_strncasecmp(label, "w_", 2))
-        label += 2;
-
-    if (!*label)
-        return "weapon";
-    return std::string(label);
 }
 
 class PlayerConfigPage : public MenuPage {
@@ -74,6 +58,7 @@ private:
     void RefreshSkinList();
     void BuildWeaponList(const char *model);
     void AdvanceWeapon();
+    void SyncWeaponEntity();
     void SetStage(int index);
     void AdvanceStage();
     void UpdateMuzzleFlash();
@@ -82,7 +67,6 @@ private:
     FieldWidget *name_ = nullptr;
     SpinWidget *model_ = nullptr;
     SpinWidget *skin_ = nullptr;
-    SpinWidget *weapon_ = nullptr;
     SpinWidget *hand_ = nullptr;
     ImageSpinWidget *dogtag_ = nullptr;
 
@@ -98,7 +82,6 @@ private:
     unsigned holdUntil_ = 0;
     unsigned muzzleFlashUntil_ = 0;
     std::vector<qhandle_t> weaponModels_;
-    std::vector<std::string> weaponNames_;
     int weaponIndex_ = -1;
     float baseYaw_ = 260.0f;
     float rotationSpeed_ = 0.02f;
@@ -110,17 +93,11 @@ private:
 PlayerConfigPage::PlayerConfigPage()
     : menu_("players")
 {
-    auto header = std::make_unique<SeparatorWidget>();
-    header->SetLabel("player configuration");
-
     auto modelSpin = std::make_unique<SpinWidget>("model", nullptr, SpinType::Index);
     model_ = modelSpin.get();
 
     auto skinSpin = std::make_unique<SpinWidget>("skin", nullptr, SpinType::Index);
     skin_ = skinSpin.get();
-
-    auto weaponSpin = std::make_unique<DropdownWidget>("weapon", nullptr, SpinType::Index);
-    weapon_ = weaponSpin.get();
 
     auto handSpin = std::make_unique<SpinWidget>("hand", Cvar_FindVar("hand"), SpinType::Index);
     hand_ = handSpin.get();
@@ -137,15 +114,13 @@ PlayerConfigPage::PlayerConfigPage()
                                                    MAX_CLIENT_NAME - 1, false, false, false);
     name_ = nameField.get();
 
-    menu_.AddWidget(std::move(header));
     menu_.AddWidget(std::move(modelSpin));
     menu_.AddWidget(std::move(skinSpin));
-    menu_.AddWidget(std::move(weaponSpin));
     menu_.AddWidget(std::move(dogtagSpin));
     menu_.AddWidget(std::move(nameField));
     menu_.AddWidget(std::move(handSpin));
 
-    const vec3_t origin = { 32.0f, 0.0f, 0.0f };
+    const vec3_t origin = { 28.0f, 0.0f, 0.0f };
     const vec3_t angles = { 0.0f, 260.0f, 0.0f };
 
     entities_[0].flags = RF_FULLBRIGHT;
@@ -196,14 +171,10 @@ void PlayerConfigPage::BuildWeaponList(const char *model)
     char scratch[MAX_QPATH];
 
     weaponModels_.clear();
-    weaponNames_.clear();
     weaponIndex_ = -1;
     entities_[1].model = 0;
-
-    if (weapon_) {
-        weapon_->ClearOptions();
-        weapon_->SetDisabled(true);
-    }
+    if (refdef_.num_entities > 1)
+        refdef_.num_entities = 1;
 
     Q_concat(scratch, sizeof(scratch), "players/", model);
     int file_count = 0;
@@ -223,17 +194,11 @@ void PlayerConfigPage::BuildWeaponList(const char *model)
                   return Q_stricmp(a.c_str(), b.c_str()) < 0;
               });
 
-    int defaultIndex = -1;
     for (const auto &name : names) {
         Q_concat(scratch, sizeof(scratch), "players/", model, "/", name.c_str());
         qhandle_t handle = R_RegisterModel(scratch);
         if (handle) {
-            if (defaultIndex < 0 && uis.weaponModel[0] &&
-                !Q_stricmp(uis.weaponModel, name.c_str())) {
-                defaultIndex = static_cast<int>(weaponModels_.size());
-            }
             weaponModels_.push_back(handle);
-            weaponNames_.push_back(WeaponLabelFromFilename(name.c_str()));
         }
     }
 
@@ -242,48 +207,59 @@ void PlayerConfigPage::BuildWeaponList(const char *model)
         qhandle_t handle = R_RegisterModel(scratch);
         if (handle) {
             weaponModels_.push_back(handle);
-            weaponNames_.push_back(WeaponLabelFromFilename(uis.weaponModel));
         }
     }
 
     if (!weaponModels_.empty()) {
-        if (defaultIndex < 0)
-            defaultIndex = 0;
-        weaponIndex_ = defaultIndex;
+        weaponIndex_ = static_cast<int>(Q_rand_uniform(static_cast<uint32_t>(weaponModels_.size())));
         entities_[1].model = weaponModels_[weaponIndex_];
-        entities_[1].frame = 0;
-        entities_[1].oldframe = 0;
-        refdef_.num_entities++;
-
-        if (weapon_) {
-            weapon_->SetDisabled(false);
-            for (const auto &label : weaponNames_)
-                weapon_->AddOption(label);
-            weapon_->SetCurrent(weaponIndex_);
-        }
-    } else if (weapon_) {
-        weapon_->ClearOptions();
-        weapon_->AddOption("none");
-        weapon_->SetCurrent(0);
-        weapon_->SetDisabled(true);
+        refdef_.num_entities = max(refdef_.num_entities, 2);
+        SyncWeaponEntity();
     }
 }
 
 void PlayerConfigPage::AdvanceWeapon()
 {
-    if (weaponModels_.empty())
+    int count = static_cast<int>(weaponModels_.size());
+    if (count <= 0)
         return;
 
-    weaponIndex_++;
-    if (weaponIndex_ >= static_cast<int>(weaponModels_.size()))
-        weaponIndex_ = 0;
+    int next = weaponIndex_;
+    if (count > 1) {
+        int attempts = 0;
+        do {
+            next = static_cast<int>(Q_rand_uniform(count));
+        } while (next == weaponIndex_ && ++attempts < 4);
+        if (next == weaponIndex_)
+            next = (weaponIndex_ + 1) % count;
+    } else {
+        next = 0;
+    }
 
+    weaponIndex_ = next;
     entities_[1].model = weaponModels_[weaponIndex_];
-    entities_[1].frame = 0;
-    entities_[1].oldframe = 0;
+    refdef_.num_entities = max(refdef_.num_entities, 2);
+    SyncWeaponEntity();
+}
 
-    if (weapon_)
-        weapon_->SetCurrent(weaponIndex_);
+void PlayerConfigPage::SyncWeaponEntity()
+{
+    if (weaponIndex_ < 0 || weaponIndex_ >= static_cast<int>(weaponModels_.size()))
+        return;
+
+    VectorCopy(entities_[0].origin, entities_[1].origin);
+    VectorCopy(entities_[0].oldorigin, entities_[1].oldorigin);
+    VectorCopy(entities_[0].angles, entities_[1].angles);
+    entities_[1].frame = entities_[0].frame;
+    entities_[1].oldframe = entities_[0].oldframe;
+    entities_[1].backlerp = entities_[0].backlerp;
+    entities_[1].flags = entities_[0].flags;
+    entities_[1].alpha = entities_[0].alpha;
+    entities_[1].rgba = entities_[0].rgba;
+    VectorCopy(entities_[0].scale, entities_[1].scale);
+    entities_[1].bottom_z = entities_[0].bottom_z;
+    entities_[1].skinnum = 0;
+    entities_[1].skin = 0;
 }
 
 void PlayerConfigPage::SetStage(int index)
@@ -304,8 +280,8 @@ void PlayerConfigPage::SetStage(int index)
     entities_[0].frame = animStart_;
     entities_[0].oldframe = animStart_;
     if (refdef_.num_entities > 1) {
-        entities_[1].frame = 0;
-        entities_[1].oldframe = 0;
+        entities_[1].frame = entities_[0].frame;
+        entities_[1].oldframe = entities_[0].oldframe;
     }
 
     time_ = uis.realtime - frameMsec_;
@@ -313,6 +289,8 @@ void PlayerConfigPage::SetStage(int index)
 
     if (stage.switchWeapon)
         AdvanceWeapon();
+    else
+        SyncWeaponEntity();
 }
 
 void PlayerConfigPage::AdvanceStage()
@@ -383,9 +361,8 @@ void PlayerConfigPage::RunFrame()
 
         entities_[0].oldframe = entities_[0].frame;
         entities_[0].frame = nextFrame;
-        if (refdef_.num_entities > 1) {
-            entities_[1].oldframe = entities_[1].frame;
-        }
+        if (refdef_.num_entities > 1)
+            SyncWeaponEntity();
 
         if (stage.fire && ((nextFrame - animStart_) & 1)) {
             muzzleFlashUntil_ = uis.realtime + 60;
@@ -395,43 +372,50 @@ void PlayerConfigPage::RunFrame()
 
 void PlayerConfigPage::UpdatePreviewLayout()
 {
-    menu_.RefreshLayout();
-
     float inv_scale = (uis.scale > 0.0f) ? (1.0f / uis.scale) : 1.0f;
     int scaled_w = uis.width;
     int scaled_h = uis.height;
-    int w = Q_rint(scaled_w * inv_scale);
     int h = Q_rint(scaled_h * inv_scale);
 
-    int leftX = scaled_w / 2 - (CONCHAR_WIDTH * 16);
-    if (leftX < 0)
-        leftX = 0;
-    int contentWidth = scaled_w - (leftX * 2);
-    if (contentWidth < 0)
-        contentWidth = 0;
-    int menuRight = leftX + contentWidth;
-
     int pad = CONCHAR_WIDTH * 2;
-    int rightSpace = scaled_w - menuRight - pad;
-    if (rightSpace < CONCHAR_WIDTH * 10) {
-        refdef_.x = w / 2;
-        refdef_.width = max(1, w / 2);
+    int right_column = max(CONCHAR_WIDTH * 12, scaled_w / 3);
+    int menu_left = pad;
+    int menu_width = scaled_w - right_column - pad * 2;
+    bool split_columns = menu_width >= CONCHAR_WIDTH * 18;
+    if (split_columns) {
+        menu_.SetLayoutBounds(menu_left, menu_width);
     } else {
-        refdef_.x = Q_rint((menuRight + pad) * inv_scale);
-        refdef_.width = max(1, Q_rint(rightSpace * inv_scale));
+        menu_.ClearLayoutBounds();
     }
+    menu_.RefreshLayout();
+
+    int preview_left = scaled_w / 2;
+    int preview_width = scaled_w - preview_left;
+    if (split_columns) {
+        preview_left = menu_left + menu_width + pad;
+        preview_width = scaled_w - preview_left - pad;
+    }
+    if (preview_width < CONCHAR_WIDTH * 10) {
+        preview_left = scaled_w / 2;
+        preview_width = scaled_w - preview_left;
+    }
+    if (preview_width < 1)
+        preview_width = max(1, scaled_w - preview_left);
+
+    refdef_.x = Q_rint(preview_left * inv_scale);
+    refdef_.width = max(1, Q_rint(preview_width * inv_scale));
 
     int menuTop = menu_.ContentTop();
     int menuBottom = menu_.ContentBottom();
     int centerY = (menuBottom > menuTop) ? (menuTop + menuBottom) / 2 : (scaled_h / 2);
-    int targetHeight = (scaled_h * 4) / 5;
+    int targetHeight = min(scaled_h - pad * 2, Q_rint(scaled_h * 0.9f));
     refdef_.height = max(1, Q_rint(targetHeight * inv_scale));
 
     int centerYScaled = Q_rint(centerY * inv_scale);
     int maxY = max(0, h - refdef_.height);
     refdef_.y = Q_clip(centerYScaled - refdef_.height / 2, 0, maxY);
 
-    refdef_.fov_x = 75;
+    refdef_.fov_x = 65;
     refdef_.fov_y = V_CalcFov(refdef_.fov_x, refdef_.width, refdef_.height);
 }
 
@@ -505,7 +489,7 @@ void PlayerConfigPage::OnOpen()
         menu_.SetBackground(uis.color.background);
     }
 
-    menu_.SetTitle("");
+    menu_.SetTitle("Player Configuration");
 
     menu_.OnOpen();
 
@@ -546,18 +530,6 @@ Sound PlayerConfigPage::KeyEvent(int key)
             ReloadMedia();
             SetStage(stageIndex_);
         }
-    }
-
-    if (weapon_ && !weaponModels_.empty() && weapon_->Current() != weaponIndex_) {
-        int index = weapon_->Current();
-        if (index < 0 || index >= static_cast<int>(weaponModels_.size()))
-            index = 0;
-        weaponIndex_ = index;
-        entities_[1].model = weaponModels_[weaponIndex_];
-        entities_[1].frame = 0;
-        entities_[1].oldframe = 0;
-        if (refdef_.num_entities < 2)
-            refdef_.num_entities = 2;
     }
 
     return sound;
@@ -601,12 +573,6 @@ void PlayerConfigPage::Draw()
 
     UpdatePreviewLayout();
     menu_.Draw();
-
-    int header_x = uis.width / 2 - (CONCHAR_WIDTH * 16);
-    if (header_x < 0)
-        header_x = 0;
-    UI_DrawString(header_x, 0, UI_LEFT, uis.color.active, "Options");
-    R_DrawFill32(header_x, CONCHAR_HEIGHT, uis.width - header_x, 1, uis.color.normal);
 
     R_RenderFrame(&refdef_);
     R_SetScale(uis.scale);

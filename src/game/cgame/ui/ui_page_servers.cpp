@@ -29,6 +29,42 @@ int ServerHintReserveHeight()
     return max(textHeight, iconHeight);
 }
 
+bool IsLikelyTextServerList(const char *data, size_t len)
+{
+    if (!data || len == 0)
+        return false;
+
+    size_t check_len = min(len, static_cast<size_t>(256));
+    bool saw_digit = false;
+    bool saw_dot = false;
+    bool saw_colon = false;
+    bool saw_newline = false;
+    int nonprintable = 0;
+
+    for (size_t i = 0; i < check_len; ++i) {
+        unsigned char c = static_cast<unsigned char>(data[i]);
+        if (c == '\n' || c == '\r') {
+            saw_newline = true;
+            continue;
+        }
+        if (c < 32 || c > 126) {
+            nonprintable++;
+            continue;
+        }
+        if (c >= '0' && c <= '9')
+            saw_digit = true;
+        if (c == '.')
+            saw_dot = true;
+        if (c == ':')
+            saw_colon = true;
+    }
+
+    if (nonprintable > 0)
+        return false;
+
+    return saw_digit && (saw_dot || saw_colon) && (saw_newline || len < 64);
+}
+
 } // namespace
 
 #define MAX_STATUS_RULES 64
@@ -585,10 +621,16 @@ void ServerBrowserPage::ParseMasterArgs(netadr_t *broadcast)
             len = FS_LoadFile(s + 7, &data);
             if (len < 0)
                 continue;
-            if (parse_binary)
-                ParseBinary(data, len, chunk);
-            else
+            bool parse_as_text = !parse_binary;
+            if (parse_binary) {
+                size_t data_len = static_cast<size_t>(len);
+                if (chunk == 0 || (data_len % chunk) != 0 || IsLikelyTextServerList(static_cast<const char *>(data), data_len))
+                    parse_as_text = true;
+            }
+            if (parse_as_text)
                 ParsePlain(data, len, chunk);
+            else
+                ParseBinary(data, len, chunk);
             FS_FreeFile(data);
             continue;
         }
@@ -598,10 +640,16 @@ void ServerBrowserPage::ParseMasterArgs(netadr_t *broadcast)
             len = HTTP_FetchFile(s, &data);
             if (len < 0)
                 continue;
-            if (parse_binary)
-                ParseBinary(data, len, chunk);
-            else
+            bool parse_as_text = !parse_binary;
+            if (parse_binary) {
+                size_t data_len = static_cast<size_t>(len);
+                if (chunk == 0 || (data_len % chunk) != 0 || IsLikelyTextServerList(static_cast<const char *>(data), data_len))
+                    parse_as_text = true;
+            }
+            if (parse_as_text)
                 ParsePlain(data, len, chunk);
+            else
+                ParseBinary(data, len, chunk);
             HTTP_FreeFile(data);
 #else
             Com_Printf("$cg_auto_9f78db570fe8", s);
@@ -834,7 +882,7 @@ void ServerBrowserPage::BuildColumns()
     list_.columns[COL_MAP].width = base + MLIST_PADDING;
     list_.columns[COL_PLAYERS].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
     list_.columns[COL_RTT].width = 5 * CONCHAR_WIDTH + MLIST_PADDING;
-    list_.width = w;
+    list_.width = w + MLIST_SCROLLBAR_WIDTH;
 
     if (uis.canvas_width >= 640) {
         info_.x = w + MLIST_SCROLLBAR_WIDTH;
@@ -846,7 +894,7 @@ void ServerBrowserPage::BuildColumns()
         info_.height = (uis.height + 1) / 2 - CONCHAR_HEIGHT - 2;
         int side_width = max(0, uis.width - info_.x);
         int list_width = max(0, side_width - MLIST_SCROLLBAR_WIDTH);
-        info_.width = list_width;
+        info_.width = list_width + MLIST_SCROLLBAR_WIDTH;
         info_.columns[0].width = list_width / 3;
         info_.columns[1].width = list_width - info_.columns[0].width;
 
@@ -857,7 +905,7 @@ void ServerBrowserPage::BuildColumns()
         players_.alternateShade = kServerListAlternateShade;
         players_.rowSpacing = rowSpacing;
         players_.height = uis.height - hintHeight - players_.y - CONCHAR_HEIGHT;
-        players_.width = list_width;
+        players_.width = list_width + MLIST_SCROLLBAR_WIDTH;
         players_.columns[0].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
         players_.columns[1].width = 3 * CONCHAR_WIDTH + MLIST_PADDING;
         players_.columns[2].width = 15 * CONCHAR_WIDTH + MLIST_PADDING;
@@ -969,6 +1017,15 @@ Sound ServerBrowserPage::KeyEvent(int key)
 void ServerBrowserPage::MouseEvent(int x, int y, bool down)
 {
     (void)down;
+    bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+    if (list_.HandleMouseDrag(x, y, mouse_down))
+        return;
+    if (uis.canvas_width >= 640) {
+        if (info_.HandleMouseDrag(x, y, mouse_down))
+            return;
+        if (players_.HandleMouseDrag(x, y, mouse_down))
+            return;
+    }
     list_.HoverAt(x, y);
 }
 

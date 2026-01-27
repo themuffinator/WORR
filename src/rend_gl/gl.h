@@ -233,6 +233,7 @@ typedef struct {
     int             shadow_light_indices[MAX_SHADOWMAP_LIGHTS];
     int             shadowmap_index[MAX_DLIGHTS];
     bool            shadowmap_is_spot[MAX_DLIGHTS];
+    bool            shadowmap_pcss[MAX_DLIGHTS];
     int             csm_cascades;
     vec4_t          csm_splits;
     vec3_t          sun_dir;
@@ -921,7 +922,7 @@ typedef struct {
     vec4_t      shadow_params; // x = 1/size, y = bias, z = softness, w = shadow depth scale
     vec4_t      shadow_params2; // x = method, y = quality, z = vcm bleed, w = vcm min variance
     vec4_t      shadow_params3; // x = slope bias, y = normal offset, z = evsm exponent, w = shadow mode
-    vec4_t      shadow_params4; // x = pcss blocker samples, y = pcss filter samples, zw = pad
+    vec4_t      shadow_params4; // x = pcss blocker samples, y = pcss filter samples, z = bias scale, w = debug
     vec4_t      crt_params; // x = hard pix, y = hard scan, z = bright boost, w = linear gamma
     vec4_t      crt_params2; // x = mask dark, y = mask light, z = mask type, w = pad
     vec4_t      crt_texel; // x = inv width, y = inv height, z = width, w = height
@@ -1234,6 +1235,7 @@ void GL_ClearSolidFaces(void);
  */
 void GL_DrawBspModel(mmodel_t *model);
 void GL_DrawWorld(void);
+void GL_UpdateViewPVS(void);
 void GL_SampleLightPoint(vec3_t color);
 void GL_LightPoint(const vec3_t origin, vec3_t color);
 
