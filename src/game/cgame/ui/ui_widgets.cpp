@@ -321,6 +321,22 @@ static int WidgetPadding()
     return max(2, CONCHAR_WIDTH / 2);
 }
 
+static color_t WidgetAdjustColor(color_t color, float delta)
+{
+    float amount = Q_clipf(delta, -1.0f, 1.0f);
+    if (amount >= 0.0f) {
+        color.r = Q_rint(color.r + (255 - color.r) * amount);
+        color.g = Q_rint(color.g + (255 - color.g) * amount);
+        color.b = Q_rint(color.b + (255 - color.b) * amount);
+    } else {
+        float factor = 1.0f + amount;
+        color.r = Q_rint(color.r * factor);
+        color.g = Q_rint(color.g * factor);
+        color.b = Q_rint(color.b * factor);
+    }
+    return color;
+}
+
 static void DrawPanel(int x, int y, int width, int height, color_t fill, color_t border, int borderWidth)
 {
     if (width <= 0 || height <= 0)
@@ -794,7 +810,8 @@ void SliderWidget::Draw(bool focused) const
         }
     }
 
-    bool hovered = !disabled && RectContains(rect_, uis.mouseCoords[0], uis.mouseCoords[1]);
+    bool hovered = !disabled && (dragging_ || RectContains(rect_, uis.mouseCoords[0], uis.mouseCoords[1]));
+    bool pressed = dragging_ && (Key_IsDown(K_MOUSE1) != 0);
     unsigned now = uis.realtime;
     float dt = hoverTime_ ? (now - hoverTime_) * 0.001f : 0.0f;
     hoverTime_ = now;
@@ -803,6 +820,8 @@ void SliderWidget::Draw(bool focused) const
     hoverFrac_ += (target - hoverFrac_) * step_t;
 
     float scale = 1.0f + hoverFrac_ * 0.15f;
+    if (pressed)
+        scale *= 0.95f;
     int knob_w = max(6, track_h + 2);
     if (knob_w > value_w)
         knob_w = value_w;
@@ -826,16 +845,20 @@ void SliderWidget::Draw(bool focused) const
             thumb_fill = COLOR_SETA_U8(thumb_fill, 110);
     }
 
-    float lighten = hoverFrac_ * 0.3f;
-    if (lighten > 0.0f) {
-        thumb_fill.r = Q_rint(thumb_fill.r + (255 - thumb_fill.r) * lighten);
-        thumb_fill.g = Q_rint(thumb_fill.g + (255 - thumb_fill.g) * lighten);
-        thumb_fill.b = Q_rint(thumb_fill.b + (255 - thumb_fill.b) * lighten);
-    }
+    float thumb_delta = hoverFrac_ * 0.3f;
+    if (pressed)
+        thumb_delta -= 0.2f;
+    thumb_fill = WidgetAdjustColor(thumb_fill, thumb_delta);
 
     color_t knob_border = disabled
         ? COLOR_SETA_U8(uis.color.disabled, 160)
         : COLOR_SETA_U8(uis.color.active, 220);
+    if (!disabled) {
+        float border_delta = hoverFrac_ * 0.2f;
+        if (pressed)
+            border_delta -= 0.15f;
+        knob_border = WidgetAdjustColor(knob_border, border_delta);
+    }
     DrawPanel(knob_x, knob_y, knob_w, knob_h, thumb_fill, knob_border, 1);
 }
 
@@ -1088,6 +1111,14 @@ DropdownWidget::DropdownWidget(std::string label, cvar_t *cvar, SpinType type)
 {
 }
 
+int DropdownWidget::Height(int lineHeight) const
+{
+    int padding = WidgetPadding();
+    int text_h = WidgetTextHeight();
+    int desired = text_h + padding * 2;
+    return max(lineHeight, desired);
+}
+
 void DropdownWidget::Draw(bool focused) const
 {
     bool disabled = IsDisabled();
@@ -1117,11 +1148,11 @@ void DropdownWidget::Draw(bool focused) const
     int value_x = ValueX(label);
     int value_w = ValueWidth(value_x);
     value_w = max(1, value_w);
-    int box_h = min(rect_.height, max(8, WidgetTextHeight() + 6));
+    int padding = WidgetPadding();
+    int box_h = min(rect_.height, max(8, WidgetTextHeight() + padding * 2));
     int box_y = rect_.y + (rect_.height - box_h) / 2;
     DrawControlBox(value_x, box_y, value_w, box_h, focused, disabled);
 
-    int padding = WidgetPadding();
     int arrow_area = min(CONCHAR_WIDTH * 2, max(0, value_w - 2));
     if (arrow_area < CONCHAR_WIDTH)
         arrow_area = 0;
@@ -1157,7 +1188,7 @@ void DropdownWidget::DrawOverlay() const
     if (!expanded_ || labels_.empty())
         return;
 
-    int row_height = max(1, rect_.height);
+    int row_height = RowHeight();
     int visible = ComputeVisibleCount(row_height);
     if (visible <= 0)
         return;
@@ -1226,6 +1257,17 @@ void DropdownWidget::DrawOverlay() const
         int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
         color_t thumb_fill = COLOR_SETA_U8(uis.color.active, 255);
         color_t thumb_border = COLOR_SETA_U8(uis.color.active, 255);
+        bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+        vrect_t thumb_rect{ bar_x + 1, thumb_y, max(1, scroll_width - 2), thumb_h };
+        bool thumb_hovered = RectContains(thumb_rect, uis.mouseCoords[0], uis.mouseCoords[1]);
+        bool thumb_pressed = scrollDragging_ && mouse_down;
+        if (thumb_pressed) {
+            thumb_fill = WidgetAdjustColor(thumb_fill, -0.2f);
+            thumb_border = WidgetAdjustColor(thumb_border, -0.2f);
+        } else if (thumb_hovered) {
+            thumb_fill = WidgetAdjustColor(thumb_fill, 0.15f);
+            thumb_border = WidgetAdjustColor(thumb_border, 0.15f);
+        }
         DrawPanel(bar_x + 1, thumb_y, max(1, scroll_width - 2), thumb_h,
                   thumb_fill, thumb_border, 1);
     }
@@ -1266,7 +1308,7 @@ Sound DropdownWidget::KeyEvent(int key)
         return Sound::Beep;
     }
 
-    int row_height = max(1, rect_.height);
+    int row_height = RowHeight();
     int visible = max(1, ComputeVisibleCount(row_height));
 
     switch (key) {
@@ -1348,6 +1390,16 @@ Sound DropdownWidget::KeyEvent(int key)
                 int max_start = max(0, total - visible);
                 if (max_start > 0) {
                     int track_h = max(1, bar_h - 2);
+                    int draw_start = Q_clip(listStart_, 0, max_start);
+                    float page_frac = static_cast<float>(visible) / static_cast<float>(total);
+                    float start_frac = static_cast<float>(draw_start) / max(1, total - visible);
+                    int thumb_h = max(6, Q_rint((bar_h - 2) * page_frac));
+                    int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
+                    if (uis.mouseCoords[1] >= thumb_y && uis.mouseCoords[1] < thumb_y + thumb_h) {
+                        scrollDragging_ = true;
+                        scrollDragOffset_ = uis.mouseCoords[1] - thumb_y;
+                        return Sound::Silent;
+                    }
                     float frac = static_cast<float>(uis.mouseCoords[1] - (bar_y + 1)) / track_h;
                     int new_start = Q_rint(frac * max_start);
                     listStart_ = Q_clip(new_start, 0, max_start);
@@ -1396,7 +1448,7 @@ bool DropdownWidget::HoverAt(int mx, int my)
     if (!expanded_ || labels_.empty())
         return false;
 
-    int row_height = max(1, rect_.height);
+    int row_height = RowHeight();
     int visible = ComputeVisibleCount(row_height);
     if (visible <= 0)
         return false;
@@ -1412,6 +1464,82 @@ bool DropdownWidget::HoverAt(int mx, int my)
     return true;
 }
 
+bool DropdownWidget::HandleMouseDrag(int mx, int my, bool mouseDown)
+{
+    if (!expanded_ || labels_.empty()) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    if (!mouseDown) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int row_height = RowHeight();
+    int visible = ComputeVisibleCount(row_height);
+    if (visible <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int total = static_cast<int>(labels_.size());
+    int max_start = max(0, total - visible);
+    if (max_start <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int scroll_width = 0;
+    vrect_t list_rect = ComputeListRect(visible, row_height, &scroll_width);
+    if (scroll_width <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int bar_x = list_rect.x + list_rect.width - scroll_width;
+    int bar_y = list_rect.y + 1;
+    int bar_h = list_rect.height - 2;
+    if (bar_h <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int draw_start = Q_clip(listStart_, 0, max_start);
+    float page_frac = static_cast<float>(visible) / static_cast<float>(total);
+    float start_frac = static_cast<float>(draw_start) / max(1, total - visible);
+    int thumb_h = max(6, Q_rint((bar_h - 2) * page_frac));
+    if (thumb_h > bar_h - 2)
+        thumb_h = max(1, bar_h - 2);
+    int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
+
+    if (!scrollDragging_) {
+        if (mx >= bar_x && mx < list_rect.x + list_rect.width &&
+            my >= bar_y && my < bar_y + bar_h &&
+            my >= thumb_y && my < thumb_y + thumb_h) {
+            scrollDragging_ = true;
+            scrollDragOffset_ = my - thumb_y;
+            return true;
+        }
+        return false;
+    }
+
+    int min_thumb = bar_y + 1;
+    int max_thumb = bar_y + 1 + max(0, bar_h - 2 - thumb_h);
+    int new_thumb = Q_clip(my - scrollDragOffset_, min_thumb, max_thumb);
+    float frac = static_cast<float>(new_thumb - min_thumb) /
+        static_cast<float>(max(1, max_thumb - min_thumb));
+    int new_start = Q_clip(Q_rint(frac * max_start), 0, max_start);
+    if (new_start != listStart_) {
+        listStart_ = new_start;
+        int min_cursor = listStart_;
+        int max_cursor = min(total - 1, listStart_ + visible - 1);
+        listCursor_ = Q_clip(listCursor_, min_cursor, max_cursor);
+        curValue_ = listCursor_;
+    }
+    return true;
+}
+
 void DropdownWidget::OnClose()
 {
     CloseList(true);
@@ -1423,12 +1551,14 @@ void DropdownWidget::OpenList()
     if (labels_.empty())
         return;
     expanded_ = true;
+    scrollDragging_ = false;
+    scrollDragOffset_ = 0;
     openValue_ = curValue_;
     if (curValue_ < 0 || curValue_ >= static_cast<int>(labels_.size()))
         curValue_ = 0;
     listCursor_ = curValue_;
     listStart_ = 0;
-    int row_height = max(1, rect_.height);
+    int row_height = RowHeight();
     int visible = ComputeVisibleCount(row_height);
     if (visible > 0)
         EnsureListVisible(visible);
@@ -1439,6 +1569,8 @@ void DropdownWidget::CloseList(bool accept)
     if (!expanded_)
         return;
     expanded_ = false;
+    scrollDragging_ = false;
+    scrollDragOffset_ = 0;
     if (!accept)
         curValue_ = openValue_;
     openValue_ = -1;
@@ -1524,6 +1656,14 @@ int DropdownWidget::ComputeVisibleCount(int rowHeight) const
     if (max_visible > available_rows)
         max_visible = available_rows;
     return max_visible;
+}
+
+int DropdownWidget::RowHeight() const
+{
+    int padding = WidgetPadding();
+    int text_h = WidgetTextHeight();
+    int desired = text_h + padding * 2;
+    return max(max(1, rect_.height), desired);
 }
 
 int DropdownWidget::ValueX(const char *label) const
@@ -1839,6 +1979,8 @@ void ImageSpinWidget::OnOpen()
     openValue_ = -1;
     listStart_ = 0;
     listCursor_ = curValue_;
+    scrollDragging_ = false;
+    scrollDragOffset_ = 0;
 }
 
 void ImageSpinWidget::OnClose()
@@ -2053,6 +2195,17 @@ void ImageSpinWidget::DrawOverlay() const
         int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
         color_t thumb_fill = COLOR_SETA_U8(uis.color.active, 255);
         color_t thumb_border = COLOR_SETA_U8(uis.color.active, 255);
+        bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+        vrect_t thumb_rect{ bar_x + 1, thumb_y, max(1, scroll_width - 2), thumb_h };
+        bool thumb_hovered = RectContains(thumb_rect, uis.mouseCoords[0], uis.mouseCoords[1]);
+        bool thumb_pressed = scrollDragging_ && mouse_down;
+        if (thumb_pressed) {
+            thumb_fill = WidgetAdjustColor(thumb_fill, -0.2f);
+            thumb_border = WidgetAdjustColor(thumb_border, -0.2f);
+        } else if (thumb_hovered) {
+            thumb_fill = WidgetAdjustColor(thumb_fill, 0.15f);
+            thumb_border = WidgetAdjustColor(thumb_border, 0.15f);
+        }
         DrawPanel(bar_x + 1, thumb_y, max(1, scroll_width - 2), thumb_h,
                   thumb_fill, thumb_border, 1);
     }
@@ -2205,6 +2358,16 @@ Sound ImageSpinWidget::KeyEvent(int key)
             int max_start = max(0, total_rows - visible_rows);
             if (max_start > 0) {
                 int track_h = max(1, bar_h - 2);
+                int draw_start = Q_clip(listStart_, 0, max_start);
+                float page_frac = static_cast<float>(visible_rows) / static_cast<float>(total_rows);
+                float start_frac = static_cast<float>(draw_start) / max(1, total_rows - visible_rows);
+                int thumb_h = max(6, Q_rint((bar_h - 2) * page_frac));
+                int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
+                if (uis.mouseCoords[1] >= thumb_y && uis.mouseCoords[1] < thumb_y + thumb_h) {
+                    scrollDragging_ = true;
+                    scrollDragOffset_ = uis.mouseCoords[1] - thumb_y;
+                    return Sound::Silent;
+                }
                 float frac = static_cast<float>(uis.mouseCoords[1] - (bar_y + 1)) / track_h;
                 int new_start = Q_rint(frac * max_start);
                 listStart_ = Q_clip(new_start, 0, max_start);
@@ -2279,12 +2442,98 @@ bool ImageSpinWidget::HoverAt(int mx, int my)
     return true;
 }
 
+bool ImageSpinWidget::HandleMouseDrag(int mx, int my, bool mouseDown)
+{
+    if (!expanded_ || entryCount_ <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    if (!mouseDown) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int tile_pad = max(2, WidgetPadding());
+    int tile_w = max(1, max(previewWidth_, CONCHAR_WIDTH) + tile_pad * 2);
+    int tile_h = max(1, max(previewHeight_, CONCHAR_HEIGHT) + tile_pad * 2);
+    int value_w = ValueWidth(ValueX(LabelText()));
+
+    int columns = ComputeColumns(tile_w, value_w, 0);
+    int total_rows = max(1, (entryCount_ + columns - 1) / columns);
+    int visible_rows = min(total_rows, ComputeVisibleRows(tile_h));
+    int scroll_width = (total_rows > visible_rows) ? max(6, MLIST_SCROLLBAR_WIDTH) : 0;
+    columns = ComputeColumns(tile_w, value_w, scroll_width);
+    total_rows = max(1, (entryCount_ + columns - 1) / columns);
+    visible_rows = min(total_rows, ComputeVisibleRows(tile_h));
+    scroll_width = (total_rows > visible_rows) ? max(6, MLIST_SCROLLBAR_WIDTH) : 0;
+
+    if (scroll_width <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int max_start = max(0, total_rows - visible_rows);
+    if (max_start <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    vrect_t list_rect = ComputeListRect(visible_rows, columns, tile_h, &scroll_width);
+    int bar_x = list_rect.x + list_rect.width - scroll_width;
+    int bar_y = list_rect.y + 1;
+    int bar_h = list_rect.height - 2;
+    if (bar_h <= 0) {
+        scrollDragging_ = false;
+        return false;
+    }
+
+    int draw_start = Q_clip(listStart_, 0, max_start);
+    float page_frac = static_cast<float>(visible_rows) / static_cast<float>(total_rows);
+    float start_frac = static_cast<float>(draw_start) / max(1, total_rows - visible_rows);
+    int thumb_h = max(6, Q_rint((bar_h - 2) * page_frac));
+    if (thumb_h > bar_h - 2)
+        thumb_h = max(1, bar_h - 2);
+    int thumb_y = bar_y + 1 + Q_rint((bar_h - 2 - thumb_h) * start_frac);
+
+    if (!scrollDragging_) {
+        if (mx >= bar_x && mx < list_rect.x + list_rect.width &&
+            my >= bar_y && my < bar_y + bar_h &&
+            my >= thumb_y && my < thumb_y + thumb_h) {
+            scrollDragging_ = true;
+            scrollDragOffset_ = my - thumb_y;
+            return true;
+        }
+        return false;
+    }
+
+    int min_thumb = bar_y + 1;
+    int max_thumb = bar_y + 1 + max(0, bar_h - 2 - thumb_h);
+    int new_thumb = Q_clip(my - scrollDragOffset_, min_thumb, max_thumb);
+    float frac = static_cast<float>(new_thumb - min_thumb) /
+        static_cast<float>(max(1, max_thumb - min_thumb));
+    int new_start = Q_clip(Q_rint(frac * max_start), 0, max_start);
+    if (new_start != listStart_) {
+        listStart_ = new_start;
+        int min_row = listStart_;
+        int max_row = min(total_rows - 1, listStart_ + visible_rows - 1);
+        int cur_row = listCursor_ / max(1, columns);
+        if (cur_row < min_row || cur_row > max_row) {
+            listCursor_ = min(entryCount_ - 1, listStart_ * max(1, columns));
+            curValue_ = listCursor_;
+        }
+    }
+    return true;
+}
+
 void ImageSpinWidget::OpenList()
 {
     if (entryCount_ <= 0)
         return;
 
     expanded_ = true;
+    scrollDragging_ = false;
+    scrollDragOffset_ = 0;
     openValue_ = curValue_;
     if (curValue_ < 0 || curValue_ >= entryCount_)
         curValue_ = 0;
@@ -2308,6 +2557,8 @@ void ImageSpinWidget::CloseList(bool accept)
         return;
 
     expanded_ = false;
+    scrollDragging_ = false;
+    scrollDragOffset_ = 0;
     if (!accept)
         curValue_ = openValue_;
     openValue_ = -1;

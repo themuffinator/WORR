@@ -459,7 +459,7 @@ static void AddServer(const netadr_t *address, const char *hostname)
             return;
 
         if (!NET_StringToAdr(hostname, &tmp, PORT_SERVER)) {
-            Com_Printf("$e_auto_35af01e118a2", hostname);
+            Com_Printf("$cl_bad_server_address_detail", hostname);
             return;
         }
 
@@ -475,7 +475,7 @@ static void AddServer(const netadr_t *address, const char *hostname)
 
     // privileged ports are not allowed
     if (BigShort(address->port) < 1024) {
-        Com_Printf("$e_auto_0f3fc5b0f530", hostname);
+        Com_Printf("$cl_bad_server_port", hostname);
         return;
     }
 
@@ -1176,3 +1176,4 @@ void M_Menu_Servers(void)
 
     List_Append(&ui_menus, &m_servers.menu.entry);
 }
+

@@ -105,7 +105,7 @@ static void S_SoundList_f(void)
             Com_Printf("(%2db) (%dch) %6i : %s\n", sc->width * 8, sc->channels, sc->size, sfx->name);
         } else {
             if (sfx->name[0] == '*')
-                Com_Printf("$e_auto_41788ae1f142", sfx->name);
+                Com_Printf("$s_placeholder_entry", sfx->name);
             else
                 Com_Printf("$e_auto_ecbcd2965f35",
                            sfx->name, Q_ErrorString(sfx->error));
@@ -227,7 +227,7 @@ void S_Init(void)
 
 fail:
     Cvar_SetInteger(s_enable, s_started, FROM_CODE);
-    Com_Printf("$e_auto_2bc25acf4b25");
+    Com_Printf("$s_separator_line");
 }
 
 
@@ -655,7 +655,7 @@ void S_IssuePlaysound(playsound_t *ps)
 
 #if USE_DEBUG
     if (s_show->integer)
-        Com_Printf("$e_auto_28119ee774cb", ps->begin);
+        Com_Printf("$s_issue_line", ps->begin);
 #endif
     // pick a channel to play on
     ch = S_PickChannel(ps->entnum, ps->entchannel);
@@ -1184,3 +1184,4 @@ void S_Update(void)
 
     s_api->update();
 }
+

@@ -124,6 +124,22 @@ static bool UpdateExpandedHover(const std::vector<std::unique_ptr<Widget>> &widg
     return false;
 }
 
+static color_t MenuAdjustColor(color_t color, float delta)
+{
+    float amount = Q_clipf(delta, -1.0f, 1.0f);
+    if (amount >= 0.0f) {
+        color.r = Q_rint(color.r + (255 - color.r) * amount);
+        color.g = Q_rint(color.g + (255 - color.g) * amount);
+        color.b = Q_rint(color.b + (255 - color.b) * amount);
+    } else {
+        float factor = 1.0f + amount;
+        color.r = Q_rint(color.r * factor);
+        color.g = Q_rint(color.g * factor);
+        color.b = Q_rint(color.b * factor);
+    }
+    return color;
+}
+
 } // namespace
 
 Menu::Menu(std::string name)
@@ -553,9 +569,8 @@ bool Menu::HandleScrollBarDrag(int mx, int my, bool mouseDown)
         return false;
     }
 
-    if (!scrollDragging_)
-        return false;
-
+    int bar_x = uis.width - MLIST_SCROLLBAR_WIDTH;
+    int bar_w = MLIST_SCROLLBAR_WIDTH - 1;
     int bar_h = viewHeight;
     int bar_y = contentTop_;
     int arrow_h = max(MLIST_SCROLLBAR_WIDTH, lineHeight_);
@@ -574,6 +589,17 @@ bool Menu::HandleScrollBarDrag(int mx, int my, bool mouseDown)
     int thumb_h = max(6, Q_rint(track_h * pageFrac));
     if (thumb_h > track_h)
         thumb_h = track_h;
+    int thumb_y = track_y + Q_rint((track_h - thumb_h) *
+                                   (static_cast<float>(scrollY_) / maxScroll));
+
+    if (!scrollDragging_) {
+        bool over_thumb = mx >= bar_x && mx < bar_x + bar_w &&
+            my >= thumb_y && my < thumb_y + thumb_h;
+        if (!over_thumb)
+            return false;
+        scrollDragging_ = true;
+        scrollDragOffset_ = my - thumb_y;
+    }
 
     int new_thumb = Q_clip(my - scrollDragOffset_, track_y, track_y + track_h - thumb_h);
     float frac = static_cast<float>(new_thumb - track_y) /
@@ -906,9 +932,25 @@ void Menu::Draw()
         R_DrawFill32(bar_x + bar_w - 1, bar_y, 1, bar_h, border);
 
         if (arrow_h > 1) {
+            int mouse_x = uis.mouseCoords[0];
+            int mouse_y = uis.mouseCoords[1];
+            bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+            bool over_up = mouse_x >= bar_x && mouse_x < bar_x + bar_w &&
+                mouse_y >= bar_y && mouse_y < bar_y + arrow_h;
+            bool over_down = mouse_x >= bar_x && mouse_x < bar_x + bar_w &&
+                mouse_y >= bar_y + bar_h - arrow_h && mouse_y < bar_y + bar_h;
             color_t arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+            if (over_up && mouse_down)
+                arrow_fill = MenuAdjustColor(arrow_fill, -0.2f);
+            else if (over_up)
+                arrow_fill = MenuAdjustColor(arrow_fill, 0.15f);
             R_DrawFill32(bar_x + 1, bar_y + 1, max(1, bar_w - 2),
                          max(1, arrow_h - 2), arrow_fill);
+            arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+            if (over_down && mouse_down)
+                arrow_fill = MenuAdjustColor(arrow_fill, -0.2f);
+            else if (over_down)
+                arrow_fill = MenuAdjustColor(arrow_fill, 0.15f);
             R_DrawFill32(bar_x + 1, bar_y + bar_h - arrow_h + 1,
                          max(1, bar_w - 2), max(1, arrow_h - 2), arrow_fill);
 
@@ -928,6 +970,16 @@ void Menu::Draw()
                 thumb_h = track_h;
             int thumb_y = track_y + Q_rint((track_h - thumb_h) * scrollFrac);
             color_t thumb = COLOR_SETA_U8(uis.color.active, 220);
+            int mouse_x = uis.mouseCoords[0];
+            int mouse_y = uis.mouseCoords[1];
+            bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+            vrect_t thumb_rect{ bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h };
+            bool over_thumb = RectContains(thumb_rect, mouse_x, mouse_y);
+            bool pressed = scrollDragging_ && mouse_down;
+            if (pressed)
+                thumb = MenuAdjustColor(thumb, -0.2f);
+            else if (over_thumb)
+                thumb = MenuAdjustColor(thumb, 0.15f);
             R_DrawFill32(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h, thumb);
         }
     }
@@ -1042,7 +1094,15 @@ void Menu::MouseEvent(int x, int y, bool down)
     if (uis.keywait)
         return;
 
-    if (FindExpandedOverlay(widgets_)) {
+    if (Widget *overlay = FindExpandedOverlay(widgets_)) {
+        bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+        if (auto *dropdown = dynamic_cast<DropdownWidget *>(overlay)) {
+            if (dropdown->HandleMouseDrag(x, y, mouse_down))
+                return;
+        } else if (auto *image = dynamic_cast<ImageSpinWidget *>(overlay)) {
+            if (image->HandleMouseDrag(x, y, mouse_down))
+                return;
+        }
         UpdateExpandedHover(widgets_, x, y);
         return;
     }

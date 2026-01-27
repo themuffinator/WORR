@@ -298,7 +298,7 @@ static void SCR_ScoreShot_f(void)
     int i, ret;
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -340,9 +340,9 @@ static void SCR_ScoreShot_f(void)
     FS_Write(buffer, sizeof(buffer), f);
 
     if (FS_CloseFile(f))
-        Com_EPrintf("$e_auto_3240af950c4e", path);
+        Com_EPrintf("$cl_error_writing_file", path);
     else
-        Com_Printf("$e_auto_c859496e563d", path);
+        Com_Printf("$cl_write_complete", path);
 }
 
 static void SCR_ScoreDump_f(void)
@@ -351,7 +351,7 @@ static void SCR_ScoreDump_f(void)
     int i;
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -372,3 +372,5 @@ void CL_InitAscii(void)
     Cmd_AddCommand("aashot", SCR_ScoreShot_f);
     Cmd_AddCommand("aadump", SCR_ScoreDump_f);
 }
+
+

@@ -9,10 +9,8 @@ m_n_or = "N or"
 m_yes = "Yes"
 m_no = "No"
 m_auto = "Auto"
-
 // iis menu
 m_start = "Start"
-
 // top level menu
 m_game = "Game"
 m_single_player = "Single Player"
@@ -28,7 +26,6 @@ m_delete_game = "Delete Game"
 m_end_game = "End Game"
 m_sign_out = "Sign Out"
 m_tutorial = "Tutorial"
-
 // save menu
 m_new_save = "New Save"
 m_restart_level = "Restart Level"
@@ -39,10 +36,8 @@ m_quicksave = "Quick Save"
 m_quickload = "Quick Load"
 m_delete = "Delete"
 m_delete_question = "Are you sure you want to delete:" // save name
-
 // level select menu
 m_level_select = "Level Select"
-
 // difficulty
 m_episode = "Episode"
 m_difficulty = "Difficulty"
@@ -50,13 +45,11 @@ m_easy = "Easy"
 m_medium = "Medium"
 m_hard = "Hard"
 m_nightmare = "Nightmare"
-
 // multiplayer services
 m_network_local = "Local"
 m_network_lan = "LAN"
 m_network_adhoc = "Local Wireless"
 m_network_playfab = "Online"
-
 // online services
 m_logging_in = "Signing in..."
 m_logging_in_multi <switch> = "Waiting for online services, player {0} of {1}..."
@@ -76,13 +69,11 @@ m_getting_arbitrator = "Match found, finding leader."
 m_waiting_arbitrator = "Match found, waiting for leader."
 m_waitingforplayers = "Waiting for players..."
 m_searching_estimate = "{0} players ({1} seconds)"
-
 // tos
 m_accept_tos_prompt = "Please review and accept these agreements before playing."
 m_viewtos = "View Terms of Service"
 m_accept = "Accept all"
 m_reject = "Reject all"
-
 // mp player config
 m_whosplaying = "Setup Players"
 m_controllersconnected = "Controllers Connected"
@@ -90,7 +81,6 @@ m_controllersconnected <ps4 ps5> = "Controllers Connected"
 m_controllersconnected <switch> = "Controllers Connected"
 m_controllersconnected <xboxone xboxseries winstore> = "Controllers Connected"
 m_remove = "Remove player"
-
 // multiplayer menu
 m_join_match = "Join Match"
 m_join_adhoc_match = "Join Ad-hoc Match"
@@ -143,14 +133,12 @@ m_player_config_option = "Player Configuration..."
 m_coop_limit_reached = "Co-op is limited\nto 4 players"
 m_weaponRespawnTime = "Weapon Respawn Time"
 m_sortby = "Sort by"
-
 // Map selector
 m_select_maps_header = "Select Maps"
 m_use_filters = "Use Filters"
 m_select_all = "Select All"
 m_select_none = "Deselect All"
 m_maps = "Maps"
-
 // player configuration 
 m_player_config = "Player Configuration"
 m_model = "Model"
@@ -159,7 +147,6 @@ m_dogtag = "Tag"
 m_male = "Male"
 m_female = "Female"
 m_cyborg = "Cyborg"
-
 // match config
 m_bot_settings = "Bot Settings"
 m_coop_squad = "Respawn on Squad"
@@ -185,7 +172,6 @@ m_mp_nukes = "Spawn Antimatter Bombs"
 m_mp_quad_drop = "Drop Quad Damage On Death"
 m_mp_quadfire_drop = "Drop Dualfire On Death"
 m_player_collision = "Player Collision"
-
 m_refresh = "Refresh"
 m_refreshing = "Refreshing..."
 m_searching_match = "Searching for match..."
@@ -193,14 +179,12 @@ m_waiting_for_server = "Waiting for server..."
 m_match_found_setting = "Match found, setting host"
 m_match_found_getting = "Match found, getting host"
 m_match_found_waiting = "Match found, waiting for host"
-
 // match browser
 m_browserfilters = "Match Browser Filters"
 m_lobbytype = "Lobby Type"
 m_showfull = "Show Full"
 m_filter_settings = "Filter Settings"
 m_no_matches = "No matches available"
-
 // lobby
 m_next_match = "Next Match"
 m_current_match = "Current Match"
@@ -220,12 +204,10 @@ m_join = "Join"
 m_switchteam = "Switch Team..."
 m_crossplat_friends = "Crossplatform Friends..."
 m_no_invites = "No invites available"
-
 // join room code menu
 m_connectroom = "Connect via room code"
 m_roomcodehelp = "Enter the four letter room code in order to directly connect to that match."
 m_connect = "Connect"
-
 // vault
 m_concept = "Concept Art"
 m_development = "Development"
@@ -241,7 +223,6 @@ m_playanim = "Play Animation"
 m_pauseanim = "Pause Animation"
 m_show_orig = "Show Original Model"
 m_show_enhanced = "Show Enhanced Model"
-
 // bot skills
 m_bot_skill_training = "Training"
 m_bot_skill_easy = "Easy"
@@ -249,7 +230,6 @@ m_bot_skill_normal = "Normal"
 m_bot_skill_hard = "Hard"
 m_bot_skill_uv = "Ultra-Violence"
 m_bot_skill_nightmare = "Nightmare"
-
 // bot connected chats - these MUST be numbered ( 0 - N )
 // {$} is the name of a random human player.
 m_bot_chat_connected_0 = "hello"
@@ -270,7 +250,6 @@ m_bot_chat_connected_14 = "oh, it's you again {$}"
 m_bot_chat_connected_15 = "funny seeing you here {$}"
 m_bot_chat_connected_16 = "woah - who let {$} in here?!"
 m_bot_chat_connected_17 = "have i seen you on another server somewhere {$}?"
-
 // bot disconnected chats - these MUST be numbered ( 0 - N )
 // {$} is the name of a random human player.
 m_bot_chat_disconnect_0 = "later losers!"
@@ -288,7 +267,6 @@ m_bot_chat_disconnect_11 = "peace!"
 m_bot_chat_disconnect_12 = "cya!"
 m_bot_chat_disconnect_13 = "gonna see if I can find a server without {$}"
 m_bot_chat_disconnect_14 = "catch ya later {$}!"
-
 // bot match start chats - these MUST be numbered ( 0 - N )
 // {$} is the name of a random human player.
 m_bot_chat_match_start_0 = "lets do this"
@@ -306,7 +284,6 @@ m_bot_chat_match_start_11 = "let's get the show on the road!"
 m_bot_chat_match_start_12 = "here we go {$}!"
 m_bot_chat_match_start_13 = "watch how i do it {$}!"
 m_bot_chat_match_start_14 = "watch and learn from the best {$}!"
-
 // bot match end chats - these MUST be numbered ( 0 - N )
 // {$} is the name of a random human player.
 m_bot_chat_match_end_0 = "gg"
@@ -328,7 +305,6 @@ m_bot_chat_match_end_15 = "good game!"
 m_bot_chat_match_end_16 = "don't feel bad {$}"
 m_bot_chat_match_end_17 = "my days of not taking {$} seriously have... come to a middle"
 m_bot_chat_match_end_18 = "look at poor {$} there"
-
 // bot melee murder chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_melee_murder_0 = "sorry you gotta split {$}!"
@@ -343,7 +319,6 @@ m_bot_chat_melee_murder_8 = "oops!"
 m_bot_chat_melee_murder_9 = "coming thru!"
 m_bot_chat_melee_murder_10 = "bloody mess!"
 m_bot_chat_melee_murder_11 = "watch your head {$}!"
-
 // bot killed in action by enemy human chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_kia_human_0 = "haha"
@@ -362,7 +337,6 @@ m_bot_chat_kia_human_12 = "ah beans!"
 m_bot_chat_kia_human_13 = "lucky shot {$}!"
 m_bot_chat_kia_human_14 = "eh, figured {$} needed a point already"
 m_bot_chat_kia_human_15 = "payback is gonna suck {$}!"
-
 // bot killed in action by monster chats - these MUST be numbered ( 0 - N )
 m_bot_chat_kia_monster_0 = "oh come on!"
 m_bot_chat_kia_monster_1 = "killed by a monster = LAME!"
@@ -376,7 +350,6 @@ m_bot_chat_kia_monster_8 = "STAY ALIVE!!"
 m_bot_chat_kia_monster_9 = "watch your back, they got me good."
 m_bot_chat_kia_monster_10 = "i'm down! hang in there"
 m_bot_chat_kia_monster_11 = "stupid monster!"
-
 // bot killed in action by friendly chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_kia_friendly_0 = "watch your fire {$}!"
@@ -391,7 +364,6 @@ m_bot_chat_kia_friendly_8 = "next time turn off friendly fire, alright {$}?"
 m_bot_chat_kia_friendly_9 = "I needed a break anyhow"
 m_bot_chat_kia_friendly_10 = "might want to get your eyes checked {$}..."
 m_bot_chat_kia_friendly_11 = "{$} - you know which team you're on right?!"
-
 // bot fragged enemy chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_fragged_enemy_0 = "don't hate the player..."
@@ -415,12 +387,10 @@ m_bot_chat_fragged_enemy_17 = "duck next time {$}!"
 m_bot_chat_fragged_enemy_18 = "dodge next time {$}!"
 m_bot_chat_fragged_enemy_19 = "you tried your best {$} :-P"
 m_bot_chat_fragged_enemy_20 = "try moving around more {$} :-P"
-
 // bot fragged friendly chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_fragged_friendly_0 = "oh damn! my bad!"
 m_bot_chat_fragged_friendly_1 = "whoops!"
-
 // bot fragged self chats - these MUST be numbered ( 0 - N )
 m_bot_chat_fragged_self_0 = "well damn!"
 m_bot_chat_fragged_self_1 = "lagging bad"
@@ -437,7 +407,6 @@ m_bot_chat_fragged_self_11 = "imma sit down for a minute"
 m_bot_chat_fragged_self_12 = "my controller is broken"
 m_bot_chat_fragged_self_13 = "my mouse is acting goofy"
 m_bot_chat_fragged_self_14 = "oh FFS!"
-
 // bot telefragged enemy chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_telefragged_enemy_0 = "woah! what happened here?"
@@ -448,13 +417,11 @@ m_bot_chat_telefragged_enemy_4 = "what a mess!"
 m_bot_chat_telefragged_enemy_5 = "hahahahaha!!!"
 m_bot_chat_telefragged_enemy_6 = "hah!!"
 m_bot_chat_telefragged_enemy_7 = "thx for the free kill {$}!"
-
 // bot telefragged friendly chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_telefragged_friendly_0 = "whoops!"
 m_bot_chat_telefragged_friendly_1 = "{$} - you looking to get telefragged?!"
 m_bot_chat_telefragged_friendly_2 = "damn - sorry {$}!"
-
 // bot telefragged self chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_telefragged_self_0 = "don't invade my personal space {$}!"
@@ -464,14 +431,12 @@ m_bot_chat_telefragged_self_3 = "need to teach you about personal space {$}"
 m_bot_chat_telefragged_self_4 = "oh don't mind me :-/"
 m_bot_chat_telefragged_self_5 = "must be losing my touch..."
 m_bot_chat_telefragged_self_6 = "who put that teleporter here?!"
-
 // bot escorting someone chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_escort_following_0 = "i've got your back {$}!"
 m_bot_chat_escort_following_1 = "you lead, i'll follow!"
 m_bot_chat_escort_following_2 = "you take point {$}"
 m_bot_chat_escort_following_3 = "lead the way {$}"
-
 // bot is annoyed at escort goal chats - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_escort_annoyed_0 = "don't be an ass {$}!"
@@ -479,7 +444,6 @@ m_bot_chat_escort_annoyed_1 = "stop clowning around {$}"
 m_bot_chat_escort_annoyed_2 = "hah hah - REAL funny"
 m_bot_chat_escort_annoyed_3 = "why don't you grow up {$}!"
 m_bot_chat_escort_annoyed_4 = "real funny - ha ha!"
-
 // bots escort goal just died - these MUST be numbered ( 0 - N )
 // {$} is the name of the other player involved.
 m_bot_chat_escort_goal_died_0 = "you zigged when you should have zagged!"
@@ -490,21 +454,18 @@ m_bot_chat_escort_goal_died_4 = "just stay there {$}, i'll fight on without you 
 m_bot_chat_escort_goal_died_5 = "great, now I have to do this alone"
 m_bot_chat_escort_goal_died_6 = "take 5 - I'll show you how it's done :D"
 m_bot_chat_escort_goal_died_7 = "some nice moves there slick :P"
-
 // bot guarding team flag chats - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_on_defense_0 = "i'll guard the base!"
 m_bot_chat_ctf_on_defense_1 = "i'll stay home"
 m_bot_chat_ctf_on_defense_2 = "i'm on defense!"
 m_bot_chat_ctf_on_defense_3 = "staying home"
 m_bot_chat_ctf_on_defense_4 = "i'll watch our flag"
-
 // bot going for enemy flag chats - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_on_offense_0 = "i'm gonna get the enemy flag!"
 m_bot_chat_ctf_on_offense_1 = "i'm on offense!"
 m_bot_chat_ctf_on_offense_2 = "their flag is mine!"
 m_bot_chat_ctf_on_offense_3 = "going for the flag"
 m_bot_chat_ctf_on_offense_4 = "getting their flag"
-
 // bot returning dropped team flag chats - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_returning_dropped_flag_0 = "i'll grab our flag!"
 m_bot_chat_ctf_returning_dropped_flag_1 = "flag is down, grabbing it!"
@@ -512,7 +473,6 @@ m_bot_chat_ctf_returning_dropped_flag_2 = "going for our flag"
 m_bot_chat_ctf_returning_dropped_flag_3 = "i'll get our flag"
 m_bot_chat_ctf_returning_dropped_flag_4 = "near our flag - grabbing it!"
 m_bot_chat_ctf_returning_dropped_flag_5 = "see our flag - getting it!"
-
 // bot hunting enemy flag carrier chats - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_attacking_enemy_carrier_0 = "i'm gonna kill the enemy carrier!"
 m_bot_chat_ctf_attacking_enemy_carrier_1 = "going after that fool with our flag!"
@@ -520,7 +480,6 @@ m_bot_chat_ctf_attacking_enemy_carrier_2 = "gonna kill their flag carrier"
 m_bot_chat_ctf_attacking_enemy_carrier_3 = "gonna get our flag back!"
 m_bot_chat_ctf_attacking_enemy_carrier_4 = "tracking their flag carrier"
 m_bot_chat_ctf_attacking_enemy_carrier_5 = "hunting their flag carrier"
-
 // bot bringing enemy flag home chats - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_delivering_flag_0 = "i've got their flag! cover me!"
 m_bot_chat_ctf_delivering_flag_1 = "heading back to the barn with the flag"
@@ -529,7 +488,6 @@ m_bot_chat_ctf_delivering_flag_3 = "flag is mine! could use a little help here!"
 m_bot_chat_ctf_delivering_flag_4 = "everyone on me - i have their flag!"
 m_bot_chat_ctf_delivering_flag_5 = "got the flag - need help!"
 m_bot_chat_ctf_delivering_flag_6 = "need backup - got the flag!"
-
 // bot hanging out at enemy base, waitin for carrier to arrive - these MUST be numbered ( 0 - N )
 m_bot_chat_ctf_camping_enemy_base_0 = "i'll ambush them at their base"
 m_bot_chat_ctf_camping_enemy_base_1 = "gonna camp their base and wait for them"
@@ -538,7 +496,6 @@ m_bot_chat_ctf_camping_enemy_base_3 = "heading to their base to ambush them"
 m_bot_chat_ctf_camping_enemy_base_4 = "will head to their base and wait in ambush"
 m_bot_chat_ctf_camping_enemy_base_5 = "i'll be in their base camping"
 m_bot_chat_ctf_camping_enemy_base_6 = "i'll be in their base waiting for them"
-
 // addons menu
 m_loading = "Loading..."
 m_download = "Download"
@@ -549,7 +506,6 @@ m_addons_empty = "You have no downloaded add-ons to manage.  Go online to browse
 m_go_online = "Go Online"
 m_addons_error = "There was a problem downloading the list of addons."
 m_addons_download_error = "Add-on download failed."
-
 // options root menu
 m_input = "Input"
 m_gameplay = "Gameplay"
@@ -559,10 +515,8 @@ m_a11y = "Accessibility"
 m_language = "Language"
 m_credits = "Credits"
 m_legalnotices = "Legal Notices"
-
 // gameplay general
 m_attract_loop = "Run Attract Demos"
-
 // gameplay menu
 m_always_run = "Always Run (Keyboard)"
 m_view_bob = "View Bob"
@@ -595,7 +549,6 @@ m_manual = "Manual"
 m_50_cells = "> 50 Cells"
 m_75_cells = "> 75 Cells"
 m_100_cells = "> 100 Cells"
-
 // controls menu
 m_current_player = "Current Player: {}"
 m_skip_player_one = "First Controller"
@@ -641,14 +594,12 @@ m_enabled = "Enabled"
 m_vibration <switch> = "Vibration Feature"
 m_vibration = "Vibration"
 m_vibration_volume = "Vibration Intensity"
-
 // sound menu
 m_music_volume = "Music Volume"
 m_sound_volume = "Sound Volume"
 m_voice_volume = "Voice Volume"
 m_reverb = "Enable Reverb"
 m_subtitles = "Enable Subtitles"
-
 // display menu
 m_open_video_settings = "Open Video Settings..."
 m_video_settings = "Video Settings"
@@ -682,7 +633,6 @@ m_resolutionscale_fixed = "Scale"
 m_fixed = "Fixed"
 m_dynamic = "Dynamic"
 m_safe_zone = "Safe Zone"
-
 // a11y menu
 m_intro_text = "Quake II has several accessibility settings to increase readability of menus, and to assist with voice or text chat in multiplayer. These are enabled by default.\n\nPlease take a moment to review these settings, or you may choose to disable all accessibility settings now."
 m_a11y_disable_all = "Disable all settings"
@@ -701,7 +651,6 @@ m_chat_message_time = "Chat Message Time"
 options_mp_speak_for_me = "Speak For Me in Voice Chat"
 m_options_no_voice_profiles = "Connect to an online match to change voice settings."
 m_options_voice_profile = "Voice Profile"
-
 // video menu
 m_video_resolution = "Resolution"
 m_window_mode = "Window Mode"
@@ -714,14 +663,12 @@ m_game_thread = "Threaded Game Renderer"
 m_apply_settings = "Apply Settings"
 m_graphics_api          = "Graphics API"
 m_graphics_api_question = "Changes to the Graphics API will take effect after restarting the game."
-
 // binds menu
 m_player_controls = "Player"
 m_inventory_controls = "Inventory"
 m_weapon_controls = "Weapon"
 m_multiplayer_controls = "Multiplayer"
 m_other_controls = "Other"
-
 m_unbind = "Unbind"
 m_attack = "Attack"
 m_next_weapon = "Next Weapon"
@@ -784,11 +731,9 @@ m_salute_bind = "Salute"
 m_taunt_bind = "Taunt"
 m_wave_bind = "Wave"
 m_point_bind = "Point/Ping"
-
 // HUD
 m_room_code_display = "Room code: {}"
 g_n64_crouching = "Quake II 64 does not have crouching."
-
 // scoreboard
 // SP: single-player bottom status bar
 // MT: multi-player top scorebox
@@ -803,12 +748,10 @@ m_ping = "Ping"             // MH
 m_time_left = "Time Left"   // MT
 m_frags_left = "Frags Left" // MT
 m_captures_left = "Captures Left" // MT
-
 // Q2 scoreboard
 g_score_frags = "Frag Limit: {}"
 g_score_captures = "Capture Limit: {}"
 g_score_time = "Time Left: {}"
-
 // scoreboard menu actions
 m_mute = "Mute"
 m_unmute = "Unmute"
@@ -823,14 +766,12 @@ m_view_profile = "View Profile"
 m_addfriend = "Add Friend"
 m_removefriend = "Remove Friend"
 m_report = "Report"
-
 // scoreboard action items
 m_interact = "Interact"
 m_continue = "Continue"
 m_continue_in = "Continue in {}..." // non-zero number
 m_respawn = "Respawn"
 m_review = "Accolades"
-
 // error screen
 m_error_occurred = "A game error has occurred:"
 m_error_wrong_room_code = "No room exists for code {}"
@@ -863,14 +804,11 @@ m_error_no_network = "Unable to connect to a network."
 m_error_failed_signin = "One or more accounts failed to sign into multiplayer."
 m_error_failed_signin <switch> = "Online play is currently unavailable."
 m_error_accept_tos = "A network error occured while accepting the TOS."
-
 // we have an error, but we can't show it yet
 m_error_wait = "Please wait..."
-
 // save messages
 m_game_loaded = "Game loaded"
 m_game_saved = "Game saved"
-
 // Platform message boxes
 m_error = "Error"
 m_gamepad_disconnected_message = "Please reconnect a controller to continue."
@@ -879,13 +817,11 @@ m_gamepad_disconnected_message <switch> = "Please reconnect a controller to cont
 m_gamepad_disconnected_message <xboxone xboxseries winstore> = "Please reconnect a controller to continue."
 m_confirm_mp_activity = "Launching this activity will exit your current session.  Do you wish to continue?"
 m_no_game_license = "A game license is required to play this title."
-
 // Achievements
 bnet_achievements        = "ACHIEVEMENTS"
 m_achievements           = "Achievements"
 m_achievements <ps4 ps5> = "Trophies"
 ach_achieved             = "ACHIEVED"
-
 ach_name_eou1 = "Establish Communications"
 ach_desc_eou1 = "Quake II: Establish a communication link to the command ship."
 ach_name_eou2 = "Destroy Strogg Logistical Train"
@@ -914,7 +850,6 @@ ach_name_n64 = "Shut Down the Core"
 ach_desc_n64 = "Quake II 64: Enter an alternate timeline, and destroy the Guardians."
 ach_name_platinum = "Quad Machine"
 ach_desc_platinum = "No Strogg will stand in my way of complete domination."
-
 // Playfab
 options_mp_enable_crossplay = "Enable Crossplay"
 options_mp_enable_voip      = "Enable Voice Chat"
@@ -926,21 +861,17 @@ options_mp_enable_ptt       = "Enable Push To Talk"
 options_mp_enable_direct    = "Allow Direct Connections"
 options_mp_stats_for_nerds  = "Show Network Stats"
 options_mp_show_cs_code     = "Show Customer Support Code"
-
 //Chat
 chat_all = "All"
 chat_team = "Team"
 chat_voice = "Voice"
 chat_cycle_channel = "Cycle channel"
-
 // Colours
 m_alpha = "Alpha"
 m_red = "Red"
 m_green = "Green"
 m_blue = "Blue"
-
 // game dll strings
-
 item_body_armor = "Body Armor"
 item_body_armor_def = "the Body Armor"
 item_combat_armor = "Combat Armor"
@@ -1109,7 +1040,6 @@ item_compass = "Compass"
 item_compass_def = "the Compass"
 item_flashlight = "Flashlight"
 item_fllashlight_def = "the Flashlight"
-
 g_no_players_chase = "No other players to chase."
 g_need_cheats = "You must run the server with '+set cheats 1' to enable this command.\n"
 g_unknown_item = "Unknown item\n"
@@ -1205,10 +1135,8 @@ g_only_one_sphere_time = "Only one sphere at a time!\n"
 no_valid_poi = "Compass data not available for objective.\n"
 g_player_connected = "{} connected.\n"
 g_ctf_and_more = "...and {} more\n"
-
 g_no_load_in_dm = "Can't load while in a deathmatch game.\n"
 g_no_load_in_lobby = "Disconnect before attempting to load a game.\n"
-
 g_pc_primary_objective = "Primary Objective"
 g_pc_secondary_objective = "Secondary Objective"
 g_pc_skill = "Skill"
@@ -1225,14 +1153,11 @@ g_pc_chase_camera = "Chase Camera"
 g_pc_leave_chase_camera = "Leave Chase Camera"
 g_pc_no_chase = "No one to chase"
 g_pc_return = "Return to Main Menu"
-
 g_lives = "Lives"
 g_frags = "Frags"
-
 g_drop = "Drop"
 g_drop_weapon = "Drop Weapon"
 g_drop_ammo = "Drop Ammo"
-
 // map messages and goals localization
 map_2_minutes_to_detonation = "2 minutes to detonation..." // 1 hits
 map_30_seconds_to_detonation = "30 seconds to detonation..." // 1 hits
@@ -1784,7 +1709,6 @@ map_youve_opened_a_secret = "You opened a secret!" // 1 hits
 map_youve_triggered_the_slime = "You've triggered the Slime!" // 2 hits
 map_youve_triggered_the_trap = "You've triggered the trap." // 1 hits
 boss2_jonatan = "Jonatan Pöljö\nEnhanced Models & Additional Art" // should be carried over in all other languages but name and title left unlocalized (needed to render ö correctly)
-
 // additional map messages, xatrix mostly
 map_a_door_has_opened = "A door has opened." // 5 hits
 map_a_secret_area_has_been_revealed = "A secret area has been revealed." // 1 hits
@@ -1920,7 +1844,6 @@ map_youve_discovered_a_secret = "You've discovered a secret." // 4 hits
 map_youve_discovered_a_secret_area = "You've discovered a secret area." // 1 hits
 map_youve_found_a_secret_area = "You've found a secret area!" // 1 hits
 map_youve_found_a_secret_area_1 = "You've found a secret area." // 5 hits
-
 map_mission_completed_that_was_pret_0 = "Mission Completed:\nThat was pretty good,\nbut can you do it with just\nthe Blaster?"
 map_shoot_barrels_to_make_them_explo_0 = "Shoot barrels to\nmake them explode."
 map_shoot_button_to_open_a_secret_ar_0 = "Shoot button to\nopen a secret area."
@@ -1962,9 +1885,7 @@ map_locate_entrance_to = "Locate entrance to\n the Badlands."
 map_locate_entrance_to_ = "Locate entrance to\n Logistics Complex."
 map_rboss_escape = "Anti-Matter Bomb planted.\nEscape to Research Hangar\nusing transport pod."
 map_rboss_mission_incomplete = "Destroy the Gravity Well before\nreturning to the transport pod."
-
 map_1moretogo = "1 more to go...\n"
-
 // N64 map goals
 map_dm4_goal_0 = "Par time is\n----\n1:40"
 map_outpost_goal_0 = "Mission 1:\n\nLocate entrance to\nCentral Complex."
@@ -2001,9 +1922,7 @@ map_conduits_goal_0 = "Mission 28:\n\nLocate remaining lock\nto core entrance."
 map_conduits_goal_1 = "Mission 29:\n\nEntrance open.\nProceed to core."
 map_core_goal_0 = "Mission 30:\n\nDescend into core.\nLocate entrance to\nStrogg command."
 map_command_goal_0 = "Mission 31:\n\nDestroy the Guardians.\nShut down the core."
-
 g_fact3_objective = "You have 30 seconds...\ncollect what you can!"
-
 // mg maps
 map_access = "Access\n the Security Office." // 1 hits
 map_access_denied = "Access Denied." // 8 hits
@@ -2237,18 +2156,15 @@ map_hub_mgu3 = "OPERATION: Ruined Earth\n\nPress button\nto deploy Marine."
 map_hub_mgu4 = "OPERATION: Wastelands\n\nPress button\nto deploy Marine."
 map_hub_mgu5 = "OPERATION: Firewall\n\nPress button\nto deploy Marine."
 map_hub_mgu6 = "OPERATION: Darkest Depths\n\nPress button\nto deploy Marine."
-
 // end of unit table
 m_eou_level = "Level"
 m_eou_kills = "Kills"
 m_eou_secrets = "Secrets"
 m_eou_time = "Time"
 m_eou_press_button = "Press any button to continue."
-
 // means of death
 // {0} is always the player who died.
 // for non-self/generic deaths, {1} is the killer.
-
 // generic deaths
 g_mod_generic_died = "{0} died.\n"
 g_mod_generic_suicide = "{0} suicides.\n"
@@ -2263,7 +2179,6 @@ g_mod_generic_laser = "{0} saw the light.\n"
 g_mod_generic_blaster = "{0} got blasted.\n"
 g_mod_generic_hurt = "{0} was in the wrong place.\n"
 g_mod_generic_gekk = "{0}... that's gotta hurt!\n"
-
 // self deaths
 g_mod_self_held_grenade = "{0} tried to put the pin back in.\n"
 g_mod_self_grenade_splash = "{0} tripped on their own grenade.\n"
@@ -2272,7 +2187,6 @@ g_mod_self_bfg_blast = "{0} should have used a smaller gun.\n"
 g_mod_self_trap = "{0} was sucked into their own trap.\n"
 g_mod_self_dopple_explode = "{0} was fooled by their own doppelganger.\n"
 g_mod_self_default = "{0} killed themselves.\n"
-
 // killer deaths
 g_mod_kill_blaster = "{0} was blasted by {1}.\n"
 g_mod_kill_shotgun = "{0} was gunned down by {1}.\n"
@@ -2311,30 +2225,21 @@ g_mod_kill_dopple_vengeance = "{0} was purged by {1}'s Doppelganger.\n"
 g_mod_kill_dopple_hunter = "{0} was hunted down by {1}'s Doppelganger.\n"
 g_mod_kill_grapple = "{0} was caught by {1}'s grapple.\n"
 g_mod_kill_generic = "{0} was killed by {1}.\n"
-
 // id vault
-
 vault_faces = "HUD Faces"
 vault_faces_desc = "Similar to the Ranger face in the original Quake, in Q2Test, the public beta version of Quake II, originally included a face at the bottom left of the screen that reflected the damage state of the character and even indicated from which direction the player was being hit."
-
 vault_early_hud = "Early HUD"
 vault_early_hud_desc = "This early HUD is close to what we shipped with Q2Test, the public beta version of Quake II. Ultimately, we opted for a cleaner HUD without the damage faces or background for the actual health, armor and ammo values."
-
 vault_logo = "Quake II Logo"
 vault_logo_desc = "Quake II wasn't supposed to be a sequel. Other than the technology, the only thing Quake and Quake II have in common is the name and logo.  However, id needed to design the product packaging and they wanted to integrate the logo into the cinematic. After several failed attempts to come up with a name that was cool and could be trademarked, id ran out of time, and opted to call it Quake II. The second nail was added to the Quake logo, and it was done. Quake would continue afterwards with Quake III: Arena, but it was designed to be a successor to the free multiplayer focused update of QuakeWorld, than a continuation of either Quake title."
-
 vault_biggun = "Big Gun"
 vault_biggun_desc = "The Strogg reach Earth by generating and traveling through a black hole. This assault on Earth is depicted in the 2007 release of Enemy Territory: Quake Wars. Quake II is the follow-up story of Operation Overlord, Earth's plan to travel through the black hole and destroy the generator using a massive airstrike. In the way, however, is a defense system called the Big Gun. The idea of the Big Gun was inspired by the 1961 movie, \"The Guns of Navarone.\" In the movie, a World War II commando unit is selected to take out massive Axis defense guns on the Island of Navarone. In Quake II, Operation Overlord is a large muti-target assault that includes destroying the Black Hole Generator, a Gravity Well, the Strogg Defense Fleet, and the Big Gun itself."
-
 vault_hangar = "Hangar"
 vault_hangar_desc = "Although the final version of the Hangar bares little resemblence to this original concept, the design for the Strogg defense aircraft that can be seen flying by were created from this piece. An early Strogg ship based on this concept is also available in the Development section of the id Vault."
-
 vault_imperial_city = "Imperial City"
 vault_imperial_city_desc = "The core of the Stroggos civilization is the capital city of Cerberon. This highly defended complex is built into the base of an enormous crater, Crater Majoris. Between the northern plains and the southern sea of Stroggos, Cerberon contains the major defense, communication, and political controls for the Strogg civilization. At the southern tip of Majoris is a second crater called Crater Minor. Crater Minor contains the defense base complex for the city of Cerberon."
-
 vault_stroggos_base = "Stroggos Base"
 vault_stroggos_base_desc = "The Stroggos Base is where Bitterman's pod first crashes and the player's journey begins. These first levels are pretty typical of Strogg military construction, but have seen some destruction as a result of Earth's counter-attack. The first level in the game has been expanded on in this release based on materials found in the Quake II development archive. A new outdoor area that fills in the area between the two sections of base, and connects to the stream in the original level was restored."
-
 vault_weapon_sketches_1 = "Weapon Sketches 1"
 vault_weapon_sketches_2 = "Weapon Sketches 2"
 vault_weapon_sketches_3 = "Weapon Sketches 3"
@@ -2342,113 +2247,80 @@ vault_weapon_sketches_4 = "Weapon Sketches 4"
 vault_weapon_sketches_5 = "Weapon Sketches 5"
 vault_weapon_sketches_6 = "Weapon Sketches 6"
 vault_weapon_sketches_desc = "Not a lot of concept art from this era of id has survived. These pieces were all found hidden among some old printed box art proofs as purely physical drawings. Quake II had the most concept art out of the early id titles, since cinematics had to be finished far in advance of the game. These weapon sketches go from earliest very quick scribbles to pencil shaded and inked versions. Many of these designs made it relatively unchanged to the final, while others look completely different. Among the sketches, the original concept for the Disintegator can be spotted, which would go on to be used for the expansion pack weapon, the Plasma Beam."
-
 vault_doc1 = "Design Doc Excerpt 1"
 vault_doc2 = "Design Doc Excerpt 2"
 vault_doc_desc = "Two pages from an otherwise missing design document, containing descriptions of the units and needed art assets. While the original Quake had most of the artists and level designers creating their own episodes in isolation, only to be pieced together at the end in different episodes, Quake II was planned from the start to have a more cohesive progression of levels. These pages, which were well-loved by evidence of multiple coffee mug rings, cover the City and Palace units, near the end of the game."
-
 vault_items = "Item Sketches"
 vault_items_desc = "A photocopy of a sketchbook shows a pretty close to final looking Data Disc concept. Cut off on the bottom is the Power Cell. In the middle is an unknown item that was likely to be meant to used as a key to gate progression."
-
 vault_consolead = "Console Print Ad"
 vault_consolead_desc = "A scanned proof of a magazine advertisement for the console ports of Quake II, undated. The faux-retro style of advertising has been a recurring theme in id advertising throughout the 90s."
-
 vault_strogg = "Strogg Sketch"
 vault_strogg_desc = "A sketch of a Strogg that may have been originally meant to be the Jorg/Makron. The final design would feature the same idea of a smaller enemy inside a large exo-skeleton, however while the exo-skeleton certainly looks tough, the same cannot be said for its occupant."
-
 vault_ocean = "Ocean"
 vault_ocean_desc = "Stroggos' atmosphere is similar in composition to that of the Earth and has bodies of water and water vapor clouds, indicating that a hydrologic cycle persists, in spite of the Strogg's industrial activities. While many of the levels would feature water in environments, this part of Stroggos was not really explored in the game's levels."
-
 vault_monorail = "Strogg Monorail"
 vault_monorail_desc = "The Strogg are a heavily industrialized civilization, and their monorail system is evidence of this. It connects key facilities across Stroggos, hauling machinery, raw materials, and Stroggs themselves. Trains on their rail lines are often used as a device to allow the player to transition from one unit to the next while above or underground."
-
 vault_texpaint = "Texpaint"
 vault_texpaint_desc = "Texpaint was an internal tool created for the purposes of creating skin textures for models by drawing directly on 3D models. While artists have access to a wealth of tools today for dealing with complex UV mappings, tools were primitive back then, and tools like Texpaint helped the id artists create more complex models compared to the first title."
-
 vault_area_map = "Stroggos Area Map"
 vault_area_map_desc = "A marked up version of the Stroggos planet surface, as seen panned around during the cinematic sequences. Much of the 3d modeling and texture is low quality, as it was never intended to be viewed outside of the 320x240 cinematic videos. The path is roughly the path taken of the player throughout the main campaign."
-
 vault_alphabet = "Stroggos Lettering"
 vault_alphabet_desc = "The stylized Strogg alphabet, used throughout the game on various textures in the environment. The lettering was pulled from this example image, baked directly into the texture. Also included are some custom ligature pairs, some of which went unused in the final version."
-
 vault_e3_lab = "E3 97: Lab"
 vault_e3_lab_desc = "By June 1997, Quake II was in the process of switching game code from QuakeC, to native code. The version at E3 more closely resembles Quake II as we know it today, while internally a version of Quake II existed that more resembled the original game. This HUD using Quake 1 graphics can be seen in official screenshots as it was one of the last things to be implemented. Being shown in the midst of a major rewrite, the AI was simple and the player would often get caught up on walls and other surfaces."
-
 vault_e3_campaign = "Playable: E3 97"
 vault_e3_campaign_desc = "These are the original maps included in the trade show demo version of the game, modified to work on the final version of the engine. While they won't be the same experience as playing the original version, these levels accurately represent the state of the game at this time."
-
 vault_ects_video = "Video: ECTS 97"
 vault_ects_video_desc = "In September 1997, Quake II would be shown in London at the European Computer Trade Show. This video was captured from an included demo on that original build"
-
 vault_ects_campaign = "Playable: ECTS 97"
 vault_ects_campaign_desc = "A playable version of the maps included in the above build. These levels represent roughly three months of progress, as the game progresses towards being complete in November. Despite being so close to the end date, large changes in the levels can be observed."
-
 vault_early_tech = "Early Technician"
 vault_early_tech_desc = "An early version of the Technician, with a best attempt at fitting what the skin would have been at the time of development. This iteration of the Technician sported an array of prodding and grabbing tools, popping out and fidgeting about at random."
-
 vault_early_flyer = "Early Flyer"
 vault_early_flyer_desc = "A near final version of the Flyer, which would be completed ten days after this iteration. A simpler texture, and in-progress skin with a more mechanical take, while the final Flyer would take on more organic forms including a face."
-
 vault_early_tank = "Early Tank"
 vault_early_tank_desc = "The Tank was one of the earlier enemies created in Quake II. This iteration has in-progress skins and animations, but largely resembles the final version of the Tank."
-
 vault_early_mutant = "Early Mutant"
 vault_early_mutant_desc = "The Mutant originally was to be more of a bipedal enemy as the animations in this version show. Several alternate skins were prototyped, with this particularly red one chosen to display here. This version of the Mutant is dated as late as September 1997, less than two months before the final version."
-
 vault_gnorta = "Gnorta"
 vault_gnorta_desc = "The Gnorta is an enemy that was cut before a skin or animations were created. This model, with no skin or animations is all that remains. It appears to be an enemy with a turtle-like shell, and would scuttle low to the ground."
-
 vault_shocker = "Shocker"
 vault_shocker_desc = "The Shocker is another enemy that did not make it past an initial prototype model. It appears to integrate aspects of the Infantry, Gunner, and Berserker, however it is also unknown what role it may have served, and was seemingly cut relatively early on in development."
-
 vault_early_blaster = "Early Blaster"
 vault_early_blaster_desc = "This early iteration of the Blaster's first person view model featured a completely different silhouette, with sharper edges and a more traditional angled design. The less bulbous design create a much smaller weapon when viewed from the player."
-
 vault_early_ship = "Early Strogg Ship"
 vault_early_ship_desc = "An early version of a Strogg fighter ship, from before skinning of the model started. This model would stay relatively true to the final version, and is similar to the ship depicted in the \"Hangar\" concept art."
-
 vault_early_male = "Early Male Player"
 vault_early_male_desc = "This early version of the male player model is relatively close to the final version visually. Many of the animations would be unused however, with variants for swimming horizontally, elaborate death animations featuring lost limbs, and animations for pushing objects around in the environment. Quake III Arena would eventually feature unique swimming animations, however it is likely a lot of these animations went unused in Quake II due to time."
-
 vault_early_female = "Early Female Player"
 vault_early_female_desc = "An early mesh of the female player model, featuring a different hair style, and an early version of her silhouette."
-
 vault_early_inf = "Early Infantry: Pale"
 vault_early_inf2 = "Early Infantry: Camo"
 vault_early_inf_desc = "Two skin variations of the Infantry that both map to the final model, a paler variation, and a camouflage skin. Both of these would go unused in favor of the final single skin."
-
 vault_early_cg = "Early Chaingun"
 vault_early_cg_desc = "The Chaingun went through a few iterations before being finished, including versions with visible hands. This one features a smaller barrel, but showing more of the gun's base itself, before eventually becoming just the larger, higher resolution barrel. The Chaingun's design would ultimately be finalized in June 1997, making this one of the earlier examples of a weapon new to Quake II."
-
 vault_early_sg1 = "Early Shotgun 1"
 vault_early_sg2 = "Early Shotgun 2"
 vault_early_sg3 = "Early Shotgun 3"
 vault_early_sg_desc = "Three variations of the in-progress Shotgun skin, dated from June 1997. Different textures were being tested, before settling on the cooler tones, without the rust texture. This texture would then be refined, with drawn on lighting, and lights to increase visual interest along the side of the gun."
-
 vault_unused_fighter = "Unused Fighter Ship"
 vault_unused_transport = "Unused Transport Ship"
 vault_unused_ships_desc = "Two unused types of Strogg ships. Not much is known about the intended use of them, and dates on the files suggest that they may have been intended for a post-release expansion pack."
-
 vault_early_invuln1 = "Early Invulnerability 1"
 vault_early_invuln2 = "Early Invulnerability 2"
 vault_early_invuln3 = "Early Invulnerability 3"
 vault_early_invuln_desc = "Three variations of the Invulnerability powerup. At this point, the model would be finalized, however the skin was still being worked on. These skins would not be finalized until October 1997, only one month before the game would be finished."
-
 vault_early_scope = "Unused Scope"
 vault_early_sights = "Unused Sights"
 vault_early_cam = "Unused Remote Camera"
 vault_early_nukebooster = "Unused Nuclear Booster"
 vault_unused_items_desc = "Player inventory and upgrades were originally intended to be a bigger part of the game. The original purpose of the scope was to enable zooming in on your gun, at a cost of 1 cell per zoom. Sights would enable auto-aiming at enemies for a limited amount of shots, similar to how the Silencer works. Finally, the remote camera would act as you'd expect, it would allow you to view an area through the camera, and would beep in the player's speakers if damaged. Other powerups included ideas such as a Geiger counter that helped identify close enemies, speed boosts, personal teleporters, and low gravity belts. Some of these ideas would be revisited in Quake III: Arena."
-
 vault_early_stim = "Early Stimpack"
 vault_early_stim_desc = "This stimpack would go on to be redesigned to look more like the adrenaline powerup. This item would make it pretty far with a fairly complete skin, before being replaced with the final version."
-
 vault_early_flares = "Unused Flares"
 vault_early_flares_desc = "These flares would be used with the Flare Gun, whose model would eventually go on to be reused for the Grapple. The Flare Gun was one of the earlier weapon concepts present in early versions of Quake II, simply lighting up the area for a short amount of time when shot."
-
 vault_early_nuke = "Unused Nuke"
 vault_early_nuke_desc = "The Nuke was an early grenade that would be thrown by the player. As the name implies, this item would be thrown by a player, and after a short countdown it would explode, taking out a large area of whoever was nearby. The Nuke was present in early versions of Quake II, when it was still running under the Quake 1 engine, but was cut before release."
-
 vault_early_smallbullets = "Unused Small Bullets"
 vault_early_largebullets = "Unused Large Bullets"
 vault_early_smallshells = "Unused Small Shells"
@@ -2459,136 +2331,92 @@ vault_early_smallslugs = "Unused Small Slugs"
 vault_early_largeslugs = "Unused Large Slugs"
 vault_early_smallrockets = "Unused Small Rockets"
 vault_early_ammo_desc = "In DOOM and Quake, ammo came in two variants: large and small. Quake II was originally planned to add a third medium variant, but by the time development ended, both large and small ammo types would be removed in favor of one level of pickup per ammo type. Most of these ammo types were far along before being cut, likely to reduce the amount of pickups, with Quake II having more ammo types compared to original Quake."
-
 vault_arachnid_console = "Arachnid (Console)"
 vault_arachnid_console_desc = "The Arachnid is one of the toughest non-boss enemies found in the console version of Quake II. The Arachnid's dual railguns are fired one after the other, right first, and are capable of outright killing an unprotected player if both shots connect. When in melee range, the Arachnid swings at the player with its arms, using the railguns as improvised clubs.\nDefense/Weapon Analysis: Hard\nComments: The Arachnid should be a high priority. The accuracy and firing speed of their railguns is dangerous."
-
 vault_barracuda_shark = "Barracuda Shark"
 vault_barracuda_shark_desc = "The only creatures indigenous to water on Stroggos. Their blade-like teeth and spiked tail are capable of disemboweling you.\nDefense/Weapon Analysis: Medium\nComments: They attack in packs, but generally go down easy. Just don't become too occupied with them that you forget to take a breath."
-
 vault_berserker = "Berserker"
 vault_berserker_desc = "He has a metal spike as one arm, a hammer as another, and moves very quickly.\nDefense/Weapon Analysis: Medium\nComments: This bald mutha is one deadly freak. He may hit the dirt easy, but he'll get up and is relentless in his pursuits."
-
 vault_black_widow_standing = "Black Widow"
 vault_black_widow_standing_desc = "She appears to be high-ranking within the Strogg hierarchy, which means she has been around and has been victorious. Her experience can be seen in her armaments; she has multiple weapons at her disposal, and the ability to summon in reinforcements at a moment's notice.\nDefense/Weapon Analysis: Extreme\nComments: This is what stands in between you and the Gravity Well. You're going to have to do what no other species has done yet if you want to succeed."
-
 vault_black_widow_spider = "Black Widow (Spider)"
 vault_black_widow_spider_desc = "This is the Black Widow's preferred mode of transport: an arachnid-shaped tank, featuring even more firepower than when she's on foot.\nDefense/Weapon Analysis: Extreme\nComments: We've only received intel about the capabilities of this thing, nobody that has seen it has come out alive."
-
 vault_brains = "Brains"
 vault_brains_desc = "A vicious cyborg abomination with life-stealing tentacles protruding from its chest during attack.\nDefense/Weapon Analysis: Medium/Hard\nComments: Stay out of range of his dangerous tentacle attack."
-
 vault_carrier = "Carrier"
 vault_carrier_desc = "Massive, brutish, and deadly, this particular Strogg is one to avoid at all costs. With twin chainguns, a railgun, and a grenade launcher, this flying arsenal is well-equipped to deal with Marines. As if that weren't enough, the Carrier can also teleport in Flyers for extra Marine-gibbing action.\nDefense/Weapon Analysis: Hard\nComments: They don't call this guy the Carrier for nothing. Make sure to concentrate your fire on it first and then take care of those pesky Flyers."
-
 vault_daedalus = "Daedalus"
 vault_daedalus_desc = "This is a more powerful version of the Icarus. He shoots an upgraded Blaster from his shoulder-mounted lasers. He also utilizes the Power Screen to blunt the force of your attacks.\nDefense/Weapon Analysis: Medium\nComments: Basically they're a flying platform for double barrel Blasters. Their intelligence has been improved, so these birds are ready to foul you up. Watch out, they are tough!"
-
 vault_fixbot = "Fixbot"
 vault_fixbot_desc = "Better left alone, these hard-working robots can usually be found repairing doors, lights, and other types of equipment.\nDefense/Weapon Analysis: Easy\nComments: Keep you eye on these guys - though innocent looking they also have the ability to awaken dead Strogg from eternal sleep."
-
 vault_flyer = "Flyer"
 vault_flyer_desc = "A small two-winged monster, comprised of a controlling brain and a cyborg body that allows it to levitate.\nDefense/Weapon Analysis: Medium/Hard\nComments: The Flyer moves fairly quickly, travels in packs, and each wing is a laser blaster."
-
 vault_gekk = "Gekk"
 vault_gekk_desc = "A lightning-fast amphibious creature that lives and hunts in the planet's proto-swamps.\nDefense/Weapon Analysis: Medium\nComments: Commonly found in packs, these creatures will hunt you down, leaping from the shadows to claw or bite."
-
 vault_gladiator = "Gladiator"
 vault_gladiator_desc = "With two massively mechanized legs and one shoulder-mounted railgun, the Gladiator is the daddy of all the adapted humanoids.\nDefense/Weapon Analysis: Medium/Hard\nComments: Once targeted, you have less than a second to sidestep or you're toast. Also watch for his lethal left-handed clamp grip."
-
 vault_gladiator_phalanx = "Gladiator (Phalanx)"
 vault_gladiator_phalanx_desc = "This mutant's shoulder-mounted weapon has been modified to fire Phalanx Particle Cannon rounds. He has also been fitted with protective energy armor.\nDefense/Weapon Analysis: Medium/Hard\nComments: Persistence is the key in defeating this powerhouse. You must first deplete his energy armor, then you can move in for the kill."
-
 vault_guardian_console = "Guardian (Console)"
 vault_guardian_console_desc = "It appears to have been constructed from a Tank Commander's torso, wired into a massive pair of mechanical legs. Two large weapon assemblies extend from its shoulders. Commonly, the Guardian launches continuous four-round bursts of hyper blaster fire in the player's direction from its right weapon mount. The Guardian will also use the laser mounted on its left shoulder against players who are a greater distance away. If the player gets too close to the Guardian it will attempt to kick or stamp them, dealing massive amounts of damage.\nDefense/Weapon Analysis: Hard\nComments: Due to the massive damage dealt by its melee attack, it is advisable to keep your distance."
-
 vault_gunner = "Gunner"
 vault_gunner_desc = "The fighting elite for the Strogg, outfitted with a powerful machine gun and an automatic grenade launcher.\nDefense/Weapon Analysis: Medium\nComments: This cybernetic terror eats Mutants for breakfast before coming to work - on you. He does have one weakness, though. It takes a second for his hand to open up into the machine gun so take advantage of the brief delay."
-
 vault_gunner_commander = "Gunner Commander"
 vault_gunner_commander_desc = "If the Gunner is the fighting elite, the Gunner Commander is the elite of the elite. The Gunner Commander is more lethal, shooting projectiles from a modified form of the ETF Rifle. The Commander is also issued with Power Armor as standard, and has multiple melee attacks.\nDefense/Weapon Analysis: Medium\nComments: The Gunner Commander may be an elite unit, but they still go down when shot like everyone else. Use energy weapons to break through the shield and then give 'em a good Super Shotgun blast."
-
 vault_hornet = "Hornet"
 vault_hornet_desc = "The Strogg Hornets are used for strategic defense of key objectives. While they are large in size, they are also highly maneuverable, allowing them to faithfully patrol both indoor and outdoor areas. As a weapons platform, they have both a pair of Chainguns and a pair of Rocket Launchers at their disposal, giving them excellent suppression ability.\nDefense/Weapon Analysis: Hard\nComments: Watch out for their Chaingun, they are deadly accurate. Use cover judiciously, and don't corner yourself leaving you open to take a rocket to the face."
-
 vault_icarus = "Icarus"
 vault_icarus_desc = "Relies on a huge jet packed attached to its back, with laser blasters mounted into his shoulders.\nDefense/Weapon Analysis: Medium/Hard\nComments: With its durable shell, swift maneuverability, and insatiable appetite for destruction, the Icarus is an aerial nightmare."
-
 vault_infantry = "Infantry"
 vault_infantry_desc = "Strong, muscle-bound warrior who dishes out chain gun speed damage.\nDefense/Weapon Analysis: Medium\nComments: These bullies have one objective in mind, marine - to fill your body with as much lead in the least amount of time. They can take a beating, and are effective at ducking your ammo. Also watch out for post-mortem spray from their chain gun caused by a spasm in their arm. Split once you see one fall to its knees."
-
 vault_insane_human = "Insane Human"
 vault_insane_human_desc = "The Strogg use these poor bastards for food, and for creating their horrible soldiers. They've been driven insane by the Strogg and can no longer defend themselves, or do much of anything but accept their fate.\nDefense/Weapon Analysis: Harmless\nComments: ..."
-
 vault_iron_maiden = "Iron Maiden"
 vault_iron_maiden_desc = "Equally as powerful as the Gunner, this femme fatale has both an arm-mounted rocket launcher and flesh tearing claws.\nDefense/Weapon Analysis: Medium\nComments: The cyber-bitch from hell... not the kind of girl to take home to mom."
-
 vault_iron_maiden_heat_seeking = "Iron Maiden (Heat-Seeking)"
 vault_iron_maiden_heat_seeking_desc = "Her arm-mounted rocket launcher has been modified with heat-seeking rockets that track their targets.\nDefense/Weapon Analysis: Medium/Hard\nComments: This bitch is bad news. Her rockets will track your ass down, but they won't track around objects. So if she fires one off, look fast for cover."
-
 vault_jorg = "Jorg"
 vault_jorg_desc = "Little is known about the Jorg, besides they appear to carry the Makron head of command.\nDefense/Weapon Analysis: Extreme\nComments: They're built more tough than anything else we've ever seen. Unload everything you've got on it."
-
 vault_makron = "Makron"
 vault_makron_desc = "Even less is known about the Makron than the Jorg. The Jorg appears to act as a vehicle for the Makron inside, but even detached from the Jorg they have even more dangerous weaponry.\nDefense/Weapon Analysis: Extreme\nComments: This is who you're after. Good luck!"
-
 vault_medic = "Medic"
 vault_medic_desc = "As the name suggests, this threatening organism has the ability to awaken dead Strogg from eternal sleep.\nDefense/Weapon Analysis: Medium\nComments: When he is not healing, the Medic moves about on two hydraulic legs, and is armed with a laser blaster that shoots at hyper speeds."
-
 vault_medic_commander = "Medic Commander"
 vault_medic_commander_desc = "These troops have a modified version of the HyperBlaster as a deadly prosthetic.\nDefense/Weapon Analysis: Medium/Hard\nComments: If reanimating dead comrades and creating new enemies were not enough, this guy also fires an upgraded Blaster. Keep your eyes peeled for the SOB. He's itching to kick your butt!"
-
 vault_mutant = "Mutant"
 vault_mutant_desc = "The Strogg refineries have spewed toxins into the ecosystem for untold decades causing this once docile creature to mutate into a fierce, fast, flesh tearing beast.\nDefense/Weapon Analysis: Medium/Hard\nComments: Run."
-
 vault_parasite = "Parasite"
 vault_parasite_desc = "Four-legged beast with a probe on its back. Once fired, it attaches itself and literally sucks the life from you.\nDefense/Weapon Analysis: Medium\nComments: You probably don't want to pet the Parasite."
-
 vault_shambler = "Shambler"
 vault_shambler_desc = "This thing is definitely not from Stroggos. It may be from a past Strogg conquered planet, or it might be from another dimension entirely. We're not quite sure.\nDefense/Weapon Analysis: Medium\nComments: Specimens have been observed covered in fur that stands up when shooting lightning, but some individuals have been found to just be covered in skin and muscle."
-
 vault_soldier_light = "Soldier (Light)"
 vault_soldier_light_desc = "Weakest of the three processed humans, armed solely with a simple blaster.\nDefense/Weapon Analysis: Easy\nComments: Although their weapons may only sting, they may attack in packs or summon help from the big dogs."
-
 vault_soldier_shotgun = "Soldier (Shotgun)"
 vault_soldier_shotgun_desc = "These loyal troops have an automatic scatter gun prosthetic.\nDefense/Weapon Analysis: Easy\nComments: He goes down easy, but packs a punch."
-
 vault_soldier_machinegun = "Soldier (Machinegun)"
 vault_soldier_machinegun_desc = "Bigger, meaner, and deadlier than above... with a machine gun for a right arm.\nDefense/Weapon Analysis: Easy\nComments: They tend to charge in droves and have a sharp eye."
-
 vault_soldier_ripper = "Soldier (Ripper)"
 vault_soldier_ripper_desc = "His arm-mounted weapon has been modified to accommodate a body-shredding Ion Ripper.\nDefense/Weapon Analysis: Easy/Medium\nComments: Watch for the Ripper projectiles ricocheting off of surfaces - it may miss you the first time, but find it's target on the way back."
-
 vault_soldier_hyper = "Soldier (Hyper)"
 vault_soldier_hyper_desc = "These troops have a modified version of the HyperBlaster as a deadly prosthetic.\nDefense/Weapon Analysis: Easy\nComments: Though easy to defeat, these troops' piercing blue energy rounds will make quick work of unsuspecting marines."
-
 vault_soldier_laser = "Soldier (Laser)"
 vault_soldier_laser_desc = "Advancing Strogg technology has given these guards the ability to mount a high-powered laser on their arm.\nDefense/Weapon Analysis: Easy\nComments: The Laser Guards have a keen eye and an advanced ability to track their targets. Stay clear of that laser, marine."
-
 vault_stalker = "Stalker"
 vault_stalker_desc = "Spider-like cyborgs that skulk around in unlikely places. At a distance, they fire an improved Blaster from ports on their backs. Up close, they have a lethal slash attack.\nDefense/Weapon Analysis: Medium/Hard\nComments: These little buggers are vicious. They can cling to ceilings, pounce down on top of you to attack, then re-attach to the ceilings to evade your retaliation."
-
 vault_super_tank = "Super Tank"
 vault_super_tank_desc = "The ultimate combination of man and machine has been enhanced with powerful energy armor.\nDefense/Weapon Analysis: Hard\nComments: Only one thing matters when it comes to defeating this beast: firepower. You can't have too much of it."
-
 vault_super_tank_heat_seeking = "Super Tank (Heat-Seeking)"
 vault_super_tank_heat_seeking_desc = "Like the Super Tank, but even worse with the addition of heat-seeking rockets.\nDefense/Weapon Analysis: Hard\nComments: Was the regular model really not enough?"
-
 vault_tank = "Tank"
 vault_tank_desc = "Tanks have three weapons they use at random: an arm-mounted machine gun, an arm-mounted laser blaster, and a shoulder-mounted rocket launcher.\nDefense/Weapon Analysis: Hard\nComments: Get in, take your shot, and get out. Repeat as often as necessary. These metallic beasts can endure massive gunfire."
-
 vault_tank_commander = "Tank Commander"
 vault_tank_commander_desc = "These Tanks are a special class, designed to secure the Inner City from infiltrators.\nDefense/Weapon Analysis: Hard\nComments: Consider planning your means of attack beforehand, rather than running into their view with your weapons blasting."
-
 vault_tank_commander_dead = "Tank Commander (Dead)"
 vault_tank_commander_dead_desc = "A Tank Commander, after coming in contact with us in battle. This one was brought in from the field for research.\nDefense/Weapon Analysis: Harmless\nComments: These guys sure have a lot of parts!"
-
 vault_technician = "Technician"
 vault_technician_desc = "An almost completely robotic brute, controlled by a brain that floats around inside it's metal body in a red preserving fluid. This creature moves about by hovering on four jets that sit under its body and is equipped with three weapons: a shocking prod, a flesh-ripping claw, and a laser blaster. Use energy armor if you've got any.\nDefense/Weapon Analysis: Medium\nComments: The Technician is easy to hit, but takes a lot of damage. A good slap from your super shotgun at close range will make him keep his distance."
-
 vault_turret = "Turret"
 vault_turret_desc = "These rapid-fire weapons are mounted in the floors and ceilings. They activate when they sense your presence. There are three types of turrets: Blaster, Machine Gun, and Rocket.\nDefense/Weapon Analysis: Easy/Medium\nComments: They shoot a wide variety of weaponry, and they're deadly wherever you find them. If you see one of these, dance!"
-
 item_grapple_desc = "Originally created to tow drop pods in zero gravity environments, the Grapple was reappropriated by some Marines during their downtime for entertainment purposes. This alternative usage was quickly banned by Upper Command after a few too many concussions, but that has done little to discourage their use in the field."
 item_blaster_desc = "This is the standard issue rechargeable energy side-arm. It does not require ammunition. Useful for taking down Guards as well as exploding barrels and setting off shootable buttons and secret doors. Keep one on you at all times."
 item_chainfist_desc = "This is an enormous arm-mounted chainsaw. It's perfect when you need to R.I.P. a wide swathe in a room full of baddies."
@@ -2610,8 +2438,6 @@ item_railgun_desc = "The Railgun fires depleted uranium slugs at super high velo
 item_phalanx_desc = "The Phalanx Particle Cannon emits two quantum accelerated magnesium slugs at unsuspecting foes. This weapon delivers heavy firepower, but should be used with extreme caution at close range."
 item_bfg10k_desc = "Big, uh, freakin' gun. This weapon redefines the word \"wallpaper.\" Simply fire the BFG10K into a small room of unsuspecting Strogg and observe the new red paint job."
 item_disruptor_desc = "An experimental and super-secret weapon created in the merger of Strogg and Human tech, the Disruptor was long believed to not even exist. It packs a big punch like the BFG10K, and has a high rate of fire, however it will only target one enemy at a time."
-
-
 // PATCH LOC
 m_waterwarp = "Underwater Warp"
 m_drop_tech = "Drop CTF Tech"
@@ -2963,125 +2789,122 @@ g_sgame_auto_fe72b29f79ea = "Match has already ended.\n"
 g_sgame_auto_fe7c444adc1a = "Removed.\n"
 g_sgame_auto_feab1aa2b2f7 = "Invalid arena number.\n"
 g_sgame_auto_ff1c75025db3 = "{} {}\nBegins in..."
-
-
 // cgame auto
-cg_auto_e6ba1369ba86 = "bad _mapdb_episode\\n"
-cg_auto_bf69489cd5dd = "bad _mapdb_level\\n"
-cg_auto_9064e9b262c3 = "unknown _mapdb_type\\n"
-cg_auto_9f78db570fe8 = "Can't fetch '%s', no HTTP support compiled in.\\n"
-cg_auto_f8b0044bcfd3 = "Ignoring invalid master URL: %s\\n"
-cg_auto_35af01e118a2 = "Bad server address: %s\\n"
-cg_auto_0f3fc5b0f530 = "Bad server port: %s\\n"
-cg_auto_f0e9a2b48b82 = "No player models found.\\n"
-cg_auto_4f734c250891 = "Expanded line exceeded %i chars, discarded.\\n"
-cg_auto_38449524bdfb = "Unknown menu feeder '%s'\\n"
-cg_auto_bf1a859155a3 = "Failed to load %s: %s (%s)\\n"
-cg_auto_e13d46568ae9 = "Usage: %s <menu>\\n"
-cg_auto_ad494789521e = "No such menu: %s\\n"
-cg_auto_713f13864237 = "UI_PushMenu: MAX_MENU_DEPTH exceeded\\n"
-cg_auto_433adc0b106f = "%s does not take an argument.\\n"
-cg_auto_f2564956cac4 = "Missing argument to %s.\\n"
-cg_auto_d6e935de0e44 = "Unknown option: %s.\\n"
-cg_auto_7535716ffdff = "Usage: %s [-"
-cg_auto_8ac24f918f3e = "] %s\\n"
-cg_auto_43221e8bf8b1 = "\\nAvailable options:\\n"
-cg_auto_55f681b31104 = "Try '%s --help' for more information.\\n"
-
+ui_mapdb_bad_episode = "bad _mapdb_episode\\n"
+ui_mapdb_bad_level = "bad _mapdb_level\\n"
+ui_mapdb_unknown_type = "unknown _mapdb_type\\n"
+ui_http_fetch_not_supported = "Can't fetch '%s', no HTTP support compiled in.\\n"
+ui_invalid_master_url_ignored = "Ignoring invalid master URL: %s\\n"
+ui_bad_server_address = "Bad server address: %s\\n"
+ui_bad_server_port = "Bad server port: %s\\n"
+ui_player_models_not_found = "No player models found.\\n"
+ui_cmd_expanded_line_too_long = "Expanded line exceeded %i chars, discarded.\\n"
+ui_unknown_menu_feeder = "Unknown menu feeder '%s'\\n"
+ui_json_load_failed = "Failed to load %s: %s (%s)\\n"
+ui_cmd_menu_usage = "Usage: %s <menu>\\n"
+ui_menu_not_found = "No such menu: %s\\n"
+ui_pushmenu_max_depth = "UI_PushMenu: MAX_MENU_DEPTH exceeded\\n"
+ui_cmd_option_no_argument = "%s does not take an argument.\\n"
+ui_cmd_missing_argument = "Missing argument to %s.\\n"
+ui_cmd_unknown_option = "Unknown option: %s.\\n"
+ui_cmd_usage_prefix = "Usage: %s [-"
+ui_cmd_usage_suffix = "] %s\\n"
+ui_cmd_options_header = "\\nAvailable options:\\n"
+ui_cmd_help_hint = "Try '%s --help' for more information.\\n"
 // engine auto
-e_auto_f1b83d0e66c9 = "Runaway wait count\\n"
-e_auto_222e9240889b = "%s: overflow\\n"
-e_auto_b47c4588b65d = "Line exceeded %i chars, discarded.\\n"
-e_auto_e58851d27288 = "No alias commands registered.\\n"
-e_auto_5a2290e8949f = "Registered alias commands:\\n"
-e_auto_c1ac475b26f9 = "\"%s\" = \"%s\"\\n"
-e_auto_cc5e9df92c38 = "\"%s\" already defined as a command\\n"
-e_auto_5db1acfedd95 = "\"%s\" already defined as a cvar\\n"
-e_auto_fc5d90c00b6e = "\"%s\" is undefined\\n"
-e_auto_147a87479fd1 = "Removed all alias commands.\\n"
-e_auto_8aa0a71a471c = "Missing alias name.\\n"
-e_auto_34a43883dfb0 = "\"%s\" is undefined.\\n"
-e_auto_123e4c5a134d = "No current message triggers\\n"
-e_auto_4b9d566d5f92 = "Current message triggers:\\n"
-e_auto_1191386e1852 = "Usage: %s <command> <match>\\n"
-e_auto_2128c0ac068b = "Match string is too short\\n"
-e_auto_7987984782b4 = "Removed %d trigger%s\\n"
-e_auto_3f32e987a006 = "Can't find trigger \"%s\" = \"%s\"\\n"
-e_auto_51d307fee76e = "Usage: if <expr> <op> <expr> [then] <command> [else <command>]\\n"
+cmd_wait_runaway = "Runaway wait count\\n"
+cmd_overflow = "%s: overflow\\n"
+cmd_line_too_long = "Line exceeded %i chars, discarded.\\n"
+cmd_alias_none = "No alias commands registered.\\n"
+cmd_alias_list_header = "Registered alias commands:\\n"
+cmd_kv_pair = "\"%s\" = \"%s\"\\n"
+cmd_name_already_command = "\"%s\" already defined as a command\\n"
+cmd_name_already_cvar_quoted = "\"%s\" already defined as a cvar\\n"
+cmd_undefined = "\"%s\" is undefined\\n"
+cmd_alias_clear_all = "Removed all alias commands.\\n"
+cmd_alias_missing_name = "Missing alias name.\\n"
+cmd_undefined_period = "\"%s\" is undefined.\\n"
+cmd_trigger_none = "No current message triggers\\n"
+cmd_trigger_list_header = "Current message triggers:\\n"
+cmd_trigger_usage = "Usage: %s <command> <match>\\n"
+cmd_trigger_match_too_short = "Match string is too short\\n"
+cmd_trigger_removed_count = "Removed %d trigger%s\\n"
+cmd_trigger_not_found = "Can't find trigger \"%s\" = \"%s\"\\n"
+cmd_if_usage = "Usage: if <expr> <op> <expr> [then] <command> [else <command>]\\n"
 misc_cant_use_numeric_expressions = "Can't use '%s' with non-numeric expression(s)\\n"
-e_auto_d4de46d59515 = "Unknown operator '%s'\\n"
-e_auto_048af56bd6de = "Valid are: ==, != or <>, <, <=, >, >=, [!]isin[i], eq, ne\\n"
-e_auto_900d94221b36 = "%s: %s already defined as a cvar\\n"
-e_auto_63ae75e00274 = "%s: %s already defined\\n"
-e_auto_433adc0b106f = "%s does not take an argument.\\n"
-e_auto_f2564956cac4 = "Missing argument to %s.\\n"
-e_auto_d6e935de0e44 = "Unknown option: %s.\\n"
-e_auto_7535716ffdff = "Usage: %s [-"
-e_auto_8ac24f918f3e = "] %s\\n"
-e_auto_43221e8bf8b1 = "\\nAvailable options:\\n"
-e_auto_55f681b31104 = "Try '%s --help' for more information.\\n"
-e_auto_4f734c250891 = "Expanded line exceeded %i chars, discarded.\\n"
-e_auto_e6a1218ed003 = "Macro expansion loop, discarded.\\n"
-e_auto_372c92bfdaaf = "Line has unmatched quote, discarded.\\n"
-e_auto_23a15e4dcb24 = "Can't \"%s\", not connected\\n"
-e_auto_146248f9ee83 = "Runaway alias loop\\n"
-e_auto_7cd2e8eb4815 = "Unknown command \"%s\"\\n"
-e_auto_6d0101f3edea = "Execing %s\\n"
-e_auto_8229a49e2a97 = "%s <filename> : execute a script file\\n"
-e_auto_bab55c887650 = "Couldn't exec %s: %s\\n"
-e_auto_822ffbdd85b6 = "Print a line of text into the console.\\n"
-e_auto_bcc0a8583c82 = "Bad print level: %s\\n"
-e_auto_cfbfbe758955 = "%i of %i commands\\n"
-e_auto_f1a758aff3ef = "%i of %i macros\\n"
-e_auto_c8135ca9df1b = "Usage: %s <command>"
-e_auto_ed853522e12d = "%s is already defined as a cvar\\n"
+cmd_if_unknown_operator = "Unknown operator '%s'\\n"
+cmd_if_valid_operators = "Valid are: ==, != or <>, <, <=, >, >=, [!]isin[i], eq, ne\\n"
+cmd_name_already_cvar_with_cmd = "%s: %s already defined as a cvar\\n"
+cmd_name_already_defined = "%s: %s already defined\\n"
+cmd_option_no_argument = "%s does not take an argument.\\n"
+cmd_missing_argument = "Missing argument to %s.\\n"
+cmd_unknown_option = "Unknown option: %s.\\n"
+cmd_usage_prefix = "Usage: %s [-"
+cmd_usage_suffix = "] %s\\n"
+cmd_options_header = "\\nAvailable options:\\n"
+cmd_help_hint = "Try '%s --help' for more information.\\n"
+cmd_line_expanded_too_long = "Expanded line exceeded %i chars, discarded.\\n"
+cmd_macro_loop = "Macro expansion loop, discarded.\\n"
+cmd_line_unmatched_quote = "Line has unmatched quote, discarded.\\n"
+cmd_not_connected = "Can't \"%s\", not connected\\n"
+cmd_alias_loop = "Runaway alias loop\\n"
+cmd_unknown_command = "Unknown command \"%s\"\\n"
+cmd_execing_file = "Execing %s\\n"
+cmd_exec_usage = "%s <filename> : execute a script file\\n"
+cmd_exec_failed = "Couldn't exec %s: %s\\n"
+cmd_echo_help = "Print a line of text into the console.\\n"
+cmd_print_level_invalid = "Bad print level: %s\\n"
+cmd_list_count = "%i of %i commands\\n"
+cmd_macro_list_count = "%i of %i macros\\n"
+cmd_complete_usage = "Usage: %s <command>"
+cmd_name_already_cvar = "%s is already defined as a cvar\\n"
 e_auto_bd8795aad49c = "Usage: %s %s <track>\\n"
 e_auto_830f9dc2c0a7 = "Sound system not started.\\n"
 e_auto_aa73cd5fd87e = "Can't play music in cinematic mode.\\n"
 e_auto_71c2c825dc61 = "No such track: %s\\n"
 e_auto_79b47d22b1d3 = "Playback stopped.\\n"
 e_auto_9b38c06a5ed1 = "Usage: %s <info|play|stop|next|pause>\\n"
-e_auto_41788ae1f142 = "  placeholder : %s\\n"
+s_placeholder_entry = "  placeholder : %s\\n"
 e_auto_ecbcd2965f35 = "  not loaded  : %s (%s)\\n"
 e_auto_e391772931a1 = "Total sounds: %d (out of %d slots)\\n"
 e_auto_91de38aa9aed = "Total resident: %zu\\n"
 e_auto_5d1f180265cb = "Sound initialization disabled.\\n"
 e_auto_a49b8ae1ad17 = "------- S_Init -------\\n"
 e_auto_be2e6da1b98d = "Sound failed to initialize.\\n"
-e_auto_2bc25acf4b25 = "----------------------\\n"
-e_auto_28119ee774cb = "Issue %i\\n"
+s_separator_line = "----------------------\\n"
+s_issue_line = "Issue %i\\n"
 e_auto_b0ba0ae0c004 = "S_IssuePlaysound: couldn't load %s\\n"
 e_auto_d359e858f230 = "%5d channels\\n"
 e_auto_5a4ad441a3d7 = "%5d samples\\n"
 e_auto_cd8809bb2e07 = "%5d samplepos\\n"
 e_auto_9b76d03925f0 = "%5d samplebits\\n"
 e_auto_a6981ff5c3a8 = "%5d submission_chunk\\n"
-e_auto_001763d30d22 = "%5d speed\\n"
+s_dma_speed = "%5d speed\\n"
 e_auto_a3f65c922527 = "%p dma buffer\\n"
 e_auto_cb9848071902 = "sound sampling rate: %i\\n"
-e_auto_0e4356fb2cf6 = "----(%i)---- painted: %i\\n"
-e_auto_eed59e38c05c = "Usage: %s <filename>\\n"
-e_auto_3240af950c4e = "Error writing %s\\n"
-e_auto_72168c60abd6 = "Dumped console text to %s.\\n"
-e_auto_5d5e456dd309 = "You must be in a level to chat.\\n"
-e_auto_8b3a3eed2c7e = "Usage: %s <address> <password>\\n"
-e_auto_3995db0e9377 = "Bad address: %s\\n"
-e_auto_c4616e5ce1be = "Invalid value '%s' for '%s'\\n"
-e_auto_ed1789c79286 = "unbind <key> : remove commands from a key\\n"
-e_auto_4c61facc074a = "\"%s\" isn't a valid key\\n"
-e_auto_8f37cefa77a7 = "bind <key> [command] : attach a command to a key\\n"
-e_auto_dc34814563e2 = "\"%s\" is not bound\\n"
+s_painted_stats = "----(%i)---- painted: %i\\n"
+cl_filename_usage = "Usage: %s <filename>\\n"
+cl_error_writing_file = "Error writing %s\\n"
+con_dumped_to_file = "Dumped console text to %s.\\n"
+cl_chat_requires_level = "You must be in a level to chat.\\n"
+cl_rcon_usage = "Usage: %s <address> <password>\\n"
+cl_bad_address = "Bad address: %s\\n"
+con_invalid_value = "Invalid value '%s' for '%s'\\n"
+key_unbind_usage = "unbind <key> : remove commands from a key\\n"
+key_invalid = "\"%s\" isn't a valid key\\n"
+key_bind_usage = "bind <key> [command] : attach a command to a key\\n"
+key_not_bound = "\"%s\" is not bound\\n"
 e_auto_605198020d80 = "Usage: %s <name> <cvar> <desc1> [...]\\n"
-e_auto_3d6cf9654db2 = "Usage: %s <name> <cvar> <path filter>\\n"
+ui_script_cvar_filter_usage = "Usage: %s <name> <cvar> <path filter>\\n"
 e_auto_795090ff06e8 = "Usage: %s <name> <cvar> <desc1> <value1> [...]\\n"
 e_auto_f7990bba4004 = "Usage: %s <name> <cvar> <min> <max> [step]\\n"
-e_auto_2097b2791be0 = "Usage: %s <name> <command>\\n"
-e_auto_2b03ba9a75d8 = "Usage: %s <dir>\\n"
+ui_script_command_usage = "Usage: %s <name> <command>\\n"
+ui_script_dir_usage = "Usage: %s <dir>\\n"
 e_auto_851faebfa520 = "Usage: %s <name> <cvar> [~][bit]\\n"
 e_auto_4cf98dc30c11 = "Invalid bit number: %d\\n"
-e_auto_313aa18385ba = "Invalid width\\n"
+ui_script_invalid_width = "Invalid width\\n"
 e_auto_57db15103668 = "Usage: %s <state> <color>\\n"
-e_auto_167b4e384169 = "Unknown state '%s'\\n"
+ui_script_unknown_state = "Unknown state '%s'\\n"
 e_auto_b369c202878f = "Usage: %s <plaque> [logo]\\n"
 e_auto_633cb08a236c = "Usage: %s <banner>\\n"
 e_auto_f50d69c7d411 = "Couldn't %s %s: %s\\n"
@@ -3090,75 +2913,75 @@ e_auto_fd362eb66462 = "Unknown keyword '%s'\\n"
 e_auto_bc9b548f7336 = "Expected menu name after '%s'\\n"
 e_auto_bbcac12c35ad = "Expected file name after '%s'\\n"
 e_auto_fbebe5f10eaa = "Includes too deeply nested\\n"
-e_auto_3e5f335bfb5c = "Menu entry without 'end' terminator\\n"
-e_auto_35af01e118a2 = "Bad server address: %s\\n"
-e_auto_0f3fc5b0f530 = "Bad server port: %s\\n"
+ui_script_menu_missing_end = "Menu entry without 'end' terminator\\n"
+cl_bad_server_address_detail = "Bad server address: %s\\n"
+cl_bad_server_port = "Bad server port: %s\\n"
 e_auto_9f78db570fe8 = "Can't fetch '%s', no HTTP support compiled in.\\n"
 e_auto_f8b0044bcfd3 = "Ignoring invalid master URL: %s\\n"
 e_auto_f0e9a2b48b82 = "No player models found.\\n"
-e_auto_255c3fbcc0f4 = "Requesting challenge... %i\\n"
-e_auto_5514076c935f = "Requesting connection... %i\\n"
-e_auto_198a2158c500 = "Usage: %s <server>\\n"
-e_auto_6ee119dba76f = "Second argument to `%s' is now ignored. Set protocol via `cl_protocol' variable.\\n"
-e_auto_11f0de8c20e7 = "Bad server address\\n"
-e_auto_52fe84e67c1a = "Following %s...\\n"
-e_auto_a74af888a687 = "No IP address to follow.\\n"
-e_auto_09cfc56c5ba5 = "No longer listening for passive connections.\\n"
-e_auto_7c1aa98fac25 = "Listening for passive connections at %s.\\n"
-e_auto_fb76d1529fd3 = "Usage: %s <command>\\n"
-e_auto_3cc5fe0a3654 = "You must set 'rcon_password' before issuing an rcon command.\\n"
-e_auto_cf3a55754bf2 = "You must either be connected, or set the 'rcon_address' cvar to issue rcon commands.\\n"
-e_auto_4df11c3d1cb7 = "Usage: %s [address]\\n"
-e_auto_47660594f0e7 = "Status response from %s\\n\\n"
-e_auto_5b394e95bd0d = "\\nNum Score Ping Name\\n"
-e_auto_cd41ea86bba9 = "Changing map...\\n"
-e_auto_4769270aeefb = "No server to reconnect to.\\n"
-e_auto_6eed87d4d3e2 = "Reconnecting...\\n"
-e_auto_38e74046af44 = "Can not reconnect to loopback.\\n"
-e_auto_1ae0c0071632 = "Must be in a level to load skins.\\n"
-e_auto_a27b63711677 = "Invalid protocol %d\\n"
-e_auto_db968b79e17c = "Connected to %s (protocol %d).\\n"
-e_auto_63acd6f01865 = "Loading anticheat, this may take a few moments...\\n"
-e_auto_9d2d506fbca0 = "Trying to connect without anticheat.\\n"
-e_auto_b5648fb19f60 = "Anticheat loaded successfully.\\n"
-e_auto_1d7c8dd8349d = "Anticheat required by server, but no anticheat support linked in.\\n"
-e_auto_86647dcd1eca = "Received passive connect from %s.\\n"
-e_auto_078045195028 = "User info settings:\\n"
-e_auto_cdd0cd072e5b = "Usage: %s <sound> [...]\\n"
-e_auto_73e61d85e709 = "Couldn't load %s: %s\\n"
-e_auto_94387398dcf4 = "Oversize filter on line %d in %s\\n"
-e_auto_0ceb51b7d6b5 = "No ignore filters.\\n"
-e_auto_a883e09d37b0 = "Current ignore filters:\\n"
-e_auto_bd726af48aa6 = "\"%s\" (%u hit%s)\\n"
-e_auto_9d3ce8989acb = "Match string \"%s\" is too short.\\n"
-e_auto_2d29e918127d = "Can't find ignore filter \"%s\"\\n"
-e_auto_7e5843912eda = "Removed %d ignore filter%s.\\n"
-e_auto_d47c2c22870e = "Must be in a level to dump.\\n"
-e_auto_db2474c829a0 = "No %s to dump.\\n"
-e_auto_c82fb443bf35 = "Dumped %s program to %s.\\n"
-e_auto_5978ab1f0a4c = "Save current configuration into file.\\n"
-e_auto_901124f8c0c4 = "Missing filename argument.\\n"
-e_auto_c859496e563d = "Wrote %s.\\n"
-e_auto_6997f57b8941 = "Couldn't open %s for writing: %s\\n"
-e_auto_733d45d943d1 = "Manual `vid_restart' command ignored.\\n"
-e_auto_99880e5d83b2 = "Video settings are automatically applied by WORR, thus manual `vid_restart' is never needed. To force restart of video subsystem, use `vid_restart force', or set `cl_allow_vid_restart' variable to 1 to restore old behavior of this command.\\n"
-e_auto_f21c677009ba = "Ignored stufftext: %s\\n"
-e_auto_9449d59c2dfa = "%s value `%d' is inexact and will be rounded to `%d'.\\n"
-e_auto_e9f660ec33af = "(Set `%s' to `0' to disable this warning.)\\n"
-e_auto_2d5bd94651b7 = "CL_Shutdown: recursive shutdown\\n"
+cl_requesting_challenge = "Requesting challenge... %i\\n"
+cl_requesting_connection = "Requesting connection... %i\\n"
+cl_server_cmd_usage = "Usage: %s <server>\\n"
+cl_connect_second_arg_ignored = "Second argument to `%s' is now ignored. Set protocol via `cl_protocol' variable.\\n"
+cl_bad_server_address = "Bad server address\\n"
+cl_following_server = "Following %s...\\n"
+cl_follow_no_address = "No IP address to follow.\\n"
+cl_passive_listen_disabled = "No longer listening for passive connections.\\n"
+cl_passive_listen_started = "Listening for passive connections at %s.\\n"
+cl_command_usage = "Usage: %s <command>\\n"
+cl_rcon_password_required = "You must set 'rcon_password' before issuing an rcon command.\\n"
+cl_rcon_requires_address = "You must either be connected, or set the 'rcon_address' cvar to issue rcon commands.\\n"
+cl_status_usage = "Usage: %s [address]\\n"
+cl_status_response_from = "Status response from %s\\n\\n"
+cl_status_table_header = "\\nNum Score Ping Name\\n"
+cl_changing_map = "Changing map...\\n"
+cl_reconnect_no_server = "No server to reconnect to.\\n"
+cl_reconnecting = "Reconnecting...\\n"
+cl_reconnect_loopback_blocked = "Can not reconnect to loopback.\\n"
+cl_loadskins_requires_level = "Must be in a level to load skins.\\n"
+cl_invalid_protocol = "Invalid protocol %d\\n"
+cl_connected_to_server = "Connected to %s (protocol %d).\\n"
+cl_anticheat_loading = "Loading anticheat, this may take a few moments...\\n"
+cl_anticheat_connect_without = "Trying to connect without anticheat.\\n"
+cl_anticheat_loaded = "Anticheat loaded successfully.\\n"
+cl_anticheat_required_missing = "Anticheat required by server, but no anticheat support linked in.\\n"
+cl_passive_connect_received = "Received passive connect from %s.\\n"
+cl_userinfo_header = "User info settings:\\n"
+cl_sound_usage = "Usage: %s <sound> [...]\\n"
+cl_load_failed = "Couldn't load %s: %s\\n"
+cl_filter_oversize_line = "Oversize filter on line %d in %s\\n"
+cl_ignore_filters_none = "No ignore filters.\\n"
+cl_ignore_filters_header = "Current ignore filters:\\n"
+cl_ignore_filter_entry = "\"%s\" (%u hit%s)\\n"
+cl_ignore_filter_match_too_short = "Match string \"%s\" is too short.\\n"
+cl_ignore_filter_not_found = "Can't find ignore filter \"%s\"\\n"
+cl_ignore_filter_removed_count = "Removed %d ignore filter%s.\\n"
+cl_dump_requires_level = "Must be in a level to dump.\\n"
+cl_dump_no_target = "No %s to dump.\\n"
+cl_dump_program_written = "Dumped %s program to %s.\\n"
+cl_writeconfig_help = "Save current configuration into file.\\n"
+cl_missing_filename = "Missing filename argument.\\n"
+cl_write_complete = "Wrote %s.\\n"
+cl_write_open_failed = "Couldn't open %s for writing: %s\\n"
+cl_vid_restart_manual_ignored = "Manual `vid_restart' command ignored.\\n"
+cl_vid_restart_auto_info = "Video settings are automatically applied by WORR, thus manual `vid_restart' is never needed. To force restart of video subsystem, use `vid_restart force', or set `cl_allow_vid_restart' variable to 1 to restore old behavior of this command.\\n"
+cl_ignored_stufftext = "Ignored stufftext: %s\\n"
+cl_value_inexact_warning = "%s value `%d' is inexact and will be rounded to `%d'.\\n"
+cl_warning_disable_hint = "(Set `%s' to `0' to disable this warning.)\\n"
+cl_shutdown_recursive = "CL_Shutdown: recursive shutdown\\n"
 e_auto_eb3969f72a8c = "Line %d is incomplete in %s\\n"
 e_auto_fb31cd542948 = "Usage: %s <name>\\n"
-e_auto_56b7f769dcc1 = "Must be in a level.\\n"
-e_auto_2b6a11d27c8c = "Added location %s at %s\\n"
+locs_requires_level = "Must be in a level.\\n"
+cl_location_added = "Added location %s at %s\\n"
 e_auto_bc1de37034da = "No closest location.\\n"
 e_auto_eaa7f653a97a = "Deleted location %s at %s\\n"
 e_auto_65920d22627c = "Renamed location at %s to %s\\n"
-e_auto_a15ec000714d = "No locations to list.\\n"
-e_auto_248efcc4ac89 = "%s at %s\\n"
+locs_no_locations = "No locations to list.\\n"
+cl_location_entry = "%s at %s\\n"
 e_auto_68f038d32388 = "%d location%s listed\\n"
 e_auto_9dd09167f01d = "No locations to write.\\n"
 e_auto_ff47f8618ad9 = "Wrote %d location%s to %s\\n"
-e_auto_d506e504b1d3 = "Usage: %s <add|del|set|list|save>\\n"
+locs_usage = "Usage: %s <add|del|set|list|save>\\n"
 e_auto_73287ca7dcec = "Couldn't exclusively open %s for writing: %s\\n"
 e_auto_ee0c7925449b = "All scoreshot slots are full.\\n"
 e_auto_cc6bb5df67a7 = "Loaded renderer '%s'.\\n"
@@ -3166,6 +2989,4 @@ e_auto_4260ac49b6ef = "No such video driver: %s.\\nAvailable video drivers: "
 e_auto_713f13864237 = "UI_PushMenu: MAX_MENU_DEPTH exceeded\\n"
 e_auto_e13d46568ae9 = "Usage: %s <menu>\\n"
 e_auto_ad494789521e = "No such menu: %s\\n"
-
-
 

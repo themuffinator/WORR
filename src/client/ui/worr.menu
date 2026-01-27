@@ -220,7 +220,7 @@ end
 
 begin multiplayer
     banner m_banner_multiplayer
-    action "browse q2servers.com" pushmenu servers "+https://q2servers.com/?raw=2"
+    action "browse q2servers.com" pushmenu servers "+https://q2servers.com/?raw=2" "https://q2servers.com/?raw=0"
     action "browse address book" pushmenu servers "favorites://" "file:///servers.lst" "broadcast://"
     action "browse demos" pushmenu demos
     action "start server" pushmenu startserver
@@ -300,7 +300,7 @@ end
 begin game
     background #0000ff20
     style --compact
-    action "browse q2servers.com" pushmenu servers "+https://q2servers.com/?raw=2"
+    action "browse q2servers.com" pushmenu servers "+https://q2servers.com/?raw=2" "https://q2servers.com/?raw=0"
     action "browse address book" pushmenu servers "favorites://" "file:///servers.lst" "broadcast://"
     action "browse demos" pushmenu demos
     action "single player" pushmenu singleplayer

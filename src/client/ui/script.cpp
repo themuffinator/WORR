@@ -72,7 +72,7 @@ static void add_expand(menuSpinControl_t *s, const char *tok)
             data = temp;
             macro->function(temp, len + 1);
         } else {
-            Com_Printf("$e_auto_4f734c250891", INT_MAX);
+            Com_Printf("$cmd_line_expanded_too_long", INT_MAX);
             return;
         }
     } else {
@@ -230,7 +230,7 @@ static void Parse_ImageSpin(menuFrameWork_t *menu, menuType_t type)
 
     numItems = Cmd_Argc() - (cmd_optind + 2);
     if (numItems < 1) {
-        Com_Printf("$e_auto_3d6cf9654db2", Cmd_Argv(0));
+        Com_Printf("$ui_script_cvar_filter_usage", Cmd_Argv(0));
         return;
     }
 
@@ -349,7 +349,7 @@ static void Parse_Action(menuFrameWork_t *menu)
     }
 
     if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("$e_auto_2097b2791be0", Cmd_Argv(0));
+        Com_Printf("$ui_script_command_usage", Cmd_Argv(0));
         return;
     }
 
@@ -389,7 +389,7 @@ static void Parse_Bitmap(menuFrameWork_t *menu)
     }
 
     if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("$e_auto_2097b2791be0", Cmd_Argv(0));
+        Com_Printf("$ui_script_command_usage", Cmd_Argv(0));
         return;
     }
 
@@ -433,7 +433,7 @@ static void Parse_Bind(menuFrameWork_t *menu)
     }
 
     if (Cmd_Argc() - cmd_optind < 2) {
-        Com_Printf("$e_auto_2097b2791be0", Cmd_Argv(0));
+        Com_Printf("$ui_script_command_usage", Cmd_Argv(0));
         return;
     }
 
@@ -465,7 +465,7 @@ static void Parse_Savegame(menuFrameWork_t *menu, menuType_t type)
     }
 
     if (Cmd_Argc() - cmd_optind < 1) {
-        Com_Printf("$e_auto_2b03ba9a75d8", Cmd_Argv(0));
+        Com_Printf("$ui_script_dir_usage", Cmd_Argv(0));
         return;
     }
 
@@ -566,7 +566,7 @@ static void Parse_Field(menuFrameWork_t *menu)
         case 'w':
             width = Q_atoi(cmd_optarg);
             if (width < 1 || width > 32) {
-                Com_Printf("$e_auto_313aa18385ba");
+                Com_Printf("$ui_script_invalid_width");
                 return;
             }
             break;
@@ -661,7 +661,7 @@ static void Parse_Color(void)
     } else if (!strcmp(s, "disabled")) {
         SCR_ParseColor(c, &uis.color.disabled);
     } else {
-        Com_Printf("$e_auto_167b4e384169", s);
+        Com_Printf("$ui_script_unknown_state", s);
     }
 }
 
@@ -856,7 +856,7 @@ static bool Parse_File(const char *path, int depth)
     FS_FreeFile(raw);
 
     if (menu) {
-        Com_WPrintf("$e_auto_3e5f335bfb5c");
+        Com_WPrintf("$ui_script_menu_missing_end");
         menu->free(menu);
     }
 
@@ -867,3 +867,5 @@ void UI_LoadScript(void)
 {
     Parse_File(APPLICATION ".menu", 0);
 }
+
+

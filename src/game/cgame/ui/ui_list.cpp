@@ -49,6 +49,22 @@ static color_t List_DarkenColor(color_t color, float shade)
                       color.a);
 }
 
+static color_t List_AdjustColor(color_t color, float delta)
+{
+    float amount = Q_clipf(delta, -1.0f, 1.0f);
+    if (amount >= 0.0f) {
+        color.r = Q_rint(color.r + (255 - color.r) * amount);
+        color.g = Q_rint(color.g + (255 - color.g) * amount);
+        color.b = Q_rint(color.b + (255 - color.b) * amount);
+    } else {
+        float factor = 1.0f + amount;
+        color.r = Q_rint(color.r * factor);
+        color.g = Q_rint(color.g * factor);
+        color.b = Q_rint(color.b * factor);
+    }
+    return color;
+}
+
 static void List_DrawPanel(int x, int y, int width, int height, color_t fill,
                            color_t border, int borderWidth)
 {
@@ -345,9 +361,25 @@ void ListWidget::Draw()
             List_DrawPanel(bar_x, bar_y, bar_w, bar_h, track, border, 1);
 
             if (arrow_h > 1) {
+                int mouse_x = uis.mouseCoords[0];
+                int mouse_y = uis.mouseCoords[1];
+                bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+                bool over_up = mouse_x >= bar_x && mouse_x < bar_x + bar_w &&
+                    mouse_y >= bar_y && mouse_y < bar_y + arrow_h;
+                bool over_down = mouse_x >= bar_x && mouse_x < bar_x + bar_w &&
+                    mouse_y >= bar_y + bar_h - arrow_h && mouse_y < bar_y + bar_h;
                 color_t arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+                if (over_up && mouse_down)
+                    arrow_fill = List_AdjustColor(arrow_fill, -0.2f);
+                else if (over_up)
+                    arrow_fill = List_AdjustColor(arrow_fill, 0.15f);
                 List_DrawPanel(bar_x + 1, bar_y + 1, max(1, bar_w - 2),
                                max(1, arrow_h - 2), arrow_fill, COLOR_A(0), 0);
+                arrow_fill = COLOR_SETA_U8(uis.color.selection, 200);
+                if (over_down && mouse_down)
+                    arrow_fill = List_AdjustColor(arrow_fill, -0.2f);
+                else if (over_down)
+                    arrow_fill = List_AdjustColor(arrow_fill, 0.15f);
                 List_DrawPanel(bar_x + 1, bar_y + bar_h - arrow_h + 1,
                                max(1, bar_w - 2), max(1, arrow_h - 2),
                                arrow_fill, COLOR_A(0), 0);
@@ -362,6 +394,16 @@ void ListWidget::Draw()
 
             if (track_h > 0 && thumb_h > 0) {
                 color_t thumb = COLOR_SETA_U8(uis.color.active, 220);
+                int mouse_x = uis.mouseCoords[0];
+                int mouse_y = uis.mouseCoords[1];
+                bool mouse_down = Key_IsDown(K_MOUSE1) != 0;
+                vrect_t thumb_rect{ bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h };
+                bool over_thumb = RectContains(thumb_rect, mouse_x, mouse_y);
+                bool pressed = scrollDragging && mouse_down;
+                if (pressed)
+                    thumb = List_AdjustColor(thumb, -0.2f);
+                else if (over_thumb)
+                    thumb = List_AdjustColor(thumb, 0.15f);
                 List_DrawPanel(bar_x + 1, thumb_y, max(1, bar_w - 2), thumb_h,
                                thumb, COLOR_SETA_U8(uis.color.active, 255), 1);
             }

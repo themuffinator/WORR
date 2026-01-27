@@ -59,7 +59,7 @@ static void Cmd_Wait_f(void)
     int count = Q_atoi(Cmd_Argv(1));
 
     if (cmd_current->waitCount >= 1000) {
-        Com_WPrintf("$e_auto_f1b83d0e66c9");
+        Com_WPrintf("$cmd_wait_runaway");
         return;
     }
 
@@ -93,7 +93,7 @@ void Cbuf_AddText(cmdbuf_t *buf, const char *text)
 
     Q_assert(buf->cursize <= buf->maxsize);
     if (l > buf->maxsize - buf->cursize) {
-        Com_WPrintf("$e_auto_222e9240889b", __func__);
+        Com_WPrintf("$cmd_overflow", __func__);
         return;
     }
     memcpy(buf->text + buf->cursize, text, l);
@@ -118,7 +118,7 @@ void Cbuf_InsertText(cmdbuf_t *buf, const char *text)
     }
     Q_assert(buf->cursize <= buf->maxsize);
     if (l >= buf->maxsize - buf->cursize) {
-        Com_WPrintf("$e_auto_222e9240889b", __func__);
+        Com_WPrintf("$cmd_overflow", __func__);
         return;
     }
 
@@ -185,7 +185,7 @@ void Cbuf_Execute(cmdbuf_t *buf)
             cmd_current = buf;
             buf->exec(buf, line);
         } else {
-            Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
+            Com_Printf("$cmd_line_too_long", MAX_STRING_CHARS);
         }
     }
 }
@@ -351,33 +351,33 @@ void Cmd_Alias_f(void)
 
     if (Cmd_Argc() < 2) {
         if (LIST_EMPTY(&cmd_alias)) {
-            Com_Printf("$e_auto_e58851d27288");
+            Com_Printf("$cmd_alias_none");
             return;
         }
-        Com_Printf("$e_auto_5a2290e8949f");
+        Com_Printf("$cmd_alias_list_header");
         FOR_EACH_ALIAS(a) {
-            Com_Printf("$e_auto_c1ac475b26f9", a->name, a->value);
+            Com_Printf("$cmd_kv_pair", a->name, a->value);
         }
         return;
     }
 
     s = Cmd_Argv(1);
     if (Cmd_Exists(s)) {
-        Com_Printf("$e_auto_cc5e9df92c38", s);
+        Com_Printf("$cmd_name_already_command", s);
         return;
     }
 
     if (Cvar_Exists(s, true)) {
-        Com_Printf("$e_auto_5db1acfedd95", s);
+        Com_Printf("$cmd_name_already_cvar_quoted", s);
         return;
     }
 
     if (Cmd_Argc() < 3) {
         a = Cmd_AliasFind(s);
         if (a) {
-            Com_Printf("$e_auto_c1ac475b26f9", a->name, a->value);
+            Com_Printf("$cmd_kv_pair", a->name, a->value);
         } else {
-            Com_Printf("$e_auto_fc5d90c00b6e", s);
+            Com_Printf("$cmd_undefined", s);
         }
         return;
     }
@@ -414,7 +414,7 @@ static void Cmd_UnAlias_f(void)
                 List_Init(&cmd_aliasHash[hash]);
             }
             List_Init(&cmd_alias);
-            Com_Printf("$e_auto_147a87479fd1");
+            Com_Printf("$cmd_alias_clear_all");
             return;
         default:
             return;
@@ -422,7 +422,7 @@ static void Cmd_UnAlias_f(void)
     }
 
     if (!cmd_optarg[0]) {
-        Com_Printf("$e_auto_8aa0a71a471c");
+        Com_Printf("$cmd_alias_missing_name");
         Cmd_PrintHint();
         return;
     }
@@ -430,7 +430,7 @@ static void Cmd_UnAlias_f(void)
     s = Cmd_Argv(1);
     a = Cmd_AliasFind(s);
     if (!a) {
-        Com_Printf("$e_auto_34a43883dfb0", s);
+        Com_Printf("$cmd_undefined_period", s);
         return;
     }
 
@@ -507,13 +507,13 @@ static void list_triggers(void)
     cmd_trigger_t *trigger;
 
     if (LIST_EMPTY(&cmd_triggers)) {
-        Com_Printf("$e_auto_123e4c5a134d");
+        Com_Printf("$cmd_trigger_none");
         return;
     }
 
-    Com_Printf("$e_auto_4b9d566d5f92");
+    Com_Printf("$cmd_trigger_list_header");
     FOR_EACH_TRIGGER(trigger) {
-        Com_Printf("$e_auto_c1ac475b26f9", trigger->command, trigger->match);
+        Com_Printf("$cmd_kv_pair", trigger->command, trigger->match);
     }
 }
 
@@ -534,7 +534,7 @@ static void Cmd_Trigger_f(void)
     }
 
     if (Cmd_Argc() < 3) {
-        Com_Printf("$e_auto_1191386e1852", Cmd_Argv(0));
+        Com_Printf("$cmd_trigger_usage", Cmd_Argv(0));
         return;
     }
 
@@ -549,7 +549,7 @@ static void Cmd_Trigger_f(void)
     cmdlen = strlen(command) + 1;
     matchlen = strlen(match) + 1;
     if (matchlen < 4) {
-        Com_Printf("$e_auto_2128c0ac068b");
+        Com_Printf("$cmd_trigger_match_too_short");
         return;
     }
 
@@ -572,7 +572,7 @@ static void Cmd_UnTrigger_f(void)
     }
 
     if (LIST_EMPTY(&cmd_triggers)) {
-        Com_Printf("$e_auto_123e4c5a134d");
+        Com_Printf("$cmd_trigger_none");
         return;
     }
 
@@ -585,12 +585,12 @@ static void Cmd_UnTrigger_f(void)
                 count++;
             }
 
-            Com_Printf("$e_auto_7987984782b4", count, count == 1 ? "" : "s");
+            Com_Printf("$cmd_trigger_removed_count", count, count == 1 ? "" : "s");
             List_Init(&cmd_triggers);
             return;
         }
 
-        Com_Printf("$e_auto_1191386e1852", Cmd_Argv(0));
+        Com_Printf("$cmd_trigger_usage", Cmd_Argv(0));
         return;
     }
 
@@ -599,7 +599,7 @@ static void Cmd_UnTrigger_f(void)
 
     trigger = find_trigger(command, match);
     if (!trigger) {
-        Com_Printf("$e_auto_3f32e987a006", command, match);
+        Com_Printf("$cmd_trigger_not_found", command, match);
         return;
     }
 
@@ -648,7 +648,7 @@ static void Cmd_If_f(void)
     int i, j;
 
     if (Cmd_Argc() < 5) {
-        Com_Printf("$e_auto_51d307fee76e");
+        Com_Printf("$cmd_if_usage");
         return;
     }
 
@@ -693,8 +693,8 @@ error:
     } else if (!Q_stricmp(op, "ne")) {
         matched = Q_stricmp(a, b);
     } else {
-        Com_Printf("$e_auto_d4de46d59515", op);
-        Com_Printf("$e_auto_048af56bd6de");
+        Com_Printf("$cmd_if_unknown_operator", op);
+        Com_Printf("$cmd_if_valid_operators");
         return;
     }
 
@@ -778,7 +778,7 @@ void Cmd_AddMacro(const char *name, xmacro_t function)
 
 // fail if the macro is a variable name
     if (Cvar_Exists(name, false)) {
-        Com_WPrintf("$e_auto_900d94221b36", __func__, name);
+        Com_WPrintf("$cmd_name_already_cvar_with_cmd", __func__, name);
         return;
     }
 
@@ -786,7 +786,7 @@ void Cmd_AddMacro(const char *name, xmacro_t function)
     macro = Cmd_FindMacro(name);
     if (macro) {
         if (macro->function != function) {
-            Com_WPrintf("$e_auto_63ae75e00274", __func__, name);
+            Com_WPrintf("$cmd_name_already_defined", __func__, name);
         }
         return;
     }
@@ -1056,7 +1056,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
         // parse long option argument
         if (p) {
             if (o->sh[1] != ':') {
-                Com_Printf("$e_auto_433adc0b106f", cmd_argv[cmd_optind]);
+                Com_Printf("$cmd_option_no_argument", cmd_argv[cmd_optind]);
                 Cmd_PrintHint();
                 return '!';
             }
@@ -1078,7 +1078,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     // parse option argument
     if (!p && o->sh[1] == ':') {
         if (cmd_optind + 1 == cmd_argc) {
-            Com_Printf("$e_auto_f2564956cac4", cmd_argv[cmd_optind]);
+            Com_Printf("$cmd_missing_argument", cmd_argv[cmd_optind]);
             Cmd_PrintHint();
             return ':';
         }
@@ -1089,14 +1089,14 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     return o->sh[0];
 
 unknown:
-    Com_Printf("$e_auto_d6e935de0e44", cmd_argv[cmd_optind]);
+    Com_Printf("$cmd_unknown_option", cmd_argv[cmd_optind]);
     Cmd_PrintHint();
     return '?';
 }
 
 void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
 {
-    Com_Printf("$e_auto_7535716ffdff", cmd_argv[0]);
+    Com_Printf("$cmd_usage_prefix", cmd_argv[0]);
     while (opt->sh) {
         Com_Printf("%c", opt->sh[0]);
         if (opt->sh[1] == ':') {
@@ -1105,7 +1105,7 @@ void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
         opt++;
     }
     if (suffix) {
-        Com_Printf("$e_auto_8ac24f918f3e", suffix);
+        Com_Printf("$cmd_usage_suffix", suffix);
     } else {
         Com_Printf("]\n");
     }
@@ -1124,7 +1124,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
         width = max(width, min(len, 31));
     }
 
-    Com_Printf("$e_auto_43221e8bf8b1");
+    Com_Printf("$cmd_options_header");
     while (opt->sh) {
         if (opt->sh[1] == ':') {
             Q_concat(buffer, sizeof(buffer), opt->lo, "=<", opt->sh + 2, ">");
@@ -1139,7 +1139,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
 
 void Cmd_PrintHint(void)
 {
-    Com_Printf("$e_auto_55f681b31104", cmd_argv[0]);
+    Com_Printf("$cmd_help_hint", cmd_argv[0]);
 }
 
 void Cmd_Option_c(const cmd_option_t *opt, xgenerator_t g, genctx_t *ctx, int argnum)
@@ -1263,7 +1263,7 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
 
     len = strlen(text);
     if (len >= MAX_STRING_CHARS) {
-        Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
+        Com_Printf("$cmd_line_too_long", MAX_STRING_CHARS);
         return NULL;
     }
 
@@ -1311,12 +1311,12 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
 
         j = strlen(result);
         if (j >= remaining) {
-            Com_Printf("$e_auto_4f734c250891", MAX_STRING_CHARS);
+            Com_Printf("$cmd_line_expanded_too_long", MAX_STRING_CHARS);
             return NULL;
         }
 
         if (++count == 100) {
-            Com_Printf("$e_auto_e6a1218ed003");
+            Com_Printf("$cmd_macro_loop");
             return NULL;
         }
 
@@ -1331,7 +1331,7 @@ char *Cmd_MacroExpandString(const char *text, bool aliasHack)
     }
 
     if (inquote) {
-        Com_Printf("$e_auto_372c92bfdaaf");
+        Com_Printf("$cmd_line_unmatched_quote");
         return NULL;
     }
 
@@ -1377,7 +1377,7 @@ void Cmd_TokenizeString(const char *text, bool macroExpand)
 
     len = strlen(text);
     if (len >= MAX_STRING_CHARS) {
-        Com_Printf("$e_auto_b47c4588b65d", MAX_STRING_CHARS);
+        Com_Printf("$cmd_line_too_long", MAX_STRING_CHARS);
         return;
     }
 
@@ -1477,7 +1477,7 @@ static void Cmd_RegCommand(const cmdreg_t *reg)
 
 // fail if the command is a variable name
     if (Cvar_Exists(reg->name, false)) {
-        Com_WPrintf("$e_auto_900d94221b36", __func__, reg->name);
+        Com_WPrintf("$cmd_name_already_cvar_with_cmd", __func__, reg->name);
         return;
     }
 
@@ -1485,7 +1485,7 @@ static void Cmd_RegCommand(const cmdreg_t *reg)
     cmd = Cmd_Find(reg->name);
     if (cmd) {
         if (cmd->function) {
-            Com_WPrintf("$e_auto_63ae75e00274", __func__, reg->name);
+            Com_WPrintf("$cmd_name_already_defined", __func__, reg->name);
             return;
         }
         cmd->function = reg->function;
@@ -1599,7 +1599,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
         if (cmd->function) {
             cmd->function();
         } else if (!COM_DEDICATED && !CL_ForwardToServer()) {
-            Com_Printf("$e_auto_23a15e4dcb24", cmd_argv[0]);
+            Com_Printf("$cmd_not_connected", cmd_argv[0]);
         }
         return;
     }
@@ -1608,7 +1608,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
     a = Cmd_AliasFind(cmd_argv[0]);
     if (a) {
         if (buf->aliasCount >= ALIAS_LOOP_COUNT) {
-            Com_WPrintf("$e_auto_146248f9ee83");
+            Com_WPrintf("$cmd_alias_loop");
             return;
         }
         text = Cmd_MacroExpandString(a->value, true);
@@ -1628,7 +1628,7 @@ void Cmd_ExecuteCommand(cmdbuf_t *buf)
 
     // send it as a server command if we are connected
     if (!CL_ForwardToServer()) {
-        Com_Printf("$e_auto_7cd2e8eb4815", cmd_argv[0]);
+        Com_Printf("$cmd_unknown_command", cmd_argv[0]);
     }
 }
 
@@ -1686,7 +1686,7 @@ int Cmd_ExecuteFile(const char *path, unsigned flags)
     }
 
     // everything ok, execute it
-    Com_Printf("$e_auto_6d0101f3edea", path);
+    Com_Printf("$cmd_execing_file", path);
 
     buf->aliasCount++;
     Cbuf_InsertText(buf, f);
@@ -1709,7 +1709,7 @@ static void Cmd_Exec_f(void)
     int     ret;
 
     if (Cmd_Argc() != 2) {
-        Com_Printf("$e_auto_8229a49e2a97", Cmd_Argv(0));
+        Com_Printf("$cmd_exec_usage", Cmd_Argv(0));
         return;
     }
 
@@ -1728,7 +1728,7 @@ static void Cmd_Exec_f(void)
 
 fail:
     if (ret) {
-        Com_Printf("$e_auto_bab55c887650", buffer, Q_ErrorString(ret));
+        Com_Printf("$cmd_exec_failed", buffer, Q_ErrorString(ret));
     }
 }
 
@@ -1828,7 +1828,7 @@ static void Cmd_EchoEx_f(void)
         switch (c) {
         case 'h':
             Cmd_PrintUsage(o_echo, "[text]");
-            Com_Printf("$e_auto_822ffbdd85b6");
+            Com_Printf("$cmd_echo_help");
             Cmd_PrintHelp(o_echo);
             return;
         case 'e':
@@ -1846,7 +1846,7 @@ static void Cmd_EchoEx_f(void)
             case 'e': level = PRINT_ERROR;     break;
             case 'n': level = PRINT_NOTICE;    break;
             default:
-                Com_Printf("$e_auto_bcc0a8583c82", cmd_optarg);
+                Com_Printf("$cmd_print_level_invalid", cmd_optarg);
                 return;
             }
             break;
@@ -1895,7 +1895,7 @@ static void Cmd_List_f(void)
         Com_Printf("%s\n", cmd->name);
         i++;
     }
-    Com_Printf("$e_auto_cfbfbe758955", i, total);
+    Com_Printf("$cmd_list_count", i, total);
 }
 
 /*
@@ -1923,7 +1923,7 @@ static void Cmd_MacroList_f(void)
         Com_Printf("%-16s %s\n", macro->name, buffer);
         i++;
     }
-    Com_Printf("$e_auto_f1a758aff3ef", i, total);
+    Com_Printf("$cmd_macro_list_count", i, total);
 }
 
 static void Cmd_Text_f(void)
@@ -1941,7 +1941,7 @@ static void Cmd_Complete_f(void)
         return;
 
     if (cmd_argc < 2) {
-        Com_Printf("$e_auto_c8135ca9df1b", cmd_argv[0]);
+        Com_Printf("$cmd_complete_usage", cmd_argv[0]);
         return;
     }
 
@@ -1949,7 +1949,7 @@ static void Cmd_Complete_f(void)
 
 // fail if the command is a variable name
     if (Cvar_Exists(name, true)) {
-        Com_Printf("$e_auto_ed853522e12d", name);
+        Com_Printf("$cmd_name_already_cvar", name);
         return;
     }
 
@@ -2011,3 +2011,4 @@ void Cmd_Init(void)
 
     Cmd_Register(c_cmd);
 }
+

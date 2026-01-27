@@ -22,7 +22,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.h"
-#include "common/cmodel.h"
 #if !defined(RENDERER_DLL)
 #include "system/system.h"
 #endif
@@ -40,6 +39,57 @@ static entity_t *gl_shadow_casters[MAX_ENTITIES];
 static int gl_shadow_caster_count;
 static entity_t *gl_shadow_dynamic_casters[MAX_ENTITIES];
 static int gl_shadow_dynamic_caster_count;
+
+static int gl_leaf_count;
+static int gl_leaf_maxcount;
+static const mleaf_t **gl_leaf_list;
+static const vec_t *gl_leaf_mins;
+static const vec_t *gl_leaf_maxs;
+static const mnode_t *gl_leaf_topnode;
+
+static inline int GL_PointContents(const vec3_t p, const mnode_t *headnode,
+                                   bool extended) {
+  if (!headnode)
+    return 0;
+  const mleaf_t *leaf = BSP_PointLeaf(headnode, p);
+  if (!leaf)
+    return 0;
+  return leaf->contents[extended];
+}
+
+static void GL_BoxLeafs_r(const mnode_t *node) {
+  while (node->plane) {
+    box_plane_t side = BoxOnPlaneSideFast(gl_leaf_mins, gl_leaf_maxs, node->plane);
+    if (side == BOX_INFRONT) {
+      node = node->children[0];
+    } else if (side == BOX_BEHIND) {
+      node = node->children[1];
+    } else {
+      if (!gl_leaf_topnode)
+        gl_leaf_topnode = node;
+      GL_BoxLeafs_r(node->children[0]);
+      node = node->children[1];
+    }
+  }
+
+  if (gl_leaf_count < gl_leaf_maxcount)
+    gl_leaf_list[gl_leaf_count++] = (const mleaf_t *)node;
+}
+
+static int GL_BoxLeafs_headnode(const vec3_t mins, const vec3_t maxs,
+                                const mleaf_t **list, int listsize,
+                                const mnode_t *headnode) {
+  gl_leaf_list = list;
+  gl_leaf_count = 0;
+  gl_leaf_maxcount = listsize;
+  gl_leaf_mins = mins;
+  gl_leaf_maxs = maxs;
+  gl_leaf_topnode = NULL;
+
+  GL_BoxLeafs_r(headnode);
+
+  return gl_leaf_count;
+}
 
 unsigned r_registration_sequence;
 
@@ -100,6 +150,9 @@ cvar_t *gl_csm_blend;
 cvar_t *gl_shadow_debug;
 cvar_t *gl_shadow_debug_light;
 cvar_t *gl_shadow_debug_freeze;
+cvar_t *gl_shadow_draw_debug;
+cvar_t *gl_shadow_debug_log;
+cvar_t *gl_shadow_debug_log_ms;
 cvar_t *gl_shadow_bias_scale;
 cvar_t *gl_shadow_pcss_max_lights;
 cvar_t *gl_shadow_alpha_mode;
@@ -1889,7 +1942,7 @@ static bool GL_ShadowmapFindSafeOrigin(const dlight_t *dl, vec3_t out) {
   if (!bsp)
     return false;
 
-  if (!(CM_PointContents(dl->origin, bsp->nodes, glr.fd.extended) &
+  if (!(GL_PointContents(dl->origin, bsp->nodes, glr.fd.extended) &
         CONTENTS_SOLID))
     return false;
 
@@ -1903,7 +1956,7 @@ static bool GL_ShadowmapFindSafeOrigin(const dlight_t *dl, vec3_t out) {
 
     for (int i = 0; i < (int)q_countof(offsets); i++) {
       VectorMA(dl->origin, offsets[i], dir, out);
-      if (!(CM_PointContents(out, bsp->nodes, glr.fd.extended) &
+      if (!(GL_PointContents(out, bsp->nodes, glr.fd.extended) &
             CONTENTS_SOLID))
         return true;
     }
@@ -1915,7 +1968,7 @@ static bool GL_ShadowmapFindSafeOrigin(const dlight_t *dl, vec3_t out) {
     for (int i = 0; i < (int)q_countof(offsets); i++) {
       for (int j = 0; j < (int)q_countof(dirs); j++) {
         VectorMA(dl->origin, offsets[i], dirs[j], out);
-        if (!(CM_PointContents(out, bsp->nodes, glr.fd.extended) &
+        if (!(GL_PointContents(out, bsp->nodes, glr.fd.extended) &
               CONTENTS_SOLID))
           return true;
       }
@@ -2474,8 +2527,7 @@ static bool GL_BoxIntersectsSphereBounds(const vec3_t mins, const vec3_t maxs,
 }
 
 static float GL_ShadowmapLightRadius(const dlight_t *dl) {
-  float radius = dl->radius + DLIGHT_CUTOFF;
-  return radius > 0.0f ? radius : 0.0f;
+  return GL_DlightInfluenceRadius(dl);
 }
 
 static bool GL_EntityInSpotCone(float cos_dir, float dist, float radius,
@@ -2647,23 +2699,299 @@ static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
   if (!bsp || gl_novis->integer)
     return true;
 
-  const mleaf_t *leaf = BSP_PointLeaf(bsp->nodes, dl->origin);
-  if (!leaf)
+  vec3_t mins, maxs;
+  VectorSet(mins, dl->origin[0] - radius, dl->origin[1] - radius,
+            dl->origin[2] - radius);
+  VectorSet(maxs, dl->origin[0] + radius, dl->origin[1] + radius,
+            dl->origin[2] + radius);
+
+  const mleaf_t *leafs[512];
+  int count =
+      GL_BoxLeafs_headnode(mins, maxs, leafs, q_countof(leafs), bsp->nodes);
+  if (count <= 0)
+    return false;
+  if (count >= (int)q_countof(leafs))
     return true;
 
-  if (glr.fd.areabits && !Q_IsBitSet(glr.fd.areabits, leaf->area))
+  for (int i = 0; i < count; i++) {
+    const mleaf_t *leaf = leafs[i];
+    if (!leaf || leaf->cluster == -1)
+      continue;
+    if (glr.fd.areabits && !Q_IsBitSet(glr.fd.areabits, leaf->area))
+      continue;
+    if (leaf->visframe == glr.visframe)
+      return true;
+  }
+
+  return false;
+}
+
+typedef enum {
+  SHADOWDBG_DRAW_ALL_LIGHTS = BIT(0),
+  SHADOWDBG_DRAW_SELECTED = BIT(1),
+  SHADOWDBG_DRAW_CONES = BIT(2),
+  SHADOWDBG_DRAW_CASTERS = BIT(3),
+  SHADOWDBG_DRAW_CSM = BIT(4),
+  SHADOWDBG_DRAW_TEXT = BIT(5),
+} shadow_debug_draw_bits_t;
+
+static color_t GL_ShadowDebugSlotColor(int slot) {
+  static const color_t colors[] = {
+      COLOR_RED,     COLOR_GREEN,  COLOR_BLUE,   COLOR_YELLOW,
+      COLOR_CYAN,    COLOR_MAGENTA, COLOR_WHITE, COLOR_RGB(255, 128, 0),
+      COLOR_RGB(128, 255, 0),       COLOR_RGB(0, 255, 128),
+      COLOR_RGB(0, 128, 255),       COLOR_RGB(128, 0, 255),
+  };
+
+  if (slot < 0)
+    return COLOR_WHITE;
+
+  return colors[slot % q_countof(colors)];
+}
+
+static bool GL_ShadowmapSlotDirty(int slot, bool is_spot) {
+  if (slot < 0 || !gl_static.shadowmap_cache_tex)
     return false;
 
-  if (leaf->cluster == -1)
-    return true;
+  int face_count = is_spot ? 1 : SHADOWMAP_FACE_COUNT;
+  int base = slot * SHADOWMAP_FACE_COUNT;
+  for (int f = 0; f < face_count; f++) {
+    if (gl_static.shadowmap_cache_dirty[base + f])
+      return true;
+  }
 
-  return leaf->visframe == glr.visframe;
+  return false;
+}
+
+static void GL_ShadowDebugDrawCone(const dlight_t *dl, float radius,
+                                   color_t color, uint32_t time,
+                                   qboolean depth_test) {
+  vec3_t dir;
+  VectorCopy(dl->cone, dir);
+  if (VectorNormalize(dir) < 0.001f)
+    return;
+
+  vec3_t right, up;
+  MakeNormalVectors(dir, right, up);
+
+  float angle = dl->cone[3];
+  float cone_radius = tanf(max(angle, 0.001f)) * radius;
+  cone_radius = min(cone_radius, radius);
+
+  vec3_t end;
+  VectorMA(dl->origin, radius, dir, end);
+
+  R_AddDebugLine(dl->origin, end, color, time, depth_test);
+
+  vec3_t p1, p2, p3, p4;
+  VectorMA(end, cone_radius, right, p1);
+  VectorMA(end, -cone_radius, right, p2);
+  VectorMA(end, cone_radius, up, p3);
+  VectorMA(end, -cone_radius, up, p4);
+
+  R_AddDebugLine(p1, p3, color, time, depth_test);
+  R_AddDebugLine(p3, p2, color, time, depth_test);
+  R_AddDebugLine(p2, p4, color, time, depth_test);
+  R_AddDebugLine(p4, p1, color, time, depth_test);
+
+  R_AddDebugLine(dl->origin, p1, color, time, depth_test);
+  R_AddDebugLine(dl->origin, p2, color, time, depth_test);
+  R_AddDebugLine(dl->origin, p3, color, time, depth_test);
+  R_AddDebugLine(dl->origin, p4, color, time, depth_test);
+}
+
+static void GL_ShadowDebugUpdate(void) {
+  int draw_bits = gl_shadow_draw_debug ? gl_shadow_draw_debug->integer : 0;
+  if (draw_bits <= 0)
+    return;
+
+  int filter = gl_shadow_debug_light ? gl_shadow_debug_light->integer : -1;
+  int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
+  const bool draw_all = (draw_bits & SHADOWDBG_DRAW_ALL_LIGHTS) != 0;
+  const bool draw_selected = (draw_bits & SHADOWDBG_DRAW_SELECTED) != 0;
+  const bool draw_cones = (draw_bits & SHADOWDBG_DRAW_CONES) != 0;
+  const bool draw_casters = (draw_bits & SHADOWDBG_DRAW_CASTERS) != 0;
+  const bool draw_csm = (draw_bits & SHADOWDBG_DRAW_CSM) != 0;
+  const bool draw_text = (draw_bits & SHADOWDBG_DRAW_TEXT) != 0;
+
+  if (draw_csm && glr.csm_cascades > 0 && gl_static.sun_shadowmap_ok) {
+    for (int i = 0; i < glr.csm_cascades; i++) {
+      color_t color = GL_ShadowDebugSlotColor(i);
+      R_AddDebugBounds(glr.csm_bounds[i][0], glr.csm_bounds[i][1], color, 0,
+                       true);
+    }
+  }
+
+  for (int i = 0; i < total; i++) {
+    if (filter >= 0 && i != filter)
+      continue;
+
+    const dlight_t *dl = &glr.fd.dlights[i];
+    float radius = GL_DlightInfluenceRadius(dl);
+    if (radius <= 0.0f)
+      continue;
+
+    int slot = glr.shadowmap_index[i];
+    bool selected = slot >= 0;
+    bool is_spot = glr.shadowmap_is_spot[i];
+    color_t color = selected ? GL_ShadowDebugSlotColor(slot) : COLOR_RGB(80, 80, 80);
+
+    if (draw_all)
+      R_AddDebugSphere(dl->origin, radius, color, 0, true);
+
+    if (draw_selected && selected)
+      R_AddDebugSphere(dl->origin, radius, color, 0, true);
+
+    if (draw_cones && dl->conecos != 0.0f)
+      GL_ShadowDebugDrawCone(dl, radius, color, 0, true);
+
+    if (draw_casters && selected) {
+      for (int c = 0; c < gl_shadow_caster_count; c++) {
+        entity_t *ent = gl_shadow_casters[c];
+        if (!GL_EntityInShadowRange(ent, dl))
+          continue;
+        vec3_t ent_origin;
+        GL_EntityShadowOrigin(ent, ent_origin);
+        float ent_radius = GL_EntityShadowRadius(ent);
+        if (ent_radius <= 0.0f)
+          continue;
+        color_t ent_color = GL_EntityShadowDynamic(ent) ? COLOR_YELLOW : COLOR_GREEN;
+        if (ent->model & BIT(31))
+          ent_color = COLOR_CYAN;
+        R_AddDebugSphere(ent_origin, ent_radius, ent_color, 0, true);
+      }
+    }
+
+    if (draw_text && (draw_all || selected)) {
+      char text[192];
+      const char *shadow_type = "none";
+      if (dl->shadow == DL_SHADOW_LIGHT)
+        shadow_type = "static";
+      else if (dl->shadow == DL_SHADOW_DYNAMIC)
+        shadow_type = "dynamic";
+      const bool cache_dirty = GL_ShadowmapSlotDirty(slot, is_spot);
+      Q_snprintf(text, sizeof(text),
+                 "dl %d slot %d %s %s r=%.0f i=%.2f pcss=%d cache=%s",
+                 i, slot, shadow_type, is_spot ? "spot" : "point", radius,
+                 dl->intensity, glr.shadowmap_pcss[i] ? 1 : 0,
+                 cache_dirty ? "dirty" : "clean");
+      R_AddDebugText(dl->origin, NULL, text, 0.6f, color, 0, true);
+    }
+  }
+}
+
+static void GL_ShadowDebugLog(void) {
+  int mode = gl_shadow_debug_log ? gl_shadow_debug_log->integer : 0;
+  if (mode <= 0)
+    return;
+
+  unsigned interval_ms = gl_shadow_debug_log_ms
+                             ? (unsigned)max(0, gl_shadow_debug_log_ms->integer)
+                             : 0;
+  static unsigned last_ms = 0;
+  unsigned now = Sys_Milliseconds();
+  if (interval_ms && (now - last_ms) < interval_ms)
+    return;
+  last_ms = now;
+
+  Com_Printf(
+      "shadow dbg: dlights=%d shadowlights=%d casters=%d dyn_casters=%d\n",
+      glr.fd.num_dlights, glr.shadow_light_count, gl_shadow_caster_count,
+      gl_shadow_dynamic_caster_count);
+
+  if (mode == 1)
+    return;
+
+  int filter = gl_shadow_debug_light ? gl_shadow_debug_light->integer : -1;
+  bool selected_only = (mode == 2);
+  int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
+  for (int i = 0; i < total; i++) {
+    if (filter >= 0 && i != filter)
+      continue;
+
+    int slot = glr.shadowmap_index[i];
+    if (selected_only && slot < 0)
+      continue;
+
+    const dlight_t *dl = &glr.fd.dlights[i];
+    float radius = GL_DlightInfluenceRadius(dl);
+    const char *shadow_type = "none";
+    if (dl->shadow == DL_SHADOW_LIGHT)
+      shadow_type = "static";
+    else if (dl->shadow == DL_SHADOW_DYNAMIC)
+      shadow_type = "dynamic";
+    bool is_spot = glr.shadowmap_is_spot[i];
+    bool cache_dirty = GL_ShadowmapSlotDirty(slot, is_spot);
+
+    Com_Printf(
+        "  dl %2d slot=%2d %s %s r=%.0f i=%.2f origin=(%.0f %.0f %.0f) "
+        "pcss=%d cache=%s\n",
+        i, slot, shadow_type, is_spot ? "spot" : "point", radius,
+        dl->intensity, dl->origin[0], dl->origin[1], dl->origin[2],
+        glr.shadowmap_pcss[i] ? 1 : 0, cache_dirty ? "dirty" : "clean");
+  }
+}
+
+static void GL_ShadowDump_f(void) {
+  int argc = Cmd_Argc();
+  int filter = -1;
+  bool selected_only = false;
+
+  if (argc > 1) {
+    const char *arg = Cmd_Argv(1);
+    if (!Q_strcasecmp(arg, "selected"))
+      selected_only = true;
+    else
+      filter = Q_atoi(arg);
+  }
+
+  Com_Printf(
+      "shadow dump: dlights=%d shadowlights=%d casters=%d dyn_casters=%d\n",
+      glr.fd.num_dlights, glr.shadow_light_count, gl_shadow_caster_count,
+      gl_shadow_dynamic_caster_count);
+
+  int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
+  for (int i = 0; i < total; i++) {
+    if (filter >= 0 && i != filter)
+      continue;
+
+    int slot = glr.shadowmap_index[i];
+    if (selected_only && slot < 0)
+      continue;
+
+    const dlight_t *dl = &glr.fd.dlights[i];
+    float radius = GL_DlightInfluenceRadius(dl);
+    const char *shadow_type = "none";
+    if (dl->shadow == DL_SHADOW_LIGHT)
+      shadow_type = "static";
+    else if (dl->shadow == DL_SHADOW_DYNAMIC)
+      shadow_type = "dynamic";
+    bool is_spot = glr.shadowmap_is_spot[i];
+    bool cache_dirty = GL_ShadowmapSlotDirty(slot, is_spot);
+
+    Com_Printf(
+        "  dl %2d slot=%2d %s %s r=%.0f i=%.2f origin=(%.0f %.0f %.0f) "
+        "cone=%.3f pcss=%d cache=%s\n",
+        i, slot, shadow_type, is_spot ? "spot" : "point", radius,
+        dl->intensity, dl->origin[0], dl->origin[1], dl->origin[2],
+        dl->conecos, glr.shadowmap_pcss[i] ? 1 : 0,
+        cache_dirty ? "dirty" : "clean");
+  }
 }
 
 static void GL_SelectShadowLights(void) {
   static bool slots_initialized = false;
   static int prev_indices[MAX_SHADOWMAP_LIGHTS];
+  static bool frozen = false;
   const float hysteresis = 0.85f;
+
+  if (gl_shadow_debug_freeze && gl_shadow_debug_freeze->integer) {
+    if (frozen)
+      return;
+    frozen = true;
+  } else {
+    frozen = false;
+  }
 
   if (!slots_initialized) {
     for (int i = 0; i < MAX_SHADOWMAP_LIGHTS; i++)
@@ -3175,6 +3503,9 @@ void R_RenderFrame(const refdef_t *fd) {
   GL_RenderSunShadowMaps();
 
   GL_RenderShadowMaps();
+
+  GL_ShadowDebugUpdate();
+  GL_ShadowDebugLog();
 
   gls.u_block.dof_params[0] =
       r_dofFocusDistance ? r_dofFocusDistance->value : 0.0f;
@@ -3771,6 +4102,9 @@ static void GL_Register(void) {
   gl_shadow_debug = Cvar_Get("gl_shadow_debug", "0", 0);
   gl_shadow_debug_light = Cvar_Get("gl_shadow_debug_light", "-1", 0);
   gl_shadow_debug_freeze = Cvar_Get("gl_shadow_debug_freeze", "0", 0);
+  gl_shadow_draw_debug = Cvar_Get("gl_shadow_draw_debug", "0", 0);
+  gl_shadow_debug_log = Cvar_Get("gl_shadow_debug_log", "0", 0);
+  gl_shadow_debug_log_ms = Cvar_Get("gl_shadow_debug_log_ms", "250", 0);
 
   gl_shadow_bias_scale = Cvar_Get("gl_shadow_bias_scale", "1.0", CVAR_ARCHIVE);
   gl_shadow_pcss_max_lights =
@@ -3950,6 +4284,7 @@ static void GL_Register(void) {
 
   Cmd_AddCommand("strings", GL_Strings_f);
   Cmd_AddCommand("gfxinfo", GL_GfxInfo_f);
+  Cmd_AddCommand("gl_shadow_dump", GL_ShadowDump_f);
 
 #if USE_DEBUG
   Cmd_AddMacro("gl_viewcluster", GL_ViewCluster_m);
@@ -3957,7 +4292,10 @@ static void GL_Register(void) {
 #endif
 }
 
-static void GL_Unregister(void) { Cmd_RemoveCommand("strings"); }
+static void GL_Unregister(void) {
+  Cmd_RemoveCommand("strings");
+  Cmd_RemoveCommand("gl_shadow_dump");
+}
 
 static void APIENTRY myDebugProc(GLenum source, GLenum type, GLuint id,
                                  GLenum severity, GLsizei length,

@@ -767,7 +767,7 @@ static void GL_DrawFace(const mface_t *surf)
     int i, j;
 
     if (glr.shadow_pass) {
-        glStateBits_t state = GLS_SHADOWMAP;
+        glStateBits_t state = GLS_SHADOWMAP | GLS_CULL_DISABLE;
 
         if (tess.flags != state ||
             tess.numindices + numindices > TESS_MAX_INDICES) {
@@ -791,7 +791,9 @@ static void GL_DrawFace(const mface_t *surf)
         tess.numindices += numindices;
 
         tess.flags = state;
-        GL_LoadMatrix(gl_identity, glr.viewmatrix);
+        const GLfloat *model =
+            (glr.ent && glr.ent != &gl_world) ? glr.entmatrix : gl_identity;
+        GL_LoadMatrix(model, glr.viewmatrix);
 
         c.facesTris += numtris;
         c.facesDrawn++;

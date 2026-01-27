@@ -437,13 +437,13 @@ static void Key_Unbind_f(void)
     int     b;
 
     if (Cmd_Argc() != 2) {
-        Com_Printf("$e_auto_ed1789c79286");
+        Com_Printf("$key_unbind_usage");
         return;
     }
 
     b = Key_StringToKeynum(Cmd_Argv(1));
     if (b == -1) {
-        Com_Printf("$e_auto_4c61facc074a", Cmd_Argv(1));
+        Com_Printf("$key_invalid", Cmd_Argv(1));
         return;
     }
 
@@ -477,20 +477,20 @@ static void Key_Bind_f(void)
     c = Cmd_Argc();
 
     if (c < 2) {
-        Com_Printf("$e_auto_8f37cefa77a7");
+        Com_Printf("$key_bind_usage");
         return;
     }
     b = Key_StringToKeynum(Cmd_Argv(1));
     if (b == -1) {
-        Com_Printf("$e_auto_4c61facc074a", Cmd_Argv(1));
+        Com_Printf("$key_invalid", Cmd_Argv(1));
         return;
     }
 
     if (c == 2) {
         if (keybindings[b])
-            Com_Printf("$e_auto_c1ac475b26f9", Cmd_Argv(1), keybindings[b]);
+            Com_Printf("$cmd_kv_pair", Cmd_Argv(1), keybindings[b]);
         else
-            Com_Printf("$e_auto_dc34814563e2", Cmd_Argv(1));
+            Com_Printf("$key_not_bound", Cmd_Argv(1));
         return;
     }
 
@@ -1003,3 +1003,5 @@ void Key_WaitKey(keywaitcb_t wait, void *arg)
     key_wait_cb = wait;
     key_wait_arg = arg;
 }
+
+

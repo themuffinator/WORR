@@ -127,11 +127,13 @@ PlayerConfigPage::PlayerConfigPage()
     VectorCopy(angles, entities_[0].angles);
     VectorCopy(origin, entities_[0].origin);
     VectorCopy(origin, entities_[0].oldorigin);
+    VectorSet(entities_[0].scale, 1.0f, 1.0f, 1.0f);
 
     entities_[1].flags = RF_FULLBRIGHT;
     VectorCopy(angles, entities_[1].angles);
     VectorCopy(origin, entities_[1].origin);
     VectorCopy(origin, entities_[1].oldorigin);
+    VectorSet(entities_[1].scale, 1.0f, 1.0f, 1.0f);
 
     refdef_.num_entities = 0;
     refdef_.entities = entities_;
@@ -144,6 +146,13 @@ PlayerConfigPage::PlayerConfigPage()
 void PlayerConfigPage::ReloadMedia()
 {
     char scratch[MAX_QPATH];
+    refdef_.num_entities = 0;
+    entities_[0].model = 0;
+    entities_[0].skin = 0;
+    entities_[1].model = 0;
+    entities_[1].skin = 0;
+    weaponModels_.clear();
+    weaponIndex_ = -1;
     if (model_->Current() < 0 || model_->Current() >= uis.numPlayerModels)
         return;
     if (skin_->Current() < 0 || skin_->Current() >= uis.pmi[model_->Current()].nskins)
@@ -151,8 +160,6 @@ void PlayerConfigPage::ReloadMedia()
 
     const char *model = uis.pmi[model_->Current()].directory;
     const char *skin = uis.pmi[model_->Current()].skindisplaynames[skin_->Current()];
-
-    refdef_.num_entities = 0;
 
     Q_concat(scratch, sizeof(scratch), "players/", model, "/tris.md2");
     entities_[0].model = R_RegisterModel(scratch);
@@ -437,7 +444,7 @@ void PlayerConfigPage::OnOpen()
     if (!uis.numPlayerModels) {
         PlayerModel_Load();
         if (!uis.numPlayerModels) {
-            Com_Printf("$cg_auto_f0e9a2b48b82");
+            Com_Printf("$ui_player_models_not_found");
             return;
         }
     }
@@ -506,11 +513,18 @@ void PlayerConfigPage::OnClose()
     menu_.OnClose();
 
     if (model_ && skin_) {
-        char scratch[MAX_QPATH];
-        Q_concat(scratch, sizeof(scratch),
-                 uis.pmi[model_->Current()].directory, "/",
-                 uis.pmi[model_->Current()].skindisplaynames[skin_->Current()]);
-        Cvar_SetEx("skin", scratch, FROM_CONSOLE);
+        int model_index = model_->Current();
+        if (model_index >= 0 && model_index < uis.numPlayerModels) {
+            const playerModelInfo_t &info = uis.pmi[model_index];
+            int skin_index = skin_->Current();
+            if (skin_index >= 0 && skin_index < info.nskins) {
+                char scratch[MAX_QPATH];
+                Q_concat(scratch, sizeof(scratch),
+                         info.directory, "/",
+                         info.skindisplaynames[skin_index]);
+                Cvar_SetEx("skin", scratch, FROM_CONSOLE);
+            }
+        }
     }
 }
 
@@ -574,7 +588,8 @@ void PlayerConfigPage::Draw()
     UpdatePreviewLayout();
     menu_.Draw();
 
-    R_RenderFrame(&refdef_);
+    if (refdef_.width > 0 && refdef_.height > 0 && refdef_.num_entities > 0)
+        R_RenderFrame(&refdef_);
     R_SetScale(uis.scale);
 }
 
@@ -584,3 +599,4 @@ std::unique_ptr<MenuPage> CreatePlayerConfigPage()
 }
 
 } // namespace ui
+

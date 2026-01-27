@@ -357,7 +357,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
 
         if (p) {
             if (o->sh[1] != ':') {
-                Com_Printf("$cg_auto_433adc0b106f", Cmd_Argv(cmd_optind));
+                Com_Printf("$ui_cmd_option_no_argument", Cmd_Argv(cmd_optind));
                 Cmd_PrintHint();
                 return '!';
             }
@@ -375,7 +375,7 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
 
     if (!p && o->sh[1] == ':') {
         if (cmd_optind + 1 == argc) {
-            Com_Printf("$cg_auto_f2564956cac4", Cmd_Argv(cmd_optind));
+            Com_Printf("$ui_cmd_missing_argument", Cmd_Argv(cmd_optind));
             Cmd_PrintHint();
             return ':';
         }
@@ -386,14 +386,14 @@ int Cmd_ParseOptions(const cmd_option_t *opt)
     return o->sh[0];
 
 unknown:
-    Com_Printf("$cg_auto_d6e935de0e44", Cmd_Argv(cmd_optind));
+    Com_Printf("$ui_cmd_unknown_option", Cmd_Argv(cmd_optind));
     Cmd_PrintHint();
     return '?';
 }
 
 void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
 {
-    Com_Printf("$cg_auto_7535716ffdff", Cmd_Argv(0));
+    Com_Printf("$ui_cmd_usage_prefix", Cmd_Argv(0));
     while (opt->sh) {
         Com_Printf("%c", opt->sh[0]);
         if (opt->sh[1] == ':')
@@ -401,7 +401,7 @@ void Cmd_PrintUsage(const cmd_option_t *opt, const char *suffix)
         opt++;
     }
     if (suffix)
-        Com_Printf("$cg_auto_8ac24f918f3e", suffix);
+        Com_Printf("$ui_cmd_usage_suffix", suffix);
     else
         Com_Printf("]\n");
 }
@@ -419,7 +419,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
         width = max(width, min(len, 31));
     }
 
-    Com_Printf("$cg_auto_43221e8bf8b1");
+    Com_Printf("$ui_cmd_options_header");
     while (opt->sh) {
         if (opt->sh[1] == ':')
             Q_concat(buffer, sizeof(buffer), opt->lo, "=<", opt->sh + 2, ">");
@@ -433,7 +433,7 @@ void Cmd_PrintHelp(const cmd_option_t *opt)
 
 void Cmd_PrintHint(void)
 {
-    Com_Printf("$cg_auto_55f681b31104", Cmd_Argv(0));
+    Com_Printf("$ui_cmd_help_hint", Cmd_Argv(0));
 }
 
 void Cmd_Option_c(const cmd_option_t *opt, xgenerator_t g, genctx_t *ctx, int argnum)
@@ -880,3 +880,4 @@ void Con_Close(bool force)
     if (uii && uii->Con_Close)
         uii->Con_Close(force);
 }
+

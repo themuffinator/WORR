@@ -373,6 +373,9 @@ extern cvar_t *gl_csm_blend;
 extern cvar_t *gl_shadow_debug;
 extern cvar_t *gl_shadow_debug_light;
 extern cvar_t *gl_shadow_debug_freeze;
+extern cvar_t *gl_shadow_draw_debug;
+extern cvar_t *gl_shadow_debug_log;
+extern cvar_t *gl_shadow_debug_log_ms;
 extern cvar_t *gl_shadow_bias_scale;
 extern cvar_t *gl_shadow_pcss_max_lights;
 extern cvar_t *gl_shadow_alpha_mode;
@@ -709,6 +712,12 @@ void GL_UploadLightmaps(void);
 void GL_RebuildLighting(void);
 void GL_FreeWorld(void);
 void GL_LoadWorld(const char *name);
+
+static inline float GL_DlightInfluenceRadius(const dlight_t *dl)
+{
+    float radius = dl->radius + DLIGHT_CUTOFF;
+    return radius > 0.0f ? radius : 0.0f;
+}
 
 /*
  * gl_state.c

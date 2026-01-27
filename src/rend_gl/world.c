@@ -461,14 +461,16 @@ static void GL_MarkShadowLeaves(const dlight_t *dl)
     if (!bsp)
         return;
 
-    float radius = dl->sphere[3];
+    float radius = GL_DlightInfluenceRadius(dl);
     if (radius <= 0.0f)
         return;
 
     glr.visframe++;
     glr.nodes_visible = 0;
 
-    GL_MarkShadowNodes_r(bsp->nodes, dl->sphere, radius);
+    vec3_t center;
+    VectorCopy(dl->origin, center);
+    GL_MarkShadowNodes_r(bsp->nodes, center, radius);
 }
 
 static void GL_MarkShadowBox(const vec3_t bounds[2])
@@ -546,10 +548,12 @@ void GL_DrawBspModel(mmodel_t *model)
         if (face->drawflags & SURF_NODRAW)
             continue;
 
-        dot = PlaneDiffFast(transformed, face->plane);
-        if ((face->drawflags & DSURF_PLANEBACK) ? (dot > BACKFACE_EPSILON) : (dot < -BACKFACE_EPSILON)) {
-            c.facesCulled++;
-            continue;
+        if (!glr.shadow_pass) {
+            dot = PlaneDiffFast(transformed, face->plane);
+            if ((face->drawflags & DSURF_PLANEBACK) ? (dot > BACKFACE_EPSILON) : (dot < -BACKFACE_EPSILON)) {
+                c.facesCulled++;
+                continue;
+            }
         }
 
         if (!glr.shadow_pass && gl_dynamic->integer)

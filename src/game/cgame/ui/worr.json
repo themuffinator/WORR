@@ -613,7 +613,7 @@
       "name": "multiplayer",
       "banner": "m_banner_multiplayer",
       "items": [
-        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+https://q2servers.com/?raw=2\"" },
+        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+https://q2servers.com/?raw=2\" \"https://q2servers.com/?raw=0\"" },
         { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
         { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
         { "type": "action", "label": "start server", "command": "if $match_setup_format == \"\" then match_setup_format regular; if $match_setup_gametype == \"\" then match_setup_gametype ffa; if $match_setup_modifier == \"\" then match_setup_modifier standard; if $match_setup_length == \"\" then match_setup_length standard; if $match_setup_type == \"\" then match_setup_type standard; if $match_setup_bestof == \"\" then match_setup_bestof bo1; if $match_setup_maxplayers == \"\" then match_setup_maxplayers 8; pushmenu startserver" }
@@ -716,7 +716,7 @@
         { "type": "action", "label": "player setup", "command": "pushmenu players" },
         { "type": "action", "label": "options", "command": "pushmenu options" },
         { "type": "action", "label": "deathmatch flags...", "command": "pushmenu gameflags", "deathmatchOnly": true },
-        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+https://q2servers.com/?raw=2\"" },
+        { "type": "action", "label": "browse q2servers.com", "command": "pushmenu servers \"+https://q2servers.com/?raw=2\" \"https://q2servers.com/?raw=0\"" },
         { "type": "action", "label": "browse address book", "command": "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"" },
         { "type": "action", "label": "browse demos", "command": "pushmenu demos" },
         { "type": "action", "label": "save game...", "command": "pushmenu savegame", "enableIf": ["ingame", "deathmatch=0", "coop=0"] },

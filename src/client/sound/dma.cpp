@@ -701,7 +701,7 @@ static void DMA_SoundInfo(void)
     Com_Printf("$e_auto_cd8809bb2e07", dma.samplepos);
     Com_Printf("$e_auto_9b76d03925f0", dma.samplebits);
     Com_Printf("$e_auto_a6981ff5c3a8", dma.submission_chunk);
-    Com_Printf("$e_auto_001763d30d22", dma.speed);
+    Com_Printf("$s_dma_speed", dma.speed);
     Com_Printf("$e_auto_a3f65c922527", dma.buffer);
 }
 
@@ -1047,7 +1047,7 @@ static void DMA_Update(void)
             }
         }
         if (s_show->integer > 1 || total) {
-            Com_Printf("$e_auto_0e4356fb2cf6", total, s_paintedtime);
+            Com_Printf("$s_painted_stats", total, s_paintedtime);
         }
     }
 #endif
@@ -1104,3 +1104,4 @@ const sndapi_t snd_dma = {
     .stop_all_sounds = DMA_ClearBuffer,
     .get_sample_rate = DMA_GetSampleRate,
 };
+

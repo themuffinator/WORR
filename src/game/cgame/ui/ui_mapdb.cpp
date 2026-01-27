@@ -14,7 +14,7 @@ static void MapDB_Run_f(void)
         int episode = mapdb_episode->integer;
 
         if (episode < 0 || episode >= mapdb->num_episodes) {
-            Com_WPrintf("$cg_auto_e6ba1369ba86");
+            Com_WPrintf("$ui_mapdb_bad_episode");
             return;
         }
 
@@ -26,7 +26,7 @@ static void MapDB_Run_f(void)
         int level = mapdb_level->integer;
 
         if (level < 0 || level >= mapdb->num_maps) {
-            Com_WPrintf("$cg_auto_bf69489cd5dd");
+            Com_WPrintf("$ui_mapdb_bad_level");
             return;
         }
 
@@ -36,7 +36,7 @@ static void MapDB_Run_f(void)
         Cbuf_AddText(&cmd_buffer, mapdb->maps[level].bsp);
         Cbuf_AddText(&cmd_buffer, "\n");
     } else {
-        Com_WPrintf("$cg_auto_9064e9b262c3");
+        Com_WPrintf("$ui_mapdb_unknown_type");
     }
 }
 
@@ -99,3 +99,4 @@ void UI_MapDB_Shutdown()
 }
 
 } // namespace ui
+

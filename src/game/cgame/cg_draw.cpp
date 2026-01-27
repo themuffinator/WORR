@@ -1268,6 +1268,7 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
     const std::string text = G_Fmt("{} fps", fps_value).data();
     const int x = ((hud_vrect.x + hud_vrect.width) * scale) - hud_safe.x;
     const int y = (hud_vrect.y * scale) + hud_safe.y;
+    const int fps_scale = 4;
 
     const int scale_factor = 2;
     float hud_scale = 1.0f;
@@ -1282,11 +1283,11 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
         float coord_scale = 1.0f / (scale_factor * hud_scale);
         cgi.SCR_SetScale(1.0f / scale_factor);
         cgi.SCR_DrawFontString(text.c_str(), Q_rint(x * coord_scale),
-                               Q_rint(y * coord_scale), scale,
+                               Q_rint(y * coord_scale), fps_scale,
                                rgba_white, true, text_align_t::RIGHT);
         cgi.SCR_SetScale(hud_scale);
     } else {
-        cgi.SCR_DrawFontString(text.c_str(), x, y, scale, rgba_white, true,
+        cgi.SCR_DrawFontString(text.c_str(), x, y, fps_scale, rgba_white, true,
                                text_align_t::RIGHT);
     }
 }

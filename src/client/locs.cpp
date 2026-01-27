@@ -71,7 +71,7 @@ void LOC_LoadLocations(void)
     ret = FS_LoadFile(path, (void **)&buffer);
     if (!buffer) {
         if (ret != Q_ERR(ENOENT)) {
-            Com_EPrintf("$e_auto_73e61d85e709", path, Q_ErrorString(ret));
+            Com_EPrintf("$cl_load_failed", path, Q_ErrorString(ret));
         }
         return;
     }
@@ -257,7 +257,7 @@ static void LOC_Add_f(void)
     }
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -265,7 +265,7 @@ static void LOC_Add_f(void)
     VectorCopy(cl.playerEntityOrigin, loc->origin);
     List_Append(&cl_locations, &loc->entry);
 
-    Com_Printf("$e_auto_2b6a11d27c8c", loc->name, vtos(loc->origin));
+    Com_Printf("$cl_location_added", loc->name, vtos(loc->origin));
 }
 
 static void LOC_Delete_f(void)
@@ -273,7 +273,7 @@ static void LOC_Delete_f(void)
     location_t *loc;
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -298,7 +298,7 @@ static void LOC_Set_f(void)
     }
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -322,18 +322,18 @@ static void LOC_List_f(void)
     int count;
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
     if (LIST_EMPTY(&cl_locations)) {
-        Com_Printf("$e_auto_a15ec000714d");
+        Com_Printf("$locs_no_locations");
         return;
     }
 
     count = 0;
     LIST_FOR_EACH(location_t, loc, &cl_locations, entry) {
-        Com_Printf("$e_auto_248efcc4ac89", loc->name, vtos(loc->origin));
+        Com_Printf("$cl_location_entry", loc->name, vtos(loc->origin));
         count++;
     }
 
@@ -349,7 +349,7 @@ static void LOC_Save_f(void)
     int count;
 
     if (cls.state != ca_active) {
-        Com_Printf("$e_auto_56b7f769dcc1");
+        Com_Printf("$locs_requires_level");
         return;
     }
 
@@ -380,7 +380,7 @@ static void LOC_Save_f(void)
     }
 
     if (FS_CloseFile(f))
-        Com_EPrintf("$e_auto_3240af950c4e", buffer);
+        Com_EPrintf("$cl_error_writing_file", buffer);
     else
         Com_Printf("$e_auto_ff47f8618ad9",
                    count, count == 1 ? "" : "s", buffer);
@@ -412,7 +412,7 @@ static void LOC_Cmd_f(void)
     else if (!strcmp(cmd, "save"))
         LOC_Save_f();
     else
-        Com_Printf("$e_auto_d506e504b1d3", Cmd_Argv(0));
+        Com_Printf("$locs_usage", Cmd_Argv(0));
 }
 
 static const cmdreg_t c_loc[] = {
@@ -436,3 +436,5 @@ void LOC_Init(void)
 
     Cmd_Register(c_loc);
 }
+
+

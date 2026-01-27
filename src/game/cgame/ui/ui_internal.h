@@ -463,6 +463,7 @@ protected:
 class DropdownWidget : public SpinWidget {
 public:
     DropdownWidget(std::string label, cvar_t *cvar, SpinType type);
+    int Height(int lineHeight) const override;
     void Draw(bool focused) const override;
     void DrawOverlay() const;
     Sound Activate() override;
@@ -470,6 +471,7 @@ public:
     void OnClose() override;
     bool IsExpanded() const { return expanded_; }
     bool HoverAt(int mx, int my);
+    bool HandleMouseDrag(int mx, int my, bool mouseDown);
 
 private:
     void OpenList();
@@ -477,6 +479,7 @@ private:
     void EnsureListVisible(int visibleCount);
     vrect_t ComputeListRect(int visibleCount, int rowHeight, int *out_scroll_width) const;
     int ComputeVisibleCount(int rowHeight) const;
+    int RowHeight() const;
     int ValueX(const char *label) const;
     int ValueWidth(int valueX) const;
     int HitTestList(int mx, int my, const vrect_t &listRect, int rowHeight, int visibleCount,
@@ -486,6 +489,8 @@ private:
     int listStart_ = 0;
     int listCursor_ = -1;
     int openValue_ = -1;
+    bool scrollDragging_ = false;
+    int scrollDragOffset_ = 0;
 };
 
 enum class SwitchStyle {
@@ -542,6 +547,7 @@ public:
     void OnClose() override;
     bool IsExpanded() const { return expanded_; }
     bool HoverAt(int mx, int my);
+    bool HandleMouseDrag(int mx, int my, bool mouseDown);
 
 private:
     void OpenList();
@@ -567,6 +573,8 @@ private:
     int listStart_ = 0;
     int listCursor_ = -1;
     int openValue_ = -1;
+    bool scrollDragging_ = false;
+    int scrollDragOffset_ = 0;
     bool numericValues_ = false;
     std::string valuePrefix_;
 };

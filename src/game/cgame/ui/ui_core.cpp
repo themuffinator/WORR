@@ -164,7 +164,7 @@ static void UI_Command_NoOp()
 static void UI_Command_PushMenu()
 {
     if (Cmd_Argc() < 2) {
-        Com_Printf("$cg_auto_e13d46568ae9", Cmd_Argv(0));
+        Com_Printf("$ui_cmd_menu_usage", Cmd_Argv(0));
         return;
     }
 
@@ -176,7 +176,7 @@ static void UI_Command_PushMenu()
             menu->SetArgs(args);
         GetMenuSystem().Push(menu);
     } else {
-        Com_Printf("$cg_auto_ad494789521e", menu_name);
+        Com_Printf("$ui_menu_not_found", menu_name);
     }
 }
 
@@ -325,7 +325,7 @@ void MenuSystem::Push(MenuPage *menu)
     }
 
     if (stack_.size() >= MAX_MENU_DEPTH) {
-        Com_EPrintf("$cg_auto_713f13864237");
+        Com_EPrintf("$ui_pushmenu_max_depth");
         return;
     }
 
@@ -592,3 +592,4 @@ bool UI_IsTransparent(void)
 }
 
 } // extern "C"
+
