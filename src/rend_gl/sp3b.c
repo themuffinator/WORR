@@ -423,9 +423,9 @@ static void shader_load_lights(void) {
 
     const dlight_t *dl = &glr.fd.dlights[n];
 
-    float cull_radius = GL_DlightInfluenceRadius(dl);
-    if (cull_radius <= 0.0f ||
-        GL_CullSphere(dl->origin, cull_radius) == CULL_OUT) {
+    vec3_t cull_origin;
+    float cull_radius = GL_DlightCullRadius(dl, cull_origin);
+    if (cull_radius <= 0.0f) {
       c.dlightsCulled++;
       continue;
     }

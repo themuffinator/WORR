@@ -18,9 +18,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.h"
 #include "cgame_classic.h"
+#include "client/cgame_entity.h"
 #include "client/cgame_ui.h"
 #include "client/font.h"
 #include "client/ui_font.h"
+#include "common/mdfour.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
 
@@ -437,6 +439,26 @@ static void CG_FreeTags(int tag)
     Z_FreeTags(static_cast<memtag_t>(tag + TAG_MAX));
 }
 
+static void CG_Cvar_Reset(cvar_t *var)
+{
+    Cvar_Reset(var);
+}
+
+static void CG_Q2Proto_UnpackSolid(uint32_t solid, vec3_t mins, vec3_t maxs)
+{
+    q2proto_client_unpack_solid(&cls.q2proto_ctx, solid, mins, maxs);
+}
+
+static void CG_CL_GTV_Resume(void)
+{
+    CL_GTV_Resume();
+}
+
+static void CG_CL_GTV_EmitFrame(void)
+{
+    CL_GTV_EmitFrame();
+}
+
 static cvar_t *CG_cvar(const char *var_name, const char *value, cvar_flags_t flags)
 {
     if (flags & CVAR_EXTENDED_MASK) {
@@ -454,6 +476,153 @@ static void CG_AddCommandString(const char *string)
     Cbuf_AddText(&cmd_buffer, string);
 }
 
+static qhandle_t CG_R_RegisterSkin(const char *name)
+{
+    return R_RegisterImage(name, IT_SKIN, IF_NONE);
+}
+
+static qhandle_t CG_R_RegisterModel(const char *name)
+{
+    if (!re.RegisterModel)
+        return 0;
+    return re.RegisterModel(name);
+}
+
+static qhandle_t CG_R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags)
+{
+    if (!re.RegisterImage)
+        return 0;
+    return re.RegisterImage(name, type, flags);
+}
+
+static bool CG_R_SupportsPerPixelLighting(void)
+{
+    return re.SupportsPerPixelLighting ? re.SupportsPerPixelLighting() : false;
+}
+
+extern "C" mtexinfo_t nulltexinfo;
+
+#ifdef R_RegisterModel
+#pragma push_macro("R_RegisterModel")
+#undef R_RegisterModel
+#define CGAME_ENTITY_POP_R_REGISTERMODEL 1
+#endif
+#ifdef R_RegisterImage
+#pragma push_macro("R_RegisterImage")
+#undef R_RegisterImage
+#define CGAME_ENTITY_POP_R_REGISTERIMAGE 1
+#endif
+#ifdef R_SupportsPerPixelLighting
+#pragma push_macro("R_SupportsPerPixelLighting")
+#undef R_SupportsPerPixelLighting
+#define CGAME_ENTITY_POP_R_SUPPORTSPERPIXELLIGHTING 1
+#endif
+
+static cgame_entity_import_t cg_entity_import = {
+    .api_version = CGAME_ENTITY_API_VERSION,
+
+    .cl = &cl,
+    .cls = &cls,
+    .cl_entities = cl_entities,
+    .te = &te,
+    .mz = &mz,
+    .null_surface = &nulltexinfo.c,
+    .gun_frame = &gun_frame,
+    .gun_model = &gun_model,
+    .cmd_buffer = &cmd_buffer,
+
+    .Com_Printf = CG_UI_Com_Printf,
+    .Com_DPrintf = CG_UI_Com_DPrintf,
+    .Com_WPrintf = CG_UI_Com_WPrintf,
+    .Com_LPrintf = Com_LPrintf,
+    .Com_Error = Com_Error,
+
+    .Com_PlayerToEntityState = Com_PlayerToEntityState,
+    .Com_BlockChecksum = Com_BlockChecksum,
+    .Com_SlowRand = Com_SlowRand,
+    .Com_Color_g = Com_Color_g,
+
+    .Cvar_Get = Cvar_Get,
+    .Cvar_FindVar = Cvar_FindVar,
+    .Cvar_SetByVar = Cvar_SetByVar,
+    .Cvar_SetValue = Cvar_SetValue,
+    .Cvar_SetInteger = Cvar_SetInteger,
+    .Cvar_Reset = CG_Cvar_Reset,
+    .Cvar_ClampInteger = Cvar_ClampInteger,
+    .Cvar_ClampValue = Cvar_ClampValue,
+    .fs_game = fs_game,
+    .sv_paused = sv_paused,
+
+    .Cbuf_ExecuteDeferred = Cbuf_ExecuteDeferred,
+    .AddCommandString = CG_AddCommandString,
+    .Cmd_ExecTrigger = Cmd_ExecTrigger,
+
+    .IN_Activate = IN_Activate,
+    .Con_Close = Con_Close,
+    .SCR_EndLoadingPlaque = SCR_EndLoadingPlaque,
+    .SCR_LagClear = SCR_LagClear,
+    .SCR_SetCrosshairColor = SCR_SetCrosshairColor,
+    .SCR_ParseColor = SCR_ParseColor,
+
+    .Key_IsDown = Key_IsDown,
+
+    .CL_CheckForPause = CL_CheckForPause,
+    .CL_UpdateFrameTimes = CL_UpdateFrameTimes,
+    .CL_PredictAngles = CL_PredictAngles,
+    .CL_CheckPredictionError = CL_CheckPredictionError,
+    .CL_EmitDemoFrame = CL_EmitDemoFrame,
+    .CL_FirstDemoFrame = CL_FirstDemoFrame,
+    .CL_GTV_Resume = CG_CL_GTV_Resume,
+    .CL_GTV_EmitFrame = CG_CL_GTV_EmitFrame,
+    .CL_AddHitMarker = CL_AddHitMarker,
+    .CL_LoadClientinfo = CL_LoadClientinfo,
+
+    .CL_Trace = CL_Trace,
+
+    .Z_Malloc = Z_Malloc,
+    .Z_Freep = Z_Freep,
+
+    .FS_LoadFileEx = FS_LoadFileEx,
+    .FS_FreeFile = Z_Free,
+
+    .CM_BoxTrace = CM_BoxTrace,
+    .CM_TransformedBoxTrace = CM_TransformedBoxTrace,
+    .CM_ClipEntity = CM_ClipEntity,
+    .BSP_LoadMaterials = BSP_LoadMaterials,
+
+    .Q2Proto_UnpackSolid = CG_Q2Proto_UnpackSolid,
+
+    .R_RegisterModel = CG_R_RegisterModel,
+    .R_RegisterImage = CG_R_RegisterImage,
+    .R_RegisterSkin = CG_R_RegisterSkin,
+    .R_SupportsPerPixelLighting = CG_R_SupportsPerPixelLighting,
+    .V_CalcFov = V_CalcFov,
+
+    .V_AddEntity = V_AddEntity,
+    .V_AddParticle = V_AddParticle,
+    .V_AddLight = V_AddLight,
+    .V_AddLightEx = V_AddLightEx,
+    .V_AddLightStyle = V_AddLightStyle,
+
+    .S_RegisterSound = S_RegisterSound,
+    .S_StartSound = S_StartSound,
+
+    .LOC_AddLocationsToScene = LOC_AddLocationsToScene,
+};
+
+#ifdef CGAME_ENTITY_POP_R_REGISTERMODEL
+#pragma pop_macro("R_RegisterModel")
+#undef CGAME_ENTITY_POP_R_REGISTERMODEL
+#endif
+#ifdef CGAME_ENTITY_POP_R_REGISTERIMAGE
+#pragma pop_macro("R_RegisterImage")
+#undef CGAME_ENTITY_POP_R_REGISTERIMAGE
+#endif
+#ifdef CGAME_ENTITY_POP_R_SUPPORTSPERPIXELLIGHTING
+#pragma pop_macro("R_SupportsPerPixelLighting")
+#undef CGAME_ENTITY_POP_R_SUPPORTSPERPIXELLIGHTING
+#endif
+
 static void * CG_GetExtension(const char *name)
 {
     if (!name)
@@ -463,6 +632,9 @@ static void * CG_GetExtension(const char *name)
     }
     if (strcmp(name, CGAME_UI_IMPORT_EXT) == 0) {
         return &cg_ui_import;
+    }
+    if (strcmp(name, CGAME_ENTITY_IMPORT_EXT) == 0) {
+        return &cg_entity_import;
     }
     return NULL;
 }
@@ -1010,6 +1182,7 @@ static bool CG_CL_InAutoDemoLoop(void)
 }
 
 const cgame_export_t *cgame = NULL;
+const cgame_entity_export_t *cgame_entity = NULL;
 static char *current_game = NULL;
 static bool current_rerelease_server;
 static const cgame_ui_export_t *cgame_ui;
@@ -1174,6 +1347,19 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
             Com_Error(ERR_DROP, "cgame API version mismatch (got %d, expected %d)",
                       cgame ? cgame->apiversion : -1, CGAME_API_VERSION);
         }
+        cgame_entity = NULL;
+        if (cgame->GetExtension) {
+            cgame_entity = static_cast<const cgame_entity_export_t *>(cgame->GetExtension(CGAME_ENTITY_EXPORT_EXT));
+            if (cgame_entity && cgame_entity->api_version != CGAME_ENTITY_API_VERSION) {
+                Com_WPrintf("cgame entity API version mismatch\n");
+                cgame_entity = NULL;
+            }
+            if (cgame_entity) {
+                CL_InitEffects();
+                CL_InitBrightskins();
+                CL_InitTEnts();
+            }
+        }
         Z_Freep(&current_game);
         current_game = Z_CopyString(new_game);
         current_rerelease_server = is_rerelease_server;
@@ -1183,6 +1369,7 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
 void CG_Unload(void)
 {
     cgame = NULL;
+    cgame_entity = NULL;
     cgame_ui = NULL;
     Z_Freep(&current_game);
 

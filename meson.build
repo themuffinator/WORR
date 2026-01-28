@@ -436,7 +436,13 @@ sgame_src = bgame_src + [
 cgame_src = bgame_src + [
   'src/game/sgame/player/p_move.cpp',
   'src/game/cgame/cg_local.h',
+  'src/game/cgame/cg_entity_local.h',
   'src/game/cgame/cg_main.cpp',
+  'src/game/cgame/cg_entity_api.cpp',
+  'src/game/cgame/cg_entities.cpp',
+  'src/game/cgame/cg_effects.cpp',
+  'src/game/cgame/cg_newfx.cpp',
+  'src/game/cgame/cg_tent.cpp',
   'src/game/cgame/cg_draw.cpp',
   'src/game/cgame/cg_ui_export.cpp',
   'src/game/cgame/cg_ui_sys.cpp',
@@ -1280,11 +1286,19 @@ sgame_dll = shared_library('sgame' + cpu, sgame_src,
 cgame_all_src = cgame_src + ui_src + [
   'src/common/field.c',
   'src/common/jsmn.c',
+  'src/common/math.c',
   'src/common/mapdb.c',
   'src/common/mdfour.c',
   'src/common/utf8.c',
+  'src/shared/m_flash.c',
   'src/shared/shared.c',
 ]
+
+if zlib.found()
+  cgame_deps = game_deps + [zlib]
+else
+  cgame_deps = game_deps
+endif
 
 cgame_inc = [
   include_directories('inc', 'q2proto/inc'),
@@ -1294,7 +1308,7 @@ cgame_inc = [
 cgame_dll = shared_library('cgame' + cpu, cgame_all_src,
   name_prefix:           '',
   gnu_symbol_visibility: 'hidden',
-  dependencies:          game_deps,
+  dependencies:          cgame_deps,
   include_directories:   cgame_inc,
   c_args:                game_c_args + cgame_defines,
   cpp_args:              game_cpp_args + cgame_defines,

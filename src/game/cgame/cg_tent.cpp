@@ -17,8 +17,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_tent.c -- client side temporary entities
 
-#include "client.h"
+#include "shared/shared.h"
 #include "common/mdfour.h"
+#include "cg_entity_local.h"
 
 static cvar_t *cl_compass_time;
 
@@ -69,8 +70,6 @@ typedef struct {
 static cl_footstep_sfx_t    *cl_footstep_sfx;
 static int                  cl_num_footsteps;
 static qhandle_t            cl_last_footstep;
-
-extern "C" mtexinfo_t nulltexinfo;
 
 /*
 =================
@@ -127,7 +126,7 @@ static int CL_FindFootstepSurface(int entnum)
         return footstep_id;
     }
 
-    if (tr.surface != &(nulltexinfo.c)) {
+    if (tr.surface != cgei->null_surface) {
         // copy over the surfaces' step ID
         footstep_id = cl.bsp->texinfo[tr.surface->id - 1].step_id;
 
@@ -138,7 +137,7 @@ static int CL_FindFootstepSurface(int entnum)
 
         CL_Trace(&tr, trace_start, new_end, trace_mins, trace_maxs, NULL, MASK_SOLID | MASK_WATER);
         // if we hit something else, use that new footstep id instead of the first traces' value
-        if (tr.surface != &(nulltexinfo.c))
+        if (tr.surface != cgei->null_surface)
             footstep_id = cl.bsp->texinfo[tr.surface->id - 1].step_id;
     }
 
@@ -162,7 +161,8 @@ void CL_PlayFootstepSfx(int step_id, int entnum, float volume, float attenuation
     if (step_id == -1)
         step_id = CL_FindFootstepSurface(entnum);
 
-    Q_assert((unsigned)step_id < cl_num_footsteps);
+    if ((unsigned)step_id >= (unsigned)cl_num_footsteps)
+        step_id = FOOTSTEP_ID_DEFAULT;
 
     sfx = &cl_footstep_sfx[step_id];
     if (!sfx->num_sfx)
@@ -191,7 +191,8 @@ static void CL_RegisterFootstep(cl_footstep_sfx_t *sfx, const char *material)
     size_t len;
     int i;
 
-    Q_assert(!material || *material);
+    if (material && !*material)
+        material = NULL;
 
     for (i = 0; i < MAX_FOOTSTEP_SFX; i++) {
         if (material)
@@ -226,8 +227,17 @@ static void CL_RegisterFootsteps(void)
     }
 
     cl_num_footsteps = BSP_LoadMaterials(cl.bsp);
-    Q_assert(cl_num_footsteps >= FOOTSTEP_RESERVED_COUNT);
+    if (cl_num_footsteps < FOOTSTEP_RESERVED_COUNT) {
+        Com_WPrintf("%s: invalid footstep material count: %d\n", __func__, cl_num_footsteps);
+        cl_num_footsteps = 0;
+        return;
+    }
     cl_footstep_sfx = static_cast<cl_footstep_sfx_t *>(Z_Malloc(sizeof(cl_footstep_sfx[0]) * cl_num_footsteps));
+    if (!cl_footstep_sfx) {
+        Com_WPrintf("%s: failed to allocate footstep list\n", __func__);
+        cl_num_footsteps = 0;
+        return;
+    }
 
     for (i = 0; i < cl_num_footsteps; i++)
         cl_footstep_sfx[i].num_sfx = -1;
@@ -238,6 +248,8 @@ static void CL_RegisterFootsteps(void)
 
     // load the rest
     for (i = 0, tex = cl.bsp->texinfo; i < cl.bsp->numtexinfo; i++, tex++) {
+        if ((unsigned)tex->step_id >= (unsigned)cl_num_footsteps)
+            continue;
         cl_footstep_sfx_t *sfx = &cl_footstep_sfx[tex->step_id];
         if (sfx->num_sfx == -1)
             CL_RegisterFootstep(sfx, tex->c.material);
@@ -251,11 +263,6 @@ CL_RegisterTEntSounds
 */
 void CL_RegisterTEntSounds(void)
 {
-    if (cgame_entity && cgame_entity->RegisterTEntSounds) {
-        cgame_entity->RegisterTEntSounds();
-        return;
-    }
-
     cl_sfx_ric1 = S_RegisterSound("world/ric1.wav");
     cl_sfx_ric2 = S_RegisterSound("world/ric2.wav");
     cl_sfx_ric3 = S_RegisterSound("world/ric3.wav");
@@ -300,11 +307,6 @@ CL_RegisterTEntModels
 */
 void CL_RegisterTEntModels(void)
 {
-    if (cgame_entity && cgame_entity->RegisterTEntModels) {
-        cgame_entity->RegisterTEntModels();
-        return;
-    }
-
     void *data;
     int len;
 
@@ -406,7 +408,7 @@ static explosion_t *CL_PlainExplosion(void)
     ex = CL_AllocExplosion();
     VectorCopy(te.pos1, ex->ent.origin);
     ex->type = ex_poly;
-    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
+    ex->ent.flags = RF_FULLBRIGHT;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->light = 350;
     VectorSet(ex->lightcolor, 1.0f, 0.5f, 0.5f);
@@ -425,7 +427,7 @@ static void CL_BFGExplosion(const vec3_t pos)
     ex = CL_AllocExplosion();
     VectorCopy(pos, ex->ent.origin);
     ex->type = ex_poly;
-    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
+    ex->ent.flags = RF_FULLBRIGHT;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->light = 350;
     VectorSet(ex->lightcolor, 0.0f, 1.0f, 0.0f);
@@ -486,11 +488,6 @@ void CL_AddMuzzleFX(const vec3_t origin, const vec3_t angles, cl_muzzlefx_t fx, 
 // help stuff
 void CL_AddHelpPath(const vec3_t origin, const vec3_t dir, bool first)
 {
-    if (cgame_entity && cgame_entity->AddHelpPath) {
-        cgame_entity->AddHelpPath(origin, dir, first);
-        return;
-    }
-
     if (first) {
         int i;
         explosion_t *ex;
@@ -536,7 +533,7 @@ void CL_SmokeAndFlash(const vec3_t origin)
     ex = CL_AllocExplosion();
     VectorCopy(origin, ex->ent.origin);
     ex->type = ex_flash;
-    ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
+    ex->ent.flags = RF_FULLBRIGHT;
     ex->frames = 2;
     ex->start = cl.servertime - CL_FRAMETIME;
     ex->ent.model = cl_mod_flash;
@@ -969,13 +966,9 @@ static void CL_AddPlayerBeams(void)
             ps = CL_KEYPS;
             ops = CL_OLDKEYPS;
 
-            if (info_bobskip->integer) {
-                VectorCopy(cl.refdef.vieworg, b->start);
-            } else {
-                for (j = 0; j < 3; j++) {
-                    b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
-                        CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
-                }
+            for (j = 0; j < 3; j++) {
+                b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
+                    CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
             }
 
             x = b->offset[0];
@@ -1009,20 +1002,20 @@ static void CL_AddPlayerBeams(void)
             vectoangles2(dist, angles);
 
             // if it's the heatbeam, draw the particle effect
-            if (b->model == cl_mod_heatbeam && !sv_paused->integer)
+            if (b->model == cl_mod_heatbeam && !(CG_SvPausedVar() && CG_SvPausedVar()->integer))
                 CL_Heatbeam(org, dist);
 
             framenum = 1;
         } else {
             VectorCopy(b->start, org);
 
+            // calculate pitch and yaw
+            VectorSubtract(b->end, org, dist);
+            vectoangles2(dist, angles);
+
             // if it's a non-origin offset, it's a player, so use the hardcoded player offset
             if (!VectorEmpty(b->offset)) {
                 vec3_t  tmp, f, r, u;
-
-                // calculate pitch and yaw
-                VectorSubtract(b->end, org, dist);
-                vectoangles2(dist, angles);
 
                 tmp[0] = -angles[0];
                 tmp[1] = angles[1] + 180.0f;
@@ -1036,10 +1029,6 @@ static void CL_AddPlayerBeams(void)
                 // if it's a monster, do the particle effect
                 CL_MonsterPlasma_Shell(b->start);
             }
-
-            // calculate pitch and yaw
-            VectorSubtract(b->end, org, dist);
-            vectoangles2(dist, angles);
 
             framenum = 2;
         }
@@ -1222,6 +1211,11 @@ static cvar_t *cl_railcore_width;
 static cvar_t *cl_railspiral_color;
 static cvar_t *cl_railspiral_radius;
 
+static void cl_timeout_changed(cvar_t *self)
+{
+    self->integer = 1000 * Cvar_ClampValue(self, 0, 24 * 24 * 60 * 60);
+}
+
 static void cl_railcore_color_changed(cvar_t *self)
 {
     if (!SCR_ParseColor(self->string, &railcore_color)) {
@@ -1338,11 +1332,6 @@ static const byte splash_color[] = {0x00, 0xe0, 0xb0, 0x50, 0xd0, 0xe0, 0xe8};
 
 void CL_ParseTEnt(void)
 {
-    if (cgame_entity && cgame_entity->ParseTempEntity) {
-        cgame_entity->ParseTempEntity();
-        return;
-    }
-
     explosion_t *ex;
     int r;
 
@@ -1429,7 +1418,7 @@ void CL_ParseTEnt(void)
         VectorCopy(te.pos1, ex->ent.origin);
         dirtoangles(ex->ent.angles);
         ex->type = ex_misc;
-        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT | RF_NOSHADOW;
+        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT;
         ex->light = 150;
         switch (te.type) {
         case TE_BLASTER:
@@ -1583,7 +1572,7 @@ void CL_ParseTEnt(void)
         ex->type = ex_flash;
         // note to self
         // we need a better no draw flag
-        ex->ent.flags = RF_BEAM | RF_NOSHADOW;
+        ex->ent.flags = RF_BEAM;
         ex->start = cl.servertime - CL_FRAMETIME;
         ex->light = 100 + (Q_rand() % 75);
         VectorSet(ex->lightcolor, 1.0f, 1.0f, 0.3f);
@@ -1695,7 +1684,7 @@ void CL_ParseTEnt(void)
         dirtoangles(ex->ent.angles);
         ex->type = ex_misc;
         ex->ent.model = cl_mod_explode;
-        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT | RF_NOSHADOW;
+        ex->ent.flags = RF_FULLBRIGHT | RF_TRANSLUCENT;
         VectorSet(ex->ent.scale, 3.0f, 3.0f, 3.0f);
         ex->ent.skinnum = 2;
         ex->start = cl.servertime - CL_FRAMETIME;
@@ -1749,11 +1738,6 @@ CL_ClearTEnts
 */
 void CL_ClearTEnts(void)
 {
-    if (cgame_entity && cgame_entity->ClearTEnts) {
-        cgame_entity->ClearTEnts();
-        return;
-    }
-
     CL_ClearBeams();
     CL_ClearExplosions();
     CL_ClearLasers();
@@ -1762,11 +1746,6 @@ void CL_ClearTEnts(void)
 
 void CL_InitTEnts(void)
 {
-    if (cgame_entity && cgame_entity->InitTEnts) {
-        cgame_entity->InitTEnts();
-        return;
-    }
-
     cl_muzzleflashes = Cvar_Get("cl_muzzleflashes", "1", 0);
     cl_railtrail_type = Cvar_Get("cl_railtrail_type", "0", 0);
     cl_railtrail_time = Cvar_Get("cl_railtrail_time", "1.0", 0);

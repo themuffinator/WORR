@@ -153,6 +153,10 @@ cvar_t *gl_shadow_debug_freeze;
 cvar_t *gl_shadow_draw_debug;
 cvar_t *gl_shadow_debug_log;
 cvar_t *gl_shadow_debug_log_ms;
+cvar_t *gl_shadow_debug_dlights;
+cvar_t *gl_shadow_debug_shadowlights;
+cvar_t *gl_shadow_debug_casters;
+cvar_t *gl_shadow_debug_dyn_casters;
 cvar_t *gl_shadow_bias_scale;
 cvar_t *gl_shadow_pcss_max_lights;
 cvar_t *gl_shadow_alpha_mode;
@@ -2689,9 +2693,6 @@ static float GL_ShadowmapLightScore(const dlight_t *dl) {
 }
 
 static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
-  if (GL_CullSphere(dl->origin, radius) == CULL_OUT)
-    return false;
-
   if (glr.fd.rdflags & RDF_NOWORLDMODEL)
     return true;
 
@@ -2699,11 +2700,16 @@ static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
   if (!bsp || gl_novis->integer)
     return true;
 
+  vec3_t center;
+  float vis_radius = GL_DlightCullRadius(dl, center);
+  if (vis_radius <= 0.0f)
+    return false;
+
   vec3_t mins, maxs;
-  VectorSet(mins, dl->origin[0] - radius, dl->origin[1] - radius,
-            dl->origin[2] - radius);
-  VectorSet(maxs, dl->origin[0] + radius, dl->origin[1] + radius,
-            dl->origin[2] + radius);
+  VectorSet(mins, center[0] - vis_radius, center[1] - vis_radius,
+            center[2] - vis_radius);
+  VectorSet(maxs, center[0] + vis_radius, center[1] + vis_radius,
+            center[2] + vis_radius);
 
   const mleaf_t *leafs[512];
   int count =
@@ -2733,6 +2739,8 @@ typedef enum {
   SHADOWDBG_DRAW_CASTERS = BIT(3),
   SHADOWDBG_DRAW_CSM = BIT(4),
   SHADOWDBG_DRAW_TEXT = BIT(5),
+  SHADOWDBG_DRAW_XRAY = BIT(6),
+  SHADOWDBG_DRAW_WIREFRAMES = BIT(7),
 } shadow_debug_draw_bits_t;
 
 static color_t GL_ShadowDebugSlotColor(int slot) {
@@ -2802,8 +2810,17 @@ static void GL_ShadowDebugDrawCone(const dlight_t *dl, float radius,
 
 static void GL_ShadowDebugUpdate(void) {
   int draw_bits = gl_shadow_draw_debug ? gl_shadow_draw_debug->integer : 0;
-  if (draw_bits <= 0)
+  static bool stats_active = false;
+  if (draw_bits <= 0) {
+    if (stats_active) {
+      Cvar_SetInteger(gl_shadow_debug_dlights, 0, FROM_CODE);
+      Cvar_SetInteger(gl_shadow_debug_shadowlights, 0, FROM_CODE);
+      Cvar_SetInteger(gl_shadow_debug_casters, 0, FROM_CODE);
+      Cvar_SetInteger(gl_shadow_debug_dyn_casters, 0, FROM_CODE);
+      stats_active = false;
+    }
     return;
+  }
 
   int filter = gl_shadow_debug_light ? gl_shadow_debug_light->integer : -1;
   int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
@@ -2813,21 +2830,33 @@ static void GL_ShadowDebugUpdate(void) {
   const bool draw_casters = (draw_bits & SHADOWDBG_DRAW_CASTERS) != 0;
   const bool draw_csm = (draw_bits & SHADOWDBG_DRAW_CSM) != 0;
   const bool draw_text = (draw_bits & SHADOWDBG_DRAW_TEXT) != 0;
+  const bool draw_xray = (draw_bits & SHADOWDBG_DRAW_XRAY) != 0;
+  const bool draw_wireframes = (draw_bits & SHADOWDBG_DRAW_WIREFRAMES) != 0;
+  const qboolean depth_test = draw_xray ? false : true;
 
   if (draw_csm && glr.csm_cascades > 0 && gl_static.sun_shadowmap_ok) {
     for (int i = 0; i < glr.csm_cascades; i++) {
       color_t color = GL_ShadowDebugSlotColor(i);
       R_AddDebugBounds(glr.csm_bounds[i][0], glr.csm_bounds[i][1], color, 0,
-                       true);
+                       depth_test);
     }
   }
+
+  Cvar_SetInteger(gl_shadow_debug_dlights, glr.fd.num_dlights, FROM_CODE);
+  Cvar_SetInteger(gl_shadow_debug_shadowlights, glr.shadow_light_count,
+                  FROM_CODE);
+  Cvar_SetInteger(gl_shadow_debug_casters, gl_shadow_caster_count, FROM_CODE);
+  Cvar_SetInteger(gl_shadow_debug_dyn_casters,
+                  gl_shadow_dynamic_caster_count, FROM_CODE);
+  stats_active = true;
 
   for (int i = 0; i < total; i++) {
     if (filter >= 0 && i != filter)
       continue;
 
     const dlight_t *dl = &glr.fd.dlights[i];
-    float radius = GL_DlightInfluenceRadius(dl);
+    vec3_t center;
+    float radius = GL_DlightCullRadius(dl, center);
     if (radius <= 0.0f)
       continue;
 
@@ -2835,15 +2864,19 @@ static void GL_ShadowDebugUpdate(void) {
     bool selected = slot >= 0;
     bool is_spot = glr.shadowmap_is_spot[i];
     color_t color = selected ? GL_ShadowDebugSlotColor(slot) : COLOR_RGB(80, 80, 80);
+    const bool draw_light =
+        draw_wireframes || draw_all || (draw_selected && selected);
 
-    if (draw_all)
-      R_AddDebugSphere(dl->origin, radius, color, 0, true);
+    if (draw_light) {
+      if (draw_wireframes && dl->conecos != 0.0f) {
+        GL_ShadowDebugDrawCone(dl, radius, color, 0, depth_test);
+      } else {
+        R_AddDebugSphere(center, radius, color, 0, depth_test);
+      }
+    }
 
-    if (draw_selected && selected)
-      R_AddDebugSphere(dl->origin, radius, color, 0, true);
-
-    if (draw_cones && dl->conecos != 0.0f)
-      GL_ShadowDebugDrawCone(dl, radius, color, 0, true);
+    if (!draw_wireframes && draw_cones && dl->conecos != 0.0f)
+      GL_ShadowDebugDrawCone(dl, radius, color, 0, depth_test);
 
     if (draw_casters && selected) {
       for (int c = 0; c < gl_shadow_caster_count; c++) {
@@ -2858,11 +2891,11 @@ static void GL_ShadowDebugUpdate(void) {
         color_t ent_color = GL_EntityShadowDynamic(ent) ? COLOR_YELLOW : COLOR_GREEN;
         if (ent->model & BIT(31))
           ent_color = COLOR_CYAN;
-        R_AddDebugSphere(ent_origin, ent_radius, ent_color, 0, true);
+        R_AddDebugSphere(ent_origin, ent_radius, ent_color, 0, depth_test);
       }
     }
 
-    if (draw_text && (draw_all || selected)) {
+    if (draw_text && (draw_all || draw_wireframes || selected)) {
       char text[192];
       const char *shadow_type = "none";
       if (dl->shadow == DL_SHADOW_LIGHT)
@@ -2875,7 +2908,7 @@ static void GL_ShadowDebugUpdate(void) {
                  i, slot, shadow_type, is_spot ? "spot" : "point", radius,
                  dl->intensity, glr.shadowmap_pcss[i] ? 1 : 0,
                  cache_dirty ? "dirty" : "clean");
-      R_AddDebugText(dl->origin, NULL, text, 0.6f, color, 0, true);
+      R_AddDebugText(dl->origin, NULL, text, 0.6f, color, 0, depth_test);
     }
   }
 }
@@ -3030,6 +3063,7 @@ static void GL_SelectShadowLights(void) {
   float candidate_scores[MAX_DLIGHTS];
   bool candidate_valid[MAX_DLIGHTS];
   int candidate_count = 0;
+  int pvs_shadow_count = 0;
   int total = min(glr.fd.num_dlights, MAX_DLIGHTS);
 
   memset(candidate_valid, 0, sizeof(candidate_valid));
@@ -3046,11 +3080,21 @@ static void GL_SelectShadowLights(void) {
     if (!GL_ShadowmapLightVisible(dl, radius))
       continue;
 
+    pvs_shadow_count++;
     candidates[candidate_count].index = i;
     candidates[candidate_count].score = GL_ShadowmapLightScore(dl);
     candidate_scores[i] = candidates[candidate_count].score;
     candidate_valid[i] = true;
     candidate_count++;
+  }
+
+  if (pvs_shadow_count >= MAX_DLIGHTS) {
+    static unsigned last_warn_ms = 0;
+    unsigned now_ms = Sys_Milliseconds();
+    if ((now_ms - last_warn_ms) > 2000) {
+      Com_WPrintf("Shadow dlights in PVS hit limit (%d).\n", MAX_DLIGHTS);
+      last_warn_ms = now_ms;
+    }
   }
 
   bool used[MAX_DLIGHTS] = {0};
@@ -3504,9 +3548,6 @@ void R_RenderFrame(const refdef_t *fd) {
 
   GL_RenderShadowMaps();
 
-  GL_ShadowDebugUpdate();
-  GL_ShadowDebugLog();
-
   gls.u_block.dof_params[0] =
       r_dofFocusDistance ? r_dofFocusDistance->value : 0.0f;
   gls.u_block.dof_params[1] = r_dofBlurRange ? r_dofBlurRange->value : 0.0f;
@@ -3518,6 +3559,9 @@ void R_RenderFrame(const refdef_t *fd) {
   GL_Setup3D();
 
   GL_SetupFrustum();
+
+  GL_ShadowDebugUpdate();
+  GL_ShadowDebugLog();
 
   if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_drawworld->integer)
     GL_DrawWorld();
@@ -4105,6 +4149,12 @@ static void GL_Register(void) {
   gl_shadow_draw_debug = Cvar_Get("gl_shadow_draw_debug", "0", 0);
   gl_shadow_debug_log = Cvar_Get("gl_shadow_debug_log", "0", 0);
   gl_shadow_debug_log_ms = Cvar_Get("gl_shadow_debug_log_ms", "250", 0);
+  gl_shadow_debug_dlights = Cvar_Get("gl_shadow_debug_dlights", "0", 0);
+  gl_shadow_debug_shadowlights =
+      Cvar_Get("gl_shadow_debug_shadowlights", "0", 0);
+  gl_shadow_debug_casters = Cvar_Get("gl_shadow_debug_casters", "0", 0);
+  gl_shadow_debug_dyn_casters =
+      Cvar_Get("gl_shadow_debug_dyn_casters", "0", 0);
 
   gl_shadow_bias_scale = Cvar_Get("gl_shadow_bias_scale", "1.0", CVAR_ARCHIVE);
   gl_shadow_pcss_max_lights =

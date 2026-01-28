@@ -1223,8 +1223,15 @@ static void setup_lights(void)
 
     for (int i = 0; i < glr.fd.num_dlights; i++) {
         const dlight_t *dl = &glr.fd.dlights[i];
+        vec3_t center;
+        float radius = GL_DlightCullRadius(dl, center);
+        if (radius <= 0.0f) {
+            c.dlightsEntCulled++;
+            continue;
+        }
 
-        if (!test_sphere_sphere(dl->sphere, ent_sphere)) {
+        vec4_t light_sphere = { center[0], center[1], center[2], radius };
+        if (!test_sphere_sphere(light_sphere, ent_sphere)) {
             c.dlightsEntCulled++;
             continue;
         }

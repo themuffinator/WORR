@@ -3,6 +3,7 @@
 
 #include "cg_local.h"
 #include "cg_wheel.h"
+#include "client/cgame_entity_ext.h"
 #include "client/cgame_ui_ext.h"
 #include "m_flash.hpp"
 
@@ -11,6 +12,12 @@ cgame_export_t cglobals;
 
 extern "C" void CG_UI_SetImport(const cgame_ui_import_t *import);
 extern "C" const cgame_ui_export_t *CG_GetUIAPI(void);
+struct cgame_entity_import_s;
+struct cgame_entity_export_s;
+using cgame_entity_import_t = cgame_entity_import_s;
+using cgame_entity_export_t = cgame_entity_export_s;
+extern "C" const cgame_entity_export_t *CG_GetEntityAPI(void);
+void CG_Entity_SetImport(const cgame_entity_import_t *import);
 
 static void *CG_GetExtension(const char *name)
 {
@@ -19,6 +26,8 @@ static void *CG_GetExtension(const char *name)
 
 	if (!strcmp(name, CGAME_UI_EXPORT_EXT))
 		return (void *)CG_GetUIAPI();
+	if (!strcmp(name, CGAME_ENTITY_EXPORT_EXT))
+		return (void *)CG_GetEntityAPI();
 
 	return nullptr;
 }
@@ -129,6 +138,9 @@ Q2GAME_API cgame_export_t *GetCGameAPI(cgame_import_t *import)
 		const cgame_ui_import_t *ui_import =
 			(const cgame_ui_import_t *)import->GetExtension(CGAME_UI_IMPORT_EXT);
 		CG_UI_SetImport(ui_import);
+		const cgame_entity_import_t *entity_import =
+			(const cgame_entity_import_t *)import->GetExtension(CGAME_ENTITY_IMPORT_EXT);
+		CG_Entity_SetImport(entity_import);
 	}
 
 	cglobals.apiVersion = CGAME_API_VERSION;

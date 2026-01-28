@@ -461,15 +461,14 @@ static void GL_MarkShadowLeaves(const dlight_t *dl)
     if (!bsp)
         return;
 
-    float radius = GL_DlightInfluenceRadius(dl);
+    vec3_t center;
+    float radius = GL_DlightCullRadius(dl, center);
     if (radius <= 0.0f)
         return;
 
     glr.visframe++;
     glr.nodes_visible = 0;
 
-    vec3_t center;
-    VectorCopy(dl->origin, center);
     GL_MarkShadowNodes_r(bsp->nodes, center, radius);
 }
 

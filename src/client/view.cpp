@@ -134,11 +134,12 @@ V_AddParticle
 
 =====================
 */
-void V_AddParticle(const particle_t *p)
+bool V_AddParticle(const particle_t *p)
 {
     if (r_numparticles >= MAX_PARTICLES)
-        return;
+        return false;
     r_particles[r_numparticles++] = *p;
+    return true;
 }
 
 static void cone_to_bounding_sphere(const vec3_t origin, const vec3_t forward, float size, float angle_radians, float c, float s, vec4_t out)

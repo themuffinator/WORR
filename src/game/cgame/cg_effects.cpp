@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_fx.c -- entity effects parsing and management
 
-#include "client.h"
+#include "cg_entity_local.h"
 #include "shared/m_flash.h"
 
 static void CL_LogoutEffect(const vec3_t org, int color);
@@ -29,52 +29,10 @@ static cvar_t *cl_rerelease_effects;
 static cvar_t *cl_muzzlelight_time;
 cvar_t *cl_shadowlights;
 
-static float CL_PlayerMuzzleViewheight(const centity_t *pl, int entity)
+static void CL_AddWeaponMuzzleFXv(cl_muzzlefx_t fx, float x, float y, float z, float scale)
 {
-    if (entity == cl.frame.clientNum + 1)
-        return cl.frame.ps.viewoffset[2] + cl.frame.ps.pmove.viewheight;
-
-    if (cl.game_api == Q2PROTO_GAME_RERELEASE && cl.csr.extended) {
-        player_skinnum_t unpacked = { .skinnum = pl->current.skinnum };
-        return (float)unpacked.viewheight;
-    }
-
-    return (float)cl.frame.ps.pmove.viewheight;
-}
-
-static void CL_AddPlayerThirdPersonMuzzleFX(cl_muzzlefx_t fx, const vec3_t offset, float scale)
-{
-    if (mz.entity == cl.frame.clientNum + 1 && !cl.thirdPersonView)
-        return;
-
-    const centity_t *pl = &cl_entities[mz.entity];
-    vec3_t origin;
-    vec3_t angles;
-
-    if (mz.entity == cl.frame.clientNum + 1) {
-        VectorCopy(cl.playerEntityOrigin, origin);
-        VectorCopy(cl.playerEntityAngles, angles);
-    } else {
-        VectorCopy(pl->current.origin, origin);
-        VectorCopy(pl->current.angles, angles);
-    }
-
-    origin[2] += CL_PlayerMuzzleViewheight(pl, mz.entity);
-
-    vec3_t forward, right, up;
-    vec3_t flash_origin;
-    AngleVectors(angles, forward, right, up);
-    VectorMA(origin, offset[0], forward, flash_origin);
-    VectorMA(flash_origin, offset[1], right, flash_origin);
-    VectorMA(flash_origin, offset[2], up, flash_origin);
-
-    CL_AddMuzzleFX(flash_origin, angles, fx, 0, scale);
-}
-
-static void CL_AddPlayerMuzzleFX(cl_muzzlefx_t fx, const vec3_t offset, float scale)
-{
+    vec3_t offset = { x, y, z };
     CL_AddWeaponMuzzleFX(fx, offset, scale);
-    CL_AddPlayerThirdPersonMuzzleFX(fx, offset, scale);
 }
 
 /*
@@ -111,11 +69,6 @@ CL_SetLightStyle
 */
 void CL_SetLightStyle(int index, const char *s)
 {
-    if (cgame_entity && cgame_entity->SetLightStyle) {
-        cgame_entity->SetLightStyle(index, s);
-        return;
-    }
-
     int     i;
     clightstyle_t   *ls;
 
@@ -266,11 +219,6 @@ CL_MuzzleFlash
 */
 void CL_MuzzleFlash(void)
 {
-    if (cgame_entity && cgame_entity->ParseMuzzleFlash) {
-        cgame_entity->ParseMuzzleFlash();
-        return;
-    }
-
     vec3_t      fv, rv;
     cdlight_t   *dl;
     centity_t   *pl;
@@ -298,7 +246,7 @@ void CL_MuzzleFlash(void)
     case MZ_BLASTER:
         VectorSet(dl->color, 1, 1, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/blastf1a.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_BLAST, (const vec3_t) { 27.0f, 7.4f, -6.6f }, 8.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_BLAST, 27.0f, 7.4f, -6.6f, 8.0f);
         break;
     case MZ_BLUEHYPERBLASTER:
         VectorSet(dl->color, 0, 0, 1);
@@ -307,31 +255,31 @@ void CL_MuzzleFlash(void)
     case MZ_HYPERBLASTER:
         VectorSet(dl->color, 1, 1, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/hyprbf1a.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_BLAST, (const vec3_t) { 23.5f, 6.0f, -6.0f }, 9.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_BLAST, 23.5f, 6.0f, -6.0f, 9.0f);
         break;
     case MZ_MACHINEGUN:
         VectorSet(dl->color, 1, 1, 0);
         Q_snprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (Q_rand() % 5) + 1);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_MACHN, (const vec3_t) { 29.0f, 9.7f, -8.0f }, 12.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_MACHN, 29.0f, 9.7f, -8.0f, 12.0f);
         break;
     case MZ_SHOTGUN:
         VectorSet(dl->color, 1, 1, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/shotgf1b.wav"), volume, ATTN_NORM, 0);
         S_StartSound(NULL, mz.entity, CHAN_AUTO,   S_RegisterSound("weapons/shotgr1b.wav"), volume, ATTN_NORM, cl_rerelease_effects->integer ? 0.35f : 0.1f);
-        CL_AddPlayerMuzzleFX(MFLASH_SHOTG, (const vec3_t) { 26.5f, 8.6f, -9.5f }, 12.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_SHOTG, 26.5f, 8.6f, -9.5f, 12.0f);
         break;
     case MZ_SSHOTGUN:
         VectorSet(dl->color, 1, 1, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/sshotf1b.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_SHOTG2, (const vec3_t) { 25.0f, 7.0f, -5.5f }, 12.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_SHOTG2, 25.0f, 7.0f, -5.5f, 12.0f);
         break;
     case MZ_CHAINGUN1:
         dl->radius = 200 + (Q_rand() & 31);
         VectorSet(dl->color, 1, 0.25f, 0);
         Q_snprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (Q_rand() % 5) + 1);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_MACHN, (const vec3_t) { 29.0f, 9.7f, -10.0f }, 12.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_MACHN, 29.0f, 9.7f, -10.0f, 12.0f);
         break;
     case MZ_CHAINGUN2:
         dl->radius = 225 + (Q_rand() & 31);
@@ -340,7 +288,7 @@ void CL_MuzzleFlash(void)
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
         Q_snprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (Q_rand() % 5) + 1);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.05f);
-        CL_AddPlayerMuzzleFX(MFLASH_MACHN, (const vec3_t) { 29.0f, 9.7f, -10.0f }, 16.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_MACHN, 29.0f, 9.7f, -10.0f, 16.0f);
         break;
     case MZ_CHAINGUN3:
         dl->radius = 250 + (Q_rand() & 31);
@@ -351,26 +299,26 @@ void CL_MuzzleFlash(void)
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.033f);
         Q_snprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (Q_rand() % 5) + 1);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.066f);
-        CL_AddPlayerMuzzleFX(MFLASH_MACHN, (const vec3_t) { 29.0f, 9.7f, -10.0f }, 20.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_MACHN, 29.0f, 9.7f, -10.0f, 20.0f);
         break;
     case MZ_RAILGUN:
         VectorSet(dl->color, 0.5f, 0.5f, 1.0f);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/railgf1a.wav"), volume, ATTN_NORM, 0);
         if (cl_rerelease_effects->integer)
             S_StartSound(NULL, mz.entity, CHAN_AUX3, S_RegisterSound("weapons/railgr1b.wav"), volume, ATTN_NORM, 0.4f);
-        CL_AddPlayerMuzzleFX(MFLASH_RAIL, (const vec3_t) { 20.0f, 5.2f, -7.0f }, 12.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_RAIL, 20.0f, 5.2f, -7.0f, 12.0f);
         break;
     case MZ_ROCKET:
         VectorSet(dl->color, 1, 0.5f, 0.2f);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/rocklf1a.wav"), volume, ATTN_NORM, 0);
         S_StartSound(NULL, mz.entity, CHAN_AUTO,   S_RegisterSound("weapons/rocklr1b.wav"), volume, ATTN_NORM, cl_rerelease_effects->integer ? 0.15f : 0.1f);
-        CL_AddPlayerMuzzleFX(MFLASH_ROCKET, (const vec3_t) { 20.8f, 5.0f, -11.0f }, 10.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_ROCKET, 20.8f, 5.0f, -11.0f, 10.0f);
         break;
     case MZ_GRENADE:
         VectorSet(dl->color, 1, 0.5f, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), volume, ATTN_NORM, 0);
         S_StartSound(NULL, mz.entity, CHAN_AUTO,   S_RegisterSound("weapons/grenlr1b.wav"), volume, ATTN_NORM, cl_rerelease_effects->integer ? 0.15f : 0.1f);
-        CL_AddPlayerMuzzleFX(MFLASH_LAUNCH, (const vec3_t) { 18.0f, 6.0f, -6.5f }, 9.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_LAUNCH, 18.0f, 6.0f, -6.5f, 9.0f);
         break;
     case MZ_BFG:
         VectorSet(dl->color, 0, 1, 0);
@@ -378,7 +326,7 @@ void CL_MuzzleFlash(void)
         break;
     case MZ_BFG2:
         VectorSet(dl->color, 0, 1, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_BFG, (const vec3_t) { 18.0f, 8.0f, -7.5f }, 16.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_BFG, 18.0f, 8.0f, -7.5f, 16.0f);
         break;
 
     case MZ_LOGIN:
@@ -402,31 +350,31 @@ void CL_MuzzleFlash(void)
         break;
     case MZ_PHALANX2:
         VectorSet(dl->color, 1, 0.5f, 0.5f);
-        CL_AddPlayerMuzzleFX(MFLASH_ROCKET, (const vec3_t) { 18.0f, 10.0f, -6.0f }, 9.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_ROCKET, 18.0f, 10.0f, -6.0f, 9.0f);
         break;
     case MZ_IONRIPPER:
         VectorSet(dl->color, 1, 0.5f, 0.5f);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/rippfire.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_BOOMER, (const vec3_t) { 24.0f, 3.8f, -5.5f }, 15.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_BOOMER, 24.0f, 3.8f, -5.5f, 15.0f);
         break;
 
     case MZ_PROX:
         VectorSet(dl->color, 1, 0.5f, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), volume, ATTN_NORM, 0);
         S_StartSound(NULL, mz.entity, CHAN_AUTO,   S_RegisterSound("weapons/proxlr1a.wav"), volume, ATTN_NORM, cl_rerelease_effects->integer ? 0.15f : 0.1f);
-        CL_AddPlayerMuzzleFX(MFLASH_LAUNCH, (const vec3_t) { 18.0f, 6.0f, -6.5f }, 9.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_LAUNCH, 18.0f, 6.0f, -6.5f, 9.0f);
         break;
     case MZ_ETF_RIFLE:
         VectorSet(dl->color, 0.9f, 0.7f, 0);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/nail1.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_ETF_RIFLE, (const vec3_t) { 24.0f, 5.25f, -5.5f }, 4.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_ETF_RIFLE, 24.0f, 5.25f, -5.5f, 4.0f);
         break;
     case MZ_SHOTGUN2:
         // remaster overloads this as MZ_ETF_RIFLE_2
         if (cl.csr.extended) {
             VectorSet(dl->color, 0.9f, 0.7f, 0);
             S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/nail1.wav"), volume, ATTN_NORM, 0);
-            CL_AddPlayerMuzzleFX(MFLASH_ETF_RIFLE, (const vec3_t) { 24.0f, 4.0f, -5.5f }, 4.0f);
+            CL_AddWeaponMuzzleFXv(MFLASH_ETF_RIFLE, 24.0f, 4.0f, -5.5f, 4.0f);
         } else {
             VectorSet(dl->color, 1, 1, 0);
             S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/shotg2.wav"), volume, ATTN_NORM, 0);
@@ -436,7 +384,7 @@ void CL_MuzzleFlash(void)
         VectorSet(dl->color, 1, 1, 0);
         dl->die = cl.time + 100;
 //      S_StartSound (NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/bfg__l1a.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_BEAMER, (const vec3_t) { 18.0f, 6.0f, -8.5f }, 16.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_BEAMER, 18.0f, 6.0f, -8.5f, 16.0f);
         break;
     case MZ_BLASTER2:
         VectorSet(dl->color, 0, 1, 0);
@@ -447,7 +395,7 @@ void CL_MuzzleFlash(void)
         // negative flashes handled the same in gl/soft until CL_AddDLights
         VectorSet(dl->color, -1, -1, -1);
         S_StartSound(NULL, mz.entity, CHAN_WEAPON, S_RegisterSound("weapons/disint2.wav"), volume, ATTN_NORM, 0);
-        CL_AddPlayerMuzzleFX(MFLASH_DIST, (const vec3_t) { 18.0f, 6.0f, -6.5f }, 10.0f);
+        CL_AddWeaponMuzzleFXv(MFLASH_DIST, 18.0f, 6.0f, -6.5f, 10.0f);
         break;
     case MZ_NUKE1:
         VectorSet(dl->color, 1, 0, 0);
@@ -487,11 +435,6 @@ CL_MuzzleFlash2
 */
 void CL_MuzzleFlash2(void)
 {
-    if (cgame_entity && cgame_entity->ParseMuzzleFlash2) {
-        cgame_entity->ParseMuzzleFlash2();
-        return;
-    }
-
     centity_t   *ent;
     vec3_t      ofs, origin, flash_origin;
     cdlight_t   *dl;
@@ -1842,9 +1785,6 @@ void CL_TeleportParticles(const vec3_t org)
             }
 }
 
-extern int          r_numparticles;
-extern particle_t   r_particles[MAX_PARTICLES];
-
 /*
 ===============
 CL_AddParticles
@@ -1856,7 +1796,6 @@ void CL_AddParticles(void)
     float           alpha;
     float           time, time2;
     cparticle_t     *active, *tail;
-    particle_t      *part;
 
     active = NULL;
     tail = NULL;
@@ -1878,9 +1817,21 @@ void CL_AddParticles(void)
             alpha = p->alpha;
         }
 
-        if (r_numparticles >= MAX_PARTICLES)
+        particle_t part = {};
+
+        time2 = time * time;
+
+        part.origin[0] = p->org[0] + p->vel[0] * time + p->accel[0] * time2;
+        part.origin[1] = p->org[1] + p->vel[1] * time + p->accel[1] * time2;
+        part.origin[2] = p->org[2] + p->vel[2] * time + p->accel[2] * time2;
+
+        part.rgba = p->rgba;
+        part.color = p->color;
+        part.alpha = min(alpha, 1.0f);
+        part.scale = p->scale;
+
+        if (!V_AddParticle(&part))
             break;
-        part = &r_particles[r_numparticles++];
 
         p->next = NULL;
         if (!tail)
@@ -1889,17 +1840,6 @@ void CL_AddParticles(void)
             tail->next = p;
             tail = p;
         }
-
-        time2 = time * time;
-
-        part->origin[0] = p->org[0] + p->vel[0] * time + p->accel[0] * time2;
-        part->origin[1] = p->org[1] + p->vel[1] * time + p->accel[1] * time2;
-        part->origin[2] = p->org[2] + p->vel[2] * time + p->accel[2] * time2;
-
-        part->rgba = p->rgba;
-        part->color = p->color;
-        part->alpha = min(alpha, 1.0f);
-        part->scale = p->scale;
 
         if (p->alphavel == INSTANT_PARTICLE) {
             p->alphavel = 0.0f;
@@ -1917,39 +1857,28 @@ CL_AddShadowLights
 */
 void CL_AddShadowLights(void)
 {
+    if (!cl_shadowlights->integer || !R_SupportsPerPixelLighting())
+        return;
+
     for (size_t i = 0; i < cl.csr.max_shadowlights; i++) {
         if (!*cl.configstrings[cl.csr.shadowlights + i])
             continue;
 
-        int entnum = cl.shadowdefs[i].number;
-        if (entnum <= 0 || entnum >= cl.csr.max_edicts)
-            continue;
+        centity_t *ent = &cl_entities[cl.shadowdefs[i].number];
 
-        centity_t *ent = &cl_entities[entnum];
-        const entity_state_t *state = NULL;
-        if (ent->serverframe)
-            state = &ent->current;
-        else if (cl.baselines[entnum].number == entnum)
-            state = &cl.baselines[entnum];
-        else
+        if (ent->serverframe != cl.frame.number)
             continue;
 
         color_t color;
-        if (!state->skinnum)
+        if (!ent->current.skinnum)
             color = COLOR_WHITE;
         else
-            color.u32 = BigLong(state->skinnum);
+            color.u32 = BigLong(ent->current.skinnum);
         // technically we should be lerping but
         // these lights never move in the game
         // (even though they can)
-        VectorCopy(state->origin, cl.shadowdefs[i].light.origin);
+        VectorCopy(ent->current.origin, cl.shadowdefs[i].light.origin);
         cl.shadowdefs[i].light.color = color;
-
-        if (cl.shadowdefs[i].light.max_fade_dist > 0.0f) {
-            float max_dist = cl.shadowdefs[i].light.max_fade_dist;
-            if (DistanceSquared(cl.refdef.vieworg, cl.shadowdefs[i].light.origin) > (max_dist * max_dist))
-                continue;
-        }
 
         V_AddLightEx(&cl.shadowdefs[i].light);
     }
@@ -1963,11 +1892,6 @@ CL_ClearEffects
 */
 void CL_ClearEffects(void)
 {
-    if (cgame_entity && cgame_entity->ClearEffects) {
-        cgame_entity->ClearEffects();
-        return;
-    }
-
     CL_ClearLightStyles();
     CL_ClearParticles();
     CL_ClearDlights();
@@ -1975,12 +1899,19 @@ void CL_ClearEffects(void)
 
 void CL_InitEffects(void)
 {
-    if (cgame_entity && cgame_entity->InitEffects) {
-        cgame_entity->InitEffects();
-        return;
-    }
-
     int i, j;
+    static bool cg_rand_seeded;
+
+    // Ensure particle/dlight lists are initialized for cgame module
+    // (CL_ClearEffects may have run before cgame was loaded).
+    CL_ClearLightStyles();
+    CL_ClearParticles();
+    CL_ClearDlights();
+
+    if (!cg_rand_seeded) {
+        Q_srand(Com_SlowRand());
+        cg_rand_seeded = true;
+    }
 
     for (i = 0; i < NUMVERTEXNORMALS; i++)
         for (j = 0; j < 3; j++)

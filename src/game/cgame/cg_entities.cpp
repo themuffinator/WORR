@@ -17,7 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 // cl_ents.c -- entity parsing and management
 
-#include "client.h"
+#include "cg_entity_local.h"
 
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
@@ -30,6 +30,11 @@ static cvar_t *cl_brightskins_team_color;
 static cvar_t *cl_brightskins_dead;
 static color_t brightskin_enemy_color = COLOR_RED;
 static color_t brightskin_team_color = COLOR_GREEN;
+static vec3_t listener_origin;
+static vec3_t listener_forward;
+static vec3_t listener_right;
+static vec3_t listener_up;
+static int listener_entnum;
 
 #define RESERVED_ENTITY_GUN 1
 #define RESERVED_ENTITY_TESTMODEL 2
@@ -74,11 +79,6 @@ static void cl_brightskins_team_color_changed(cvar_t *self)
 
 void CL_InitBrightskins(void)
 {
-    if (cgame_entity && cgame_entity->InitBrightskins) {
-        cgame_entity->InitBrightskins();
-        return;
-    }
-
     cl_brightskins_custom = Cvar_Get("cl_brightskins_custom", "0", CVAR_ARCHIVE);
     cl_brightskins_enemy_color = Cvar_Get("cl_brightskins_enemy_color", "#ff0000", CVAR_ARCHIVE);
     cl_brightskins_enemy_color->changed = cl_brightskins_enemy_color_changed;
@@ -110,11 +110,6 @@ static bool CL_IsSpectatorView(void)
 
 void CL_MigratePlayerCvars(void)
 {
-    if (cgame_entity && cgame_entity->MigratePlayerCvars) {
-        cgame_entity->MigratePlayerCvars();
-        return;
-    }
-
     float old_enemy_outline = 0.0f;
     float old_self_outline = 0.0f;
     float old_enemy_rim = 0.0f;
@@ -196,11 +191,6 @@ static void CL_UpdateForcedModels(void)
 
 void CL_RegisterForcedModels(void)
 {
-    if (cgame_entity && cgame_entity->RegisterForcedModels) {
-        cgame_entity->RegisterForcedModels();
-        return;
-    }
-
     cl_forced_enemy_modcount = -1;
     cl_forced_team_modcount = -1;
     CL_UpdateForcedModels();
@@ -373,7 +363,7 @@ static void parse_entity_update(const entity_state_t *state)
         cl.solidEntities[cl.numSolidEntities++] = ent;
 
     if (state->solid && state->solid != PACKED_BSP) {
-        q2proto_client_unpack_solid(&cls.q2proto_ctx, state->solid, ent->mins, ent->maxs);
+        cgei->Q2Proto_UnpackSolid(state->solid, ent->mins, ent->maxs);
         ent->radius = Distance(ent->maxs, ent->mins) * 0.5f;
     } else {
         VectorClear(ent->mins);
@@ -594,11 +584,6 @@ A valid frame has been parsed.
 */
 void CL_DeltaFrame(void)
 {
-    if (cgame_entity && cgame_entity->DeltaFrame) {
-        cgame_entity->DeltaFrame();
-        return;
-    }
-
     centity_t           *ent;
     int                 i, j;
     int                 framenum;
@@ -678,11 +663,6 @@ void CL_DeltaFrame(void)
 // for debugging problems when out-of-date entity origin is referenced
 void CL_CheckEntityPresent(int entnum, const char *what)
 {
-    if (cgame_entity && cgame_entity->CheckEntityPresent) {
-        cgame_entity->CheckEntityPresent(entnum, what);
-        return;
-    }
-
     const centity_t *e;
 
     if (entnum == cl.frame.clientNum + 1) {
@@ -742,7 +722,8 @@ static bool CL_GetPlayerTeamInfo(const entity_state_t *state, uint8_t *team_inde
     if (cl.game_api != Q2PROTO_GAME_RERELEASE || !cl.csr.extended)
         return false;
 
-    player_skinnum_t unpacked = { .skinnum = state->skinnum };
+    player_skinnum_t unpacked = {};
+    unpacked.skinnum = state->skinnum;
 
     if (team_index)
         *team_index = unpacked.team_index;
@@ -1470,7 +1451,8 @@ static void CL_AddPacketEntities(void)
                 const clientinfo_t *weapon_ci = render_ci;
 
                 if (cl.game_api == Q2PROTO_GAME_RERELEASE) {
-                    player_skinnum_t unpacked = { .skinnum = s1->skinnum };
+                    player_skinnum_t unpacked = {};
+                    unpacked.skinnum = s1->skinnum;
                     ci = &cl.clientinfo[unpacked.client_num];
                     i = unpacked.vwep_index;
                 } else {
@@ -1985,11 +1967,6 @@ loop if rendering is disabled but sound is running.
 */
 void CL_CalcViewValues(void)
 {
-    if (cgame_entity && cgame_entity->CalcViewValues) {
-        cgame_entity->CalcViewValues();
-        return;
-    }
-
     const player_state_t *ps, *ops;
     vec3_t viewoffset;
     float lerp;
@@ -2118,6 +2095,7 @@ void CL_CalcViewValues(void)
     VectorCopy(cl.v_forward, listener_forward);
     VectorCopy(cl.v_right, listener_right);
     VectorCopy(cl.v_up, listener_up);
+    listener_entnum = cl.frame.clientNum + 1;
 }
 
 /*
@@ -2129,11 +2107,6 @@ Emits all entities, particles, and lights to the renderer
 */
 void CL_AddEntities(void)
 {
-    if (cgame_entity && cgame_entity->AddEntities) {
-        cgame_entity->AddEntities();
-        return;
-    }
-
     CL_CalcViewValues();
     CL_FinishViewValues();
     CL_AddPacketEntities();
@@ -2154,11 +2127,6 @@ Called to get the sound spatialization origin
 */
 void CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org)
 {
-    if (cgame_entity && cgame_entity->GetEntitySoundOrigin) {
-        cgame_entity->GetEntitySoundOrigin(entnum, org);
-        return;
-    }
-
     const centity_t *ent;
     const mmodel_t  *mod;
     vec3_t          mid;

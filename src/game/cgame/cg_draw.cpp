@@ -126,6 +126,11 @@ static cvar_t *cg_obituary_fade;
 static cvar_t *cg_obituary_fade_legacy;
 static cvar_t *cg_draw_fps;
 static cvar_t *cg_draw_fps_legacy;
+static cvar_t *gl_shadow_draw_debug;
+static cvar_t *gl_shadow_debug_dlights;
+static cvar_t *gl_shadow_debug_shadowlights;
+static cvar_t *gl_shadow_debug_casters;
+static cvar_t *gl_shadow_debug_dyn_casters;
 
 // static temp data used for hud
 static struct
@@ -1269,6 +1274,23 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
     const int x = ((hud_vrect.x + hud_vrect.width) * scale) - hud_safe.x;
     const int y = (hud_vrect.y * scale) + hud_safe.y;
     const int fps_scale = 4;
+    const int line_height = max(
+        1, static_cast<int>(std::lround(cgi.SCR_FontLineHeight(fps_scale))));
+    const bool show_shadow_stats =
+        (gl_shadow_draw_debug && gl_shadow_draw_debug->integer > 0);
+    const std::string shadow_text =
+        show_shadow_stats
+            ? G_Fmt("dl:{} sh:{} cas:{} dyn:{}",
+                    gl_shadow_debug_dlights ? gl_shadow_debug_dlights->integer : 0,
+                    gl_shadow_debug_shadowlights
+                        ? gl_shadow_debug_shadowlights->integer
+                        : 0,
+                    gl_shadow_debug_casters ? gl_shadow_debug_casters->integer : 0,
+                    gl_shadow_debug_dyn_casters
+                        ? gl_shadow_debug_dyn_casters->integer
+                        : 0)
+                  .data()
+            : std::string();
 
     const int scale_factor = 2;
     float hud_scale = 1.0f;
@@ -1285,10 +1307,21 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
         cgi.SCR_DrawFontString(text.c_str(), Q_rint(x * coord_scale),
                                Q_rint(y * coord_scale), fps_scale,
                                rgba_white, true, text_align_t::RIGHT);
+        if (show_shadow_stats) {
+            cgi.SCR_DrawFontString(
+                shadow_text.c_str(), Q_rint(x * coord_scale),
+                Q_rint((y + line_height) * coord_scale), fps_scale, rgba_white,
+                true, text_align_t::RIGHT);
+        }
         cgi.SCR_SetScale(hud_scale);
     } else {
         cgi.SCR_DrawFontString(text.c_str(), x, y, fps_scale, rgba_white, true,
                                text_align_t::RIGHT);
+        if (show_shadow_stats) {
+            cgi.SCR_DrawFontString(shadow_text.c_str(), x, y + line_height,
+                                   fps_scale, rgba_white, true,
+                                   text_align_t::RIGHT);
+        }
     }
 }
 
@@ -5135,6 +5168,15 @@ void CG_InitScreen()
     cg_hud_cgame_legacy = cgi.cvar("cl_hud_cgame", cg_hud_cgame->string, CVAR_NOFLAGS);
     cg_draw_fps = cgi.cvar("cg_draw_fps", "0", CVAR_ARCHIVE);
     cg_draw_fps_legacy = cgi.cvar("cg_drawFPS", cg_draw_fps->string, CVAR_NOFLAGS);
+    gl_shadow_draw_debug = cgi.cvar("gl_shadow_draw_debug", "0", CVAR_NOFLAGS);
+    gl_shadow_debug_dlights =
+        cgi.cvar("gl_shadow_debug_dlights", "0", CVAR_NOFLAGS);
+    gl_shadow_debug_shadowlights =
+        cgi.cvar("gl_shadow_debug_shadowlights", "0", CVAR_NOFLAGS);
+    gl_shadow_debug_casters =
+        cgi.cvar("gl_shadow_debug_casters", "0", CVAR_NOFLAGS);
+    gl_shadow_debug_dyn_casters =
+        cgi.cvar("gl_shadow_debug_dyn_casters", "0", CVAR_NOFLAGS);
     cg_usekfont = cgi.cvar("cg_usekfont", "1", CVAR_NOFLAGS);
     cg_usekfont_legacy = cgi.cvar("scr_usekfont", cg_usekfont->string, CVAR_NOFLAGS);
     cl_alpha = cgi.cvar("cl_alpha", "1", CVAR_NOFLAGS);

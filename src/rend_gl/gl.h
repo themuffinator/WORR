@@ -376,6 +376,25 @@ extern cvar_t *gl_shadow_debug_freeze;
 extern cvar_t *gl_shadow_draw_debug;
 extern cvar_t *gl_shadow_debug_log;
 extern cvar_t *gl_shadow_debug_log_ms;
+extern cvar_t *gl_shadow_debug_dlights;
+extern cvar_t *gl_shadow_debug_shadowlights;
+extern cvar_t *gl_shadow_debug_casters;
+extern cvar_t *gl_shadow_debug_dyn_casters;
+
+static inline float GL_DlightInfluenceRadius(const dlight_t *dl);
+
+static inline float GL_DlightCullRadius(const dlight_t *dl, vec3_t out_center)
+{
+    float radius = GL_DlightInfluenceRadius(dl);
+
+    VectorCopy(dl->origin, out_center);
+    if (dl->conecos != 0.0f) {
+        VectorCopy(dl->sphere, out_center);
+        radius = max(radius, dl->sphere[3] + DLIGHT_CUTOFF);
+    }
+
+    return radius;
+}
 extern cvar_t *gl_shadow_bias_scale;
 extern cvar_t *gl_shadow_pcss_max_lights;
 extern cvar_t *gl_shadow_alpha_mode;
