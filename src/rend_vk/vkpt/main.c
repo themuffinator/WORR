@@ -2083,6 +2083,14 @@ static void fill_model_instance(ModelInstance* instance, const entity_t* entity,
 	instance->alpha_and_frame = floatToHalf((entity->flags & RF_TRANSLUCENT) ? entity->alpha : 1.0f);
 	instance->render_buffer_idx = 0; // to be filled later
 	instance->render_prim_offset = 0;
+	if (entity->flags & RF_ITEM_COLORIZE) {
+		instance->colorize[0] = entity->rgba.r * (1.0f / 255.0f);
+		instance->colorize[1] = entity->rgba.g * (1.0f / 255.0f);
+		instance->colorize[2] = entity->rgba.b * (1.0f / 255.0f);
+		instance->colorize[3] = entity->rgba.a * (1.0f / 255.0f);
+	} else {
+		Vector4Set(instance->colorize, 0.0f, 0.0f, 0.0f, 0.0f);
+	}
 
 	// If this is a static wall light model, the renderer creates a custom set of light polys
 	// for this model. Mark the material with the light flag to avoid double contribution and noise

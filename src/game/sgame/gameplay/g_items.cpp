@@ -4590,6 +4590,22 @@ void SetItemNames() {
 					itemList[i].pickupName);
 
 	for (item_id_t i = IT_NULL; i < IT_TOTAL; i = static_cast<item_id_t>(i + 1)) {
+		const Item& it = itemList[i];
+		if (!it.worldModel || !*it.worldModel) {
+			gi.configString(static_cast<int32_t>(CS_ITEM_COLORS) + static_cast<int32_t>(i), "");
+			continue;
+		}
+
+		const int32_t model_index = gi.modelIndex(it.worldModel);
+		const rgba_t color = it.colorize;
+		const int r = color.r;
+		const int g = color.g;
+		const int b = color.b;
+		gi.configString(static_cast<int32_t>(CS_ITEM_COLORS) + static_cast<int32_t>(i),
+			G_Fmt("{} {} {} {}", model_index, r, g, b).data());
+	}
+
+	for (item_id_t i = IT_NULL; i < IT_TOTAL; i = static_cast<item_id_t>(i + 1)) {
 		itemList[i].ammoWheelIndex = -1;
 		itemList[i].weaponWheelIndex = -1;
 		itemList[i].powerupWheelIndex = -1;

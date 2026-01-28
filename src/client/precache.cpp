@@ -586,6 +586,38 @@ void CL_PrepRenderer(void)
     OGG_Play();
 }
 
+static void CL_ParseItemColorConfigstring(int item_id, const char *s)
+{
+    if (item_id < 0 || item_id >= MAX_ITEMS)
+        return;
+
+    const int old_model = cl.item_color_model_index[item_id];
+    if (old_model > 0 && old_model < cl.csr.max_models)
+        cl.item_color_by_model[old_model].u32 = 0;
+
+    cl.item_color_model_index[item_id] = 0;
+
+    if (!s || !*s)
+        return;
+
+    int model_index = 0;
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    if (sscanf(s, "%d %d %d %d", &model_index, &r, &g, &b) != 4)
+        return;
+
+    if (model_index <= 0 || model_index >= cl.csr.max_models)
+        return;
+
+    r = Q_clip(r, 0, 255);
+    g = Q_clip(g, 0, 255);
+    b = Q_clip(b, 0, 255);
+
+    cl.item_color_by_model[model_index] = COLOR_RGB(r, g, b);
+    cl.item_color_model_index[item_id] = model_index;
+}
+
 // parse configstring, internal method
 static void update_configstring(int index)
 {
@@ -609,6 +641,18 @@ static void update_configstring(int index)
 
     if (index >= cl.csr.lights && index < cl.csr.lights + MAX_LIGHTSTYLES) {
         CL_SetLightStyle(index - cl.csr.lights, s);
+        return;
+    }
+
+    if (cl.csr.itemcolors != (uint16_t)-1 &&
+        index >= cl.csr.itemcolors && index < cl.csr.itemcolors + MAX_ITEMS) {
+        CL_ParseItemColorConfigstring(index - cl.csr.itemcolors, s);
+        return;
+    }
+
+    if (cl.csr.itemcolors == (uint16_t)-1 &&
+        index >= CS_ITEM_COLORS && index < CS_ITEM_COLORS + MAX_ITEMS) {
+        CL_ParseItemColorConfigstring(index - CS_ITEM_COLORS, s);
         return;
     }
 

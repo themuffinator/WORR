@@ -1481,6 +1481,7 @@ const cs_remap_t cs_remap_old = {
     .wheelpowerups = -1,
     .cdloopcount = -1,
     .gamestyle   = -1,
+    .itemcolors  = -1,
 
     .end         = MAX_CONFIGSTRINGS_OLD
 };
@@ -1512,6 +1513,7 @@ const cs_remap_t cs_remap_rerelease = {
     .wheelpowerups = CS_WHEEL_POWERUPS,
     .cdloopcount = CS_CD_LOOP_COUNT,
     .gamestyle   = CS_GAME_STYLE,
+    .itemcolors  = CS_ITEM_COLORS,
 
     .end         = MAX_CONFIGSTRINGS
 };
@@ -1543,6 +1545,7 @@ const cs_remap_t cs_remap_q2pro_new = {
     .wheelpowerups = -1,
     .cdloopcount = -1,
     .gamestyle   = -1,
+    .itemcolors  = -1,
 
     .end         = MAX_CONFIGSTRINGS_EX
 };

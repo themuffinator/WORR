@@ -1030,6 +1030,17 @@ get_material(
 	base_color = image1.rgb * minfo.base_factor;
 	base_color = clamp(base_color, vec3(0), vec3(1));
 
+	if (triangle.instance_index != ~0u) {
+		vec4 colorize = instance_buffer.model_instances[triangle.instance_index].colorize;
+		if (colorize.a > 0.0) {
+			vec3 tint = clamp(colorize.rgb, vec3(0), vec3(1));
+			float strength = clamp(colorize.a, 0.0, 1.0);
+			float lum = dot(base_color, vec3(0.299, 0.587, 0.114));
+			vec3 shaded = tint * lum;
+			base_color = mix(base_color, shaded, strength);
+		}
+	}
+
 	normal = geo_normal;
 	metallic = 0;
     roughness = 1;

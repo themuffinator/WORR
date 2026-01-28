@@ -1217,7 +1217,8 @@ enum {
 	CS_CD_LOOP_COUNT = (CS_WHEEL_POWERUPS + MAX_WHEEL_ITEMS), // [Paril-KEX] override default loop count
 	CS_GAME_STYLE, // [Paril-KEX] see game_style_t
 	CS_FLAGSTATUS, // [WORR-KEX] capture-the-flag status indicator
-	MAX_CONFIGSTRINGS
+	CS_ITEM_COLORS,
+	MAX_CONFIGSTRINGS = (CS_ITEM_COLORS + MAX_ITEMS)
 };
 
 static_assert(MAX_CONFIGSTRINGS <= 0x7FFF, "configstrings too big");

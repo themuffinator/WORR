@@ -26,6 +26,7 @@ extern cvar_t *cl_rollhack;
 extern cvar_t *cl_noglow;
 extern cvar_t *cl_nobob;
 extern cvar_t *cl_nolerp;
+extern cvar_t *cl_colorize_items;
 extern cvar_t *cl_thirdperson;
 extern cvar_t *cl_thirdperson_angle;
 extern cvar_t *cl_thirdperson_range;

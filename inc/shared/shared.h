@@ -1719,7 +1719,9 @@ typedef int16_t layout_flags_t;
 #define CS_WHEEL_POWERUPS   (CS_WHEEL_AMMO + MAX_WHEEL_ITEMS) // [Paril-KEX] see MAX_WHEEL_ITEMS
 #define CS_CD_LOOP_COUNT    (CS_WHEEL_POWERUPS + MAX_WHEEL_ITEMS) // [Paril-KEX] override default loop count
 #define CS_GAME_STYLE       (CS_CD_LOOP_COUNT + 1) // [Paril-KEX] see game_style_t
-#define MAX_CONFIGSTRINGS   (CS_GAME_STYLE + 1)
+#define CS_FLAGSTATUS       (CS_GAME_STYLE + 1) // [WORR-KEX] capture-the-flag status indicator
+#define CS_ITEM_COLORS      (CS_FLAGSTATUS + 1)
+#define MAX_CONFIGSTRINGS   (CS_ITEM_COLORS + MAX_ITEMS)
 #endif // !defined(GAME3_INCLUDE)
 
 // Configuration strings for "Q2PRO extended" games
@@ -1781,6 +1783,7 @@ typedef struct {
     uint16_t    wheelpowerups;
     uint16_t    cdloopcount;
     uint16_t    gamestyle;
+    uint16_t    itemcolors;
 
     uint16_t    end;
 } cs_remap_t;

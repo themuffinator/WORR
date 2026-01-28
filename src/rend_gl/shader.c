@@ -1449,8 +1449,14 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits) {
     GLSL(diffuse.rgb *= (diffuse.r + diffuse.g + diffuse.b) / 3.0;
          diffuse.rgb *= v_color.a;)
 
-  if (!(bits & GLS_TEXTURE_REPLACE))
-    GLSL(diffuse *= color;)
+  if (bits & GLS_ITEM_COLORIZE) {
+    GLSL(float lum = dot(diffuse.rgb, vec3(0.299, 0.587, 0.114));)
+    GLSL(vec3 shaded = lum * v_color.rgb;)
+    GLSL(diffuse = vec4(shaded, diffuse.a * v_color.a);)
+  } else if (!(bits & GLS_TEXTURE_REPLACE)) {
+    if (!(bits & GLS_ITEM_COLORIZE_BASE))
+      GLSL(diffuse *= color;)
+  }
 
   if (!(bits & GLS_LIGHTMAP_ENABLE) && (bits & GLS_GLOWMAP_ENABLE)) {
     GLSL(vec4 glowmap = texture(u_glowmap, tc);)

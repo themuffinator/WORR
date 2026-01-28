@@ -767,6 +767,30 @@ static uint8_t CL_ShellColorToByte(float value)
     return (uint8_t)Q_clip(scaled, 0, 255);
 }
 
+static bool CL_GetItemColorizeSettings(int model_index, color_t *color, float *strength, float *rim_strength)
+{
+    if (!cl_colorize_items)
+        return false;
+
+    const int flags = Cvar_ClampInteger(cl_colorize_items, 0, 3);
+    if (!flags)
+        return false;
+
+    if (model_index <= 0 || model_index >= cl.csr.max_models)
+        return false;
+
+    const color_t item_color = cl.item_color_by_model[model_index];
+    if (!item_color.u32)
+        return false;
+
+    *color = item_color;
+    if (strength)
+        *strength = (flags & 1) ? 1.0f : 0.0f;
+    if (rim_strength)
+        *rim_strength = (flags & 2) ? 1.0f : 0.0f;
+    return (flags & 3) != 0;
+}
+
 static bool CL_ShellRimlightColor(renderfx_t flags, color_t *color)
 {
     flags &= RF_SHELL_MASK;
@@ -1363,6 +1387,27 @@ static void CL_AddPacketEntities(void)
                     rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
                     rim.alpha = rim_alpha;
                     rim.rgba = rim_color;
+                    V_AddEntity(&rim);
+                }
+            }
+        }
+
+        if (!is_player) {
+            color_t item_color;
+            float item_strength = 0.0f;
+            float item_rim_strength = 0.0f;
+            if (CL_GetItemColorizeSettings(s1->modelindex, &item_color, &item_strength, &item_rim_strength)) {
+                ent.rgba = item_color;
+                if (item_strength > 0.0f) {
+                    ent.flags |= RF_ITEM_COLORIZE;
+                    ent.rgba.a = (uint8_t)Q_clip(Q_rint(item_strength * 255.0f), 0, 255);
+                }
+
+                if (item_rim_strength > 0.0f) {
+                    entity_t rim = ent;
+                    rim.flags = RF_RIMLIGHT | RF_TRANSLUCENT;
+                    rim.alpha = entity_alpha * item_rim_strength;
+                    rim.rgba = item_color;
                     V_AddEntity(&rim);
                 }
             }

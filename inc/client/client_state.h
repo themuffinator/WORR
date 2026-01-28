@@ -296,6 +296,8 @@ typedef struct {
     qhandle_t sound_precache[MAX_SOUNDS];
     qhandle_t image_precache[MAX_IMAGES];
     qhandle_t sfx_hit_marker;
+    color_t item_color_by_model[MAX_MODELS];
+    int32_t item_color_model_index[MAX_ITEMS];
 
     clientinfo_t    clientinfo[MAX_CLIENTS];
     clientinfo_t    baseclientinfo;

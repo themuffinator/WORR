@@ -794,6 +794,8 @@ static inline float GL_DlightInfluenceRadius(const dlight_t *dl)
 #define GLS_POSTFX              BIT_ULL(40)
 #define GLS_BLOOM_PREFILTER     BIT_ULL(41)
 #define GLS_EXPOSURE_UPDATE     BIT_ULL(42)
+#define GLS_ITEM_COLORIZE       BIT_ULL(43)
+#define GLS_ITEM_COLORIZE_BASE  BIT_ULL(44)
 
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
@@ -808,7 +810,7 @@ static inline float GL_DlightInfluenceRadius(const dlight_t *dl)
                                  GLS_GLOWMAP_ENABLE | GLS_SKY_MASK | GLS_DEFAULT_FLARE | GLS_MESH_MASK | \
                                  GLS_FOG_MASK | GLS_BLOOM_MASK | GLS_BLUR_MASK | GLS_DYNAMIC_LIGHTS | \
                                  GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF | GLS_CRT | GLS_POSTFX | GLS_BLOOM_PREFILTER | \
-                                 GLS_EXPOSURE_UPDATE)
+                                 GLS_EXPOSURE_UPDATE | GLS_ITEM_COLORIZE | GLS_ITEM_COLORIZE_BASE)
 #define GLS_UNIFORM_MASK        (GLS_WARP_ENABLE | GLS_REFRACT_ENABLE | GLS_LIGHTMAP_ENABLE | GLS_INTENSITY_ENABLE | \
                                  GLS_SKY_MASK | GLS_FOG_MASK | GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER | GLS_BLUR_MASK | \
                                  GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP | GLS_DOF | GLS_CRT | GLS_POSTFX | \

@@ -41,6 +41,7 @@ extern "C" {
 #define RF_OUTLINE          BIT_ULL(34)
 #define RF_OUTLINE_NODEPTH  BIT_ULL(35)
 #define RF_BRIGHTSKIN       BIT_ULL(36)
+#define RF_ITEM_COLORIZE    BIT_ULL(37)
 
 #define RF_SHELL_MASK       (RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | \
                              RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM | RF_SHELL_LITE_GREEN)

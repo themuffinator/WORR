@@ -2109,6 +2109,7 @@ struct Item {
   const char *pickupName;           // for printing on pickup
   const char *pickupNameDefinitive; // definite article version for languages
                                     // that need it
+  rgba_t colorize = rgba_white;     // item colorize target (rgb)
 
   int quantity = 0; // for ammo how much, for weapons how much is used per shot
   item_id_t ammo = IT_NULL;     // for weapons

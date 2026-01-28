@@ -55,6 +55,7 @@ cvar_t  *cl_rollhack;
 cvar_t  *cl_noglow;
 cvar_t  *cl_nobob;
 cvar_t  *cl_nolerp;
+cvar_t  *cl_colorize_items;
 cvar_t  *cl_player_outline_enemy;
 cvar_t  *cl_player_outline_team;
 cvar_t  *cl_player_outline_width;
@@ -2910,6 +2911,7 @@ static void CL_InitLocal(void)
     cl_noglow = Cvar_Get("cl_noglow", "0", 0);
     cl_nobob = Cvar_Get("cl_nobob", "0", 0);
     cl_nolerp = Cvar_Get("cl_nolerp", "0", 0);
+    cl_colorize_items = Cvar_Get("cl_colorize_items", "0", CVAR_ARCHIVE);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
     cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
     cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);

@@ -19,6 +19,7 @@ cvar_t *cl_rollhack = nullptr;
 cvar_t *cl_noglow = nullptr;
 cvar_t *cl_nobob = nullptr;
 cvar_t *cl_nolerp = nullptr;
+cvar_t *cl_colorize_items = nullptr;
 cvar_t *cl_thirdperson = nullptr;
 cvar_t *cl_thirdperson_angle = nullptr;
 cvar_t *cl_thirdperson_range = nullptr;
@@ -65,6 +66,7 @@ void CG_Entity_InitCvars(void)
     cl_noglow = Cvar_Get("cl_noglow", "0", 0);
     cl_nobob = Cvar_Get("cl_nobob", "0", 0);
     cl_nolerp = Cvar_Get("cl_nolerp", "0", 0);
+    cl_colorize_items = Cvar_Get("cl_colorize_items", "0", CVAR_ARCHIVE);
     cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
     cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);
     cl_player_rimlight_enemy = Cvar_Get("cl_player_rimlight_enemy", "0", CVAR_ARCHIVE);

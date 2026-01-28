@@ -281,6 +281,7 @@ BEGIN_SHADER_STRUCT( ModelInstance )
 	uint alpha_and_frame;
 	uint render_buffer_idx;
 	uint render_prim_offset;
+	vec4 colorize;
 }
 END_SHADER_STRUCT( ModelInstance )
 

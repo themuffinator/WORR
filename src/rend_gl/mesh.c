@@ -856,6 +856,7 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
             state |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE;
     }
 
+
     skin = skin_for_mesh(skins, num_skins);
     if (skin->texnum2)
         state |= GLS_GLOWMAP_ENABLE;
@@ -864,6 +865,10 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
         state |= GLS_BLOOM_GENERATE;
         if (glr.ent->flags & (RF_SHELL_MASK | RF_RIMLIGHT))
             state |= GLS_BLOOM_SHELL;
+    }
+
+    if (glr.ent->flags & RF_ITEM_COLORIZE) {
+        state |= GLS_ITEM_COLORIZE_BASE;
     }
 
     if (!(state & (GLS_MESH_SHELL | GLS_RIMLIGHT)) &&
@@ -889,6 +894,43 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
     GL_LockArrays(num_verts);
 
     qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+
+    if (!glr.shadow_pass && (glr.ent->flags & RF_ITEM_COLORIZE)) {
+        const float strength = glr.ent->rgba.a * (1.0f / 255.0f);
+        if (strength > 0.0f) {
+            const float tint_r = glr.ent->rgba.r * (1.0f / 255.0f);
+            const float tint_g = glr.ent->rgba.g * (1.0f / 255.0f);
+            const float tint_b = glr.ent->rgba.b * (1.0f / 255.0f);
+            const float overlay_r = tint_r;
+            const float overlay_g = tint_g;
+            const float overlay_b = tint_b;
+            const float overlay_a = strength * color[3];
+
+            if (overlay_a > 0.0f) {
+                glStateBits_t overlay_bits = state;
+                overlay_bits &= ~(GLS_BLEND_MASK | GLS_BLOOM_MASK | GLS_DYNAMIC_LIGHTS);
+                overlay_bits |= GLS_BLEND_BLEND | GLS_DEPTHMASK_FALSE | GLS_ITEM_COLORIZE;
+
+                GL_StateBits(overlay_bits);
+                GL_BindTexture(TMU_TEXTURE, skin->texnum);
+                if (overlay_bits & GLS_GLOWMAP_ENABLE)
+                    GL_BindTexture(TMU_GLOWMAP, skin->texnum2);
+
+                if (gls.currentva) {
+                    if (dotshading)
+                        GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_COLOR);
+                    else
+                        GL_ArrayBits(GLA_VERTEX | GLA_TC | GLA_NORMAL);
+                    gl_backend->tex_coord_pointer((const GLfloat *)tcoords);
+                }
+
+                uniform_mesh_color(overlay_r, overlay_g, overlay_b, overlay_a);
+                GL_LoadUniforms();
+
+                qglDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, indices);
+            }
+        }
+    }
 
     if (outline_no_depth) {
         if (gls.currentva) {
