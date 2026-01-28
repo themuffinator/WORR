@@ -29,6 +29,12 @@ static cvar_t *cl_rerelease_effects;
 static cvar_t *cl_muzzlelight_time;
 cvar_t *cl_shadowlights;
 
+static void CL_RequireCGameEntity(const char *what)
+{
+    if (!cgame_entity)
+        Com_Error(ERR_DROP, "cgame entity extension required for %s", what);
+}
+
 static float CL_PlayerMuzzleViewheight(const centity_t *pl, int entity)
 {
     if (entity == cl.frame.clientNum + 1)
@@ -98,11 +104,14 @@ static clightstyle_t    cl_lightstyles[MAX_LIGHTSTYLES];
 // Paril: interpolation
 static int              cl_lastlightstyleoffset = -1;
 
+// Legacy engine lightstyle reset; unused with cgame entity migration.
+#if 0
 static void CL_ClearLightStyles(void)
 {
     memset(cl_lightstyles, 0, sizeof(cl_lightstyles));
     cl_lastlightstyleoffset = -1;
 }
+#endif
 
 /*
 ================
@@ -111,20 +120,11 @@ CL_SetLightStyle
 */
 void CL_SetLightStyle(int index, const char *s)
 {
-    if (cgame_entity && cgame_entity->SetLightStyle) {
-        cgame_entity->SetLightStyle(index, s);
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->SetLightStyle)
+        Com_Error(ERR_DROP, "cgame entity SetLightStyle not available");
 
-    int     i;
-    clightstyle_t   *ls;
-
-    ls = &cl_lightstyles[index];
-    ls->length = strlen(s);
-    Q_assert(ls->length <= CS_MAX_STRING_LENGTH);
-
-    for (i = 0; i < ls->length; i++)
-        ls->map[i] = (float)(s[i] - 'a') / (float)('m' - 'a');
+    cgame_entity->SetLightStyle(index, s);
 }
 
 /*
@@ -192,10 +192,13 @@ DLIGHT MANAGEMENT
 
 static cdlight_t       cl_dlights[MAX_DLIGHTS];
 
+// Legacy engine dlight reset; unused with cgame entity migration.
+#if 0
 static void CL_ClearDlights(void)
 {
     memset(cl_dlights, 0, sizeof(cl_dlights));
 }
+#endif
 
 /*
 ===============
@@ -266,10 +269,12 @@ CL_MuzzleFlash
 */
 void CL_MuzzleFlash(void)
 {
-    if (cgame_entity && cgame_entity->ParseMuzzleFlash) {
-        cgame_entity->ParseMuzzleFlash();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->ParseMuzzleFlash)
+        Com_Error(ERR_DROP, "cgame entity ParseMuzzleFlash not available");
+
+    cgame_entity->ParseMuzzleFlash();
+    return;
 
     vec3_t      fv, rv;
     cdlight_t   *dl;
@@ -487,10 +492,12 @@ CL_MuzzleFlash2
 */
 void CL_MuzzleFlash2(void)
 {
-    if (cgame_entity && cgame_entity->ParseMuzzleFlash2) {
-        cgame_entity->ParseMuzzleFlash2();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->ParseMuzzleFlash2)
+        Com_Error(ERR_DROP, "cgame entity ParseMuzzleFlash2 not available");
+
+    cgame_entity->ParseMuzzleFlash2();
+    return;
 
     centity_t   *ent;
     vec3_t      ofs, origin, flash_origin;
@@ -1003,6 +1010,8 @@ static cparticle_t  *active_particles, *free_particles;
 
 static cparticle_t  particles[MAX_PARTICLES];
 
+// Legacy engine particle reset; unused with cgame entity migration.
+#if 0
 static void CL_ClearParticles(void)
 {
     int     i;
@@ -1014,6 +1023,7 @@ static void CL_ClearParticles(void)
         particles[i].next = &particles[i + 1];
     particles[i].next = NULL;
 }
+#endif
 
 cparticle_t *CL_AllocParticle(void)
 {
@@ -1963,31 +1973,22 @@ CL_ClearEffects
 */
 void CL_ClearEffects(void)
 {
-    if (cgame_entity && cgame_entity->ClearEffects) {
-        cgame_entity->ClearEffects();
+    if (!cgame_entity)
         return;
-    }
 
-    CL_ClearLightStyles();
-    CL_ClearParticles();
-    CL_ClearDlights();
+    if (!cgame_entity->ClearEffects)
+        Com_Error(ERR_DROP, "cgame entity ClearEffects not available");
+
+    cgame_entity->ClearEffects();
 }
 
 void CL_InitEffects(void)
 {
-    if (cgame_entity && cgame_entity->InitEffects) {
-        cgame_entity->InitEffects();
+    if (!cgame_entity)
         return;
-    }
 
-    int i, j;
+    if (!cgame_entity->InitEffects)
+        Com_Error(ERR_DROP, "cgame entity InitEffects not available");
 
-    for (i = 0; i < NUMVERTEXNORMALS; i++)
-        for (j = 0; j < 3; j++)
-            avelocities[i][j] = (Q_rand() & 255) * 0.01f;
-
-    cl_lerp_lightstyles = Cvar_Get("cl_lerp_lightstyles", "1", 0);
-    cl_rerelease_effects = Cvar_Get("cl_rerelease_effects", "1", 0);
-    cl_muzzlelight_time = Cvar_Get("cl_muzzlelight_time", "100", 0);
-    cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
+    cgame_entity->InitEffects();
 }

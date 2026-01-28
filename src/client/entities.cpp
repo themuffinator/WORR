@@ -35,6 +35,12 @@ static color_t brightskin_team_color = COLOR_GREEN;
 #define RESERVED_ENTITY_TESTMODEL 2
 #define RESERVED_ENTITY_COUNT 3
 
+static void CL_RequireCGameEntity(const char *what)
+{
+    if (!cgame_entity)
+        Com_Error(ERR_DROP, "cgame entity extension required for %s", what);
+}
+
 static bool CL_ParseBrightskinColor(const char *s, color_t *color)
 {
     if (SCR_ParseColor(s, color))
@@ -79,16 +85,10 @@ void CL_InitBrightskins(void)
         return;
     }
 
-    cl_brightskins_custom = Cvar_Get("cl_brightskins_custom", "0", CVAR_ARCHIVE);
-    cl_brightskins_enemy_color = Cvar_Get("cl_brightskins_enemy_color", "#ff0000", CVAR_ARCHIVE);
-    cl_brightskins_enemy_color->changed = cl_brightskins_enemy_color_changed;
-    cl_brightskins_enemy_color->generator = Com_Color_g;
-    cl_brightskins_enemy_color_changed(cl_brightskins_enemy_color);
-    cl_brightskins_team_color = Cvar_Get("cl_brightskins_team_color", "#00ff00", CVAR_ARCHIVE);
-    cl_brightskins_team_color->changed = cl_brightskins_team_color_changed;
-    cl_brightskins_team_color->generator = Com_Color_g;
-    cl_brightskins_team_color_changed(cl_brightskins_team_color);
-    cl_brightskins_dead = Cvar_Get("cl_brightskins_dead", "1", CVAR_ARCHIVE);
+    if (!cgame_entity)
+        return;
+
+    Com_Error(ERR_DROP, "cgame entity InitBrightskins not available");
 }
 
 typedef struct {
@@ -115,37 +115,10 @@ void CL_MigratePlayerCvars(void)
         return;
     }
 
-    float old_enemy_outline = 0.0f;
-    float old_self_outline = 0.0f;
-    float old_enemy_rim = 0.0f;
-    float old_self_rim = 0.0f;
+    if (!cgame_entity)
+        return;
 
-    if (cl_enemy_outline)
-        old_enemy_outline = Cvar_ClampValue(cl_enemy_outline, 0.0f, 1.0f);
-    if (cl_enemy_outline_self)
-        old_self_outline = Cvar_ClampValue(cl_enemy_outline_self, 0.0f, 1.0f);
-    if (cl_enemy_rimlight)
-        old_enemy_rim = Cvar_ClampValue(cl_enemy_rimlight, 0.0f, 1.0f);
-    if (cl_enemy_rimlight_self)
-        old_self_rim = Cvar_ClampValue(cl_enemy_rimlight_self, 0.0f, 1.0f);
-
-    if (cl_player_outline_enemy && cl_player_outline_enemy->modified_count == 0 && old_enemy_outline > 0.0f)
-        Cvar_SetValue(cl_player_outline_enemy, old_enemy_outline, FROM_CODE);
-
-    if (cl_player_outline_team && cl_player_outline_team->modified_count == 0) {
-        float team_outline = old_enemy_outline > old_self_outline ? old_enemy_outline : old_self_outline;
-        if (team_outline > 0.0f)
-            Cvar_SetValue(cl_player_outline_team, team_outline, FROM_CODE);
-    }
-
-    if (cl_player_rimlight_enemy && cl_player_rimlight_enemy->modified_count == 0 && old_enemy_rim > 0.0f)
-        Cvar_SetValue(cl_player_rimlight_enemy, old_enemy_rim, FROM_CODE);
-
-    if (cl_player_rimlight_team && cl_player_rimlight_team->modified_count == 0) {
-        float team_rim = old_enemy_rim > old_self_rim ? old_enemy_rim : old_self_rim;
-        if (team_rim > 0.0f)
-            Cvar_SetValue(cl_player_rimlight_team, team_rim, FROM_CODE);
-    }
+    Com_Error(ERR_DROP, "cgame entity MigratePlayerCvars not available");
 }
 
 static bool CL_ForceModelActive(const cvar_t *var)
@@ -201,9 +174,10 @@ void CL_RegisterForcedModels(void)
         return;
     }
 
-    cl_forced_enemy_modcount = -1;
-    cl_forced_team_modcount = -1;
-    CL_UpdateForcedModels();
+    if (!cgame_entity)
+        return;
+
+    Com_Error(ERR_DROP, "cgame entity RegisterForcedModels not available");
 }
 
 /*
@@ -594,115 +568,22 @@ A valid frame has been parsed.
 */
 void CL_DeltaFrame(void)
 {
-    if (cgame_entity && cgame_entity->DeltaFrame) {
-        cgame_entity->DeltaFrame();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->DeltaFrame)
+        Com_Error(ERR_DROP, "cgame entity DeltaFrame not available");
 
-    centity_t           *ent;
-    int                 i, j;
-    int                 framenum;
-    int                 prevstate = cls.state;
-
-    // getting a valid frame message ends the connection process
-    if (cls.state == ca_precached)
-        set_active_state();
-
-    // set server time
-    framenum = cl.frame.number - cl.serverdelta;
-
-    if (framenum < 0)
-        Com_Error(ERR_DROP, "%s: server time went backwards", __func__);
-
-    if (CL_FRAMETIME && framenum > INT_MAX / CL_FRAMETIME)
-        Com_Error(ERR_DROP, "%s: server time overflowed", __func__);
-
-    cl.servertime = framenum * CL_FRAMETIME;
-#if USE_FPS
-    cl.keyservertime = (framenum / cl.frametime.div) * BASE_FRAMETIME;
-#endif
-
-    // rebuild the list of solid entities for this frame
-    cl.numSolidEntities = 0;
-
-    // initialize position of the player's own entity from playerstate.
-    // this is needed in situations when player entity is invisible, but
-    // server sends an effect referencing it's origin (such as MZ_LOGIN, etc)
-    ent = &cl_entities[cl.frame.clientNum + 1];
-    Com_PlayerToEntityState(&cl.frame.ps, &ent->current);
-
-    // set current and prev, unpack solid, etc
-    for (i = 0; i < cl.frame.numEntities; i++) {
-        j = (cl.frame.firstEntity + i) & PARSE_ENTITIES_MASK;
-        parse_entity_update(&cl.entityStates[j]);
-    }
-
-    // fire events. due to footstep tracing this must be after updating entities.
-    for (i = 0; i < cl.frame.numEntities; i++) {
-        j = (cl.frame.firstEntity + i) & PARSE_ENTITIES_MASK;
-        parse_entity_event(cl.entityStates[j].number);
-    }
-
-    if (cls.demo.recording && !cls.demo.paused && !cls.demo.seeking && CL_FRAMESYNC) {
-        CL_EmitDemoFrame();
-    }
-
-    if (prevstate == ca_precached)
-        CL_GTV_Resume();
-    else
-        CL_GTV_EmitFrame();
-
-    if (cls.demo.playback) {
-        // this delta has nothing to do with local viewangles,
-        // clear it to avoid interfering with demo freelook hack
-        VectorClear(cl.frame.ps.pmove.delta_angles);
-    }
-
-    if (cl.oldframe.ps.pmove.pm_type != cl.frame.ps.pmove.pm_type) {
-        IN_Activate();
-    }
-
-    check_player_lerp(&cl.oldframe, &cl.frame, 1);
-
-#if USE_FPS
-    if (CL_FRAMESYNC)
-        check_player_lerp(&cl.oldkeyframe, &cl.keyframe, cl.frametime.div);
-#endif
-
-    CL_CheckPredictionError();
-
-    SCR_SetCrosshairColor();
+    cgame_entity->DeltaFrame();
 }
 
 #if USE_DEBUG
 // for debugging problems when out-of-date entity origin is referenced
 void CL_CheckEntityPresent(int entnum, const char *what)
 {
-    if (cgame_entity && cgame_entity->CheckEntityPresent) {
-        cgame_entity->CheckEntityPresent(entnum, what);
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->CheckEntityPresent)
+        Com_Error(ERR_DROP, "cgame entity CheckEntityPresent not available");
 
-    const centity_t *e;
-
-    if (entnum == cl.frame.clientNum + 1) {
-        return; // player entity = current
-    }
-
-    e = &cl_entities[entnum];
-    if (e->serverframe == cl.frame.number) {
-        return; // current
-    }
-
-    if (e->serverframe) {
-        Com_LPrintf(PRINT_DEVELOPER,
-                    "SERVER BUG: %s on entity %d last seen %d frames ago\n",
-                    what, entnum, cl.frame.number - e->serverframe);
-    } else {
-        Com_LPrintf(PRINT_DEVELOPER,
-                    "SERVER BUG: %s on entity %d never seen before\n",
-                    what, entnum);
-    }
+    cgame_entity->CheckEntityPresent(entnum, what);
 }
 #endif
 
@@ -1985,139 +1866,11 @@ loop if rendering is disabled but sound is running.
 */
 void CL_CalcViewValues(void)
 {
-    if (cgame_entity && cgame_entity->CalcViewValues) {
-        cgame_entity->CalcViewValues();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->CalcViewValues)
+        Com_Error(ERR_DROP, "cgame entity CalcViewValues not available");
 
-    const player_state_t *ps, *ops;
-    vec3_t viewoffset;
-    float lerp;
-
-    if (!cl.frame.valid) {
-        return;
-    }
-
-    // find states to interpolate between
-    ps = &cl.frame.ps;
-    ops = &cl.oldframe.ps;
-
-    lerp = cl.lerpfrac;
-
-    float viewheight;
-
-    // calculate the origin
-    if (!cls.demo.playback && cl_predict->integer && !(ps->pmove.pm_flags & PMF_NO_PREDICTION)) {
-        // use predicted values
-        unsigned delta = cls.realtime - cl.predicted_step_time;
-        float backlerp = lerp - 1.0f;
-
-        VectorMA(cl.predicted_origin, backlerp, cl.prediction_error, cl.refdef.vieworg);
-
-        // smooth out stair climbing
-        if (delta < STEP_TIME) {
-            cl.refdef.vieworg[2] -= cl.predicted_step * (STEP_TIME - delta) * (1.f / STEP_TIME);
-        }
-    } else {
-        // just use interpolated values
-        for (int i = 0; i < 3; i++) {
-            cl.refdef.vieworg[i] = ops->pmove.origin[i] +
-                lerp * (ps->pmove.origin[i] - ops->pmove.origin[i]);
-        }
-    }
-    
-    // Record viewheight changes
-    if (cl.current_viewheight != ps->pmove.viewheight) {
-        cl.prev_viewheight = cl.current_viewheight;
-        cl.current_viewheight = ps->pmove.viewheight;
-        cl.viewheight_change_time = cl.time;
-    }
-
-    // if not running a demo or on a locked frame, add the local angle movement
-    if (cls.demo.playback) {
-        if (cls.key_dest == KEY_GAME && Key_IsDown(K_SHIFT)) {
-            VectorCopy(cl.viewangles, cl.refdef.viewangles);
-        } else {
-            LerpAngles(ops->viewangles, ps->viewangles, lerp,
-                       cl.refdef.viewangles);
-        }
-    } else if (ps->pmove.pm_type < PM_DEAD) {
-        // use predicted values
-        VectorCopy(cl.predicted_angles, cl.refdef.viewangles);
-    } else if (ops->pmove.pm_type < PM_DEAD && cls.serverProtocol > PROTOCOL_VERSION_DEFAULT) {
-        // lerp from predicted angles, since enhanced servers
-        // do not send viewangles each frame
-        LerpAngles(cl.predicted_angles, ps->viewangles, lerp, cl.refdef.viewangles);
-    } else {
-        // just use interpolated values
-        LerpAngles(ops->viewangles, ps->viewangles, lerp, cl.refdef.viewangles);
-    }
-
-    if (cl.csr.extended) {
-        // interpolate blend colors if the last frame wasn't clear
-        float blendfrac = ops->screen_blend[3] ? cl.lerpfrac : 1;
-        float damageblendfrac = ops->damage_blend[3] ? cl.lerpfrac : 1;
-        
-        Vector4Lerp(ops->screen_blend, ps->screen_blend, blendfrac, cl.refdef.screen_blend);
-        Vector4Lerp(ops->damage_blend, ps->damage_blend, damageblendfrac, cl.refdef.damage_blend);
-    } else {
-        Vector4Copy(ps->screen_blend, cl.refdef.screen_blend);
-        Vector4Copy(ps->damage_blend, cl.refdef.damage_blend);
-    }
-    // Mix in screen_blend from cgame pmove
-    // FIXME: Should also be interpolated?...
-    if(cl.predicted_screen_blend[3] > 0) {
-        float a2 = cl.refdef.screen_blend[3] + (1 - cl.refdef.screen_blend[3]) * cl.predicted_screen_blend[3]; // new total alpha
-        float a3 = cl.refdef.screen_blend[3] / a2;					// fraction of color from old
-
-        LerpVector(cl.predicted_screen_blend, cl.refdef.screen_blend, a3, cl.refdef.screen_blend);
-        cl.refdef.screen_blend[3] = a2;
-    }
-    if (info_bobskip->integer) {
-        Vector4Clear(cl.refdef.damage_blend);
-    }
-
-
-#if USE_FPS
-    ps = &cl.keyframe.ps;
-    ops = &cl.oldkeyframe.ps;
-
-    lerp = cl.keylerpfrac;
-#endif
-
-    // interpolate field of view
-    cl.fov_x = lerp_client_fov(ops->fov, ps->fov, lerp);
-    cl.fov_y = V_CalcFov(cl.fov_x, 4, 3);
-
-    LerpVector(ops->viewoffset, ps->viewoffset, lerp, viewoffset);
-    if (info_bobskip->integer) {
-        VectorClear(viewoffset);
-    }
-
-    AngleVectors(cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
-
-    VectorCopy(cl.refdef.vieworg, cl.playerEntityOrigin);
-    VectorCopy(cl.refdef.viewangles, cl.playerEntityAngles);
-
-    if (cl.playerEntityAngles[PITCH] > 180) {
-        cl.playerEntityAngles[PITCH] -= 360;
-    }
-
-    cl.playerEntityAngles[PITCH] = cl.playerEntityAngles[PITCH] / 3;
-
-    VectorAdd(cl.refdef.vieworg, viewoffset, cl.refdef.vieworg);
-
-    // Smooth out view height over 100ms
-    float viewheight_lerp = (cl.time - cl.viewheight_change_time);
-    viewheight_lerp = 100 - min(viewheight_lerp, 100);
-    viewheight = cl.current_viewheight + (float)(cl.prev_viewheight - cl.current_viewheight) * viewheight_lerp * 0.01f;
-
-    cl.refdef.vieworg[2] += viewheight;
-
-    VectorCopy(cl.refdef.vieworg, listener_origin);
-    VectorCopy(cl.v_forward, listener_forward);
-    VectorCopy(cl.v_right, listener_right);
-    VectorCopy(cl.v_up, listener_up);
+    cgame_entity->CalcViewValues();
 }
 
 /*
@@ -2129,20 +1882,11 @@ Emits all entities, particles, and lights to the renderer
 */
 void CL_AddEntities(void)
 {
-    if (cgame_entity && cgame_entity->AddEntities) {
-        cgame_entity->AddEntities();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->AddEntities)
+        Com_Error(ERR_DROP, "cgame entity AddEntities not available");
 
-    CL_CalcViewValues();
-    CL_FinishViewValues();
-    CL_AddPacketEntities();
-    CL_AddTEnts();
-    CL_AddParticles();
-    CL_AddDLights();
-    CL_AddLightStyles();
-    CL_AddShadowLights();
-    LOC_AddLocationsToScene();
+    cgame_entity->AddEntities();
 }
 
 /*
@@ -2154,66 +1898,9 @@ Called to get the sound spatialization origin
 */
 void CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org)
 {
-    if (cgame_entity && cgame_entity->GetEntitySoundOrigin) {
-        cgame_entity->GetEntitySoundOrigin(entnum, org);
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->GetEntitySoundOrigin)
+        Com_Error(ERR_DROP, "cgame entity GetEntitySoundOrigin not available");
 
-    const centity_t *ent;
-    const mmodel_t  *mod;
-    vec3_t          mid;
-
-    if (entnum >= cl.csr.max_edicts)
-        Com_Error(ERR_DROP, "%s: bad entity", __func__);
-
-    if (!entnum || entnum == listener_entnum) {
-        // should this ever happen?
-        VectorCopy(listener_origin, org);
-        return;
-    }
-
-    // interpolate origin
-    ent = &cl_entities[entnum];
-    LerpVector(ent->prev.origin, ent->current.origin, cl.lerpfrac, org);
-
-    // use re-releases algorithm for bmodels & beams
-    if (cl.csr.extended) {
-        // for BSP models, we want the nearest point from
-        // the bmodel to the listener; if we're "inside"
-        // the bmodel we want it full strength.
-        if (ent->current.solid == PACKED_BSP) {
-            mod = cl.model_clip[ent->current.modelindex];
-            if (mod) {
-                vec3_t absmin, absmax;
-                VectorAdd(org, mod->mins, absmin);
-                VectorAdd(org, mod->maxs, absmax);
-
-                for (int i = 0; i < 3; i++)
-                    org[i] = (listener_origin[i] < absmin[i]) ? absmin[i] :
-                             (listener_origin[i] > absmax[i]) ? absmax[i] :
-                             listener_origin[i];
-            }
-        } else if (ent->current.renderfx & RF_BEAM) {
-            // for beams, we use the nearest point on the line
-            // between the two origins
-            vec3_t old_origin;
-            LerpVector(ent->prev.old_origin, ent->current.old_origin, cl.lerpfrac, old_origin);
-
-            vec3_t vec, p;
-            VectorSubtract(old_origin, org, vec);
-            VectorSubtract(listener_origin, org, p);
-
-            float frac = Q_clipf(DotProduct(p, vec) / DotProduct(vec, vec), 0.0f, 1.0f);
-            VectorMA(org, frac, vec, org);
-        }
-    } else {
-        // offset the origin for BSP models
-        if (ent->current.solid == PACKED_BSP) {
-            mod = cl.model_clip[ent->current.modelindex];
-            if (mod) {
-                VectorAvg(mod->mins, mod->maxs, mid);
-                VectorAdd(org, mid, org);
-            }
-        }
-    }
+    cgame_entity->GetEntitySoundOrigin(entnum, org);
 }

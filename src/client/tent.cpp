@@ -70,6 +70,12 @@ static cl_footstep_sfx_t    *cl_footstep_sfx;
 static int                  cl_num_footsteps;
 static qhandle_t            cl_last_footstep;
 
+static void CL_RequireCGameEntity(const char *what)
+{
+    if (!cgame_entity)
+        Com_Error(ERR_DROP, "cgame entity extension required for %s", what);
+}
+
 extern "C" mtexinfo_t nulltexinfo;
 
 /*
@@ -251,31 +257,12 @@ CL_RegisterTEntSounds
 */
 void CL_RegisterTEntSounds(void)
 {
-    if (cgame_entity && cgame_entity->RegisterTEntSounds) {
-        cgame_entity->RegisterTEntSounds();
+    if (!cgame_entity)
         return;
-    }
+    if (!cgame_entity->RegisterTEntSounds)
+        Com_Error(ERR_DROP, "cgame entity RegisterTEntSounds not available");
 
-    cl_sfx_ric1 = S_RegisterSound("world/ric1.wav");
-    cl_sfx_ric2 = S_RegisterSound("world/ric2.wav");
-    cl_sfx_ric3 = S_RegisterSound("world/ric3.wav");
-    cl_sfx_lashit = S_RegisterSound("weapons/lashit.wav");
-    cl_sfx_spark5 = S_RegisterSound("world/spark5.wav");
-    cl_sfx_spark6 = S_RegisterSound("world/spark6.wav");
-    cl_sfx_spark7 = S_RegisterSound("world/spark7.wav");
-    cl_sfx_railg = S_RegisterSound("weapons/railgf1a.wav");
-    cl_sfx_rockexp = S_RegisterSound("weapons/rocklx1a.wav");
-    cl_sfx_grenexp = S_RegisterSound("weapons/grenlx1a.wav");
-    cl_sfx_watrexp = S_RegisterSound("weapons/xpld_wat.wav");
-
-    S_RegisterSound("player/land1.wav");
-    S_RegisterSound("player/fall2.wav");
-    S_RegisterSound("player/fall1.wav");
-
-    CL_RegisterFootsteps();
-
-    cl_sfx_lightning = S_RegisterSound("weapons/tesla.wav");
-    cl_sfx_disrexp = S_RegisterSound("weapons/disrupthit.wav");
+    cgame_entity->RegisterTEntSounds();
 }
 
 static const char *const muzzlenames[MFLASH_TOTAL] = {
@@ -300,39 +287,12 @@ CL_RegisterTEntModels
 */
 void CL_RegisterTEntModels(void)
 {
-    if (cgame_entity && cgame_entity->RegisterTEntModels) {
-        cgame_entity->RegisterTEntModels();
+    if (!cgame_entity)
         return;
-    }
+    if (!cgame_entity->RegisterTEntModels)
+        Com_Error(ERR_DROP, "cgame entity RegisterTEntModels not available");
 
-    void *data;
-    int len;
-
-    cl_mod_explode = R_RegisterModel("models/objects/explode/tris.md2");
-    cl_mod_smoke = R_RegisterModel("models/objects/smoke/tris.md2");
-    cl_mod_flash = R_RegisterModel("models/objects/flash/tris.md2");
-    cl_mod_parasite_segment = R_RegisterModel("models/monsters/parasite/segment/tris.md2");
-    cl_mod_grapple_cable = R_RegisterModel("models/ctf/segment/tris.md2");
-    cl_mod_explo4 = R_RegisterModel("models/objects/r_explode/tris.md2");
-    cl_mod_bfg_explo = R_RegisterModel("sprites/s_bfg2.sp2");
-    cl_mod_powerscreen = R_RegisterModel("models/items/armor/effect/tris.md2");
-    cl_mod_laser = R_RegisterModel("models/objects/laser/tris.md2");
-    cl_mod_dmspot = R_RegisterModel("models/objects/dmspot/tris.md2");
-
-    cl_mod_lightning = R_RegisterModel("models/proj/lightning/tris.md2");
-    cl_mod_heatbeam = R_RegisterModel("models/proj/beam/tris.md2");
-
-    for (int i = 0; i < MFLASH_TOTAL; i++)
-        cl_mod_muzzles[i] = R_RegisterModel(va("models/weapons/%s/flash/tris.md2", muzzlenames[i]));
-
-    cl_mod_marker = R_RegisterModel("models/objects/pointer/tris.md2");
-
-    cl_img_flare = R_RegisterImage("misc/flare.tga", IT_SPRITE, IF_DEFAULT_FLARE);
-
-    // check for remaster powerscreen model (ugly!)
-    len = FS_LoadFile("models/items/armor/effect/tris.md2", &data);
-    cl.need_powerscreen_scale = len == 2300 && Com_BlockChecksum(data, len) == 0x19fca65b;
-    FS_FreeFile(data);
+    cgame_entity->RegisterTEntModels();
 }
 
 /*
@@ -486,34 +446,11 @@ void CL_AddMuzzleFX(const vec3_t origin, const vec3_t angles, cl_muzzlefx_t fx, 
 // help stuff
 void CL_AddHelpPath(const vec3_t origin, const vec3_t dir, bool first)
 {
-    if (cgame_entity && cgame_entity->AddHelpPath) {
-        cgame_entity->AddHelpPath(origin, dir, first);
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->AddHelpPath)
+        Com_Error(ERR_DROP, "cgame entity AddHelpPath not available");
 
-    if (first) {
-        int i;
-        explosion_t *ex;
-        
-        for (i = 0, ex = cl_explosions; i < MAX_EXPLOSIONS; i++, ex++) {
-            if (ex->type == ex_marker) {
-                ex->type = ex_free;
-                continue;
-            }
-        }
-    }
-
-    explosion_t *ex = CL_AllocExplosion();
-    VectorCopy(origin, ex->ent.origin);
-    ex->ent.origin[2] += 16.0f;
-    ex->lightcolor[0] = ex->ent.origin[2];
-    vectoangles2(dir, ex->ent.angles);
-    ex->type = ex_marker;
-    ex->ent.flags = RF_NOSHADOW | RF_MINLIGHT | RF_TRANSLUCENT;
-    ex->ent.alpha = 1.0f;
-    ex->start = cl.servertime - CL_FRAMETIME;
-    ex->ent.model = cl_mod_marker;
-    VectorSet(ex->ent.scale, 2.5f, 2.5f, 2.5f);
+    cgame_entity->AddHelpPath(origin, dir, first);
 }
 
 /*
@@ -1338,10 +1275,12 @@ static const byte splash_color[] = {0x00, 0xe0, 0xb0, 0x50, 0xd0, 0xe0, 0xe8};
 
 void CL_ParseTEnt(void)
 {
-    if (cgame_entity && cgame_entity->ParseTempEntity) {
-        cgame_entity->ParseTempEntity();
-        return;
-    }
+    CL_RequireCGameEntity(__func__);
+    if (!cgame_entity->ParseTempEntity)
+        Com_Error(ERR_DROP, "cgame entity ParseTempEntity not available");
+
+    cgame_entity->ParseTempEntity();
+    return;
 
     explosion_t *ex;
     int r;
@@ -1749,38 +1688,20 @@ CL_ClearTEnts
 */
 void CL_ClearTEnts(void)
 {
-    if (cgame_entity && cgame_entity->ClearTEnts) {
-        cgame_entity->ClearTEnts();
+    if (!cgame_entity)
         return;
-    }
+    if (!cgame_entity->ClearTEnts)
+        Com_Error(ERR_DROP, "cgame entity ClearTEnts not available");
 
-    CL_ClearBeams();
-    CL_ClearExplosions();
-    CL_ClearLasers();
-    CL_ClearSustains();
+    cgame_entity->ClearTEnts();
 }
 
 void CL_InitTEnts(void)
 {
-    if (cgame_entity && cgame_entity->InitTEnts) {
-        cgame_entity->InitTEnts();
+    if (!cgame_entity)
         return;
-    }
+    if (!cgame_entity->InitTEnts)
+        Com_Error(ERR_DROP, "cgame entity InitTEnts not available");
 
-    cl_muzzleflashes = Cvar_Get("cl_muzzleflashes", "1", 0);
-    cl_railtrail_type = Cvar_Get("cl_railtrail_type", "0", 0);
-    cl_railtrail_time = Cvar_Get("cl_railtrail_time", "1.0", 0);
-    cl_railtrail_time->changed = cl_timeout_changed;
-    cl_railtrail_time->changed(cl_railtrail_time);
-    cl_railcore_color = Cvar_Get("cl_railcore_color", "red", 0);
-    cl_railcore_color->changed = cl_railcore_color_changed;
-    cl_railcore_color->generator = Com_Color_g;
-    cl_railcore_color_changed(cl_railcore_color);
-    cl_railcore_width = Cvar_Get("cl_railcore_width", "2", 0);
-    cl_railspiral_color = Cvar_Get("cl_railspiral_color", "blue", 0);
-    cl_railspiral_color->changed = cl_railspiral_color_changed;
-    cl_railspiral_color->generator = Com_Color_g;
-    cl_railspiral_color_changed(cl_railspiral_color);
-    cl_railspiral_radius = Cvar_Get("cl_railspiral_radius", "3", 0);
-    cl_compass_time = Cvar_Get("cl_compass_time", "10", 0);
+    cgame_entity->InitTEnts();
 }

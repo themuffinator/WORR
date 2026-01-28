@@ -1354,12 +1354,14 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
                 Com_WPrintf("cgame entity API version mismatch\n");
                 cgame_entity = NULL;
             }
-            if (cgame_entity) {
-                CL_InitEffects();
-                CL_InitBrightskins();
-                CL_InitTEnts();
-            }
         }
+        if (!cgame_entity) {
+            Com_Error(ERR_DROP, "cgame entity extension required");
+        }
+
+        CL_InitEffects();
+        CL_InitBrightskins();
+        CL_InitTEnts();
         Z_Freep(&current_game);
         current_game = Z_CopyString(new_game);
         current_rerelease_server = is_rerelease_server;
