@@ -1008,7 +1008,7 @@ PARTICLE MANAGEMENT
 
 static cparticle_t  *active_particles, *free_particles;
 
-static cparticle_t  particles[MAX_PARTICLES];
+[[maybe_unused]] static cparticle_t  particles[MAX_PARTICLES];
 
 // Legacy engine particle reset; unused with cgame entity migration.
 #if 0

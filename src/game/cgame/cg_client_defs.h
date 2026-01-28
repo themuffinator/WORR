@@ -163,3 +163,7 @@ void CL_ColorExplosionParticles(const vec3_t org, int color, int run);
 void CL_WidowSplash(void);
 void CL_BerserkSlamParticles(const vec3_t org, const vec3_t dir);
 void CL_PowerSplash(void);
+
+void CL_PredictAngles(void);
+void CL_PredictMovement(void);
+void CL_CheckPredictionError(void);

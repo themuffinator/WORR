@@ -449,6 +449,11 @@ static void CG_Q2Proto_UnpackSolid(uint32_t solid, vec3_t mins, vec3_t maxs)
     q2proto_client_unpack_solid(&cls.q2proto_ctx, solid, mins, maxs);
 }
 
+static void CG_Entity_Pmove(pmove_t *pmove)
+{
+    Pmove(pmove, &cl.pmp);
+}
+
 static void CG_CL_GTV_Resume(void)
 {
     CL_GTV_Resume();
@@ -568,8 +573,6 @@ static cgame_entity_import_t cg_entity_import = {
 
     .CL_CheckForPause = CL_CheckForPause,
     .CL_UpdateFrameTimes = CL_UpdateFrameTimes,
-    .CL_PredictAngles = CL_PredictAngles,
-    .CL_CheckPredictionError = CL_CheckPredictionError,
     .CL_EmitDemoFrame = CL_EmitDemoFrame,
     .CL_FirstDemoFrame = CL_FirstDemoFrame,
     .CL_GTV_Resume = CG_CL_GTV_Resume,
@@ -578,6 +581,8 @@ static cgame_entity_import_t cg_entity_import = {
     .CL_LoadClientinfo = CL_LoadClientinfo,
 
     .CL_Trace = CL_Trace,
+    .CL_PointContents = CL_PointContents,
+    .Pmove = CG_Entity_Pmove,
 
     .Z_Malloc = Z_Malloc,
     .Z_Freep = Z_Freep,

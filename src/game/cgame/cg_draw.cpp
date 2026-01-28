@@ -1269,13 +1269,19 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
     if (!cg_draw_fps || cg_draw_fps->integer <= 0)
         return;
 
+    constexpr float k_fps_line_height_px = 5.0f;
+
     const int fps_value = CG_UpdateFPSValue(isplit);
     const std::string text = G_Fmt("{} fps", fps_value).data();
     const int x = ((hud_vrect.x + hud_vrect.width) * scale) - hud_safe.x;
     const int y = (hud_vrect.y * scale) + hud_safe.y;
-    const int fps_scale = 4;
+    const int fps_scale = 1;
+    const float base_line_height = cgi.SCR_FontLineHeight(fps_scale);
+    const float scale_factor = (base_line_height > 0.0f)
+        ? max(1.0f, base_line_height / k_fps_line_height_px)
+        : 1.0f;
     const int line_height = max(
-        1, static_cast<int>(std::lround(cgi.SCR_FontLineHeight(fps_scale))));
+        1, static_cast<int>(std::lround(base_line_height / scale_factor)));
     const bool show_shadow_stats =
         (gl_shadow_draw_debug && gl_shadow_draw_debug->integer > 0);
     const std::string shadow_text =
@@ -1292,7 +1298,6 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
                   .data()
             : std::string();
 
-    const int scale_factor = 2;
     float hud_scale = 1.0f;
     if (cgi.SCR_GetScreenMetrics) {
         cg_screen_metrics_t metrics{};
@@ -1301,7 +1306,7 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
             hud_scale = metrics.hud_scale;
     }
 
-    if (cgi.SCR_SetScale && scale_factor > 1 && hud_scale > 0.0f) {
+    if (cgi.SCR_SetScale && scale_factor > 1.0f && hud_scale > 0.0f) {
         float coord_scale = 1.0f / (scale_factor * hud_scale);
         cgi.SCR_SetScale(1.0f / scale_factor);
         cgi.SCR_DrawFontString(text.c_str(), Q_rint(x * coord_scale),

@@ -118,6 +118,8 @@ void CL_RegisterTEntSounds(void);
 void CL_RegisterTEntModels(void);
 void CL_SetLightStyle(int index, const char *s);
 void CL_DeltaFrame(void);
+void CL_PredictMovement(void);
+void CL_CheckPredictionError(void);
 void CL_CalcViewValues(void);
 void CL_AddEntities(void);
 void CL_GetEntitySoundOrigin(unsigned entnum, vec3_t org);
@@ -144,6 +146,8 @@ static cgame_entity_export_t cg_entity_exports = {
     .SetLightStyle = CL_SetLightStyle,
 
     .DeltaFrame = CL_DeltaFrame,
+    .PredictMovement = CL_PredictMovement,
+    .CheckPredictionError = CL_CheckPredictionError,
     .CalcViewValues = CL_CalcViewValues,
     .AddEntities = CL_AddEntities,
 

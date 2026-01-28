@@ -172,7 +172,13 @@ static void CL_SetRendererCheatFlags(bool enable)
 #endif
 #endif
 
-static cvar_t   *cl_hit_markers; // 1 = sound + pic, 2 = pic
+static cvar_t   *cl_hit_markers; // hit marker visuals (0 = off)
+static cvar_t   *cg_hit_beeps;
+
+static qhandle_t cl_sfx_hit_high;
+static qhandle_t cl_sfx_hit_medium;
+static qhandle_t cl_sfx_hit_low;
+static qhandle_t cl_sfx_hit_teammate;
 
 client_static_t cls;
 client_state_t  cl;
@@ -2913,6 +2919,8 @@ static void CL_InitLocal(void)
     cl_nolerp = Cvar_Get("cl_nolerp", "0", 0);
     cl_colorize_items = Cvar_Get("cl_colorize_items", "0", CVAR_ARCHIVE);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
+    cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
+    cg_hit_beeps = Cvar_Get("cg_hit_beeps", "1", CVAR_ARCHIVE);
     cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
     cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);
     cl_player_outline_width = Cvar_Get("cl_player_outline_width", "2.0", CVAR_ARCHIVE);
@@ -3407,16 +3415,18 @@ void CL_UpdateFrameTimes(void)
 
 void CL_AddHitMarker(int damage)
 {
-    if (damage <= 0)
+    const bool friendly_hit = damage < 0;
+    const int hit_damage = damage < 0 ? -damage : damage;
+    if (hit_damage <= 0)
         return;
 
     bool use_cgame = (cgame && cgame->DrawCrosshair && cgame->NotifyHitMarker);
 
     if (use_cgame) {
-        cgame->NotifyHitMarker(0, damage);
+        cgame->NotifyHitMarker(0, hit_damage);
     } else {
         cl.crosshair_hit_time = cls.realtime;
-        cl.crosshair_hit_damage = damage;
+        cl.crosshair_hit_damage = hit_damage;
     }
 
     if (!cl_hit_markers->integer)
@@ -3429,8 +3439,35 @@ void CL_AddHitMarker(int damage)
             cl.hit_marker_count++;
         }
 
-        if (cl_hit_markers->integer > 1)
-            S_StartSound(NULL, listener_entnum, 257, cl.sfx_hit_marker, 1, ATTN_NONE, 0);
+        if (cg_hit_beeps && cg_hit_beeps->integer > 0) {
+            qhandle_t hit_sfx = 0;
+            if (friendly_hit) {
+                if (!cl_sfx_hit_teammate)
+                    cl_sfx_hit_teammate = S_RegisterSound("feedback/hit_teammate.ogg");
+                hit_sfx = cl_sfx_hit_teammate;
+            } else if (cg_hit_beeps->integer <= 1) {
+                if (!cl.sfx_hit_marker)
+                    cl.sfx_hit_marker = S_RegisterSound("feedback/hit.ogg");
+                hit_sfx = cl.sfx_hit_marker;
+            } else {
+                if (hit_damage >= 50) {
+                    if (!cl_sfx_hit_high)
+                        cl_sfx_hit_high = S_RegisterSound("feedback/hit0.ogg");
+                    hit_sfx = cl_sfx_hit_high;
+                } else if (hit_damage >= 20) {
+                    if (!cl_sfx_hit_medium)
+                        cl_sfx_hit_medium = S_RegisterSound("feedback/hit1.ogg");
+                    hit_sfx = cl_sfx_hit_medium;
+                } else {
+                    if (!cl_sfx_hit_low)
+                        cl_sfx_hit_low = S_RegisterSound("feedback/hit2.ogg");
+                    hit_sfx = cl_sfx_hit_low;
+                }
+            }
+
+            if (hit_sfx)
+                S_StartSound(NULL, listener_entnum, 257, hit_sfx, 1, ATTN_NONE, 0);
+        }
     }
 }
 
@@ -3440,7 +3477,7 @@ static void CL_UpdateHitMarkers(void)
         return;
 
     int damage = cgame->GetHitMarkerDamage(&cl.frame.ps);
-    if (damage > 0)
+    if (damage != 0)
         CL_AddHitMarker(damage);
 }
 

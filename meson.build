@@ -440,6 +440,7 @@ cgame_src = bgame_src + [
   'src/game/cgame/cg_main.cpp',
   'src/game/cgame/cg_entity_api.cpp',
   'src/game/cgame/cg_entities.cpp',
+  'src/game/cgame/cg_predict.cpp',
   'src/game/cgame/cg_effects.cpp',
   'src/game/cgame/cg_newfx.cpp',
   'src/game/cgame/cg_tent.cpp',

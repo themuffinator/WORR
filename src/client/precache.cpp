@@ -283,7 +283,7 @@ void CL_RegisterSounds(void)
 
     S_BeginRegistration();
     CL_RegisterTEntSounds();
-    cl.sfx_hit_marker = S_RegisterSound("weapons/marker.wav");
+    cl.sfx_hit_marker = S_RegisterSound("feedback/hit.ogg");
     for (i = 1; i < cl.csr.max_sounds; i++) {
         s = cl.configstrings[cl.csr.sounds + i];
         if (!s[0])

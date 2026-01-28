@@ -110,8 +110,6 @@ typedef struct cgame_entity_import_s {
 
     void (*CL_CheckForPause)(void);
     void (*CL_UpdateFrameTimes)(void);
-    void (*CL_PredictAngles)(void);
-    void (*CL_CheckPredictionError)(void);
     void (*CL_EmitDemoFrame)(void);
     void (*CL_FirstDemoFrame)(void);
     void (*CL_GTV_Resume)(void);
@@ -122,6 +120,8 @@ typedef struct cgame_entity_import_s {
     void (*CL_Trace)(trace_t *tr, const vec3_t start, const vec3_t end,
                      const vec3_t mins, const vec3_t maxs,
                      const struct edict_s *passent, contents_t contentmask);
+    contents_t (*CL_PointContents)(const vec3_t point);
+    void (*Pmove)(pmove_t *pmove);
 
     void *(*Z_Malloc)(size_t size);
     void (*Z_Freep)(void *ptr);
@@ -175,6 +175,8 @@ typedef struct cgame_entity_export_s {
     void (*SetLightStyle)(int index, const char *s);
 
     void (*DeltaFrame)(void);
+    void (*PredictMovement)(void);
+    void (*CheckPredictionError)(void);
     void (*CalcViewValues)(void);
     void (*AddEntities)(void);
 

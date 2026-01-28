@@ -222,7 +222,8 @@ void V_AddLightEx(cl_shadow_light_t *light)
     dl->fade[0] = light->fade_start;
     dl->fade[1] = light->fade_end;
     dl->shadow = DL_SHADOW_NONE;
-    if (light->resolution > 0 && cl_shadowlights->integer && R_SupportsPerPixelLighting()) {
+    if (light->resolution > 0 && cl_shadowlights && cl_shadowlights->integer
+        && R_SupportsPerPixelLighting()) {
         dl->shadow = DL_SHADOW_LIGHT;
     }
 }

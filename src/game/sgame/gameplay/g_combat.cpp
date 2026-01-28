@@ -1056,8 +1056,21 @@ void Damage(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
     if (!((targ->svFlags & SVF_DEADMONSTER) ||
           (targ->flags & FL_NO_DAMAGE_EFFECTS)) &&
         mod.id != ModID::Laser) {
-      attacker->client->ps.stats[STAT_HIT_MARKER] +=
-          statTake + powerArmorSave + armorSave;
+      const int hit_damage = statTake + powerArmorSave + armorSave;
+      const int current_hit = attacker->client->ps.stats[STAT_HIT_MARKER];
+      const int current_total = current_hit < 0 ? -current_hit : current_hit;
+      const int next_total = std::min(current_total + hit_damage, 32767);
+
+      if (OnSameTeam(targ, attacker)) {
+        attacker->client->ps.stats[STAT_HIT_MARKER] =
+            static_cast<short>(-next_total);
+      } else if (current_hit < 0) {
+        attacker->client->ps.stats[STAT_HIT_MARKER] =
+            static_cast<short>(-next_total);
+      } else {
+        attacker->client->ps.stats[STAT_HIT_MARKER] =
+            static_cast<short>(next_total);
+      }
     }
 
     attacker->client->pers.match.totalDmgDealt +=

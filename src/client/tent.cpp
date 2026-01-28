@@ -55,7 +55,7 @@ qhandle_t   cl_mod_heatbeam;
 
 qhandle_t   cl_mod_muzzles[MFLASH_TOTAL];
 
-static qhandle_t   cl_mod_marker;
+[[maybe_unused]] static qhandle_t   cl_mod_marker;
 
 static cvar_t   *cl_muzzleflashes;
 
@@ -218,7 +218,7 @@ static void CL_RegisterFootstep(cl_footstep_sfx_t *sfx, const char *material)
 CL_RegisterFootsteps
 =================
 */
-static void CL_RegisterFootsteps(void)
+[[maybe_unused]] static void CL_RegisterFootsteps(void)
 {
     mtexinfo_t *tex;
     int i;
@@ -265,7 +265,7 @@ void CL_RegisterTEntSounds(void)
     cgame_entity->RegisterTEntSounds();
 }
 
-static const char *const muzzlenames[MFLASH_TOTAL] = {
+[[maybe_unused]] static const char *const muzzlenames[MFLASH_TOTAL] = {
     "v_machn",
     "v_shotg2",
     "v_shotg",
@@ -328,7 +328,7 @@ typedef struct {
 
 static explosion_t  cl_explosions[MAX_EXPLOSIONS];
 
-static void CL_ClearExplosions(void)
+[[maybe_unused]] static void CL_ClearExplosions(void)
 {
     memset(cl_explosions, 0, sizeof(cl_explosions));
 }
@@ -618,7 +618,7 @@ typedef struct {
 
 static laser_t  cl_lasers[MAX_LASERS];
 
-static void CL_ClearLasers(void)
+[[maybe_unused]] static void CL_ClearLasers(void)
 {
     memset(cl_lasers, 0, sizeof(cl_lasers));
 }
@@ -710,7 +710,7 @@ typedef struct {
 static beam_t   cl_beams[MAX_BEAMS];
 static beam_t   cl_playerbeams[MAX_BEAMS];
 
-static void CL_ClearBeams(void)
+[[maybe_unused]] static void CL_ClearBeams(void)
 {
     memset(cl_beams, 0, sizeof(cl_beams));
     memset(cl_playerbeams, 0, sizeof(cl_playerbeams));
@@ -1060,7 +1060,7 @@ SUSTAIN MANAGEMENT
 
 static cl_sustain_t     cl_sustains[MAX_SUSTAINS];
 
-static void CL_ClearSustains(void)
+[[maybe_unused]] static void CL_ClearSustains(void)
 {
     memset(cl_sustains, 0, sizeof(cl_sustains));
 }
@@ -1154,12 +1154,12 @@ static color_t  railspiral_color;
 
 static cvar_t *cl_railtrail_type;
 static cvar_t *cl_railtrail_time;
-static cvar_t *cl_railcore_color;
+[[maybe_unused]] static cvar_t *cl_railcore_color;
 static cvar_t *cl_railcore_width;
-static cvar_t *cl_railspiral_color;
+[[maybe_unused]] static cvar_t *cl_railspiral_color;
 static cvar_t *cl_railspiral_radius;
 
-static void cl_railcore_color_changed(cvar_t *self)
+[[maybe_unused]] static void cl_railcore_color_changed(cvar_t *self)
 {
     if (!SCR_ParseColor(self->string, &railcore_color)) {
         Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
@@ -1168,7 +1168,7 @@ static void cl_railcore_color_changed(cvar_t *self)
     }
 }
 
-static void cl_railspiral_color_changed(cvar_t *self)
+[[maybe_unused]] static void cl_railspiral_color_changed(cvar_t *self)
 {
     if (!SCR_ParseColor(self->string, &railspiral_color)) {
         Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);

@@ -25,8 +25,8 @@ extern qhandle_t cl_mod_dmspot;
 extern qhandle_t cl_img_flare;
 
 static cvar_t *cl_brightskins_custom;
-static cvar_t *cl_brightskins_enemy_color;
-static cvar_t *cl_brightskins_team_color;
+[[maybe_unused]] static cvar_t *cl_brightskins_enemy_color;
+[[maybe_unused]] static cvar_t *cl_brightskins_team_color;
 static cvar_t *cl_brightskins_dead;
 static color_t brightskin_enemy_color = COLOR_RED;
 static color_t brightskin_team_color = COLOR_GREEN;
@@ -60,7 +60,7 @@ static bool CL_ParseBrightskinColor(const char *s, color_t *color)
     return false;
 }
 
-static void cl_brightskins_enemy_color_changed(cvar_t *self)
+[[maybe_unused]] static void cl_brightskins_enemy_color_changed(cvar_t *self)
 {
     if (!CL_ParseBrightskinColor(self->string, &brightskin_enemy_color)) {
         Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
@@ -69,7 +69,7 @@ static void cl_brightskins_enemy_color_changed(cvar_t *self)
     }
 }
 
-static void cl_brightskins_team_color_changed(cvar_t *self)
+[[maybe_unused]] static void cl_brightskins_team_color_changed(cvar_t *self)
 {
     if (!CL_ParseBrightskinColor(self->string, &brightskin_team_color)) {
         Com_WPrintf("Invalid value '%s' for '%s'\n", self->string, self->name);
@@ -335,7 +335,7 @@ static inline bool entity_is_new(const centity_t *ent)
     return false;
 }
 
-static void parse_entity_update(const entity_state_t *state)
+[[maybe_unused]] static void parse_entity_update(const entity_state_t *state)
 {
     centity_t *ent = &cl_entities[state->number];
     const vec_t *origin;
@@ -380,7 +380,7 @@ static void parse_entity_update(const entity_state_t *state)
 }
 
 // an entity has just been parsed that has an event value
-static void parse_entity_event(int number)
+[[maybe_unused]] static void parse_entity_event(int number)
 {
     const centity_t *cent = &cl_entities[number];
 
@@ -434,7 +434,7 @@ static void parse_entity_event(int number)
     }
 }
 
-static void set_active_state(void)
+[[maybe_unused]] static void set_active_state(void)
 {
     cls.state = ca_active;
     Cbuf_ExecuteDeferred(&cmd_buffer);
@@ -498,8 +498,7 @@ static void set_active_state(void)
     }
 }
 
-static void
-check_player_lerp(server_frame_t *oldframe, server_frame_t *frame, int framediv)
+[[maybe_unused]] static void check_player_lerp(server_frame_t *oldframe, server_frame_t *frame, int framediv)
 {
     player_state_t *ps, *ops;
     const centity_t *ent;
@@ -737,7 +736,7 @@ CL_AddPacketEntities
 
 ===============
 */
-static void CL_AddPacketEntities(void)
+[[maybe_unused]] static void CL_AddPacketEntities(void)
 {
     entity_t                ent;
     const entity_state_t    *s1;
@@ -1092,7 +1091,8 @@ static void CL_AddPacketEntities(void)
             vec3_t forward, start, end;
             trace_t trace;
             contents_t mask = CONTENTS_SOLID;
-            bool is_per_pixel = cl_shadowlights->integer && R_SupportsPerPixelLighting();
+            bool is_per_pixel =
+                cl_shadowlights && cl_shadowlights->integer && R_SupportsPerPixelLighting();
             
             if (!is_per_pixel)
                 mask |= CONTENTS_MONSTER | CONTENTS_PLAYER;
@@ -1868,7 +1868,7 @@ static void CL_SetupThirdPersionView(void)
     cl.thirdPersonView = true;
 }
 
-static void CL_FinishViewValues(void)
+[[maybe_unused]] static void CL_FinishViewValues(void)
 {
     if (cl_thirdperson->integer && get_player_entity())
         CL_SetupThirdPersionView();
@@ -1876,7 +1876,7 @@ static void CL_FinishViewValues(void)
         CL_SetupFirstPersonView();
 }
 
-static inline float lerp_client_fov(float ofov, float nfov, float lerp)
+[[maybe_unused]] static inline float lerp_client_fov(float ofov, float nfov, float lerp)
 {
     if (cls.demo.playback && !cls.demo.compat) {
         int fov = info_fov->integer;

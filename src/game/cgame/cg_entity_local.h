@@ -138,8 +138,6 @@ static inline cvar_t *CG_SvPausedVar(void)
 
 #define CL_CheckForPause cgei->CL_CheckForPause
 #define CL_UpdateFrameTimes cgei->CL_UpdateFrameTimes
-#define CL_PredictAngles cgei->CL_PredictAngles
-#define CL_CheckPredictionError cgei->CL_CheckPredictionError
 #define CL_EmitDemoFrame cgei->CL_EmitDemoFrame
 #define CL_FirstDemoFrame cgei->CL_FirstDemoFrame
 #define CL_GTV_Resume cgei->CL_GTV_Resume
@@ -148,6 +146,7 @@ static inline cvar_t *CG_SvPausedVar(void)
 #define CL_LoadClientinfo cgei->CL_LoadClientinfo
 
 #define CL_Trace cgei->CL_Trace
+#define CL_PointContents cgei->CL_PointContents
 
 #define Z_Malloc cgei->Z_Malloc
 #define Z_Freep cgei->Z_Freep
