@@ -45,6 +45,19 @@ struct MenuItemData {
     int wrapWidth = 0;
     bool ingameOnly = false;
     bool deathmatchOnly = false;
+    int textOffset = 0;
+    bool textOffsetSet = false;
+    int textSize = 0;
+    bool textSizeSet = false;
+    int x = 0;
+    int y = 0;
+    bool positionSet = false;
+    int anchor = 0;
+    bool anchorSet = false;
+    color_t textColor{};
+    bool textColorSet = false;
+    color_t selectedTextColor{};
+    bool selectedTextColorSet = false;
 };
 
 static std::string Json_ReadString(json_parse_t *parser)
@@ -407,12 +420,53 @@ static std::unique_ptr<Widget> BuildWidget(const MenuItemData &item)
         if (!item.commandCvar.empty())
             action->SetCommandCvar(Cvar_WeakGet(item.commandCvar.c_str()));
         widget = std::move(action);
+    } else if (item.type == "button") {
+        qhandle_t image = R_RegisterPic(item.image.c_str());
+        qhandle_t imageSelected = item.imageSelected.empty()
+            ? R_RegisterPic(va("%s_sel", item.image.c_str()))
+            : R_RegisterPic(item.imageSelected.c_str());
+        auto button = std::make_unique<MenuButtonWidget>(image, imageSelected, item.command);
+        button->SetLabel(item.label);
+        if (item.imageWidth > 0 || item.imageHeight > 0)
+            button->SetDrawSize(item.imageWidth, item.imageHeight);
+        if (item.positionSet)
+            button->SetPosition(item.x, item.y);
+        if (item.anchorSet) {
+            if (item.anchor == 1)
+                button->SetAnchorLeft();
+            else if (item.anchor == 2)
+                button->SetAnchorRight();
+            else
+                button->SetAnchorCenter();
+        }
+        if (item.textOffsetSet)
+            button->SetTextOffset(item.textOffset);
+        if (item.textSizeSet)
+            button->SetTextSize(item.textSize);
+        if (item.textColorSet)
+            button->SetTextColor(item.textColor);
+        if (item.selectedTextColorSet)
+            button->SetSelectedTextColor(item.selectedTextColor);
+        widget = std::move(button);
     } else if (item.type == "bitmap") {
         qhandle_t image = R_RegisterPic(item.image.c_str());
         qhandle_t imageSelected = item.imageSelected.empty()
             ? R_RegisterPic(va("%s_sel", item.image.c_str()))
             : R_RegisterPic(item.imageSelected.c_str());
-        widget = std::make_unique<BitmapWidget>(image, imageSelected, item.command);
+        auto bitmap = std::make_unique<BitmapWidget>(image, imageSelected, item.command);
+        if (item.imageWidth > 0 || item.imageHeight > 0)
+            bitmap->SetDrawSize(item.imageWidth, item.imageHeight);
+        if (item.positionSet)
+            bitmap->SetPosition(item.x, item.y);
+        if (item.anchorSet) {
+            if (item.anchor == 1)
+                bitmap->SetAnchorLeft();
+            else if (item.anchor == 2)
+                bitmap->SetAnchorRight();
+            else
+                bitmap->SetAnchorCenter();
+        }
+        widget = std::move(bitmap);
     } else if (item.type == "range") {
         cvar_t *cvar = Cvar_WeakGet(item.cvar.c_str());
         auto slider = std::make_unique<SliderWidget>(item.label, cvar,
@@ -687,6 +741,45 @@ static bool ParseMenuItem(json_parse_t *parser, Menu &menu)
         } else if (Json_Strcmp(parser, "imageHeight") == 0) {
             Json_Next(parser);
             data.imageHeight = static_cast<int>(Json_ReadNumber(parser));
+        } else if (Json_Strcmp(parser, "textOffset") == 0) {
+            Json_Next(parser);
+            data.textOffset = static_cast<int>(Json_ReadNumber(parser));
+            data.textOffsetSet = true;
+        } else if (Json_Strcmp(parser, "textSize") == 0) {
+            Json_Next(parser);
+            data.textSize = static_cast<int>(Json_ReadNumber(parser));
+            data.textSizeSet = true;
+        } else if (Json_Strcmp(parser, "x") == 0) {
+            Json_Next(parser);
+            data.x = static_cast<int>(Json_ReadNumber(parser));
+            data.positionSet = true;
+        } else if (Json_Strcmp(parser, "y") == 0) {
+            Json_Next(parser);
+            data.y = static_cast<int>(Json_ReadNumber(parser));
+            data.positionSet = true;
+        } else if (Json_Strcmp(parser, "anchor") == 0) {
+            Json_Next(parser);
+            std::string value = Json_ReadString(parser);
+            if (value == "left") {
+                data.anchor = 1;
+                data.anchorSet = true;
+            } else if (value == "right") {
+                data.anchor = 2;
+                data.anchorSet = true;
+            } else {
+                data.anchor = 0;
+                data.anchorSet = true;
+            }
+        } else if (Json_Strcmp(parser, "textColor") == 0) {
+            Json_Next(parser);
+            std::string value = Json_ReadString(parser);
+            if (SCR_ParseColor(value.c_str(), &data.textColor))
+                data.textColorSet = true;
+        } else if (Json_Strcmp(parser, "textSelectedColor") == 0) {
+            Json_Next(parser);
+            std::string value = Json_ReadString(parser);
+            if (SCR_ParseColor(value.c_str(), &data.selectedTextColor))
+                data.selectedTextColorSet = true;
         } else if (Json_Strcmp(parser, "slot") == 0) {
             Json_Next(parser);
             data.slot = Json_ReadString(parser);
@@ -717,6 +810,23 @@ static void ParseMenu(json_parse_t *parser)
     bool transparent = false;
     bool allowBlur = true;
     bool allowBlurSet = false;
+    bool showPlayerName = false;
+    bool alignToBitmaps = false;
+    bool fixedLayout = false;
+    bool plaqueRectSet = false;
+    bool logoRectSet = false;
+    vrect_t plaqueRect{};
+    vrect_t logoRect{};
+    int plaqueAnchor = 0;
+    int logoAnchor = 0;
+    bool plaqueAnchorSet = false;
+    bool logoAnchorSet = false;
+    std::string footerText;
+    std::string footerSubtext;
+    bool footerColorSet = false;
+    color_t footerColor{};
+    bool footerSizeSet = false;
+    int footerSize = 0;
     bool frame = false;
     bool frameSet = false;
     int framePadding = GenericSpacing(CONCHAR_HEIGHT);
@@ -756,6 +866,70 @@ static void ParseMenu(json_parse_t *parser)
                     } else if (Json_Strcmp(parser, "logo") == 0) {
                         Json_Next(parser);
                         logo = Json_ReadString(parser);
+                    } else if (Json_Strcmp(parser, "plaqueRect") == 0) {
+                        Json_Next(parser);
+                        jsmntok_t *rect = Json_EnsureNext(parser, JSMN_OBJECT);
+                        for (int r = 0; r < rect->size; r++) {
+                            if (Json_Strcmp(parser, "x") == 0) {
+                                Json_Next(parser);
+                                plaqueRect.x = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "y") == 0) {
+                                Json_Next(parser);
+                                plaqueRect.y = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "w") == 0) {
+                                Json_Next(parser);
+                                plaqueRect.width = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "h") == 0) {
+                                Json_Next(parser);
+                                plaqueRect.height = static_cast<int>(Json_ReadNumber(parser));
+                            } else {
+                                Json_Next(parser);
+                                Json_SkipToken(parser);
+                            }
+                        }
+                        plaqueRectSet = true;
+                    } else if (Json_Strcmp(parser, "plaqueAnchor") == 0) {
+                        Json_Next(parser);
+                        std::string value = Json_ReadString(parser);
+                        if (value == "left")
+                            plaqueAnchor = 1;
+                        else if (value == "right")
+                            plaqueAnchor = 2;
+                        else
+                            plaqueAnchor = 0;
+                        plaqueAnchorSet = true;
+                    } else if (Json_Strcmp(parser, "logoRect") == 0) {
+                        Json_Next(parser);
+                        jsmntok_t *rect = Json_EnsureNext(parser, JSMN_OBJECT);
+                        for (int r = 0; r < rect->size; r++) {
+                            if (Json_Strcmp(parser, "x") == 0) {
+                                Json_Next(parser);
+                                logoRect.x = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "y") == 0) {
+                                Json_Next(parser);
+                                logoRect.y = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "w") == 0) {
+                                Json_Next(parser);
+                                logoRect.width = static_cast<int>(Json_ReadNumber(parser));
+                            } else if (Json_Strcmp(parser, "h") == 0) {
+                                Json_Next(parser);
+                                logoRect.height = static_cast<int>(Json_ReadNumber(parser));
+                            } else {
+                                Json_Next(parser);
+                                Json_SkipToken(parser);
+                            }
+                        }
+                        logoRectSet = true;
+                    } else if (Json_Strcmp(parser, "logoAnchor") == 0) {
+                        Json_Next(parser);
+                        std::string value = Json_ReadString(parser);
+                        if (value == "left")
+                            logoAnchor = 1;
+                        else if (value == "right")
+                            logoAnchor = 2;
+                        else
+                            logoAnchor = 0;
+                        logoAnchorSet = true;
                     } else {
                         Json_Next(parser);
                         Json_SkipToken(parser);
@@ -763,6 +937,43 @@ static void ParseMenu(json_parse_t *parser)
                 }
             } else {
                 plaque = Json_ReadString(parser);
+            }
+        } else if (Json_Strcmp(parser, "playerName") == 0) {
+            Json_Next(parser);
+            showPlayerName = Json_ReadBool(parser);
+        } else if (Json_Strcmp(parser, "alignToBitmaps") == 0) {
+            Json_Next(parser);
+            alignToBitmaps = Json_ReadBool(parser);
+        } else if (Json_Strcmp(parser, "fixedLayout") == 0) {
+            Json_Next(parser);
+            fixedLayout = Json_ReadBool(parser);
+        } else if (Json_Strcmp(parser, "footer") == 0) {
+            Json_Next(parser);
+            if (parser->pos->type == JSMN_OBJECT) {
+                jsmntok_t *footer = Json_EnsureNext(parser, JSMN_OBJECT);
+                for (int f = 0; f < footer->size; f++) {
+                    if (Json_Strcmp(parser, "text") == 0) {
+                        Json_Next(parser);
+                        footerText = Json_ReadString(parser);
+                    } else if (Json_Strcmp(parser, "subtext") == 0) {
+                        Json_Next(parser);
+                        footerSubtext = Json_ReadString(parser);
+                    } else if (Json_Strcmp(parser, "color") == 0) {
+                        Json_Next(parser);
+                        std::string value = Json_ReadString(parser);
+                        if (SCR_ParseColor(value.c_str(), &footerColor))
+                            footerColorSet = true;
+                    } else if (Json_Strcmp(parser, "size") == 0) {
+                        Json_Next(parser);
+                        footerSize = static_cast<int>(Json_ReadNumber(parser));
+                        footerSizeSet = true;
+                    } else {
+                        Json_Next(parser);
+                        Json_SkipToken(parser);
+                    }
+                }
+            } else {
+                footerText = Json_ReadString(parser);
             }
         } else if (Json_Strcmp(parser, "closeCommand") == 0) {
             Json_Next(parser);
@@ -885,15 +1096,44 @@ static void ParseMenu(json_parse_t *parser)
         qhandle_t pic = R_RegisterPic(plaque.c_str());
         vrect_t rc{};
         R_GetPicSize(&rc.width, &rc.height, pic);
-        menu->SetPlaque(pic, rc);
+        if (plaqueRectSet) {
+            menu->SetPlaque(pic, plaqueRect);
+            menu->SetPlaqueFixed(true);
+            if (plaqueAnchorSet)
+                menu->SetPlaqueAnchor(plaqueAnchor);
+        } else {
+            menu->SetPlaque(pic, rc);
+        }
     }
 
     if (!logo.empty()) {
         qhandle_t pic = R_RegisterPic(logo.c_str());
         vrect_t rc{};
         R_GetPicSize(&rc.width, &rc.height, pic);
-        menu->SetLogo(pic, rc);
+        if (logoRectSet) {
+            menu->SetLogo(pic, logoRect);
+            menu->SetLogoFixed(true);
+            if (logoAnchorSet)
+                menu->SetLogoAnchor(logoAnchor);
+        } else {
+            menu->SetLogo(pic, rc);
+        }
     }
+
+    if (showPlayerName)
+        menu->SetShowPlayerName(true);
+    if (alignToBitmaps)
+        menu->SetAlignContentToBitmaps(true);
+    if (fixedLayout)
+        menu->SetFixedLayout(true);
+    if (!footerText.empty())
+        menu->SetFooterText(footerText);
+    if (!footerSubtext.empty())
+        menu->SetFooterSubtext(footerSubtext);
+    if (footerColorSet)
+        menu->SetFooterColor(footerColor);
+    if (footerSizeSet)
+        menu->SetFooterSize(footerSize);
 
     GetMenuSystem().RegisterMenu(std::move(menu));
 }

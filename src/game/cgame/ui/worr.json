@@ -1,7 +1,7 @@
 {
   "globals": {
     "background": "black",
-    "font": "$ui_font",
+    "font": "$scr_font",
     "cursor": "/gfx/cursor.png",
     "weapon": "w_railgun.md2",
     "colors": {
@@ -698,13 +698,89 @@
     },
     {
       "name": "main",
-      "plaque": { "image": "m_main_plaque", "logo": "m_main_logo" },
+      "plaque": {
+        "image": "m_main_plaque",
+        "logo": "m_main_logo",
+        "plaqueRect": { "x": 6, "y": 66, "w": 64, "h": 282 },
+        "logoRect": { "x": 6, "y": 350, "w": 64, "h": 64 }
+      },
+      "playerName": true,
+      "alignToBitmaps": true,
+      "fixedLayout": true,
+      "footer": {
+        "text": "NOT FINAL - WORK IN PROGRESS",
+        "subtext": "© 1997-2026 id Software LLC. Q2REPRO/WORR fan continuation.",
+        "size": 8,
+        "color": "#8f9f7a",
+        "align": "center"
+      },
       "items": [
-        { "type": "bitmap", "image": "m_main_game", "command": "pushmenu singleplayer" },
-        { "type": "bitmap", "image": "m_main_multiplayer", "command": "pushmenu multiplayer" },
-        { "type": "bitmap", "image": "m_main_options", "command": "pushmenu options" },
-        { "type": "bitmap", "image": "m_main_video", "command": "pushmenu video" },
-        { "type": "bitmap", "image": "m_main_quit", "command": "quit" }
+        { "type": "heading", "label": "Game" },
+        {
+          "type": "button",
+          "label": "Single Player",
+          "image": "/gfx/menu_bg_off",
+          "imageSelected": "/gfx/menu_bg_on",
+          "imageWidth": 340,
+          "imageHeight": 38,
+          "x": 80,
+          "y": 108,
+          "textColor": "#a4b381",
+          "textSelectedColor": "#def99e",
+          "command": "pushmenu singleplayer"
+        },
+        {
+          "type": "button",
+          "label": "Multiplayer",
+          "image": "/gfx/menu_bg_off",
+          "imageSelected": "/gfx/menu_bg_on",
+          "imageWidth": 340,
+          "imageHeight": 38,
+          "x": 80,
+          "y": 146,
+          "textColor": "#a4b381",
+          "textSelectedColor": "#def99e",
+          "command": "pushmenu multiplayer"
+        },
+        {
+          "type": "button",
+          "label": "Options",
+          "image": "/gfx/menu_bg_off",
+          "imageSelected": "/gfx/menu_bg_on",
+          "imageWidth": 340,
+          "imageHeight": 38,
+          "x": 80,
+          "y": 184,
+          "textColor": "#a4b381",
+          "textSelectedColor": "#def99e",
+          "command": "pushmenu options"
+        },
+        {
+          "type": "button",
+          "label": "Video",
+          "image": "/gfx/menu_bg_off",
+          "imageSelected": "/gfx/menu_bg_on",
+          "imageWidth": 340,
+          "imageHeight": 38,
+          "x": 80,
+          "y": 222,
+          "textColor": "#a4b381",
+          "textSelectedColor": "#def99e",
+          "command": "pushmenu video"
+        },
+        {
+          "type": "button",
+          "label": "Quit",
+          "image": "/gfx/menu_bg_off",
+          "imageSelected": "/gfx/menu_bg_on",
+          "imageWidth": 340,
+          "imageHeight": 38,
+          "x": 80,
+          "y": 260,
+          "textColor": "#a4b381",
+          "textSelectedColor": "#def99e",
+          "command": "quit"
+        }
       ]
     },
     {

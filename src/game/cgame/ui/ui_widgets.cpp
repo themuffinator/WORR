@@ -534,7 +534,9 @@ BitmapWidget::BitmapWidget(qhandle_t image, qhandle_t imageSelected, std::string
     , imageSelected_(imageSelected)
     , command_(std::move(command))
 {
-    R_GetPicSize(&imageWidth_, &imageHeight_, image_);
+    R_GetPicSize(&nativeWidth_, &nativeHeight_, image_);
+    imageWidth_ = nativeWidth_;
+    imageHeight_ = nativeHeight_;
     selectable_ = true;
 }
 
@@ -548,20 +550,37 @@ void BitmapWidget::Layout(int x, int y, int width, int lineHeight)
 {
     (void)width;
     (void)lineHeight;
-    rect_.x = x - imageWidth_ / 2;
-    rect_.y = y;
+    if (fixedPosition_) {
+        if (anchor_ == FixedAnchor::Right) {
+            rect_.x = max(0, uis.width - fixedX_ - imageWidth_);
+        } else {
+            rect_.x = fixedX_;
+        }
+        rect_.y = fixedY_;
+    } else {
+        rect_.x = x - imageWidth_ / 2;
+        rect_.y = y;
+    }
     rect_.width = imageWidth_;
     rect_.height = imageHeight_;
 }
 
 void BitmapWidget::Draw(bool focused) const
 {
+    auto draw_pic = [this](qhandle_t pic) {
+        if (customSize_) {
+            R_DrawStretchPic(rect_.x, rect_.y, imageWidth_, imageHeight_, COLOR_WHITE, pic);
+        } else {
+            R_DrawPic(rect_.x, rect_.y, COLOR_WHITE, pic);
+        }
+    };
+
     if (focused) {
         unsigned frame = (uis.realtime / 100) % NUM_CURSOR_FRAMES;
         R_DrawPic(rect_.x - CURSOR_OFFSET, rect_.y, COLOR_WHITE, uis.bitmapCursors[frame]);
-        R_DrawPic(rect_.x, rect_.y, COLOR_WHITE, imageSelected_);
+        draw_pic(imageSelected_);
     } else {
-        R_DrawPic(rect_.x, rect_.y, COLOR_WHITE, image_);
+        draw_pic(image_);
     }
 }
 
@@ -572,6 +591,68 @@ Sound BitmapWidget::Activate()
         Cbuf_AddText(&cmd_buffer, "\n");
     }
     return Sound::In;
+}
+
+void BitmapWidget::SetDrawSize(int width, int height)
+{
+    if (width <= 0 && height <= 0)
+        return;
+
+    int w = width;
+    int h = height;
+    if (w <= 0 && nativeWidth_ > 0 && nativeHeight_ > 0) {
+        w = max(1, nativeWidth_ * h / nativeHeight_);
+    } else if (h <= 0 && nativeWidth_ > 0 && nativeHeight_ > 0) {
+        h = max(1, nativeHeight_ * w / nativeWidth_);
+    }
+
+    if (w <= 0)
+        w = nativeWidth_;
+    if (h <= 0)
+        h = nativeHeight_;
+
+    imageWidth_ = w;
+    imageHeight_ = h;
+    customSize_ = (imageWidth_ != nativeWidth_ || imageHeight_ != nativeHeight_);
+}
+
+void BitmapWidget::SetPosition(int x, int y)
+{
+    fixedX_ = x;
+    fixedY_ = y;
+    fixedPosition_ = true;
+}
+
+MenuButtonWidget::MenuButtonWidget(qhandle_t image, qhandle_t imageSelected, std::string command)
+    : BitmapWidget(image, imageSelected, std::move(command))
+{
+}
+
+void MenuButtonWidget::Draw(bool focused) const
+{
+    BitmapWidget::Draw(focused);
+
+    const char *label = LabelText();
+    if (!label || !*label)
+        return;
+
+    bool disabled = IsDisabled();
+    color_t base = disabled ? uis.color.disabled : uis.color.normal;
+    color_t active = disabled ? uis.color.disabled : uis.color.active;
+    if (textColorSet_)
+        base = textColor_;
+    if (selectedTextColorSet_)
+        active = selectedTextColor_;
+    color_t color = focused ? active : base;
+
+    int image_width = ImageWidth();
+    int inset = textOffsetSet_ ? textOffset_ : max(CONCHAR_WIDTH * 2, image_width / 10);
+    int font_size = textSizeSet_ ? textSize_ : max(CONCHAR_HEIGHT, rect_.height * 2 / 3);
+    int text_h = UI_FontLineHeightSized(font_size);
+    int text_y = rect_.y + (rect_.height - text_h) / 2;
+
+    UI_FontDrawStringSized(rect_.x + inset, text_y, UI_LEFT, MAX_STRING_CHARS, label,
+                           COLOR_SETA_U8(color, 255), font_size);
 }
 
 SliderWidget::SliderWidget(std::string label, cvar_t *cvar, float minValue, float maxValue, float step)

@@ -286,6 +286,17 @@ public:
     void SetBanner(qhandle_t banner, const vrect_t &rc);
     void SetPlaque(qhandle_t plaque, const vrect_t &rc);
     void SetLogo(qhandle_t logo, const vrect_t &rc);
+    void SetShowPlayerName(bool show) { showPlayerName_ = show; }
+    void SetAlignContentToBitmaps(bool align) { alignContentToBitmaps_ = align; }
+    void SetFixedLayout(bool fixed) { fixedLayout_ = fixed; }
+    void SetPlaqueFixed(bool fixed) { plaqueFixed_ = fixed; }
+    void SetLogoFixed(bool fixed) { logoFixed_ = fixed; }
+    void SetPlaqueAnchor(int anchor) { plaqueAnchor_ = anchor; }
+    void SetLogoAnchor(int anchor) { logoAnchor_ = anchor; }
+    void SetFooterText(std::string text) { footerText_ = std::move(text); }
+    void SetFooterSubtext(std::string text) { footerSubtext_ = std::move(text); }
+    void SetFooterColor(color_t color) { footerColor_ = color; footerColorSet_ = true; }
+    void SetFooterSize(int size) { footerSize_ = size; footerSizeSet_ = true; }
     void SetCloseCommand(std::string command) { closeCommand_ = std::move(command); }
     void SetFrameStyle(bool enabled, color_t fill, color_t border, int padding, int borderWidth);
     void ClearHints();
@@ -353,6 +364,20 @@ private:
     bool customLayout_ = false;
     int customLeftX_ = 0;
     int customContentWidth_ = 0;
+    bool showPlayerName_ = false;
+    bool alignContentToBitmaps_ = false;
+    cvar_t *playerNameCvar_ = nullptr;
+    bool fixedLayout_ = false;
+    bool plaqueFixed_ = false;
+    bool logoFixed_ = false;
+    int plaqueAnchor_ = 0;
+    int logoAnchor_ = 0;
+    std::string footerText_{};
+    std::string footerSubtext_{};
+    color_t footerColor_{};
+    bool footerColorSet_ = false;
+    int footerSize_ = 0;
+    bool footerSizeSet_ = false;
     bool scrollDragging_ = false;
     int scrollDragOffset_ = 0;
 };
@@ -382,6 +407,15 @@ public:
     Sound Activate() override;
     int ImageWidth() const { return imageWidth_; }
     int ImageHeight() const { return imageHeight_; }
+    void SetDrawSize(int width, int height);
+    void SetPosition(int x, int y);
+    bool HasFixedPosition() const { return fixedPosition_; }
+    int FixedX() const { return fixedX_; }
+    int FixedY() const { return fixedY_; }
+    void SetAnchorCenter() { anchor_ = FixedAnchor::Center; }
+    void SetAnchorLeft() { anchor_ = FixedAnchor::Left; }
+    void SetAnchorRight() { anchor_ = FixedAnchor::Right; }
+    int Anchor() const { return static_cast<int>(anchor_); }
 
 private:
     qhandle_t image_;
@@ -389,6 +423,38 @@ private:
     std::string command_;
     int imageWidth_ = 0;
     int imageHeight_ = 0;
+    int nativeWidth_ = 0;
+    int nativeHeight_ = 0;
+    bool customSize_ = false;
+    bool fixedPosition_ = false;
+    int fixedX_ = 0;
+    int fixedY_ = 0;
+    enum class FixedAnchor {
+        Center,
+        Left,
+        Right
+    };
+    FixedAnchor anchor_ = FixedAnchor::Center;
+};
+
+class MenuButtonWidget : public BitmapWidget {
+public:
+    MenuButtonWidget(qhandle_t image, qhandle_t imageSelected, std::string command);
+    void Draw(bool focused) const override;
+    void SetTextOffset(int offset) { textOffset_ = offset; textOffsetSet_ = true; }
+    void SetTextSize(int size) { textSize_ = size; textSizeSet_ = true; }
+    void SetTextColor(color_t color) { textColor_ = color; textColorSet_ = true; }
+    void SetSelectedTextColor(color_t color) { selectedTextColor_ = color; selectedTextColorSet_ = true; }
+
+private:
+    int textOffset_ = 0;
+    bool textOffsetSet_ = false;
+    int textSize_ = 0;
+    bool textSizeSet_ = false;
+    color_t textColor_{};
+    bool textColorSet_ = false;
+    color_t selectedTextColor_{};
+    bool selectedTextColorSet_ = false;
 };
 
 class SliderWidget : public Widget {

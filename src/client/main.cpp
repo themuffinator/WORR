@@ -173,7 +173,7 @@ static void CL_SetRendererCheatFlags(bool enable)
 #endif
 
 static cvar_t   *cl_hit_markers; // hit marker visuals (0 = off)
-static cvar_t   *cg_hit_beeps;
+static cvar_t   *cl_hit_beeps;
 
 static qhandle_t cl_sfx_hit_high;
 static qhandle_t cl_sfx_hit_medium;
@@ -2920,7 +2920,7 @@ static void CL_InitLocal(void)
     cl_colorize_items = Cvar_Get("cl_colorize_items", "0", CVAR_ARCHIVE);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
     cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
-    cg_hit_beeps = Cvar_Get("cg_hit_beeps", "1", CVAR_ARCHIVE);
+    cl_hit_beeps = Cvar_Get("cl_hit_beeps", "1", CVAR_ARCHIVE);
     cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
     cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);
     cl_player_outline_width = Cvar_Get("cl_player_outline_width", "2.0", CVAR_ARCHIVE);
@@ -3439,13 +3439,13 @@ void CL_AddHitMarker(int damage)
             cl.hit_marker_count++;
         }
 
-        if (cg_hit_beeps && cg_hit_beeps->integer > 0) {
+        if (cl_hit_beeps && cl_hit_beeps->integer > 0) {
             qhandle_t hit_sfx = 0;
             if (friendly_hit) {
                 if (!cl_sfx_hit_teammate)
                     cl_sfx_hit_teammate = S_RegisterSound("feedback/hit_teammate.ogg");
                 hit_sfx = cl_sfx_hit_teammate;
-            } else if (cg_hit_beeps->integer <= 1) {
+            } else if (cl_hit_beeps->integer <= 1) {
                 if (!cl.sfx_hit_marker)
                     cl.sfx_hit_marker = S_RegisterSound("feedback/hit.ogg");
                 hit_sfx = cl.sfx_hit_marker;

@@ -337,6 +337,13 @@ void Menu::Layout()
         if (!widget || widget->IsHidden())
             continue;
         int h = widget->Height(lineHeight_);
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            if (bitmap->HasFixedPosition()) {
+                itemHeights_[i] = bitmap->ImageHeight();
+                itemYs_[i] = bitmap->FixedY();
+                continue;
+            }
+        }
         itemHeights_[i] = h;
         total += h;
     }
@@ -345,10 +352,16 @@ void Menu::Layout()
     int availableHeight = uis.height - HintHeight();
     if (availableHeight < 0)
         availableHeight = 0;
-    contentTop_ = (availableHeight - contentHeight_) / 2;
-    if (contentTop_ < 0)
+    if (fixedLayout_) {
         contentTop_ = 0;
-    contentBottom_ = min(contentTop_ + contentHeight_, availableHeight);
+        contentBottom_ = uis.height;
+        contentHeight_ = uis.height;
+    } else {
+        contentTop_ = (availableHeight - contentHeight_) / 2;
+        if (contentTop_ < 0)
+            contentTop_ = 0;
+        contentBottom_ = min(contentTop_ + contentHeight_, availableHeight);
+    }
 
     int y = contentTop_;
     if (banner_) {
@@ -361,15 +374,33 @@ void Menu::Layout()
         Widget *widget = widgets_[i].get();
         if (!widget || widget->IsHidden())
             continue;
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            if (bitmap->HasFixedPosition())
+                continue;
+        }
         itemYs_[i] = y;
         y += itemHeights_[i];
     }
 
     int widest_bitmap = 0;
-    for (const auto &widget : widgets_) {
-        const auto *bitmap = dynamic_cast<const BitmapWidget *>(widget.get());
-        if (bitmap)
-            widest_bitmap = max(widest_bitmap, bitmap->ImageWidth());
+    int bitmap_top = 0;
+    int bitmap_bottom = 0;
+    bool bitmap_bounds_set = false;
+    for (size_t i = 0; i < widgets_.size(); i++) {
+        const auto *bitmap = dynamic_cast<const BitmapWidget *>(widgets_[i].get());
+        if (!bitmap || widgets_[i]->IsHidden())
+            continue;
+        widest_bitmap = max(widest_bitmap, bitmap->ImageWidth());
+        int top = itemYs_[i];
+        int bottom = top + itemHeights_[i];
+        if (!bitmap_bounds_set) {
+            bitmap_top = top;
+            bitmap_bottom = bottom;
+            bitmap_bounds_set = true;
+        } else {
+            bitmap_top = min(bitmap_top, top);
+            bitmap_bottom = max(bitmap_bottom, bottom);
+        }
     }
 
     hasBitmaps_ = widest_bitmap > 0;
@@ -382,15 +413,19 @@ void Menu::Layout()
         bitmapBaseX_ = (uis.width + total_width) / 2 - widest_bitmap;
     }
 
-    if (plaque_) {
+    int plaque_center_y = uis.height / 2;
+    if (alignContentToBitmaps_ && bitmap_bounds_set)
+        plaque_center_y = (bitmap_top + bitmap_bottom) / 2;
+
+    if (plaque_ && !plaqueFixed_) {
         int total_plaque = plaqueRect_.height + (logo_ ? (logoRect_.height + 5) : 0);
         plaqueRect_.x = bitmapBaseX_ - CURSOR_WIDTH - plaqueRect_.width;
-        plaqueRect_.y = (uis.height - total_plaque) / 2;
+        plaqueRect_.y = plaque_center_y - total_plaque / 2;
     }
-    if (logo_) {
+    if (logo_ && !logoFixed_) {
         int total_plaque = (plaque_ ? plaqueRect_.height : 0) + logoRect_.height + 5;
         logoRect_.x = bitmapBaseX_ - CURSOR_WIDTH - logoRect_.width;
-        logoRect_.y = (uis.height + total_plaque) / 2 - logoRect_.height;
+        logoRect_.y = plaque_center_y + total_plaque / 2 - logoRect_.height;
     }
 
     int firstSelectable = -1;
@@ -412,12 +447,30 @@ void Menu::Layout()
 
 void Menu::GetLayoutBounds(int *leftX, int *centerX, int *contentWidth) const
 {
-    int lx = customLayout_ ? customLeftX_ : (uis.width / 2 - (CONCHAR_WIDTH * 16));
+    int lx = 0;
+    int cw = 0;
+
+    if (customLayout_) {
+        lx = customLeftX_;
+    } else if (alignContentToBitmaps_ && hasBitmaps_) {
+        lx = bitmapBaseX_;
+    } else {
+        lx = (uis.width / 2) - (CONCHAR_WIDTH * 16);
+    }
+
     if (lx < 0)
         lx = 0;
 
     int max_width = max(0, uis.width - lx);
-    int cw = customLayout_ ? min(customContentWidth_, max_width) : (uis.width - (lx * 2));
+    if (customLayout_) {
+        cw = min(customContentWidth_, max_width);
+    } else if (alignContentToBitmaps_ && hasBitmaps_) {
+        int right_pad = GenericSpacing(CONCHAR_WIDTH);
+        cw = max(0, uis.width - lx - right_pad);
+    } else {
+        cw = uis.width - (lx * 2);
+    }
+
     if (cw < 0)
         cw = 0;
 
@@ -446,6 +499,12 @@ int Menu::HitTest(int x, int y)
 
         int draw_y = itemYs_[i] - scrollY_;
         int height = itemHeights_[i];
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            if (bitmap->HasFixedPosition()) {
+                draw_y = bitmap->FixedY();
+                height = bitmap->ImageHeight();
+            }
+        }
         if (draw_y + height < contentTop_ || draw_y > contentBottom_)
             continue;
 
@@ -851,12 +910,56 @@ void Menu::Draw()
         UI_DrawString(uis.width / 2, menuTop, UI_CENTER | UI_ALTCOLOR, COLOR_WHITE, title_.c_str());
     }
 
+    if (showPlayerName_) {
+        if (!playerNameCvar_)
+            playerNameCvar_ = Cvar_WeakGet("name");
+        const char *name = playerNameCvar_ ? playerNameCvar_->string : "";
+        if (name && *name) {
+            int pad = GenericSpacing(CONCHAR_WIDTH);
+            int text_y = max(0, pad / 2);
+            UI_DrawString(uis.width - pad, text_y, UI_RIGHT, COLOR_WHITE, name);
+        }
+    }
+
     if (banner_)
         R_DrawPic(bannerRect_.x, bannerRect_.y, COLOR_WHITE, banner_);
-    if (plaque_)
-        R_DrawPic(plaqueRect_.x, plaqueRect_.y, COLOR_WHITE, plaque_);
-    if (logo_)
-        R_DrawPic(logoRect_.x, logoRect_.y, COLOR_WHITE, logo_);
+    if (plaque_) {
+        int draw_x = plaqueRect_.x;
+        if (plaqueFixed_ && plaqueAnchor_ == 2)
+            draw_x = max(0, uis.width - plaqueRect_.width - plaqueRect_.x);
+        if (plaqueFixed_)
+            R_DrawStretchPic(draw_x, plaqueRect_.y, plaqueRect_.width, plaqueRect_.height, COLOR_WHITE, plaque_);
+        else
+            R_DrawPic(draw_x, plaqueRect_.y, COLOR_WHITE, plaque_);
+    }
+    if (logo_) {
+        int draw_x = logoRect_.x;
+        if (logoFixed_ && logoAnchor_ == 2)
+            draw_x = max(0, uis.width - logoRect_.width - logoRect_.x);
+        if (logoFixed_)
+            R_DrawStretchPic(draw_x, logoRect_.y, logoRect_.width, logoRect_.height, COLOR_WHITE, logo_);
+        else
+            R_DrawPic(draw_x, logoRect_.y, COLOR_WHITE, logo_);
+    }
+
+    if (!footerText_.empty() || !footerSubtext_.empty()) {
+        int size = footerSizeSet_ ? footerSize_ : max(8, CONCHAR_HEIGHT - 4);
+        color_t color = footerColorSet_ ? footerColor_ : COLOR_RGBA(180, 180, 180, 255);
+        int line_h = UI_FontLineHeightSized(size);
+        int pad = GenericSpacing(CONCHAR_HEIGHT) / 2;
+        int y = uis.height - hintHeight - pad - line_h;
+        if (!footerSubtext_.empty())
+            y -= line_h;
+        if (!footerText_.empty()) {
+            UI_FontDrawStringSized(uis.width / 2, y, UI_CENTER, MAX_STRING_CHARS,
+                                   footerText_.c_str(), color, size);
+            y += line_h;
+        }
+        if (!footerSubtext_.empty()) {
+            UI_FontDrawStringSized(uis.width / 2, y, UI_CENTER, MAX_STRING_CHARS,
+                                   footerSubtext_.c_str(), color, size);
+        }
+    }
 
     int viewTop = contentTop_;
     int viewBottom = contentBottom_;
@@ -871,6 +974,12 @@ void Menu::Draw()
 
         int draw_y = itemYs_[i] - scrollY_;
         int height = itemHeights_[i];
+        if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget)) {
+            if (bitmap->HasFixedPosition()) {
+                draw_y = bitmap->FixedY();
+                height = bitmap->ImageHeight();
+            }
+        }
 
         if (draw_y + height < viewTop || draw_y > viewBottom)
             continue;
