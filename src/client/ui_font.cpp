@@ -24,6 +24,7 @@ static font_t *ui_font_handle;
 static font_t *ui_list_font_handle;
 static cvar_t *ui_font;
 static cvar_t *ui_scale;
+static cvar_t *cl_font_skip_virtual_scale;
 static float ui_pixel_scale;
 static int ui_last_width;
 static int ui_last_height;
@@ -32,6 +33,10 @@ static const float k_ui_ttf_letter_spacing = 0.06f;
 
 static float UI_FontCalcPixelScale(void)
 {
+    if (!cl_font_skip_virtual_scale)
+        cl_font_skip_virtual_scale =
+            Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
+
     float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
     float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
     float base_scale = max(scale_x, scale_y);
@@ -43,6 +48,9 @@ static float UI_FontCalcPixelScale(void)
     float ui_draw_scale = ui_scale ? R_ClampScale(ui_scale) : 1.0f;
     if (ui_draw_scale <= 0.0f)
         ui_draw_scale = 1.0f;
+
+    if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
+        return 1.0f / ui_draw_scale;
 
     return (float)base_scale_int / ui_draw_scale;
 }

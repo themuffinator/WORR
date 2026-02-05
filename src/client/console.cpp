@@ -97,6 +97,7 @@ static cvar_t *con_auto_chat;
 static cvar_t *ui_download_active;
 static cvar_t *con_fontscale;
 static cvar_t *con_fontsize;
+static cvar_t *cl_font_skip_virtual_scale;
 
 static bool con_speed_alias_syncing;
 
@@ -420,6 +421,10 @@ void Con_CheckResize(void) {
 }
 
 static float Con_GetFontPixelScale(void) {
+  if (!cl_font_skip_virtual_scale)
+    cl_font_skip_virtual_scale =
+        Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
+
   float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
   float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
   float base_scale = max(scale_x, scale_y);
@@ -429,6 +434,8 @@ static float Con_GetFontPixelScale(void) {
     base_scale_int = 1;
 
   float scale = con.scale > 0.0f ? con.scale : 1.0f;
+  if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
+    return 1.0f / scale;
   return (float)base_scale_int / scale;
 }
 
@@ -546,7 +553,7 @@ void Con_Init(void) {
   con_font->changed = con_media_changed;
   con_fontscale = Cvar_Get("con_fontscale", "5", 0);
   con_fontscale->changed = con_media_changed;
-  con_fontsize = Cvar_Get("con_fontsize", con_fontscale->string, 0);
+  con_fontsize = Cvar_Get("con_fontsize", "8", 0);
   con_fontsize->changed = con_media_changed;
   con_background = Cvar_Get("con_background", "conback", 0);
   con_background->changed = con_media_changed;

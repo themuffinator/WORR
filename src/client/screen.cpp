@@ -61,6 +61,7 @@ static cvar_t   *scr_alpha_legacy;
 static cvar_t   *scr_demobar;
 static cvar_t   *scr_font;
 static cvar_t   *scr_scale;
+static cvar_t   *cl_font_skip_virtual_scale;
 static cvar_t   *scr_demobar_legacy;
 static cvar_t   *scr_font_legacy;
 static cvar_t   *scr_scale_legacy;
@@ -120,6 +121,7 @@ static cvar_t   *scr_safe_zone_legacy;
 
 static void scr_font_changed(cvar_t *self);
 static void scr_scale_changed(cvar_t *self);
+static void cl_font_skip_virtual_scale_changed(cvar_t *self);
 static void scr_ui_font_reload(void);
 
 // nb: this is dumb but C doesn't allow
@@ -231,10 +233,30 @@ static int SCR_GetUiScaleInt(void)
 
 static float SCR_GetFontPixelScale(void)
 {
+    if (!cl_font_skip_virtual_scale)
+        cl_font_skip_virtual_scale =
+            Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
+
     int base_scale_int = SCR_GetBaseScaleInt();
     float hud_scale = scr.hud_scale > 0.0f ? scr.hud_scale : 1.0f;
 
+    if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
+        return 1.0f / hud_scale;
+
     return (float)base_scale_int / hud_scale;
+}
+
+static void cl_font_skip_virtual_scale_changed(cvar_t *self)
+{
+    if (!self)
+        return;
+    if (!scr.initialized || !cls.ref_initialized)
+        return;
+
+    Con_CheckResize();
+    UI_FontModeChanged();
+    if (scr_font)
+        scr_font_changed(scr_font);
 }
 
 static bool SCR_UseScrFont(qhandle_t font)
@@ -2896,6 +2918,8 @@ void SCR_Init(void)
     scr_scale = Cvar_Get("cl_scale", "0", 0);
     scr_scale_legacy = Cvar_Get("scr_scale", scr_scale->string, CVAR_NOARCHIVE);
     scr_scale->changed = scr_scale_changed;
+    cl_font_skip_virtual_scale = Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
+    cl_font_skip_virtual_scale->changed = cl_font_skip_virtual_scale_changed;
     scr_crosshair = Cvar_Get("crosshair", "3", CVAR_ARCHIVE);
     scr_crosshair->changed = scr_crosshair_changed;
 
