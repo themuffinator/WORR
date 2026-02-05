@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/font.h"
 
 #include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstring>
@@ -67,6 +68,8 @@ struct font_glyph_t {
   float bearing_y = 0.0f;
   float offset_x = 0.0f;
   float offset_y = 0.0f;
+  int pad_top = 0;
+  int pad_bottom = 0;
   int advance = 0;
   bool oversized = false;
   bool metrics_valid = false;
@@ -109,6 +112,7 @@ struct font_ttf_t {
   int rendered_descent = 0;
   int rendered_extent = 0;
   bool rendered_metrics_valid = false;
+  bool rendered_metrics_locked = false;
   int fixed_advance_units = 0;
   std::unordered_map<uint32_t, font_glyph_t> glyphs;
   std::list<uint32_t> lru;
@@ -259,6 +263,307 @@ static bool font_debug_match(const char *string) {
   if (!string || !*string)
     return false;
   return strstr(string, cl_font_debug_match->string) != nullptr;
+}
+
+static bool font_is_number(const char *value) {
+  return value && *value && COM_IsFloat(value);
+}
+
+static const char *font_format_char(uint32_t cp, char *buffer, size_t size) {
+  if (!buffer || size == 0)
+    return "";
+  if (cp == ' ') {
+    Q_snprintf(buffer, size, "space");
+    return buffer;
+  }
+  if (cp == '\t') {
+    Q_snprintf(buffer, size, "\\t");
+    return buffer;
+  }
+  if (cp == '\n') {
+    Q_snprintf(buffer, size, "\\n");
+    return buffer;
+  }
+  if (cp == '\r') {
+    Q_snprintf(buffer, size, "\\r");
+    return buffer;
+  }
+  if (cp == '\\') {
+    Q_snprintf(buffer, size, "\\\\");
+    return buffer;
+  }
+  if (cp == '\'') {
+    Q_snprintf(buffer, size, "\\'");
+    return buffer;
+  }
+  if (cp >= 32 && cp < 127 && std::isprint(static_cast<int>(cp))) {
+    Q_snprintf(buffer, size, "%c", (char)cp);
+    return buffer;
+  }
+  Q_snprintf(buffer, size, "0x%02X", (unsigned)cp);
+  return buffer;
+}
+
+static font_t *font_load_internal(const char *path, int virtual_line_height,
+                                  float pixel_scale, int fixed_advance,
+                                  const char *fallback_kfont,
+                                  const char *fallback_legacy,
+                                  bool register_font);
+static const char *font_kind_name(font_kind_t kind);
+#if USE_SDL3_TTF
+static int font_ttf_metric_mode(void);
+static bool font_ttf_hb_snap_positions(void);
+static int font_ttf_metric_extent(const font_t *font);
+static int font_ttf_metric_baseline(const font_t *font);
+static float font_ttf_metric_scale(const font_t *font, int scale);
+static float font_get_ttf_advance_scaled(const font_t *font, int advance_units,
+                                         int scale);
+static font_glyph_t *font_get_ttf_glyph(font_t *font, uint32_t codepoint,
+                                        bool *out_created);
+#endif
+
+static void font_dump_glyphs_ttf(qhandle_t file, const char *label,
+                                 const char *path, font_t *font) {
+#if !USE_SDL3_TTF
+  (void)file;
+  (void)label;
+  (void)path;
+  (void)font;
+#else
+  if (!font || font->kind != FONT_TTF) {
+    FS_FPrintf(file, "Font %s: not a TTF font, skipping.\n",
+               label ? label : "<null>");
+    return;
+  }
+
+  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
+  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
+  FS_FPrintf(file,
+             "kind: %s line_height=%d pixel_scale=%.3f fixed_advance=%d "
+             "letter_spacing=%.3f\n",
+             font_kind_name(font->kind), font->virtual_line_height,
+             font->pixel_scale, font->fixed_advance, font->letter_spacing);
+  FS_FPrintf(file,
+             "ttf: pixel_height=%d ascent=%d line_skip=%d baseline=%d "
+             "extent=%d rendered=%d/%d metric_mode=%d scale_boost=%.2f "
+             "hb_snap=%d\n",
+             font->ttf.pixel_height, font->ttf.ascent, font->ttf.line_skip,
+             font->ttf.baseline, font->ttf.extent, font->ttf.rendered_ascent,
+             font->ttf.rendered_extent, font_ttf_metric_mode(),
+             font_scale_boost(), font_ttf_hb_snap_positions() ? 1 : 0);
+
+  float glyph_scale = font_ttf_metric_scale(font, 1);
+  FS_FPrintf(file, "glyph_scale=%.3f baseline=%d extent=%d\n", glyph_scale,
+             font_ttf_metric_baseline(font), font_ttf_metric_extent(font));
+
+  FS_FPrintf(file,
+             "cp hex char adv adv_px minx maxx miny maxy bearX bearY offX offY "
+             "w h bmpL bmpT bmpR bmpB dL dT dR dB\n");
+
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    font_glyph_t *glyph = font_get_ttf_glyph(font, cp, nullptr);
+    if (!glyph) {
+      char disp[16];
+      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
+                 font_format_char(cp, disp, sizeof(disp)));
+      continue;
+    }
+
+    int minx = 0;
+    int maxx = 0;
+    int miny = 0;
+    int maxy = 0;
+    int advance = 0;
+    bool have_metrics = false;
+    if (font->ttf.font &&
+        TTF_GetGlyphMetrics(font->ttf.font, cp, &minx, &maxx, &miny, &maxy,
+                            &advance)) {
+      have_metrics = true;
+    }
+
+    float bmp_left = glyph->bearing_x + glyph->offset_x;
+    float bmp_top = glyph->bearing_y + glyph->offset_y;
+    float bmp_right = bmp_left + (float)glyph->w;
+    float bmp_bottom = bmp_top - (float)glyph->h;
+
+    float d_left = have_metrics ? (bmp_left - (float)minx) : 0.0f;
+    float d_top = have_metrics ? (bmp_top - (float)maxy) : 0.0f;
+    float d_right = have_metrics ? (bmp_right - (float)maxx) : 0.0f;
+    float d_bottom = have_metrics ? (bmp_bottom - (float)miny) : 0.0f;
+
+    float adv_px =
+        font_get_ttf_advance_scaled(font, glyph->advance, 1);
+
+    char disp[16];
+    FS_FPrintf(
+        file,
+        "%3u 0x%02X '%s' %4d %6.2f %4d %4d %4d %4d %6.2f %6.2f %6.2f %6.2f "
+        "%3d %3d %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f\n",
+        cp, cp, font_format_char(cp, disp, sizeof(disp)), glyph->advance,
+        adv_px, have_metrics ? minx : 0, have_metrics ? maxx : 0,
+        have_metrics ? miny : 0, have_metrics ? maxy : 0, glyph->bearing_x,
+        glyph->bearing_y, glyph->offset_x, glyph->offset_y, glyph->w, glyph->h,
+        bmp_left, bmp_top, bmp_right, bmp_bottom, d_left, d_top, d_right,
+        d_bottom);
+  }
+#endif
+}
+
+static void font_dump_glyphs_kfont(qhandle_t file, const char *label,
+                                   const char *path, font_t *font) {
+  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
+  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
+  if (!font || font->kind != FONT_KFONT) {
+    FS_FPrintf(file, "kind: %s (not kfont), skipping.\n",
+               font ? font_kind_name(font->kind) : "null");
+    return;
+  }
+  FS_FPrintf(file, "kind: %s line_height=%d\n", font_kind_name(font->kind),
+             font->kfont.line_height);
+  FS_FPrintf(file, "cp hex char x y w h\n");
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    auto it = font->kfont.glyphs.find(cp);
+    char disp[16];
+    if (it == font->kfont.glyphs.end()) {
+      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
+                 font_format_char(cp, disp, sizeof(disp)));
+      continue;
+    }
+    const kfont_glyph_t &glyph = it->second;
+    FS_FPrintf(file, "%3u 0x%02X '%s' %4d %4d %3d %3d\n", cp, cp,
+               font_format_char(cp, disp, sizeof(disp)), glyph.x, glyph.y,
+               glyph.w, glyph.h);
+  }
+}
+
+static void font_dump_glyphs_legacy(qhandle_t file, const char *label,
+                                    const char *path, font_t *font) {
+  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
+  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
+  if (!font || font->kind != FONT_LEGACY) {
+    FS_FPrintf(file, "kind: %s (not legacy), skipping.\n",
+               font ? font_kind_name(font->kind) : "null");
+    return;
+  }
+  FS_FPrintf(file, "kind: %s char_w=%d char_h=%d\n",
+             font_kind_name(font->kind), CONCHAR_WIDTH, CONCHAR_HEIGHT);
+  FS_FPrintf(file, "cp hex char w h\n");
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    char disp[16];
+    FS_FPrintf(file, "%3u 0x%02X '%s' %3d %3d\n", cp, cp,
+               font_format_char(cp, disp, sizeof(disp)), CONCHAR_WIDTH,
+               CONCHAR_HEIGHT);
+  }
+}
+
+static void font_dump_glyphs_for_path(qhandle_t file, const char *label,
+                                      const char *path, int line_height,
+                                      int fixed_advance) {
+  if (!path || !*path) {
+    FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
+    FS_FPrintf(file, "path: <empty>, skipping.\n");
+    return;
+  }
+
+  font_t *font = font_load_internal(path, line_height, 1.0f, fixed_advance,
+                                    "fonts/qfont.kfont", "conchars.png",
+                                    false);
+  if (!font) {
+    FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
+    FS_FPrintf(file, "path: %s\n", path);
+    FS_FPrintf(file, "load failed: %s\n", Com_GetLastError());
+    return;
+  }
+
+  switch (font->kind) {
+  case FONT_TTF:
+    font_dump_glyphs_ttf(file, label, path, font);
+    break;
+  case FONT_KFONT:
+    font_dump_glyphs_kfont(file, label, path, font);
+    break;
+  case FONT_LEGACY:
+  default:
+    font_dump_glyphs_legacy(file, label, path, font);
+    break;
+  }
+
+  Font_Free(font);
+}
+
+static void Font_DumpGlyphs_f(void) {
+  int line_height = 32;
+  const char *font_path = nullptr;
+  const char *out_name = nullptr;
+  int arg = 1;
+
+  if (Cmd_Argc() > arg) {
+    const char *a1 = Cmd_Argv(arg);
+    if (font_is_number(a1)) {
+      line_height = Q_clip(Q_rint(Q_atof(a1)), 1, 256);
+      arg++;
+    } else {
+      font_path = a1;
+      arg++;
+      if (Cmd_Argc() > arg && font_is_number(Cmd_Argv(arg))) {
+        line_height = Q_clip(Q_rint(Q_atof(Cmd_Argv(arg))), 1, 256);
+        arg++;
+      }
+    }
+  }
+
+  if (Cmd_Argc() > arg)
+    out_name = Cmd_Argv(arg);
+
+  char path[MAX_OSPATH];
+  qhandle_t file = 0;
+
+  if (out_name && *out_name) {
+    file = FS_EasyOpenFile(path, sizeof(path),
+                           FS_MODE_WRITE | FS_FLAG_TEXT, "fontdump/",
+                           out_name, ".txt");
+  } else {
+    for (int i = 0; i < 1000; ++i) {
+      Q_snprintf(path, sizeof(path), "fontdump/glyphs_%03d.txt", i);
+      int ret = FS_OpenFile(path, &file,
+                            FS_MODE_WRITE | FS_FLAG_TEXT | FS_FLAG_EXCL);
+      if (file)
+        break;
+      if (ret != Q_ERR(EEXIST)) {
+        Com_EPrintf("$e_auto_73287ca7dcec", path, Q_ErrorString(ret));
+        return;
+      }
+    }
+  }
+
+  if (!file) {
+    Com_Printf("font_dump_glyphs: failed to open output file.\n");
+    return;
+  }
+
+  FS_FPrintf(file, "WORR Font Glyph Dump\n");
+  FS_FPrintf(file, "line_height=%d\n", line_height);
+  FS_FPrintf(file, "scale_boost=%.2f\n", font_scale_boost());
+
+  if (font_path) {
+    font_dump_glyphs_for_path(file, "custom", font_path, line_height, 0);
+  } else {
+    const char *con_path = Cvar_VariableString("con_font");
+    const char *scr_path = Cvar_VariableString("cl_font");
+    const char *ui_path = Cvar_VariableString("ui_font");
+    const char *scr_ui_path = "fonts/AtkinsonHyperLegible-Regular.otf";
+
+    font_dump_glyphs_for_path(file, "con_font", con_path, line_height,
+                              line_height);
+    font_dump_glyphs_for_path(file, "cl_font", scr_path, line_height, 0);
+    font_dump_glyphs_for_path(file, "ui_font", ui_path, line_height, 0);
+    font_dump_glyphs_for_path(file, "scr_ui_font", scr_ui_path, line_height, 0);
+  }
+
+  if (FS_CloseFile(file))
+    Com_EPrintf("$cl_error_writing_file", path);
+  else
+    Com_Printf("$cl_write_complete", path);
 }
 
 static void font_debug_draw_line(int x, int y, int w, color_t color) {
@@ -478,9 +783,16 @@ static bool font_update_ttf_rendered_metrics_for_glyph(font_t *font,
                                                        const font_glyph_t &glyph) {
   if (!font || font->kind != FONT_TTF || glyph.h <= 0)
     return false;
+  if (font->ttf.rendered_metrics_locked)
+    return false;
 
-  float top = glyph.bearing_y + glyph.offset_y;
-  float bottom = top - (float)glyph.h;
+  int pad_top = max(0, glyph.pad_top);
+  int pad_bottom = max(0, glyph.pad_bottom);
+  int trimmed_h = glyph.h - pad_top - pad_bottom;
+  if (trimmed_h <= 0)
+    trimmed_h = glyph.h;
+  float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
+  float bottom = top - (float)trimmed_h;
   int ascent = max(1, (int)ceilf(top));
   int descent = max(0, (int)ceilf(-bottom));
   int extent = ascent + descent;
@@ -1794,6 +2106,7 @@ static void font_compute_ttf_metrics(font_t *font) {
   font->ttf.rendered_descent = 0;
   font->ttf.rendered_extent = 0;
   font->ttf.rendered_metrics_valid = false;
+  font->ttf.rendered_metrics_locked = false;
 }
 
 static void font_compute_ttf_rendered_metrics(font_t *font) {
@@ -1815,8 +2128,13 @@ static void font_compute_ttf_rendered_metrics(font_t *font) {
       const font_glyph_t &glyph = entry.second;
       if (glyph.h <= 0 || !glyph.metrics_valid)
         continue;
-      float top = glyph.bearing_y + glyph.offset_y;
-      float bottom = top - (float)glyph.h;
+      int pad_top = max(0, glyph.pad_top);
+      int pad_bottom = max(0, glyph.pad_bottom);
+      int trimmed_h = glyph.h - pad_top - pad_bottom;
+      if (trimmed_h <= 0)
+        trimmed_h = glyph.h;
+      float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
+      float bottom = top - (float)trimmed_h;
       max_top = max(max_top, top);
       max_bottom = max(max_bottom, -bottom);
       ++samples;
@@ -1826,8 +2144,13 @@ static void font_compute_ttf_rendered_metrics(font_t *font) {
       const font_glyph_t &glyph = entry.second;
       if (glyph.h <= 0 || !glyph.metrics_valid)
         continue;
-      float top = glyph.bearing_y + glyph.offset_y;
-      float bottom = top - (float)glyph.h;
+      int pad_top = max(0, glyph.pad_top);
+      int pad_bottom = max(0, glyph.pad_bottom);
+      int trimmed_h = glyph.h - pad_top - pad_bottom;
+      if (trimmed_h <= 0)
+        trimmed_h = glyph.h;
+      float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
+      float bottom = top - (float)trimmed_h;
       max_top = max(max_top, top);
       max_bottom = max(max_bottom, -bottom);
       ++samples;
@@ -2037,6 +2360,8 @@ static font_glyph_t *font_get_ttf_glyph(font_t *font, uint32_t codepoint,
   int pad_bottom = 0;
   font_measure_glyph_padding(surface, &pad_left, &pad_top, &pad_right,
                              &pad_bottom);
+  glyph.pad_top = pad_top;
+  glyph.pad_bottom = pad_bottom;
   if (glyph.w > 0 && glyph.h > 0) {
     glyph.offset_x = -(float)pad_left;
     glyph.offset_y = (float)pad_top;
@@ -2225,6 +2550,8 @@ static font_glyph_t *font_get_ttf_glyph_index(font_t *font,
   int pad_bottom = 0;
   font_measure_glyph_padding(surface, &pad_left, &pad_top, &pad_right,
                              &pad_bottom);
+  glyph.pad_top = pad_top;
+  glyph.pad_bottom = pad_bottom;
   if (glyph.w > 0 && glyph.h > 0)
     glyph.offset_x = -(float)pad_left;
 
@@ -2450,6 +2777,7 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
           font->ttf.pages.push_back(font_create_atlas_page(font->id, 0));
           font_preload_ttf_glyphs(font);
           font_compute_ttf_rendered_metrics(font);
+          font->ttf.rendered_metrics_locked = true;
           font_update_ttf_fixed_advance(font);
           font_flush_ttf_pages(font);
           font_debug_printf("Font: TTF loaded \"%s\" ascent=%d line_skip=%d "
@@ -2580,6 +2908,9 @@ void Font_Init(void) {
   (void)font_debug_enabled();
   (void)font_glyph_cache_limit();
   (void)font_scale_boost();
+#if USE_CLIENT
+  Cmd_AddCommand("font_dump_glyphs", Font_DumpGlyphs_f);
+#endif
 #if USE_SDL3_TTF
   (void)font_ttf_hinting_mode();
   (void)font_ttf_supersample();
@@ -2604,6 +2935,9 @@ void Font_Init(void) {
 }
 
 void Font_Shutdown(void) {
+#if USE_CLIENT
+  Cmd_RemoveCommand("font_dump_glyphs");
+#endif
   for (font_t *font : g_fonts)
     Font_Free(font);
   g_fonts.clear();
