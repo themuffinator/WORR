@@ -692,7 +692,7 @@ jsoncpp_dep = dependency('jsoncpp', default_options: game_fallback_opt)
 zlib = dependency('zlib',
   fallback:        'zlib-ng',
   required:        get_option('zlib'),
-  default_options: fallback_opt + [ 'tests=disabled', 'zlib-compat=true', 'force-sse2=true' ],
+  default_options: fallback_opt + [ 'tests=disabled', 'zlib-compat=true', 'sse2=enabled' ],
 )
 
 if not zlib.found()
