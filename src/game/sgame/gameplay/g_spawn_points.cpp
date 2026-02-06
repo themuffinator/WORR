@@ -1430,6 +1430,7 @@ void ClientSpawn(gentity_t *ent) {
   bool valid_spawn = false;
   bool force_spawn = cl->awaitingRespawn && level.time > cl->respawn_timeout;
   bool is_landmark = false;
+  bool usedGhostSpawn = false;
 
   InitPlayerTeam(ent);
   cl->ps.teamID = static_cast<int>(cl->sess.team);
@@ -1652,14 +1653,16 @@ void ClientSpawn(gentity_t *ent) {
     if (ghostSpotSafe) {
       spawnOrigin = ghostOrigin;
       spawnAngles = ghostAngles;
+      usedGhostSpawn = true;
     } else {
       const char *sessionName = cl->sess.netName;
       const char *persistentName = cl->pers.netName;
       const char *playerName = cl->sess.netName[0]   ? sessionName
                                : cl->pers.netName[0] ? persistentName
                                                      : "player";
+      const std::string safePlayerName = G_ColorResetAfter(playerName);
 
-      const char *blockerDesc = "solid geometry";
+      std::string blockerDesc = "solid geometry";
       if (blockingEnt) {
         if (blockingEnt->client) {
           const char *occupantPersist = blockingEnt->client->pers.netName;
@@ -1667,7 +1670,10 @@ void ClientSpawn(gentity_t *ent) {
           const char *occupant = (occupantPersist[0])   ? occupantPersist
                                  : (occupantSession[0]) ? occupantSession
                                                         : nullptr;
-          blockerDesc = (occupant && *occupant) ? occupant : "another player";
+          if (occupant && *occupant)
+            blockerDesc = G_ColorResetAfter(occupant);
+          else
+            blockerDesc = "another player";
         } else if (blockingEnt->className) {
           blockerDesc = blockingEnt->className;
         }
@@ -1675,7 +1681,7 @@ void ClientSpawn(gentity_t *ent) {
 
       gi.Com_PrintFmt(
           "Ghost respawn for {} denied at ({} {} {}); blocked by {}\n",
-          playerName, ghostOrigin[0], ghostOrigin[1], ghostOrigin[2],
+          safePlayerName, ghostOrigin[0], ghostOrigin[1], ghostOrigin[2],
           blockerDesc);
     }
 
@@ -1687,6 +1693,12 @@ void ClientSpawn(gentity_t *ent) {
   ent->s.frame = 0;
 
   PutClientOnSpawnPoint(ent, spawnOrigin, spawnAngles);
+
+  if (ClientIsPlaying(cl) && !eliminated && !is_landmark &&
+      !cl->coopRespawn.useSquad && !usedGhostSpawn) {
+    cl->spawnAngleLockAngles = spawnAngles;
+    cl->spawnAngleLockUntil = level.time + (FRAME_TIME_MS * 2);
+  }
 
   if (!is_landmark) {
     // When spawning at a map-defined point, persist the mapper-provided

@@ -443,7 +443,8 @@ static void VoteCommandStore(gentity_t *ent, const VoteCommand *vote_cmd,
   }
 
   gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_367fce8f6362",
-                        level.vote.client->sess.netName, vote_cmd->name.data(),
+                        G_ColorResetAfter(level.vote.client->sess.netName).c_str(),
+                        vote_cmd->name.data(),
                         argSuffix.empty() ? "" : argSuffix.c_str());
 
   for (auto ec : active_clients()) {

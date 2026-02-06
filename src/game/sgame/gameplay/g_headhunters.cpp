@@ -332,23 +332,26 @@ namespace HeadHunters {
 		void AnnounceDeposit(const gentity_t* player, uint8_t heads, int points) {
 			if (!player || !player->client || !heads)
 				return;
-			const char* name = player->client->sess.netName;
+			const std::string name = G_ColorResetAfter(player->client->sess.netName);
 			const char* headWord = (heads == 1) ? "head" : "heads";
 			const char* pointWord = (points == 1) ? "point" : "points";
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_22262d9d2b45", name, heads, headWord, points, pointWord);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_22262d9d2b45",
+				name.c_str(), heads, headWord, points, pointWord);
 		}
 
 		void AnnounceDrop(const gentity_t* player, const gentity_t* instigator, uint8_t heads) {
 			if (!player || !player->client || !heads)
 				return;
-			const char* victimName = player->client->sess.netName;
+			const std::string victimName = G_ColorResetAfter(player->client->sess.netName);
 			const char* headWord = (heads == 1) ? "head" : "heads";
 			if (instigator && instigator->client) {
 				gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_2b587ce58d76",
-					instigator->client->sess.netName, victimName, heads, headWord);
+					G_ColorResetAfter(instigator->client->sess.netName).c_str(),
+					victimName.c_str(), heads, headWord);
 			}
 			else {
-				gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_1f39f05237ce", victimName, heads, headWord);
+				gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_1f39f05237ce",
+					victimName.c_str(), heads, headWord);
 			}
 		}
 

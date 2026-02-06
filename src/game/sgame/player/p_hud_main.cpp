@@ -1524,7 +1524,7 @@ void SetStats(gentity_t *ent) {
           ent->client->resp.thawer->client) {
         freezeStatus =
             fmt::format("Being thawed by {}",
-                        ent->client->resp.thawer->client->sess.netName);
+                        G_ColorResetAfter(ent->client->resp.thawer->client->sess.netName));
       } else {
         freezeStatus = "Frozen - waiting for thaw";
       }

@@ -23,7 +23,7 @@ void UpdateMatchStatsMenu(gentity_t *ent, bool openMenu) {
   size_t i = 0;
 
   lines[i++] = "Player Stats for Match";
-  lines[i++] = ent->client->sess.netName;
+  lines[i++] = G_ColorResetAfter(ent->client->sess.netName);
   lines[i++] = "--------------------------";
   lines[i++] = fmt::format("kills: {}", st.totalKills);
   lines[i++] = fmt::format("deaths: {}", st.totalDeaths);

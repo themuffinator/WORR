@@ -641,7 +641,8 @@ void AnnounceGoal(const gentity_t* scorer, Team team,
 	if (scorer && scorer->client) {
 		gi.LocBroadcast_Print(
 		    PRINT_HIGH, "$g_sgame_auto_e342cbc26110",
-		    scorer->client->sess.netName, teamName, goalLabel);
+		    G_ColorResetAfter(scorer->client->sess.netName).c_str(),
+		    teamName, goalLabel);
 	} else {
 		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_bc02a46f44d7", teamName);
 	}
@@ -674,7 +675,7 @@ void AwardAssist(LevelLocals::ProBallState& state, gentity_t* scorer,
 	level.match.proBallAssists++;
 
 	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5fa5290e5143",
-			      assistPlayer->client->sess.netName);
+			      G_ColorResetAfter(assistPlayer->client->sess.netName).c_str());
 }
 
 /*
@@ -1039,7 +1040,7 @@ bool DropBall(gentity_t* carrier, gentity_t* instigator, bool forced) {
 	}
 
 	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_683c14fe132b",
-			      carrier->client->sess.netName);
+			      G_ColorResetAfter(carrier->client->sess.netName).c_str());
 	return true;
 }
 
@@ -1059,7 +1060,7 @@ bool ThrowBall(gentity_t* carrier, const Vector3& origin, const Vector3& dir) {
 		return false;
 
 	gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_841bf21fa102",
-			      carrier->client->sess.netName);
+			      G_ColorResetAfter(carrier->client->sess.netName).c_str());
 	return true;
 }
 

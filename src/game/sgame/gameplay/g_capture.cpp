@@ -461,7 +461,8 @@ namespace {
 
 			if (teammate->client->resp.ctf_lastreturnedflag &&
 				teammate->client->resp.ctf_lastreturnedflag + CTF::RETURN_FLAG_ASSIST_TIMEOUT > level.time) {
-				gi.LocBroadcast_Print(PRINT_HIGH, "$g_bonus_assist_return", teammate->client->sess.netName);
+				gi.LocBroadcast_Print(PRINT_HIGH, "$g_bonus_assist_return",
+					G_ColorResetAfter(teammate->client->sess.netName).c_str());
 				G_AdjustPlayerScore(teammate->client, CTF::RETURN_FLAG_ASSIST_BONUS, false, 0);
 				teammate->client->pers.match.ctfFlagAssists++;
 				PushAward(teammate, PlayerMedal::Assist);
@@ -469,7 +470,8 @@ namespace {
 
 			if (teammate->client->resp.ctf_lastfraggedcarrier &&
 				teammate->client->resp.ctf_lastfraggedcarrier + CTF::FRAG_CARRIER_ASSIST_TIMEOUT > level.time) {
-				gi.LocBroadcast_Print(PRINT_HIGH, "$g_bonus_assist_frag_carrier", teammate->client->sess.netName);
+				gi.LocBroadcast_Print(PRINT_HIGH, "$g_bonus_assist_frag_carrier",
+					G_ColorResetAfter(teammate->client->sess.netName).c_str());
 				G_AdjustPlayerScore(teammate->client, CTF::FRAG_CARRIER_ASSIST_BONUS, false, 0);
 				teammate->client->pers.match.ctfFlagAssists++;
 				PushAward(teammate, PlayerMedal::Assist);
@@ -521,7 +523,7 @@ namespace {
 				PRINT_HIGH,
 				"$g_sgame_auto_4e27928143af",
 				Teams_TeamName(scoringTeam),
-				scorer->client->sess.netName,
+				G_ColorResetAfter(scorer->client->sess.netName).c_str(),
 				TimeString((level.time - pickupTime).milliseconds(), true, false));
 		}
 		else {
@@ -529,7 +531,7 @@ namespace {
 				PRINT_HIGH,
 				"$g_sgame_auto_e9691a6f20ec",
 				Teams_TeamName(scoringTeam),
-				scorer->client->sess.netName);
+				G_ColorResetAfter(scorer->client->sess.netName).c_str());
 		}
 	}
 
@@ -1083,9 +1085,9 @@ void CTF_ScoreBonuses(gentity_t* targ, gentity_t*, gentity_t* attacker) {
 	if (targ->client->pers.inventory[enemyFlagItem]) {
 		attacker->client->resp.ctf_lastfraggedcarrier = level.time;
 		G_AdjustPlayerScore(attacker->client, CTF::FRAG_CARRIER_BONUS, false, 0);
-		gi.LocBroadcast_Print(PRINT_MEDIUM, "$g_sgame_auto_ebb9672c8db9",
-			attacker->client->sess.netName,
-			Teams_TeamName(targetTeam));
+	gi.LocBroadcast_Print(PRINT_MEDIUM, "$g_sgame_auto_ebb9672c8db9",
+		G_ColorResetAfter(attacker->client->sess.netName).c_str(),
+		Teams_TeamName(targetTeam));
 		ResetCarrierHurtTimers(otherTeam);
 		return;
 	}
@@ -1271,8 +1273,9 @@ bool CTF_PickupFlag(gentity_t* ent, gentity_t* other) {
 			return false;
 		}
 
-		gi.LocBroadcast_Print(PRINT_HIGH, "$g_returned_flag",
-			other->client->sess.netName, Teams_TeamName(flagTeam));
+	gi.LocBroadcast_Print(PRINT_HIGH, "$g_returned_flag",
+		G_ColorResetAfter(other->client->sess.netName).c_str(),
+		Teams_TeamName(flagTeam));
 		G_AdjustPlayerScore(other->client, CTF::RECOVERY_BONUS, false, 0);
 		other->client->resp.ctf_lastreturnedflag = level.time;
 		other->client->pers.match.ctfFlagReturns++;
@@ -1310,7 +1313,8 @@ bool CTF_PickupFlag(gentity_t* ent, gentity_t* other) {
 	}
 
 	gi.LocBroadcast_Print(PRINT_HIGH, "$g_got_flag",
-		other->client->sess.netName, TeamNameOrNeutral(flagTeam));
+		G_ColorResetAfter(other->client->sess.netName).c_str(),
+		TeamNameOrNeutral(flagTeam));
 	G_AdjustPlayerScore(other->client, CTF::FLAG_BONUS, false, 0);
 	if (Game::Is(GameType::CaptureStrike) && !level.strike_flag_touch) {
 		level.strike_flag_touch = true;
@@ -1389,21 +1393,24 @@ void CTF_DeadDropFlag(gentity_t* self) {
 		dropped = Drop_Item(self, GetItemByIndex(IT_FLAG_RED));
 		self->client->pers.inventory[IT_FLAG_RED] = 0;
 		gi.LocBroadcast_Print(PRINT_HIGH, "$g_lost_flag",
-			self->client->sess.netName, Teams_TeamName(Team::Red));
+			G_ColorResetAfter(self->client->sess.netName).c_str(),
+			Teams_TeamName(Team::Red));
 		droppedTeam = Team::Red;
 	}
 	else if (self->client->pers.inventory[IT_FLAG_BLUE]) {
 		dropped = Drop_Item(self, GetItemByIndex(IT_FLAG_BLUE));
 		self->client->pers.inventory[IT_FLAG_BLUE] = 0;
 		gi.LocBroadcast_Print(PRINT_HIGH, "$g_lost_flag",
-			self->client->sess.netName, Teams_TeamName(Team::Blue));
+			G_ColorResetAfter(self->client->sess.netName).c_str(),
+			Teams_TeamName(Team::Blue));
 		droppedTeam = Team::Blue;
 	}
 	else if (self->client->pers.inventory[IT_FLAG_NEUTRAL]) {
 		dropped = Drop_Item(self, GetItemByIndex(IT_FLAG_NEUTRAL));
 		self->client->pers.inventory[IT_FLAG_NEUTRAL] = 0;
 		gi.LocBroadcast_Print(PRINT_HIGH, "$g_lost_flag",
-			self->client->sess.netName, Teams_TeamName(Team::Free));
+			G_ColorResetAfter(self->client->sess.netName).c_str(),
+			Teams_TeamName(Team::Free));
 		droppedTeam = Team::Free;
 	}
 

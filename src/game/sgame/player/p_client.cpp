@@ -176,10 +176,13 @@ std::string BuildObituaryLocBase(const char *key, const char *base) {
 void BroadcastObituaryPrint(const char *key, const char *base,
                             const char *victim, const char *killer) {
   const std::string decorated = BuildObituaryLocBase(key, base);
+  const std::string safeVictim = G_ColorResetAfter(victim);
+  const std::string safeKiller = G_ColorResetAfter(killer);
   if (killer && *killer) {
-    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), victim, killer);
+    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), safeVictim.c_str(),
+                          safeKiller.c_str());
   } else {
-    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), victim);
+    gi.LocBroadcast_Print(PRINT_MEDIUM, decorated.c_str(), safeVictim.c_str());
   }
 }
 } // namespace
@@ -1176,7 +1179,8 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
   if (attacker->svFlags & SVF_MONSTER) {
     if (auto monster_name = GetMonsterDisplayName(attacker->className)) {
       const std::string message =
-          fmt::format("{} was killed by a {}.\n", victim->client->sess.netName,
+          fmt::format("{} was killed by a {}.\n",
+                      G_ColorResetAfter(victim->client->sess.netName),
                       *monster_name);
 
       // Broadcast the message to all clients and write it to the server log.
@@ -1381,6 +1385,10 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
   // frag messages
   if (deathmatch->integer && victim != attacker && victim->client &&
       attacker->client) {
+    const std::string safeAttackerName =
+        G_ColorResetAfter(attacker->client->sess.netName);
+    const std::string safeVictimName =
+        G_ColorResetAfter(victim->client->sess.netName);
     if (!(victim->svFlags & SVF_BOT)) {
       if (level.matchState == MatchState::Warmup_ReadyUp) {
         BroadcastReadyReminderMessage();
@@ -1390,7 +1398,7 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
           gi.LocClient_Print(
               victim, PRINT_CENTER,
               "$g_sgame_auto_24516e7280f1",
-              attacker->client->sess.netName);
+              safeAttackerName.c_str());
         } else if (Game::Is(GameType::FreezeTag) &&
                    level.roundState == RoundState::In_Progress) {
           bool last_standing = true;
@@ -1400,14 +1408,14 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
                level.pop.num_living_blue > 1))
             last_standing = false;
           gi.LocClient_Print(victim, PRINT_CENTER, "$g_sgame_auto_46b053398cf6",
-                             attacker->client->sess.netName,
+                             safeAttackerName.c_str(),
                              last_standing ? ""
                                            : "\nYou will respawn once thawed.");
         } else {
           gi.LocClient_Print(victim, PRINT_CENTER, "$g_sgame_auto_ddeb5b9cd278",
                              Game::Is(GameType::FreezeTag) ? "frozen"
                                                            : "fragged",
-                             attacker->client->sess.netName);
+                             safeAttackerName.c_str());
         }
       }
     }
@@ -1415,7 +1423,7 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
       if (Teams() && OnSameTeam(victim, attacker)) {
         gi.LocClient_Print(attacker, PRINT_CENTER,
                            "$g_sgame_auto_e1384014eedb",
-                           victim->client->sess.netName);
+                           safeVictimName.c_str());
       } else {
         if (level.matchState == MatchState::Warmup_ReadyUp) {
           BroadcastReadyReminderMessage();
@@ -1423,25 +1431,25 @@ static void ClientObituary(gentity_t *victim, gentity_t *inflictor,
                    !(attacker->client->killStreakCount % 10)) {
           gi.LocBroadcast_Print(PRINT_CENTER,
                                 "$g_sgame_auto_5ea9ca9e55c0",
-                                attacker->client->sess.netName,
+                                safeAttackerName.c_str(),
                                 attacker->client->killStreakCount);
           PushAward(attacker, PlayerMedal::Rampage);
         } else if (killStreakCount >= 10) {
           gi.LocBroadcast_Print(
               PRINT_CENTER, "$g_sgame_auto_d037994285e0",
-              attacker->client->sess.netName, victim->client->sess.netName);
+              safeAttackerName.c_str(), safeVictimName.c_str());
         } else if (Teams() || level.matchState != MatchState::In_Progress) {
           if (attacker->client->sess.pc.show_fragmessages)
             gi.LocClient_Print(attacker, PRINT_CENTER, "$g_sgame_auto_161a2768fd20",
                                Game::Is(GameType::FreezeTag) ? "froze"
                                                              : "fragged",
-                               victim->client->sess.netName);
+                               safeVictimName.c_str());
         } else {
           if (attacker->client->sess.pc.show_fragmessages)
             gi.LocClient_Print(
                 attacker, PRINT_CENTER, "$g_sgame_auto_e41afbaf7793",
                 Game::Is(GameType::FreezeTag) ? "froze" : "fragged",
-                victim->client->sess.netName,
+                safeVictimName.c_str(),
                 PlaceString(attacker->client->pers.currentRank + 1),
                 attacker->client->resp.score);
         }
@@ -2141,10 +2149,13 @@ static void FreezeTag_StopThawHold(gentity_t *frozen, bool notify) {
   gentity_t *thawer = fcl->resp.thawer;
 
   if (notify && thawer && thawer->client) {
+    const std::string safeFrozenName = G_ColorResetAfter(fcl->sess.netName);
+    const std::string safeThawerName =
+        G_ColorResetAfter(thawer->client->sess.netName);
     gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_0979fa106e6c",
-                       fcl->sess.netName);
+                       safeFrozenName.c_str());
     gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_311f822919dd",
-                       thawer->client->sess.netName);
+                       safeThawerName.c_str());
   }
 
   fcl->resp.thawer = nullptr;
@@ -2171,9 +2182,9 @@ void worr::server::client::FreezeTag_StartThawHold(gentity_t *thawer,
   gi.sound(frozen, CHAN_AUTO, gi.soundIndex("world/steam.wav"), 1, ATTN_NORM,
            0);
   gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_01aa97dfc24a",
-                     fcl->sess.netName);
+                     G_ColorResetAfter(fcl->sess.netName).c_str());
   gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_fdb011c6e37e",
-                     thawer->client->sess.netName);
+                     G_ColorResetAfter(thawer->client->sess.netName).c_str());
 }
 
 /*
@@ -2201,12 +2212,12 @@ void worr::server::client::FreezeTag_ThawPlayer(gentity_t *thawer,
     ++thawer->client->resp.thawed;
     G_AdjustPlayerScore(thawer->client, 1, false, 0);
     gi.LocClient_Print(thawer, PRINT_CENTER, "$g_sgame_auto_d2e00686ef3e",
-                       frozen->client->sess.netName);
+                       G_ColorResetAfter(frozen->client->sess.netName).c_str());
   }
 
   if (thawer && thawer->client) {
     gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_b5a10a49253a",
-                       thawer->client->sess.netName);
+                       G_ColorResetAfter(thawer->client->sess.netName).c_str());
   } else if (autoThaw) {
     gi.LocClient_Print(frozen, PRINT_CENTER, "$g_sgame_auto_6b9b4499a953");
   }
@@ -3542,11 +3553,12 @@ void BroadcastTeamChange(gentity_t *ent, Team old_team, bool inactive,
   char name[MAX_INFO_VALUE] = {};
   gi.Info_ValueForKey(ent->client->pers.userInfo, "name", name, sizeof(name));
   const std::string_view playerName = name;
+  const std::string safePlayerName = G_ColorResetAfter(playerName);
   const uint16_t skill = ent->client->sess.skillRating;
   const auto team = ent->client->sess.team;
   switch (team) {
   case Team::Free:
-    s = std::format(".{} joined the battle.\n", playerName);
+    s = std::format(".{} joined the battle.\n", safePlayerName);
     if (skill > 0.f) {
       t = std::format(".You have joined the game.\nYour Skill Rating: {}",
                       skill);
@@ -3556,20 +3568,21 @@ void BroadcastTeamChange(gentity_t *ent, Team old_team, bool inactive,
     break;
   case Team::Spectator:
     if (inactive) {
-      s = std::format(".{} is inactive,\nmoved to spectators.\n", playerName);
+      s = std::format(".{} is inactive,\nmoved to spectators.\n",
+                      safePlayerName);
       t = "You are inactive and have been\nmoved to spectators.";
     } else if (Game::Has(GameFlags::OneVOne) && ent->client->sess.matchQueued) {
-      s = std::format(".{} is in the queue to play.\n", playerName);
+      s = std::format(".{} is in the queue to play.\n", safePlayerName);
       t = ".You are in the queue to play.";
     } else {
-      s = std::format(".{} joined the spectators.\n", playerName);
+      s = std::format(".{} joined the spectators.\n", safePlayerName);
       t = ".You are now spectating.";
     }
     break;
   case Team::Red:
   case Team::Blue: {
     std::string_view teamName = Teams_TeamName(team);
-    s = std::format(".{} joined the {} Team.\n", playerName, teamName);
+    s = std::format(".{} joined the {} Team.\n", safePlayerName, teamName);
     if (skill > 0.f) {
       t = std::format(".You have joined the {} Team.\nYour Skill Rating: {}",
                       teamName, skill);

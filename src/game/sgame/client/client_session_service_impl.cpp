@@ -415,9 +415,11 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_01787314874c", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_01787314874c",
+					G_ColorResetAfter(name).c_str());
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_35c469e0ed79", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_35c469e0ed79",
+					G_ColorResetAfter(name).c_str());
 			}
 		}
 
@@ -435,9 +437,11 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_20f0bccab75a", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_20f0bccab75a",
+					G_ColorResetAfter(name).c_str());
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_9d12a54636ca", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_9d12a54636ca",
+					G_ColorResetAfter(name).c_str());
 			}
 		}
 
@@ -455,9 +459,11 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_802ecb6cbfb2", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_802ecb6cbfb2",
+					G_ColorResetAfter(name).c_str());
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_b8f60b5f0ef7", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_b8f60b5f0ef7",
+					G_ColorResetAfter(name).c_str());
 			}
 		}
 
@@ -478,9 +484,11 @@ static bool CheckBanned(local_game_import_t& gi, LevelLocals& level, gentity_t* 
 				char name[MAX_INFO_VALUE] = { 0 };
 				gi.Info_ValueForKey(userInfo, "name", name, sizeof(name));
 
-				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_b4a374f1ef2b", name);
+				gi.LocClient_Print(host, PRINT_TTS, "$g_sgame_auto_b4a374f1ef2b",
+					G_ColorResetAfter(name).c_str());
 				host->client->lastBannedMessageTime = level.time;
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_cf2e3748aef1", name);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_cf2e3748aef1",
+					G_ColorResetAfter(name).c_str());
 			}
 		}
 		gi.localSound(ent, CHAN_AUTO, gi.soundIndex("world/klaxon3.wav"), 1, ATTN_NONE, 0);
@@ -670,17 +678,20 @@ gentity_t* ent, char* userInfo, const char* socialID, bool isBot) {
 		}
 
 		if (ent->client->sess.banned) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_59bb445bff79", value.data());
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_59bb445bff79",
+				G_ColorResetAfter(value.data()).c_str());
 			gi.AddCommandString(G_Fmt("kick {}\n", ent - g_entities - 1).data());
 			return false;
 		}
 
 		if (ent->client->sess.skillRating > 0) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa87f5ca778d", value.data(),
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa87f5ca778d",
+				G_ColorResetAfter(value.data()).c_str(),
 				ent->client->sess.skillRating);
 		}
 		else {
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_player_connected", value.data());
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_player_connected",
+				G_ColorResetAfter(value.data()).c_str());
 		}
 
 		// entity 1 is always server host, so make admin
@@ -810,7 +821,8 @@ void ClientSessionServiceImpl::ClientBegin(local_game_import_t& gi, GameLocals& 
 	else {
 		// send effect if in a multiplayer game
 		if (game.maxClients > 1 && !(ent->svFlags & SVF_NOCLIENT))
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_entered_game", cl->sess.netName);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_entered_game",
+				G_ColorResetAfter(cl->sess.netName).c_str());
 		worr::Logf(worr::LogLevel::Debug, "{}: {} entered active play", __FUNCTION__, ClientLogLabel(ent));
 	}
 
@@ -958,7 +970,7 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 		game.tournament.autoTimeoutActive = true;
 		gi.LocBroadcast_Print(PRINT_CENTER,
 			"$g_sgame_auto_e14920069ec3",
-			cl->sess.netName,
+			G_ColorResetAfter(cl->sess.netName).c_str(),
 			TimeString(match_timeoutLength->integer * 1000, false, false));
 		G_LogEvent("MATCH TIMEOUT STARTED");
 	}
@@ -994,7 +1006,8 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 
 	if (cl->pers.connected && cl->sess.initialised && !cl->sess.is_a_bot) {
 		if (cl->sess.netName[0]) {
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5ff8533b699f", cl->sess.netName);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5ff8533b699f",
+				G_ColorResetAfter(cl->sess.netName).c_str());
 		}
 	}
 
@@ -1074,7 +1087,7 @@ void ClientSessionServiceImpl::OnDisconnect(local_game_import_t& gi, gentity_t* 
 	if (canUpdateReady && cl->sess.netName[0]) {
 		gi.LocBroadcast_Print(PRINT_CENTER,
 				"$g_sgame_auto_c29829d27a76",
-				cl->sess.netName);
+				G_ColorResetAfter(cl->sess.netName).c_str());
 	}
 }
 
@@ -1390,6 +1403,15 @@ gentity_t* ent, usercmd_t* ucmd) {
 
 		pmState.viewHeight = ent->viewHeight;
 
+		const bool spawnLockActive = cl->spawnAngleLockUntil > level.time;
+		if (spawnLockActive) {
+			const int64_t remainingMs =
+				std::max<int64_t>(1, (cl->spawnAngleLockUntil - level.time).milliseconds());
+			const uint16_t lockTime = static_cast<uint16_t>(std::min<int64_t>(remainingMs, 65535));
+			pmState.pmFlags |= PMF_TIME_KNOCKBACK;
+			pmState.pmTime = std::max(pmState.pmTime, lockTime);
+		}
+
 		if (cl->resp.cmdAngles[YAW] < -180.f)
 			cl->resp.cmdAngles[YAW] += 360.f;
 		else if (cl->resp.cmdAngles[YAW] > 180.f)
@@ -1405,6 +1427,9 @@ gentity_t* ent, usercmd_t* ucmd) {
 		pm.cmd = *ucmd;
 		if (IsBlockingUiMenuOpen(cl) && !ClientIsPlaying(cl)) {
 			pm.cmd.angles = cl->ps.viewAngles - pm.s.deltaAngles;
+		}
+		if (spawnLockActive) {
+			pm.cmd.angles = cl->spawnAngleLockAngles - pm.s.deltaAngles;
 		}
 		pm.player = ent;
 		pm.trace = gi.game_import_t::trace;
@@ -1486,7 +1511,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 		ent->maxs = pm.maxs;
 
 		if (!IsBlockingUiMenuOpen(cl))
-			cl->resp.cmdAngles = ucmd->angles;
+			cl->resp.cmdAngles = spawnLockActive ? cl->spawnAngleLockAngles : ucmd->angles;
 
 		if (pm.jumpSound && !onLadder) {
 			gi.sound(ent, CHAN_VOICE, gi.soundIndex("*jump1.wav"), 1, ATTN_NORM, 0);
@@ -1723,7 +1748,8 @@ ReadyResult ClientSessionServiceImpl::OnReadyToggled(gentity_t* ent, bool state,
 
 		gi_.LocBroadcast_Print(PRINT_CENTER,
 			"$g_sgame_auto_079b93a3e425",
-			ent->client->sess.netName, ent->client->pers.readyStatus ? "" : "NOT " );
+			G_ColorResetAfter(ent->client->sess.netName).c_str(),
+			ent->client->pers.readyStatus ? "" : "NOT ");
 
 		return ReadyResult::Success;}
 

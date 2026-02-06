@@ -1886,7 +1886,7 @@ static THINK(info_world_text_think)(gentity_t* self) -> void {
 		default:
 			if (leader && leader->client && level.match.totalDeaths > 0 && leader->client->resp.score > 0) {
 				textBuf = std::format("{} is in the lead\nwith a score of {}",
-					leader->client->sess.netName, leader->client->resp.score);
+					G_ColorResetAfter(leader->client->sess.netName), leader->client->resp.score);
 				text = textBuf;
 			}
 			break;

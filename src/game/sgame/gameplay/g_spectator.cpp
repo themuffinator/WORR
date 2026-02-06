@@ -286,19 +286,23 @@ static void SanitizeString(const char* in, char* out, size_t outSize) {
 	if (!outSize)
 		return;
 
+	char stripped[MAX_STRING_CHARS];
+	G_StripColorEscapes(in, stripped, sizeof(stripped));
+
 	char* cursor = out;
 	size_t remaining = outSize;
 
-	while (*in && remaining > 1) {
-		const unsigned char ch = static_cast<unsigned char>(*in);
+	const char* src = stripped;
+	while (*src && remaining > 1) {
+		const unsigned char ch = static_cast<unsigned char>(*src);
 		if (ch < ' ') {
-			++in;
+			++src;
 			continue;
 		}
 		*cursor = static_cast<char>(std::tolower(ch));
 		++cursor;
 		--remaining;
-		++in;
+		++src;
 	}
 
 	*cursor = '\0';

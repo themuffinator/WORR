@@ -406,6 +406,7 @@ void ClientConfigStore::ApplyWeaponPreferencesFromJson(gclient_t* client, const 
 		return;
 
 	client->sess.weaponPrefs.clear();
+	const std::string safePlayerName = G_ColorResetAfter(client->sess.netName);
 
 	if (!playerData.isMember("config"))
 		return;
@@ -451,12 +452,12 @@ joined << ", ";
 joined << invalidTokens[i];
 }
 gi_.Com_PrintFmt("{}: ignored invalid weapon preference tokens for {}: {}\n",
-__FUNCTION__, client->sess.netName, joined.str().c_str());
+__FUNCTION__, safePlayerName.c_str(), joined.str().c_str());
 }
 
 if (capacityExceeded) {
 gi_.Com_PrintFmt("{}: weapon preferences for {} truncated to {} entries\n",
-__FUNCTION__, client->sess.netName, client->sess.weaponPrefs.size());
+__FUNCTION__, safePlayerName.c_str(), client->sess.weaponPrefs.size());
 }
 
 	Client_RebuildWeaponPreferenceOrder(*client);
@@ -524,6 +525,7 @@ bool ClientConfigStore::LoadProfile(gclient_t* client, const std::string& player
 	}
 
 	const std::string path = *pathOpt;
+	const std::string safePlayerName = G_ColorResetAfter(playerName);
 	std::ifstream file(path);
 
 	if (!file.is_open()) {
@@ -537,9 +539,9 @@ bool ClientConfigStore::LoadProfile(gclient_t* client, const std::string& player
 if (!Json::parseFromStream(builder, file, &playerData, &errs)) {
 file.close();
 gi_.Com_PrintFmt("Failed to parse client config for {}: {} ({})\n",
-playerName.c_str(), path.c_str(), errs.c_str());
+safePlayerName.c_str(), path.c_str(), errs.c_str());
 gi_.Com_PrintFmt("Resetting {} to default configuration and recreating the client config.\n",
-playerName.c_str());
+safePlayerName.c_str());
 		client->sess.skillRating = kDefaultSkillRating;
 		client->sess.skillRatingChange = 0;
 		client->sess.admin = false;
@@ -654,11 +656,13 @@ if (outFile.is_open()) {
 				outFile.close();
 			}
 			else {
-gi_.Com_PrintFmt("Failed to write updated config for {}: {}\n", playerName.c_str(), path.c_str());
+gi_.Com_PrintFmt("Failed to write updated config for {}: {}\n",
+safePlayerName.c_str(), path.c_str());
 }
 }
 catch (const std::exception& e) {
-gi_.Com_PrintFmt("{}: exception writing {}: {}\n", __FUNCTION__, playerName.c_str(), e.what());
+gi_.Com_PrintFmt("{}: exception writing {}: {}\n", __FUNCTION__,
+safePlayerName.c_str(), e.what());
 }
 }
 

@@ -2681,7 +2681,8 @@ static void Use_Powerup_BroadcastMsg(gentity_t* ent, Item* item, const char* sou
 		return;
 
 	if (g_quadhog->integer && item->id == IT_POWERUP_QUAD) {
-		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_0d00e491f39d", ent->client->sess.netName);
+		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_0d00e491f39d",
+			G_ColorResetAfter(ent->client->sess.netName).c_str());
 	}
 
 	gi.sound(ent, CHAN_RELIABLE | CHAN_NO_PHS_ADD | CHAN_AUX, gi.soundIndex(sound_name), 1, ATTN_NONE, 0);
@@ -3471,7 +3472,8 @@ static void BroadcastTeamPickupPing(gentity_t* picker, const Item* it) {
 		std::string msg;
 		if (pcl->sess.team != Team::Spectator)
 			msg += "[TEAM]: ";
-		msg += (picker->client ? picker->client->sess.netName : "unknown");
+		msg += (picker->client ? G_ColorResetAfter(picker->client->sess.netName)
+							   : "unknown");
 		msg += " got the ";
 		msg += it->useName ? it->useName : "item";
 		msg += ".\n";

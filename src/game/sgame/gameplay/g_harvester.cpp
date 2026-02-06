@@ -85,7 +85,7 @@ namespace {
 			level.ctf_last_capture_team = baseTeam;
 
 			const auto msg = G_Fmt("{} delivered {} skull{}.",
-				other->client->sess.netName,
+				G_ColorResetAfter(other->client->sess.netName).c_str(),
 				tokens,
 				tokens == 1 ? "" : "s");
 			gi.LocBroadcast_Print(PRINT_HIGH, msg.data());

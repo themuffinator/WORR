@@ -2168,7 +2168,7 @@ static void TimeoutEnd() {
 
   if (owner && owner->client) {
     gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6171c4a72be2",
-                          owner->client->sess.netName);
+                          G_ColorResetAfter(owner->client->sess.netName).c_str());
   } else {
     gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_5b8728eeddd3");
   }

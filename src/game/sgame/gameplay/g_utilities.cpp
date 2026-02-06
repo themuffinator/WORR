@@ -46,6 +46,81 @@ std::tm LocalTimeNow() {
 }
 
 /*
+=============
+G_ColorResetAfter
+
+Appends a white color escape so subsequent text renders in the default color.
+Use for user-provided strings (e.g., player names) when composing messages.
+=============
+*/
+std::string G_ColorResetAfter(std::string_view text) {
+  if (text.empty())
+    return {};
+
+  if (text.size() >= 2 && text[text.size() - 2] == '^' &&
+      text[text.size() - 1] == '7') {
+    return std::string(text);
+  }
+
+  std::string out;
+  out.reserve(text.size() + 2);
+  out.append(text);
+  out.append("^7");
+  return out;
+}
+
+std::string G_ColorResetAfter(const char *text) {
+  if (!text || !*text)
+    return {};
+  return G_ColorResetAfter(std::string_view{text});
+}
+
+static inline bool G_IsColorEscapeCode(char c) {
+  if (c >= '0' && c <= '7')
+    return true;
+  if (c >= 'a' && c <= 'z')
+    return true;
+  if (c >= 'A' && c <= 'Z')
+    return true;
+  return false;
+}
+
+size_t G_StripColorEscapes(std::string_view text, char *out, size_t outSize) {
+  if (!out || outSize == 0)
+    return 0;
+
+  const char *src = text.data();
+  size_t remaining = text.size();
+  char *cursor = out;
+  size_t capacity = outSize;
+
+  while (remaining && capacity > 1) {
+    if (remaining >= 2 && src[0] == '^' && G_IsColorEscapeCode(src[1])) {
+      src += 2;
+      remaining -= 2;
+      continue;
+    }
+
+    *cursor++ = *src++;
+    --capacity;
+    --remaining;
+  }
+
+  *cursor = '\0';
+  return static_cast<size_t>(cursor - out);
+}
+
+size_t G_StripColorEscapes(const char *text, char *out, size_t outSize) {
+  if (!out || outSize == 0)
+    return 0;
+  if (!text) {
+    out[0] = '\0';
+    return 0;
+  }
+  return G_StripColorEscapes(std::string_view{text}, out, outSize);
+}
+
+/*
 =========================
 CheckArenaValid
 =========================
@@ -1426,14 +1501,20 @@ gentity_t *ClientEntFromString(const char *in) {
     return nullptr;
 
   // check by nick first
-  if (*in != '\0') {
-    for (auto ec : active_clients())
-      if (!strcmp(in, ec->client->sess.netName))
+  char sanitizedInput[MAX_INFO_STRING] = {};
+  G_StripColorEscapes(in, sanitizedInput, sizeof(sanitizedInput));
+  if (*sanitizedInput != '\0') {
+    for (auto ec : active_clients()) {
+      char sanitizedName[MAX_INFO_STRING] = {};
+      G_StripColorEscapes(ec->client->sess.netName, sanitizedName,
+                          sizeof(sanitizedName));
+      if (!strcmp(sanitizedInput, sanitizedName))
         return ec;
+    }
   }
 
   // otherwise check client num
-  uint32_t num = strtoul(in, nullptr, 10);
+  uint32_t num = strtoul(sanitizedInput, nullptr, 10);
   if (num >= 0 && num < game.maxClients)
     return &g_entities[&game.clients[num] - game.clients + 1];
 
@@ -2217,7 +2298,8 @@ int TeamBalance(bool force) {
         gi.LocBroadcast_Print(
             PRINT_HIGH,
             G_Fmt("{} will swap to the {} team when the next round begins.\n",
-                  cl->pers.netName, Teams_TeamName(targetTeam))
+                  G_ColorResetAfter(cl->pers.netName),
+                  Teams_TeamName(targetTeam))
                 .data());
       } else {
         cl->sess.team = targetTeam;

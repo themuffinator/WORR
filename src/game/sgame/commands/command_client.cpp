@@ -206,7 +206,9 @@ Allows the losing player in a duel to forfeit the match.
 			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_e49affcf0b2e");
 			return;
 		}
-		std::string msg = std::format("{} forfeits the match.", ent->client->sess.netName);
+		std::string msg = std::format(
+			"{} forfeits the match.",
+			G_ColorResetAfter(ent->client->sess.netName));
 		QueueIntermission(msg.c_str(), true, false);
 	}
 
@@ -398,7 +400,7 @@ Allows the losing player in a duel to forfeit the match.
 
 				if (!result.empty())
 					result.append(", ");
-				result.append(player->client->sess.netName);
+				result.append(G_ColorResetAfter(player->client->sess.netName));
 
 				if (result.size() > 200)
 					break;
@@ -446,7 +448,8 @@ Allows the losing player in a duel to forfeit the match.
 
 					if (text.size() - macro.symbol.size() + replacement.size() > max_len) {
 						if (g_verbose->integer)
-							gi.Com_PrintFmt("Chat macro overflow from {}\n", ent->client->sess.netName);
+							gi.Com_PrintFmt("Chat macro overflow from {}\n",
+								G_ColorResetAfter(ent->client->sess.netName));
 						return;
 					}
 
@@ -474,9 +477,10 @@ Allows the losing player in a duel to forfeit the match.
 			if (message.empty())
 				return;
 
+			const std::string safeName = G_ColorResetAfter(ent->client->sess.netName);
 			const std::string prefix = team
-				? std::format("({}): ", ent->client->sess.netName)
-				: std::format("{}: ", ent->client->sess.netName);
+				? std::format("({}): ", safeName)
+				: std::format("{}: ", safeName);
 
 			if (prefix.size() >= kChatMaxLen)
 				return;
@@ -542,7 +546,8 @@ Enables administrative permissions when the correct password is supplied.
 		std::string password(args.getString(1));
 		if (admin_password->string && *admin_password->string && Q_strcasecmp(admin_password->string, password.c_str()) == 0) {
 			ent->client->sess.admin = true;
-			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa6c0d95b39c", ent->client->sess.netName);
+			gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_aa6c0d95b39c",
+				G_ColorResetAfter(ent->client->sess.netName).c_str());
 			return;
 		}
 
@@ -790,7 +795,8 @@ Enables administrative permissions when the correct password is supplied.
 
 			if (Teams() && g_teamplay_item_drop_notice->integer) {
 				uint32_t key = GetUnicastKey();
-				std::string message = std::format("[TEAM]: {} drops {}\n", ent->client->sess.netName, it->useName);
+				const std::string safeName = G_ColorResetAfter(ent->client->sess.netName);
+				std::string message = std::format("[TEAM]: {} drops {}\n", safeName, it->useName);
 
 				for (auto ec : active_clients()) {
 					if (ent == ec) continue;
@@ -808,7 +814,8 @@ Enables administrative permissions when the correct password is supplied.
 						gi.WriteByte(POI_FLAG_NONE);
 						gi.unicast(ec, false);
 						gi.localSound(ec, CHAN_AUTO, gi.soundIndex("misc/help_marker.wav"), 1.0f, ATTN_NONE, 0.0f, key);
-						gi.LocClient_Print(ec, PRINT_TTS, message.c_str(), ent->client->sess.netName);
+						gi.LocClient_Print(ec, PRINT_TTS, message.c_str(),
+							G_ColorResetAfter(ent->client->sess.netName).c_str());
 					}
 				}
 			}
@@ -1020,7 +1027,8 @@ Displays connected clients, optionally sorted by score or time played.
 
 			gi.LocClient_Print(ent, PRINT_HIGH | PRINT_NO_NOTIFY,
 				"$g_sgame_auto_16e0f4a83957",
-				clientIndex, cl->sess.netName,
+				clientIndex,
+				G_ColorResetAfter(cl->sess.netName).c_str(),
 				ClientScoreForStandings(cl), timePlayed);
 		}
 
@@ -1203,7 +1211,7 @@ Toggles the eyecam view when following other players.
 
 		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_365594b83c4e", display.c_str());
 		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_e95aa4fc7359",
-			ent->client->sess.netName,
+			G_ColorResetAfter(ent->client->sess.netName).c_str(),
 			display.c_str());
 		if (enqueueResult.evictedOldest) {
 			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_fc37447ee950");
@@ -1924,7 +1932,8 @@ Toggles the eyecam view when following other players.
 			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_6421882515c4");
 			return;
 		}
-		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6171c4a72be2", ent->client->sess.netName);
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_6171c4a72be2",
+			G_ColorResetAfter(ent->client->sess.netName).c_str());
 		level.timeoutActive = 3_sec;
 	}
 
@@ -1947,7 +1956,9 @@ Toggles the eyecam view when following other players.
 		}
 		level.timeoutOwner = ent;
 		level.timeoutActive = GameTime::from_sec(match_timeoutLength->integer);
-		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_d55060a5237d", ent->client->sess.netName, TimeString(match_timeoutLength->integer * 1000, false, false));
+		gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_d55060a5237d",
+			G_ColorResetAfter(ent->client->sess.netName).c_str(),
+			TimeString(match_timeoutLength->integer * 1000, false, false));
 		ent->client->pers.timeout_used = true;
 		G_LogEvent("MATCH TIMEOUT STARTED");
 	}
@@ -2152,12 +2163,18 @@ Toggles the eyecam view when following other players.
 			}
 		}
 
+		const std::string safeCallerName = G_ColorResetAfter(ent->client->sess.netName);
+		std::string safePointTargetName;
 		const char* pointTargetName = nullptr;
 
-		if (aimingAt)
-		pointTargetName = aimingAt->client->sess.netName;
-		else if (pointingItemName)
-		pointTargetName = pointingItemName;
+		if (aimingAt) {
+			safePointTargetName = G_ColorResetAfter(aimingAt->client->sess.netName);
+			pointTargetName = safePointTargetName.c_str();
+		}
+		else if (pointingItemName) {
+			safePointTargetName = G_ColorResetAfter(pointingItemName);
+			pointTargetName = safePointTargetName.c_str();
+		}
 
 		if (gesture == GESTURE_POINT && hasTarget) {
 			if (CheckFlood(ent))
@@ -2183,9 +2200,11 @@ Toggles the eyecam view when following other players.
 
 					gi.localSound(player, CHAN_AUTO, gi.soundIndex("misc/help_marker.wav"), 1.0f, ATTN_NONE, 0.0f, key);
 					if (pointTargetName)
-					gi.LocClient_Print(player, PRINT_TTS, pingNotifyMsg, ent->client->sess.netName, pointTargetName);
+					gi.LocClient_Print(player, PRINT_TTS, pingNotifyMsg,
+						safeCallerName.c_str(), pointTargetName);
 					else
-					gi.LocClient_Print(player, PRINT_TTS, pingNotifyMsg, ent->client->sess.netName);
+					gi.LocClient_Print(player, PRINT_TTS, pingNotifyMsg,
+						safeCallerName.c_str());
 				}
 			}
 		}
@@ -2203,15 +2222,19 @@ Toggles the eyecam view when following other players.
 				continue;
 
 				if (pointTargetName && otherNotifyMsg)
-				gi.LocClient_Print(targ, PRINT_TTS, otherNotifyMsg, ent->client->sess.netName, pointTargetName);
+				gi.LocClient_Print(targ, PRINT_TTS, otherNotifyMsg,
+					safeCallerName.c_str(), pointTargetName);
 				else if (otherNotifyNoneMsg)
-				gi.LocClient_Print(targ, PRINT_TTS, otherNotifyNoneMsg, ent->client->sess.netName);
+				gi.LocClient_Print(targ, PRINT_TTS, otherNotifyNoneMsg,
+					safeCallerName.c_str());
 			}
 
 			if (pointTargetName && otherNotifyMsg)
-			gi.LocClient_Print(ent, PRINT_TTS, otherNotifyMsg, ent->client->sess.netName, pointTargetName);
+			gi.LocClient_Print(ent, PRINT_TTS, otherNotifyMsg,
+				safeCallerName.c_str(), pointTargetName);
 			else if (otherNotifyNoneMsg)
-			gi.LocClient_Print(ent, PRINT_TTS, otherNotifyNoneMsg, ent->client->sess.netName);
+			gi.LocClient_Print(ent, PRINT_TTS, otherNotifyNoneMsg,
+				safeCallerName.c_str());
 		}
 
 		ent->client->anim.time = 0_ms;

@@ -4938,6 +4938,10 @@ void P_ForceFogTransition(gentity_t *ent, bool instant);
 void P_SendLevelPOI(gentity_t *ent);
 unsigned int P_GetLobbyUserNum(const gentity_t *player);
 std::string G_EncodedPlayerName(gentity_t *player);
+std::string G_ColorResetAfter(std::string_view text);
+std::string G_ColorResetAfter(const char *text);
+size_t G_StripColorEscapes(std::string_view text, char *out, size_t outSize);
+size_t G_StripColorEscapes(const char *text, char *out, size_t outSize);
 void TossClientItems(gentity_t *self);
 bool G_LimitedLivesRespawn(gentity_t *ent);
 void EndOfUnitMessage();
@@ -5893,6 +5897,8 @@ struct gclient_t {
   uint32_t stepFrame = 0;
 
   // only set temporarily
+  GameTime spawnAngleLockUntil = 0_ms;
+  Vector3 spawnAngleLockAngles = vec3_origin;
   bool awaitingRespawn = false;
   GameTime respawn_timeout = 0_ms; // after this time, force a respawn
 

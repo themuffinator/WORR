@@ -40,7 +40,8 @@ void UpdateVoteMenu(gentity_t *ent, bool openMenu) {
 
   MenuUi::UiCommandBuilder cmd(ent);
   cmd.AppendCvar("ui_vote_line_0",
-                 fmt::format("{} called a vote:", level.vote.client->sess.netName));
+                 fmt::format("{} called a vote:",
+                             G_ColorResetAfter(level.vote.client->sess.netName)));
   cmd.AppendCvar("ui_vote_line_1", "");
   cmd.AppendCvar("ui_vote_line_2", cmdLine);
   cmd.AppendCvar("ui_vote_can_vote", canVote ? "1" : "0");

@@ -321,7 +321,7 @@ bool MarathonCheckScoreLimit(std::string &message) {
 
       if (cl->resp.score - game.marathon.mapStartPlayerScores[index] >= limit) {
         message = G_Fmt("Marathon: {} hit {} points this map.",
-                        cl->sess.netName, limit);
+                        G_ColorResetAfter(cl->sess.netName).c_str(), limit);
         return true;
       }
     }
@@ -533,8 +533,10 @@ std::string TournamentBuildTeamMessage(Team winner) {
 
 std::string TournamentBuildPlayerMessage(const gclient_t *winner,
                                          size_t winnerSlot) {
-  const char *name =
-      (winner && winner->sess.netName[0]) ? winner->sess.netName : "Player";
+  const std::string name =
+      (winner && winner->sess.netName[0])
+          ? G_ColorResetAfter(winner->sess.netName)
+          : std::string("Player");
 
   const int wins = (winnerSlot == kTournamentInvalidSlot)
                        ? 0
@@ -1182,7 +1184,7 @@ void Duel_RemoveLoser() {
 
   if (g_verbose->integer)
     gi.Com_PrintFmt("Duel: Moving the loser, {} to spectator queue.\n",
-                    loser->client->sess.netName);
+                    G_ColorResetAfter(loser->client->sess.netName));
 
   SetTeam(loser, Team::None, false, true, false);
 
@@ -1201,7 +1203,7 @@ void Gauntlet_RemoveLoser() {
 
   if (g_verbose->integer)
     gi.Com_PrintFmt("Gauntlet: Moving the loser, {} to end of queue.\n",
-                    loser->client->sess.netName);
+                    G_ColorResetAfter(loser->client->sess.netName));
 
   SetTeam(loser, Team::None, false, true, false);
 }
@@ -2139,8 +2141,10 @@ static void CheckDMWarmupState() {
           game.clients[level.sortedClients[1]].pers.connected) {
         gi.LocBroadcast_Print(
             PRINT_CENTER, "$g_sgame_auto_dada6003170d",
-            game.clients[level.sortedClients[0]].sess.netName,
-            game.clients[level.sortedClients[1]].sess.netName);
+            G_ColorResetAfter(game.clients[level.sortedClients[0]].sess.netName)
+                .c_str(),
+            G_ColorResetAfter(game.clients[level.sortedClients[1]].sess.netName)
+                .c_str());
       } else {
         gi.LocBroadcast_Print(PRINT_CENTER, "$g_sgame_auto_c1b6c1827a61",
                               level.gametype_name.data());
@@ -2455,7 +2459,8 @@ void CheckDMExitRules() {
     if (level.pop.num_playing_clients > 0 && level.sortedClients[0] >= 0) {
       auto &winner = game.clients[level.sortedClients[0]];
       QueueTournamentIntermission(
-          G_Fmt("{} WINS with a final score of {}.", winner.sess.netName,
+          G_Fmt("{} WINS with a final score of {}.",
+                G_ColorResetAfter(winner.sess.netName).c_str(),
                 ClientScoreForStandings(&winner)),
           &winner, Team::None, false, false);
     } else {
@@ -2566,7 +2571,8 @@ void CheckDMExitRules() {
 
         auto &winner = game.clients[winnerIndex];
         QueueTournamentIntermission(
-            G_Fmt("{} WINS with a final score of {}.", winner.sess.netName,
+            G_Fmt("{} WINS with a final score of {}.",
+                  G_ColorResetAfter(winner.sess.netName).c_str(),
                   ClientScoreForStandings(&winner)),
             &winner, Team::None, false, false);
         return;
@@ -2605,7 +2611,8 @@ void CheckDMExitRules() {
       if (ClientScoreForStandings(&cl1) >=
           ClientScoreForStandings(&cl2) + mercyLimit->integer) {
         QueueTournamentIntermission(
-            G_Fmt("{} hit the mercy limit ({}).", cl1.sess.netName,
+            G_Fmt("{} hit the mercy limit ({}).",
+                  G_ColorResetAfter(cl1.sess.netName).c_str(),
                   mercyLimit->integer),
             &cl1, Team::None, true, false);
         return;
@@ -2689,7 +2696,8 @@ void CheckDMExitRules() {
         if (playersWithLives == 1 && potentialWinner) {
           QueueTournamentIntermission(
               G_Fmt("{} WINS! (last survivor)",
-                    potentialWinner->client->sess.netName),
+                    G_ColorResetAfter(potentialWinner->client->sess.netName)
+                        .c_str()),
               potentialWinner->client, Team::None, false, false);
         } else {
           QueueIntermission("All players eliminated!", true, false);
@@ -2723,7 +2731,8 @@ void CheckDMExitRules() {
 
       if (ClientScoreForStandings(ec->client) >= scoreLimit) {
         QueueTournamentIntermission(
-            G_Fmt("{} WINS! (hit the {} limit)", ec->client->sess.netName,
+            G_Fmt("{} WINS! (hit the {} limit)",
+                  G_ColorResetAfter(ec->client->sess.netName).c_str(),
                   GT_ScoreLimitString()),
             ec->client, Team::None, false, false);
         return;

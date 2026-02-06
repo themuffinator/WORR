@@ -351,7 +351,8 @@ void MapSelector_CastVote(gentity_t *ent, int voteIndex) {
                 : candidateId.c_str();
 
   gi.LocBroadcast_Print(PRINT_HIGH, "$match_map_vote_cast",
-                        ent->client->sess.netName, mapName);
+                        G_ColorResetAfter(ent->client->sess.netName).c_str(),
+                        mapName);
 
   // Mark menu dirty to update HUD/bar
   ent->client->ui.mapSelectorNextUpdate = level.time;

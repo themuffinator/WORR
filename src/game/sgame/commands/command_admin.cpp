@@ -65,7 +65,8 @@ namespace Commands {
 			LoadAdminList();
 			std::string playerName = GetClientConfigStore().PlayerNameForSocialID(resolvedID);
 			if (!playerName.empty()) {
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_e96321e5d944", playerName.c_str());
+				const std::string safeName = G_ColorResetAfter(playerName);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_e96321e5d944", safeName.c_str());
 			}
 			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_8890d5af0cc7", resolvedID);
 		}
@@ -319,7 +320,8 @@ namespace Commands {
 			LoadAdminList();
 			std::string playerName = GetClientConfigStore().PlayerNameForSocialID(resolvedID);
 			if (!playerName.empty()) {
-				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_8a604d586b47", playerName.c_str());
+				const std::string safeName = G_ColorResetAfter(playerName);
+				gi.LocBroadcast_Print(PRINT_CHAT, "$g_sgame_auto_8a604d586b47", safeName.c_str());
 			}
 			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_95fd409fe486", resolvedID);
 		}
@@ -453,7 +455,9 @@ namespace Commands {
 		}
 
 		if (targ->client->sess.team == team) {
-			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_2fb1ead52da0", targ->client->sess.netName, Teams_TeamName(team));
+			gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_2fb1ead52da0",
+				G_ColorResetAfter(targ->client->sess.netName).c_str(),
+				Teams_TeamName(team));
 			return;
 		}
 
@@ -462,7 +466,9 @@ namespace Commands {
 			return;
 		}
 
-		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_03e82a05d734", targ->client->sess.netName, Teams_TeamName(team));
+		gi.LocBroadcast_Print(PRINT_HIGH, "$g_sgame_auto_03e82a05d734",
+			G_ColorResetAfter(targ->client->sess.netName).c_str(),
+			Teams_TeamName(team));
 		::SetTeam(targ, team, false, true, false);
 	}
 
