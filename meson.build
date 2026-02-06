@@ -564,6 +564,27 @@ elif cc.get_id() == 'msvc'
   common_args += ['/wd4146', '/wd4244', '/wd4305', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS', '/wd4267', '/wd4018']
 endif
 
+# Propagate CRT deprecation suppressions to subprojects (e.g. HarfBuzz).
+if win32
+  if cc.get_argument_syntax() == 'msvc'
+    add_global_arguments('/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS', language: ['c', 'cpp'])
+  else
+    add_global_arguments('-D_CRT_SECURE_NO_WARNINGS', '-D_CRT_NONSTDC_NO_WARNINGS', language: ['c', 'cpp'])
+  endif
+endif
+
+# Silence known third-party C++ warnings from fallback dependencies on Windows.
+if win32 and cpp.get_argument_syntax() == 'gcc'
+  add_global_arguments(cpp.get_supported_arguments([
+    '-Wno-deprecated-literal-operator',
+    '-Wno-invalid-offsetof',
+    '-Wno-unused-function',
+  ]), language: 'cpp')
+endif
+if win32 and cc.get_argument_syntax() == 'gcc'
+  add_global_arguments(cc.get_supported_arguments(['-Wno-unused-function']), language: 'c')
+endif
+
 client_cpp_args = [
   '-DHAVE_CONFIG_H',
   '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
