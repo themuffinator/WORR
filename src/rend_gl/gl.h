@@ -380,6 +380,7 @@ extern cvar_t *gl_shadow_debug_dlights;
 extern cvar_t *gl_shadow_debug_shadowlights;
 extern cvar_t *gl_shadow_debug_casters;
 extern cvar_t *gl_shadow_debug_dyn_casters;
+extern cvar_t *gl_show_shadow_atlas;
 
 static inline float GL_DlightInfluenceRadius(const dlight_t *dl);
 

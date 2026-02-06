@@ -1933,6 +1933,14 @@ static void shader_load_lights(void) {
 
     const dlight_t *dl = &glr.fd.dlights[n];
 
+    // Shadow-designated static lights should not fall back to unshadowed
+    // shading when they did not receive a shadowmap slot this frame.
+    if (dl->shadow == DL_SHADOW_LIGHT && gl_shadowmaps && gl_shadowmaps->integer &&
+        gl_static.shadowmap_ok && glr.shadowmap_index[n] < 0) {
+      c.dlightsNotUsed++;
+      continue;
+    }
+
     vec3_t cull_origin;
     float cull_radius = GL_DlightCullRadius(dl, cull_origin);
     if (cull_radius <= 0.0f) {

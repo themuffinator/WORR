@@ -39,6 +39,17 @@ static entity_t *gl_shadow_casters[MAX_ENTITIES];
 static int gl_shadow_caster_count;
 static entity_t *gl_shadow_dynamic_casters[MAX_ENTITIES];
 static int gl_shadow_dynamic_caster_count;
+static visrow_t gl_shadow_pvs2_mask;
+static int gl_shadow_pvs2_cluster1 = -2;
+static int gl_shadow_pvs2_cluster2 = -2;
+static const bsp_t *gl_shadow_pvs2_bsp = NULL;
+static GLuint gl_shadow_atlas_debug_tex = 0;
+static int gl_shadow_atlas_debug_size = 0;
+enum {
+  SHADOW_LIGHT_VIS_PVS = BIT(0),
+  SHADOW_LIGHT_VIS_PVS2 = BIT(1),
+};
+static uint8_t gl_shadow_light_vis[MAX_DLIGHTS];
 
 static int gl_leaf_count;
 static int gl_leaf_maxcount;
@@ -103,6 +114,7 @@ static void GL_ShadowmapMarkDirty(int slot);
 static void GL_UpdateShadowmapSampling(void);
 static void GL_UpdateSunShadowData(void);
 static void GL_RenderSunShadowMaps(void);
+static void GL_DrawShadowAtlas(void);
 
 // regular variables
 cvar_t *gl_partscale;
@@ -157,6 +169,7 @@ cvar_t *gl_shadow_debug_dlights;
 cvar_t *gl_shadow_debug_shadowlights;
 cvar_t *gl_shadow_debug_casters;
 cvar_t *gl_shadow_debug_dyn_casters;
+cvar_t *gl_show_shadow_atlas;
 cvar_t *gl_shadow_bias_scale;
 cvar_t *gl_shadow_pcss_max_lights;
 cvar_t *gl_shadow_alpha_mode;
@@ -2424,11 +2437,68 @@ static float GL_EntityMaxScale(const entity_t *ent) {
   return max(sx, max(sy, sz));
 }
 
+static bool GL_GetAliasShadowBounds(const entity_t *ent, const model_t *model,
+                                    vec3_t mins, vec3_t maxs) {
+  if (!model || model->type != MOD_ALIAS || model->numframes <= 0)
+    return false;
+
+  int frame = ent->frame;
+  int oldframe = ent->oldframe;
+
+  if (glr.fd.extended) {
+    frame %= model->numframes;
+    oldframe %= model->numframes;
+    if (frame < 0)
+      frame += model->numframes;
+    if (oldframe < 0)
+      oldframe += model->numframes;
+  } else {
+    if (frame < 0 || frame >= model->numframes)
+      frame = 0;
+    if (oldframe < 0 || oldframe >= model->numframes)
+      oldframe = frame;
+  }
+
+  vec3_t bounds[2];
+  UnionBounds(model->frames[frame].bounds, model->frames[oldframe].bounds,
+              bounds);
+  VectorCopy(bounds[0], mins);
+  VectorCopy(bounds[1], maxs);
+  return true;
+}
+
 static void GL_EntityShadowOrigin(const entity_t *ent, vec3_t out) {
   VectorCopy(ent->origin, out);
 
-  if (!(ent->model & BIT(31)))
+  if (!(ent->model & BIT(31))) {
+    if (!ent->model)
+      return;
+
+    const model_t *model = MOD_ForHandle(ent->model);
+    vec3_t mins, maxs, center;
+    if (!GL_GetAliasShadowBounds(ent, model, mins, maxs))
+      return;
+
+    VectorAdd(mins, maxs, center);
+    VectorScale(center, 0.5f, center);
+
+    float sx = ent->scale[0] ? fabsf(ent->scale[0]) : 1.0f;
+    float sy = ent->scale[1] ? fabsf(ent->scale[1]) : 1.0f;
+    float sz = ent->scale[2] ? fabsf(ent->scale[2]) : 1.0f;
+    center[0] *= sx;
+    center[1] *= sy;
+    center[2] *= sz;
+
+    if (ent->angles[0] || ent->angles[1] || ent->angles[2]) {
+      vec3_t axis[3];
+      AnglesToAxis(ent->angles, axis);
+      VectorRotate(center, axis, out);
+      VectorAdd(ent->origin, out, out);
+    } else {
+      VectorAdd(ent->origin, center, out);
+    }
     return;
+  }
 
   const bsp_t *bsp = gl_static.world.cache;
   int index = ~ent->model;
@@ -2460,8 +2530,6 @@ static void GL_EntityShadowOrigin(const entity_t *ent, vec3_t out) {
 }
 
 static float GL_EntityShadowRadius(const entity_t *ent) {
-  float radius = 0.0f;
-
   if (ent->model & BIT(31)) {
     const bsp_t *bsp = gl_static.world.cache;
     int index = ~ent->model;
@@ -2482,35 +2550,37 @@ static float GL_EntityShadowRadius(const entity_t *ent) {
     extents[1] *= sy;
     extents[2] *= sz;
 
-    radius = VectorLength(extents);
-  } else {
-    if (!ent->model)
+    float radius = VectorLength(extents);
+    if (radius <= 0.0f)
       return 0.0f;
 
-    const model_t *model = MOD_ForHandle(ent->model);
-    if (!model || model->type != MOD_ALIAS || model->numframes <= 0)
-      return 0.0f;
-
-    int frame = ent->frame;
-    int oldframe = ent->oldframe;
-
-    if (glr.fd.extended) {
-      frame %= model->numframes;
-      oldframe %= model->numframes;
-    } else {
-      if (frame < 0 || frame >= model->numframes)
-        frame = 0;
-      if (oldframe < 0 || oldframe >= model->numframes)
-        oldframe = frame;
-    }
-
-    radius = max(model->frames[frame].radius, model->frames[oldframe].radius);
+    // Preserve existing brush model behavior.
+    return radius * GL_EntityMaxScale(ent);
   }
 
+  if (!ent->model)
+    return 0.0f;
+
+  const model_t *model = MOD_ForHandle(ent->model);
+  vec3_t mins, maxs, extents;
+  if (!GL_GetAliasShadowBounds(ent, model, mins, maxs))
+    return 0.0f;
+
+  VectorSubtract(maxs, mins, extents);
+  VectorScale(extents, 0.5f, extents);
+
+  float sx = ent->scale[0] ? fabsf(ent->scale[0]) : 1.0f;
+  float sy = ent->scale[1] ? fabsf(ent->scale[1]) : 1.0f;
+  float sz = ent->scale[2] ? fabsf(ent->scale[2]) : 1.0f;
+  extents[0] *= sx;
+  extents[1] *= sy;
+  extents[2] *= sz;
+
+  float radius = VectorLength(extents);
   if (radius <= 0.0f)
     return 0.0f;
 
-  return radius * GL_EntityMaxScale(ent);
+  return radius;
 }
 
 static bool GL_BoxIntersectsSphereBounds(const vec3_t mins, const vec3_t maxs,
@@ -2692,18 +2762,62 @@ static float GL_ShadowmapLightScore(const dlight_t *dl) {
   return score;
 }
 
-static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
+static void GL_UpdateShadowPvs2Mask(const bsp_t *bsp) {
+  if (!bsp)
+    return;
+
+  if (bsp != gl_shadow_pvs2_bsp) {
+    gl_shadow_pvs2_bsp = bsp;
+    gl_shadow_pvs2_cluster1 = -2;
+    gl_shadow_pvs2_cluster2 = -2;
+  }
+
+  int cluster1 = glr.viewcluster1;
+  int cluster2 = glr.viewcluster2;
+
+  if (bsp->vis) {
+    int numclusters = bsp->vis->numclusters;
+    if (cluster1 < -1 || cluster1 >= numclusters)
+      cluster1 = -1;
+    if (cluster2 < -1 || cluster2 >= numclusters)
+      cluster2 = cluster1;
+  }
+
+  if (cluster1 == gl_shadow_pvs2_cluster1 && cluster2 == gl_shadow_pvs2_cluster2)
+    return;
+
+  gl_shadow_pvs2_cluster1 = cluster1;
+  gl_shadow_pvs2_cluster2 = cluster2;
+
+  if (!bsp->vis || cluster1 == -1) {
+    memset(gl_shadow_pvs2_mask.b, 0xff, bsp->visrowsize);
+    return;
+  }
+
+  BSP_ClusterVis(bsp, &gl_shadow_pvs2_mask, cluster1, DVIS_PVS2);
+  if (cluster2 != cluster1) {
+    visrow_t pvs2;
+    BSP_ClusterVis(bsp, &pvs2, cluster2, DVIS_PVS2);
+    int longs = VIS_FAST_LONGS(bsp->visrowsize);
+    for (int i = 0; i < longs; i++)
+      gl_shadow_pvs2_mask.l[i] |= pvs2.l[i];
+  }
+}
+
+static uint8_t GL_ShadowmapLightVisibility(const dlight_t *dl) {
   if (glr.fd.rdflags & RDF_NOWORLDMODEL)
-    return true;
+    return SHADOW_LIGHT_VIS_PVS | SHADOW_LIGHT_VIS_PVS2;
 
   const bsp_t *bsp = gl_static.world.cache;
   if (!bsp || gl_novis->integer)
-    return true;
+    return SHADOW_LIGHT_VIS_PVS | SHADOW_LIGHT_VIS_PVS2;
+
+  GL_UpdateShadowPvs2Mask(bsp);
 
   vec3_t center;
   float vis_radius = GL_DlightCullRadius(dl, center);
   if (vis_radius <= 0.0f)
-    return false;
+    return 0;
 
   vec3_t mins, maxs;
   VectorSet(mins, center[0] - vis_radius, center[1] - vis_radius,
@@ -2715,10 +2829,11 @@ static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
   int count =
       GL_BoxLeafs_headnode(mins, maxs, leafs, q_countof(leafs), bsp->nodes);
   if (count <= 0)
-    return false;
+    return 0;
   if (count >= (int)q_countof(leafs))
-    return true;
+    return SHADOW_LIGHT_VIS_PVS | SHADOW_LIGHT_VIS_PVS2;
 
+  uint8_t vis = 0;
   for (int i = 0; i < count; i++) {
     const mleaf_t *leaf = leafs[i];
     if (!leaf || leaf->cluster == -1)
@@ -2726,10 +2841,14 @@ static bool GL_ShadowmapLightVisible(const dlight_t *dl, float radius) {
     if (glr.fd.areabits && !Q_IsBitSet(glr.fd.areabits, leaf->area))
       continue;
     if (leaf->visframe == glr.visframe)
-      return true;
+      vis |= SHADOW_LIGHT_VIS_PVS;
+    if (Q_IsBitSet(gl_shadow_pvs2_mask.b, leaf->cluster))
+      vis |= SHADOW_LIGHT_VIS_PVS2;
+    if (vis == (SHADOW_LIGHT_VIS_PVS | SHADOW_LIGHT_VIS_PVS2))
+      break;
   }
 
-  return false;
+  return vis;
 }
 
 typedef enum {
@@ -2965,6 +3084,265 @@ static void GL_ShadowDebugLog(void) {
   }
 }
 
+#define SHADOW_ATLAS_DEBUG_FACE_GRID 4
+
+static void GL_DestroyShadowAtlasDebugTexture(void) {
+  if (!gl_shadow_atlas_debug_tex)
+    return;
+
+  if (gls.texnums[TMU_TEXTURE] == gl_shadow_atlas_debug_tex)
+    GL_BindTexture(TMU_TEXTURE, 0);
+
+  qglDeleteTextures(1, &gl_shadow_atlas_debug_tex);
+  gl_shadow_atlas_debug_tex = 0;
+  gl_shadow_atlas_debug_size = 0;
+}
+
+static bool GL_EnsureShadowAtlasDebugTexture(int size) {
+  if (size <= 0)
+    return false;
+
+  if (!gl_shadow_atlas_debug_tex)
+    qglGenTextures(1, &gl_shadow_atlas_debug_tex);
+  if (!gl_shadow_atlas_debug_tex)
+    return false;
+
+  GL_ForceTexture(TMU_TEXTURE, gl_shadow_atlas_debug_tex);
+
+  if (gl_shadow_atlas_debug_size == size)
+    return true;
+
+  qglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA,
+                GL_UNSIGNED_BYTE, NULL);
+  qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  gl_shadow_atlas_debug_size = size;
+
+  return true;
+}
+
+static void GL_DrawShadowAtlasFillPixels(int x, int y, int w, int h,
+                                         color_t color) {
+  int vx, vy, vw, vh;
+  gl_pixel_rect_to_virtual(x, y, w, h, &vx, &vy, &vw, &vh);
+  if (vw <= 0 || vh <= 0)
+    return;
+  R_DrawFill32(vx, vy, vw, vh, color);
+}
+
+static void GL_DrawShadowAtlasBorderPixels(int x, int y, int w, int h,
+                                           int thickness, color_t color) {
+  if (w <= 0 || h <= 0 || thickness <= 0)
+    return;
+
+  thickness = min(thickness, max(1, min(w, h) / 2));
+  GL_DrawShadowAtlasFillPixels(x, y, w, thickness, color);
+  GL_DrawShadowAtlasFillPixels(x, y + h - thickness, w, thickness, color);
+  GL_DrawShadowAtlasFillPixels(x, y + thickness, thickness, h - (thickness * 2),
+                               color);
+  GL_DrawShadowAtlasFillPixels(x + w - thickness, y + thickness, thickness,
+                               h - (thickness * 2), color);
+}
+
+static void GL_ShadowAtlasSlotRect(int slot, int slot_cols, int atlas_x,
+                                   int atlas_y, int block_px, int *out_x,
+                                   int *out_y) {
+  int sx = slot % slot_cols;
+  int sy = slot / slot_cols;
+
+  sx = (slot_cols - 1) - sx;
+  sy = (slot_cols - 1) - sy;
+
+  if (out_x)
+    *out_x = atlas_x + sx * block_px;
+  if (out_y)
+    *out_y = atlas_y + sy * block_px;
+}
+
+static color_t GL_ShadowAtlasSlotColor(const dlight_t *dl, uint8_t vis,
+                                       bool selected) {
+  if (dl->shadow == DL_SHADOW_DYNAMIC)
+    return selected ? COLOR_RGB(0, 200, 190) : COLOR_RGB(220, 60, 60);
+
+  if (vis & SHADOW_LIGHT_VIS_PVS)
+    return COLOR_RGB(70, 140, 255);
+  if (vis & SHADOW_LIGHT_VIS_PVS2)
+    return COLOR_RGB(80, 235, 90);
+
+  return COLOR_RGB(150, 150, 150);
+}
+
+static void GL_DrawShadowAtlasLayerPreview(int layer, int x, int y, int size) {
+  if (size <= 0)
+    return;
+  if (layer < 0 || layer >= gl_static.shadowmap_layers)
+    return;
+
+  int vx, vy, vw, vh;
+  gl_pixel_rect_to_virtual(x, y, size, size, &vx, &vy, &vw, &vh);
+  if (vw <= 0 || vh <= 0)
+    return;
+
+  qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadowmap_fbo);
+  qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                             gl_static.shadowmap_tex, 0, layer);
+  if (qglReadBuffer)
+    qglReadBuffer(GL_COLOR_ATTACHMENT0);
+
+  GL_ForceTexture(TMU_TEXTURE, gl_shadow_atlas_debug_tex);
+  qglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, gl_static.shadowmap_size,
+                       gl_static.shadowmap_size);
+
+  qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+  if (qglReadBuffer)
+    qglReadBuffer(GL_BACK);
+
+  GL_Flush2D();
+  GL_PostProcess(GLS_DEFAULT, vx, vy, vw, vh);
+}
+
+static void GL_DrawShadowAtlas(void) {
+  int mode = gl_show_shadow_atlas ? Cvar_ClampInteger(gl_show_shadow_atlas, 0, 2) : 0;
+  if (mode <= 0)
+    return;
+
+  if (!gl_shadowmaps || !gl_shadowmaps->integer || !gl_static.shadowmap_ok ||
+      !gl_static.shadowmap_tex || !qglFramebufferTextureLayer)
+    return;
+
+  int shadow_size = gl_static.shadowmap_size;
+  if (!GL_EnsureShadowAtlasDebugTexture(shadow_size))
+    return;
+
+  int max_slots = min(gl_static.shadowmap_max_lights, MAX_SHADOWMAP_LIGHTS);
+  if (max_slots <= 0)
+    return;
+
+  int slot_cols = 1;
+  while (slot_cols * slot_cols < max_slots)
+    slot_cols++;
+  int atlas_units = slot_cols * SHADOW_ATLAS_DEBUG_FACE_GRID;
+
+  int margin = 8;
+  int pad = 2;
+  int panel_size = max(72, min(192, r_config.height / 9));
+  int panel_inner = max(16, panel_size - (pad * 2));
+  int cell_px = max(2, panel_inner / max(1, atlas_units));
+  int atlas_px = cell_px * atlas_units;
+  int panel_px = atlas_px + (pad * 2);
+  int panel_x = margin;
+  int panel_y = margin;
+  int block_px = cell_px * SHADOW_ATLAS_DEBUG_FACE_GRID;
+  int line_px = max(1, cell_px / 8);
+
+  if ((panel_x + panel_px) > r_config.width)
+    panel_x = max(0, r_config.width - panel_px - margin);
+  int atlas_x = panel_x + pad;
+  int atlas_y = panel_y + pad;
+
+  GL_Setup2D();
+  GL_DrawShadowAtlasFillPixels(panel_x, panel_y, panel_px, panel_px,
+                               COLOR_RGBA(0, 0, 0, 224));
+  GL_DrawShadowAtlasBorderPixels(panel_x, panel_y, panel_px, panel_px, 1,
+                                 COLOR_RGB(85, 85, 85));
+
+  for (int slot = 0; slot < max_slots; slot++) {
+    int sx, sy;
+    GL_ShadowAtlasSlotRect(slot, slot_cols, atlas_x, atlas_y, block_px, &sx,
+                           &sy);
+    GL_DrawShadowAtlasBorderPixels(sx, sy, block_px, block_px, 1,
+                                   COLOR_RGB(34, 34, 34));
+  }
+
+  int drawn_slots = min(glr.shadow_light_count, max_slots);
+  int total_dlights = min(glr.fd.num_dlights, MAX_DLIGHTS);
+  for (int slot = 0; slot < drawn_slots; slot++) {
+    int light_index = glr.shadow_light_indices[slot];
+    if (light_index < 0 || light_index >= total_dlights)
+      continue;
+
+    int assigned_slot = glr.shadowmap_index[light_index];
+    if (assigned_slot < 0 || assigned_slot >= max_slots)
+      continue;
+
+    const dlight_t *dl = &glr.fd.dlights[light_index];
+    color_t border_color =
+        GL_ShadowAtlasSlotColor(dl, gl_shadow_light_vis[light_index], true);
+
+    int sx, sy;
+    GL_ShadowAtlasSlotRect(assigned_slot, slot_cols, atlas_x, atlas_y, block_px,
+                           &sx, &sy);
+    GL_DrawShadowAtlasBorderPixels(sx, sy, block_px, block_px, line_px,
+                                   border_color);
+
+    if (dl->shadow == DL_SHADOW_DYNAMIC) {
+      int mini = max(2, block_px / 2);
+      int mx = sx + block_px - mini;
+      int my = sy + block_px - mini;
+      GL_DrawShadowAtlasFillPixels(mx, my, mini, mini,
+                                   COLOR_RGBA(border_color.r, border_color.g,
+                                              border_color.b, 48));
+      GL_DrawShadowAtlasBorderPixels(mx, my, mini, mini, line_px, border_color);
+      if (mode > 1) {
+        int layer = assigned_slot * SHADOWMAP_FACE_COUNT;
+        int preview_pad = max(1, line_px);
+        GL_DrawShadowAtlasLayerPreview(layer, mx + preview_pad, my + preview_pad,
+                                       max(1, mini - preview_pad * 2));
+      }
+      continue;
+    }
+
+    int face_count = glr.shadowmap_is_spot[light_index] ? 1 : SHADOWMAP_FACE_COUNT;
+    int base_layer = assigned_slot * SHADOWMAP_FACE_COUNT;
+    for (int face = 0; face < face_count; face++) {
+      int fx = (SHADOW_ATLAS_DEBUG_FACE_GRID - 1) -
+               (face % SHADOW_ATLAS_DEBUG_FACE_GRID);
+      int fy = (SHADOW_ATLAS_DEBUG_FACE_GRID - 1) -
+               (face / SHADOW_ATLAS_DEBUG_FACE_GRID);
+      int cx = sx + fx * cell_px;
+      int cy = sy + fy * cell_px;
+      int preview_pad = max(1, line_px);
+      int preview_size = max(1, cell_px - (preview_pad * 2));
+
+      GL_DrawShadowAtlasLayerPreview(base_layer + face, cx + preview_pad,
+                                     cy + preview_pad, preview_size);
+      GL_DrawShadowAtlasBorderPixels(cx, cy, cell_px, cell_px, line_px,
+                                     border_color);
+    }
+  }
+
+  // Show overflowed dynamic lights (eligible but unassigned) as small red tiles.
+  int overflow_cols = max(1, atlas_px / max(1, cell_px / 2));
+  int overflow_count = 0;
+  for (int i = 0; i < total_dlights; i++) {
+    const dlight_t *dl = &glr.fd.dlights[i];
+    if (dl->shadow != DL_SHADOW_DYNAMIC)
+      continue;
+    if (!(gl_shadow_light_vis[i] & SHADOW_LIGHT_VIS_PVS2))
+      continue;
+    if (glr.shadowmap_index[i] >= 0)
+      continue;
+
+    color_t marker_color =
+        GL_ShadowAtlasSlotColor(dl, gl_shadow_light_vis[i], false);
+    int marker = max(2, cell_px / 2);
+    int mx = atlas_x + (overflow_count % overflow_cols) * marker;
+    int my = atlas_y + (overflow_count / overflow_cols) * marker;
+    if (my + marker > (atlas_y + block_px))
+      break;
+
+    GL_DrawShadowAtlasFillPixels(
+        mx, my, marker, marker,
+        COLOR_RGBA(marker_color.r, marker_color.g, marker_color.b, 56));
+    GL_DrawShadowAtlasBorderPixels(mx, my, marker, marker, 1, marker_color);
+    overflow_count++;
+  }
+
+  GL_Flush2D();
+}
+
 static void GL_ShadowDump_f(void) {
   int argc = Cmd_Argc();
   int filter = -1;
@@ -3033,6 +3411,7 @@ static void GL_SelectShadowLights(void) {
   }
 
   glr.shadow_light_count = 0;
+  memset(gl_shadow_light_vis, 0, sizeof(gl_shadow_light_vis));
   for (int i = 0; i < MAX_DLIGHTS; i++) {
     glr.shadowmap_index[i] = -1;
     glr.shadowmap_is_spot[i] = false;
@@ -3077,7 +3456,9 @@ static void GL_SelectShadowLights(void) {
       continue;
     if (dl->shadow != DL_SHADOW_LIGHT && dl->shadow != DL_SHADOW_DYNAMIC)
       continue;
-    if (!GL_ShadowmapLightVisible(dl, radius))
+    uint8_t vis = GL_ShadowmapLightVisibility(dl);
+    gl_shadow_light_vis[i] = vis;
+    if (!(vis & SHADOW_LIGHT_VIS_PVS2))
       continue;
 
     pvs_shadow_count++;
@@ -3102,13 +3483,17 @@ static void GL_SelectShadowLights(void) {
   for (int slot = 0; slot < max_lights; slot++) {
     int best = -1;
     float best_score = -1.0f;
+    bool best_static = false;
     for (int j = 0; j < candidate_count; j++) {
       int index = candidates[j].index;
       if (used[index])
         continue;
-      if (candidates[j].score > best_score) {
+      bool is_static = glr.fd.dlights[index].shadow == DL_SHADOW_LIGHT;
+      if (best == -1 || (is_static && !best_static) ||
+          (is_static == best_static && candidates[j].score > best_score)) {
         best_score = candidates[j].score;
         best = j;
+        best_static = is_static;
       }
     }
 
@@ -3116,7 +3501,10 @@ static void GL_SelectShadowLights(void) {
     if (prev >= 0 && prev < MAX_DLIGHTS && candidate_valid[prev] &&
         !used[prev]) {
       float prev_score = candidate_scores[prev];
-      if (best == -1 || prev_score >= best_score * hysteresis) {
+      bool prev_static = glr.fd.dlights[prev].shadow == DL_SHADOW_LIGHT;
+      if (best == -1 || (prev_static && !best_static) ||
+          ((prev_static == best_static) &&
+           (prev_score >= best_score * hysteresis))) {
         const dlight_t *dl = &glr.fd.dlights[prev];
         glr.shadowmap_index[prev] = slot;
         glr.shadowmap_is_spot[prev] = (dl->conecos != 0.0f);
@@ -3671,6 +4059,8 @@ void R_EndFrame(void) {
 #endif
   GL_Flush2D();
 
+  GL_DrawShadowAtlas();
+
   if (gl_showtearing->integer)
     GL_DrawTearing();
 
@@ -4155,6 +4545,7 @@ static void GL_Register(void) {
   gl_shadow_debug_casters = Cvar_Get("gl_shadow_debug_casters", "0", 0);
   gl_shadow_debug_dyn_casters =
       Cvar_Get("gl_shadow_debug_dyn_casters", "0", 0);
+  gl_show_shadow_atlas = Cvar_Get("gl_show_shadow_atlas", "0", CVAR_CHEAT);
 
   gl_shadow_bias_scale = Cvar_Get("gl_shadow_bias_scale", "1.0", CVAR_ARCHIVE);
   gl_shadow_pcss_max_lights =
@@ -4623,6 +5014,7 @@ void R_Shutdown(bool total) {
   GL_FreeWorld();
   GL_DeleteQueries();
   GL_ShutdownImages();
+  GL_DestroyShadowAtlasDebugTexture();
   MOD_Shutdown();
 
   if (!total)

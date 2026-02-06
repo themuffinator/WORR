@@ -584,6 +584,7 @@ void SV_BuildClientFrame(client_t *client)
     int         clientarea, clientcluster;
     visrow_t    clientphs;
     visrow_t    clientpvs;
+    visrow_t    clientpvs2;
     int         max_packet_entities;
     edict_t     *edicts[MAX_EDICTS];
     int         num_edicts;
@@ -649,6 +650,7 @@ void SV_BuildClientFrame(client_t *client)
 
     CM_FatPVS(client->cm, &clientpvs, org);
     BSP_ClusterVis(client->cm->cache, &clientphs, clientcluster, DVIS_PHS);
+    BSP_ClusterVis(client->cm->cache, &clientpvs2, clientcluster, DVIS_PVS2);
 
     bool client_is_spectator = clent->client->ps.pmove.pm_type == PM_SPECTATOR
         || clent->client->ps.pmove.pm_type == PM_FREEZE;
@@ -713,7 +715,12 @@ void SV_BuildClientFrame(client_t *client)
             // remaster uses different sound culling rules
             bool sound_cull = ent->s.sound;
 
-            if (!SV_EntityVisible(client, svent, (beam_cull || sound_cull || (ent->s.renderfx & RF_CASTSHADOW)) ? &clientphs : &clientpvs))
+            bool shadow_affecting = (ent->s.renderfx & RF_CASTSHADOW)
+                || (ent->s.modelindex && !(ent->s.renderfx & RF_NOSHADOW));
+            const visrow_t *entity_vis = (beam_cull || sound_cull) ? &clientphs
+                : (shadow_affecting ? &clientpvs2 : &clientpvs);
+
+            if (!SV_EntityVisible(client, svent, entity_vis))
                 continue;
 
             // don't send sounds if they will be attenuated away
@@ -721,7 +728,8 @@ void SV_BuildClientFrame(client_t *client)
                 if (SV_EntityAttenuatedAway(org, ent)) {
                     if (!ent->s.modelindex)
                         continue;
-                    if (!beam_cull && !SV_EntityVisible(client, svent, &clientpvs))
+                    const visrow_t *sound_vis = shadow_affecting ? &clientpvs2 : &clientpvs;
+                    if (!beam_cull && !SV_EntityVisible(client, svent, sound_vis))
                         continue;
                 }
             } else if (!ent->s.modelindex && !(ent->s.renderfx & RF_CASTSHADOW)) {
