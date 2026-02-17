@@ -427,6 +427,38 @@ static const char *R_NormalizeRendererName(const char *name)
         return "vulkan";
     }
 
+    if (!Q_strcasecmp(name, "vkpt")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vk_rtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vulkan_rtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vulkan rtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vulkan-rtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vulkanrtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "rtx")) {
+        return "rtx";
+    }
+
+    if (!Q_strcasecmp(name, "vulkan")) {
+        return "vulkan";
+    }
+
     return name;
 }
 
@@ -825,6 +857,7 @@ static void r_renderer_g(genctx_t *ctx)
     Prompt_AddMatch(ctx, "opengl");
 #if USE_VULKAN
     Prompt_AddMatch(ctx, "vulkan");
+    Prompt_AddMatch(ctx, "rtx");
 #endif
 }
 #endif
@@ -930,8 +963,10 @@ void CL_InitRenderer(void)
     if (!R_LoadExternalRenderer(renderer_name)) {
         Com_Error(ERR_FATAL, "Couldn't load renderer '%s': %s", renderer_name, Com_GetLastError());
     }
-    Cvar_Get("r_ref", renderer_name, CVAR_ROM);
-    Cvar_Get("vid_ref", renderer_name, CVAR_ROM);
+    cvar_t *r_ref = Cvar_Get("r_ref", renderer_name, CVAR_ROM);
+    cvar_t *vid_ref = Cvar_Get("vid_ref", renderer_name, CVAR_ROM);
+    Cvar_SetByVar(r_ref, renderer_name, FROM_CODE);
+    Cvar_SetByVar(vid_ref, renderer_name, FROM_CODE);
 #else
     Cvar_Get("r_ref", "opengl", CVAR_ROM);
     Cvar_Get("vid_ref", "opengl", CVAR_ROM);

@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gl.h"
 #include "common/utils.h"
+#include "renderer/ui_scale.h"
 
 drawStatic_t draw;
 
@@ -25,20 +26,8 @@ static inline void draw_pixel_rect_to_virtual(int x, int y, int w, int h,
                                               int *out_x, int *out_y,
                                               int *out_w, int *out_h)
 {
-    float inv_base = draw.base_scale > 0.0f ? (1.0f / draw.base_scale) : 1.0f;
-    int x0 = Q_rint(x * inv_base);
-    int y0 = Q_rint(y * inv_base);
-    int x1 = Q_rint((x + w) * inv_base);
-    int y1 = Q_rint((y + h) * inv_base);
-
-    if (out_x)
-        *out_x = x0;
-    if (out_y)
-        *out_y = y0;
-    if (out_w)
-        *out_w = max(0, x1 - x0);
-    if (out_h)
-        *out_h = max(0, y1 - y0);
+    R_UIScalePixelRectToVirtual(x, y, w, h, draw.base_scale,
+                                out_x, out_y, out_w, out_h);
 }
 
 // the final process in drawing any pic
@@ -255,7 +244,6 @@ void GL_Blend(void)
 void R_SetClipRect(const clipRect_t *clip)
 {
     clipRect_t rc;
-    float pixel_scale;
 
     GL_Flush2D();
 
@@ -268,24 +256,8 @@ clear:
         return;
     }
 
-    pixel_scale = draw.base_scale / draw.scale;
-
-    rc.left = Q_rint(clip->left * pixel_scale);
-    rc.top = Q_rint(clip->top * pixel_scale);
-    rc.right = Q_rint(clip->right * pixel_scale);
-    rc.bottom = Q_rint(clip->bottom * pixel_scale);
-
-    if (rc.left < 0)
-        rc.left = 0;
-    if (rc.top < 0)
-        rc.top = 0;
-    if (rc.right > r_config.width)
-        rc.right = r_config.width;
-    if (rc.bottom > r_config.height)
-        rc.bottom = r_config.height;
-    if (rc.right < rc.left)
-        goto clear;
-    if (rc.bottom < rc.top)
+    if (!R_UIScaleClipToPixels(clip, draw.base_scale, draw.scale,
+                               r_config.width, r_config.height, &rc))
         goto clear;
 
     qglEnable(GL_SCISSOR_TEST);
@@ -294,43 +266,9 @@ clear:
     draw.scissor = true;
 }
 
-static int get_base_scale_int(void)
-{
-    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
-    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
-    float base_scale = max(scale_x, scale_y);
-    int base_scale_int = (int)base_scale;
-
-    if (base_scale_int < 1)
-        base_scale_int = 1;
-
-    return base_scale_int;
-}
-
-static int get_ui_scale_int(int base_scale_int, cvar_t *var)
-{
-    float extra_scale = 1.0f;
-
-    if (var && var->value)
-        extra_scale = Cvar_ClampValue(var, 0.25f, 10.0f);
-
-    int ui_scale_int = (int)((float)base_scale_int * extra_scale);
-
-    if (ui_scale_int < 1)
-        ui_scale_int = 1;
-
-    return ui_scale_int;
-}
-
 float R_ClampScale(cvar_t *var)
 {
-    if (!var)
-        return 1.0f;
-
-    int base_scale_int = get_base_scale_int();
-    int ui_scale_int = get_ui_scale_int(base_scale_int, var);
-
-    return (float)base_scale_int / (float)ui_scale_int;
+    return R_UIScaleClamp(r_config.width, r_config.height, var);
 }
 
 void R_SetScale(float scale)

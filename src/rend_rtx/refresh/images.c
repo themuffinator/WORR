@@ -356,7 +356,8 @@ static bool supports_extended_pixel_format(void)
 IMG_LOAD(STB)
 {
 	int w, h, channels;
-	byte* data = NULL;
+	byte *data = NULL;
+	bool is_r16 = false;
 	if(supports_extended_pixel_format())
 	{
 		int img_comp;
@@ -368,6 +369,7 @@ IMG_LOAD(STB)
 			// Special: 16bpc grayscale
 			data = (byte*)stbi_load_16_from_memory(rawdata, rawlen, &w, &h, &channels, 1);
 			image->pixel_format = PF_R16_UNORM;
+			is_r16 = true;
 		}
 		// else: handle default case (8bpc RGBA) below
 	}
@@ -375,6 +377,7 @@ IMG_LOAD(STB)
 	{
 		data = stbi_load_from_memory(rawdata, rawlen, &w, &h, &channels, 4);
 		image->pixel_format = PF_R8G8B8A8_UNORM;
+		is_r16 = false;
 	}
 
 	if (!data)
@@ -383,7 +386,18 @@ IMG_LOAD(STB)
 		return Q_ERR_LIBRARY_ERROR;
 	}
 
-	*pic = data;
+	size_t bpp = is_r16 ? sizeof(uint16_t) : 4;
+	size_t pic_size = (size_t)w * (size_t)h * bpp;
+	*pic = IMG_AllocPixels(pic_size);
+	if (!*pic)
+	{
+		stbi_image_free(data);
+		Com_SetLastError("Out of memory");
+		return Q_ERR(ENOMEM);
+	}
+
+	memcpy(*pic, data, pic_size);
+	stbi_image_free(data);
 
 	image->upload_width = image->width = w;
 	image->upload_height = image->height = h;

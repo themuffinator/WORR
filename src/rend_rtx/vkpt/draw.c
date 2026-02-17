@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/utils.h"
 #include "refresh/refresh.h"
 #include "refresh/images.h"
+#include "renderer/ui_scale.h"
 
 #include <math.h>
 #include <assert.h>
@@ -49,6 +50,9 @@ enum
 
 static drawStatic_t draw = {
 	.scale = 1.0f,
+	.base_scale = 1.0f,
+	.virtual_width = VIRTUAL_SCREEN_WIDTH,
+	.virtual_height = VIRTUAL_SCREEN_HEIGHT,
 	.alpha_scale = 1.0f
 };
 static float hud_alpha_scale = 1.0f;
@@ -98,10 +102,294 @@ static VkDescriptorSet         desc_set_final_blit[MAX_FRAMES_IN_FLIGHT];
 extern cvar_t* cvar_ui_hdr_nits;
 extern cvar_t* cvar_tm_hdr_saturation_scale;
 
+static inline image_t *draw_image_for_handle(qhandle_t handle)
+{
+	if (handle <= 0 || handle >= r_numImages)
+		return NULL;
+
+	image_t *image = &r_images[handle];
+	if (!image->registration_sequence)
+		return NULL;
+
+	return image;
+}
+
+static inline float vkpt_lightstyle_white(byte style)
+{
+	if (!vkpt_refdef.fd || !vkpt_refdef.fd->lightstyles)
+		return 1.0f;
+	return vkpt_refdef.fd->lightstyles[style].white;
+}
+
+static inline void vkpt_shift_lightmap_bytes(const byte in[3], vec3_t out)
+{
+	out[0] = in[0];
+	out[1] = in[1];
+	out[2] = in[2];
+}
+
+static inline void vkpt_adjust_light_color(vec3_t color)
+{
+	VectorScale(color, 1.0f / 255.0f, color);
+}
+
+static void vkpt_sample_lightpoint(const lightpoint_t *point, vec3_t color)
+{
+	const mface_t *surf = point->surf;
+	const byte *lightmap;
+	const byte *b1, *b2, *b3, *b4;
+	float fracu, fracv;
+	float w1, w2, w3, w4;
+	int s, t, smax, tmax, size;
+
+	s = (int)point->s;
+	t = (int)point->t;
+
+	fracu = point->s - s;
+	fracv = point->t - t;
+
+	w1 = (1.0f - fracu) * (1.0f - fracv);
+	w2 = fracu * (1.0f - fracv);
+	w3 = fracu * fracv;
+	w4 = (1.0f - fracu) * fracv;
+
+	smax = surf->lm_width;
+	tmax = surf->lm_height;
+	size = smax * tmax * 3;
+
+	VectorClear(color);
+
+	lightmap = surf->lightmap;
+	for (int i = 0; i < surf->numstyles; i++) {
+		if (surf->styles[i] == 255)
+			break;
+
+		b1 = &lightmap[3 * ((t + 0) * smax + (s + 0))];
+		b2 = &lightmap[3 * ((t + 0) * smax + (s + 1))];
+		b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
+		b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
+
+		vec3_t c1, c2, c3, c4;
+		vec3_t temp;
+		vkpt_shift_lightmap_bytes(b1, c1);
+		vkpt_shift_lightmap_bytes(b2, c2);
+		vkpt_shift_lightmap_bytes(b3, c3);
+		vkpt_shift_lightmap_bytes(b4, c4);
+
+		temp[0] = w1 * c1[0] + w2 * c2[0] + w3 * c3[0] + w4 * c4[0];
+		temp[1] = w1 * c1[1] + w2 * c2[1] + w3 * c3[1] + w4 * c4[1];
+		temp[2] = w1 * c1[2] + w2 * c2[2] + w3 * c3[2] + w4 * c4[2];
+
+		VectorMA(color, vkpt_lightstyle_white(surf->styles[i]), temp, color);
+		lightmap += size;
+	}
+}
+
+static bool vkpt_lightgrid_point(const lightgrid_t *grid, const vec3_t start, vec3_t color)
+{
+	vec3_t point, avg;
+	uint32_t point_i[3];
+	vec3_t samples[8];
+	int i, j, mask, numsamples;
+
+	if (!grid->numleafs)
+		return false;
+	if (cvar_rtx_lightgrid && cvar_rtx_lightgrid->integer == 0)
+		return false;
+
+	point[0] = (start[0] - grid->mins[0]) * grid->scale[0];
+	point[1] = (start[1] - grid->mins[1]) * grid->scale[1];
+	point[2] = (start[2] - grid->mins[2]) * grid->scale[2];
+
+	point_i[0] = (uint32_t)point[0];
+	point_i[1] = (uint32_t)point[1];
+	point_i[2] = (uint32_t)point[2];
+	VectorClear(avg);
+
+	for (i = mask = numsamples = 0; i < 8; i++) {
+		uint32_t tmp[3];
+
+		tmp[0] = point_i[0] + ((i >> 0) & 1);
+		tmp[1] = point_i[1] + ((i >> 1) & 1);
+		tmp[2] = point_i[2] + ((i >> 2) & 1);
+
+		const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp);
+		if (!s)
+			continue;
+
+		VectorClear(samples[i]);
+
+		for (j = 0; j < (int)grid->numstyles && s->style != 255; j++, s++) {
+			vec3_t shifted;
+			vkpt_shift_lightmap_bytes(s->rgb, shifted);
+			VectorMA(samples[i], vkpt_lightstyle_white(s->style), shifted, samples[i]);
+		}
+
+		if (j) {
+			mask |= BIT(i);
+			VectorAdd(avg, samples[i], avg);
+			numsamples++;
+		}
+	}
+
+	if (!mask)
+		return false;
+
+	if (mask != 255) {
+		VectorScale(avg, 1.0f / numsamples, avg);
+		for (i = 0; i < 8; i++) {
+			if (!(mask & BIT(i)))
+				VectorCopy(avg, samples[i]);
+		}
+	}
+
+	{
+		float fx = point[0] - point_i[0];
+		float fy = point[1] - point_i[1];
+		float fz = point[2] - point_i[2];
+		float bx = 1.0f - fx;
+		float by = 1.0f - fy;
+		float bz = 1.0f - fz;
+		vec3_t lerp_x[4];
+		vec3_t lerp_y[2];
+
+		LerpVector2(samples[0], samples[1], bx, fx, lerp_x[0]);
+		LerpVector2(samples[2], samples[3], bx, fx, lerp_x[1]);
+		LerpVector2(samples[4], samples[5], bx, fx, lerp_x[2]);
+		LerpVector2(samples[6], samples[7], bx, fx, lerp_x[3]);
+
+		LerpVector2(lerp_x[0], lerp_x[1], by, fy, lerp_y[0]);
+		LerpVector2(lerp_x[2], lerp_x[3], by, fy, lerp_y[1]);
+
+		LerpVector2(lerp_y[0], lerp_y[1], bz, fz, color);
+	}
+
+	vkpt_adjust_light_color(color);
+
+	return true;
+}
+
+static bool vkpt_lightpoint_from_world(const vec3_t start, vec3_t color)
+{
+	const bsp_t *bsp = vkpt_get_world_bsp();
+	const entity_t *ent;
+	lightpoint_t point, transformed_point;
+	vec3_t end, mins, maxs;
+	int nolm_mask;
+
+	if (!bsp)
+		return false;
+
+	if (vkpt_lightgrid_point(&bsp->lightgrid, start, color))
+		return true;
+
+	if (!bsp->lightmap)
+		return false;
+	if (cvar_rtx_lightmaps && cvar_rtx_lightmaps->integer == 0)
+		return false;
+
+	end[0] = start[0];
+	end[1] = start[1];
+	end[2] = start[2] - 8192.0f;
+
+	nolm_mask = bsp->has_bspx ? SURF_NOLM_MASK_REMASTER : SURF_NOLM_MASK_DEFAULT;
+	nolm_mask |= SURF_TRANS_MASK;
+
+	BSP_LightPoint(&point, start, end, bsp->nodes, nolm_mask);
+
+	if (vkpt_refdef.fd && vkpt_refdef.fd->entities) {
+		for (int i = 0; i < vkpt_refdef.fd->num_entities; i++) {
+			int index;
+			const mmodel_t *model;
+			const vec_t *angles;
+
+			ent = vkpt_refdef.fd->entities + i;
+			index = ~ent->model;
+			if (index < 1 || index >= bsp->nummodels)
+				continue;
+
+			model = &bsp->models[index];
+			if (!model->numfaces)
+				continue;
+
+			if (!VectorEmpty(ent->angles)) {
+				if (fabsf(start[0] - ent->origin[0]) > model->radius)
+					continue;
+				if (fabsf(start[1] - ent->origin[1]) > model->radius)
+					continue;
+				angles = ent->angles;
+			} else {
+				VectorAdd(model->mins, ent->origin, mins);
+				VectorAdd(model->maxs, ent->origin, maxs);
+				if (start[0] < mins[0] || start[0] > maxs[0])
+					continue;
+				if (start[1] < mins[1] || start[1] > maxs[1])
+					continue;
+				angles = NULL;
+			}
+
+			BSP_TransformedLightPoint(&transformed_point, start, end, model->headnode,
+				nolm_mask, ent->origin, angles);
+
+			if (transformed_point.fraction < point.fraction)
+				point = transformed_point;
+		}
+	}
+
+	if (!point.surf)
+		return false;
+
+	vkpt_sample_lightpoint(&point, color);
+	vkpt_adjust_light_color(color);
+
+	return true;
+}
+
+static void vkpt_add_dynamic_lights(const vec3_t origin, vec3_t color)
+{
+	if (!vkpt_refdef.fd || !vkpt_refdef.fd->dlights)
+		return;
+
+	for (int i = 0; i < vkpt_refdef.fd->num_dlights; i++) {
+		const dlight_t *light = vkpt_refdef.fd->dlights + i;
+		float f = light->radius - DLIGHT_CUTOFF - Distance(light->origin, origin);
+		if (f > 0.0f) {
+			f *= (1.0f / 255.0f);
+			VectorMA(color, f * light->intensity, light->color, color);
+		}
+	}
+}
+
 static VkExtent2D
 vkpt_draw_get_extent(void)
 {
 	return qvk.extent_unscaled;
+}
+
+static inline void draw_refresh_virtual_metrics(void)
+{
+	renderer_ui_scale_t metrics = R_UIScaleCompute(r_config.width, r_config.height);
+	draw.base_scale = metrics.base_scale;
+	draw.virtual_width = metrics.virtual_width;
+	draw.virtual_height = metrics.virtual_height;
+}
+
+static inline void draw_get_scaled_dimensions(float *width, float *height)
+{
+	draw_refresh_virtual_metrics();
+
+	float scaled_width = draw.virtual_width * draw.scale;
+	float scaled_height = draw.virtual_height * draw.scale;
+
+	if (scaled_width <= 0.0f)
+		scaled_width = 1.0f;
+	if (scaled_height <= 0.0f)
+		scaled_height = 1.0f;
+
+	if (width)
+		*width = scaled_width;
+	if (height)
+		*height = scaled_height;
 }
 
 void vkpt_draw_set_hud_alpha(float alpha)
@@ -121,7 +409,7 @@ static inline StretchPic_t *alloc_stretch_pic(uint32_t color, int tex_handle)
 		assert(0);
 		return NULL;
 	}
-	assert(tex_handle);
+
 	StretchPic_t *sp = stretch_pic_queue + num_stretch_pics++;
 
 	if (alpha_scale < 1.f) {
@@ -133,9 +421,14 @@ static inline StretchPic_t *alloc_stretch_pic(uint32_t color, int tex_handle)
 
 	sp->color = color;
 	sp->tex_handle = tex_handle;
-	if (tex_handle >= 0 && tex_handle < MAX_RIMAGES
-	&& !r_images[tex_handle].registration_sequence) {
+
+	if (tex_handle == 0) {
 		sp->tex_handle = TEXNUM_WHITE;
+	} else if (tex_handle > 0) {
+		if (tex_handle >= r_numImages || tex_handle >= MAX_RIMAGES ||
+			!r_images[tex_handle].registration_sequence) {
+			sp->tex_handle = TEXNUM_WHITE;
+		}
 	}
 
 	return sp;
@@ -194,8 +487,8 @@ static inline void enqueue_stretch_pic(
 	if (!sp)
 		return;
 
-	float width = r_config.width * draw.scale;
-	float height = r_config.height * draw.scale;
+	float width, height;
+	draw_get_scaled_dimensions(&width, &height);
 	float scale_x = 2.0f / width;
 	float scale_y = 2.0f / height;
 
@@ -218,8 +511,8 @@ static inline void enqueue_stretch_pic_rotated(
 		float angle, float pivot_x, float pivot_y,
 		uint32_t color, int tex_handle)
 {
-	float width = r_config.width * draw.scale;
-	float height = r_config.height * draw.scale;
+	float width, height;
+	draw_get_scaled_dimensions(&width, &height);
 	float scale_x = 2.0f / width;
 	float scale_y = 2.0f / height;
 
@@ -911,17 +1204,32 @@ vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D ex
 	return VK_SUCCESS;
 }
 
-void R_SetClipRect(const clipRect_t *clip) 
-{ 
-	if (clip)
-	{
-		clip_enable = true;
-		clip_rect = *clip;
-	}
-	else
-	{
+void R_SetClipRect(const clipRect_t *clip)
+{
+	if (!clip) {
 		clip_enable = false;
+		return;
 	}
+
+	draw_refresh_virtual_metrics();
+
+	clipRect_t pixel_clip;
+	if (!R_UIScaleClipToPixels(clip, draw.base_scale, draw.scale,
+		r_config.width, r_config.height, &pixel_clip)) {
+		clip_enable = false;
+		return;
+	}
+
+	float inv_pixel_scale = (draw.base_scale > 0.0f) ? (draw.scale / draw.base_scale) : draw.scale;
+	clip_rect.left = Q_rint(pixel_clip.left * inv_pixel_scale);
+	clip_rect.top = Q_rint(pixel_clip.top * inv_pixel_scale);
+	clip_rect.right = Q_rint(pixel_clip.right * inv_pixel_scale);
+	clip_rect.bottom = Q_rint(pixel_clip.bottom * inv_pixel_scale);
+	if (clip_rect.right < clip_rect.left || clip_rect.bottom < clip_rect.top) {
+		clip_enable = false;
+		return;
+	}
+	clip_enable = true;
 }
 
 void
@@ -954,12 +1262,23 @@ R_SetColor(uint32_t color)
 void
 R_LightPoint(const vec3_t origin, vec3_t light)
 {
-	VectorSet(light, 1, 1, 1);
+	if (cvar_r_fullbright && cvar_r_fullbright->integer) {
+		VectorSet(light, 1, 1, 1);
+		return;
+	}
+
+	if (!vkpt_lightpoint_from_world(origin, light))
+		VectorSet(light, 1, 1, 1);
+
+	vkpt_add_dynamic_lights(origin, light);
 }
 
 void
 R_SetScale(float scale)
 {
+	draw_refresh_virtual_metrics();
+	if (scale <= 0.0f)
+		scale = 1.0f;
 	draw.scale = scale;
 }
 
@@ -983,7 +1302,10 @@ R_DrawStretchSubPic(int x, int y, int w, int h,
 void
 R_DrawPic(int x, int y, color_t color, qhandle_t pic)
 {
-	image_t *image = IMG_ForHandle(pic);
+	image_t *image = draw_image_for_handle(pic);
+	if (!image)
+		return;
+
 	R_DrawStretchPic(x, y, image->width, image->height, color, pic);
 }
 
@@ -1030,7 +1352,9 @@ R_DiscardRawPic(void)
 
 void R_DrawKeepAspectPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
 {
-    image_t *image = IMG_ForHandle(pic);
+    image_t *image = draw_image_for_handle(pic);
+    if (!image)
+        return;
 
     if (image->flags & IF_SCRAP) {
         R_DrawStretchPic(x, y, w, h, color, pic);
@@ -1290,8 +1614,14 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
 		}
 	}
 
-	font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
-	font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
+	image_t *font_image = draw_image_for_handle(font->pic);
+	if (font_image && font_image->width > 0 && font_image->height > 0) {
+		font->sw = 1.0f / font_image->width;
+		font->sh = 1.0f / font_image->height;
+	} else {
+		font->sw = 0.0f;
+		font->sh = 0.0f;
+	}
 
 	FS_FreeFile(buffer);
 

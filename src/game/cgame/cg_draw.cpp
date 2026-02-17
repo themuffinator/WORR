@@ -126,11 +126,20 @@ static cvar_t *cg_obituary_fade;
 static cvar_t *cg_obituary_fade_legacy;
 static cvar_t *cg_draw_fps;
 static cvar_t *cg_draw_fps_legacy;
-static cvar_t *gl_shadow_draw_debug;
-static cvar_t *gl_shadow_debug_dlights;
-static cvar_t *gl_shadow_debug_shadowlights;
-static cvar_t *gl_shadow_debug_casters;
-static cvar_t *gl_shadow_debug_dyn_casters;
+static cvar_t *rtx_draw_debug;
+static cvar_t *rtx_debug_dlights_total;
+static cvar_t *rtx_debug_dlights_uploaded;
+static cvar_t *rtx_debug_dlights_cap;
+static cvar_t *rtx_debug_dlights_dropped;
+static cvar_t *rtx_debug_shadowlights_total;
+static cvar_t *rtx_debug_shadowlights_uploaded;
+static cvar_t *cl_dlight_debug_requested;
+static cvar_t *cl_dlight_debug_selected;
+static cvar_t *cl_dlight_debug_cap;
+static cvar_t *cl_dlight_debug_dropped;
+static cvar_t *cl_dlight_debug_shadow_requested;
+static cvar_t *cl_dlight_debug_shadow_strict_requested;
+static cvar_t *cl_dlight_draw_debug;
 
 // static temp data used for hud
 static struct
@@ -1282,21 +1291,59 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
         : 1.0f;
     const int line_height = max(
         1, static_cast<int>(std::lround(base_line_height / scale_factor)));
-    const bool show_shadow_stats =
-        (gl_shadow_draw_debug && gl_shadow_draw_debug->integer > 0);
-    const std::string shadow_text =
-        show_shadow_stats
-            ? G_Fmt("dl:{} sh:{} cas:{} dyn:{}",
-                    gl_shadow_debug_dlights ? gl_shadow_debug_dlights->integer : 0,
-                    gl_shadow_debug_shadowlights
-                        ? gl_shadow_debug_shadowlights->integer
-                        : 0,
-                    gl_shadow_debug_casters ? gl_shadow_debug_casters->integer : 0,
-                    gl_shadow_debug_dyn_casters
-                        ? gl_shadow_debug_dyn_casters->integer
-                        : 0)
-                  .data()
-            : std::string();
+    const bool show_rtx_shadow_stats =
+        (rtx_draw_debug && rtx_draw_debug->integer > 0);
+    const bool show_cl_dlight_stats =
+        !show_rtx_shadow_stats &&
+        (cl_dlight_draw_debug && cl_dlight_draw_debug->integer > 0);
+
+    std::string shadow_text;
+    if (show_rtx_shadow_stats) {
+        shadow_text = G_Fmt(
+                          "rtx dl:{}/{} total:{} drop:{} sh:{}/{}",
+                          rtx_debug_dlights_uploaded
+                              ? rtx_debug_dlights_uploaded->integer
+                              : 0,
+                          rtx_debug_dlights_cap
+                              ? rtx_debug_dlights_cap->integer
+                              : 0,
+                          rtx_debug_dlights_total
+                              ? rtx_debug_dlights_total->integer
+                              : 0,
+                          rtx_debug_dlights_dropped
+                              ? rtx_debug_dlights_dropped->integer
+                              : 0,
+                          rtx_debug_shadowlights_uploaded
+                              ? rtx_debug_shadowlights_uploaded->integer
+                              : 0,
+                          rtx_debug_shadowlights_total
+                              ? rtx_debug_shadowlights_total->integer
+                              : 0)
+                          .data();
+    } else if (show_cl_dlight_stats) {
+        shadow_text = G_Fmt(
+                          "cl dl:{}/{} req:{} drop:{} sh:{} strict:{}",
+                          cl_dlight_debug_selected
+                              ? cl_dlight_debug_selected->integer
+                              : 0,
+                          cl_dlight_debug_cap
+                              ? cl_dlight_debug_cap->integer
+                              : 0,
+                          cl_dlight_debug_requested
+                              ? cl_dlight_debug_requested->integer
+                              : 0,
+                          cl_dlight_debug_dropped
+                              ? cl_dlight_debug_dropped->integer
+                              : 0,
+                          cl_dlight_debug_shadow_requested
+                              ? cl_dlight_debug_shadow_requested->integer
+                              : 0,
+                          cl_dlight_debug_shadow_strict_requested
+                              ? cl_dlight_debug_shadow_strict_requested->integer
+                              : 0)
+                          .data();
+    }
+    const bool show_shadow_stats = !shadow_text.empty();
 
     float hud_scale = 1.0f;
     if (cgi.SCR_GetScreenMetrics) {
@@ -5173,15 +5220,32 @@ void CG_InitScreen()
     cg_hud_cgame_legacy = cgi.cvar("cl_hud_cgame", cg_hud_cgame->string, CVAR_NOFLAGS);
     cg_draw_fps = cgi.cvar("cg_draw_fps", "0", CVAR_ARCHIVE);
     cg_draw_fps_legacy = cgi.cvar("cg_drawFPS", cg_draw_fps->string, CVAR_NOFLAGS);
-    gl_shadow_draw_debug = cgi.cvar("gl_shadow_draw_debug", "0", CVAR_NOFLAGS);
-    gl_shadow_debug_dlights =
-        cgi.cvar("gl_shadow_debug_dlights", "0", CVAR_NOFLAGS);
-    gl_shadow_debug_shadowlights =
-        cgi.cvar("gl_shadow_debug_shadowlights", "0", CVAR_NOFLAGS);
-    gl_shadow_debug_casters =
-        cgi.cvar("gl_shadow_debug_casters", "0", CVAR_NOFLAGS);
-    gl_shadow_debug_dyn_casters =
-        cgi.cvar("gl_shadow_debug_dyn_casters", "0", CVAR_NOFLAGS);
+    rtx_draw_debug = cgi.cvar("rtx_draw_debug", "0", CVAR_NOFLAGS);
+    rtx_debug_dlights_total =
+        cgi.cvar("rtx_debug_dlights_total", "0", CVAR_NOFLAGS);
+    rtx_debug_dlights_uploaded =
+        cgi.cvar("rtx_debug_dlights_uploaded", "0", CVAR_NOFLAGS);
+    rtx_debug_dlights_cap =
+        cgi.cvar("rtx_debug_dlights_cap", "0", CVAR_NOFLAGS);
+    rtx_debug_dlights_dropped =
+        cgi.cvar("rtx_debug_dlights_dropped", "0", CVAR_NOFLAGS);
+    rtx_debug_shadowlights_total =
+        cgi.cvar("rtx_debug_shadowlights_total", "0", CVAR_NOFLAGS);
+    rtx_debug_shadowlights_uploaded =
+        cgi.cvar("rtx_debug_shadowlights_uploaded", "0", CVAR_NOFLAGS);
+    cl_dlight_draw_debug = cgi.cvar("cl_dlight_draw_debug", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_requested =
+        cgi.cvar("cl_dlight_debug_requested", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_selected =
+        cgi.cvar("cl_dlight_debug_selected", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_cap =
+        cgi.cvar("cl_dlight_debug_cap", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_dropped =
+        cgi.cvar("cl_dlight_debug_dropped", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_shadow_requested =
+        cgi.cvar("cl_dlight_debug_shadow_requested", "0", CVAR_NOFLAGS);
+    cl_dlight_debug_shadow_strict_requested = cgi.cvar(
+        "cl_dlight_debug_shadow_strict_requested", "0", CVAR_NOFLAGS);
     cg_usekfont = cgi.cvar("cg_usekfont", "1", CVAR_NOFLAGS);
     cg_usekfont_legacy = cgi.cvar("scr_usekfont", cg_usekfont->string, CVAR_NOFLAGS);
     cl_alpha = cgi.cvar("cl_alpha", "1", CVAR_NOFLAGS);

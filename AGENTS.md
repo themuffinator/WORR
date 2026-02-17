@@ -8,6 +8,7 @@ Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR
 - Backwards compatibility is not a requirement, only a nice-to-have.
 - Use idTech3 (Quake 3 Arena) codebases as refactoring inspiration (Quake3e: `E:\_SOURCE\_CODE\Quake3e-master`, baseq3a: `E:\_SOURCE\_CODE\baseq3a-master`) to replicate its advantages as WORR evolves.
 - Treat `q2proto/` as read-only unless explicitly prompted otherwise; creating/developing a new WORR protocol is allowed when needed, but must preserve compatibility with legacy Q2 servers and demos.
+- Never redirect Vulkan renderer paths to OpenGL. All Vulkan renderer work (`rend_vk`, `vk_`/`pt_` behavior) must be implemented natively in Vulkan.
 
 ## Common cvar prefixes
 - `cg_`: client game (`cgame`).
@@ -19,6 +20,7 @@ Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR
 - `r_`: shared renderer (`renderer`).
 - `gl_`: OpenGL renderer exclusive (`rend_gl`).
 - `vk_`: Vulkan renderer exclusive (`rend_vk`).
+- `rtx_`: Vulkan RTX/path-tracing mode cvars (`rend_vk/vkpt`); prefer for RTX mode toggles/features.
 - `pt_`: Vulkan path tracing (vkpt) renderer cvars (`rend_vk`).
 - `vid_`: generic renderer cvar, ideally replace with `r_`.
 - `con_`: console cvar (`client/console.cpp`).
@@ -39,3 +41,4 @@ Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR
 ## Cvar naming conventions
 - Use lowercase `snake_case` (for example `cg_draw_graphical_obits`).
 - Use `draw` in the cvar name when it enables rendering a UI element.
+- Prefer `rtx_` over `vk_` for Vulkan ray-tracing mode/toggle cvars.

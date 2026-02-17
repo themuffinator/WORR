@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "gl.h"
+#include "renderer/ui_scale.h"
 
 glState_t gls;
 
@@ -26,8 +27,7 @@ const mat4_t gl_identity = { [0] = 1, [5] = 1, [10] = 1, [15] = 1 };
 
 static inline GLenum GL_TextureTarget(glTmu_t tmu)
 {
-    if (tmu == TMU_SHADOWMAP || tmu == TMU_SHADOWMAP_CSM)
-        return GL_TEXTURE_2D_ARRAY;
+    (void)tmu;
     return GL_TEXTURE_2D;
 }
 
@@ -216,22 +216,10 @@ void GL_Ortho(GLfloat xmin, GLfloat xmax, GLfloat ymin, GLfloat ymax, GLfloat zn
 
 static void GL_Update2DView(void)
 {
-    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
-    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
-    float base_scale = max(scale_x, scale_y);
-    int base_scale_int = (int)base_scale;
-
-    if (base_scale_int < 1)
-        base_scale_int = 1;
-
-    draw.virtual_width = r_config.width / base_scale_int;
-    draw.virtual_height = r_config.height / base_scale_int;
-    if (draw.virtual_width <= 0.0f)
-        draw.virtual_width = 1.0f;
-    if (draw.virtual_height <= 0.0f)
-        draw.virtual_height = 1.0f;
-
-    draw.base_scale = (float)base_scale_int;
+    renderer_ui_scale_t metrics = R_UIScaleCompute(r_config.width, r_config.height);
+    draw.base_scale = metrics.base_scale;
+    draw.virtual_width = metrics.virtual_width;
+    draw.virtual_height = metrics.virtual_height;
 }
 
 void GL_Setup2D(void)

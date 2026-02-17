@@ -421,69 +421,6 @@ static bool GL_BoxIntersectsBox(const vec3_t mins, const vec3_t maxs, const vec3
              maxs[2] < test_mins[2] || mins[2] > test_maxs[2]);
 }
 
-static void GL_MarkShadowNodes_r(mnode_t *node, const vec3_t center, float radius)
-{
-    if (!GL_BoxIntersectsSphere(node->mins, node->maxs, center, radius))
-        return;
-
-    if (node->visframe != glr.visframe) {
-        node->visframe = glr.visframe;
-        glr.nodes_visible++;
-    }
-
-    if (!node->plane)
-        return;
-
-    GL_MarkShadowNodes_r(node->children[0], center, radius);
-    GL_MarkShadowNodes_r(node->children[1], center, radius);
-}
-
-static void GL_MarkShadowNodesBox_r(mnode_t *node, const vec3_t mins, const vec3_t maxs)
-{
-    if (!GL_BoxIntersectsBox(node->mins, node->maxs, mins, maxs))
-        return;
-
-    if (node->visframe != glr.visframe) {
-        node->visframe = glr.visframe;
-        glr.nodes_visible++;
-    }
-
-    if (!node->plane)
-        return;
-
-    GL_MarkShadowNodesBox_r(node->children[0], mins, maxs);
-    GL_MarkShadowNodesBox_r(node->children[1], mins, maxs);
-}
-
-static void GL_MarkShadowLeaves(const dlight_t *dl)
-{
-    const bsp_t *bsp = gl_static.world.cache;
-    if (!bsp)
-        return;
-
-    vec3_t center;
-    float radius = GL_DlightCullRadius(dl, center);
-    if (radius <= 0.0f)
-        return;
-
-    glr.visframe++;
-    glr.nodes_visible = 0;
-
-    GL_MarkShadowNodes_r(bsp->nodes, center, radius);
-}
-
-static void GL_MarkShadowBox(const vec3_t bounds[2])
-{
-    const bsp_t *bsp = gl_static.world.cache;
-    if (!bsp)
-        return;
-
-    glr.visframe++;
-    glr.nodes_visible = 0;
-
-    GL_MarkShadowNodesBox_r(bsp->nodes, bounds[0], bounds[1]);
-}
-
 #define BACKFACE_EPSILON    0.01f
 
 void GL_DrawBspModel(mmodel_t *model)
@@ -528,8 +465,7 @@ void GL_DrawBspModel(mmodel_t *model)
         VectorSubtract(glr.fd.vieworg, ent->origin, transformed);
     }
 
-    if (!glr.shadow_pass)
-        GL_TransformLights(model);
+    GL_TransformLights(model);
 
     GL_RotateForEntity();
 
@@ -547,20 +483,16 @@ void GL_DrawBspModel(mmodel_t *model)
         if (face->drawflags & SURF_NODRAW)
             continue;
 
-        if (!glr.shadow_pass) {
-            dot = PlaneDiffFast(transformed, face->plane);
-            if ((face->drawflags & DSURF_PLANEBACK) ? (dot > BACKFACE_EPSILON) : (dot < -BACKFACE_EPSILON)) {
-                c.facesCulled++;
-                continue;
-            }
+        dot = PlaneDiffFast(transformed, face->plane);
+        if ((face->drawflags & DSURF_PLANEBACK) ? (dot > BACKFACE_EPSILON) : (dot < -BACKFACE_EPSILON)) {
+            c.facesCulled++;
+            continue;
         }
 
-        if (!glr.shadow_pass && gl_dynamic->integer)
+        if (gl_dynamic->integer)
             GL_PushLights(face);
 
         if (face->drawflags & SURF_TRANS_MASK) {
-            if (glr.shadow_pass)
-                continue;
             if (model->drawframe != glr.drawframe)
                 GL_AddAlphaFace(face);
             continue;
@@ -569,7 +501,7 @@ void GL_DrawBspModel(mmodel_t *model)
         GL_AddSolidFace(face);
     }
 
-    if (!glr.shadow_pass && gl_dynamic->integer)
+    if (gl_dynamic->integer)
         GL_UploadLightmaps();
 
     GL_DrawSolidFaces();
@@ -632,20 +564,17 @@ static inline void GL_DrawNode(const mnode_t *node)
             continue;
 
         if (face->drawflags & SURF_SKY && !(face->statebits & GLS_SKY_MASK)) {
-            if (!glr.shadow_pass)
-                R_AddSkySurface(face);
+            R_AddSkySurface(face);
             continue;
         }
 
         if (face->drawflags & SURF_NODRAW)
             continue;
 
-        if (!glr.shadow_pass && gl_dynamic->integer)
+        if (gl_dynamic->integer)
             GL_PushLights(face);
 
         if (face->drawflags & SURF_TRANS_MASK) {
-            if (glr.shadow_pass)
-                continue;
             GL_AddAlphaFace(face);
         } else
             GL_AddSolidFace(face);
@@ -690,19 +619,9 @@ void GL_DrawWorld(void)
 
     tess.dlight_bits = 0;
 
-    if (glr.shadow_pass) {
-        if (glr.shadow_mode == SHADOW_MODE_SUN)
-            GL_MarkShadowBox(glr.shadow_bounds);
-        else if (glr.shadow_light)
-            GL_MarkShadowLeaves(glr.shadow_light);
-    } else
-        GL_MarkLeaves();
-
-    if (!glr.shadow_pass)
-        GL_MarkLights();
-
-    if (!glr.shadow_pass)
-        R_ClearSkyBox();
+    GL_MarkLeaves();
+    GL_MarkLights();
+    R_ClearSkyBox();
 
     GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
@@ -711,17 +630,14 @@ void GL_DrawWorld(void)
     GL_ClearSolidFaces();
 
     int clip_mode = gl_cull_nodes->integer ? NODE_CLIPPED : NODE_UNCLIPPED;
-    if (glr.shadow_pass && glr.shadow_mode == SHADOW_MODE_SUN)
-        clip_mode = NODE_UNCLIPPED;
     GL_WorldNode_r(gl_static.world.cache->nodes, clip_mode);
 
-    if (!glr.shadow_pass && gl_dynamic->integer)
+    if (gl_dynamic->integer)
         GL_UploadLightmaps();
 
     GL_DrawSolidFaces();
 
     GL_Flush3D();
 
-    if (!glr.shadow_pass)
-        R_DrawSkyBox();
+    R_DrawSkyBox();
 }

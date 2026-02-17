@@ -33,6 +33,16 @@ static cvar_t   *cl_add_lights;
 static cvar_t   *cl_add_entities;
 static cvar_t   *cl_add_blend;
 static cvar_t   *cl_menu_bokeh_blur;
+static cvar_t   *cl_dlight_shadowlight_priority;
+static cvar_t   *cl_dlight_shadowlight_strict_pvs_priority;
+static cvar_t   *cl_dlight_sticky_ms;
+static cvar_t   *cl_dlight_sticky_boost;
+static cvar_t   *cl_dlight_debug_requested;
+static cvar_t   *cl_dlight_debug_selected;
+static cvar_t   *cl_dlight_debug_cap;
+static cvar_t   *cl_dlight_debug_dropped;
+static cvar_t   *cl_dlight_debug_shadow_requested;
+static cvar_t   *cl_dlight_debug_shadow_strict_requested;
 
 #if USE_DEBUG
 static cvar_t   *cl_testparticles;
@@ -48,6 +58,18 @@ cvar_t   *cl_adjustfov;
 int         r_numdlights;
 dlight_t    r_dlights[MAX_DLIGHTS];
 static float r_dlight_scores[MAX_DLIGHTS];
+static uint32_t r_dlight_keys[MAX_DLIGHTS];
+static int r_dlight_requested;
+static int r_dlight_dropped;
+static int r_dlight_shadow_requested;
+static int r_dlight_shadow_strict_requested;
+
+#define DLIGHT_STICKY_CACHE_SIZE 256
+typedef struct {
+    uint32_t key;
+    uint32_t last_seen_ms;
+} dlight_sticky_entry_t;
+static dlight_sticky_entry_t r_dlight_sticky[DLIGHT_STICKY_CACHE_SIZE];
 
 int         r_numentities;
 entity_t    r_entities[MAX_ENTITIES];
@@ -74,12 +96,118 @@ static void V_ClearScene(void)
     r_numentities = 0;
     r_numparticles = 0;
     memset(r_dlight_scores, 0, sizeof(r_dlight_scores));
+    memset(r_dlight_keys, 0, sizeof(r_dlight_keys));
+    r_dlight_requested = 0;
+    r_dlight_dropped = 0;
+    r_dlight_shadow_requested = 0;
+    r_dlight_shadow_strict_requested = 0;
 }
 
 static float V_DlightScore(const vec3_t origin, float radius, float intensity)
 {
     float dist2 = DistanceSquared(origin, cl.refdef.vieworg);
     return (intensity * radius) / (dist2 + 1.0f);
+}
+
+static inline uint32_t V_DlightHashStep(uint32_t hash, int32_t value)
+{
+    hash ^= (uint32_t)value;
+    hash *= 16777619u;
+    return hash;
+}
+
+static uint32_t V_DlightBuildKey(const vec3_t origin, float radius, float intensity,
+                                 int32_t color0, int32_t color1, int32_t color2,
+                                 bool shadowlight, bool strict_pvs)
+{
+    uint32_t hash = 2166136261u;
+    hash = V_DlightHashStep(hash, Q_rint(origin[0] * 0.25f));
+    hash = V_DlightHashStep(hash, Q_rint(origin[1] * 0.25f));
+    hash = V_DlightHashStep(hash, Q_rint(origin[2] * 0.25f));
+    hash = V_DlightHashStep(hash, Q_rint(radius * 0.5f));
+    hash = V_DlightHashStep(hash, Q_rint(intensity * 16.0f));
+    hash = V_DlightHashStep(hash, color0);
+    hash = V_DlightHashStep(hash, color1);
+    hash = V_DlightHashStep(hash, color2);
+    hash = V_DlightHashStep(hash, shadowlight ? 1 : 0);
+    hash = V_DlightHashStep(hash, strict_pvs ? 1 : 0);
+    return hash ? hash : 1u;
+}
+
+static float V_DlightStickyMultiplier(uint32_t key, uint32_t now_ms)
+{
+    if (!key || !cl_dlight_sticky_ms || !cl_dlight_sticky_boost) {
+        return 1.0f;
+    }
+
+    const int sticky_ms = max(0, cl_dlight_sticky_ms->integer);
+    const float sticky_boost = max(1.0f, cl_dlight_sticky_boost->value);
+    if (sticky_ms <= 0 || sticky_boost <= 1.0f) {
+        return 1.0f;
+    }
+
+    for (int i = 0; i < DLIGHT_STICKY_CACHE_SIZE; i++) {
+        const dlight_sticky_entry_t *entry = &r_dlight_sticky[i];
+        if (entry->key != key) {
+            continue;
+        }
+        if ((uint32_t)(now_ms - entry->last_seen_ms) <= (uint32_t)sticky_ms) {
+            return sticky_boost;
+        }
+        return 1.0f;
+    }
+
+    return 1.0f;
+}
+
+static void V_DlightStickyTouch(uint32_t key, uint32_t now_ms)
+{
+    if (!key) {
+        return;
+    }
+
+    int empty = -1;
+    int oldest = 0;
+    uint32_t oldest_age = 0;
+    for (int i = 0; i < DLIGHT_STICKY_CACHE_SIZE; i++) {
+        dlight_sticky_entry_t *entry = &r_dlight_sticky[i];
+        if (entry->key == key) {
+            entry->last_seen_ms = now_ms;
+            return;
+        }
+        if (!entry->key && empty < 0) {
+            empty = i;
+            continue;
+        }
+        uint32_t age = now_ms - entry->last_seen_ms;
+        if (age > oldest_age) {
+            oldest_age = age;
+            oldest = i;
+        }
+    }
+
+    int slot = (empty >= 0) ? empty : oldest;
+    r_dlight_sticky[slot].key = key;
+    r_dlight_sticky[slot].last_seen_ms = now_ms;
+}
+
+static float V_WeightedDlightScore(const vec3_t origin, float radius, float intensity,
+                                   bool shadowlight, bool strict_pvs, uint32_t key,
+                                   uint32_t now_ms)
+{
+    float score = V_DlightScore(origin, radius, intensity);
+
+    if (shadowlight) {
+        if (cl_dlight_shadowlight_priority) {
+            score *= max(0.01f, cl_dlight_shadowlight_priority->value);
+        }
+        if (strict_pvs && cl_dlight_shadowlight_strict_pvs_priority) {
+            score *= max(0.01f, cl_dlight_shadowlight_strict_pvs_priority->value);
+        }
+    }
+
+    score *= V_DlightStickyMultiplier(key, now_ms);
+    return score;
 }
 
 static int V_ReserveDlightSlot(float score)
@@ -182,7 +310,7 @@ V_AddLightEx
 
 =====================
 */
-void V_AddLightEx(cl_shadow_light_t *light)
+void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
 {
     dlight_t    *dl;
 
@@ -191,16 +319,36 @@ void V_AddLightEx(cl_shadow_light_t *light)
     if (fade <= 0.0f)
         return;
 
+    const bool shadowlight =
+        light->resolution > 0 && cl_shadowlights && cl_shadowlights->integer;
+    const uint32_t now_ms = Sys_Milliseconds();
     float intensity = light->intensity *
                       (light->lightstyle == -1 ? 1.0f : r_lightstyles[light->lightstyle].white) *
                       fade;
-    float score = V_DlightScore(light->origin, light->radius, intensity);
+    uint32_t key = V_DlightBuildKey(
+        light->origin, light->radius, intensity, (int32_t)light->color.r,
+        (int32_t)light->color.g, (int32_t)light->color.b, shadowlight,
+        strict_pvs);
+    float score = V_WeightedDlightScore(light->origin, light->radius, intensity,
+                                        shadowlight, strict_pvs, key, now_ms);
+
+    r_dlight_requested++;
+    if (shadowlight) {
+        r_dlight_shadow_requested++;
+        if (strict_pvs)
+            r_dlight_shadow_strict_requested++;
+    }
+
     int slot = V_ReserveDlightSlot(score);
-    if (slot < 0)
+    if (slot < 0) {
+        r_dlight_dropped++;
         return;
+    }
 
     dl = &r_dlights[slot];
+    memset(dl, 0, sizeof(*dl));
     r_dlight_scores[slot] = score;
+    r_dlight_keys[slot] = key;
     VectorCopy(light->origin, dl->origin);
     dl->radius = light->radius;
     dl->intensity = intensity;
@@ -209,11 +357,22 @@ void V_AddLightEx(cl_shadow_light_t *light)
     dl->color[2] = light->color.b / 255.f;
 
     if (light->coneangle) {
+        dl->light_type = DLIGHT_SPOT;
         VectorCopy(light->conedirection, dl->cone);
+        if (VectorLengthSquared(dl->cone) < 1e-6f)
+            VectorSet(dl->cone, 0.0f, 0.0f, -1.0f);
+        else
+            VectorNormalize(dl->cone);
         dl->cone[3] = DEG2RAD(light->coneangle);
         dl->conecos = cosf(dl->cone[3]);
         cone_to_bounding_sphere(dl->origin, dl->cone, dl->radius, dl->cone[3], dl->conecos, sinf(dl->cone[3]), dl->sphere);
+
+        dl->spot.emission_profile = DLIGHT_SPOT_EMISSION_PROFILE_FALLOFF;
+        VectorCopy(dl->cone, dl->spot.direction);
+        dl->spot.cos_total_width = dl->conecos;
+        dl->spot.cos_falloff_start = cosf(dl->cone[3] * 0.8f);
     } else {
+        dl->light_type = DLIGHT_SPHERE;
         dl->conecos = 0;
         VectorCopy(dl->origin, dl->sphere);
         dl->sphere[3] = dl->radius;
@@ -222,10 +381,16 @@ void V_AddLightEx(cl_shadow_light_t *light)
     dl->fade[0] = light->fade_start;
     dl->fade[1] = light->fade_end;
     dl->shadow = DL_SHADOW_NONE;
-    if (light->resolution > 0 && cl_shadowlights && cl_shadowlights->integer
-        && R_SupportsPerPixelLighting()) {
+    if (shadowlight) {
         dl->shadow = DL_SHADOW_LIGHT;
     }
+
+    V_DlightStickyTouch(key, now_ms);
+}
+
+void V_AddLightEx(cl_shadow_light_t *light)
+{
+    V_AddLightExVis(light, true);
 }
 
 /*
@@ -238,13 +403,23 @@ void V_AddLight(const vec3_t org, float intensity, float r, float g, float b)
 {
     dlight_t    *dl;
 
-    float score = V_DlightScore(org, intensity, 1.0f);
+    const uint32_t now_ms = Sys_Milliseconds();
+    const uint32_t key = V_DlightBuildKey(
+        org, intensity, 1.0f, Q_rint(r * 255.0f), Q_rint(g * 255.0f),
+        Q_rint(b * 255.0f), false, true);
+    float score = V_WeightedDlightScore(org, intensity, 1.0f, false, true, key,
+                                        now_ms);
+    r_dlight_requested++;
     int slot = V_ReserveDlightSlot(score);
-    if (slot < 0)
+    if (slot < 0) {
+        r_dlight_dropped++;
         return;
+    }
 
     dl = &r_dlights[slot];
+    memset(dl, 0, sizeof(*dl));
     r_dlight_scores[slot] = score;
+    r_dlight_keys[slot] = key;
     VectorCopy(org, dl->origin);
     dl->radius = intensity;
     dl->intensity = 1.0f;
@@ -256,6 +431,9 @@ void V_AddLight(const vec3_t org, float intensity, float r, float g, float b)
     VectorCopy(dl->origin, dl->sphere);
     dl->sphere[3] = dl->radius;
     dl->shadow = DL_SHADOW_DYNAMIC;
+    dl->light_type = DLIGHT_SPHERE;
+
+    V_DlightStickyTouch(key, now_ms);
 }
 
 /*
@@ -352,6 +530,7 @@ static void V_TestLights(void)
     if (cl_testlights->integer != 1) {
         dl = &r_dlights[0];
         r_numdlights = 1;
+        memset(dl, 0, sizeof(*dl));
 
         VectorMA(cl.refdef.vieworg, 256, cl.v_forward, dl->origin);
         if (cl_testlights->integer == -1)
@@ -360,6 +539,7 @@ static void V_TestLights(void)
             VectorSet(dl->color, 1, 1, 1);
         dl->radius = 256;
         dl->intensity = 1.0f;
+        dl->light_type = DLIGHT_SPHERE;
         return;
     }
 
@@ -380,6 +560,7 @@ static void V_TestLights(void)
         dl->color[2] = (((i % 6) + 1) & 4) >> 2;
         dl->radius = 200;
         dl->intensity = 1.0f;
+        dl->light_type = DLIGHT_SPHERE;
     }
 }
 
@@ -491,6 +672,24 @@ static void V_SetLightLevel(void)
             cl.lightlevel = 150.0f * shadelight[2];
         }
     }
+}
+
+static inline void V_SetDebugCvarInt(cvar_t *var, int value)
+{
+    if (!var)
+        return;
+    Cvar_SetByVar(var, va("%d", value), FROM_CODE);
+}
+
+static void V_UpdateDlightDebugCvars(void)
+{
+    V_SetDebugCvarInt(cl_dlight_debug_requested, r_dlight_requested);
+    V_SetDebugCvarInt(cl_dlight_debug_selected, r_numdlights);
+    V_SetDebugCvarInt(cl_dlight_debug_cap, MAX_DLIGHTS);
+    V_SetDebugCvarInt(cl_dlight_debug_dropped, r_dlight_dropped);
+    V_SetDebugCvarInt(cl_dlight_debug_shadow_requested, r_dlight_shadow_requested);
+    V_SetDebugCvarInt(cl_dlight_debug_shadow_strict_requested,
+                      r_dlight_shadow_strict_requested);
 }
 
 /*
@@ -669,6 +868,8 @@ void V_RenderView(void)
             Vector4Clear(cl.refdef.damage_blend);
         }
 
+        V_UpdateDlightDebugCvars();
+
         cl.refdef.num_entities = r_numentities;
         cl.refdef.entities = r_entities;
         cl.refdef.num_particles = r_numparticles;
@@ -803,6 +1004,27 @@ void V_Init(void)
     cl_add_blend = Cvar_Get("cl_blend", "1", 0);
     cl_add_blend->changed = cl_add_blend_changed;
     cl_menu_bokeh_blur = Cvar_Get("cl_menu_bokeh_blur", "0.85", CVAR_ARCHIVE);
+    cl_dlight_shadowlight_priority =
+        Cvar_Get("cl_dlight_shadowlight_priority", "1.15", CVAR_ARCHIVE);
+    cl_dlight_shadowlight_strict_pvs_priority = Cvar_Get(
+        "cl_dlight_shadowlight_strict_pvs_priority", "1.35", CVAR_ARCHIVE);
+    cl_dlight_sticky_ms =
+        Cvar_Get("cl_dlight_sticky_ms", "250", CVAR_ARCHIVE);
+    cl_dlight_sticky_boost =
+        Cvar_Get("cl_dlight_sticky_boost", "1.25", CVAR_ARCHIVE);
+    cl_dlight_debug_requested =
+        Cvar_Get("cl_dlight_debug_requested", "0", CVAR_NOARCHIVE);
+    cl_dlight_debug_selected =
+        Cvar_Get("cl_dlight_debug_selected", "0", CVAR_NOARCHIVE);
+    cl_dlight_debug_cap =
+        Cvar_Get("cl_dlight_debug_cap", "0", CVAR_NOARCHIVE);
+    cl_dlight_debug_dropped =
+        Cvar_Get("cl_dlight_debug_dropped", "0", CVAR_NOARCHIVE);
+    cl_dlight_debug_shadow_requested = Cvar_Get(
+        "cl_dlight_debug_shadow_requested", "0", CVAR_NOARCHIVE);
+    cl_dlight_debug_shadow_strict_requested = Cvar_Get(
+        "cl_dlight_debug_shadow_strict_requested", "0", CVAR_NOARCHIVE);
+    memset(r_dlight_sticky, 0, sizeof(r_dlight_sticky));
 
     cl_adjustfov = Cvar_Get("cl_adjustfov", "1", CVAR_ROM);
 }

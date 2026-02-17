@@ -86,15 +86,12 @@ static void write_block(sizebuf_t *buf, glStateBits_t bits) {
        vec2 u_scroll; vec4 u_fog_color; vec4 u_heightfog_start;
        vec4 u_heightfog_end; float u_heightfog_density;
        float u_heightfog_falloff; float u_refract_scale; float u_refract_pad;
-       vec4 u_dof_params; vec4 u_vieworg; vec4 u_shadow_params;
-       vec4 u_shadow_params2; vec4 u_shadow_params3; vec4 u_shadow_params4;
+       vec4 u_dof_params; vec4 u_vieworg;
        vec4 u_crt_params; vec4 u_crt_params2; vec4 u_crt_texel;
        vec4 u_postfx_bloom; vec4 u_postfx_bloom2; vec4 u_postfx_hdr;
        vec4 u_postfx_color; vec4 u_postfx_tint; vec4 u_postfx_auto;
        vec4 u_postfx_split_shadow; vec4 u_postfx_split_highlight;
-       vec4 u_postfx_split_params; vec4 u_postfx_lut; vec4 u_viewdir;
-       vec4 u_sun_dir; vec4 u_sun_color; vec4 u_csm_splits; vec4 u_csm_params;)
-  GLSF("mat4 u_csm_matrix[" STRINGIFY(MAX_CSM_CASCADES) "];\n");
+       vec4 u_postfx_split_params; vec4 u_postfx_lut; vec4 u_viewdir;)
   GLSF("};\n");
 }
 
@@ -104,7 +101,6 @@ static void write_dynamic_light_block(sizebuf_t *buf) {
     float radius;
     vec4 color;
     vec4 cone;
-    vec4 shadow;
   };)
   GLSF("#define DLIGHT_CUTOFF 64\n");
   GLSF("layout(std140) uniform DynamicLights {\n");
@@ -115,572 +111,36 @@ static void write_dynamic_light_block(sizebuf_t *buf) {
 }
 
 static void write_dynamic_lights(sizebuf_t *buf) {
-  GLSL(
-      float shadow_hash(vec3 p) {
-        return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  GLSL(vec3 calc_dynamic_lights() {
+    vec3 shade = vec3(0);
+
+    for (int i = 0; i < num_dlights; i++) {
+      vec3 light_dir = dlights[i].position - v_world_pos;
+      float dist = length(light_dir);
+      float radius = dlights[i].radius + DLIGHT_CUTOFF;
+      float len = max(radius - dist - DLIGHT_CUTOFF, 0.0) / radius;
+      vec3 dir = light_dir / max(dist, 1.0);
+      float lambert;
+
+      if (dlights[i].color.r < 0.0)
+        lambert = 1.0;
+      else
+        lambert = max(dot(v_norm, dir), 0.0);
+
+      vec3 result = ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
+
+      if (dlights[i].cone.w != 0.0) {
+        float mag = -dot(dir, dlights[i].cone.xyz);
+        result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - dlights[i].cone.w)), 0.0);
       }
 
-      mat2 shadow_rotate(float angle) {
-        float s = sin(angle);
-        float c = cos(angle);
-        return mat2(c, -s, s, c);
-      }
-
-      float shadow_compare(vec2 uv, float layer, float depth, float bias) {
-        vec2 clamped_uv = clamp(uv, 0.0, 1.0);
-        float stored = texture(u_shadowmap, vec3(clamped_uv, layer)).r;
-        return depth - bias <= stored ? 1.0 : 0.0;
-      }
-
-      float shadow_vsm(vec2 uv, float layer, float depth, float bias,
-                       float bleed, float min_var) {
-        vec2 clamped_uv = clamp(uv, 0.0, 1.0);
-        vec2 moments = texture(u_shadowmap, vec3(clamped_uv, layer)).rg;
-        float mean = moments.x;
-        float mean2 = moments.y;
-        float depth_bias = depth - bias;
-        float d = depth_bias - mean;
-        float variance = max(mean2 - mean * mean, min_var);
-        float p = variance / (variance + d * d);
-        float result = depth_bias <= mean ? 1.0 : p;
-        if (bleed > 0.0)
-          result = clamp((result - bleed) / (1.0 - bleed), 0.0, 1.0);
-        return result;
-      }
-
-      float shadow_evsm(vec2 uv, float layer, float depth, float bias,
-                        float exponent, float bleed, float min_var) {
-        vec2 clamped_uv = clamp(uv, 0.0, 1.0);
-        vec2 moments = texture(u_shadowmap, vec3(clamped_uv, layer)).rg;
-        float depth_bias = depth - bias;
-        float warped = exp(min(exponent * depth_bias, 80.0));
-        float mean = moments.x;
-        float mean2 = moments.y;
-        float d = warped - mean;
-        float variance = max(mean2 - mean * mean, min_var);
-        float p = variance / (variance + d * d);
-        float result = warped <= mean ? 1.0 : p;
-        if (bleed > 0.0)
-          result = clamp((result - bleed) / (1.0 - bleed), 0.0, 1.0);
-        return result;
-      }
-
-      float shadow_pcf(vec2 uv, float layer, float depth, float bias,
-                       float texel, int quality) {
-        if (texel <= 0.0 || quality <= 0)
-          return shadow_compare(uv, layer, depth, bias);
-
-        if (quality == 1) {
-          vec2 o = vec2(texel);
-          float shadow = 0.0;
-          shadow += shadow_compare(uv + vec2(-o.x, -o.y), layer, depth, bias);
-          shadow += shadow_compare(uv + vec2(o.x, -o.y), layer, depth, bias);
-          shadow += shadow_compare(uv + vec2(-o.x, o.y), layer, depth, bias);
-          shadow += shadow_compare(uv + vec2(o.x, o.y), layer, depth, bias);
-          return shadow * 0.25;
-        }
-
-        if (quality == 2) {
-          float shadow = 0.0;
-          for (int y = -1; y <= 1; y++) {
-            for (int x = -1; x <= 1; x++) {
-              shadow += shadow_compare(uv + vec2(float(x), float(y)) * texel,
-                                       layer, depth, bias);
-            }
-          }
-          return shadow / 9.0;
-        }
-
-        float shadow = 0.0;
-        for (int y = 0; y < 4; y++) {
-          float oy = float(y) - 1.5;
-          for (int x = 0; x < 4; x++) {
-            float ox = float(x) - 1.5;
-            shadow +=
-                shadow_compare(uv + vec2(ox, oy) * texel, layer, depth, bias);
-          }
-        }
-        return shadow * 0.0625;
-      }
-
-      const vec2 pcss_offsets[16] = vec2[16](
-          vec2(-0.613, 0.354), vec2(0.170, -0.676), vec2(0.476, 0.168),
-          vec2(-0.415, -0.354), vec2(-0.070, 0.726), vec2(0.656, -0.140),
-          vec2(-0.243, -0.761), vec2(0.780, 0.524), vec2(-0.907, -0.090),
-          vec2(0.267, 0.918), vec2(-0.674, 0.605), vec2(0.097, -0.222),
-          vec2(-0.003, 0.102), vec2(0.540, 0.839), vec2(-0.824, 0.273),
-          vec2(0.919, -0.451));
-
-      float shadow_pcss(vec2 uv, float layer, float depth, float bias,
-                        float texel, float softness, int blocker_samples,
-                        int filter_samples) {
-        if (texel <= 0.0 || softness <= 0.0)
-          return shadow_compare(uv, layer, depth, bias);
-
-        int blockers = 0;
-        float avg_blocker = 0.0;
-        float angle = shadow_hash(vec3(uv, depth)) * 6.2831853;
-        mat2 rot = shadow_rotate(angle);
-        float search_radius = texel * softness * 2.0;
-
-        for (int i = 0; i < 16; i++) {
-          if (i >= blocker_samples)
-            break;
-          vec2 offset = rot * pcss_offsets[i] * search_radius;
-          float sample_depth =
-              texture(u_shadowmap, vec3(clamp(uv + offset, 0.0, 1.0), layer)).r;
-          if (sample_depth < depth - bias) {
-            avg_blocker += sample_depth;
-            blockers++;
-          }
-        }
-
-        if (blockers == 0)
-          return 1.0;
-
-        avg_blocker /= float(blockers);
-        float penumbra = (depth - avg_blocker) / max(avg_blocker, 0.0001);
-        float filter_radius = max(texel, penumbra * softness * texel);
-
-        float shadow = 0.0;
-        int samples = max(filter_samples, 1);
-        for (int i = 0; i < 16; i++) {
-          if (i >= samples)
-            break;
-          vec2 offset = rot * pcss_offsets[i] * filter_radius;
-          shadow += shadow_compare(uv + offset, layer, depth, bias);
-        }
-
-        return shadow / float(min(samples, 16));
-      }
-
-      float shadow_compare_csm(vec2 uv, float layer, float depth, float bias) {
-        float stored = texture(u_shadowmap_csm, vec3(uv, layer)).r;
-        return depth - bias <= stored ? 1.0 : 0.0;
-      }
-
-      float shadow_vsm_csm(vec2 uv, float layer, float depth, float bias,
-                           float bleed, float min_var) {
-        vec2 moments = texture(u_shadowmap_csm, vec3(uv, layer)).rg;
-        float mean = moments.x;
-        float mean2 = moments.y;
-        float depth_bias = depth - bias;
-        float d = depth_bias - mean;
-        float variance = max(mean2 - mean * mean, min_var);
-        float p = variance / (variance + d * d);
-        float result = depth_bias <= mean ? 1.0 : p;
-        if (bleed > 0.0)
-          result = clamp((result - bleed) / (1.0 - bleed), 0.0, 1.0);
-        return result;
-      }
-
-      float shadow_evsm_csm(vec2 uv, float layer, float depth, float bias,
-                            float exponent, float bleed, float min_var) {
-        vec2 moments = texture(u_shadowmap_csm, vec3(uv, layer)).rg;
-        float depth_bias = depth - bias;
-        float warped = exp(min(exponent * depth_bias, 80.0));
-        float mean = moments.x;
-        float mean2 = moments.y;
-        float d = warped - mean;
-        float variance = max(mean2 - mean * mean, min_var);
-        float p = variance / (variance + d * d);
-        float result = warped <= mean ? 1.0 : p;
-        if (bleed > 0.0)
-          result = clamp((result - bleed) / (1.0 - bleed), 0.0, 1.0);
-        return result;
-      }
-
-      float shadow_pcf_csm(vec2 uv, float layer, float depth, float bias,
-                           float texel, int quality) {
-        if (texel <= 0.0 || quality <= 0)
-          return shadow_compare_csm(uv, layer, depth, bias);
-
-        if (quality == 1) {
-          vec2 o = vec2(texel);
-          float shadow = 0.0;
-          shadow +=
-              shadow_compare_csm(uv + vec2(-o.x, -o.y), layer, depth, bias);
-          shadow +=
-              shadow_compare_csm(uv + vec2(o.x, -o.y), layer, depth, bias);
-          shadow +=
-              shadow_compare_csm(uv + vec2(-o.x, o.y), layer, depth, bias);
-          shadow += shadow_compare_csm(uv + vec2(o.x, o.y), layer, depth, bias);
-          return shadow * 0.25;
-        }
-
-        if (quality == 2) {
-          float shadow = 0.0;
-          for (int y = -1; y <= 1; y++) {
-            for (int x = -1; x <= 1; x++) {
-              shadow += shadow_compare_csm(
-                  uv + vec2(float(x), float(y)) * texel, layer, depth, bias);
-            }
-          }
-          return shadow / 9.0;
-        }
-
-        float shadow = 0.0;
-        for (int y = 0; y < 4; y++) {
-          float oy = float(y) - 1.5;
-          for (int x = 0; x < 4; x++) {
-            float ox = float(x) - 1.5;
-            shadow += shadow_compare_csm(uv + vec2(ox, oy) * texel, layer,
-                                         depth, bias);
-          }
-        }
-        return shadow * 0.0625;
-      }
-
-      float shadow_pcss_csm(vec2 uv, float layer, float depth, float bias,
-                            float texel, float softness, int blocker_samples,
-                            int filter_samples) {
-        if (texel <= 0.0 || softness <= 0.0)
-          return shadow_compare_csm(uv, layer, depth, bias);
-
-        int blockers = 0;
-        float avg_blocker = 0.0;
-        float angle = shadow_hash(vec3(uv, depth)) * 6.2831853;
-        mat2 rot = shadow_rotate(angle);
-        float search_radius = texel * softness * 2.0;
-
-        for (int i = 0; i < 16; i++) {
-          if (i >= blocker_samples)
-            break;
-          vec2 offset = rot * pcss_offsets[i] * search_radius;
-          float sample_depth =
-              texture(u_shadowmap_csm, vec3(uv + offset, layer)).r;
-          if (sample_depth < depth - bias) {
-            avg_blocker += sample_depth;
-            blockers++;
-          }
-        }
-
-        if (blockers == 0)
-          return 1.0;
-
-        avg_blocker /= float(blockers);
-        float penumbra = (depth - avg_blocker) / max(avg_blocker, 0.0001);
-        float filter_radius = max(texel, penumbra * softness * texel);
-
-        float shadow = 0.0;
-        int samples = max(filter_samples, 1);
-        for (int i = 0; i < 16; i++) {
-          if (i >= samples)
-            break;
-          vec2 offset = rot * pcss_offsets[i] * filter_radius;
-          shadow += shadow_compare_csm(uv + offset, layer, depth, bias);
-        }
-
-        return shadow / float(min(samples, 16));
-      }
-
-      vec2 shadow_cube_uv(vec3 dir, out float face) {
-        vec3 adir = abs(dir);
-        vec2 uv;
-        if (adir.x >= adir.y && adir.x >= adir.z) {
-          if (dir.x > 0.0) {
-            face = 0.0;
-            uv = vec2(-dir.z, dir.y) / adir.x;
-          } else {
-            face = 1.0;
-            uv = vec2(dir.z, dir.y) / adir.x;
-          }
-        } else if (adir.y >= adir.x && adir.y >= adir.z) {
-          if (dir.y > 0.0) {
-            face = 2.0;
-            uv = vec2(dir.x, -dir.z) / adir.y;
-          } else {
-            face = 3.0;
-            uv = vec2(dir.x, dir.z) / adir.y;
-          }
-        } else {
-          if (dir.z > 0.0) {
-            face = 4.0;
-            uv = vec2(dir.x, dir.y) / adir.z;
-          } else {
-            face = 5.0;
-            uv = vec2(-dir.x, dir.y) / adir.z;
-          }
-        }
-        return uv * 0.5 + 0.5;
-      }
-
-      float shadow_point(vec3 light_dir, float dist, float radius,
-                         float shadow_index, float bias, int method) {
-        if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
-          return 1.0;
-
-        float face;
-        vec2 uv = shadow_cube_uv(light_dir / max(dist, 1.0), face);
-        float layer = shadow_index * 6.0 + face;
-        float depth = dist / radius;
-        float base_texel = u_shadow_params.x;
-        float softness = max(u_shadow_params.z, 0.0);
-        float texel = base_texel * softness;
-        int quality = int(u_shadow_params2.y + 0.5);
-        int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
-        int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
-
-        if (method == 4)
-          return shadow_pcss(uv, layer, depth, bias, base_texel, softness,
-                             blocker_samples, filter_samples);
-
-        if (method == 3)
-          return shadow_evsm(uv, layer, depth, bias, u_shadow_params3.z,
-                             u_shadow_params2.z, u_shadow_params2.w);
-
-        if (method == 2)
-          return shadow_vsm(uv, layer, depth, bias, u_shadow_params2.z,
-                            u_shadow_params2.w);
-
-        if (method == 1)
-          return shadow_pcf(uv, layer, depth, bias, texel, quality);
-
-        return shadow_compare(uv, layer, depth, bias);
-      }
-
-      float shadow_spot(vec3 light_vec, float dist, float radius,
-                        float shadow_index, vec3 spot_dir, float spot_cos,
-                        float bias, int method) {
-        if (shadow_index < 0.0 || u_shadow_params.x <= 0.0)
-          return 1.0;
-
-        vec3 dir = light_vec / max(dist, 1.0);
-        vec3 forward = normalize(spot_dir);
-        float proj = dot(dir, forward);
-        if (proj <= 0.0)
-          return 1.0;
-
-        vec3 basis_up =
-            abs(forward.z) > 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
-        vec3 right = normalize(cross(basis_up, forward));
-        vec3 up = cross(forward, right);
-
-        float spot_sin = sqrt(max(1.0 - spot_cos * spot_cos, 0.0));
-        float inv_tan = spot_cos / max(spot_sin, 0.0001);
-        vec2 proj_uv =
-            vec2(dot(dir, right), dot(dir, up)) * (inv_tan / max(proj, 0.001));
-        vec2 uv = proj_uv * 0.5 + 0.5;
-
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
-          return 1.0;
-
-        float layer = shadow_index * 6.0;
-        float depth = dist / radius;
-        float base_texel = u_shadow_params.x;
-        float softness = max(u_shadow_params.z, 0.0);
-        float texel = base_texel * softness;
-        int quality = int(u_shadow_params2.y + 0.5);
-        int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
-        int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
-
-        if (method == 4)
-          return shadow_pcss(uv, layer, depth, bias, base_texel, softness,
-                             blocker_samples, filter_samples);
-
-        if (method == 3)
-          return shadow_evsm(uv, layer, depth, bias, u_shadow_params3.z,
-                             u_shadow_params2.z, u_shadow_params2.w);
-
-        if (method == 2)
-          return shadow_vsm(uv, layer, depth, bias, u_shadow_params2.z,
-                            u_shadow_params2.w);
-
-        if (method == 1)
-          return shadow_pcf(uv, layer, depth, bias, texel, quality);
-
-        return shadow_compare(uv, layer, depth, bias);
-      }
-
-      float shadow_csm(vec3 world_pos, float bias) {
-        int cascades = int(u_csm_params.y + 0.5);
-        if (cascades <= 0 || u_csm_params.x <= 0.0)
-          return 1.0;
-
-        float view_depth = dot(world_pos - u_vieworg.xyz, u_viewdir.xyz);
-        if (view_depth < 0.0)
-          return 1.0;
-
-        int cascade = 0;
-        int next_cascade = -1;
-        float blend = 0.0;
-        float split_next = u_csm_splits.x;
-
-        if (view_depth < u_csm_splits.x) {
-          cascade = 0;
-          split_next = u_csm_splits.x;
-        } else if (view_depth < u_csm_splits.y) {
-          cascade = 1;
-          split_next = u_csm_splits.y;
-        } else if (view_depth < u_csm_splits.z) {
-          cascade = 2;
-          split_next = u_csm_splits.z;
-        } else {
-          cascade = 3;
-        }
-
-        if (cascade >= cascades)
-          cascade = cascades - 1;
-
-        if (cascade < cascades - 1) {
-          float fade_range = split_next * u_csm_params.z;
-          if (view_depth > split_next - fade_range) {
-            next_cascade = cascade + 1;
-            blend = (view_depth - (split_next - fade_range)) /
-                    max(fade_range, 0.001);
-            blend = clamp(blend, 0.0, 1.0);
-          }
-        }
-
-        vec4 shadow_pos = u_csm_matrix[cascade] * vec4(world_pos, 1.0);
-        vec3 proj = shadow_pos.xyz / shadow_pos.w;
-
-        float shadow = 1.0;
-        if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0 &&
-            proj.z >= 0.0 && proj.z <= 1.0) {
-          float layer = float(cascade);
-          float shadow_depth = proj.z;
-          float base_texel = u_csm_params.x;
-          float softness = max(u_shadow_params.z, 0.0);
-          float texel = base_texel * softness;
-          int method = int(u_shadow_params2.x + 0.5);
-          int quality = int(u_shadow_params2.y + 0.5);
-          int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
-          int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
-
-          if (method == 4)
-            shadow =
-                shadow_pcss_csm(proj.xy, layer, shadow_depth, bias, base_texel,
-                                softness, blocker_samples, filter_samples);
-          else if (method == 3)
-            shadow = shadow_evsm_csm(proj.xy, layer, shadow_depth, bias,
-                                     u_shadow_params3.z, u_shadow_params2.z,
-                                     u_shadow_params2.w);
-          else if (method == 2)
-            shadow = shadow_vsm_csm(proj.xy, layer, shadow_depth, bias,
-                                    u_shadow_params2.z, u_shadow_params2.w);
-          else if (method == 1)
-            shadow = shadow_pcf_csm(proj.xy, layer, shadow_depth, bias, texel,
-                                    quality);
-          else
-            shadow = shadow_compare_csm(proj.xy, layer, shadow_depth, bias);
-        }
-
-        if (next_cascade != -1 && blend > 0.0) {
-          vec4 shadow_pos2 = u_csm_matrix[next_cascade] * vec4(world_pos, 1.0);
-          vec3 proj2 = shadow_pos2.xyz / shadow_pos2.w;
-          float shadow2 = 1.0;
-          if (proj2.x >= 0.0 && proj2.x <= 1.0 && proj2.y >= 0.0 &&
-              proj2.y <= 1.0 && proj2.z >= 0.0 && proj2.z <= 1.0) {
-            float layer = float(next_cascade);
-            float shadow_depth = proj2.z;
-            float base_texel = u_csm_params.x;
-            float softness = max(u_shadow_params.z, 0.0);
-            float texel = base_texel * softness;
-            int method = int(u_shadow_params2.x + 0.5);
-            int quality = int(u_shadow_params2.y + 0.5);
-            int blocker_samples = int(clamp(u_shadow_params4.x, 1.0, 16.0));
-            int filter_samples = int(clamp(u_shadow_params4.y, 1.0, 16.0));
-
-            if (method == 4)
-              shadow2 = shadow_pcss_csm(proj2.xy, layer, shadow_depth, bias,
-                                        base_texel, softness, blocker_samples,
-                                        filter_samples);
-            else if (method == 3)
-              shadow2 = shadow_evsm_csm(proj2.xy, layer, shadow_depth, bias,
-                                        u_shadow_params3.z, u_shadow_params2.z,
-                                        u_shadow_params2.w);
-            else if (method == 2)
-              shadow2 = shadow_vsm_csm(proj2.xy, layer, shadow_depth, bias,
-                                       u_shadow_params2.z, u_shadow_params2.w);
-            else if (method == 1)
-              shadow2 = shadow_pcf_csm(proj2.xy, layer, shadow_depth, bias,
-                                       texel, quality);
-            else
-              shadow2 = shadow_compare_csm(proj2.xy, layer, shadow_depth, bias);
-          }
-          shadow = mix(shadow, shadow2, blend);
-        }
-
-        if (u_shadow_params4.w > 1.5) {
-          float f = float(cascade) * 0.25;
-          if (next_cascade != -1)
-            f = mix(f, float(next_cascade) * 0.25, blend);
-          if (fract(gl_FragCoord.x * 0.5 + gl_FragCoord.y * 0.5) > 0.5)
-            shadow *= 0.5;
-          shadow = clamp(shadow + f * 0.2, 0.0, 1.0);
-        }
-
-        return shadow;
-      }
-
-      vec3 calc_dynamic_lights() {
-        vec3 shade = vec3(0);
-        vec3 receiver_pos = v_world_pos + v_norm * u_shadow_params3.y;
-
-        for (int i = 0; i < num_dlights; i++) {
-          vec3 base_light_pos = dlights[i].position;
-          float light_cone = dlights[i].cone.w;
-
-          vec3 shadow_vec = receiver_pos - base_light_pos;
-          float shadow_dist = length(shadow_vec);
-
-          vec3 light_pos = base_light_pos;
-          if (light_cone == 0.0 && dlights[i].shadow.x < 0.0)
-            light_pos += v_norm * 16.0;
-
-          vec3 light_dir = light_pos - v_world_pos;
-          float dist = length(light_dir);
-          float radius = dlights[i].radius + DLIGHT_CUTOFF;
-          float len = max(radius - dist - DLIGHT_CUTOFF, 0.0) / radius;
-          vec3 dir = light_dir / max(dist, 1.0);
-          float lambert;
-
-          if (dlights[i].color.r < 0.0f)
-            lambert = 1.0f;
-          else
-            lambert = max(dot(v_norm, dir), 0.0);
-          vec3 result =
-              ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
-          float bias =
-              (u_shadow_params.y + u_shadow_params3.x * (1.0 - lambert)) *
-              u_shadow_params4.z;
-          int method = int(u_shadow_params2.x + 0.5);
-          if (method == 4 && dlights[i].shadow.z < 0.5)
-            method = 1;
-
-          if (light_cone != 0.0) {
-            float mag = -dot(dir, dlights[i].cone.xyz);
-            result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - light_cone)), 0.0);
-          }
-
-          if (dlights[i].shadow.y > 0.5) {
-            result *= shadow_spot(shadow_vec, shadow_dist, radius,
-                                  dlights[i].shadow.x, dlights[i].cone.xyz,
-                                  light_cone, bias, method);
-          } else {
-            result *= shadow_point(shadow_vec, shadow_dist, radius,
-                                   dlights[i].shadow.x, bias, method);
-          }
-
-          shade += result;
-        }
-
-        if (u_sun_dir.w > 0.5 && u_sun_color.a > 0.0) {
-          vec3 sun_dir = normalize(u_sun_dir.xyz);
-          float lambert = max(dot(v_norm, sun_dir), 0.0);
-          if (lambert > 0.0) {
-            float bias =
-                (u_shadow_params.y + u_shadow_params3.x * (1.0 - lambert)) *
-                u_shadow_params4.z;
-            float shadow = shadow_csm(receiver_pos, bias);
-            shade += u_sun_color.rgb * u_sun_color.a * lambert * shadow;
-          }
-        }
-
-        return shade;
-      })
+      shade += result;
+    }
+
+    return shade;
+  })
 }
+
 static void write_shadedot(sizebuf_t *buf) {
   GLSL(float shadedot(vec3 normal) {
     float d = dot(normal, u_shadedir);
@@ -692,7 +152,7 @@ static void write_shadedot(sizebuf_t *buf) {
 
 #if USE_MD5
 static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
-  const bool shadow = bits & GLS_SHADOWMAP;
+  const bool shadow = false;
 
   GLSL(
       struct Joint {
@@ -718,8 +178,7 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
     GLSL(in vec2 a_tc; out vec2 v_tc; out vec4 v_color;)
   }
 
-  if (bits &
-      (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
+  if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(out vec3 v_world_pos;)
   if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(out vec3 v_norm;)
@@ -763,8 +222,7 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & GLS_MESH_SHELL)
     GLSL(out_pos += out_norm * u_shellscale;)
 
-  if (bits &
-      (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
+  if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(v_world_pos = (m_model * vec4(out_pos, 1.0)).xyz;)
   if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(v_norm = normalize((mat3(m_model) * out_norm).xyz);)
@@ -784,7 +242,7 @@ static void write_getnormal(sizebuf_t *buf) {
 }
 
 static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
-  const bool shadow = bits & GLS_SHADOWMAP;
+  const bool shadow = false;
 
   GLSL(in ivec4 a_new_pos;)
 
@@ -795,8 +253,7 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
     GLSL(in vec2 a_tc; out vec2 v_tc; out vec4 v_color;)
   }
 
-  if (bits &
-      (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
+  if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(out vec3 v_world_pos;)
   if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(out vec3 v_norm;)
@@ -858,8 +315,7 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
       GLSL(v_norm = normalize((mat3(m_model) * norm).xyz);)
   }
 
-  if (bits &
-      (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT | GLS_SHADOWMAP))
+  if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(v_world_pos = (m_model * vec4(pos, 1.0)).xyz;)
 
   GLSL(gl_Position = m_proj * m_view * m_model * vec4(pos, 1.0);)
@@ -879,16 +335,6 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits) {
 
   if (bits & GLS_MESH_MD2) {
     write_mesh_shader(buf, bits);
-    return;
-  }
-
-  if (bits & GLS_SHADOWMAP) {
-    GLSL(in vec4 a_pos;)
-    GLSL(out vec3 v_world_pos;)
-    GLSF("void main() {\n");
-    GLSL(v_world_pos = (m_model * a_pos).xyz;)
-    GLSL(gl_Position = m_proj * m_view * m_model * a_pos;)
-    GLSF("}\n");
     return;
   }
 
@@ -1056,32 +502,6 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & GLS_UNIFORM_MASK)
     write_block(buf, bits);
 
-  if (bits & GLS_SHADOWMAP) {
-    GLSL(in vec3 v_world_pos;)
-    if (gl_config.ver_es)
-      GLSL(layout(location = 0))
-    GLSL(out vec4 o_color;)
-
-    GLSF("void main() {\n");
-    GLSL(float dist = length(v_world_pos - u_vieworg.xyz);)
-    GLSL(float depth = dist * u_shadow_params.w;)
-    GLSL(if (u_shadow_params3.w > 0.5) depth = gl_FragCoord.z;)
-    GLSL(int method = int(u_shadow_params2.x + 0.5);)
-    GLSL(
-        if (method == 3) {)
-        GLSL(    float e = max(u_shadow_params3.z, 1.0);)
-        GLSL(    float warp = exp(min(e * depth, 80.0));)
-        GLSL(    float warp2 = exp(min(2.0 * e * depth, 80.0));)
-        GLSL(    o_color = vec4(warp, warp2, 0.0, 1.0);)
-        GLSL(
-        } else {)
-        GLSL(    o_color = vec4(depth, depth * depth, 0.0, 1.0);)
-        GLSL(
-        })
-    GLSF("}\n");
-    return;
-  }
-
   if (bits & GLS_DYNAMIC_LIGHTS)
     write_dynamic_light_block(buf);
 
@@ -1120,11 +540,6 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits) {
 
   if (bits & GLS_GLOWMAP_ENABLE)
     GLSL(uniform sampler2D u_glowmap;)
-
-  if (bits & GLS_DYNAMIC_LIGHTS) {
-    GLSL(uniform sampler2DArray u_shadowmap;)
-    GLSL(uniform sampler2DArray u_shadowmap_csm;)
-  }
 
   if (!(bits & GLS_TEXTURE_REPLACE))
     GLSL(in vec4 v_color;)
@@ -1795,41 +1210,34 @@ static GLuint create_and_use_program(glStateBits_t bits) {
   }
 #endif
 
-  if (!(bits & GLS_SHADOWMAP)) {
-    if (bits & GLS_CLASSIC_SKY) {
-      bind_texture_unit(program, "u_texture1", TMU_TEXTURE);
-      bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
-    } else {
-      bind_texture_unit(program, "u_texture", TMU_TEXTURE);
-      if (bits & (GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER))
-        bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
-    }
-
-    if (bits & GLS_DOF) {
-      bind_texture_unit(program, "u_blur", TMU_LIGHTMAP);
-      bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
-    }
-
-    if (bits & GLS_LIGHTMAP_ENABLE)
-      bind_texture_unit(program, "u_lightmap", TMU_LIGHTMAP);
-
-    if (bits & GLS_GLOWMAP_ENABLE)
-      bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
-
-    if (bits & GLS_REFRACT_ENABLE)
-      bind_texture_unit(program, "u_refract", TMU_REFRACT);
-
-    if (bits & (GLS_POSTFX | GLS_EXPOSURE_UPDATE))
-      bind_texture_unit(program, "u_exposure", TMU_EXPOSURE);
-
-    if (bits & GLS_POSTFX)
-      bind_texture_unit(program, "u_lut", TMU_LUT);
-
-    if (bits & GLS_DYNAMIC_LIGHTS) {
-      bind_texture_unit(program, "u_shadowmap", TMU_SHADOWMAP);
-      bind_texture_unit(program, "u_shadowmap_csm", TMU_SHADOWMAP_CSM);
-    }
+  if (bits & GLS_CLASSIC_SKY) {
+    bind_texture_unit(program, "u_texture1", TMU_TEXTURE);
+    bind_texture_unit(program, "u_texture2", TMU_LIGHTMAP);
+  } else {
+    bind_texture_unit(program, "u_texture", TMU_TEXTURE);
+    if (bits & (GLS_BLOOM_OUTPUT | GLS_BLOOM_PREFILTER))
+      bind_texture_unit(program, "u_bloom", TMU_LIGHTMAP);
   }
+
+  if (bits & GLS_DOF) {
+    bind_texture_unit(program, "u_blur", TMU_LIGHTMAP);
+    bind_texture_unit(program, "u_depth", TMU_GLOWMAP);
+  }
+
+  if (bits & GLS_LIGHTMAP_ENABLE)
+    bind_texture_unit(program, "u_lightmap", TMU_LIGHTMAP);
+
+  if (bits & GLS_GLOWMAP_ENABLE)
+    bind_texture_unit(program, "u_glowmap", TMU_GLOWMAP);
+
+  if (bits & GLS_REFRACT_ENABLE)
+    bind_texture_unit(program, "u_refract", TMU_REFRACT);
+
+  if (bits & (GLS_POSTFX | GLS_EXPOSURE_UPDATE))
+    bind_texture_unit(program, "u_exposure", TMU_EXPOSURE);
+
+  if (bits & GLS_POSTFX)
+    bind_texture_unit(program, "u_lut", TMU_LUT);
 
   return program;
 
@@ -1933,14 +1341,6 @@ static void shader_load_lights(void) {
 
     const dlight_t *dl = &glr.fd.dlights[n];
 
-    // Shadow-designated static lights should not fall back to unshadowed
-    // shading when they did not receive a shadowmap slot this frame.
-    if (dl->shadow == DL_SHADOW_LIGHT && gl_shadowmaps && gl_shadowmaps->integer &&
-        gl_static.shadowmap_ok && glr.shadowmap_index[n] < 0) {
-      c.dlightsNotUsed++;
-      continue;
-    }
-
     vec3_t cull_origin;
     float cull_radius = GL_DlightCullRadius(dl, cull_origin);
     if (cull_radius <= 0.0f) {
@@ -1956,11 +1356,6 @@ static void shader_load_lights(void) {
       VectorCopy(dl->cone, gls.u_dlights.lights[i].cone);
     }
     gls.u_dlights.lights[i].cone[3] = dl->conecos;
-    gls.u_dlights.lights[i].shadow[0] = (float)glr.shadowmap_index[n];
-    gls.u_dlights.lights[i].shadow[1] = glr.shadowmap_is_spot[n] ? 1.0f : 0.0f;
-    gls.u_dlights.lights[i].shadow[2] =
-        glr.shadowmap_pcss[n] ? 1.0f : 0.0f;
-    gls.u_dlights.lights[i].shadow[3] = 0.0f;
 
     i++;
   }
@@ -2066,123 +1461,6 @@ static void shader_setup_3d(void) {
     VectorCopy(viewaxis[0], gls.u_block.viewdir);
     gls.u_block.viewdir[3] = 0.0f;
   }
-  if (gl_shadowmaps->integer && gl_static.shadowmap_ok &&
-      gl_static.shadowmap_size > 0) {
-    gls.u_block.shadow_params[0] = 1.0f / (float)gl_static.shadowmap_size;
-    gls.u_block.shadow_params[1] = gl_shadowmap_bias->value;
-    gls.u_block.shadow_params[2] = gl_shadowmap_softness->value;
-  } else {
-    gls.u_block.shadow_params[0] = 0.0f;
-    gls.u_block.shadow_params[1] = 0.0f;
-    gls.u_block.shadow_params[2] = 0.0f;
-  }
-  gls.u_block.shadow_params[3] = 0.0f;
-
-  if (gl_shadowmaps->integer && gl_static.shadowmap_ok &&
-      gl_static.shadowmap_size > 0) {
-    int method = (int)Cvar_ClampValue(gl_shadowmap_filter, 0, 4);
-    int quality = (int)Cvar_ClampValue(gl_shadowmap_quality, 0, 3);
-    float vsm_bleed = 0.2f;
-    float vsm_min_var = 0.001f;
-
-    switch (quality) {
-    case 0:
-      vsm_bleed = 0.3f;
-      vsm_min_var = 0.005f;
-      break;
-    case 1:
-      vsm_bleed = 0.2f;
-      vsm_min_var = 0.001f;
-      break;
-    case 2:
-      vsm_bleed = 0.1f;
-      vsm_min_var = 0.0005f;
-      break;
-    default:
-      vsm_bleed = 0.05f;
-      vsm_min_var = 0.0002f;
-      break;
-    }
-
-    if (gl_shadow_vsm_bleed && gl_shadow_vsm_bleed->value >= 0.0f)
-      vsm_bleed = gl_shadow_vsm_bleed->value;
-    if (gl_shadow_vsm_min_variance && gl_shadow_vsm_min_variance->value >= 0.0f)
-      vsm_min_var = gl_shadow_vsm_min_variance->value;
-
-    gls.u_block.shadow_params2[0] = (float)method;
-    gls.u_block.shadow_params2[1] = (float)quality;
-    gls.u_block.shadow_params2[2] = vsm_bleed;
-    gls.u_block.shadow_params2[3] = vsm_min_var;
-
-    gls.u_block.shadow_params3[0] =
-        gl_shadow_bias_slope ? gl_shadow_bias_slope->value : 0.0f;
-    gls.u_block.shadow_params3[1] =
-        gl_shadow_normal_offset ? gl_shadow_normal_offset->value : 0.0f;
-    gls.u_block.shadow_params3[2] =
-        gl_shadow_evsm_exponent ? gl_shadow_evsm_exponent->value : 0.0f;
-    gls.u_block.shadow_params3[3] = 0.0f;
-
-    gls.u_block.shadow_params4[0] = gl_shadow_pcss_blocker_samples
-                                        ? gl_shadow_pcss_blocker_samples->value
-                                        : 8.0f;
-    gls.u_block.shadow_params4[1] = gl_shadow_pcss_filter_samples
-                                        ? gl_shadow_pcss_filter_samples->value
-                                        : 16.0f;
-    gls.u_block.shadow_params4[2] =
-        gl_shadow_bias_scale ? gl_shadow_bias_scale->value : 1.0f;
-    gls.u_block.shadow_params4[3] =
-        gl_shadow_debug ? gl_shadow_debug->value : 0.0f;
-  } else {
-    gls.u_block.shadow_params2[0] = 0.0f;
-    gls.u_block.shadow_params2[1] = 0.0f;
-    gls.u_block.shadow_params2[2] = 0.0f;
-    gls.u_block.shadow_params2[3] = 0.0f;
-
-    gls.u_block.shadow_params3[0] = 0.0f;
-    gls.u_block.shadow_params3[1] = 0.0f;
-    gls.u_block.shadow_params3[2] = 0.0f;
-    gls.u_block.shadow_params3[3] = 0.0f;
-
-    gls.u_block.shadow_params4[0] = 0.0f;
-    gls.u_block.shadow_params4[1] = 0.0f;
-    gls.u_block.shadow_params4[2] = 0.0f;
-    gls.u_block.shadow_params4[3] = 0.0f;
-  }
-
-  if (gl_shadowmaps->integer && gl_static.sun_shadowmap_ok &&
-      glr.csm_cascades > 0) {
-    VectorCopy(glr.sun_dir, gls.u_block.sun_dir);
-    gls.u_block.sun_dir[3] = 1.0f;
-    VectorCopy(glr.sun_color, gls.u_block.sun_color);
-    gls.u_block.sun_color[3] = glr.sun_intensity;
-    Vector4Copy(glr.csm_splits, gls.u_block.csm_splits);
-    gls.u_block.csm_params[0] = gl_static.sun_shadowmap_size > 0
-                                    ? 1.0f / (float)gl_static.sun_shadowmap_size
-                                    : 0.0f;
-    gls.u_block.csm_params[1] = (float)glr.csm_cascades;
-    gls.u_block.csm_params[2] = gl_csm_blend ? gl_csm_blend->value : 0.0f;
-    gls.u_block.csm_params[3] = 0.0f;
-    memcpy(gls.u_block.csm_matrix, glr.csm_matrix,
-           sizeof(gls.u_block.csm_matrix));
-  } else {
-    Vector4Clear(gls.u_block.sun_dir);
-    Vector4Clear(gls.u_block.sun_color);
-    Vector4Clear(gls.u_block.csm_splits);
-    Vector4Clear(gls.u_block.csm_params);
-    memset(gls.u_block.csm_matrix, 0, sizeof(gls.u_block.csm_matrix));
-  }
-
-  if (gl_shadowmaps->integer && gl_static.shadowmap_ok &&
-      gl_static.shadowmap_tex)
-    GL_BindTexture(TMU_SHADOWMAP, gl_static.shadowmap_tex);
-  else if (gls.texnums[TMU_SHADOWMAP])
-    GL_BindTexture(TMU_SHADOWMAP, 0);
-
-  if (gl_shadowmaps->integer && gl_static.sun_shadowmap_ok &&
-      gl_static.sun_shadowmap_tex && glr.csm_cascades > 0)
-    GL_BindTexture(TMU_SHADOWMAP_CSM, gl_static.sun_shadowmap_tex);
-  else if (gls.texnums[TMU_SHADOWMAP_CSM])
-    GL_BindTexture(TMU_SHADOWMAP_CSM, 0);
 
   gls.u_block_dirty = true;
 }
@@ -2193,12 +1471,6 @@ static void shader_disable_state(void) {
 
   qglActiveTexture(GL_TEXTURE0 + TMU_EXPOSURE);
   qglBindTexture(GL_TEXTURE_2D, 0);
-
-  qglActiveTexture(GL_TEXTURE0 + TMU_SHADOWMAP);
-  qglBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-
-  qglActiveTexture(GL_TEXTURE0 + TMU_SHADOWMAP_CSM);
-  qglBindTexture(GL_TEXTURE_2D_ARRAY, 0);
 
   qglActiveTexture(GL_TEXTURE2);
   qglBindTexture(GL_TEXTURE_2D, 0);
@@ -2329,10 +1601,7 @@ static void shader_shutdown(void) {
 }
 
 static bool shader_use_per_pixel_lighting(void) {
-  if (gl_per_pixel_lighting->integer)
-    return true;
-
-  return gl_shadowmaps && gl_shadowmaps->integer;
+  return gl_per_pixel_lighting->integer != 0;
 }
 
 const glbackend_t backend_shader = {

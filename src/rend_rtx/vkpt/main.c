@@ -24,6 +24,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.h"
 #include "common/files.h"
 #include "common/math.h"
+#include "renderer/ui_scale.h"
 #include "client/video.h"
 #include "refresh/debug.h"
 #include "refresh/refresh.h"
@@ -57,8 +58,23 @@ cvar_t *cvar_profiler_samples = NULL;
 cvar_t *cvar_profiler_scale = NULL;
 cvar_t *cvar_hdr = NULL;
 cvar_t *cvar_vsync = NULL;
+cvar_t *cvar_rtx_lightmaps = NULL;
+cvar_t *cvar_rtx_lightgrid = NULL;
+cvar_t *cvar_r_fullbright = NULL;
+static cvar_t *cvar_rtx_draw_debug = NULL;
+static cvar_t *cvar_rtx_dlight_shadowlight_priority = NULL;
+static cvar_t *cvar_rtx_dlight_sticky_ms = NULL;
+static cvar_t *cvar_rtx_dlight_sticky_boost = NULL;
+static cvar_t *cvar_rtx_debug_dlights_total = NULL;
+static cvar_t *cvar_rtx_debug_dlights_uploaded = NULL;
+static cvar_t *cvar_rtx_debug_dlights_cap = NULL;
+static cvar_t *cvar_rtx_debug_dlights_dropped = NULL;
+static cvar_t *cvar_rtx_debug_shadowlights_total = NULL;
+static cvar_t *cvar_rtx_debug_shadowlights_uploaded = NULL;
 static cvar_t *vid_hdr_legacy = NULL;
 static cvar_t *vid_vsync_legacy = NULL;
+static cvar_t *vk_lightmaps_legacy = NULL;
+static cvar_t *vk_lightgrid_legacy = NULL;
 cvar_t *cvar_pt_caustics = NULL;
 cvar_t *cvar_pt_enable_nodraw = NULL;
 cvar_t *cvar_pt_enable_surface_lights = NULL;
@@ -118,13 +134,16 @@ cvar_t *cvar_dump_image = NULL;
 typedef struct {
 	cvar_t **primary;
 	cvar_t **legacy;
+	xchanged_t changed;
 } vk_cvar_alias_pair_t;
 
 static bool vk_cvar_alias_syncing;
 
 static vk_cvar_alias_pair_t vk_cvar_aliases[] = {
-	{ &cvar_vsync, &vid_vsync_legacy },
-	{ &cvar_hdr, &vid_hdr_legacy },
+	{ &cvar_vsync, &vid_vsync_legacy, NULL },
+	{ &cvar_hdr, &vid_hdr_legacy, NULL },
+	{ &cvar_rtx_lightmaps, &vk_lightmaps_legacy, NULL },
+	{ &cvar_rtx_lightgrid, &vk_lightgrid_legacy, NULL },
 };
 
 static void vk_cvar_alias_changed(cvar_t *self)
@@ -144,11 +163,15 @@ static void vk_cvar_alias_changed(cvar_t *self)
 
 		if (self == primary) {
 			Cvar_SetByVar(legacy, primary->string, FROM_CODE);
+			if (pair->changed)
+				pair->changed(primary);
 			break;
 		}
 
 		if (self == legacy) {
 			Cvar_SetByVar(primary, legacy->string, FROM_CODE);
+			if (pair->changed)
+				pair->changed(primary);
 			break;
 		}
 	}
@@ -201,6 +224,11 @@ UBO_CVAR_LIST
 #undef UBO_CVAR_DO
 
 static bsp_t *bsp_world_model;
+
+const bsp_t *vkpt_get_world_bsp(void)
+{
+	return bsp_world_model;
+}
 
 static bool temporal_frame_valid = false;
 
@@ -287,15 +315,7 @@ static void viewsize_changed(cvar_t *self)
 
 float R_ClampScale(cvar_t *var)
 {
-	if (!var) {
-		return 1.0f;
-	}
-
-	if (var->value) {
-		return 1.0f / Cvar_ClampValue(var, 1.0f, 10.0f);
-	}
-
-	return 1.0f;
+	return R_UIScaleClamp(r_config.width, r_config.height, var);
 }
 
 static void pt_nearest_changed(cvar_t* self)
@@ -1726,7 +1746,12 @@ vkpt_load_shader_from_basedir(const char *basedir, const char *path, char **data
 	if (Q_concat(fullpath, sizeof(fullpath), basedir, "/", BASEGAME, "/", path) >= sizeof(fullpath))
 		return false;
 
-	fp = Q_fopen(fullpath, "rb");
+	/*
+	 * External renderers are separate DLLs on Windows. Using engine-side
+	 * Q_fopen here and then renderer-side stdio calls crosses CRT boundaries
+	 * and can fail fast with invalid FILE handles.
+	 */
+	fp = fopen(fullpath, "rb");
 	if (!fp)
 		return false;
 
@@ -2100,47 +2125,250 @@ static void fill_model_instance(ModelInstance* instance, const entity_t* entity,
 		instance->material |= MATERIAL_FLAG_LIGHT;
 }
 
-static void add_dlight_spot(const dlight_t* light, DynLightData* dynlight_data)
+#define RTX_DLIGHT_STICKY_CACHE_SIZE 256
+typedef struct {
+	uint32_t key;
+	uint32_t last_seen_ms;
+} rtx_dlight_sticky_entry_t;
+typedef struct {
+	int index;
+	float score;
+	uint32_t key;
+} rtx_dlight_pick_t;
+static rtx_dlight_sticky_entry_t rtx_dlight_sticky[RTX_DLIGHT_STICKY_CACHE_SIZE];
+
+static inline void RTX_SetDebugCounter(cvar_t *var, int value)
+{
+	if (!var)
+		return;
+	Cvar_SetByVar(var, va("%d", value), FROM_CODE);
+}
+
+static inline uint32_t RTX_DlightHashStep(uint32_t hash, int32_t value)
+{
+	hash ^= (uint32_t)value;
+	hash *= 16777619u;
+	return hash;
+}
+
+static uint32_t RTX_DlightKey(const dlight_t *light)
+{
+	if (!light)
+		return 0;
+
+	uint32_t hash = 2166136261u;
+	hash = RTX_DlightHashStep(hash, Q_rint(light->origin[0] * 0.25f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->origin[1] * 0.25f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->origin[2] * 0.25f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->radius * 0.5f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->intensity * 16.0f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->color[0] * 255.0f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->color[1] * 255.0f));
+	hash = RTX_DlightHashStep(hash, Q_rint(light->color[2] * 255.0f));
+	hash = RTX_DlightHashStep(hash, light->shadow);
+	hash = RTX_DlightHashStep(hash, light->light_type);
+	return hash ? hash : 1u;
+}
+
+static float RTX_DlightStickyMultiplier(uint32_t key, uint32_t now_ms)
+{
+	if (!key || !cvar_rtx_dlight_sticky_ms || !cvar_rtx_dlight_sticky_boost)
+		return 1.0f;
+
+	const int sticky_ms = max(0, cvar_rtx_dlight_sticky_ms->integer);
+	const float sticky_boost = max(1.0f, cvar_rtx_dlight_sticky_boost->value);
+	if (sticky_ms <= 0 || sticky_boost <= 1.0f)
+		return 1.0f;
+
+	for (int i = 0; i < RTX_DLIGHT_STICKY_CACHE_SIZE; i++) {
+		const rtx_dlight_sticky_entry_t *entry = &rtx_dlight_sticky[i];
+		if (entry->key != key)
+			continue;
+		if ((uint32_t)(now_ms - entry->last_seen_ms) <= (uint32_t)sticky_ms)
+			return sticky_boost;
+		return 1.0f;
+	}
+
+	return 1.0f;
+}
+
+static void RTX_DlightStickyTouch(uint32_t key, uint32_t now_ms)
+{
+	if (!key)
+		return;
+
+	int empty = -1;
+	int oldest = 0;
+	uint32_t oldest_age = 0;
+	for (int i = 0; i < RTX_DLIGHT_STICKY_CACHE_SIZE; i++) {
+		rtx_dlight_sticky_entry_t *entry = &rtx_dlight_sticky[i];
+		if (entry->key == key) {
+			entry->last_seen_ms = now_ms;
+			return;
+		}
+		if (!entry->key && empty < 0) {
+			empty = i;
+			continue;
+		}
+		uint32_t age = now_ms - entry->last_seen_ms;
+		if (age > oldest_age) {
+			oldest_age = age;
+			oldest = i;
+		}
+	}
+
+	int slot = empty >= 0 ? empty : oldest;
+	rtx_dlight_sticky[slot].key = key;
+	rtx_dlight_sticky[slot].last_seen_ms = now_ms;
+}
+
+static float RTX_DlightScore(const dlight_t *light, uint32_t key, uint32_t now_ms,
+							 const vec3_t vieworg)
+{
+	float dist2 = DistanceSquared(light->origin, vieworg);
+	float score = (light->intensity * max(light->radius, 1.0f)) / (dist2 + 1.0f);
+
+	if (light->shadow == DL_SHADOW_LIGHT && cvar_rtx_dlight_shadowlight_priority) {
+		score *= max(0.01f, cvar_rtx_dlight_shadowlight_priority->value);
+	}
+
+	score *= RTX_DlightStickyMultiplier(key, now_ms);
+	return score;
+}
+
+static int RTX_DlightPickSort(const void *a, const void *b)
+{
+	const rtx_dlight_pick_t *pa = (const rtx_dlight_pick_t *)a;
+	const rtx_dlight_pick_t *pb = (const rtx_dlight_pick_t *)b;
+	if (pa->score < pb->score)
+		return 1;
+	if (pa->score > pb->score)
+		return -1;
+	if (pa->index > pb->index)
+		return 1;
+	if (pa->index < pb->index)
+		return -1;
+	return 0;
+}
+
+static void add_dlight_spot(const dlight_t *light, DynLightData *dynlight_data)
 {
 	// Copy spot data
 	VectorCopy(light->spot.direction, dynlight_data->spot_direction);
-	switch(light->spot.emission_profile)
-	{
+	switch (light->spot.emission_profile) {
 	case DLIGHT_SPOT_EMISSION_PROFILE_FALLOFF:
 		dynlight_data->type |= DYNLIGHT_SPOT_EMISSION_PROFILE_FALLOFF << 16;
-		dynlight_data->spot_data = floatToHalf(light->spot.cos_total_width) | (floatToHalf(light->spot.cos_falloff_start) << 16);
+		dynlight_data->spot_data = floatToHalf(light->spot.cos_total_width) |
+								   (floatToHalf(light->spot.cos_falloff_start)
+									<< 16);
 		break;
 	case DLIGHT_SPOT_EMISSION_PROFILE_AXIS_ANGLE_TEXTURE:
-		dynlight_data->type |= DYNLIGHT_SPOT_EMISSION_PROFILE_AXIS_ANGLE_TEXTURE << 16;
-		dynlight_data->spot_data = floatToHalf(light->spot.total_width) | (light->spot.texture << 16);
+		dynlight_data->type |=
+			DYNLIGHT_SPOT_EMISSION_PROFILE_AXIS_ANGLE_TEXTURE << 16;
+		dynlight_data->spot_data =
+			floatToHalf(light->spot.total_width) | (light->spot.texture << 16);
+		break;
+	default:
 		break;
 	}
 }
 
-static void
-add_dlights(const dlight_t* lights, int num_lights, QVKUniformBuffer_t* ubo)
+static void add_dlights(const dlight_t *lights, int num_lights, QVKUniformBuffer_t *ubo)
 {
 	ubo->num_dyn_lights = 0;
+	const bool debug_enabled = cvar_rtx_draw_debug && cvar_rtx_draw_debug->integer > 0;
+	if (!lights || num_lights <= 0) {
+		if (debug_enabled) {
+			RTX_SetDebugCounter(cvar_rtx_debug_dlights_total, max(0, num_lights));
+			RTX_SetDebugCounter(cvar_rtx_debug_dlights_uploaded, 0);
+			RTX_SetDebugCounter(cvar_rtx_debug_dlights_cap, MAX_LIGHT_SOURCES);
+			RTX_SetDebugCounter(cvar_rtx_debug_dlights_dropped, 0);
+			RTX_SetDebugCounter(cvar_rtx_debug_shadowlights_total, 0);
+			RTX_SetDebugCounter(cvar_rtx_debug_shadowlights_uploaded, 0);
+		}
+		return;
+	}
 
-	for (int i = 0; i < num_lights; i++)
-	{
-		const dlight_t* light = lights + i;
+	const int total_lights = max(0, num_lights);
+	const int cap = MAX_LIGHT_SOURCES;
+	const uint32_t now_ms = Sys_Milliseconds();
+	int shadowlights_total = 0;
+	vec3_t vieworg = { 0.f, 0.f, 0.f };
+	if (vkpt_refdef.fd)
+		VectorCopy(vkpt_refdef.fd->vieworg, vieworg);
 
-		DynLightData* dynlight_data = ubo->dyn_light_data + ubo->num_dyn_lights;
+	rtx_dlight_pick_t picks[MAX_LIGHT_SOURCES];
+	int pick_count = 0;
+
+	for (int i = 0; i < total_lights; i++) {
+		const dlight_t *light = lights + i;
+		if (light->shadow == DL_SHADOW_LIGHT)
+			shadowlights_total++;
+		if (light->radius <= 0.0f || light->intensity <= 0.0f)
+			continue;
+
+		uint32_t key = RTX_DlightKey(light);
+		float score = RTX_DlightScore(light, key, now_ms, vieworg);
+
+		if (pick_count < cap) {
+			picks[pick_count].index = i;
+			picks[pick_count].score = score;
+			picks[pick_count].key = key;
+			pick_count++;
+			continue;
+		}
+
+		int worst = 0;
+		for (int j = 1; j < pick_count; j++) {
+			if (picks[j].score < picks[worst].score)
+				worst = j;
+		}
+
+		if (score <= picks[worst].score)
+			continue;
+
+		picks[worst].index = i;
+		picks[worst].score = score;
+		picks[worst].key = key;
+	}
+
+	qsort(picks, pick_count, sizeof(picks[0]), RTX_DlightPickSort);
+
+	int shadowlights_uploaded = 0;
+	for (int i = 0; i < pick_count; i++) {
+		const dlight_t *light = lights + picks[i].index;
+		DynLightData *dynlight_data = ubo->dyn_light_data + ubo->num_dyn_lights;
+
 		VectorCopy(light->origin, dynlight_data->center);
 		VectorScale(light->color, light->intensity / 25.f, dynlight_data->color);
 		dynlight_data->radius = light->radius;
-		switch(light->light_type) {
-		case DLIGHT_SPHERE:
-			dynlight_data->type = DYNLIGHT_SPHERE;
-			break;
+
+		switch (light->light_type) {
 		case DLIGHT_SPOT:
 			dynlight_data->type = DYNLIGHT_SPOT;
 			add_dlight_spot(light, dynlight_data);
 			break;
+		case DLIGHT_SPHERE:
+		default:
+			dynlight_data->type = DYNLIGHT_SPHERE;
+			break;
 		}
 
+		if (light->shadow == DL_SHADOW_LIGHT)
+			shadowlights_uploaded++;
+		RTX_DlightStickyTouch(picks[i].key, now_ms);
 		ubo->num_dyn_lights++;
+	}
+
+	if (debug_enabled) {
+		RTX_SetDebugCounter(cvar_rtx_debug_dlights_total, total_lights);
+		RTX_SetDebugCounter(cvar_rtx_debug_dlights_uploaded, ubo->num_dyn_lights);
+		RTX_SetDebugCounter(cvar_rtx_debug_dlights_cap, cap);
+		RTX_SetDebugCounter(cvar_rtx_debug_dlights_dropped,
+							max(0, total_lights - ubo->num_dyn_lights));
+		RTX_SetDebugCounter(cvar_rtx_debug_shadowlights_total, shadowlights_total);
+		RTX_SetDebugCounter(cvar_rtx_debug_shadowlights_uploaded,
+							shadowlights_uploaded);
 	}
 }
 
@@ -3371,7 +3599,11 @@ R_RenderFrame(const refdef_t *fd)
 	evaluate_reference_mode(&ref_mode);
 	evaluate_taa_settings(&ref_mode);
 	
-	qvk.frame_menu_mode = cl_paused->integer == 1 && render_world;
+	qvk.frame_menu_mode = render_world &&
+		fd->dof_rect_enabled &&
+		fd->dof_rect.right > fd->dof_rect.left &&
+		fd->dof_rect.bottom > fd->dof_rect.top &&
+		fd->dof_strength > 0.0f;
 
 	int new_world_anim_frame = (int)(fd->time * 2);
 	bool update_world_animations = (new_world_anim_frame != world_anim_frame);
@@ -4123,6 +4355,16 @@ R_Init(bool total)
 		if (!vid || !vid->init || !vid->init()) {
 			return false;
 		}
+
+		/*
+		 * External renderer initialization runs before client-side
+		 * CL_InitRenderer() performs its usual vid->set_mode() call.
+		 * Ensure we have a real window extent before creating swapchain-
+		 * sized VKPT images, otherwise several image allocations are zero-sized.
+		 */
+		if (vid->set_mode) {
+			vid->set_mode();
+		}
 	}
 
 	if (!vk_query_native_window(&qvk.native_window)) {
@@ -4139,6 +4381,32 @@ R_Init(bool total)
 	vid_vsync_legacy = Cvar_Get("vid_vsync", cvar_vsync->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
 	cvar_hdr = Cvar_Get("vk_hdr", "0", CVAR_ARCHIVE);
 	vid_hdr_legacy = Cvar_Get("vid_hdr", cvar_hdr->string, CVAR_ARCHIVE | CVAR_NOARCHIVE);
+	cvar_rtx_lightmaps = Cvar_Get("rtx_lightmaps", "1", CVAR_ARCHIVE | CVAR_RENDERER);
+	vk_lightmaps_legacy = Cvar_Get("vk_lightmaps", cvar_rtx_lightmaps->string, CVAR_ARCHIVE | CVAR_RENDERER | CVAR_NOARCHIVE);
+	cvar_rtx_lightgrid = Cvar_Get("rtx_lightgrid", "1", CVAR_ARCHIVE | CVAR_RENDERER);
+	vk_lightgrid_legacy = Cvar_Get("vk_lightgrid", cvar_rtx_lightgrid->string, CVAR_ARCHIVE | CVAR_RENDERER | CVAR_NOARCHIVE);
+	cvar_r_fullbright = Cvar_Get("r_fullbright", "0", CVAR_CHEAT);
+	cvar_rtx_draw_debug = Cvar_Get("rtx_draw_debug", "0", 0);
+	cvar_rtx_dlight_shadowlight_priority = Cvar_Get(
+		"rtx_dlight_shadowlight_priority", "1.35",
+		CVAR_ARCHIVE | CVAR_RENDERER);
+	cvar_rtx_dlight_sticky_ms =
+		Cvar_Get("rtx_dlight_sticky_ms", "250", CVAR_ARCHIVE | CVAR_RENDERER);
+	cvar_rtx_dlight_sticky_boost = Cvar_Get(
+		"rtx_dlight_sticky_boost", "1.25", CVAR_ARCHIVE | CVAR_RENDERER);
+	cvar_rtx_debug_dlights_total =
+		Cvar_Get("rtx_debug_dlights_total", "0", CVAR_NOARCHIVE);
+	cvar_rtx_debug_dlights_uploaded =
+		Cvar_Get("rtx_debug_dlights_uploaded", "0", CVAR_NOARCHIVE);
+	cvar_rtx_debug_dlights_cap =
+		Cvar_Get("rtx_debug_dlights_cap", "0", CVAR_NOARCHIVE);
+	cvar_rtx_debug_dlights_dropped =
+		Cvar_Get("rtx_debug_dlights_dropped", "0", CVAR_NOARCHIVE);
+	cvar_rtx_debug_shadowlights_total =
+		Cvar_Get("rtx_debug_shadowlights_total", "0", CVAR_NOARCHIVE);
+	cvar_rtx_debug_shadowlights_uploaded =
+		Cvar_Get("rtx_debug_shadowlights_uploaded", "0", CVAR_NOARCHIVE);
+	memset(rtx_dlight_sticky, 0, sizeof(rtx_dlight_sticky));
 	vk_cvar_alias_register();
 	cvar_pt_caustics = Cvar_Get("pt_caustics", "1", CVAR_ARCHIVE);
 	cvar_pt_enable_nodraw = Cvar_Get("pt_enable_nodraw", "0", 0);

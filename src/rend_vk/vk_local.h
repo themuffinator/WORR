@@ -52,9 +52,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 typedef struct vk_swapchain_s {
     VkSwapchainKHR handle;
     VkFormat format;
+    VkFormat depth_format;
     VkExtent2D extent;
     VkImage *images;
     VkImageView *views;
+    VkImage depth_image;
+    VkDeviceMemory depth_memory;
+    VkImageView depth_view;
     VkFramebuffer *framebuffers;
     VkCommandBuffer *command_buffers;
     uint32_t image_count;
@@ -72,6 +76,7 @@ typedef struct vk_context_s {
     VkSemaphore image_available;
     VkSemaphore render_finished;
     VkFence in_flight_fence;
+    bool frame_submitted;
     vk_swapchain_t swapchain;
 } vk_context_t;
 

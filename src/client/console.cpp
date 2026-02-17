@@ -553,7 +553,7 @@ void Con_Init(void) {
   con_font->changed = con_media_changed;
   con_fontscale = Cvar_Get("con_fontscale", "5", 0);
   con_fontscale->changed = con_media_changed;
-  con_fontsize = Cvar_Get("con_fontsize", "8", 0);
+  con_fontsize = Cvar_Get("con_fontsize", "6", 0);
   con_fontsize->changed = con_media_changed;
   con_background = Cvar_Get("con_background", "conback", 0);
   con_background->changed = con_media_changed;

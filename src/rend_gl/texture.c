@@ -35,7 +35,6 @@ static GLenum gl_post_depth_format;
 static GLenum gl_post_depth_type;
 static bool gl_hdr_warned;
 static bool gl_bloom_mrt_warned;
-static bool gl_dof_stencil_warned;
 
 static int upload_width;
 static int upload_height;
@@ -1658,143 +1657,29 @@ static bool GL_InitFramebuffersWithFormat(bool dof_active, bool crt_active, bool
     return true;
 }
 
-typedef struct {
-    bool dof_active;
-    bool bloom_mrt;
-} postfx_attempt_t;
-
-typedef struct {
-    GLenum internal_format;
-    GLenum format;
-    GLenum type;
-    const char *label;
-} depth_format_t;
-
-static bool GL_InitFramebuffersForFormat(bool dof_active, bool bloom_mrt, bool crt_active,
-                                         bool refract_active, bool postfx_active,
-                                         GLenum internal_format, GLenum format, GLenum type)
-{
-    postfx_attempt_t attempts[4];
-    int count = 0;
-    depth_format_t depth_formats[8];
-    int depth_count = 0;
-    bool allow_depth_stencil = r_dof_allow_stencil && r_dof_allow_stencil->integer;
-    bool dof_stencil_disallowed = false;
-
-    if (allow_depth_stencil)
-        gl_dof_stencil_warned = false;
-
-    attempts[count++] = (postfx_attempt_t){ dof_active, bloom_mrt };
-    if (bloom_mrt)
-        attempts[count++] = (postfx_attempt_t){ dof_active, false };
-    if (dof_active)
-        attempts[count++] = (postfx_attempt_t){ false, bloom_mrt };
-    if (dof_active && bloom_mrt)
-        attempts[count++] = (postfx_attempt_t){ false, false };
-
-    if (gl_config.depthbits > 16) {
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, "D24" };
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, "D16" };
-    } else {
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, "D16" };
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, "D24" };
-    }
-#ifdef GL_DEPTH_COMPONENT32F
-    depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, "D32F" };
-#endif
-    if (gl_config.stencilbits) {
-#ifdef GL_DEPTH24_STENCIL8
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, "D24S8" };
-#endif
-#if defined(GL_DEPTH32F_STENCIL8) && defined(GL_FLOAT_32_UNSIGNED_INT_24_8_REV)
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH32F_STENCIL8, GL_DEPTH_STENCIL, GL_FLOAT_32_UNSIGNED_INT_24_8_REV, "D32FS8" };
-#endif
-    }
-    if (depth_count == 0)
-        depth_formats[depth_count++] = (depth_format_t){ GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, "D16" };
-
-    for (int i = 0; i < count; i++) {
-        const postfx_attempt_t *attempt = &attempts[i];
-        if (attempt->dof_active) {
-            for (int depth_index = 0; depth_index < depth_count; depth_index++) {
-                const depth_format_t *depth = &depth_formats[depth_index];
-                if (!allow_depth_stencil && depth->format == GL_DEPTH_STENCIL) {
-                    dof_stencil_disallowed = true;
-                    continue;
-                }
-                if (GL_InitFramebuffersWithFormat(attempt->dof_active, crt_active, refract_active,
-                                                  postfx_active, attempt->bloom_mrt,
-                                                  internal_format, format, type,
-                                                  depth->internal_format, depth->format, depth->type)) {
-                    gl_static.postfx_dof = attempt->dof_active;
-                    gl_static.postfx_bloom_mrt = attempt->bloom_mrt;
-                    if (bloom_mrt && !attempt->bloom_mrt)
-                        Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
-                    if (dof_active && !attempt->dof_active) {
-                        if (dof_stencil_disallowed && !gl_dof_stencil_warned) {
-                            Com_WPrintf("PostFX: depth-stencil disallowed for DOF, disabling DOF.\n");
-                            gl_dof_stencil_warned = true;
-                        } else {
-                            Com_WPrintf("PostFX: DOF depth unsupported, disabling DOF.\n");
-                        }
-                    }
-                    if (dof_active && attempt->dof_active && depth_index > 0)
-                        Com_WPrintf("PostFX: depth format %s unsupported, using %s.\n",
-                                    depth_formats[0].label, depth->label);
-                    return true;
-                }
-            }
-        } else {
-            const depth_format_t *depth = &depth_formats[0];
-            if (GL_InitFramebuffersWithFormat(attempt->dof_active, crt_active, refract_active,
-                                              postfx_active, attempt->bloom_mrt,
-                                              internal_format, format, type,
-                                              depth->internal_format, depth->format, depth->type)) {
-                gl_static.postfx_dof = attempt->dof_active;
-                gl_static.postfx_bloom_mrt = attempt->bloom_mrt;
-                if (bloom_mrt && !attempt->bloom_mrt)
-                    Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
-                if (dof_active && !attempt->dof_active) {
-                    if (dof_stencil_disallowed && !gl_dof_stencil_warned) {
-                        Com_WPrintf("PostFX: depth-stencil disallowed for DOF, disabling DOF.\n");
-                        gl_dof_stencil_warned = true;
-                    } else {
-                        Com_WPrintf("PostFX: DOF depth unsupported, disabling DOF.\n");
-                    }
-                }
-                return true;
-            }
-        }
-    }
-
-    gl_static.postfx_dof = false;
-    gl_static.postfx_bloom_mrt = false;
-    return false;
-}
-
 bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
                          bool postfx_active, bool hdr_requested)
 {
-    bool bloom_mrt = gl_bloom->integer != 0;
+    bool bloom_mrt = gl_bloom->integer && GL_PostFxSupportsBloomMRT();
 
-    if (!gl_bloom->integer)
+    if (!gl_bloom->integer || bloom_mrt)
         gl_bloom_mrt_warned = false;
-
-    if (bloom_mrt && !GL_PostFxSupportsBloomMRT()) {
-        bloom_mrt = false;
-        if (!gl_bloom_mrt_warned) {
-            Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
-            gl_bloom_mrt_warned = true;
-        }
+    else if (!gl_bloom_mrt_warned) {
+        Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
+        gl_bloom_mrt_warned = true;
     }
 
     if (!hdr_requested)
         gl_hdr_warned = false;
 
     if (hdr_requested) {
-        if (GL_InitFramebuffersForFormat(dof_active, bloom_mrt, crt_active, refract_active,
-                                         postfx_active, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT)) {
+        if (GL_InitFramebuffersWithFormat(
+                dof_active, crt_active, refract_active, postfx_active, bloom_mrt,
+                GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, GL_DEPTH_COMPONENT24,
+                GL_DEPTH_COMPONENT, GL_UNSIGNED_INT)) {
             gl_static.hdr_active = true;
+            gl_static.postfx_bloom_mrt = bloom_mrt;
+            gl_static.postfx_dof = dof_active;
             gl_hdr_warned = false;
             return true;
         }
@@ -1806,266 +1691,12 @@ bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
     }
 
     gl_static.hdr_active = false;
-    if (GL_InitFramebuffersForFormat(dof_active, bloom_mrt, crt_active, refract_active,
-                                     postfx_active, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE))
-        return true;
-
-    Com_WPrintf("PostFX framebuffer initialization failed.\n");
-    return false;
-}
-
-typedef struct {
-    GLenum internal_format;
-    GLenum format;
-    GLenum type;
-    const char *label;
-} shadowmap_format_t;
-
-static bool GL_InitShadowmapsFormat(int size, int layers, const shadowmap_format_t *fmt)
-{
-    GL_ClearErrors();
-
-    GL_ShutdownShadowmaps();
-    GL_ShutdownSunShadowmaps();
-
-    qglGenTextures(1, &gl_static.shadowmap_tex);
-    qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.shadowmap_tex);
-    qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, fmt->internal_format, size, size, layers, 0, fmt->format, fmt->type, NULL);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (gl_config.caps & QGL_CAP_TEXTURE_MAX_LEVEL)
-        qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 0);
-
-    qglGenTextures(1, &gl_static.shadowmap_cache_tex);
-    qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.shadowmap_cache_tex);
-    qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, fmt->internal_format, size, size, layers, 0, fmt->format, fmt->type, NULL);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (gl_config.caps & QGL_CAP_TEXTURE_MAX_LEVEL)
-        qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 0);
-
-    qglGenFramebuffers(1, &gl_static.shadowmap_fbo);
-    qglGenRenderbuffers(1, &gl_static.shadowmap_depth);
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.shadowmap_fbo);
-    qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.shadowmap_tex, 0, 0);
-
-    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.shadowmap_depth);
-    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
-    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
-    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gl_static.shadowmap_depth);
-
-    {
-        static const GLenum draw_buffers[1] = { GL_COLOR_ATTACHMENT0 };
-        qglDrawBuffers(1, draw_buffers);
-    }
-
-    if (!GL_CheckFramebufferStatus(true, "FBO_SHADOWMAP", size, size,
-                                   fmt->format, fmt->type, fmt->internal_format)) {
-        GL_ShutdownShadowmaps();
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
-    }
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    gl_static.shadowmap_size = size;
-    gl_static.shadowmap_layers = layers;
-    gl_static.shadowmap_max_lights = layers / SHADOWMAP_FACE_COUNT;
-    gl_static.shadowmap_ok = true;
-    memset(gl_static.shadowmap_cache_dirty, 1, sizeof(gl_static.shadowmap_cache_dirty));
-    memset(gl_static.shadowmap_cache_origins, 0, sizeof(gl_static.shadowmap_cache_origins));
-    memset(gl_static.shadowmap_cache_radius, 0, sizeof(gl_static.shadowmap_cache_radius));
-    memset(gl_static.shadowmap_cache_cone, 0, sizeof(gl_static.shadowmap_cache_cone));
-    memset(gl_static.shadowmap_cache_is_spot, 0, sizeof(gl_static.shadowmap_cache_is_spot));
-    memset(gl_static.shadowmap_cache_caster_hash, 0, sizeof(gl_static.shadowmap_cache_caster_hash));
-    memset(gl_static.shadowmap_cache_caster_valid, 0, sizeof(gl_static.shadowmap_cache_caster_valid));
-    gl_static.shadowmap_cache_scene_hash = 0;
-    gl_static.shadowmap_cache_scene_valid = false;
-    gl_static.shadowmap_use_mipmaps = false;
-
-    return true;
-}
-
-static bool GL_InitSunShadowmapsFormat(int size, int layers, const shadowmap_format_t *fmt)
-{
-    GL_ClearErrors();
-
-    GL_ShutdownSunShadowmaps();
-
-    qglGenTextures(1, &gl_static.sun_shadowmap_tex);
-    qglBindTexture(GL_TEXTURE_2D_ARRAY, gl_static.sun_shadowmap_tex);
-    qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, fmt->internal_format, size, size, layers, 0, fmt->format, fmt->type, NULL);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (gl_config.caps & QGL_CAP_TEXTURE_MAX_LEVEL)
-        qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 0);
-
-    qglGenFramebuffers(1, &gl_static.sun_shadowmap_fbo);
-    qglGenRenderbuffers(1, &gl_static.sun_shadowmap_depth);
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, gl_static.sun_shadowmap_fbo);
-    qglFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_static.sun_shadowmap_tex, 0, 0);
-
-    qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.sun_shadowmap_depth);
-    qglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
-    qglBindRenderbuffer(GL_RENDERBUFFER, 0);
-    qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gl_static.sun_shadowmap_depth);
-
-    {
-        static const GLenum draw_buffers[1] = { GL_COLOR_ATTACHMENT0 };
-        qglDrawBuffers(1, draw_buffers);
-    }
-
-    if (!GL_CheckFramebufferStatus(true, "FBO_SUN_SHADOWMAP", size, size,
-                                   fmt->format, fmt->type, fmt->internal_format)) {
-        GL_ShutdownSunShadowmaps();
-        qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
-    }
-
-    qglBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    gl_static.sun_shadowmap_size = size;
-    gl_static.sun_shadowmap_cascades = layers;
-    gl_static.sun_shadowmap_ok = true;
-    gl_static.sun_shadowmap_use_mipmaps = false;
-
-    return true;
-}
-
-bool GL_InitShadowmaps(int size, int layers)
-{
-    if (!gl_static.use_shaders || !qglTexImage3D || !qglFramebufferTextureLayer)
-        return false;
-
-    if (size <= 0 || layers <= 0)
-        return false;
-
-    static const shadowmap_format_t formats[] = {
-        { GL_RG16F, GL_RG, GL_HALF_FLOAT, "RG16F" },
-        { GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, "RGBA16F" },
-        { GL_RG16, GL_RG, GL_UNSIGNED_SHORT, "RG16" },
-        { GL_RG8, GL_RG, GL_UNSIGNED_BYTE, "RG8" },
-        { GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, "RGBA8" }
-    };
-
-    for (size_t i = 0; i < q_countof(formats); i++) {
-        if (GL_InitShadowmapsFormat(size, layers, &formats[i])) {
-            if (i > 0) {
-                Com_WPrintf("Shadowmap format %s unavailable, using %s.\n",
-                            formats[0].label, formats[i].label);
-            }
-            return true;
-        }
-    }
-
-    Com_WPrintf("Shadowmap formats unavailable, disabling shadowmaps.\n");
-    return false;
-}
-
-bool GL_InitSunShadowmaps(int size, int cascades)
-{
-    if (!gl_static.use_shaders || !qglTexImage3D || !qglFramebufferTextureLayer)
-        return false;
-
-    if (size <= 0 || cascades <= 0)
-        return false;
-
-    static const shadowmap_format_t formats[] = {
-        { GL_RG16F, GL_RG, GL_HALF_FLOAT, "RG16F" },
-        { GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, "RGBA16F" },
-        { GL_RG16, GL_RG, GL_UNSIGNED_SHORT, "RG16" },
-        { GL_RG8, GL_RG, GL_UNSIGNED_BYTE, "RG8" },
-        { GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, "RGBA8" }
-    };
-
-    for (size_t i = 0; i < q_countof(formats); i++) {
-        if (GL_InitSunShadowmapsFormat(size, cascades, &formats[i])) {
-            if (i > 0) {
-                Com_WPrintf("Sun shadowmap format %s unavailable, using %s.\n",
-                            formats[0].label, formats[i].label);
-            }
-            return true;
-        }
-    }
-
-    Com_WPrintf("Sun shadowmap formats unavailable, disabling sun shadows.\n");
-    return false;
-}
-
-void GL_ShutdownShadowmaps(void)
-{
-    if (gls.texnums[TMU_SHADOWMAP] == gl_static.shadowmap_tex ||
-        gls.texnums[TMU_SHADOWMAP] == gl_static.shadowmap_cache_tex)
-        gls.texnums[TMU_SHADOWMAP] = 0;
-
-    if (gl_static.shadowmap_tex) {
-        qglDeleteTextures(1, &gl_static.shadowmap_tex);
-        gl_static.shadowmap_tex = 0;
-    }
-
-    if (gl_static.shadowmap_cache_tex) {
-        qglDeleteTextures(1, &gl_static.shadowmap_cache_tex);
-        gl_static.shadowmap_cache_tex = 0;
-    }
-
-    if (gl_static.shadowmap_fbo) {
-        qglDeleteFramebuffers(1, &gl_static.shadowmap_fbo);
-        gl_static.shadowmap_fbo = 0;
-    }
-
-    if (gl_static.shadowmap_depth) {
-        qglDeleteRenderbuffers(1, &gl_static.shadowmap_depth);
-        gl_static.shadowmap_depth = 0;
-    }
-
-    gl_static.shadowmap_size = 0;
-    gl_static.shadowmap_layers = 0;
-    gl_static.shadowmap_max_lights = 0;
-    gl_static.shadowmap_ok = false;
-    gl_static.shadowmap_use_mipmaps = false;
-    memset(gl_static.shadowmap_cache_dirty, 0, sizeof(gl_static.shadowmap_cache_dirty));
-    memset(gl_static.shadowmap_cache_origins, 0, sizeof(gl_static.shadowmap_cache_origins));
-    memset(gl_static.shadowmap_cache_radius, 0, sizeof(gl_static.shadowmap_cache_radius));
-    memset(gl_static.shadowmap_cache_cone, 0, sizeof(gl_static.shadowmap_cache_cone));
-    memset(gl_static.shadowmap_cache_is_spot, 0, sizeof(gl_static.shadowmap_cache_is_spot));
-    memset(gl_static.shadowmap_cache_caster_hash, 0, sizeof(gl_static.shadowmap_cache_caster_hash));
-    memset(gl_static.shadowmap_cache_caster_valid, 0, sizeof(gl_static.shadowmap_cache_caster_valid));
-    gl_static.shadowmap_cache_scene_hash = 0;
-    gl_static.shadowmap_cache_scene_valid = false;
-}
-
-void GL_ShutdownSunShadowmaps(void)
-{
-    if (gls.texnums[TMU_SHADOWMAP_CSM] == gl_static.sun_shadowmap_tex)
-        gls.texnums[TMU_SHADOWMAP_CSM] = 0;
-
-    if (gl_static.sun_shadowmap_tex) {
-        qglDeleteTextures(1, &gl_static.sun_shadowmap_tex);
-        gl_static.sun_shadowmap_tex = 0;
-    }
-
-    if (gl_static.sun_shadowmap_fbo) {
-        qglDeleteFramebuffers(1, &gl_static.sun_shadowmap_fbo);
-        gl_static.sun_shadowmap_fbo = 0;
-    }
-
-    if (gl_static.sun_shadowmap_depth) {
-        qglDeleteRenderbuffers(1, &gl_static.sun_shadowmap_depth);
-        gl_static.sun_shadowmap_depth = 0;
-    }
-
-    gl_static.sun_shadowmap_size = 0;
-    gl_static.sun_shadowmap_cascades = 0;
-    gl_static.sun_shadowmap_ok = false;
-    gl_static.sun_shadowmap_use_mipmaps = false;
+    gl_static.postfx_bloom_mrt = bloom_mrt;
+    gl_static.postfx_dof = dof_active;
+    return GL_InitFramebuffersWithFormat(
+        dof_active, crt_active, refract_active, postfx_active, bloom_mrt,
+        GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_DEPTH_COMPONENT24,
+        GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
 }
 
 static void gl_partshape_changed(cvar_t *self)
@@ -2201,8 +1832,6 @@ void GL_ShutdownImages(void)
     if (vid_gamma_legacy)
         vid_gamma_legacy->changed = NULL;
     gl_partshape->changed = NULL;
-
-    GL_ShutdownShadowmaps();
 
     // delete auto textures
     qglDeleteTextures(NUM_AUTO_TEXTURES, gl_static.texnums);

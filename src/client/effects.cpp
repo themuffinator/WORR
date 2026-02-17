@@ -1936,6 +1936,7 @@ void CL_AddShadowLights(void)
             continue;
 
         centity_t *ent = &cl_entities[entnum];
+        const bool strict_pvs = ent->serverframe == cl.frame.number;
         const entity_state_t *state = NULL;
         if (ent->serverframe)
             state = &ent->current;
@@ -1961,7 +1962,7 @@ void CL_AddShadowLights(void)
                 continue;
         }
 
-        V_AddLightEx(&cl.shadowdefs[i].light);
+        V_AddLightExVis(&cl.shadowdefs[i].light, strict_pvs);
     }
 }
 

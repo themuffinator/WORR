@@ -853,6 +853,9 @@ typedef struct maliasmesh_s {
 typedef struct {
     color_t     colors[2]; // 0 - actual color, 1 - transparency (for text drawing)
     float scale;
+	float base_scale;
+	float virtual_width;
+	float virtual_height;
 	float alpha_scale;
 } drawStatic_t;
 
@@ -884,6 +887,11 @@ static inline void end_perf_marker(VkCommandBuffer command_buffer, int index)
 #define END_PERF_MARKER(command_buffer, name)    end_perf_marker(command_buffer, name)
 
 extern cvar_t *cl_player_model;
+extern cvar_t *cvar_rtx_lightmaps;
+extern cvar_t *cvar_rtx_lightgrid;
+extern cvar_t *cvar_r_fullbright;
+
+const bsp_t *vkpt_get_world_bsp(void);
 
 void vkpt_draw_set_hud_alpha(float alpha);
 
