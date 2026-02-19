@@ -1278,7 +1278,8 @@ static void CG_DrawFPS(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, int3
     if (!cg_draw_fps || cg_draw_fps->integer <= 0)
         return;
 
-    constexpr float k_fps_line_height_px = 5.0f;
+    // Keep FPS text intentionally smaller than general HUD text.
+    constexpr float k_fps_line_height_px = 4.0f;
 
     const int fps_value = CG_UpdateFPSValue(isplit);
     const std::string text = G_Fmt("{} fps", fps_value).data();

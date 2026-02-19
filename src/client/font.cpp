@@ -19,12 +19,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/font.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
-#include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
-#include <list>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -35,61 +34,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/zone.h"
 #include "shared/shared.h"
 
-#if USE_SDL3_TTF
-#include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
+#ifdef max
+#undef max
 #endif
-#if USE_HARFBUZZ
-#include <hb.h>
-#include <hb-ot.h>
+#ifdef min
+#undef min
+#endif
+
+#if USE_SDL3_TTF
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_IMAGE_H
+#include FT_OUTLINE_H
 #endif
 
 enum font_kind_t { FONT_LEGACY, FONT_KFONT, FONT_TTF };
-enum font_metric_source_t { FONT_METRIC_NONE, FONT_METRIC_TTF, FONT_METRIC_HB };
-
-struct font_atlas_page_t {
-  qhandle_t handle = 0;
-  int width = 0;
-  int height = 0;
-  int next_x = 0;
-  int next_y = 0;
-  int row_height = 0;
-  byte *pixels = nullptr;
-  bool dirty = false;
-};
-
-struct font_glyph_t {
-  int page = -1;
-  int x = 0;
-  int y = 0;
-  int w = 0;
-  int h = 0;
-  float bearing_x = 0.0f;
-  float bearing_y = 0.0f;
-  float offset_x = 0.0f;
-  float offset_y = 0.0f;
-  int pad_top = 0;
-  int pad_bottom = 0;
-  int advance = 0;
-  bool oversized = false;
-  bool metrics_valid = false;
-  int metric_source = FONT_METRIC_NONE;
-};
-
-#if USE_HARFBUZZ
-struct font_shaped_run_t {
-  size_t start = 0;
-  size_t length = 0;
-  color_t color = COLOR_WHITE;
-};
-
-struct font_shaped_text_t {
-  std::string text;
-  std::vector<color_t> colors;
-  std::vector<font_shaped_run_t> runs;
-  bool use_colors = false;
-};
-#endif
 
 struct kfont_glyph_t {
   int x = 0;
@@ -98,36 +57,45 @@ struct kfont_glyph_t {
   int h = 0;
 };
 
-struct font_ttf_t {
 #if USE_SDL3_TTF
-  TTF_Font *font = nullptr;
+struct font_ttf_glyph_t {
+  bool valid = false;
+  int page = -1;
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+  int left = 0;
+  int top = 0;
+  int bottom = 0;
+  int x_skip = 0;
+};
+
+struct font_ttf_chunk_t {
+  bool empty = false;
+  std::array<font_ttf_glyph_t, 256> glyphs{};
+};
+
+struct font_ttf_page_t {
+  qhandle_t handle = 0;
+  int width = 0;
+  int height = 0;
+  byte *pixels = nullptr;
+};
+
+struct font_ttf_t {
+  FT_Face face = nullptr;
   void *data = nullptr;
   int data_size = 0;
   int pixel_height = 0;
-  int ascent = 0;
-  int line_skip = 0;
   int baseline = 0;
   int extent = 0;
-  int rendered_ascent = 0;
-  int rendered_descent = 0;
-  int rendered_extent = 0;
-  bool rendered_metrics_valid = false;
-  bool rendered_metrics_locked = false;
+  int line_skip = 0;
   int fixed_advance_units = 0;
-  std::unordered_map<uint32_t, font_glyph_t> glyphs;
-  std::list<uint32_t> lru;
-  std::unordered_map<uint32_t, std::list<uint32_t>::iterator> lru_index;
-  std::unordered_map<uint32_t, font_glyph_t> glyph_indices;
-  std::list<uint32_t> index_lru;
-  std::unordered_map<uint32_t, std::list<uint32_t>::iterator> index_lru_index;
-  std::vector<font_atlas_page_t> pages;
-#if USE_HARFBUZZ
-  hb_blob_t *hb_blob = nullptr;
-  hb_face_t *hb_face = nullptr;
-  hb_font_t *hb_font = nullptr;
-#endif
-#endif
+  std::array<font_ttf_chunk_t *, 0x110000 / 256> chunks{};
+  std::vector<font_ttf_page_t> pages;
 };
+#endif
 
 struct font_kfont_t {
   qhandle_t pic = 0;
@@ -148,7 +116,9 @@ struct font_s {
   int fixed_advance = 0;
   float letter_spacing = 0.0f;
   qhandle_t legacy_handle = 0;
+#if USE_SDL3_TTF
   font_ttf_t ttf;
+#endif
   font_kfont_t kfont;
   font_t *fallback_kfont = nullptr;
   bool registered = false;
@@ -156,50 +126,16 @@ struct font_s {
 
 static std::vector<font_t *> g_fonts;
 static int g_font_seq = 0;
-#if USE_SDL3_TTF
-static bool g_ttf_ready = false;
-#endif
 static cvar_t *cl_debug_fonts = nullptr;
-static cvar_t *cl_font_glyph_cache_size = nullptr;
 static cvar_t *cl_font_scale_boost = nullptr;
-static cvar_t *cl_font_ttf_hinting = nullptr;
-static cvar_t *cl_font_ttf_supersample = nullptr;
-static cvar_t *cl_font_ttf_metric_mode = nullptr;
-static cvar_t *cl_font_ttf_baseline_offset = nullptr;
-static cvar_t *cl_font_ttf_preload_max = nullptr;
-static cvar_t *cl_font_debug_draw = nullptr;
-static cvar_t *cl_font_debug_dump = nullptr;
-static cvar_t *cl_font_debug_match = nullptr;
-static cvar_t *cl_font_debug_metrics = nullptr;
-static cvar_t *cl_font_ttf_hb_snap = nullptr;
-static const int k_font_debug_draw_lines = 1;
-static const int k_font_debug_draw_bounds = 2;
-static const int k_font_debug_draw_advances = 4;
-static const int k_font_debug_draw_origins = 8;
-static const int k_font_debug_draw_outline = 16;
-
-static float font_scale_boost(void) {
-  if (!cl_font_scale_boost)
-    cl_font_scale_boost = Cvar_Get("cl_font_scale_boost", "1.5", CVAR_ARCHIVE);
-  return cl_font_scale_boost ? Cvar_ClampValue(cl_font_scale_boost, 0.5f, 4.0f)
-                             : 1.5f;
-}
-
-static float font_draw_scale(const font_t *font, int scale) {
-  if (!font)
-    return 1.0f;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  float pixel_scale = font->pixel_scale > 0.0f ? font->pixel_scale : 1.0f;
-  float scale_boost = font_scale_boost();
-
-  return (font->unit_scale * (float)draw_scale * scale_boost) /
-         pixel_scale;
-}
 
 #if USE_SDL3_TTF
-static const int k_atlas_size = 1024;
-static const int k_atlas_padding = 1;
+static cvar_t *cl_font_ttf_hinting = nullptr;
+static bool g_ttf_ready = false;
+static FT_Library g_ft_library = nullptr;
+static font_ttf_chunk_t g_ttf_null_chunk;
+static const int k_ttf_atlas_size = 512;
+static const int k_ttf_atlas_padding = 1;
 #endif
 
 static const char *font_safe_str(const char *value) {
@@ -221,621 +157,24 @@ static void font_debug_printf(const char *fmt, ...) {
   va_start(args, fmt);
   Q_vsnprintf(msg, sizeof(msg), fmt, args);
   va_end(args);
-
   Com_Printf("%s", msg);
 }
 
-static int font_glyph_cache_limit(void) {
-  if (!cl_font_glyph_cache_size)
-    cl_font_glyph_cache_size = Cvar_Get("cl_font_glyph_cache_size", "2000", 0);
-  return Cvar_ClampInteger(cl_font_glyph_cache_size, 0, 200000);
+static float font_scale_boost(void) {
+  if (!cl_font_scale_boost)
+    cl_font_scale_boost = Cvar_Get("cl_font_scale_boost", "1.5", CVAR_ARCHIVE);
+  return cl_font_scale_boost ? Cvar_ClampValue(cl_font_scale_boost, 0.5f, 4.0f)
+                             : 1.5f;
 }
 
-static int font_debug_draw_flags(void) {
-  if (!cl_font_debug_draw)
-    cl_font_debug_draw = Cvar_Get("cl_font_debug_draw", "0", 0);
-  return cl_font_debug_draw ? cl_font_debug_draw->integer : 0;
-}
-
-static bool font_debug_dump_requested(void) {
-  if (!cl_font_debug_dump)
-    cl_font_debug_dump = Cvar_Get("cl_font_debug_dump", "0", 0);
-  return cl_font_debug_dump && cl_font_debug_dump->integer > 0;
-}
-
-static bool font_debug_metrics_enabled(void) {
-  if (!cl_font_debug_metrics)
-    cl_font_debug_metrics = Cvar_Get("cl_font_debug_metrics", "0", 0);
-  return cl_font_debug_metrics && cl_font_debug_metrics->integer > 0;
-}
-
-static void font_debug_dump_clear(void) {
-  if (cl_font_debug_dump)
-    Cvar_SetInteger(cl_font_debug_dump, 0, FROM_CODE);
-}
-
-static bool font_debug_match(const char *string) {
-  if (!cl_font_debug_match)
-    cl_font_debug_match = Cvar_Get("cl_font_debug_match", "", 0);
-  if (!cl_font_debug_match || !cl_font_debug_match->string ||
-      !*cl_font_debug_match->string)
-    return true;
-  if (!string || !*string)
-    return false;
-  return strstr(string, cl_font_debug_match->string) != nullptr;
-}
-
-static bool font_is_number(const char *value) {
-  return value && *value && COM_IsFloat(value);
-}
-
-static const char *font_format_char(uint32_t cp, char *buffer, size_t size) {
-  if (!buffer || size == 0)
-    return "";
-  if (cp == ' ') {
-    Q_snprintf(buffer, size, "space");
-    return buffer;
-  }
-  if (cp == '\t') {
-    Q_snprintf(buffer, size, "\\t");
-    return buffer;
-  }
-  if (cp == '\n') {
-    Q_snprintf(buffer, size, "\\n");
-    return buffer;
-  }
-  if (cp == '\r') {
-    Q_snprintf(buffer, size, "\\r");
-    return buffer;
-  }
-  if (cp == '\\') {
-    Q_snprintf(buffer, size, "\\\\");
-    return buffer;
-  }
-  if (cp == '\'') {
-    Q_snprintf(buffer, size, "\\'");
-    return buffer;
-  }
-  if (cp >= 32 && cp < 127 && std::isprint(static_cast<int>(cp))) {
-    Q_snprintf(buffer, size, "%c", (char)cp);
-    return buffer;
-  }
-  Q_snprintf(buffer, size, "0x%02X", (unsigned)cp);
-  return buffer;
-}
-
-static font_t *font_load_internal(const char *path, int virtual_line_height,
-                                  float pixel_scale, int fixed_advance,
-                                  const char *fallback_kfont,
-                                  const char *fallback_legacy,
-                                  bool register_font);
-static const char *font_kind_name(font_kind_t kind);
-#if USE_SDL3_TTF
-static int font_ttf_metric_mode(void);
-static bool font_ttf_hb_snap_positions(void);
-static int font_ttf_metric_extent(const font_t *font);
-static int font_ttf_metric_baseline(const font_t *font);
-static float font_ttf_metric_scale(const font_t *font, int scale);
-static float font_get_ttf_advance_scaled(const font_t *font, int advance_units,
-                                         int scale);
-static font_glyph_t *font_get_ttf_glyph(font_t *font, uint32_t codepoint,
-                                        bool *out_created);
-#endif
-
-static void font_dump_glyphs_ttf(qhandle_t file, const char *label,
-                                 const char *path, font_t *font) {
-#if !USE_SDL3_TTF
-  (void)file;
-  (void)label;
-  (void)path;
-  (void)font;
-#else
-  if (!font || font->kind != FONT_TTF) {
-    FS_FPrintf(file, "Font %s: not a TTF font, skipping.\n",
-               label ? label : "<null>");
-    return;
-  }
-
-  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
-  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
-  FS_FPrintf(file,
-             "kind: %s line_height=%d pixel_scale=%.3f fixed_advance=%d "
-             "letter_spacing=%.3f\n",
-             font_kind_name(font->kind), font->virtual_line_height,
-             font->pixel_scale, font->fixed_advance, font->letter_spacing);
-  FS_FPrintf(file,
-             "ttf: pixel_height=%d ascent=%d line_skip=%d baseline=%d "
-             "extent=%d rendered=%d/%d metric_mode=%d scale_boost=%.2f "
-             "hb_snap=%d\n",
-             font->ttf.pixel_height, font->ttf.ascent, font->ttf.line_skip,
-             font->ttf.baseline, font->ttf.extent, font->ttf.rendered_ascent,
-             font->ttf.rendered_extent, font_ttf_metric_mode(),
-             font_scale_boost(), font_ttf_hb_snap_positions() ? 1 : 0);
-
-  float glyph_scale = font_ttf_metric_scale(font, 1);
-  FS_FPrintf(file, "glyph_scale=%.3f baseline=%d extent=%d\n", glyph_scale,
-             font_ttf_metric_baseline(font), font_ttf_metric_extent(font));
-
-  FS_FPrintf(file,
-             "cp hex char adv adv_px minx maxx miny maxy bearX bearY offX offY "
-             "w h bmpL bmpT bmpR bmpB dL dT dR dB\n");
-
-  for (uint32_t cp = 32; cp <= 126; ++cp) {
-    font_glyph_t *glyph = font_get_ttf_glyph(font, cp, nullptr);
-    if (!glyph) {
-      char disp[16];
-      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
-                 font_format_char(cp, disp, sizeof(disp)));
-      continue;
-    }
-
-    int minx = 0;
-    int maxx = 0;
-    int miny = 0;
-    int maxy = 0;
-    int advance = 0;
-    bool have_metrics = false;
-    if (font->ttf.font &&
-        TTF_GetGlyphMetrics(font->ttf.font, cp, &minx, &maxx, &miny, &maxy,
-                            &advance)) {
-      have_metrics = true;
-    }
-
-    float bmp_left = glyph->bearing_x + glyph->offset_x;
-    float bmp_top = glyph->bearing_y + glyph->offset_y;
-    float bmp_right = bmp_left + (float)glyph->w;
-    float bmp_bottom = bmp_top - (float)glyph->h;
-
-    float d_left = have_metrics ? (bmp_left - (float)minx) : 0.0f;
-    float d_top = have_metrics ? (bmp_top - (float)maxy) : 0.0f;
-    float d_right = have_metrics ? (bmp_right - (float)maxx) : 0.0f;
-    float d_bottom = have_metrics ? (bmp_bottom - (float)miny) : 0.0f;
-
-    float adv_px =
-        font_get_ttf_advance_scaled(font, glyph->advance, 1);
-
-    char disp[16];
-    FS_FPrintf(
-        file,
-        "%3u 0x%02X '%s' %4d %6.2f %4d %4d %4d %4d %6.2f %6.2f %6.2f %6.2f "
-        "%3d %3d %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f\n",
-        cp, cp, font_format_char(cp, disp, sizeof(disp)), glyph->advance,
-        adv_px, have_metrics ? minx : 0, have_metrics ? maxx : 0,
-        have_metrics ? miny : 0, have_metrics ? maxy : 0, glyph->bearing_x,
-        glyph->bearing_y, glyph->offset_x, glyph->offset_y, glyph->w, glyph->h,
-        bmp_left, bmp_top, bmp_right, bmp_bottom, d_left, d_top, d_right,
-        d_bottom);
-  }
-#endif
-}
-
-static void font_dump_glyphs_kfont(qhandle_t file, const char *label,
-                                   const char *path, font_t *font) {
-  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
-  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
-  if (!font || font->kind != FONT_KFONT) {
-    FS_FPrintf(file, "kind: %s (not kfont), skipping.\n",
-               font ? font_kind_name(font->kind) : "null");
-    return;
-  }
-  FS_FPrintf(file, "kind: %s line_height=%d\n", font_kind_name(font->kind),
-             font->kfont.line_height);
-  FS_FPrintf(file, "cp hex char x y w h\n");
-  for (uint32_t cp = 32; cp <= 126; ++cp) {
-    auto it = font->kfont.glyphs.find(cp);
-    char disp[16];
-    if (it == font->kfont.glyphs.end()) {
-      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
-                 font_format_char(cp, disp, sizeof(disp)));
-      continue;
-    }
-    const kfont_glyph_t &glyph = it->second;
-    FS_FPrintf(file, "%3u 0x%02X '%s' %4d %4d %3d %3d\n", cp, cp,
-               font_format_char(cp, disp, sizeof(disp)), glyph.x, glyph.y,
-               glyph.w, glyph.h);
-  }
-}
-
-static void font_dump_glyphs_legacy(qhandle_t file, const char *label,
-                                    const char *path, font_t *font) {
-  FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
-  FS_FPrintf(file, "path: %s\n", path ? path : "<null>");
-  if (!font || font->kind != FONT_LEGACY) {
-    FS_FPrintf(file, "kind: %s (not legacy), skipping.\n",
-               font ? font_kind_name(font->kind) : "null");
-    return;
-  }
-  FS_FPrintf(file, "kind: %s char_w=%d char_h=%d\n",
-             font_kind_name(font->kind), CONCHAR_WIDTH, CONCHAR_HEIGHT);
-  FS_FPrintf(file, "cp hex char w h\n");
-  for (uint32_t cp = 32; cp <= 126; ++cp) {
-    char disp[16];
-    FS_FPrintf(file, "%3u 0x%02X '%s' %3d %3d\n", cp, cp,
-               font_format_char(cp, disp, sizeof(disp)), CONCHAR_WIDTH,
-               CONCHAR_HEIGHT);
-  }
-}
-
-static void font_dump_glyphs_for_path(qhandle_t file, const char *label,
-                                      const char *path, int line_height,
-                                      int fixed_advance) {
-  if (!path || !*path) {
-    FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
-    FS_FPrintf(file, "path: <empty>, skipping.\n");
-    return;
-  }
-
-  font_t *font = font_load_internal(path, line_height, 1.0f, fixed_advance,
-                                    "fonts/qfont.kfont", "conchars.png",
-                                    false);
-  if (!font) {
-    FS_FPrintf(file, "\n== Font %s ==\n", label ? label : "<unnamed>");
-    FS_FPrintf(file, "path: %s\n", path);
-    FS_FPrintf(file, "load failed: %s\n", Com_GetLastError());
-    return;
-  }
-
-  switch (font->kind) {
-  case FONT_TTF:
-    font_dump_glyphs_ttf(file, label, path, font);
-    break;
-  case FONT_KFONT:
-    font_dump_glyphs_kfont(file, label, path, font);
-    break;
-  case FONT_LEGACY:
-  default:
-    font_dump_glyphs_legacy(file, label, path, font);
-    break;
-  }
-
-  Font_Free(font);
-}
-
-static void Font_DumpGlyphs_f(void) {
-  int line_height = 32;
-  const char *font_path = nullptr;
-  const char *out_name = nullptr;
-  int arg = 1;
-
-  if (Cmd_Argc() > arg) {
-    const char *a1 = Cmd_Argv(arg);
-    if (font_is_number(a1)) {
-      line_height = Q_clip(Q_rint(Q_atof(a1)), 1, 256);
-      arg++;
-    } else {
-      font_path = a1;
-      arg++;
-      if (Cmd_Argc() > arg && font_is_number(Cmd_Argv(arg))) {
-        line_height = Q_clip(Q_rint(Q_atof(Cmd_Argv(arg))), 1, 256);
-        arg++;
-      }
-    }
-  }
-
-  if (Cmd_Argc() > arg)
-    out_name = Cmd_Argv(arg);
-
-  char path[MAX_OSPATH];
-  qhandle_t file = 0;
-
-  if (out_name && *out_name) {
-    file = FS_EasyOpenFile(path, sizeof(path),
-                           FS_MODE_WRITE | FS_FLAG_TEXT, "fontdump/",
-                           out_name, ".txt");
-  } else {
-    for (int i = 0; i < 1000; ++i) {
-      Q_snprintf(path, sizeof(path), "fontdump/glyphs_%03d.txt", i);
-      int ret = FS_OpenFile(path, &file,
-                            FS_MODE_WRITE | FS_FLAG_TEXT | FS_FLAG_EXCL);
-      if (file)
-        break;
-      if (ret != Q_ERR(EEXIST)) {
-        Com_EPrintf("$e_auto_73287ca7dcec", path, Q_ErrorString(ret));
-        return;
-      }
-    }
-  }
-
-  if (!file) {
-    Com_Printf("font_dump_glyphs: failed to open output file.\n");
-    return;
-  }
-
-  FS_FPrintf(file, "WORR Font Glyph Dump\n");
-  FS_FPrintf(file, "line_height=%d\n", line_height);
-  FS_FPrintf(file, "scale_boost=%.2f\n", font_scale_boost());
-
-  if (font_path) {
-    font_dump_glyphs_for_path(file, "custom", font_path, line_height, 0);
-  } else {
-    const char *con_path = Cvar_VariableString("con_font");
-    const char *scr_path = Cvar_VariableString("cl_font");
-    const char *ui_path = Cvar_VariableString("ui_font");
-    const char *scr_ui_path = "fonts/AtkinsonHyperLegible-Regular.otf";
-
-    font_dump_glyphs_for_path(file, "con_font", con_path, line_height,
-                              line_height);
-    font_dump_glyphs_for_path(file, "cl_font", scr_path, line_height, 0);
-    font_dump_glyphs_for_path(file, "ui_font", ui_path, line_height, 0);
-    font_dump_glyphs_for_path(file, "scr_ui_font", scr_ui_path, line_height, 0);
-  }
-
-  if (FS_CloseFile(file))
-    Com_EPrintf("$cl_error_writing_file", path);
-  else
-    Com_Printf("$cl_write_complete", path);
-}
-
-static void font_debug_draw_line(int x, int y, int w, color_t color) {
-  if (w <= 0)
-    return;
-  R_DrawFill32(x, y, w, 1, color);
-}
-
-static void font_debug_draw_box(int x, int y, int w, int h, color_t color) {
-  if (w <= 0 || h <= 0)
-    return;
-  R_DrawFill32(x, y, w, 1, color);
-  R_DrawFill32(x, y + h - 1, w, 1, color);
-  R_DrawFill32(x, y, 1, h, color);
-  R_DrawFill32(x + w - 1, y, 1, h, color);
-}
-
-static void font_debug_draw_point(int x, int y, color_t color) {
-  R_DrawFill32(x, y, 1, 1, color);
-}
-
-#if USE_SDL3_TTF
-static TTF_HintingFlags font_ttf_hinting_mode(void) {
-  if (!cl_font_ttf_hinting)
-    cl_font_ttf_hinting =
-        Cvar_Get("cl_font_ttf_hinting", "1", CVAR_ARCHIVE);
-
-  int mode = Cvar_ClampInteger(cl_font_ttf_hinting, 0, 3);
-  switch (mode) {
-  case 0:
-    return TTF_HINTING_NONE;
-  case 2:
-    return TTF_HINTING_MONO;
-  case 3:
-    return TTF_HINTING_NORMAL;
-  case 1:
-  default:
-    return TTF_HINTING_LIGHT;
-  }
-}
-
-static int font_ttf_supersample(void) {
-  if (!cl_font_ttf_supersample)
-    cl_font_ttf_supersample =
-        Cvar_Get("cl_font_ttf_supersample", "1", CVAR_ARCHIVE);
-  return Cvar_ClampInteger(cl_font_ttf_supersample, 1, 4);
-}
-
-static int font_ttf_metric_mode(void) {
-  if (!cl_font_ttf_metric_mode)
-    cl_font_ttf_metric_mode =
-        Cvar_Get("cl_font_ttf_metric_mode", "1", CVAR_ARCHIVE);
-  return Cvar_ClampInteger(cl_font_ttf_metric_mode, 0, 1);
-}
-
-static int font_ttf_baseline_offset(void) {
-  if (!cl_font_ttf_baseline_offset)
-    cl_font_ttf_baseline_offset =
-        Cvar_Get("cl_font_ttf_baseline_offset", "0", CVAR_ARCHIVE);
-  return cl_font_ttf_baseline_offset
-             ? Cvar_ClampInteger(cl_font_ttf_baseline_offset, -64, 64)
-             : 0;
-}
-
-static int font_ttf_preload_max(void) {
-  if (!cl_font_ttf_preload_max)
-    cl_font_ttf_preload_max =
-        Cvar_Get("cl_font_ttf_preload_max", "255", CVAR_ARCHIVE);
-  return cl_font_ttf_preload_max
-             ? Cvar_ClampInteger(cl_font_ttf_preload_max, 126, 2048)
-             : 255;
-}
-
-static bool font_ttf_hb_snap_positions(void) {
-  if (!cl_font_ttf_hb_snap)
-    cl_font_ttf_hb_snap = Cvar_Get("cl_font_ttf_hb_snap", "1", CVAR_ARCHIVE);
-  return cl_font_ttf_hb_snap && cl_font_ttf_hb_snap->integer != 0;
-}
-
-static bool font_ttf_use_rendered_metrics(const font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return false;
-  return font_ttf_metric_mode() != 0 && font->ttf.rendered_metrics_valid;
-}
-
-static int font_ttf_metric_extent(const font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return 0;
-  if (font_ttf_use_rendered_metrics(font))
-    return max(1, font->ttf.rendered_extent);
-  return max(1, font->ttf.extent);
-}
-
-static int font_ttf_metric_baseline(const font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return 0;
-  int baseline = font_ttf_use_rendered_metrics(font) ? font->ttf.rendered_ascent
-                                                     : font->ttf.baseline;
-  baseline += font_ttf_baseline_offset();
-  int extent = font_ttf_metric_extent(font);
-  if (extent > 0)
-    baseline = min(max(1, baseline), extent);
-  else
-    baseline = max(1, baseline);
-  return baseline;
-}
-
-static float font_ttf_metric_scale(const font_t *font, int scale) {
-  int extent = font_ttf_metric_extent(font);
-  if (!font || font->kind != FONT_TTF || extent <= 0)
+static float font_draw_scale(const font_t *font, int scale) {
+  if (!font)
     return 1.0f;
 
   int draw_scale = scale > 0 ? scale : 1;
-  float scale_boost = font_scale_boost();
-  return ((float)font->virtual_line_height * (float)draw_scale *
-          scale_boost) /
-         (float)extent;
-}
-
-static float font_ttf_letter_spacing(const font_t *font, int scale) {
-  if (!font || font->kind != FONT_TTF || font->letter_spacing <= 0.0f)
-    return 0.0f;
-
-  int base_units = font_ttf_metric_extent(font);
-  if (base_units <= 0)
-    return 0.0f;
-
-  float metric_scale = font_ttf_metric_scale(font, scale);
-  return (float)base_units * metric_scale * font->letter_spacing;
-}
-
-static bool font_ttf_try_nominal_metrics(const font_t *font,
-                                         uint32_t codepoint,
-                                         uint32_t glyph_index, int *out_minx,
-                                         int *out_maxx, int *out_miny,
-                                         int *out_maxy, int *out_advance) {
-  if (!font || font->kind != FONT_TTF || !font->ttf.font || !codepoint)
-    return false;
-
-#if USE_HARFBUZZ
-  if (font->ttf.hb_font) {
-    hb_codepoint_t nominal = 0;
-    if (!hb_font_get_nominal_glyph(font->ttf.hb_font, codepoint, &nominal))
-      return false;
-    if (nominal != glyph_index)
-      return false;
-  }
-#else
-  (void)glyph_index;
-#endif
-
-  int minx = 0;
-  int maxx = 0;
-  int miny = 0;
-  int maxy = 0;
-  int advance = 0;
-  if (!TTF_GetGlyphMetrics(font->ttf.font, codepoint, &minx, &maxx, &miny,
-                           &maxy, &advance)) {
-    return false;
-  }
-
-  if (out_minx)
-    *out_minx = minx;
-  if (out_maxx)
-    *out_maxx = maxx;
-  if (out_miny)
-    *out_miny = miny;
-  if (out_maxy)
-    *out_maxy = maxy;
-  if (out_advance)
-    *out_advance = advance;
-  return true;
-}
-
-#if USE_SDL3_TTF && USE_HARFBUZZ
-static float font_hb_adjusted_advance(const font_t *font,
-                                      hb_codepoint_t glyph_index,
-                                      uint32_t nominal_codepoint,
-                                      const font_glyph_t *cached,
-                                      float hb_advance) {
-  if (!font || font->kind != FONT_TTF || !font->ttf.hb_font)
-    return hb_advance;
-
-  int ttf_advance_units = 0;
-  if (cached && cached->advance > 0) {
-    ttf_advance_units = cached->advance;
-  } else if (nominal_codepoint) {
-    int minx = 0;
-    int maxx = 0;
-    int miny = 0;
-    int maxy = 0;
-    int advance = 0;
-    if (font_ttf_try_nominal_metrics(font, nominal_codepoint, glyph_index,
-                                     &minx, &maxx, &miny, &maxy, &advance)) {
-      ttf_advance_units = advance;
-    }
-  }
-
-  if (ttf_advance_units <= 0)
-    return hb_advance;
-
-  hb_position_t hb_nominal =
-      hb_font_get_glyph_h_advance(font->ttf.hb_font, glyph_index);
-  if (hb_nominal == 0)
-    return hb_advance;
-
-  float hb_nominal_units = (float)hb_nominal / 64.0f;
-  float delta = (float)ttf_advance_units - hb_nominal_units;
-  if (fabsf(delta) < 0.01f)
-    return hb_advance;
-
-  return hb_advance + delta;
-}
-#endif
-
-static bool font_update_ttf_rendered_metrics_for_glyph(font_t *font,
-                                                       const font_glyph_t &glyph) {
-  if (!font || font->kind != FONT_TTF || glyph.h <= 0)
-    return false;
-  if (font->ttf.rendered_metrics_locked)
-    return false;
-
-  int pad_top = max(0, glyph.pad_top);
-  int pad_bottom = max(0, glyph.pad_bottom);
-  int trimmed_h = glyph.h - pad_top - pad_bottom;
-  if (trimmed_h <= 0)
-    trimmed_h = glyph.h;
-  float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
-  float bottom = top - (float)trimmed_h;
-  int ascent = max(1, (int)ceilf(top));
-  int descent = max(0, (int)ceilf(-bottom));
-  int extent = ascent + descent;
-  if (extent <= 0)
-    return false;
-
-  if (!font->ttf.rendered_metrics_valid) {
-    font->ttf.rendered_ascent = ascent;
-    font->ttf.rendered_descent = descent;
-    font->ttf.rendered_extent = extent;
-    font->ttf.rendered_metrics_valid = true;
-    return true;
-  }
-
-  bool changed = false;
-  if (ascent > font->ttf.rendered_ascent) {
-    font->ttf.rendered_ascent = ascent;
-    changed = true;
-  }
-  if (descent > font->ttf.rendered_descent) {
-    font->ttf.rendered_descent = descent;
-    changed = true;
-  }
-  if (changed) {
-    font->ttf.rendered_extent =
-        font->ttf.rendered_ascent + font->ttf.rendered_descent;
-  }
-
-  return changed;
-}
-#endif
-
-static const char *font_kind_name(font_kind_t kind) {
-  switch (kind) {
-  case FONT_LEGACY:
-    return "legacy";
-  case FONT_KFONT:
-    return "kfont";
-  case FONT_TTF:
-    return "ttf";
-  default:
-    return "unknown";
-  }
+  float pixel_scale = font->pixel_scale > 0.0f ? font->pixel_scale : 1.0f;
+  return (font->unit_scale * (float)draw_scale * font_scale_boost()) /
+         pixel_scale;
 }
 
 static inline bool font_ext_is(const char *path, const char *ext) {
@@ -851,1051 +190,14 @@ static inline bool font_ext_is(const char *path, const char *ext) {
   return Q_strcasecmp(file_ext, ext) == 0;
 }
 
-static color_t font_resolve_color(int flags, color_t color);
-static void font_draw_legacy_glyph_at(const font_t *font, uint32_t codepoint,
-                                      int x, int y, int scale, int flags,
-                                      color_t color);
-static bool font_draw_kfont_glyph_at(const font_t *font, uint32_t codepoint,
-                                     int x, int y, int scale, int flags,
-                                     color_t color);
-
-#if USE_SDL3_TTF
-static font_glyph_t *font_get_ttf_glyph(font_t *font, uint32_t codepoint,
-                                        bool *out_created);
-static font_glyph_t *font_get_ttf_glyph_index(font_t *font,
-                                              uint32_t glyph_index,
-                                              uint32_t nominal_codepoint,
-                                              bool *out_created);
-static uint32_t font_read_codepoint(const char **src, size_t *remaining);
-static uint32_t font_codepoint_from_slice(const char *text, size_t length,
-                                          bool *out_singleton);
-static bool font_draw_ttf_glyph_index_cached(const font_t *font,
-                                             const font_glyph_t *glyph,
-                                             float draw_x, float draw_y,
-                                             float glyph_scale, int scale,
-                                             int flags, color_t color);
-
-static void font_touch_ttf_glyph(font_t *font, uint32_t codepoint) {
-  if (!font || font->kind != FONT_TTF)
-    return;
-
-  auto &lru = font->ttf.lru;
-  auto &index = font->ttf.lru_index;
-  auto it = index.find(codepoint);
-  if (it != index.end())
-    lru.erase(it->second);
-
-  lru.push_front(codepoint);
-  index[codepoint] = lru.begin();
-}
-
-static void font_remove_ttf_glyph(font_t *font, uint32_t codepoint) {
-  if (!font)
-    return;
-
-  auto &lru = font->ttf.lru;
-  auto &index = font->ttf.lru_index;
-  auto it = index.find(codepoint);
-  if (it != index.end()) {
-    lru.erase(it->second);
-    index.erase(it);
+static color_t font_resolve_color(int flags, color_t color) {
+  if (flags & (UI_ALTCOLOR | UI_XORCOLOR)) {
+    color_t alt = COLOR_RGB(255, 255, 0);
+    alt.a = color.a;
+    return alt;
   }
-
-  font->ttf.glyphs.erase(codepoint);
+  return color;
 }
-
-static void font_touch_ttf_glyph_index(font_t *font, uint32_t glyph_index) {
-  if (!font || font->kind != FONT_TTF)
-    return;
-
-  auto &lru = font->ttf.index_lru;
-  auto &index = font->ttf.index_lru_index;
-  auto it = index.find(glyph_index);
-  if (it != index.end())
-    lru.erase(it->second);
-
-  lru.push_front(glyph_index);
-  index[glyph_index] = lru.begin();
-}
-
-static void font_remove_ttf_glyph_index(font_t *font, uint32_t glyph_index) {
-  if (!font)
-    return;
-
-  auto &lru = font->ttf.index_lru;
-  auto &index = font->ttf.index_lru_index;
-  auto it = index.find(glyph_index);
-  if (it != index.end()) {
-    lru.erase(it->second);
-    index.erase(it);
-  }
-
-  font->ttf.glyph_indices.erase(glyph_index);
-}
-
-static void font_trim_ttf_cache(font_t *font, size_t limit) {
-  if (!font)
-    return;
-
-  auto &lru = font->ttf.lru;
-  while (font->ttf.glyphs.size() > limit && !lru.empty()) {
-    uint32_t victim = lru.back();
-    font_remove_ttf_glyph(font, victim);
-  }
-}
-
-static void font_trim_ttf_index_cache(font_t *font, size_t limit) {
-  if (!font)
-    return;
-
-  auto &lru = font->ttf.index_lru;
-  while (font->ttf.glyph_indices.size() > limit && !lru.empty()) {
-    uint32_t victim = lru.back();
-    font_remove_ttf_glyph_index(font, victim);
-  }
-}
-
-static bool font_try_reuse_ttf_slot(font_t *font, int w, int h,
-                                    font_glyph_t *out_slot) {
-  if (!font || !out_slot || w <= 0 || h <= 0)
-    return false;
-
-  int limit = font_glyph_cache_limit();
-  if (limit <= 0 || font->ttf.glyphs.size() < static_cast<size_t>(limit))
-    return false;
-
-  for (auto it = font->ttf.lru.rbegin(); it != font->ttf.lru.rend(); ++it) {
-    auto glyph_it = font->ttf.glyphs.find(*it);
-    if (glyph_it == font->ttf.glyphs.end())
-      continue;
-
-    const font_glyph_t &candidate = glyph_it->second;
-    if (candidate.page < 0 || candidate.w < w || candidate.h < h)
-      continue;
-
-    *out_slot = candidate;
-    font_remove_ttf_glyph(font, *it);
-    return true;
-  }
-
-  return false;
-}
-
-static bool font_try_reuse_ttf_index_slot(font_t *font, int w, int h,
-                                          font_glyph_t *out_slot) {
-  if (!font || !out_slot || w <= 0 || h <= 0)
-    return false;
-
-  int limit = font_glyph_cache_limit();
-  if (limit <= 0 ||
-      font->ttf.glyph_indices.size() < static_cast<size_t>(limit))
-    return false;
-
-  for (auto it = font->ttf.index_lru.rbegin(); it != font->ttf.index_lru.rend();
-       ++it) {
-    auto glyph_it = font->ttf.glyph_indices.find(*it);
-    if (glyph_it == font->ttf.glyph_indices.end())
-      continue;
-
-    const font_glyph_t &candidate = glyph_it->second;
-    if (candidate.page < 0 || candidate.w < w || candidate.h < h)
-      continue;
-
-    *out_slot = candidate;
-    font_remove_ttf_glyph_index(font, *it);
-    return true;
-  }
-
-  return false;
-}
-
-static void font_clear_atlas_rect(font_atlas_page_t *page, int x, int y, int w,
-                                  int h) {
-  if (!page || !page->pixels || w <= 0 || h <= 0)
-    return;
-
-  int stride = page->width * 4;
-  byte *dst = page->pixels + ((y * page->width) + x) * 4;
-  for (int row = 0; row < h; ++row) {
-    byte *row_ptr = dst + row * stride;
-    for (int col = 0; col < w; ++col) {
-      byte *px = row_ptr + col * 4;
-      px[0] = 255;
-      px[1] = 255;
-      px[2] = 255;
-      px[3] = 0;
-    }
-  }
-}
-
-#if USE_SDL3_TTF
-static void font_measure_glyph_padding(const SDL_Surface *surface, int *out_left,
-                                       int *out_top, int *out_right,
-                                       int *out_bottom) {
-  if (out_left)
-    *out_left = 0;
-  if (out_top)
-    *out_top = 0;
-  if (out_right)
-    *out_right = 0;
-  if (out_bottom)
-    *out_bottom = 0;
-
-  if (!surface || surface->w <= 0 || surface->h <= 0 || !surface->pixels)
-    return;
-
-  int min_x = surface->w;
-  int min_y = surface->h;
-  int max_x = -1;
-  int max_y = -1;
-
-  const byte *pixels = static_cast<const byte *>(surface->pixels);
-  int stride = surface->pitch;
-
-  for (int y = 0; y < surface->h; ++y) {
-    const byte *row = pixels + y * stride;
-    for (int x = 0; x < surface->w; ++x) {
-      const byte *px = row + x * 4;
-      if (px[3] == 0)
-        continue;
-      if (x < min_x)
-        min_x = x;
-      if (y < min_y)
-        min_y = y;
-      if (x > max_x)
-        max_x = x;
-      if (y > max_y)
-        max_y = y;
-    }
-  }
-
-  if (max_x < min_x || max_y < min_y)
-    return;
-
-  if (out_left)
-    *out_left = min_x;
-  if (out_top)
-    *out_top = min_y;
-  if (out_right)
-    *out_right = surface->w - max_x - 1;
-  if (out_bottom)
-    *out_bottom = surface->h - max_y - 1;
-}
-
-static void font_copy_glyph_pixels(byte *dst, int dst_stride, const byte *src,
-                                   int src_stride, int w, int h,
-                                   bool alpha_only) {
-  if (!dst || !src || w <= 0 || h <= 0)
-    return;
-
-  if (!alpha_only) {
-    for (int row = 0; row < h; ++row)
-      memcpy(dst + row * dst_stride, src + row * src_stride, w * 4);
-    return;
-  }
-
-  for (int row = 0; row < h; ++row) {
-    byte *dst_row = dst + row * dst_stride;
-    const byte *src_row = src + row * src_stride;
-    for (int col = 0; col < w; ++col) {
-      const byte *s = src_row + col * 4;
-      byte *d = dst_row + col * 4;
-      d[0] = 255;
-      d[1] = 255;
-      d[2] = 255;
-      d[3] = s[3];
-    }
-  }
-}
-#endif
-
-static void font_mark_page_dirty(font_atlas_page_t *page) {
-  if (page)
-    page->dirty = true;
-}
-
-static bool font_flush_ttf_page(font_atlas_page_t *page) {
-  if (!page || !page->dirty || !page->handle || !page->pixels)
-    return false;
-
-  if (!R_UpdateImageRGBA(page->handle, page->width, page->height, page->pixels))
-    return false;
-
-  page->dirty = false;
-  return true;
-}
-
-static void font_flush_ttf_pages(font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return;
-
-  for (auto &page : font->ttf.pages) {
-    if (page.dirty)
-      font_flush_ttf_page(&page);
-  }
-}
-
-static float font_get_ttf_kerning(const font_t *font, uint32_t prev,
-                                  uint32_t current, int scale) {
-  if (!font || font->kind != FONT_TTF || !font->ttf.font)
-    return 0.0f;
-  if (!prev || !current || font->fixed_advance > 0)
-    return 0.0f;
-
-  int kerning = 0;
-  if (!TTF_GetGlyphKerning(font->ttf.font, prev, current, &kerning))
-    return 0.0f;
-
-  float glyph_scale = font_ttf_metric_scale(font, scale);
-  return (float)kerning * glyph_scale;
-}
-
-static bool font_get_ttf_advance_units(const font_t *font, uint32_t codepoint,
-                                       int *out_advance) {
-  if (!font || font->kind != FONT_TTF || !font->ttf.font || !out_advance)
-    return false;
-
-  auto it = font->ttf.glyphs.find(codepoint);
-  if (it != font->ttf.glyphs.end()) {
-    if (it->second.oversized)
-      return false;
-    *out_advance = it->second.advance;
-    return true;
-  }
-
-  if (!TTF_FontHasGlyph(font->ttf.font, codepoint))
-    return false;
-
-  int minx = 0;
-  int maxx = 0;
-  int miny = 0;
-  int maxy = 0;
-  int advance = 0;
-  if (!TTF_GetGlyphMetrics(font->ttf.font, codepoint, &minx, &maxx, &miny,
-                           &maxy, &advance))
-    return false;
-
-  *out_advance = advance;
-  return true;
-}
-
-static float font_get_ttf_advance_scaled(const font_t *font, int advance_units,
-                                         int scale) {
-  if (!font || font->kind != FONT_TTF)
-    return 0.0f;
-
-  if (font->fixed_advance > 0) {
-    float glyph_scale = font_ttf_metric_scale(font, scale);
-    if (font->ttf.fixed_advance_units > 0) {
-      float advance = (float)font->ttf.fixed_advance_units * glyph_scale;
-      return advance < 0.0f ? 0.0f : advance;
-    }
-    int draw_scale = scale > 0 ? scale : 1;
-    float scale_boost = font_scale_boost();
-    return (float)font->fixed_advance * (float)draw_scale * scale_boost;
-  }
-
-  float glyph_scale = font_ttf_metric_scale(font, scale);
-  float advance = (float)advance_units * glyph_scale;
-  return advance < 0.0f ? 0.0f : advance;
-}
-
-static void font_preload_ttf_glyphs(font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return;
-
-  uint32_t max_cp = (uint32_t)font_ttf_preload_max();
-  if (max_cp < 32)
-    return;
-
-#if USE_HARFBUZZ
-  if (font->ttf.hb_font) {
-    for (uint32_t ch = 32; ch <= max_cp; ++ch) {
-      hb_codepoint_t glyph_index = 0;
-      if (hb_font_get_nominal_glyph(font->ttf.hb_font, ch, &glyph_index))
-        font_get_ttf_glyph_index(font, glyph_index, ch, nullptr);
-    }
-    return;
-  }
-#endif
-
-  for (uint32_t ch = 32; ch <= max_cp; ++ch)
-    font_get_ttf_glyph(font, ch, nullptr);
-}
-#endif
-
-#if USE_HARFBUZZ
-static void font_build_shaped_text(font_shaped_text_t *out, const char *string,
-                                   size_t max_chars, int flags,
-                                   color_t base_color) {
-  if (!out) {
-    return;
-  }
-
-  out->text.clear();
-  out->colors.clear();
-  out->runs.clear();
-  out->use_colors = false;
-
-  if (!string || !*string || !max_chars)
-    return;
-
-  (void)flags;
-
-  bool use_color_codes = Com_HasColorEscape(string, max_chars);
-  out->use_colors = use_color_codes;
-
-  size_t remaining = max_chars;
-  const char *s = string;
-  color_t current = base_color;
-  size_t run_start = 0;
-  color_t run_color = base_color;
-  auto push_run = [&](size_t end) {
-    if (end <= run_start)
-      return;
-    font_shaped_run_t run;
-    run.start = run_start;
-    run.length = end - run_start;
-    run.color = run_color;
-    out->runs.push_back(run);
-  };
-
-  while (remaining && *s) {
-    if (use_color_codes) {
-      color_t parsed;
-      if (Com_ParseColorEscape(&s, &remaining, base_color, &parsed)) {
-        if (parsed.u32 != current.u32) {
-          push_run(out->text.size());
-          run_start = out->text.size();
-          run_color = parsed;
-        }
-        current = parsed;
-        continue;
-      }
-    }
-
-    const char *prev = s;
-    uint32_t codepoint = font_read_codepoint(&s, &remaining);
-    if (!codepoint)
-      break;
-
-    size_t consumed = static_cast<size_t>(s - prev);
-    if (!consumed)
-      break;
-
-    out->text.append(prev, consumed);
-    if (use_color_codes) {
-      for (size_t i = 0; i < consumed; ++i)
-        out->colors.push_back(current);
-    }
-  }
-
-  if (use_color_codes && out->colors.size() < out->text.size())
-    out->colors.resize(out->text.size(), current);
-
-  push_run(out->text.size());
-}
-
-#if USE_SDL3_TTF
-static void font_trim_shaped_text(font_shaped_text_t *shaped, int flags) {
-  if (!shaped)
-    return;
-  if (flags & UI_MULTILINE)
-    return;
-  size_t newline = shaped->text.find('\n');
-  if (newline == std::string::npos)
-    return;
-  shaped->text.resize(newline);
-  if (shaped->use_colors && shaped->colors.size() > newline)
-    shaped->colors.resize(newline);
-  if (!shaped->runs.empty()) {
-    while (!shaped->runs.empty() && shaped->runs.back().start >= newline)
-      shaped->runs.pop_back();
-    if (!shaped->runs.empty()) {
-      font_shaped_run_t &run = shaped->runs.back();
-      size_t end = run.start + run.length;
-      if (end > newline)
-        run.length = newline - run.start;
-    }
-  }
-}
-
-static void font_collect_line_breaks(const std::string &text,
-                                     std::vector<size_t> &breaks) {
-  breaks.clear();
-  size_t pos = text.find('\n');
-  while (pos != std::string::npos) {
-    breaks.push_back(pos);
-    pos = text.find('\n', pos + 1);
-  }
-}
-
-#if USE_HARFBUZZ
-static hb_buffer_t *font_shape_harfbuzz_line(const font_t *font,
-                                             const char *text, size_t length) {
-  if (!font || font->kind != FONT_TTF || !font->ttf.hb_font || !text || !length)
-    return nullptr;
-
-  hb_buffer_t *buffer = hb_buffer_create();
-  if (!buffer)
-    return nullptr;
-
-  int len = length > static_cast<size_t>(INT_MAX)
-                ? INT_MAX
-                : static_cast<int>(length);
-  hb_buffer_set_cluster_level(buffer,
-                              HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
-  hb_buffer_add_utf8(buffer, text, len, 0, len);
-  hb_buffer_guess_segment_properties(buffer);
-  hb_shape(font->ttf.hb_font, buffer, nullptr, 0);
-  return buffer;
-}
-#endif
-
-static bool font_draw_ttf_glyph_region_cached(const font_t *font,
-                                              const font_glyph_t *glyph,
-                                              float draw_x, float draw_y,
-                                              float draw_w, float draw_h,
-                                              int scale, int flags,
-                                              color_t color,
-                                              const SDL_Rect *src) {
-  if (!font || font->kind != FONT_TTF || !glyph)
-    return false;
-  if (glyph->oversized)
-    return false;
-  if (glyph->page < 0 || glyph->page >= (int)font->ttf.pages.size())
-    return false;
-
-  const font_atlas_page_t &page = font->ttf.pages[glyph->page];
-  if (!page.handle)
-    return false;
-
-  int src_x = glyph->x;
-  int src_y = glyph->y;
-  int src_w = glyph->w;
-  int src_h = glyph->h;
-  if (src) {
-    src_x += src->x;
-    src_y += src->y;
-    src_w = src->w;
-    src_h = src->h;
-  }
-
-  if (src_w <= 0 || src_h <= 0)
-    return false;
-
-  int w = max(1, (int)ceilf(draw_w));
-  int h = max(1, (int)ceilf(draw_h));
-  int dx = (int)floorf(draw_x);
-  int dy = (int)floorf(draw_y);
-
-  float s1 = (float)src_x / (float)page.width;
-  float t1 = (float)src_y / (float)page.height;
-  float s2 = (float)(src_x + src_w) / (float)page.width;
-  float t2 = (float)(src_y + src_h) / (float)page.height;
-
-  if (flags & UI_DROPSHADOW) {
-    int shadow = max(1, scale);
-    color_t black = COLOR_A(color.a);
-    R_DrawStretchSubPic(dx + shadow, dy + shadow, w, h, s1, t1, s2, t2, black,
-                        page.handle);
-  }
-
-  R_DrawStretchSubPic(dx, dy, w, h, s1, t1, s2, t2, color, page.handle);
-  return true;
-}
-#endif
-
-static int font_draw_string_hb(font_t *font, int x, int y, int scale, int flags,
-                               size_t max_chars, const char *string,
-                               color_t color) {
-#if !USE_SDL3_TTF || !USE_HARFBUZZ
-  return x;
-#else
-  if (!font || font->kind != FONT_TTF || !font->ttf.hb_font || !string ||
-      !*string)
-    return x;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  float line_height = (float)Font_LineHeight(font, draw_scale);
-  float pixel_spacing =
-      font->pixel_scale > 0.0f ? (1.0f / font->pixel_scale) : 0.0f;
-  float line_step = line_height + pixel_spacing;
-  float hb_scale = font_ttf_metric_scale(font, draw_scale);
-  float ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
-  bool snap_positions = font_ttf_hb_snap_positions();
-  float baseline_offset = (float)font_ttf_metric_baseline(font) * hb_scale;
-  bool debug_match = font_debug_match(string);
-  int debug_flags = debug_match ? font_debug_draw_flags() : 0;
-  bool dump_metrics = debug_match && font_debug_dump_requested();
-
-  if (dump_metrics) {
-    Com_Printf("FontDebug(HB): font_id=%d scale=%d line_height=%.2f "
-               "baseline=%d extent=%d rendered=%d/%d metric_mode=%d "
-               "baseline_offset=%d scale_boost=%.2f snap=%d\n",
-               font->id, draw_scale, line_height,
-               font->ttf.baseline, font->ttf.extent,
-               font->ttf.rendered_ascent, font->ttf.rendered_extent,
-               font_ttf_metric_mode(), font_ttf_baseline_offset(),
-               font_scale_boost(), snap_positions ? 1 : 0);
-  }
-
-  int draw_flags = flags;
-  bool use_color_codes = Com_HasColorEscape(string, max_chars);
-  color_t base_color = color;
-  if (use_color_codes) {
-    base_color = font_resolve_color(flags, color);
-    draw_flags &= ~(UI_ALTCOLOR | UI_XORCOLOR);
-  }
-
-  color_t draw_color = font_resolve_color(flags, color);
-  if (use_color_codes)
-    draw_color = base_color;
-
-  font_shaped_text_t shaped;
-  font_build_shaped_text(&shaped, string, max_chars, flags, base_color);
-  font_trim_shaped_text(&shaped, flags);
-  if (shaped.text.empty())
-    return x;
-
-  std::vector<size_t> line_breaks;
-  font_collect_line_breaks(shaped.text, line_breaks);
-
-  size_t line_start = 0;
-  size_t break_index = 0;
-  size_t next_break =
-      line_breaks.empty() ? std::string::npos : line_breaks[break_index];
-  int line_index = 0;
-  float last_x = (float)x;
-
-  while (line_start <= shaped.text.size()) {
-    size_t line_end =
-        next_break == std::string::npos ? shaped.text.size() : next_break;
-    size_t line_len = line_end > line_start ? line_end - line_start : 0;
-
-    float baseline_y =
-        (float)y + baseline_offset + (float)line_index * line_step;
-    float line_y = (float)y + (float)line_index * line_step;
-
-    float pen_x = (float)x;
-    last_x = pen_x;
-
-    if (line_len > 0 && !shaped.runs.empty()) {
-      bool first_in_line = true;
-
-      for (const font_shaped_run_t &run : shaped.runs) {
-        size_t run_start = run.start;
-        size_t run_end = run.start + run.length;
-        if (run_end <= line_start || run_start >= line_end)
-          continue;
-        size_t segment_start = run_start < line_start ? line_start : run_start;
-        size_t segment_end = run_end > line_end ? line_end : run_end;
-        size_t segment_len =
-            segment_end > segment_start ? (segment_end - segment_start) : 0;
-        if (segment_len == 0)
-          continue;
-
-        const char *segment_text = shaped.text.data() + segment_start;
-        hb_buffer_t *buffer =
-            font_shape_harfbuzz_line(font, segment_text, segment_len);
-        if (!buffer)
-          continue;
-
-        unsigned int glyph_count = 0;
-        hb_glyph_info_t *infos =
-            hb_buffer_get_glyph_infos(buffer, &glyph_count);
-        hb_glyph_position_t *positions =
-            hb_buffer_get_glyph_positions(buffer, &glyph_count);
-
-        std::vector<uint32_t> nominal_codepoints;
-        nominal_codepoints.resize(glyph_count, 0);
-        for (unsigned int i = 0; i < glyph_count; ++i) {
-          size_t cluster = infos[i].cluster;
-          size_t next_cluster =
-              (i + 1 < glyph_count) ? infos[i + 1].cluster : segment_len;
-          if (cluster < segment_len) {
-            if (next_cluster > segment_len)
-              next_cluster = segment_len;
-            size_t slice_len =
-                next_cluster > cluster ? (next_cluster - cluster) : 0;
-            bool singleton = false;
-            uint32_t codepoint = font_codepoint_from_slice(
-                segment_text + cluster, slice_len, &singleton);
-            if (singleton)
-              nominal_codepoints[i] = codepoint;
-          }
-          font_get_ttf_glyph_index(font, infos[i].codepoint,
-                                   nominal_codepoints[i], nullptr);
-        }
-        font_flush_ttf_pages(font);
-
-        color_t run_color = shaped.use_colors ? run.color : draw_color;
-
-        for (unsigned int i = 0; i < glyph_count; ++i) {
-          uint32_t nominal_codepoint =
-              i < nominal_codepoints.size() ? nominal_codepoints[i] : 0;
-          font_glyph_t *cached = font_get_ttf_glyph_index(
-              font, infos[i].codepoint, nominal_codepoint, nullptr);
-          if (cached && cached->oversized)
-            cached = nullptr;
-          if (cached && cached->page >= 0 &&
-              cached->page < (int)font->ttf.pages.size()) {
-            font_atlas_page_t &page = font->ttf.pages[cached->page];
-            if (page.dirty)
-              font_flush_ttf_page(&page);
-          }
-
-          float advance = (float)positions[i].x_advance / 64.0f;
-#if USE_SDL3_TTF && USE_HARFBUZZ
-          advance = font_hb_adjusted_advance(font, infos[i].codepoint,
-                                             nominal_codepoint, cached,
-                                             advance);
-#endif
-          float advance_px = advance * hb_scale;
-          if (snap_positions)
-            advance_px = (float)Q_rint(advance_px);
-          if (!first_in_line && ttf_spacing != 0.0f && advance > 0.0f)
-            pen_x += ttf_spacing;
-          if (snap_positions)
-            pen_x = (float)Q_rint(pen_x);
-          first_in_line = false;
-
-          float bearing_x = 0.0f;
-          float bearing_y = 0.0f;
-          float offset_x = 0.0f;
-          float offset_y = 0.0f;
-          if (cached && cached->metrics_valid) {
-            bearing_x = cached->bearing_x;
-            bearing_y = cached->bearing_y;
-            offset_x = cached->offset_x;
-            offset_y = cached->offset_y;
-          } else {
-            hb_glyph_extents_t extents;
-            if (hb_font_get_glyph_extents(font->ttf.hb_font,
-                                          infos[i].codepoint, &extents)) {
-              bearing_x = (float)extents.x_bearing / 64.0f;
-              bearing_y = (float)extents.y_bearing / 64.0f;
-              float hb_height = (float)extents.height / 64.0f;
-              float hb_miny = bearing_y + hb_height;
-              if (cached && cached->h > 0)
-                offset_y = (hb_miny + (float)cached->h) - bearing_y;
-            }
-            if (cached) {
-              offset_x += cached->offset_x;
-              offset_y += cached->offset_y;
-            }
-          }
-
-          float x_offset = (float)positions[i].x_offset / 64.0f;
-          float y_offset = (float)positions[i].y_offset / 64.0f;
-          if (snap_positions) {
-            bearing_x = (float)Q_rint(bearing_x);
-            bearing_y = (float)Q_rint(bearing_y);
-            offset_x = (float)Q_rint(offset_x);
-            offset_y = (float)Q_rint(offset_y);
-            x_offset = (float)Q_rint(x_offset);
-            y_offset = (float)Q_rint(y_offset);
-          }
-          float draw_x =
-              pen_x + (x_offset + bearing_x + offset_x) * hb_scale;
-          float draw_y =
-              baseline_y - (y_offset + bearing_y + offset_y) * hb_scale;
-
-          bool drawn = false;
-          if (cached) {
-            float draw_w = (float)cached->w * hb_scale;
-            float draw_h = (float)cached->h * hb_scale;
-            drawn = font_draw_ttf_glyph_region_cached(
-                font, cached, draw_x, draw_y, draw_w, draw_h, draw_scale,
-                draw_flags, run_color, nullptr);
-            if (debug_flags & k_font_debug_draw_bounds) {
-              int bx = (int)floorf(draw_x);
-              int by = (int)floorf(draw_y);
-              int bw = max(1, (int)ceilf(draw_w));
-              int bh = max(1, (int)ceilf(draw_h));
-              font_debug_draw_box(bx, by, bw, bh,
-                                  COLOR_RGBA(255, 0, 255, 160));
-            }
-          }
-
-          if (!drawn) {
-            uint32_t fallback_cp = '?';
-            size_t fallback_index =
-                segment_start + (size_t)infos[i].cluster;
-            if (fallback_index < shaped.text.size()) {
-              const char *fallback_ptr =
-                  shaped.text.data() + fallback_index;
-              size_t fallback_remaining =
-                  shaped.text.size() - fallback_index;
-              fallback_cp =
-                  font_read_codepoint(&fallback_ptr, &fallback_remaining);
-            }
-            if (!fallback_cp)
-              fallback_cp = '?';
-
-            if (font->fallback_kfont) {
-              if (font->fallback_kfont->kind == FONT_KFONT) {
-                font_draw_kfont_glyph_at(font->fallback_kfont, fallback_cp,
-                                         Q_rint(draw_x), Q_rint(line_y),
-                                         draw_scale, draw_flags, run_color);
-              } else if (font->fallback_kfont->kind == FONT_LEGACY) {
-                font_draw_legacy_glyph_at(font->fallback_kfont, fallback_cp,
-                                          Q_rint(draw_x), Q_rint(line_y),
-                                          draw_scale, draw_flags, run_color);
-              }
-            } else if (font->legacy_handle) {
-              font_draw_legacy_glyph_at(font, fallback_cp, Q_rint(draw_x),
-                                        Q_rint(line_y), draw_scale, draw_flags,
-                                        run_color);
-            }
-          }
-
-          if (debug_flags & k_font_debug_draw_advances) {
-            int ax = (int)floorf(pen_x);
-            int ay = (int)floorf(line_y);
-            int ah = max(1, (int)ceilf(line_height));
-            R_DrawFill32(ax, ay, 1, ah, COLOR_RGBA(255, 255, 0, 160));
-          }
-          if (debug_flags & k_font_debug_draw_origins) {
-            font_debug_draw_point((int)floorf(pen_x),
-                                  (int)floorf(baseline_y),
-                                  COLOR_RGBA(0, 255, 255, 200));
-          }
-          if (dump_metrics) {
-            const char *src = "none";
-            if (cached) {
-              if (cached->metric_source == FONT_METRIC_TTF)
-                src = "ttf";
-              else if (cached->metric_source == FONT_METRIC_HB)
-                src = "hb";
-            }
-            Com_Printf(
-                "FontDebug(HB): i=%u glyph=%u adv=%.2f adv_px=%.2f pen=%.2f "
-                "bearing=(%.2f,%.2f) offset=(%.2f,%.2f) bmp=%dx%d src=%s "
-                "draw=(%.2f,%.2f)\n",
-                i, infos[i].codepoint, advance, advance_px, pen_x, bearing_x,
-                bearing_y, offset_x, offset_y, cached ? cached->w : 0,
-                cached ? cached->h : 0, src, draw_x, draw_y);
-            if (font_debug_metrics_enabled()) {
-              if (nominal_codepoint) {
-                int minx = 0;
-                int maxx = 0;
-                int miny = 0;
-                int maxy = 0;
-                int adv = 0;
-                if (font_ttf_try_nominal_metrics(
-                        font, nominal_codepoint, infos[i].codepoint, &minx,
-                        &maxx, &miny, &maxy, &adv)) {
-                  Com_Printf("FontDebug(HB): ttf cp=%u minx=%d maxx=%d "
-                             "miny=%d maxy=%d adv=%d\n",
-                             nominal_codepoint, minx, maxx, miny, maxy, adv);
-                }
-              }
-              hb_glyph_extents_t extents;
-              if (hb_font_get_glyph_extents(font->ttf.hb_font,
-                                            infos[i].codepoint, &extents)) {
-                Com_Printf(
-                    "FontDebug(HB): hb extents=(%.2f,%.2f,%.2f,%.2f) pos=(%.2f,"
-                    "%.2f) off=(%.2f,%.2f)\n",
-                    (float)extents.x_bearing / 64.0f,
-                    (float)extents.y_bearing / 64.0f,
-                    (float)extents.width / 64.0f,
-                    (float)extents.height / 64.0f,
-                    (float)positions[i].x_advance / 64.0f,
-                    (float)positions[i].y_advance / 64.0f,
-                    (float)positions[i].x_offset / 64.0f,
-                    (float)positions[i].y_offset / 64.0f);
-              }
-            }
-          }
-
-          pen_x += advance_px;
-          last_x = pen_x;
-        }
-
-        hb_buffer_destroy(buffer);
-      }
-    }
-
-    if (debug_flags & k_font_debug_draw_lines) {
-      int line_width = max(1, (int)ceilf(last_x - (float)x));
-      int top_y = (int)floorf(line_y);
-      int base_y = (int)floorf(baseline_y);
-      int bottom_y = top_y + max(1, (int)ceilf(line_height)) - 1;
-      font_debug_draw_line(x, top_y, line_width,
-                           COLOR_RGBA(0, 128, 255, 180));
-      font_debug_draw_line(x, base_y, line_width,
-                           COLOR_RGBA(0, 255, 0, 180));
-      font_debug_draw_line(x, bottom_y, line_width,
-                           COLOR_RGBA(255, 0, 0, 180));
-    }
-    if (debug_flags & k_font_debug_draw_outline) {
-      int line_width = max(1, (int)ceilf(last_x - (float)x));
-      float outline_top =
-          baseline_y - (float)font->ttf.baseline * hb_scale;
-      float outline_bottom = outline_top +
-                             (float)font->ttf.extent * hb_scale;
-      int top_y = (int)floorf(outline_top);
-      int bottom_y = (int)floorf(outline_bottom);
-      font_debug_draw_line(x, top_y, line_width,
-                           COLOR_RGBA(128, 0, 255, 180));
-      font_debug_draw_line(x, bottom_y, line_width,
-                           COLOR_RGBA(255, 128, 0, 180));
-    }
-
-    if (next_break == std::string::npos)
-      break;
-
-    line_start = line_end + 1;
-    ++line_index;
-    ++break_index;
-    next_break = break_index < line_breaks.size()
-                     ? line_breaks[break_index]
-                     : std::string::npos;
-  }
-
-  if (dump_metrics)
-    font_debug_dump_clear();
-
-  return Q_rint(last_x);
-#endif
-}
-
-static int font_measure_string_hb(const font_t *font, int scale, int flags,
-                                  size_t max_chars, const char *string,
-                                  int *out_height) {
-  if (out_height)
-    *out_height = 0;
-#if !USE_SDL3_TTF || !USE_HARFBUZZ
-  return 0;
-#else
-  if (!font || font->kind != FONT_TTF || !font->ttf.hb_font || !string ||
-      !*string)
-    return 0;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  float line_height = (float)Font_LineHeight(font, draw_scale);
-  float pixel_spacing =
-      font->pixel_scale > 0.0f ? (1.0f / font->pixel_scale) : 0.0f;
-  float line_step = line_height + pixel_spacing;
-  float hb_scale = font_ttf_metric_scale(font, draw_scale);
-  float ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
-  bool snap_positions = font_ttf_hb_snap_positions();
-
-  font_shaped_text_t shaped;
-  color_t base_color = font_resolve_color(flags, COLOR_WHITE);
-  font_build_shaped_text(&shaped, string, max_chars, flags, base_color);
-  font_trim_shaped_text(&shaped, flags);
-  if (shaped.text.empty())
-    return 0;
-
-  std::vector<size_t> line_breaks;
-  font_collect_line_breaks(shaped.text, line_breaks);
-
-  size_t line_start = 0;
-  size_t break_index = 0;
-  size_t next_break =
-      line_breaks.empty() ? std::string::npos : line_breaks[break_index];
-  float max_width = 0.0f;
-
-  while (line_start <= shaped.text.size()) {
-    size_t line_end =
-        next_break == std::string::npos ? shaped.text.size() : next_break;
-    size_t line_len = line_end > line_start ? line_end - line_start : 0;
-    float width = 0.0f;
-
-    if (line_len > 0 && !shaped.runs.empty()) {
-      bool first_in_line = true;
-
-      for (const font_shaped_run_t &run : shaped.runs) {
-        size_t run_start = run.start;
-        size_t run_end = run.start + run.length;
-        if (run_end <= line_start || run_start >= line_end)
-          continue;
-        size_t segment_start = run_start < line_start ? line_start : run_start;
-        size_t segment_end = run_end > line_end ? line_end : run_end;
-        size_t segment_len =
-            segment_end > segment_start ? (segment_end - segment_start) : 0;
-        if (segment_len == 0)
-          continue;
-
-        hb_buffer_t *buffer = font_shape_harfbuzz_line(
-            font, shaped.text.data() + segment_start, segment_len);
-        if (!buffer)
-          continue;
-
-        unsigned int glyph_count = 0;
-        hb_glyph_info_t *infos =
-            hb_buffer_get_glyph_infos(buffer, &glyph_count);
-        hb_glyph_position_t *positions =
-            hb_buffer_get_glyph_positions(buffer, &glyph_count);
-
-        for (unsigned int i = 0; i < glyph_count; ++i) {
-          float advance = (float)positions[i].x_advance / 64.0f;
-          uint32_t nominal_codepoint = 0;
-          if (infos) {
-            size_t cluster = infos[i].cluster;
-            size_t next_cluster =
-                (i + 1 < glyph_count) ? infos[i + 1].cluster : segment_len;
-            if (cluster < segment_len) {
-              if (next_cluster > segment_len)
-                next_cluster = segment_len;
-              size_t slice_len =
-                  next_cluster > cluster ? (next_cluster - cluster) : 0;
-              bool singleton = false;
-              nominal_codepoint = font_codepoint_from_slice(
-                  shaped.text.data() + segment_start + cluster, slice_len,
-                  &singleton);
-              if (!singleton)
-                nominal_codepoint = 0;
-            }
-          }
-#if USE_SDL3_TTF && USE_HARFBUZZ
-          if (infos) {
-            advance =
-                font_hb_adjusted_advance(font, infos[i].codepoint,
-                                         nominal_codepoint, nullptr, advance);
-          }
-#endif
-          float advance_px = advance * hb_scale;
-          if (snap_positions)
-            advance_px = (float)Q_rint(advance_px);
-          if (!first_in_line && ttf_spacing != 0.0f && advance > 0.0f)
-            width += ttf_spacing;
-          if (snap_positions)
-            width = (float)Q_rint(width);
-          first_in_line = false;
-          width += advance_px;
-        }
-
-        hb_buffer_destroy(buffer);
-      }
-    }
-
-    if (width > max_width)
-      max_width = width;
-
-    if (next_break == std::string::npos)
-      break;
-
-    line_start = line_end + 1;
-    ++break_index;
-    next_break = break_index < line_breaks.size()
-                     ? line_breaks[break_index]
-                     : std::string::npos;
-  }
-
-  if (out_height) {
-    int lines = 1;
-    if (!line_breaks.empty())
-      lines = (int)line_breaks.size() + 1;
-    *out_height = Q_rint((float)lines * line_step);
-  }
-
-  return max(0, Q_rint(max_width));
-#endif
-}
-#endif
 
 static uint32_t font_read_codepoint(const char **src, size_t *remaining) {
   const unsigned char *text = reinterpret_cast<const unsigned char *>(*src);
@@ -1942,46 +244,61 @@ static uint32_t font_read_codepoint(const char **src, size_t *remaining) {
   return code;
 }
 
-static uint32_t font_codepoint_from_slice(const char *text, size_t length,
-                                          bool *out_singleton) {
-  if (out_singleton)
-    *out_singleton = false;
-  if (!text || length == 0)
-    return 0;
-
-  const char *ptr = text;
-  size_t remaining = length;
-  uint32_t codepoint = font_read_codepoint(&ptr, &remaining);
-  if (out_singleton)
-    *out_singleton = (codepoint != 0 && remaining == 0);
-  return codepoint;
+static const char *font_format_char(uint32_t cp, char *buffer, size_t size) {
+  if (!buffer || size == 0)
+    return "";
+  if (cp == ' ') {
+    Q_snprintf(buffer, size, "space");
+    return buffer;
+  }
+  if (cp == '\t') {
+    Q_snprintf(buffer, size, "\\t");
+    return buffer;
+  }
+  if (cp == '\n') {
+    Q_snprintf(buffer, size, "\\n");
+    return buffer;
+  }
+  if (cp == '\r') {
+    Q_snprintf(buffer, size, "\\r");
+    return buffer;
+  }
+  if (cp == '\\') {
+    Q_snprintf(buffer, size, "\\\\");
+    return buffer;
+  }
+  if (cp == '\'') {
+    Q_snprintf(buffer, size, "\\'");
+    return buffer;
+  }
+  if (cp >= 32 && cp < 127 && std::isprint(static_cast<int>(cp))) {
+    Q_snprintf(buffer, size, "%c", (char)cp);
+    return buffer;
+  }
+  Q_snprintf(buffer, size, "0x%02X", (unsigned)cp);
+  return buffer;
 }
 
-static color_t font_resolve_color(int flags, color_t color) {
-  if (flags & (UI_ALTCOLOR | UI_XORCOLOR)) {
-    color_t alt = COLOR_RGB(255, 255, 0);
-    alt.a = color.a;
-    return alt;
+static qhandle_t font_register_legacy(const char *path, const char *fallback) {
+  qhandle_t handle = 0;
+  if (path && *path)
+    handle = R_RegisterFont(path);
+  if (!handle && fallback && *fallback &&
+      (!path || Q_strcasecmp(path, fallback))) {
+    handle = R_RegisterFont(fallback);
   }
-  return color;
+  return handle;
 }
 
 static bool font_load_kfont(font_t *font, const char *filename) {
   if (!font || !filename || !*filename)
     return false;
 
-  font_debug_printf("Font: loading kfont \"%s\"\n", font_safe_str(filename));
-
   char *buffer = nullptr;
-  if (FS_LoadFile(filename, (void **)&buffer) < 0) {
-    font_debug_printf("Font: kfont load failed \"%s\": %s\n",
-                      font_safe_str(filename), Com_GetLastError());
+  if (FS_LoadFile(filename, (void **)&buffer) < 0)
     return false;
-  }
 
   const char *data = buffer;
-  char texture_path[MAX_QPATH];
-  texture_path[0] = '\0';
   while (true) {
     const char *token = COM_Parse(&data);
     if (!*token)
@@ -1989,24 +306,21 @@ static bool font_load_kfont(font_t *font, const char *filename) {
 
     if (!strcmp(token, "texture")) {
       token = COM_Parse(&data);
-      Q_strlcpy(texture_path, token, sizeof(texture_path));
       font->kfont.pic = R_RegisterFont(va("/%s", token));
-      font_debug_printf("Font: kfont texture \"%s\" handle=%d\n",
-                        font_safe_str(texture_path), font->kfont.pic);
     } else if (!strcmp(token, "unicode")) {
+      continue;
     } else if (!strcmp(token, "mapchar")) {
       COM_Parse(&data); // "{"
-
       while (true) {
         token = COM_Parse(&data);
         if (!strcmp(token, "}"))
           break;
 
-        uint32_t codepoint = strtoul(token, NULL, 10);
-        uint32_t x = strtoul(COM_Parse(&data), NULL, 10);
-        uint32_t y = strtoul(COM_Parse(&data), NULL, 10);
-        uint32_t w = strtoul(COM_Parse(&data), NULL, 10);
-        uint32_t h = strtoul(COM_Parse(&data), NULL, 10);
+        uint32_t codepoint = strtoul(token, nullptr, 10);
+        uint32_t x = strtoul(COM_Parse(&data), nullptr, 10);
+        uint32_t y = strtoul(COM_Parse(&data), nullptr, 10);
+        uint32_t w = strtoul(COM_Parse(&data), nullptr, 10);
+        uint32_t h = strtoul(COM_Parse(&data), nullptr, 10);
         COM_Parse(&data); // skip
 
         kfont_glyph_t glyph;
@@ -2015,7 +329,7 @@ static bool font_load_kfont(font_t *font, const char *filename) {
         glyph.w = (int)w;
         glyph.h = (int)h;
         font->kfont.glyphs[codepoint] = glyph;
-        font->kfont.line_height = max(font->kfont.line_height, (int)h);
+        font->kfont.line_height = std::max(font->kfont.line_height, (int)h);
       }
     }
   }
@@ -2033,671 +347,589 @@ static bool font_load_kfont(font_t *font, const char *filename) {
   font->kfont.inv_h = 1.0f / (float)font->kfont.tex_h;
   if (font->kfont.line_height <= 0)
     font->kfont.line_height = CONCHAR_HEIGHT;
-
-  font_debug_printf(
-      "Font: kfont loaded \"%s\" glyphs=%zu line_height=%d texture=\"%s\"\n",
-      font_safe_str(filename), font->kfont.glyphs.size(),
-      font->kfont.line_height, font_safe_str(texture_path));
-
   return true;
 }
 
-static qhandle_t font_register_legacy(const char *path, const char *fallback) {
-  font_debug_printf("Font: legacy register path=\"%s\" fallback=\"%s\"\n",
-                    font_safe_str(path), font_safe_str(fallback));
-  qhandle_t handle = 0;
-  if (path && *path) {
-    handle = R_RegisterFont(path);
-    font_debug_printf("Font: legacy handle for \"%s\" = %d\n",
-                      font_safe_str(path), handle);
-  }
-  if (!handle && fallback && *fallback &&
-      (!path || Q_strcasecmp(path, fallback))) {
-    handle = R_RegisterFont(fallback);
-    font_debug_printf("Font: legacy fallback handle for \"%s\" = %d\n",
-                      font_safe_str(fallback), handle);
-  }
-  return handle;
+static int font_fixed_advance_scaled(const font_t *font, int scale) {
+  if (!font || font->fixed_advance <= 0)
+    return 0;
+  int draw_scale = scale > 0 ? scale : 1;
+  return std::max(
+      1, Q_rint((float)font->fixed_advance * (float)draw_scale * font_scale_boost()));
 }
 
 #if USE_SDL3_TTF
-static font_atlas_page_t font_create_atlas_page(int font_id, int page_index) {
-  font_atlas_page_t page;
-  page.width = k_atlas_size;
-  page.height = k_atlas_size;
-  page.pixels = (byte *)Z_Malloc(page.width * page.height * 4);
-  font_clear_atlas_rect(&page, 0, 0, page.width, page.height);
+static inline int ttf_floor_26_6(int value) { return value & -64; }
+static inline int ttf_ceil_26_6(int value) { return (value + 63) & -64; }
+static inline int ttf_trunc_26_6(int value) { return value >> 6; }
 
-  byte *upload = (byte *)Z_Malloc(page.width * page.height * 4);
-  memcpy(upload, page.pixels, page.width * page.height * 4);
+static int font_ttf_hinting_mode(void) {
+  if (!cl_font_ttf_hinting)
+    cl_font_ttf_hinting = Cvar_Get("cl_font_ttf_hinting", "1", CVAR_ARCHIVE);
+  return Cvar_ClampInteger(cl_font_ttf_hinting, 0, 3);
+}
 
+static FT_Int32 font_ttf_load_flags(void) {
+  FT_Int32 flags = FT_LOAD_DEFAULT | FT_LOAD_NO_BITMAP;
+  switch (font_ttf_hinting_mode()) {
+  case 0:
+    flags |= FT_LOAD_NO_HINTING;
+    break;
+  case 2:
+    flags |= FT_LOAD_TARGET_MONO | FT_LOAD_MONOCHROME;
+    break;
+  case 3:
+    flags |= FT_LOAD_TARGET_NORMAL;
+    break;
+  case 1:
+  default:
+    flags |= FT_LOAD_TARGET_LIGHT;
+    break;
+  }
+  return flags;
+}
+
+static uint32_t font_sanitize_codepoint(uint32_t codepoint) {
+  if (codepoint >= 0x110000)
+    return 0;
+  if (codepoint >= 0xD800 && codepoint < 0xE000)
+    return 0;
+  return codepoint;
+}
+
+static void font_ttf_get_glyph_box(FT_GlyphSlot slot, int *left, int *right,
+                                   int *top, int *bottom, int *width,
+                                   int *height) {
+  *left = ttf_floor_26_6(slot->metrics.horiBearingX - 64);
+  *right = ttf_ceil_26_6(slot->metrics.horiBearingX + slot->metrics.width + 64);
+  *top = ttf_ceil_26_6(slot->metrics.horiBearingY + 64);
+  *bottom =
+      ttf_floor_26_6(slot->metrics.horiBearingY - slot->metrics.height - 64);
+  *width = ttf_trunc_26_6(*right - *left);
+  *height = ttf_trunc_26_6(*top - *bottom);
+}
+
+static void font_ttf_blit_alpha(byte *dst, int dst_width, int dst_height, int x,
+                                int y, const byte *src, int src_pitch, int w,
+                                int h) {
+  if (!dst || !src || w <= 0 || h <= 0)
+    return;
+  if (x < 0 || y < 0 || x + w > dst_width || y + h > dst_height)
+    return;
+
+  for (int row = 0; row < h; ++row) {
+    byte *dst_row = dst + ((y + row) * dst_width) + x;
+    const byte *src_row = src + row * src_pitch;
+    memcpy(dst_row, src_row, (size_t)w);
+  }
+}
+
+static int font_ttf_store_page(font_t *font, const byte *alpha_pixels, int width,
+                               int height) {
+  if (!font || !alpha_pixels || width <= 0 || height <= 0)
+    return -1;
+
+  const size_t pixel_count = (size_t)width * (size_t)height;
+  const size_t rgba_size = pixel_count * 4;
+
+  font_ttf_page_t page;
+  page.width = width;
+  page.height = height;
+  page.pixels = (byte *)Z_Malloc(rgba_size);
+
+  for (size_t i = 0; i < pixel_count; ++i) {
+    const size_t j = i * 4;
+    page.pixels[j + 0] = 255;
+    page.pixels[j + 1] = 255;
+    page.pixels[j + 2] = 255;
+    page.pixels[j + 3] = alpha_pixels[i];
+  }
+
+  byte *upload = (byte *)Z_Malloc(rgba_size);
+  memcpy(upload, page.pixels, rgba_size);
+
+  int page_index = (int)font->ttf.pages.size();
   page.handle = R_RegisterRawImage(
-      va("fonts/_ttf_%d_%d", font_id, page_index), page.width, page.height,
-      upload, IT_FONT,
+      va("fonts/_ttf_%d_%d", font->id, page_index), width, height, upload,
+      IT_FONT,
       static_cast<imageflags_t>(IF_PERMANENT | IF_TRANSPARENT |
                                 IF_NO_COLOR_ADJUST));
   if (!page.handle) {
     Z_Free(upload);
-    font_debug_printf(
-        "Font: atlas page registration failed for font=%d page=%d\n", font_id,
-        page_index);
+    Z_Free(page.pixels);
+    return -1;
   }
-  page.next_x = k_atlas_padding;
-  page.next_y = k_atlas_padding;
-  page.row_height = 0;
-  page.dirty = false;
-  return page;
+
+  font->ttf.pages.push_back(page);
+  return page_index;
 }
 
-static void font_compute_ttf_metrics(font_t *font) {
-  if (!font || !font->ttf.font)
+static bool font_ttf_render_bitmap(font_t *font, uint32_t codepoint,
+                                   font_ttf_glyph_t *out_glyph,
+                                   std::vector<byte> *out_bitmap,
+                                   int *out_pitch) {
+  if (!font || !out_glyph || !out_bitmap || !out_pitch || !font->ttf.face)
+    return false;
+
+  FT_UInt glyph_index = FT_Get_Char_Index(font->ttf.face, codepoint);
+  if (!glyph_index)
+    return false;
+
+  if (FT_Load_Glyph(font->ttf.face, glyph_index, font_ttf_load_flags()) != 0)
+    return false;
+
+  FT_GlyphSlot slot = font->ttf.face->glyph;
+  if (!slot || slot->format != ft_glyph_format_outline)
+    return false;
+
+  int left = 0, right = 0, top = 0, bottom = 0, width = 0, height = 0;
+  font_ttf_get_glyph_box(slot, &left, &right, &top, &bottom, &width, &height);
+
+  out_glyph->valid = true;
+  out_glyph->left = ttf_trunc_26_6(left);
+  out_glyph->top = ttf_trunc_26_6(top);
+  out_glyph->bottom = ttf_trunc_26_6(bottom);
+  out_glyph->x_skip = std::max(1, ((int)slot->metrics.horiAdvance >> 6) + 1);
+  out_glyph->w = std::max(0, width);
+  out_glyph->h = std::max(0, height);
+
+  if (out_glyph->w <= 0 || out_glyph->h <= 0) {
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
+
+  out_bitmap->assign((size_t)out_glyph->w * (size_t)out_glyph->h, 0);
+  *out_pitch = out_glyph->w;
+
+  FT_Bitmap bitmap{};
+  bitmap.width = (unsigned)out_glyph->w;
+  bitmap.rows = (unsigned)out_glyph->h;
+  bitmap.pitch = *out_pitch;
+  bitmap.pixel_mode = ft_pixel_mode_grays;
+  bitmap.num_grays = 256;
+  bitmap.buffer = out_bitmap->data();
+
+  FT_Outline_Translate(&slot->outline, -left, -bottom);
+  if (FT_Outline_Get_Bitmap(g_ft_library, &slot->outline, &bitmap) != 0)
+    return false;
+
+  return true;
+}
+
+static bool font_ttf_render_chunk(font_t *font, uint32_t chunk_index) {
+  if (!font || font->kind != FONT_TTF || !font->ttf.face)
+    return false;
+  if (chunk_index >= font->ttf.chunks.size())
+    return false;
+  if (font->ttf.chunks[chunk_index])
+    return font->ttf.chunks[chunk_index] != &g_ttf_null_chunk;
+
+  font_ttf_chunk_t *chunk = new font_ttf_chunk_t();
+  bool any_glyph = false;
+
+  std::vector<byte> page_alpha((size_t)k_ttf_atlas_size *
+                               (size_t)k_ttf_atlas_size, 0);
+  std::vector<int> pending_slots;
+  int pen_x = k_ttf_atlas_padding;
+  int pen_y = k_ttf_atlas_padding;
+  int row_height = 0;
+
+  auto flush_page = [&]() {
+    if (pending_slots.empty())
+      return;
+    int page_index = font_ttf_store_page(font, page_alpha.data(), k_ttf_atlas_size,
+                                         k_ttf_atlas_size);
+    for (int slot : pending_slots) {
+      if (page_index >= 0)
+        chunk->glyphs[(size_t)slot].page = page_index;
+      else
+        chunk->glyphs[(size_t)slot].page = -1;
+    }
+    pending_slots.clear();
+    std::fill(page_alpha.begin(), page_alpha.end(), 0);
+    pen_x = k_ttf_atlas_padding;
+    pen_y = k_ttf_atlas_padding;
+    row_height = 0;
+  };
+
+  for (int i = 0; i < 256; ++i) {
+    uint32_t cp = chunk_index * 256u + (uint32_t)i;
+    cp = cp ? cp : 0xFFFD;
+
+    font_ttf_glyph_t glyph;
+    std::vector<byte> bitmap;
+    int bitmap_pitch = 0;
+    if (!font_ttf_render_bitmap(font, cp, &glyph, &bitmap, &bitmap_pitch))
+      continue;
+
+    any_glyph = true;
+    if (font->fixed_advance > 0 && font->ttf.fixed_advance_units > 0)
+      glyph.x_skip = font->ttf.fixed_advance_units;
+
+    if (glyph.w <= 0 || glyph.h <= 0) {
+      chunk->glyphs[(size_t)i] = glyph;
+      continue;
+    }
+
+    if (glyph.w + (k_ttf_atlas_padding * 2) > k_ttf_atlas_size ||
+        glyph.h + (k_ttf_atlas_padding * 2) > k_ttf_atlas_size) {
+      chunk->glyphs[(size_t)i] = glyph;
+      continue;
+    }
+
+    if (pen_x + glyph.w + k_ttf_atlas_padding > k_ttf_atlas_size) {
+      pen_x = k_ttf_atlas_padding;
+      pen_y += row_height + k_ttf_atlas_padding;
+      row_height = 0;
+    }
+
+    if (pen_y + glyph.h + k_ttf_atlas_padding > k_ttf_atlas_size)
+      flush_page();
+
+    if (pen_y + glyph.h + k_ttf_atlas_padding > k_ttf_atlas_size) {
+      chunk->glyphs[(size_t)i] = glyph;
+      continue;
+    }
+
+    font_ttf_blit_alpha(page_alpha.data(), k_ttf_atlas_size, k_ttf_atlas_size,
+                        pen_x, pen_y, bitmap.data(), bitmap_pitch, glyph.w,
+                        glyph.h);
+
+    glyph.page = -2;
+    glyph.x = pen_x;
+    glyph.y = pen_y;
+    chunk->glyphs[(size_t)i] = glyph;
+    pending_slots.push_back(i);
+
+    pen_x += glyph.w + k_ttf_atlas_padding;
+    row_height = std::max(row_height, glyph.h);
+  }
+
+  flush_page();
+
+  if (!any_glyph) {
+    delete chunk;
+    font->ttf.chunks[chunk_index] = &g_ttf_null_chunk;
+    return false;
+  }
+
+  chunk->empty = false;
+  font->ttf.chunks[chunk_index] = chunk;
+  return true;
+}
+
+static font_ttf_chunk_t *font_ttf_get_chunk(font_t *font, uint32_t chunk_index) {
+  if (!font || font->kind != FONT_TTF || chunk_index >= font->ttf.chunks.size())
+    return nullptr;
+
+  font_ttf_chunk_t *chunk = font->ttf.chunks[chunk_index];
+  if (!chunk) {
+    font_ttf_render_chunk(font, chunk_index);
+    chunk = font->ttf.chunks[chunk_index];
+  }
+
+  if (!chunk || chunk == &g_ttf_null_chunk || chunk->empty)
+    return nullptr;
+  return chunk;
+}
+
+static const font_ttf_glyph_t *font_ttf_get_glyph(font_t *font,
+                                                  uint32_t codepoint) {
+  if (!font || font->kind != FONT_TTF || !font->ttf.face)
+    return nullptr;
+
+  codepoint = font_sanitize_codepoint(codepoint);
+  uint32_t chunk_index = codepoint / 256u;
+  uint32_t chunk_slot = codepoint & 255u;
+
+  font_ttf_chunk_t *chunk = font_ttf_get_chunk(font, chunk_index);
+  if (chunk) {
+    const font_ttf_glyph_t &glyph = chunk->glyphs[(size_t)chunk_slot];
+    if (glyph.valid)
+      return &glyph;
+  }
+
+  if (codepoint != 0)
+    return font_ttf_get_glyph(font, 0);
+
+  return nullptr;
+}
+
+static float font_ttf_letter_spacing(const font_t *font, int scale) {
+  if (!font || font->kind != FONT_TTF || font->letter_spacing <= 0.0f)
+    return 0.0f;
+  return (float)font->ttf.extent * font_draw_scale(font, scale) *
+         font->letter_spacing;
+}
+
+static float font_ttf_advance(const font_t *font, const font_ttf_glyph_t *glyph,
+                              int scale) {
+  if (!font || !glyph)
+    return 0.0f;
+  if (font->fixed_advance > 0)
+    return (float)font_fixed_advance_scaled(font, scale);
+  return std::max(0.0f, (float)glyph->x_skip * font_draw_scale(font, scale));
+}
+
+static float font_ttf_kerning(const font_t *font, uint32_t prev, uint32_t cur,
+                              int scale) {
+  if (!font || font->kind != FONT_TTF || font->fixed_advance > 0 ||
+      !font->ttf.face || !FT_HAS_KERNING(font->ttf.face) || !prev || !cur) {
+    return 0.0f;
+  }
+
+  FT_UInt prev_index = FT_Get_Char_Index(font->ttf.face, prev);
+  FT_UInt cur_index = FT_Get_Char_Index(font->ttf.face, cur);
+  if (!prev_index || !cur_index)
+    return 0.0f;
+
+  FT_Vector delta{};
+  if (FT_Get_Kerning(font->ttf.face, prev_index, cur_index, FT_KERNING_DEFAULT,
+                     &delta) != 0) {
+    return 0.0f;
+  }
+
+  return ((float)delta.x / 64.0f) * font_draw_scale(font, scale);
+}
+
+static bool font_draw_ttf_glyph(const font_t *font, const font_ttf_glyph_t *glyph,
+                                float *pen_x, int y, int scale, int flags,
+                                color_t color) {
+  if (!font || font->kind != FONT_TTF || !glyph || !glyph->valid || !pen_x)
+    return false;
+
+  int draw_scale = scale > 0 ? scale : 1;
+  float glyph_scale = font_draw_scale(font, draw_scale);
+  float advance = font_ttf_advance(font, glyph, draw_scale);
+  if (advance <= 0.0f)
+    advance = glyph_scale;
+
+  if (glyph->page >= 0 && glyph->page < (int)font->ttf.pages.size() &&
+      glyph->w > 0 && glyph->h > 0) {
+    const font_ttf_page_t &page = font->ttf.pages[(size_t)glyph->page];
+    if (page.handle) {
+      float baseline_y = (float)y + (float)font->ttf.baseline * glyph_scale;
+      float draw_xf = *pen_x + (float)glyph->left * glyph_scale;
+      if (font->fixed_advance > 0) {
+        float centered = ((float)font_fixed_advance_scaled(font, draw_scale) -
+                          ((float)glyph->x_skip * glyph_scale)) *
+                         0.5f;
+        draw_xf += centered;
+      }
+      float draw_yf = baseline_y - (float)glyph->top * glyph_scale;
+
+      int draw_x = (int)floorf(draw_xf);
+      int draw_y = (int)floorf(draw_yf);
+      int draw_w = std::max(1, (int)ceilf((float)glyph->w * glyph_scale));
+      int draw_h = std::max(1, (int)ceilf((float)glyph->h * glyph_scale));
+
+      float s1 = (float)glyph->x / (float)page.width;
+      float t1 = (float)glyph->y / (float)page.height;
+      float s2 = (float)(glyph->x + glyph->w) / (float)page.width;
+      float t2 = (float)(glyph->y + glyph->h) / (float)page.height;
+
+      if (flags & UI_DROPSHADOW) {
+        int shadow = std::max(1, draw_scale);
+        color_t black = COLOR_A(color.a);
+        R_DrawStretchSubPic(draw_x + shadow, draw_y + shadow, draw_w, draw_h,
+                            s1, t1, s2, t2, black, page.handle);
+      }
+
+      R_DrawStretchSubPic(draw_x, draw_y, draw_w, draw_h, s1, t1, s2, t2, color,
+                          page.handle);
+    }
+  }
+
+  *pen_x += advance;
+  return true;
+}
+
+static void font_free_ttf(font_t *font) {
+  if (!font || font->kind != FONT_TTF)
     return;
 
-  int ascent = font->ttf.ascent > 0 ? font->ttf.ascent
-                                    : TTF_GetFontAscent(font->ttf.font);
-  int descent = TTF_GetFontDescent(font->ttf.font);
-  int extent = ascent + abs(descent);
-  if (extent <= 0)
-    extent = max(font->ttf.line_skip, 1);
+  for (font_ttf_chunk_t *chunk : font->ttf.chunks) {
+    if (chunk && chunk != &g_ttf_null_chunk)
+      delete chunk;
+  }
+  font->ttf.chunks.fill(nullptr);
 
-  font->ttf.baseline = ascent > 0 ? ascent : max(font->ttf.line_skip, 1);
+  for (font_ttf_page_t &page : font->ttf.pages) {
+    if (page.handle)
+      R_UnregisterImage(page.handle);
+    if (page.pixels)
+      Z_Free(page.pixels);
+  }
+  font->ttf.pages.clear();
+
+  if (font->ttf.face) {
+    FT_Done_Face(font->ttf.face);
+    font->ttf.face = nullptr;
+  }
+  if (font->ttf.data) {
+    FS_FreeFile(font->ttf.data);
+    font->ttf.data = nullptr;
+  }
+  font->ttf.data_size = 0;
+}
+
+static bool font_load_ttf(font_t *font, const char *path) {
+  if (!font || !path || !*path || !g_ttf_ready || !g_ft_library)
+    return false;
+
+  void *data = nullptr;
+  int len = FS_LoadFile(path, &data);
+  if (len <= 0 || !data)
+    return false;
+
+  FT_Face face = nullptr;
+  if (FT_New_Memory_Face(g_ft_library, (FT_Byte *)data, len, 0, &face) != 0) {
+    FS_FreeFile(data);
+    return false;
+  }
+
+  int pixel_height =
+      std::max(1, Q_rint((float)font->virtual_line_height * font->pixel_scale));
+  if (FT_Set_Pixel_Sizes(face, 0, (FT_UInt)pixel_height) != 0) {
+    FT_Done_Face(face);
+    FS_FreeFile(data);
+    return false;
+  }
+
+  font->kind = FONT_TTF;
+  font->ttf.face = face;
+  font->ttf.data = data;
+  font->ttf.data_size = len;
+  font->ttf.pixel_height = pixel_height;
+
+  int asc = std::max(1, ttf_trunc_26_6(ttf_ceil_26_6(face->size->metrics.ascender)));
+  int desc = std::max(0, -ttf_trunc_26_6(ttf_floor_26_6(face->size->metrics.descender)));
+  int line = std::max(1, ttf_trunc_26_6(ttf_ceil_26_6(face->size->metrics.height)));
+  int extent = std::max(line, asc + desc);
+  if (extent <= 0)
+    extent = pixel_height;
+
+  font->ttf.line_skip = line;
   font->ttf.extent = extent;
-  font->ttf.rendered_ascent = 0;
-  font->ttf.rendered_descent = 0;
-  font->ttf.rendered_extent = 0;
-  font->ttf.rendered_metrics_valid = false;
-  font->ttf.rendered_metrics_locked = false;
-}
+  font->ttf.baseline = std::clamp(asc + 1, 1, extent);
+  font->unit_scale =
+      ((float)font->virtual_line_height * font->pixel_scale) / (float)extent;
 
-static void font_compute_ttf_rendered_metrics(font_t *font) {
-  if (!font || font->kind != FONT_TTF)
-    return;
-
-  float max_top = 0.0f;
-  float max_bottom = 0.0f;
-  int samples = 0;
-
-#if USE_HARFBUZZ
-  const bool use_indices = font->ttf.hb_font != nullptr;
-#else
-  const bool use_indices = false;
-#endif
-
-  if (use_indices) {
-    for (const auto &entry : font->ttf.glyph_indices) {
-      const font_glyph_t &glyph = entry.second;
-      if (glyph.h <= 0 || !glyph.metrics_valid)
-        continue;
-      int pad_top = max(0, glyph.pad_top);
-      int pad_bottom = max(0, glyph.pad_bottom);
-      int trimmed_h = glyph.h - pad_top - pad_bottom;
-      if (trimmed_h <= 0)
-        trimmed_h = glyph.h;
-      float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
-      float bottom = top - (float)trimmed_h;
-      max_top = max(max_top, top);
-      max_bottom = max(max_bottom, -bottom);
-      ++samples;
-    }
-  } else {
-    for (const auto &entry : font->ttf.glyphs) {
-      const font_glyph_t &glyph = entry.second;
-      if (glyph.h <= 0 || !glyph.metrics_valid)
-        continue;
-      int pad_top = max(0, glyph.pad_top);
-      int pad_bottom = max(0, glyph.pad_bottom);
-      int trimmed_h = glyph.h - pad_top - pad_bottom;
-      if (trimmed_h <= 0)
-        trimmed_h = glyph.h;
-      float top = glyph.bearing_y + glyph.offset_y - (float)pad_top;
-      float bottom = top - (float)trimmed_h;
-      max_top = max(max_top, top);
-      max_bottom = max(max_bottom, -bottom);
-      ++samples;
+  if (font->fixed_advance > 0) {
+    FT_UInt m_index = FT_Get_Char_Index(face, 'M');
+    if (m_index && FT_Load_Glyph(face, m_index, font_ttf_load_flags()) == 0) {
+      int xskip = std::max(1, ((int)face->glyph->metrics.horiAdvance >> 6) + 1);
+      font->ttf.fixed_advance_units = xskip;
+      float vscale = (float)font->virtual_line_height / (float)font->ttf.extent;
+      font->fixed_advance = std::max(1, Q_rint((float)xskip * vscale));
     }
   }
 
-  if (samples <= 0) {
-    font->ttf.rendered_metrics_valid = false;
-    return;
-  }
-
-  int ascent = max(1, (int)ceilf(max_top));
-  int descent = max(0, (int)ceilf(max_bottom));
-  int extent = ascent + descent;
-  if (extent <= 0) {
-    font->ttf.rendered_metrics_valid = false;
-    return;
-  }
-
-  font->ttf.rendered_ascent = ascent;
-  font->ttf.rendered_descent = descent;
-  font->ttf.rendered_extent = extent;
-  font->ttf.rendered_metrics_valid = true;
-}
-
-static void font_update_ttf_fixed_advance(font_t *font) {
-  if (!font || font->kind != FONT_TTF || font->fixed_advance <= 0)
-    return;
-  if (font->ttf.fixed_advance_units <= 0)
-    return;
-
-  int extent = font_ttf_metric_extent(font);
-  if (extent <= 0)
-    return;
-
-  float advance_scale = (float)font->virtual_line_height / (float)extent;
-  font->fixed_advance =
-      max(1, Q_rint((float)font->ttf.fixed_advance_units * advance_scale));
-}
-
-#if USE_HARFBUZZ
-static void font_destroy_harfbuzz(font_t *font) {
-  if (!font)
-    return;
-
-  if (font->ttf.hb_font) {
-    hb_font_destroy(font->ttf.hb_font);
-    font->ttf.hb_font = nullptr;
-  }
-  if (font->ttf.hb_face) {
-    hb_face_destroy(font->ttf.hb_face);
-    font->ttf.hb_face = nullptr;
-  }
-  if (font->ttf.hb_blob) {
-    hb_blob_destroy(font->ttf.hb_blob);
-    font->ttf.hb_blob = nullptr;
-  }
-}
-
-static void font_init_harfbuzz(font_t *font) {
-  if (!font || !font->ttf.data || font->ttf.data_size <= 0 ||
-      font->ttf.pixel_height <= 0) {
-    return;
-  }
-
-  font_destroy_harfbuzz(font);
-
-  hb_blob_t *blob = hb_blob_create(
-      static_cast<const char *>(font->ttf.data), font->ttf.data_size,
-      HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-  if (!blob)
-    return;
-
-  hb_face_t *face = hb_face_create(blob, 0);
-  if (!face) {
-    hb_blob_destroy(blob);
-    return;
-  }
-
-  hb_font_t *hb_font = hb_font_create(face);
-  if (!hb_font) {
-    hb_face_destroy(face);
-    hb_blob_destroy(blob);
-    return;
-  }
-
-  hb_ot_font_set_funcs(hb_font);
-  hb_font_set_scale(hb_font, font->ttf.pixel_height * 64,
-                    font->ttf.pixel_height * 64);
-  hb_font_set_ppem(hb_font, font->ttf.pixel_height, font->ttf.pixel_height);
-
-  font->ttf.hb_blob = blob;
-  font->ttf.hb_face = face;
-  font->ttf.hb_font = hb_font;
+  // Preload the first Unicode chunk so ASCII text has deterministic startup
+  // behavior, matching Daemon's chunked warm-up.
+  font_ttf_render_chunk(font, 0);
+  return true;
 }
 #endif
 
-static font_glyph_t *font_get_ttf_glyph(font_t *font, uint32_t codepoint,
-                                        bool *out_created) {
-  if (out_created)
-    *out_created = false;
-
-  if (!font || font->kind != FONT_TTF)
-    return nullptr;
-
-  auto it = font->ttf.glyphs.find(codepoint);
-  if (it != font->ttf.glyphs.end()) {
-    font_touch_ttf_glyph(font, codepoint);
-    return &it->second;
+static const char *font_kind_name(font_kind_t kind) {
+  switch (kind) {
+  case FONT_LEGACY:
+    return "legacy";
+  case FONT_KFONT:
+    return "kfont";
+  case FONT_TTF:
+    return "ttf";
+  default:
+    return "unknown";
   }
-
-  if (!font->ttf.font)
-    return nullptr;
-
-  if (!TTF_FontHasGlyph(font->ttf.font, codepoint))
-    return nullptr;
-
-  int minx = 0;
-  int maxx = 0;
-  int miny = 0;
-  int maxy = 0;
-  int advance = 0;
-  if (!TTF_GetGlyphMetrics(font->ttf.font, codepoint, &minx, &maxx, &miny,
-                           &maxy, &advance))
-    return nullptr;
-
-  font_glyph_t glyph;
-  glyph.bearing_x = (float)minx;
-  glyph.bearing_y = (float)maxy;
-  glyph.advance = advance;
-  glyph.metrics_valid = true;
-  glyph.metric_source = FONT_METRIC_TTF;
-
-  SDL_Color white = {255, 255, 255, 255};
-  SDL_Surface *surface =
-      TTF_RenderGlyph_Blended(font->ttf.font, codepoint, white);
-  if (!surface) {
-    glyph.w = max(0, maxx - minx);
-    glyph.h = max(0, maxy - miny);
-    if (glyph.h > 0)
-      // Compensate for trimmed bitmap height relative to outline metrics.
-      glyph.offset_y = (float)(miny + glyph.h - maxy);
-    if (glyph.metrics_valid &&
-        font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-      font_update_ttf_fixed_advance(font);
-    }
-    font->ttf.glyphs[codepoint] = glyph;
-    font_touch_ttf_glyph(font, codepoint);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyphs[codepoint];
-  }
-
-  const SDL_PixelFormat desired_format = SDL_PIXELFORMAT_RGBA32;
-  if (surface->format != desired_format) {
-    SDL_Surface *converted = SDL_ConvertSurface(surface, desired_format);
-    if (!converted) {
-      font_debug_printf("Font: SDL_ConvertSurface failed codepoint=%u: %s\n",
-                        codepoint, SDL_GetError());
-      SDL_DestroySurface(surface);
-      if (glyph.metrics_valid &&
-          font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-        font_update_ttf_fixed_advance(font);
-      }
-      font->ttf.glyphs[codepoint] = glyph;
-      font_touch_ttf_glyph(font, codepoint);
-      if (out_created)
-        *out_created = true;
-      return &font->ttf.glyphs[codepoint];
-    }
-    SDL_DestroySurface(surface);
-    surface = converted;
-  }
-
-  if (!surface) {
-    if (glyph.metrics_valid &&
-        font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-      font_update_ttf_fixed_advance(font);
-    }
-    font->ttf.glyphs[codepoint] = glyph;
-    font_touch_ttf_glyph(font, codepoint);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyphs[codepoint];
-  }
-
-  if (!SDL_LockSurface(surface)) {
-    font_debug_printf("Font: SDL_LockSurface failed codepoint=%u: %s\n",
-                      codepoint, SDL_GetError());
-    SDL_DestroySurface(surface);
-    if (glyph.metrics_valid &&
-        font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-      font_update_ttf_fixed_advance(font);
-    }
-    font->ttf.glyphs[codepoint] = glyph;
-    font_touch_ttf_glyph(font, codepoint);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyphs[codepoint];
-  }
-
-  glyph.w = surface->w;
-  glyph.h = surface->h;
-  int pad_left = 0;
-  int pad_top = 0;
-  int pad_right = 0;
-  int pad_bottom = 0;
-  font_measure_glyph_padding(surface, &pad_left, &pad_top, &pad_right,
-                             &pad_bottom);
-  glyph.pad_top = pad_top;
-  glyph.pad_bottom = pad_bottom;
-  if (glyph.w > 0 && glyph.h > 0) {
-    glyph.offset_x = -(float)pad_left;
-    glyph.offset_y = (float)pad_top;
-  }
-
-  if (glyph.w > 0 && glyph.h > 0) {
-    int max_dim = k_atlas_size - (k_atlas_padding * 2);
-    if (glyph.w > max_dim || glyph.h > max_dim) {
-      glyph.oversized = true;
-      font_debug_printf(
-          "Font: glyph %u too large for atlas %dx%d (w=%d h=%d)\n",
-          codepoint, k_atlas_size, k_atlas_size, glyph.w, glyph.h);
-    }
-  }
-
-  if (glyph.w > 0 && glyph.h > 0 && !glyph.oversized) {
-    font_atlas_page_t *page = nullptr;
-    int page_index = -1;
-    font_glyph_t reuse_slot;
-
-    int limit = font_glyph_cache_limit();
-    bool reused = false;
-    if (limit > 0 && font->ttf.glyphs.size() >= static_cast<size_t>(limit)) {
-      reused = font_try_reuse_ttf_slot(font, glyph.w, glyph.h, &reuse_slot);
-      if (!reused)
-        font_trim_ttf_cache(font, static_cast<size_t>(limit - 1));
-    }
-
-    if (reused) {
-      page_index = reuse_slot.page;
-      if (page_index >= 0 && page_index < (int)font->ttf.pages.size()) {
-        page = &font->ttf.pages[page_index];
-        glyph.page = page_index;
-        glyph.x = reuse_slot.x;
-        glyph.y = reuse_slot.y;
-        font_clear_atlas_rect(page, reuse_slot.x, reuse_slot.y, reuse_slot.w,
-                              reuse_slot.h);
-      } else {
-        reused = false;
-      }
-    }
-
-    if (!reused) {
-      for (size_t i = 0; i < font->ttf.pages.size(); ++i) {
-        font_atlas_page_t &p = font->ttf.pages[i];
-
-        if (p.next_x + glyph.w + k_atlas_padding > p.width) {
-          p.next_x = k_atlas_padding;
-          p.next_y += p.row_height + k_atlas_padding;
-          p.row_height = 0;
-        }
-
-        if (p.next_y + glyph.h + k_atlas_padding <= p.height) {
-          page = &p;
-          page_index = (int)i;
-          break;
-        }
-      }
-
-      if (!page) {
-        font->ttf.pages.push_back(
-            font_create_atlas_page(font->id, (int)font->ttf.pages.size()));
-        page = &font->ttf.pages.back();
-        page_index = (int)font->ttf.pages.size() - 1;
-      }
-
-      if (page) {
-        glyph.page = page_index;
-        glyph.x = page->next_x;
-        glyph.y = page->next_y;
-      }
-    }
-
-    if (page) {
-      byte *dst = page->pixels + ((glyph.y * page->width) + glyph.x) * 4;
-      int dst_stride = page->width * 4;
-      int src_stride = surface->pitch;
-      const byte *src = static_cast<const byte *>(surface->pixels);
-
-      font_copy_glyph_pixels(dst, dst_stride, src, src_stride, glyph.w,
-                             glyph.h, true);
-
-      if (!reused) {
-        page->next_x += glyph.w + k_atlas_padding;
-        page->row_height = max(page->row_height, glyph.h);
-      }
-
-      font_mark_page_dirty(page);
-    }
-  }
-
-  SDL_UnlockSurface(surface);
-  SDL_DestroySurface(surface);
-
-  if (glyph.metrics_valid &&
-      font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-    font_update_ttf_fixed_advance(font);
-  }
-  font->ttf.glyphs[codepoint] = glyph;
-  font_touch_ttf_glyph(font, codepoint);
-  if (out_created)
-    *out_created = true;
-  return &font->ttf.glyphs[codepoint];
 }
 
-static font_glyph_t *font_get_ttf_glyph_index(font_t *font,
-                                              uint32_t glyph_index,
-                                              uint32_t nominal_codepoint,
-                                              bool *out_created) {
-  if (out_created)
-    *out_created = false;
+static int font_advance_for_codepoint(const font_t *font, uint32_t codepoint,
+                                      int scale) {
+  if (!font || !codepoint)
+    return 0;
 
-  if (!font || font->kind != FONT_TTF)
-    return nullptr;
+  int draw_scale = scale > 0 ? scale : 1;
+  if (font->fixed_advance > 0)
+    return font_fixed_advance_scaled(font, draw_scale);
 
-  auto it = font->ttf.glyph_indices.find(glyph_index);
-  if (it != font->ttf.glyph_indices.end()) {
-    font_touch_ttf_glyph_index(font, glyph_index);
-    return &it->second;
+  if (font->kind == FONT_LEGACY) {
+    float s = font_draw_scale(font, draw_scale);
+    return std::max(1, Q_rint((float)CONCHAR_WIDTH * s));
   }
 
-  if (!font->ttf.font)
-    return nullptr;
-
-  font_glyph_t glyph;
-  int nominal_minx = 0;
-  int nominal_maxx = 0;
-  int nominal_miny = 0;
-  int nominal_maxy = 0;
-  int nominal_advance = 0;
-  bool nominal_metrics = false;
-
-  TTF_ImageType image_type = TTF_IMAGE_INVALID;
-  SDL_Surface *surface =
-      TTF_GetGlyphImageForIndex(font->ttf.font, glyph_index, &image_type);
-  if (!surface) {
-    font->ttf.glyph_indices[glyph_index] = glyph;
-    font_touch_ttf_glyph_index(font, glyph_index);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyph_indices[glyph_index];
+  if (font->kind == FONT_KFONT) {
+    auto it = font->kfont.glyphs.find(codepoint);
+    if (it == font->kfont.glyphs.end())
+      return 0;
+    float s = font_draw_scale(font, draw_scale);
+    return std::max(1, Q_rint((float)it->second.w * s));
   }
 
-  const SDL_PixelFormat desired_format = SDL_PIXELFORMAT_RGBA32;
-  if (surface->format != desired_format) {
-    SDL_Surface *converted = SDL_ConvertSurface(surface, desired_format);
-    if (!converted) {
-      font_debug_printf(
-          "Font: SDL_ConvertSurface failed glyph_index=%u: %s\n",
-          glyph_index, SDL_GetError());
-      SDL_DestroySurface(surface);
-      font->ttf.glyph_indices[glyph_index] = glyph;
-      font_touch_ttf_glyph_index(font, glyph_index);
-      if (out_created)
-        *out_created = true;
-      return &font->ttf.glyph_indices[glyph_index];
-    }
-    SDL_DestroySurface(surface);
-    surface = converted;
-  }
-
-  if (!surface) {
-    font->ttf.glyph_indices[glyph_index] = glyph;
-    font_touch_ttf_glyph_index(font, glyph_index);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyph_indices[glyph_index];
-  }
-
-  if (!SDL_LockSurface(surface)) {
-    font_debug_printf("Font: SDL_LockSurface failed glyph_index=%u: %s\n",
-                      glyph_index, SDL_GetError());
-    SDL_DestroySurface(surface);
-    font->ttf.glyph_indices[glyph_index] = glyph;
-    font_touch_ttf_glyph_index(font, glyph_index);
-    if (out_created)
-      *out_created = true;
-    return &font->ttf.glyph_indices[glyph_index];
-  }
-
-  glyph.w = surface->w;
-  glyph.h = surface->h;
-  int pad_left = 0;
-  int pad_top = 0;
-  int pad_right = 0;
-  int pad_bottom = 0;
-  font_measure_glyph_padding(surface, &pad_left, &pad_top, &pad_right,
-                             &pad_bottom);
-  glyph.pad_top = pad_top;
-  glyph.pad_bottom = pad_bottom;
-  if (glyph.w > 0 && glyph.h > 0)
-    glyph.offset_x = -(float)pad_left;
-
-#if USE_HARFBUZZ
-  if (nominal_codepoint) {
-    nominal_metrics = font_ttf_try_nominal_metrics(
-        font, nominal_codepoint, glyph_index, &nominal_minx, &nominal_maxx,
-        &nominal_miny, &nominal_maxy, &nominal_advance);
+#if USE_SDL3_TTF
+  if (font->kind == FONT_TTF) {
+    const font_ttf_glyph_t *glyph =
+        font_ttf_get_glyph(const_cast<font_t *>(font), codepoint);
+    if (!glyph)
+      return 0;
+    return std::max(0, Q_rint(font_ttf_advance(font, glyph, draw_scale)));
   }
 #endif
 
-  if (nominal_metrics) {
-    glyph.bearing_x = (float)nominal_minx;
-    glyph.bearing_y = (float)nominal_maxy;
-    glyph.advance = nominal_advance;
-    if (glyph.h > 0)
-      glyph.offset_y = (float)pad_top;
-    glyph.metrics_valid = true;
-    glyph.metric_source = FONT_METRIC_TTF;
-  }
-
-#if USE_HARFBUZZ
-  if (!nominal_metrics && font->ttf.hb_font) {
-    hb_glyph_extents_t extents;
-    if (hb_font_get_glyph_extents(font->ttf.hb_font, glyph_index, &extents)) {
-      float bearing_x = (float)extents.x_bearing / 64.0f;
-      float bearing_y = (float)extents.y_bearing / 64.0f;
-      glyph.bearing_x = bearing_x;
-      glyph.bearing_y = bearing_y;
-      if (glyph.h > 0)
-        glyph.offset_y = (float)pad_top;
-      glyph.metrics_valid = true;
-      glyph.metric_source = FONT_METRIC_HB;
-    }
-  }
-#endif
-  if (!glyph.metrics_valid && glyph.w > 0 && glyph.h > 0)
-    glyph.offset_y = (float)pad_top;
-
-  if (glyph.w > 0 && glyph.h > 0) {
-    int max_dim = k_atlas_size - (k_atlas_padding * 2);
-    if (glyph.w > max_dim || glyph.h > max_dim) {
-      glyph.oversized = true;
-      font_debug_printf(
-          "Font: glyph index %u too large for atlas %dx%d (w=%d h=%d)\n",
-          glyph_index, k_atlas_size, k_atlas_size, glyph.w, glyph.h);
-    }
-  }
-
-  if (glyph.w > 0 && glyph.h > 0 && !glyph.oversized) {
-    font_atlas_page_t *page = nullptr;
-    int page_index = -1;
-    font_glyph_t reuse_slot;
-
-    int limit = font_glyph_cache_limit();
-    bool reused = false;
-    if (limit > 0 &&
-        font->ttf.glyph_indices.size() >= static_cast<size_t>(limit)) {
-      reused = font_try_reuse_ttf_index_slot(font, glyph.w, glyph.h,
-                                             &reuse_slot);
-      if (!reused)
-        font_trim_ttf_index_cache(font, static_cast<size_t>(limit - 1));
-    }
-
-    if (reused) {
-      page_index = reuse_slot.page;
-      if (page_index >= 0 && page_index < (int)font->ttf.pages.size()) {
-        page = &font->ttf.pages[page_index];
-        glyph.page = page_index;
-        glyph.x = reuse_slot.x;
-        glyph.y = reuse_slot.y;
-        font_clear_atlas_rect(page, reuse_slot.x, reuse_slot.y, reuse_slot.w,
-                              reuse_slot.h);
-      } else {
-        reused = false;
-      }
-    }
-
-    if (!reused) {
-      for (size_t i = 0; i < font->ttf.pages.size(); ++i) {
-        font_atlas_page_t &p = font->ttf.pages[i];
-
-        if (p.next_x + glyph.w + k_atlas_padding > p.width) {
-          p.next_x = k_atlas_padding;
-          p.next_y += p.row_height + k_atlas_padding;
-          p.row_height = 0;
-        }
-
-        if (p.next_y + glyph.h + k_atlas_padding <= p.height) {
-          page = &p;
-          page_index = (int)i;
-          break;
-        }
-      }
-
-      if (!page) {
-        font->ttf.pages.push_back(
-            font_create_atlas_page(font->id, (int)font->ttf.pages.size()));
-        page = &font->ttf.pages.back();
-        page_index = (int)font->ttf.pages.size() - 1;
-      }
-
-      if (page) {
-        glyph.page = page_index;
-        glyph.x = page->next_x;
-        glyph.y = page->next_y;
-      }
-    }
-
-    if (page) {
-      byte *dst = page->pixels + ((glyph.y * page->width) + glyph.x) * 4;
-      int dst_stride = page->width * 4;
-      int src_stride = surface->pitch;
-      const byte *src = static_cast<const byte *>(surface->pixels);
-      bool alpha_only = true;
-#if defined(TTF_IMAGE_COLOR)
-      if (image_type == TTF_IMAGE_COLOR)
-        alpha_only = false;
-#endif
-
-      font_copy_glyph_pixels(dst, dst_stride, src, src_stride, glyph.w,
-                             glyph.h, alpha_only);
-
-      if (!reused) {
-        page->next_x += glyph.w + k_atlas_padding;
-        page->row_height = max(page->row_height, glyph.h);
-      }
-
-      font_mark_page_dirty(page);
-    }
-  }
-
-  SDL_UnlockSurface(surface);
-  SDL_DestroySurface(surface);
-
-  if (glyph.metrics_valid &&
-      font_update_ttf_rendered_metrics_for_glyph(font, glyph)) {
-    font_update_ttf_fixed_advance(font);
-  }
-  font->ttf.glyph_indices[glyph_index] = glyph;
-  font_touch_ttf_glyph_index(font, glyph_index);
-  if (out_created)
-    *out_created = true;
-  return &font->ttf.glyph_indices[glyph_index];
+  return 0;
 }
-#endif
+
+static bool font_draw_legacy_glyph(const font_t *font, uint32_t codepoint, int *x,
+                                   int y, int scale, int flags, color_t color) {
+  if (!font || !font->legacy_handle || !x)
+    return false;
+
+  int draw_scale = scale > 0 ? scale : 1;
+  float s = font_draw_scale(font, draw_scale);
+  int w = std::max(1, Q_rint((float)CONCHAR_WIDTH * s));
+  int h = std::max(1, Q_rint((float)CONCHAR_HEIGHT * s));
+  int ch = codepoint <= 255 ? (int)codepoint : '?';
+
+  R_DrawStretchChar(*x, y, w, h, flags, ch, color, font->legacy_handle);
+  *x += (font->fixed_advance > 0) ? font_fixed_advance_scaled(font, draw_scale)
+                                  : w;
+  return true;
+}
+
+static bool font_draw_kfont_glyph(const font_t *font, uint32_t codepoint, int *x,
+                                  int y, int scale, int flags, color_t color) {
+  if (!font || font->kind != FONT_KFONT || !font->kfont.pic || !x)
+    return false;
+
+  auto it = font->kfont.glyphs.find(codepoint);
+  if (it == font->kfont.glyphs.end())
+    return false;
+
+  int draw_scale = scale > 0 ? scale : 1;
+  float glyph_scale = font_draw_scale(font, draw_scale);
+  const kfont_glyph_t &glyph = it->second;
+  int w = std::max(1, Q_rint((float)glyph.w * glyph_scale));
+  int h = std::max(1, Q_rint((float)glyph.h * glyph_scale));
+
+  float s1 = (float)glyph.x * font->kfont.inv_w;
+  float t1 = (float)glyph.y * font->kfont.inv_h;
+  float s2 = (float)(glyph.x + glyph.w) * font->kfont.inv_w;
+  float t2 = (float)(glyph.y + glyph.h) * font->kfont.inv_h;
+
+  if (flags & UI_DROPSHADOW) {
+    int shadow = std::max(1, draw_scale);
+    color_t black = COLOR_A(color.a);
+    R_DrawStretchSubPic(*x + shadow, y + shadow, w, h, s1, t1, s2, t2, black,
+                        font->kfont.pic);
+  }
+
+  R_DrawStretchSubPic(*x, y, w, h, s1, t1, s2, t2, color, font->kfont.pic);
+  *x += (font->fixed_advance > 0) ? font_fixed_advance_scaled(font, draw_scale)
+                                  : w;
+  return true;
+}
 
 static font_t *font_load_internal(const char *path, int virtual_line_height,
                                   float pixel_scale, int fixed_advance,
@@ -2706,20 +938,6 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
                                   bool register_font) {
   if (virtual_line_height <= 0)
     virtual_line_height = CONCHAR_HEIGHT;
-
-  font_debug_printf("Font: load request path=\"%s\" line_height=%d "
-                    "pixel_scale=%.3f fixed_advance=%d\n",
-                    font_safe_str(path), virtual_line_height, pixel_scale,
-                    fixed_advance);
-  font_debug_printf("Font: fallbacks kfont=\"%s\" legacy=\"%s\"\n",
-                    font_safe_str(fallback_kfont),
-                    font_safe_str(fallback_legacy));
-  if (path && *path) {
-    const char *ext = COM_FileExtension(path);
-    font_debug_printf("Font: path extension=\"%s\" (ttf=%d otf=%d kfont=%d)\n",
-                      font_safe_str(ext), font_ext_is(path, "ttf"),
-                      font_ext_is(path, "otf"), font_ext_is(path, "kfont"));
-  }
 
   font_t *font = new font_t();
   font->id = ++g_font_seq;
@@ -2730,103 +948,17 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
 
   if (font_ext_is(path, "ttf") || font_ext_is(path, "otf")) {
 #if USE_SDL3_TTF
-    int supersample = font_ttf_supersample();
-    int pixel_height = max(
-        1, Q_rint((float)virtual_line_height * font->pixel_scale *
-                  (float)supersample));
-    font_debug_printf("Font: trying TTF \"%s\" pixel_height=%d "
-                      "supersample=%d\n",
-                      font_safe_str(path), pixel_height, supersample);
-    void *data = nullptr;
-    int len = FS_LoadFile(path, &data);
-    if (len > 0 && data) {
-      SDL_IOStream *io = SDL_IOFromMem(data, len);
-      if (io) {
-        TTF_Font *ttf = TTF_OpenFontIO(io, true, pixel_height);
-        if (ttf) {
-          TTF_SetFontHinting(ttf, font_ttf_hinting_mode());
-          TTF_SetFontKerning(ttf, 1);
-          font->kind = FONT_TTF;
-          font->ttf.font = ttf;
-          font->ttf.data = data;
-          font->ttf.data_size = len;
-          font->ttf.pixel_height = pixel_height;
-          font->ttf.ascent = TTF_GetFontAscent(ttf);
-          font->ttf.line_skip = TTF_GetFontLineSkip(ttf);
-          if (font->ttf.line_skip <= 0)
-            font->ttf.line_skip = max(font->ttf.ascent, 1);
-          font_compute_ttf_metrics(font);
-          #if USE_HARFBUZZ
-          font_init_harfbuzz(font);
-          #endif
-          font->unit_scale = (float)(virtual_line_height * font->pixel_scale) /
-                             (float)font->ttf.extent;
-          if (font->fixed_advance > 0) {
-            int advance = 0;
-            if (font->ttf.extent > 0 &&
-                TTF_GetGlyphMetrics(ttf, 'M', nullptr, nullptr, nullptr,
-                                    nullptr, &advance) &&
-                advance > 0) {
-              font->ttf.fixed_advance_units = advance;
-              float advance_scale =
-                  (float)virtual_line_height / (float)font->ttf.extent;
-              font->fixed_advance =
-                  max(1, Q_rint((float)advance * advance_scale));
-            }
-          }
-          font->ttf.pages.push_back(font_create_atlas_page(font->id, 0));
-          font_preload_ttf_glyphs(font);
-          font_compute_ttf_rendered_metrics(font);
-          font->ttf.rendered_metrics_locked = true;
-          font_update_ttf_fixed_advance(font);
-          font_flush_ttf_pages(font);
-          font_debug_printf("Font: TTF loaded \"%s\" ascent=%d line_skip=%d "
-                            "extent=%d baseline=%d rendered=%d/%d "
-                            "metric_mode=%d unit_scale=%.3f\n",
-                            font_safe_str(path), font->ttf.ascent,
-                            font->ttf.line_skip, font->ttf.extent,
-                            font->ttf.baseline, font->ttf.rendered_ascent,
-                            font->ttf.rendered_extent, font_ttf_metric_mode(),
-                            font->unit_scale);
-        } else {
-          font_debug_printf("Font: TTF_OpenFontIO failed \"%s\": %s\n",
-                            font_safe_str(path), SDL_GetError());
-        }
-      } else {
-        font_debug_printf("Font: SDL_IOFromMem failed \"%s\"\n",
-                          font_safe_str(path));
+    if (font_load_ttf(font, path)) {
+      if (fallback_kfont && *fallback_kfont) {
+        font->fallback_kfont = font_load_internal(
+            fallback_kfont, virtual_line_height, pixel_scale, fixed_advance,
+            nullptr, fallback_legacy, false);
       }
-      if (font->kind != FONT_TTF)
-        FS_FreeFile(data);
-    } else {
-      font_debug_printf("Font: FS_LoadFile failed \"%s\": %s\n",
-                        font_safe_str(path), Com_GetLastError());
+      font->legacy_handle = font_register_legacy(fallback_legacy, fallback_legacy);
+      goto loaded;
     }
-#else
-    font_debug_printf("Font: SDL3_ttf disabled, skipping \"%s\"\n",
-                      font_safe_str(path));
 #endif
-  }
 
-  if (font->kind == FONT_TTF) {
-    font_debug_printf("Font: using TTF \"%s\"\n", font_safe_str(path));
-    if (fallback_kfont && *fallback_kfont) {
-      font->fallback_kfont =
-          font_load_internal(fallback_kfont, virtual_line_height, pixel_scale,
-                             fixed_advance, nullptr, fallback_legacy, false);
-      if (font->fallback_kfont) {
-        font_debug_printf("Font: TTF fallback kfont \"%s\" loaded\n",
-                          font_safe_str(fallback_kfont));
-      } else {
-        font_debug_printf("Font: TTF fallback kfont \"%s\" failed\n",
-                          font_safe_str(fallback_kfont));
-      }
-    }
-    font->legacy_handle =
-        font_register_legacy(fallback_legacy, fallback_legacy);
-  } else if (font_ext_is(path, "ttf") || font_ext_is(path, "otf")) {
-    font_debug_printf("Font: TTF failed, trying kfont fallback \"%s\"\n",
-                      font_safe_str(fallback_kfont));
     if (fallback_kfont && *fallback_kfont) {
       font->kind = FONT_KFONT;
       if (font_load_kfont(font, fallback_kfont)) {
@@ -2846,28 +978,18 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
     }
 
     font->kind = FONT_LEGACY;
-    font->legacy_handle =
-        font_register_legacy(fallback_legacy, fallback_legacy);
+    font->legacy_handle = font_register_legacy(fallback_legacy, fallback_legacy);
     if (!font->legacy_handle) {
       delete font;
       return nullptr;
     }
-    font->unit_scale = (float)(virtual_line_height * font->pixel_scale) /
-                       (float)CONCHAR_HEIGHT;
+    font->unit_scale =
+        (float)(virtual_line_height * font->pixel_scale) / (float)CONCHAR_HEIGHT;
   } else if (font_ext_is(path, "kfont")) {
     font->kind = FONT_KFONT;
     if (!font_load_kfont(font, path)) {
-      font->kfont.glyphs.clear();
-      font->kfont.pic = 0;
-      font->kfont.tex_w = 0;
-      font->kfont.tex_h = 0;
-      font->kfont.inv_w = 0.0f;
-      font->kfont.inv_h = 0.0f;
-      font->kfont.line_height = 0;
-
       font->kind = FONT_LEGACY;
-      font->legacy_handle =
-          font_register_legacy(fallback_legacy, fallback_legacy);
+      font->legacy_handle = font_register_legacy(fallback_legacy, fallback_legacy);
       if (!font->legacy_handle) {
         delete font;
         return nullptr;
@@ -2877,60 +999,166 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
     } else {
       font->unit_scale = (float)(virtual_line_height * font->pixel_scale) /
                          (float)font->kfont.line_height;
-      font->legacy_handle =
-          font_register_legacy(fallback_legacy, fallback_legacy);
+      font->legacy_handle = font_register_legacy(fallback_legacy, fallback_legacy);
     }
   } else {
-    font_debug_printf("Font: falling back to legacy path \"%s\"\n",
-                      font_safe_str(path));
     font->kind = FONT_LEGACY;
     font->legacy_handle = font_register_legacy(path, fallback_legacy);
     if (!font->legacy_handle) {
       delete font;
       return nullptr;
     }
-    font->unit_scale = (float)(virtual_line_height * font->pixel_scale) /
-                       (float)CONCHAR_HEIGHT;
+    font->unit_scale =
+        (float)(virtual_line_height * font->pixel_scale) / (float)CONCHAR_HEIGHT;
   }
 
 loaded:
-
-  font_debug_printf(
-      "Font: load complete kind=%s path=\"%s\" legacy_handle=%d\n",
-      font_kind_name(font->kind), font_safe_str(path), font->legacy_handle);
   if (register_font)
     g_fonts.push_back(font);
 
+  font_debug_printf("Font: loaded kind=%s path=\"%s\"\n",
+                    font_kind_name(font->kind), font_safe_str(path));
   return font;
+}
+
+static void font_dump_glyphs_kfont(qhandle_t file, font_t *font) {
+  FS_FPrintf(file, "kind: kfont line_height=%d\n", font->kfont.line_height);
+  FS_FPrintf(file, "cp hex char x y w h\n");
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    auto it = font->kfont.glyphs.find(cp);
+    char disp[16];
+    if (it == font->kfont.glyphs.end()) {
+      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
+                 font_format_char(cp, disp, sizeof(disp)));
+      continue;
+    }
+    const kfont_glyph_t &g = it->second;
+    FS_FPrintf(file, "%3u 0x%02X '%s' %4d %4d %3d %3d\n", cp, cp,
+               font_format_char(cp, disp, sizeof(disp)), g.x, g.y, g.w, g.h);
+  }
+}
+
+static void font_dump_glyphs_legacy(qhandle_t file) {
+  FS_FPrintf(file, "kind: legacy\n");
+  FS_FPrintf(file, "cp hex char w h\n");
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    char disp[16];
+    FS_FPrintf(file, "%3u 0x%02X '%s' %3d %3d\n", cp, cp,
+               font_format_char(cp, disp, sizeof(disp)), CONCHAR_WIDTH,
+               CONCHAR_HEIGHT);
+  }
+}
+
+#if USE_SDL3_TTF
+static void font_dump_glyphs_ttf(qhandle_t file, font_t *font) {
+  FS_FPrintf(file, "kind: ttf\n");
+  FS_FPrintf(file, "pixel_height=%d baseline=%d extent=%d line_skip=%d\n",
+             font->ttf.pixel_height, font->ttf.baseline, font->ttf.extent,
+             font->ttf.line_skip);
+  FS_FPrintf(file, "cp hex char adv left top bottom w h page x y\n");
+  for (uint32_t cp = 32; cp <= 126; ++cp) {
+    const font_ttf_glyph_t *g = font_ttf_get_glyph(font, cp);
+    char disp[16];
+    if (!g) {
+      FS_FPrintf(file, "%3u 0x%02X '%s' missing\n", cp, cp,
+                 font_format_char(cp, disp, sizeof(disp)));
+      continue;
+    }
+    FS_FPrintf(file, "%3u 0x%02X '%s' %4d %5d %4d %6d %3d %3d %3d %4d %4d\n", cp,
+               cp, font_format_char(cp, disp, sizeof(disp)), g->x_skip, g->left,
+               g->top, g->bottom, g->w, g->h, g->page, g->x, g->y);
+  }
+}
+#endif
+
+static void Font_DumpGlyphs_f(void) {
+  int line_height = 32;
+  const char *font_path = nullptr;
+  if (Cmd_Argc() > 1)
+    font_path = Cmd_Argv(1);
+  if (Cmd_Argc() > 2)
+    line_height = Q_clip(atoi(Cmd_Argv(2)), 1, 256);
+  if (!font_path || !*font_path)
+    font_path = Cvar_VariableString("ui_font");
+
+  char out_path[MAX_OSPATH];
+  qhandle_t file = 0;
+  for (int i = 0; i < 1000; ++i) {
+    Q_snprintf(out_path, sizeof(out_path), "fontdump/glyphs_%03d.txt", i);
+    int ret = FS_OpenFile(out_path, &file,
+                          FS_MODE_WRITE | FS_FLAG_TEXT | FS_FLAG_EXCL);
+    if (file)
+      break;
+    if (ret != Q_ERR(EEXIST)) {
+      Com_EPrintf("$e_auto_73287ca7dcec", out_path, Q_ErrorString(ret));
+      return;
+    }
+  }
+
+  if (!file) {
+    Com_Printf("font_dump_glyphs: failed to open output file\n");
+    return;
+  }
+
+  font_t *font = font_load_internal(font_path, line_height, 1.0f, 0,
+                                    "fonts/qfont.kfont", "conchars.png", false);
+  if (!font) {
+    FS_FPrintf(file, "load failed for path: %s\n", font_safe_str(font_path));
+    FS_CloseFile(file);
+    return;
+  }
+
+  FS_FPrintf(file, "WORR Font Glyph Dump\n");
+  FS_FPrintf(file, "path: %s\n", font_safe_str(font_path));
+  FS_FPrintf(file, "line_height=%d scale_boost=%.2f\n", line_height,
+             font_scale_boost());
+
+  switch (font->kind) {
+  case FONT_TTF:
+#if USE_SDL3_TTF
+    font_dump_glyphs_ttf(file, font);
+#else
+    font_dump_glyphs_legacy(file);
+#endif
+    break;
+  case FONT_KFONT:
+    font_dump_glyphs_kfont(file, font);
+    break;
+  case FONT_LEGACY:
+  default:
+    font_dump_glyphs_legacy(file);
+    break;
+  }
+
+  Font_Free(font);
+  if (FS_CloseFile(file))
+    Com_EPrintf("$cl_error_writing_file", out_path);
+  else
+    Com_Printf("$cl_write_complete", out_path);
 }
 
 void Font_Init(void) {
   (void)font_debug_enabled();
-  (void)font_glyph_cache_limit();
   (void)font_scale_boost();
 #if USE_CLIENT
   Cmd_AddCommand("font_dump_glyphs", Font_DumpGlyphs_f);
 #endif
+
 #if USE_SDL3_TTF
   (void)font_ttf_hinting_mode();
-  (void)font_ttf_supersample();
-  (void)font_ttf_metric_mode();
-  (void)font_ttf_baseline_offset();
-  (void)font_ttf_preload_max();
-  (void)font_ttf_hb_snap_positions();
-#endif
-#if USE_SDL3_TTF
+  g_ttf_null_chunk.empty = true;
   if (!g_ttf_ready) {
-    if (!TTF_Init()) {
-      Com_WPrintf("TTF_Init failed: %s\n", SDL_GetError());
-      font_debug_printf("Font: SDL3_ttf init failed\n");
+    if (FT_Init_FreeType(&g_ft_library) != 0) {
+      Com_WPrintf("FreeType init failed, TTF fonts disabled\n");
+      g_ft_library = nullptr;
+      g_ttf_ready = false;
     } else {
       g_ttf_ready = true;
-      font_debug_printf("Font: SDL3_ttf initialized\n");
+      font_debug_printf("Font: FreeType initialized\n");
     }
   }
 #else
-  font_debug_printf("Font: SDL3_ttf not available, TTF fonts will fallback\n");
+  font_debug_printf("Font: TTF support disabled at build time\n");
 #endif
 }
 
@@ -2938,13 +1166,15 @@ void Font_Shutdown(void) {
 #if USE_CLIENT
   Cmd_RemoveCommand("font_dump_glyphs");
 #endif
+
   for (font_t *font : g_fonts)
     Font_Free(font);
   g_fonts.clear();
 
 #if USE_SDL3_TTF
-  if (g_ttf_ready) {
-    TTF_Quit();
+  if (g_ttf_ready && g_ft_library) {
+    FT_Done_FreeType(g_ft_library);
+    g_ft_library = nullptr;
     g_ttf_ready = false;
   }
 #endif
@@ -2954,8 +1184,7 @@ font_t *Font_Load(const char *path, int virtual_line_height, float pixel_scale,
                   int fixed_advance, const char *fallback_kfont,
                   const char *fallback_legacy) {
   return font_load_internal(path, virtual_line_height, pixel_scale,
-                            fixed_advance, fallback_kfont, fallback_legacy,
-                            true);
+                            fixed_advance, fallback_kfont, fallback_legacy, true);
 }
 
 void Font_Free(font_t *font) {
@@ -2969,28 +1198,8 @@ void Font_Free(font_t *font) {
   }
 
 #if USE_SDL3_TTF
-  if (font->kind == FONT_TTF) {
-    for (auto &page : font->ttf.pages) {
-      if (page.handle)
-        R_UnregisterImage(page.handle);
-      if (page.pixels)
-        Z_Free(page.pixels);
-    }
-    font->ttf.pages.clear();
-    font->ttf.glyphs.clear();
-    font->ttf.lru.clear();
-    font->ttf.lru_index.clear();
-    font->ttf.glyph_indices.clear();
-    font->ttf.index_lru.clear();
-    font->ttf.index_lru_index.clear();
-#if USE_HARFBUZZ
-    font_destroy_harfbuzz(font);
-#endif
-    if (font->ttf.font)
-      TTF_CloseFont(font->ttf.font);
-    if (font->ttf.data)
-      FS_FreeFile(font->ttf.data);
-  }
+  if (font->kind == FONT_TTF)
+    font_free_ttf(font);
 #endif
 
   if (font->fallback_kfont) {
@@ -3007,326 +1216,18 @@ void Font_SetLetterSpacing(font_t *font, float spacing) {
   font->letter_spacing = spacing > 0.0f ? spacing : 0.0f;
 }
 
-static int font_advance_for_codepoint(const font_t *font, uint32_t codepoint,
-                                      int scale) {
-  if (!font || !codepoint)
-    return 0;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  if (font->fixed_advance > 0) {
-#if USE_SDL3_TTF
-    if (font->kind == FONT_TTF && font->ttf.fixed_advance_units > 0) {
-      float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-      return max(1, Q_rint((float)font->ttf.fixed_advance_units * glyph_scale));
-    }
-#endif
-    float scale_boost = font_scale_boost();
-    return max(1, Q_rint((float)font->fixed_advance * (float)draw_scale *
-                         scale_boost));
-  }
-
-  if (font->kind == FONT_LEGACY) {
-    float legacy_scale = font_draw_scale(font, draw_scale);
-    return max(1, Q_rint(CONCHAR_WIDTH * legacy_scale));
-  }
-
-  if (font->kind == FONT_KFONT) {
-    auto it = font->kfont.glyphs.find(codepoint);
-    if (it == font->kfont.glyphs.end())
-      return 0;
-    float glyph_scale = font_draw_scale(font, draw_scale);
-    return max(1, Q_rint((float)it->second.w * glyph_scale));
-  }
-
-#if USE_SDL3_TTF
-  if (font->kind == FONT_TTF) {
-    int advance_units = 0;
-    if (!font_get_ttf_advance_units(font, codepoint, &advance_units))
-      return 0;
-    float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-    return max(1, Q_rint((float)advance_units * glyph_scale));
-  }
-#endif
-
-  return 0;
-}
-
-static bool font_draw_legacy_glyph(const font_t *font, uint32_t codepoint,
-                                   int *x, int y, int scale, int flags,
-                                   color_t color) {
-  if (!font || !font->legacy_handle)
-    return false;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  float legacy_scale = font_draw_scale(font, draw_scale);
-  int w = max(1, Q_rint(CONCHAR_WIDTH * legacy_scale));
-  int h = max(1, Q_rint(CONCHAR_HEIGHT * legacy_scale));
-  int ch = codepoint <= 255 ? (int)codepoint : '?';
-
-  R_DrawStretchChar(*x, y, w, h, flags, ch, color, font->legacy_handle);
-
-  int advance = font->fixed_advance > 0
-                    ? max(1, Q_rint((float)font->fixed_advance *
-                                    (float)draw_scale * font_scale_boost()))
-                    : w;
-  *x += advance;
-  return true;
-}
-
-static bool font_draw_kfont_glyph(const font_t *font, uint32_t codepoint,
-                                  int *x, int y, int scale, int flags,
-                                  color_t color) {
-  if (!font || font->kind != FONT_KFONT || !font->kfont.pic)
-    return false;
-
-  auto it = font->kfont.glyphs.find(codepoint);
-  if (it == font->kfont.glyphs.end())
-    return false;
-
-  const kfont_glyph_t &glyph = it->second;
-  float glyph_scale = font_draw_scale(font, scale);
-  int w = max(1, Q_rint((float)glyph.w * glyph_scale));
-  int h = max(1, Q_rint((float)glyph.h * glyph_scale));
-
-  float s1 = (float)glyph.x * font->kfont.inv_w;
-  float t1 = (float)glyph.y * font->kfont.inv_h;
-  float s2 = (float)(glyph.x + glyph.w) * font->kfont.inv_w;
-  float t2 = (float)(glyph.y + glyph.h) * font->kfont.inv_h;
-
-  if (flags & UI_DROPSHADOW) {
-    int shadow = max(1, scale);
-    color_t black = COLOR_A(color.a);
-    R_DrawStretchSubPic(*x + shadow, y + shadow, w, h, s1, t1, s2, t2, black,
-                        font->kfont.pic);
-  }
-
-  R_DrawStretchSubPic(*x, y, w, h, s1, t1, s2, t2, color, font->kfont.pic);
-
-  int advance = font->fixed_advance > 0
-                    ? max(1, Q_rint((float)font->fixed_advance * (float)scale *
-                                    font_scale_boost()))
-                    : w;
-  *x += advance;
-  return true;
-}
-
-[[maybe_unused]] static void font_draw_legacy_glyph_at(const font_t *font,
-                                                       uint32_t codepoint,
-                                                       int x, int y, int scale,
-                                                       int flags,
-                                                       color_t color) {
-  if (!font || !font->legacy_handle)
-    return;
-
-  int draw_scale = scale > 0 ? scale : 1;
-  float legacy_scale = font_draw_scale(font, draw_scale);
-  int w = max(1, Q_rint(CONCHAR_WIDTH * legacy_scale));
-  int h = max(1, Q_rint(CONCHAR_HEIGHT * legacy_scale));
-  int ch = codepoint <= 255 ? (int)codepoint : '?';
-
-  R_DrawStretchChar(x, y, w, h, flags, ch, color, font->legacy_handle);
-}
-
-[[maybe_unused]] static bool font_draw_kfont_glyph_at(const font_t *font,
-                                                      uint32_t codepoint, int x,
-                                                      int y, int scale,
-                                                      int flags,
-                                                      color_t color) {
-  if (!font || font->kind != FONT_KFONT || !font->kfont.pic)
-    return false;
-
-  auto it = font->kfont.glyphs.find(codepoint);
-  if (it == font->kfont.glyphs.end())
-    return false;
-
-  const kfont_glyph_t &glyph = it->second;
-  float glyph_scale = font_draw_scale(font, scale);
-  int w = max(1, Q_rint((float)glyph.w * glyph_scale));
-  int h = max(1, Q_rint((float)glyph.h * glyph_scale));
-
-  float s1 = (float)glyph.x * font->kfont.inv_w;
-  float t1 = (float)glyph.y * font->kfont.inv_h;
-  float s2 = (float)(glyph.x + glyph.w) * font->kfont.inv_w;
-  float t2 = (float)(glyph.y + glyph.h) * font->kfont.inv_h;
-
-  if (flags & UI_DROPSHADOW) {
-    int shadow = max(1, scale);
-    color_t black = COLOR_A(color.a);
-    R_DrawStretchSubPic(x + shadow, y + shadow, w, h, s1, t1, s2, t2, black,
-                        font->kfont.pic);
-  }
-
-  R_DrawStretchSubPic(x, y, w, h, s1, t1, s2, t2, color, font->kfont.pic);
-  return true;
-}
-
-#if USE_SDL3_TTF
-static bool font_draw_ttf_glyph_cached(const font_t *font,
-                                       const font_glyph_t *glyph, float *x,
-                                       int y, int scale, int flags,
-                                       color_t color) {
-  if (!font || font->kind != FONT_TTF || !glyph)
-    return false;
-  if (glyph->oversized)
-    return false;
-
-  float glyph_scale = font_ttf_metric_scale(font, scale);
-  float advance = font_get_ttf_advance_scaled(font, glyph->advance, scale);
-
-  if (glyph->page < 0 || glyph->page >= (int)font->ttf.pages.size() ||
-      glyph->w <= 0 || glyph->h <= 0) {
-    *x += advance;
-    return true;
-  }
-
-  const font_atlas_page_t &page = font->ttf.pages[glyph->page];
-  if (!page.handle) {
-    *x += advance;
-    return true;
-  }
-  float base_x = *x;
-  float baseline_y =
-      (float)y + (float)font_ttf_metric_baseline(font) * glyph_scale;
-  float draw_xf =
-      base_x + (glyph->bearing_x + glyph->offset_x) * glyph_scale;
-  float draw_yf =
-      baseline_y - (glyph->bearing_y + glyph->offset_y) * glyph_scale;
-  int draw_x = (int)floorf(draw_xf);
-  int draw_y = (int)floorf(draw_yf);
-  int w = max(1, (int)ceilf((float)glyph->w * glyph_scale));
-  int h = max(1, (int)ceilf((float)glyph->h * glyph_scale));
-
-  float s1 = (float)glyph->x / (float)page.width;
-  float t1 = (float)glyph->y / (float)page.height;
-  float s2 = (float)(glyph->x + glyph->w) / (float)page.width;
-  float t2 = (float)(glyph->y + glyph->h) / (float)page.height;
-
-  if (flags & UI_DROPSHADOW) {
-    int shadow = max(1, scale);
-    color_t black = COLOR_A(color.a);
-    R_DrawStretchSubPic(draw_x + shadow, draw_y + shadow, w, h, s1, t1, s2, t2,
-                        black, page.handle);
-  }
-
-  R_DrawStretchSubPic(draw_x, draw_y, w, h, s1, t1, s2, t2, color, page.handle);
-
-  *x += advance;
-  return true;
-}
-
-[[maybe_unused]] static bool font_draw_ttf_glyph_index_cached(
-    const font_t *font, const font_glyph_t *glyph, float draw_x, float draw_y,
-    float glyph_scale, int scale, int flags, color_t color) {
-  if (!font || font->kind != FONT_TTF || !glyph)
-    return false;
-  if (glyph->oversized)
-    return false;
-
-  if (glyph->page < 0 || glyph->page >= (int)font->ttf.pages.size() ||
-      glyph->w <= 0 || glyph->h <= 0)
-    return false;
-
-  const font_atlas_page_t &page = font->ttf.pages[glyph->page];
-  if (!page.handle)
-    return false;
-
-  int w = max(1, (int)ceilf((float)glyph->w * glyph_scale));
-  int h = max(1, (int)ceilf((float)glyph->h * glyph_scale));
-  int dx = (int)floorf(draw_x);
-  int dy = (int)floorf(draw_y);
-
-  float s1 = (float)glyph->x / (float)page.width;
-  float t1 = (float)glyph->y / (float)page.height;
-  float s2 = (float)(glyph->x + glyph->w) / (float)page.width;
-  float t2 = (float)(glyph->y + glyph->h) / (float)page.height;
-
-  if (flags & UI_DROPSHADOW) {
-    int shadow = max(1, scale);
-    color_t black = COLOR_A(color.a);
-    R_DrawStretchSubPic(dx + shadow, dy + shadow, w, h, s1, t1, s2, t2, black,
-                        page.handle);
-  }
-
-  R_DrawStretchSubPic(dx, dy, w, h, s1, t1, s2, t2, color, page.handle);
-  return true;
-}
-#endif
-
-#if USE_SDL3_TTF
-static void font_prepare_ttf_glyphs(font_t *font, size_t max_chars,
-                                    const char *string, int flags) {
-  if (!font || font->kind != FONT_TTF || !string || !*string)
-    return;
-
-  bool use_color_codes = Com_HasColorEscape(string, max_chars);
-  size_t remaining = max_chars;
-  const char *s = string;
-  while (remaining && *s) {
-    if ((flags & UI_MULTILINE) && *s == '\n') {
-      ++s;
-      --remaining;
-      continue;
-    }
-
-    if (use_color_codes) {
-      if (Com_ParseColorEscape(&s, &remaining, COLOR_WHITE, nullptr))
-        continue;
-    }
-
-    uint32_t codepoint = font_read_codepoint(&s, &remaining);
-    if (!codepoint)
-      break;
-
-    font_get_ttf_glyph(font, codepoint, nullptr);
-  }
-}
-#endif
-
 int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
                     size_t max_chars, const char *string, color_t color) {
   if (!font || !string || !*string)
     return x;
-
-#if USE_HARFBUZZ
-  if (font->kind == FONT_TTF && font->ttf.hb_font &&
-      font->fixed_advance <= 0) {
-    return font_draw_string_hb(font, x, y, scale, flags, max_chars, string,
-                               color);
-  }
-#endif
 
   int draw_scale = scale > 0 ? scale : 1;
   float line_height = (float)Font_LineHeight(font, draw_scale);
   float pixel_spacing =
       font->pixel_scale > 0.0f ? (1.0f / font->pixel_scale) : 0.0f;
   int start_x = x;
+  int x_i = x;
   float x_f = (float)x;
-#if USE_SDL3_TTF
-  bool debug_match = font_debug_match(string);
-  int debug_flags = debug_match ? font_debug_draw_flags() : 0;
-  bool dump_metrics = debug_match && font_debug_dump_requested();
-#else
-  int debug_flags = 0;
-  bool dump_metrics = false;
-#endif
-#if USE_SDL3_TTF
-  float ttf_spacing = 0.0f;
-  if (font->kind == FONT_TTF)
-    ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
-#endif
-
-#if USE_SDL3_TTF
-  if (dump_metrics && font->kind == FONT_TTF) {
-    Com_Printf("FontDebug(TTF): font_id=%d scale=%d line_height=%.2f "
-               "baseline=%d extent=%d rendered=%d/%d metric_mode=%d "
-               "baseline_offset=%d scale_boost=%.2f\n",
-               font->id, draw_scale, line_height,
-               font->ttf.baseline, font->ttf.extent,
-               font->ttf.rendered_ascent, font->ttf.rendered_extent,
-               font_ttf_metric_mode(), font_ttf_baseline_offset(),
-               font_scale_boost());
-  }
-#endif
 
   int draw_flags = flags;
   bool use_color_codes = Com_HasColorEscape(string, max_chars);
@@ -3336,90 +1237,30 @@ int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
     draw_flags &= ~(UI_ALTCOLOR | UI_XORCOLOR);
   }
 
-  color_t draw_color = color;
-  if (font->kind != FONT_LEGACY)
-    draw_color = font_resolve_color(flags, color);
+  color_t draw_color =
+      (font->kind == FONT_LEGACY) ? color : font_resolve_color(flags, color);
   if (use_color_codes)
     draw_color = base_color;
 
 #if USE_SDL3_TTF
-  if (font->kind == FONT_TTF) {
-    font_prepare_ttf_glyphs(font, max_chars, string, flags);
-    font_flush_ttf_pages(font);
-  }
-#endif
-
-#if USE_SDL3_TTF
-  uint32_t prev_codepoint = 0;
+  uint32_t prev_ttf_cp = 0;
   bool prev_ttf = false;
-#endif
-
-  float line_start_x = (float)start_x;
-  float line_last_x = x_f;
-  int line_y = y;
-  float line_baseline_y = 0.0f;
-#if USE_SDL3_TTF
-  if (font->kind == FONT_TTF) {
-    float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-    line_baseline_y =
-        (float)line_y + (float)font_ttf_metric_baseline(font) * glyph_scale;
-  }
+  float ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
 #endif
 
   size_t remaining = max_chars;
   const char *s = string;
   while (remaining && *s) {
     if ((flags & UI_MULTILINE) && *s == '\n') {
-#if USE_SDL3_TTF
-      if (font->kind == FONT_TTF &&
-          (debug_flags & k_font_debug_draw_lines)) {
-        int line_width = max(1, (int)ceilf(line_last_x - line_start_x));
-        int top_y = line_y;
-        int base_y = (int)floorf(line_baseline_y);
-        int bottom_y = top_y + max(1, (int)ceilf(line_height)) - 1;
-        font_debug_draw_line((int)floorf(line_start_x), top_y, line_width,
-                             COLOR_RGBA(0, 128, 255, 180));
-        font_debug_draw_line((int)floorf(line_start_x), base_y, line_width,
-                             COLOR_RGBA(0, 255, 0, 180));
-        font_debug_draw_line((int)floorf(line_start_x), bottom_y, line_width,
-                             COLOR_RGBA(255, 0, 0, 180));
-      }
-      if (font->kind == FONT_TTF &&
-          (debug_flags & k_font_debug_draw_outline)) {
-        float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-        int line_width = max(1, (int)ceilf(line_last_x - line_start_x));
-        float outline_top =
-            line_baseline_y - (float)font->ttf.baseline * glyph_scale;
-        float outline_bottom =
-            outline_top + (float)font->ttf.extent * glyph_scale;
-        int top_y = (int)floorf(outline_top);
-        int bottom_y = (int)floorf(outline_bottom);
-        font_debug_draw_line((int)floorf(line_start_x), top_y, line_width,
-                             COLOR_RGBA(128, 0, 255, 180));
-        font_debug_draw_line((int)floorf(line_start_x), bottom_y, line_width,
-                             COLOR_RGBA(255, 128, 0, 180));
-      }
-#endif
-      x = start_x;
+      x_i = start_x;
       x_f = (float)start_x;
       y += Q_rint(line_height + pixel_spacing);
-      line_start_x = (float)start_x;
-      line_last_x = x_f;
-      line_y = y;
 #if USE_SDL3_TTF
-      if (font->kind == FONT_TTF) {
-        float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-        line_baseline_y =
-            (float)line_y +
-            (float)font_ttf_metric_baseline(font) * glyph_scale;
-      }
-#endif
-#if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
-      s++;
-      remaining--;
+      ++s;
+      --remaining;
       continue;
     }
 
@@ -3436,166 +1277,77 @@ int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
       break;
 
     bool drawn = false;
+
 #if USE_SDL3_TTF
     if (font->kind == FONT_TTF) {
-      font_glyph_t *glyph = font_get_ttf_glyph(font, codepoint, nullptr);
-      if (glyph && glyph->oversized)
-        glyph = nullptr;
+      const font_ttf_glyph_t *glyph = font_ttf_get_glyph(font, codepoint);
       if (glyph) {
-        float advance = font_get_ttf_advance_scaled(font, glyph->advance,
-                                                    draw_scale);
-        if (prev_ttf) {
-          float kerning =
-              font_get_ttf_kerning(font, prev_codepoint, codepoint, draw_scale);
-          if (kerning != 0.0f)
-            x_f += kerning;
-          if (ttf_spacing != 0.0f && advance > 0.0f)
+        if (prev_ttf && font->fixed_advance <= 0) {
+          x_f += font_ttf_kerning(font, prev_ttf_cp, codepoint, draw_scale);
+          if (ttf_spacing > 0.0f && font_ttf_advance(font, glyph, draw_scale) > 0.0f)
             x_f += ttf_spacing;
         }
-        if (debug_flags & (k_font_debug_draw_bounds | k_font_debug_draw_advances |
-                           k_font_debug_draw_origins)) {
-          float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-          float baseline_y = (float)line_y +
-                             (float)font_ttf_metric_baseline(font) * glyph_scale;
-          float draw_xf =
-              x_f + (glyph->bearing_x + glyph->offset_x) * glyph_scale;
-          float draw_yf =
-              baseline_y - (glyph->bearing_y + glyph->offset_y) * glyph_scale;
-          int draw_x = (int)floorf(draw_xf);
-          int draw_y = (int)floorf(draw_yf);
-          int w = max(1, (int)ceilf((float)glyph->w * glyph_scale));
-          int h = max(1, (int)ceilf((float)glyph->h * glyph_scale));
 
-          if (debug_flags & k_font_debug_draw_bounds) {
-            font_debug_draw_box(draw_x, draw_y, w, h,
-                                COLOR_RGBA(255, 0, 255, 160));
-          }
-          if (debug_flags & k_font_debug_draw_advances) {
-            int ay = line_y;
-            int ah = max(1, (int)ceilf(line_height));
-            R_DrawFill32((int)floorf(x_f), ay, 1, ah,
-                         COLOR_RGBA(255, 255, 0, 160));
-          }
-          if (debug_flags & k_font_debug_draw_origins) {
-            font_debug_draw_point((int)floorf(x_f),
-                                  (int)floorf(baseline_y),
-                                  COLOR_RGBA(0, 255, 255, 200));
-          }
-        }
-        if (glyph->page >= 0 && glyph->page < (int)font->ttf.pages.size()) {
-          font_atlas_page_t &page = font->ttf.pages[glyph->page];
-          if (page.dirty)
-            font_flush_ttf_page(&page);
-        }
-        drawn = font_draw_ttf_glyph_cached(font, glyph, &x_f, y, draw_scale,
-                                           draw_flags, draw_color);
-        if (drawn) {
-          line_last_x = x_f;
-          if (dump_metrics) {
-            Com_Printf(
-                "FontDebug(TTF): cp=%u adv=%d pen=%.2f bearing=(%.2f,%.2f) "
-                "offset=(%.2f,%.2f) bmp=%dx%d\n",
-                codepoint, glyph->advance, x_f, glyph->bearing_x,
-                glyph->bearing_y, glyph->offset_x, glyph->offset_y, glyph->w,
-                glyph->h);
-            if (font_debug_metrics_enabled() && font->ttf.font) {
-              int minx = 0;
-              int maxx = 0;
-              int miny = 0;
-              int maxy = 0;
-              int adv = 0;
-              if (TTF_GetGlyphMetrics(font->ttf.font, codepoint, &minx, &maxx,
-                                      &miny, &maxy, &adv)) {
-                Com_Printf("FontDebug(TTF): metrics minx=%d maxx=%d miny=%d "
-                           "maxy=%d adv=%d\n",
-                           minx, maxx, miny, maxy, adv);
-              }
-            }
-          }
-          if (advance > 0.0f)
-            prev_codepoint = codepoint;
+        drawn = font_draw_ttf_glyph(font, glyph, &x_f, y, draw_scale, draw_flags,
+                                    draw_color);
+        if (drawn && font->fixed_advance <= 0 &&
+            font_ttf_advance(font, glyph, draw_scale) > 0.0f) {
+          prev_ttf_cp = codepoint;
           prev_ttf = true;
+        } else {
+          prev_ttf_cp = 0;
+          prev_ttf = false;
         }
       }
     }
 #endif
+
     if (!drawn && font->kind == FONT_KFONT) {
-      drawn = font_draw_kfont_glyph(font, codepoint, &x, y, draw_scale,
+      drawn = font_draw_kfont_glyph(font, codepoint, &x_i, y, draw_scale,
                                     draw_flags, draw_color);
+      x_f = (float)x_i;
 #if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
     }
+
     if (!drawn && font->kind == FONT_LEGACY) {
-      drawn = font_draw_legacy_glyph(font, codepoint, &x, y, draw_scale,
+      drawn = font_draw_legacy_glyph(font, codepoint, &x_i, y, draw_scale,
                                      draw_flags, draw_color);
+      x_f = (float)x_i;
 #if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
     }
 
     if (!drawn && font->fallback_kfont) {
-      int fallback_x = font->kind == FONT_TTF ? Q_rint(x_f) : x;
-      drawn = font_draw_kfont_glyph(font->fallback_kfont, codepoint,
-                                    &fallback_x, y, draw_scale, draw_flags,
-                                    draw_color);
-      x = fallback_x;
-      x_f = (float)x;
+      int fallback_x = (font->kind == FONT_TTF) ? Q_rint(x_f) : x_i;
+      drawn = font_draw_kfont_glyph(font->fallback_kfont, codepoint, &fallback_x,
+                                    y, draw_scale, draw_flags, draw_color);
+      x_i = fallback_x;
+      x_f = (float)fallback_x;
 #if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
     }
 
     if (!drawn) {
-      int fallback_x = font->kind == FONT_TTF ? Q_rint(x_f) : x;
+      int fallback_x = (font->kind == FONT_TTF) ? Q_rint(x_f) : x_i;
       font_draw_legacy_glyph(font, codepoint, &fallback_x, y, draw_scale,
                              draw_flags, draw_color);
-      x = fallback_x;
-      x_f = (float)x;
+      x_i = fallback_x;
+      x_f = (float)fallback_x;
 #if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
     }
   }
 
-#if USE_SDL3_TTF
-  if (font->kind == FONT_TTF &&
-      (debug_flags & k_font_debug_draw_lines)) {
-    int line_width = max(1, (int)ceilf(line_last_x - line_start_x));
-    int top_y = line_y;
-    int base_y = (int)floorf(line_baseline_y);
-    int bottom_y = top_y + max(1, (int)ceilf(line_height)) - 1;
-    font_debug_draw_line((int)floorf(line_start_x), top_y, line_width,
-                         COLOR_RGBA(0, 128, 255, 180));
-    font_debug_draw_line((int)floorf(line_start_x), base_y, line_width,
-                         COLOR_RGBA(0, 255, 0, 180));
-    font_debug_draw_line((int)floorf(line_start_x), bottom_y, line_width,
-                         COLOR_RGBA(255, 0, 0, 180));
-  }
-  if (font->kind == FONT_TTF &&
-      (debug_flags & k_font_debug_draw_outline)) {
-    float glyph_scale = font_ttf_metric_scale(font, draw_scale);
-    int line_width = max(1, (int)ceilf(line_last_x - line_start_x));
-    float outline_top =
-        line_baseline_y - (float)font->ttf.baseline * glyph_scale;
-    float outline_bottom =
-        outline_top + (float)font->ttf.extent * glyph_scale;
-    int top_y = (int)floorf(outline_top);
-    int bottom_y = (int)floorf(outline_bottom);
-    font_debug_draw_line((int)floorf(line_start_x), top_y, line_width,
-                         COLOR_RGBA(128, 0, 255, 180));
-    font_debug_draw_line((int)floorf(line_start_x), bottom_y, line_width,
-                         COLOR_RGBA(255, 128, 0, 180));
-  }
-  if (dump_metrics)
-    font_debug_dump_clear();
-#endif
-
-  return font->kind == FONT_TTF ? Q_rint(x_f) : x;
+  return font->kind == FONT_TTF ? Q_rint(x_f) : x_i;
 }
 
 int Font_MeasureString(const font_t *font, int scale, int flags,
@@ -3606,14 +1358,6 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
     return 0;
   }
 
-#if USE_HARFBUZZ
-  if (font->kind == FONT_TTF && font->ttf.hb_font &&
-      font->fixed_advance <= 0) {
-    return font_measure_string_hb(font, scale, flags, max_chars, string,
-                                  out_height);
-  }
-#endif
-
   int draw_scale = scale > 0 ? scale : 1;
   float line_height = (float)Font_LineHeight(font, draw_scale);
   float pixel_spacing =
@@ -3623,11 +1367,9 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
   int lines = 1;
 
 #if USE_SDL3_TTF
-  float ttf_spacing = 0.0f;
-  if (font->kind == FONT_TTF)
-    ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
-  uint32_t prev_codepoint = 0;
+  uint32_t prev_ttf_cp = 0;
   bool prev_ttf = false;
+  float ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
 #endif
 
   bool use_color_codes = Com_HasColorEscape(string, max_chars);
@@ -3635,15 +1377,15 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
   const char *s = string;
   while (remaining && *s) {
     if ((flags & UI_MULTILINE) && *s == '\n') {
-      max_width = max(max_width, width);
+      max_width = std::max(max_width, width);
       width = 0.0f;
-      lines++;
+      ++lines;
 #if USE_SDL3_TTF
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
 #endif
-      s++;
-      remaining--;
+      ++s;
+      --remaining;
       continue;
     }
 
@@ -3658,70 +1400,67 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
 
     float advance = 0.0f;
     bool is_ttf = false;
+
 #if USE_SDL3_TTF
     if (font->kind == FONT_TTF) {
-      int advance_units = 0;
-      if (font_get_ttf_advance_units(font, codepoint, &advance_units)) {
-        advance = font_get_ttf_advance_scaled(font, advance_units, draw_scale);
-        is_ttf = true;
-        if (prev_ttf) {
-          float kerning =
-              font_get_ttf_kerning(font, prev_codepoint, codepoint, draw_scale);
-          if (kerning != 0.0f)
-            width += kerning;
-          if (ttf_spacing != 0.0f && advance > 0.0f)
+      const font_ttf_glyph_t *glyph =
+          font_ttf_get_glyph(const_cast<font_t *>(font), codepoint);
+      if (glyph) {
+        if (prev_ttf && font->fixed_advance <= 0) {
+          width += font_ttf_kerning(font, prev_ttf_cp, codepoint, draw_scale);
+          if (ttf_spacing > 0.0f && font_ttf_advance(font, glyph, draw_scale) > 0.0f)
             width += ttf_spacing;
         }
+        advance = font_ttf_advance(font, glyph, draw_scale);
+        is_ttf = true;
       }
     }
 #endif
+
     if (!is_ttf) {
       int fallback_advance = 0;
-      if (font->fallback_kfont)
+      if (font->fallback_kfont) {
         fallback_advance =
-            font_advance_for_codepoint(font->fallback_kfont, codepoint,
-                                       draw_scale);
-      if (!fallback_advance && font->legacy_handle)
+            font_advance_for_codepoint(font->fallback_kfont, codepoint, draw_scale);
+      }
+      if (!fallback_advance && font->legacy_handle) {
         fallback_advance =
-            max(1, Q_rint(CONCHAR_WIDTH * font_draw_scale(font, draw_scale)));
+            std::max(1, Q_rint((float)CONCHAR_WIDTH * font_draw_scale(font, draw_scale)));
+      }
       advance = (float)fallback_advance;
     }
 
     width += advance;
 
 #if USE_SDL3_TTF
-    if (is_ttf) {
-      if (advance > 0.0f)
-        prev_codepoint = codepoint;
+    if (is_ttf && advance > 0.0f && font->fixed_advance <= 0) {
+      prev_ttf_cp = codepoint;
       prev_ttf = true;
     } else {
-      prev_codepoint = 0;
+      prev_ttf_cp = 0;
       prev_ttf = false;
     }
 #endif
   }
 
-  max_width = max(max_width, width);
-  if (out_height)
+  max_width = std::max(max_width, width);
+  if (out_height) {
     *out_height =
-        Q_rint((float)lines * line_height + (lines - 1) * pixel_spacing);
-
-  return max(0, Q_rint(max_width));
+        Q_rint((float)lines * line_height + (float)(lines - 1) * pixel_spacing);
+  }
+  return std::max(0, Q_rint(max_width));
 }
 
 int Font_LineHeight(const font_t *font, int scale) {
   if (!font)
-    return CONCHAR_HEIGHT * max(scale, 1);
-
+    return CONCHAR_HEIGHT * std::max(scale, 1);
   int draw_scale = scale > 0 ? scale : 1;
-  float scale_boost = font_scale_boost();
-  return max(1, Q_rint((float)font->virtual_line_height * (float)draw_scale *
-                       scale_boost));
+  return std::max(
+      1, Q_rint((float)font->virtual_line_height * (float)draw_scale *
+                font_scale_boost()));
 }
 
-bool Font_IsLegacy(const font_t *font) {
-  return font && font->kind == FONT_LEGACY;
-}
+bool Font_IsLegacy(const font_t *font) { return font && font->kind == FONT_LEGACY; }
 
 qhandle_t Font_LegacyHandle(const font_t *font) {
   return font ? font->legacy_handle : 0;

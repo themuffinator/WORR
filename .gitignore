@@ -1,6 +1,21 @@
 /subprojects/*/
 !/subprojects/packagefiles/
 !/subprojects/rerelease-game/
+
+# Local workspace/IDE artifacts
 .vscode/
+.vs/
+.codex_temp/
+
+# Root build trees and Meson/Ninja outputs
+/build*/
+/builddir*/
+/.install/
+/meson-private/
+/meson-logs/
+/compile_commands.json
+/.ninja_log
+/.ninja_deps
+
 /tags
 /TAGS

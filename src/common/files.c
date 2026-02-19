@@ -241,6 +241,7 @@ char                fs_gamedir[MAX_OSPATH];
 
 static searchpath_t *fs_searchpaths;
 static searchpath_t *fs_base_searchpaths;
+static char fs_detected_basepath[MAX_OSPATH];
 
 static list_t       fs_hard_links;
 static list_t       fs_soft_links;
@@ -3787,16 +3788,25 @@ static void add_game_kpf(unsigned mode, const char *dir)
 static void setup_base_paths(void)
 {
     const char *base = sys_basedir->string;
+    const char *detected = fs_detected_basepath;
     const char *home = sys_homedir->string;
 
     add_builtin_content();
-    add_game_kpf(FS_PATH_BASE | FS_DIR_BASE, base);
-    add_game_dir(FS_PATH_BASE | FS_DIR_BASE, base, BASEGAME, *home);
 
+    // Priority: current basedir > detected install path > home path.
+    // Search paths are prepended, so add in reverse priority order.
     if (*home) {
         add_game_kpf(FS_PATH_BASE | FS_DIR_HOME, home);
         add_game_dir(FS_PATH_BASE | FS_DIR_HOME, home, BASEGAME, false);
     }
+
+    if (*detected) {
+        add_game_kpf(FS_PATH_BASE | FS_DIR_BASE, detected);
+        add_game_dir(FS_PATH_BASE | FS_DIR_BASE, detected, BASEGAME, true);
+    }
+
+    add_game_kpf(FS_PATH_BASE | FS_DIR_BASE, base);
+    add_game_dir(FS_PATH_BASE | FS_DIR_BASE, base, BASEGAME, *home);
 
     fs_base_searchpaths = fs_searchpaths;
 }
@@ -3805,16 +3815,21 @@ static void setup_base_paths(void)
 static void setup_game_paths(void)
 {
     const char *base = sys_basedir->string;
+    const char *detected = fs_detected_basepath;
     const char *home = sys_homedir->string;
 
     if (fs_game->string[0]) {
-        // add system path first
-        add_game_dir(FS_PATH_GAME | FS_DIR_BASE, base, fs_game->string, *home);
-
-        // home paths override system paths
+        // Priority: current basedir > detected install path > home path.
+        // Search paths are prepended, so add in reverse priority order.
         if (*home) {
             add_game_dir(FS_PATH_GAME | FS_DIR_HOME, home, fs_game->string, false);
         }
+
+        if (*detected) {
+            add_game_dir(FS_PATH_GAME | FS_DIR_BASE, detected, fs_game->string, true);
+        }
+
+        add_game_dir(FS_PATH_GAME | FS_DIR_BASE, base, fs_game->string, *home);
     }
 
     // this var is set for compatibility with server browsers, etc
@@ -4049,35 +4064,23 @@ FS_FindBaseDir
 */
 static void FS_FindBaseDir(void)
 {
-    // TODO: figure out something here. DEFGAME macro
-    // is empty by default which we should fix.
-    //static const char *defgame = "baseq2";
+    char client_dir[MAX_OSPATH] = { 0 };
+    const sys_getinstalledgamepath_func_t *gamepath_func = gamepath_funcs;
 
-    // Don't try to detect the base directory if it was already explicitly specified
-    bool detect_base_dir = !strcmp(sys_basedir->string, sys_basedir->default_string);
-    /* Only detect libdir on Windows:
-     * At least on Linux, a detected game directory probably contains a game .DLL, but no .SO,
-     * so we're better off using our own game .SOs from the default dir */
-#ifdef _WIN32
-    detect_base_dir &= !strcmp(sys_libdir->string, sys_libdir->default_string);
-#endif
+    fs_detected_basepath[0] = 0;
 
-    if (detect_base_dir) {
-        // find Steam installation dir first
-        char client_dir[MAX_OSPATH] = { 0 };
+    while (*gamepath_func && !(*gamepath_func)(com_rerelease->integer, client_dir, sizeof(client_dir))) {
+        gamepath_func++;
+    }
 
-        const sys_getinstalledgamepath_func_t *gamepath_func = gamepath_funcs;
-        while (*gamepath_func && !(*gamepath_func)(com_rerelease->integer, client_dir, sizeof(client_dir)))
-        {
-            gamepath_func++;
-        }
+    if (*client_dir) {
+        FS_NormalizePath(client_dir);
 
-        // Don't set an "empty" base dir, use defaults instead
-        if (*client_dir) {
-            Cvar_Set("basedir", client_dir);
-        #ifdef _WIN32
-            Cvar_Set("libdir", client_dir);
-        #endif
+        // Keep the current basedir as primary and use detected install path
+        // as fallback.
+        if (FS_pathcmp(client_dir, sys_basedir->string) &&
+            (!sys_homedir->string[0] || FS_pathcmp(client_dir, sys_homedir->string))) {
+            Q_strlcpy(fs_detected_basepath, client_dir, sizeof(fs_detected_basepath));
         }
     }
 

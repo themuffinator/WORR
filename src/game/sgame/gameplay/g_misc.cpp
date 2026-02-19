@@ -13,6 +13,7 @@ scripting. - Special Effects: Implements entities that create special effects, l
 gibs (`ThrowGib`) and player heads (`ThrowClientHead`) upon death.*/
 
 #include "../g_local.hpp"
+#include "g_qu3e_physics.hpp"
 
 //=====================================================
 
@@ -831,6 +832,9 @@ health (80), and dmg (150).
 static TOUCH(barrel_touch) (gentity_t* self, gentity_t* other, const trace_t& tr, bool otherTouchingSelf) -> void {
 	float  ratio;
 	Vector3 v;
+
+	if (SG_QU3EPhysics_HandleBarrelTouch(self, other))
+		return;
 
 	if ((!other->groundEntity) || (other->groundEntity == self))
 		return;

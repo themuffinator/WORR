@@ -24,6 +24,7 @@ change game behavior on the fly.*/
 #include "g_clients.hpp"
 #include "g_headhunters.hpp"
 #include "g_hud_blob.hpp"
+#include "g_qu3e_physics.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -247,6 +248,10 @@ cvar_t *g_maxvelocity;
 cvar_t *g_motd_filename;
 cvar_t *g_mover_debug;
 cvar_t *g_mover_speed_scale;
+cvar_t *sg_phys_qu3e_enable;
+cvar_t *sg_phys_qu3e_gibs;
+cvar_t *sg_phys_qu3e_barrels;
+cvar_t *sg_phys_qu3e_velocity_blend;
 cvar_t *g_nadeFest;
 cvar_t *g_no_armor;
 cvar_t *g_mapspawn_no_bfg;
@@ -978,6 +983,11 @@ static void InitGame() {
   g_rollAngle = gi.cvar("g_roll_angle", "2", CVAR_NOFLAGS);
   g_maxvelocity = gi.cvar("g_max_velocity", "2000", CVAR_NOFLAGS);
   g_gravity = gi.cvar("g_gravity", "800", CVAR_NOFLAGS);
+  sg_phys_qu3e_enable = gi.cvar("sg_phys_qu3e_enable", "1", CVAR_NOFLAGS);
+  sg_phys_qu3e_gibs = gi.cvar("sg_phys_qu3e_gibs", "1", CVAR_NOFLAGS);
+  sg_phys_qu3e_barrels = gi.cvar("sg_phys_qu3e_barrels", "1", CVAR_NOFLAGS);
+  sg_phys_qu3e_velocity_blend =
+      gi.cvar("sg_phys_qu3e_velocity_blend", "0.9", CVAR_NOFLAGS);
 
   g_skip_view_modifiers = gi.cvar("g_skip_view_modifiers", "0", CVAR_NOSET);
 
@@ -1291,6 +1301,7 @@ static void InitGame() {
 
   // initialise the heatmap system
   HM_Init();
+  SG_QU3EPhysics_Init();
 }
 
 //===================================================================
@@ -1354,6 +1365,7 @@ void FindIntermissionPoint(void) {
 static void ShutdownGame() {
   gi.Com_Print("==== ShutdownGame ====\n");
 
+  SG_QU3EPhysics_Shutdown();
   FreeClientArray();
 
   gi.FreeTags(TAG_LEVEL);
@@ -2303,6 +2315,8 @@ static inline void G_RunFrame_(bool main_loop) {
       }
     }
   }
+
+  SG_QU3EPhysics_RunFrame();
 
   // --- Entity Loop ---
   gentity_t *ent = world;

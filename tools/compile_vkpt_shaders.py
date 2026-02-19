@@ -32,6 +32,20 @@ def find_glslang(explicit_path):
     return None
 
 
+def resolve_vkpt_paths(repo_root):
+    # Prefer current RTX VKPT location; keep legacy vk path as fallback.
+    candidates = [
+        repo_root / "src" / "rend_rtx" / "vkpt",
+        repo_root / "src" / "rend_vk" / "vkpt",
+    ]
+    for root in candidates:
+        shader_dir = root / "shader"
+        fsr_dir = root / "fsr"
+        if shader_dir.is_dir():
+            return shader_dir, fsr_dir
+    return candidates[0] / "shader", candidates[0] / "fsr"
+
+
 def collect_shader_sources(shader_dir):
     exts = {".comp", ".vert", ".frag", ".rgen", ".rchit", ".rahit", ".rmiss", ".rint"}
     sources = []
@@ -100,8 +114,7 @@ def main():
 
     script_dir = Path(__file__).resolve().parent
     repo_root = script_dir.parent
-    shader_dir = repo_root / "src" / "rend_vk" / "vkpt" / "shader"
-    fsr_dir = repo_root / "src" / "rend_vk" / "vkpt" / "fsr"
+    shader_dir, fsr_dir = resolve_vkpt_paths(repo_root)
 
     if not shader_dir.is_dir():
         print(f"vkpt shaders: shader directory not found: {shader_dir}", file=sys.stderr)

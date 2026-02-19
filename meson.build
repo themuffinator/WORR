@@ -359,6 +359,7 @@ sgame_src = bgame_src + [
   'src/game/sgame/gameplay/g_monster_spawn.cpp',
   'src/game/sgame/gameplay/g_monster.cpp',
   'src/game/sgame/gameplay/g_phys.cpp',
+  'src/game/sgame/gameplay/g_qu3e_physics.cpp',
   'src/game/sgame/gameplay/g_proball.cpp',
   'src/game/sgame/gameplay/g_save.cpp',
   'src/game/sgame/gameplay/g_spawn_points.cpp',
@@ -454,6 +455,21 @@ sgame_src = bgame_src + [
   'src/game/sgame/player/p_view.cpp',
   'src/game/sgame/player/p_weapon.cpp',
   'src/game/sgame/q_std.cpp',
+  'src/game/sgame/third_party/qu3e/broadphase/q3BroadPhase.cpp',
+  'src/game/sgame/third_party/qu3e/broadphase/q3DynamicAABBTree.cpp',
+  'src/game/sgame/third_party/qu3e/collision/q3Box.cpp',
+  'src/game/sgame/third_party/qu3e/collision/q3Collide.cpp',
+  'src/game/sgame/third_party/qu3e/common/q3Geometry.cpp',
+  'src/game/sgame/third_party/qu3e/common/q3Memory.cpp',
+  'src/game/sgame/third_party/qu3e/dynamics/q3Body.cpp',
+  'src/game/sgame/third_party/qu3e/dynamics/q3Contact.cpp',
+  'src/game/sgame/third_party/qu3e/dynamics/q3ContactManager.cpp',
+  'src/game/sgame/third_party/qu3e/dynamics/q3ContactSolver.cpp',
+  'src/game/sgame/third_party/qu3e/dynamics/q3Island.cpp',
+  'src/game/sgame/third_party/qu3e/math/q3Mat3.cpp',
+  'src/game/sgame/third_party/qu3e/math/q3Quaternion.cpp',
+  'src/game/sgame/third_party/qu3e/math/q3Vec3.cpp',
+  'src/game/sgame/third_party/qu3e/scene/q3Scene.cpp',
 ]
 
 cgame_src = bgame_src + [
@@ -844,6 +860,9 @@ common_deps = [zlib]
 client_deps = [png, curl, sdl3]
 if sdl3_ttf.found()
   client_deps += sdl3_ttf
+endif
+if freetype2.found()
+  client_deps += freetype2
 endif
 if harfbuzz.found()
   client_deps += harfbuzz
