@@ -653,23 +653,11 @@ if cpp.get_argument_syntax() == 'gcc'
   ]
   client_cpp_args += cpp.get_supported_arguments(client_cpp_warn_args)
 
-  client_cpp_std_args = cpp.get_supported_arguments([
-    '-std=gnu++2b',
-    '-std=c++2b',
-    '-std=gnu++23',
-    '-std=c++23',
-    '-std=gnu++20',
-    '-std=c++20',
-  ])
-  if client_cpp_std_args.length() > 0
-    client_cpp_args += client_cpp_std_args[0]
-  endif
-
   if win32
     client_cpp_args += ['-D_CRT_SECURE_NO_WARNINGS', '-D_CRT_NONSTDC_NO_WARNINGS']
   endif
 elif cpp.get_id() == 'msvc'
-  client_cpp_args += ['/std:c++latest', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS']
+  client_cpp_args += ['/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS']
 endif
 
 game_cpp_args = [
@@ -1294,6 +1282,7 @@ executable('worr', common_src, client_src, renderer_engine_src,
   link_with:             q2proto_lib,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=REF_GL', engine_args],
   cpp_args:              client_cpp_args,
+  override_options:      ['cpp_std=c++20'],
   install:               true,
   install_dir:           bindir,
 )
@@ -1395,7 +1384,7 @@ cgame_dll = shared_library('cgame' + cpu, cgame_all_src,
   install:              true,
   install_dir:          libdir / get_option('base-game'),
   install_tag:          'runtime',
-  override_options:     ['b_vscrt=static_from_buildtype', 'cpp_std=c++23'],
+  override_options:     ['b_vscrt=static_from_buildtype', 'cpp_std=c++20'],
 )
 
 prog_copy_game_dll = find_program('copy-game-dll.py')

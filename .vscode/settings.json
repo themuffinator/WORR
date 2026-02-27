@@ -1,5 +1,5 @@
 {
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/builddir/compile_commands.json",
+    "C_Cpp.default.compileCommands": "e:\\Repositories\\WORR\\builddir/compile_commands.json",
     "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild",
     "debug.defaultConfiguration": "WORR (Vulkan)"
 }
