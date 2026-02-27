@@ -22,6 +22,7 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#install-staging-install">Install Staging</a> •
   <a href="#nightly-builds">Nightly Builds</a> •
+  <a href="#project-backbone">Project Backbone</a> •
   <a href="#building">Building</a> •
   <a href="#usage--documentation">Documentation</a>
 </p>
@@ -98,52 +99,21 @@ Nightly automation is defined in [`.github/workflows/nightly.yml`](.github/workf
 
 ---
 
-## Project Goals
+## Project Backbone
 
-**Status key:** ✅ Complete · 🟡 In&nbsp;Progress · 🔴 Planned
+WORR uses task-based projects as the primary planning and execution model.
 
-### Core Milestones
+- Canonical strategic project doc: [`docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`](docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md)
+- Significant development work should be tracked against roadmap task IDs (`FR-*` feature tasks, `DV-*` development tasks).
+- Engineering change docs under `docs-dev/` should reference the corresponding task IDs so implementation, planning, and release outcomes stay aligned.
 
-- ✅ Implement a bare-minimum C++ migration, buildable and bug-free
-- 🟡 Complete Vulkan renderer (covering GL feature set and compatibility), allow external binary build and renderer selector
-- 🔴 Implement a functional bot system – workable in campaigns and multiplayer alike
+### Current Priority Tracks
 
-### GUI
-
-- ✅ JSON menu scripting
-- 🟡 Update GUI to allow for a full range of UI elements
-- 🟡 Integrate full FreeType2 support and Quake III color escape sequences
-- ✅ Enhance aspect correction / screen positioning to be more robust and correct
-- 🟡 Extend / enhance menu selection
-- 🔴 Graphical obituaries, chatbox
-
-### Online
-
-- 🟡 **Website:** Basic server browser, user environment, ladder, etc.
-- 🔴 **Engine:** Engine bootstrapper with auto-updater, CDN for asset and update delivery
-- 🔴 **All:** Discord OAuth integration for user management, wired into engine and game module
-- 🔴 **All:** Discord server bot (or alternative) to bridge game server, web backend and Discord
-- 🔴 Set up a public game server (NL location to start, ideally)
-
-### Rendering
-
-- 🟡 Depth of field / slow-time
-- 🔴 Player outlines (and possibly rim lighting) with team support
-- 🔴 Player bright skins with color selector
-- 🟡 Shadowmapping, compatible with Quake II Rerelease maps
-- 🟡 Motion blur
-- 🟡 Revised bloom with modern tone/color correction
-- 🟡 HDR pipeline
-
-### Structure
-
-- 🔴 Split game module into `cgame` / `game` for client / server separation
-- 🔴 Migrate the majority of UI code from the engine into `cgame`
-
-### Asset Support
-
-- 🔴 IQM model support
-- 🔴 Extended BSP support: `IBSP29`, `BSP2`, `BSP2L`, `BSPX`
+- Native Vulkan parity closures for gameplay-visible gaps.
+- JSON UI/menu completion and widget backlog execution.
+- Bot system implementation from structural scaffolding to gameplay-ready behavior.
+- CI/test expansion beyond release packaging to day-to-day merge confidence.
+- Dependency/version hygiene and documentation freshness.
 
 ---
 

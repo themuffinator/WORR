@@ -7,6 +7,9 @@ Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR
 - Document significant changes in detail in a new document under `docs-dev/` (unless the change is strictly user-facing documentation content, which belongs in `docs-user/`).
 - Put all development/engineering documentation under `docs-dev/`.
 - Put all end-user documentation under `docs-user/`; keep user docs approachable, practical, and less technical than dev docs.
+- Use task-based projects as the development backbone. Significant work must be planned and tracked through project tasks, not ad-hoc notes.
+- The canonical strategic project document is `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`; keep it current as work is added/completed/reprioritized.
+- For significant work, reference the corresponding project task ID(s) in implementation docs under `docs-dev/` (and in PR/commit notes when available).
 - Use `.install/` as the local distributable staging root. Build workflows must refresh `.install/` with current binaries and packaged assets at the end of each build.
 - Backwards compatibility is not a requirement, only a nice-to-have.
 - Use idTech3 (Quake 3 Arena) codebases as refactoring inspiration (Quake3e: `E:\_SOURCE\_CODE\Quake3e-master`, baseq3a: `E:\_SOURCE\_CODE\baseq3a-master`) to replicate its advantages as WORR evolves.
