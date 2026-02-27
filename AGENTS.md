@@ -4,7 +4,9 @@
 Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR banner.
 
 ## Rules
-- Document significant changes in detail in a new, appropriate document.
+- Document significant changes in detail in a new document under `docs-dev/` (unless the change is strictly user-facing documentation content, which belongs in `docs-user/`).
+- Put all development/engineering documentation under `docs-dev/`.
+- Put all end-user documentation under `docs-user/`; keep user docs approachable, practical, and less technical than dev docs.
 - Use `.install/` as the local distributable staging root. Build workflows must refresh `.install/` with current binaries and packaged assets at the end of each build.
 - Backwards compatibility is not a requirement, only a nice-to-have.
 - Use idTech3 (Quake 3 Arena) codebases as refactoring inspiration (Quake3e: `E:\_SOURCE\_CODE\Quake3e-master`, baseq3a: `E:\_SOURCE\_CODE\baseq3a-master`) to replicate its advantages as WORR evolves.

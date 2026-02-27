@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #define JSMN_STATIC
 #include "common/jsmn.h"
@@ -121,7 +122,7 @@ static const wchar_t *kWindowClass = L"WORR_UpdateBootstrapper";
 static const wchar_t *kConfigName = L"worr_update.json";
 
 static const config_t kDefaultConfig = {
-    "themuffinator/WORR-2",
+    "themuffinator/WORR",
     "stable",
     "worr-client-win64.json",
     "worr-client-win64.zip",
@@ -918,7 +919,38 @@ static int parse_release_object(const char *json, const jsmntok_t *tokens, int t
         }
     }
 
-    return out->manifest_url[0] != '\0';
+    return out->manifest_url[0] != '\0' && out->package_url[0] != '\0';
+}
+
+static int release_matches_channel(const char *channel, const char *tag)
+{
+    if (!channel || !channel[0] || _stricmp(channel, "stable") == 0) {
+        return 1;
+    }
+
+    if (!tag || !tag[0]) {
+        return 0;
+    }
+
+    char channel_lc[MAX_STR] = {0};
+    char tag_lc[MAX_STR] = {0};
+    size_t channel_len = strlen(channel);
+    size_t tag_len = strlen(tag);
+    if (channel_len >= sizeof(channel_lc)) {
+        channel_len = sizeof(channel_lc) - 1;
+    }
+    if (tag_len >= sizeof(tag_lc)) {
+        tag_len = sizeof(tag_lc) - 1;
+    }
+
+    for (size_t i = 0; i < channel_len; ++i) {
+        channel_lc[i] = (char)tolower((unsigned char)channel[i]);
+    }
+    for (size_t i = 0; i < tag_len; ++i) {
+        tag_lc[i] = (char)tolower((unsigned char)tag[i]);
+    }
+
+    return strstr(tag_lc, channel_lc) != NULL;
 }
 
 static int parse_release_json(const char *json, size_t json_size, const config_t *config, release_info_t *out)
@@ -943,12 +975,26 @@ static int parse_release_json(const char *json, size_t json_size, const config_t
 
     int ok = 0;
     if (tokens[0].type == JSMN_ARRAY && tokens[0].size > 0) {
-        int first = 1;
-        if (tokens[first].type == JSMN_OBJECT) {
-            ok = parse_release_object(json, tokens, token_count, first, config, out);
+        int i = 1;
+        for (int elem = 0; elem < tokens[0].size; ++elem) {
+            if (tokens[i].type == JSMN_OBJECT) {
+                release_info_t candidate = {0};
+                if (parse_release_object(json, tokens, token_count, i, config, &candidate)
+                    && release_matches_channel(config->channel, candidate.tag)) {
+                    *out = candidate;
+                    ok = 1;
+                    break;
+                }
+            }
+            i = json_skip(tokens, token_count, i);
         }
     } else if (tokens[0].type == JSMN_OBJECT) {
-        ok = parse_release_object(json, tokens, token_count, 0, config, out);
+        release_info_t candidate = {0};
+        if (parse_release_object(json, tokens, token_count, 0, config, &candidate)
+            && release_matches_channel(config->channel, candidate.tag)) {
+            *out = candidate;
+            ok = 1;
+        }
     }
 
     free(tokens);

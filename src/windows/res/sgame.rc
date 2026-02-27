@@ -35,7 +35,7 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments", "https://github.com/themuffinator/WORR-2"
+            VALUE "Comments", "https://github.com/themuffinator/WORR"
             VALUE "CompanyName", "skuller.net"
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR
             VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR

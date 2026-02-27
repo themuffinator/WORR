@@ -3,7 +3,6 @@
 !/subprojects/rerelease-game/
 
 # Local workspace/IDE artifacts
-.vscode/
 .vs/
 .codex_temp/
 
@@ -16,6 +15,10 @@
 /compile_commands.json
 /.ninja_log
 /.ninja_deps
+
+# Python caches
+__pycache__/
+*.py[cod]
 
 /tags
 /TAGS

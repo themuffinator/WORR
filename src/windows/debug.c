@@ -158,7 +158,7 @@ static LONG WINAPI exception_filter(LPEXCEPTION_POINTERS exceptionInfo)
     }
 
     MessageBoxA(NULL,
-                "Crash report .dmp written; please submit to:\nhttps://github.com/themuffinator/WORR-2/issues",
+                "Crash report .dmp written; please submit to:\nhttps://github.com/themuffinator/WORR/issues",
                 CRASH_TITLE,
                 MB_ICONERROR);
 

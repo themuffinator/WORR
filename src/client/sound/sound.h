@@ -172,6 +172,7 @@ typedef struct {
     sfxcache_t *(*upload_sfx)(sfx_t *s);
     void (*delete_sfx)(sfx_t *s);
     void (*page_in_sfx)(sfx_t *s);
+    const qboolean (*set_eax_effect_properties)(const sfx_eax_properties_t *eax_properties);
     bool (*raw_samples)(int samples, int rate, int width, int channels, const void *data, float volume);
     int (*need_raw_samples)(void);
     int (*have_raw_samples)(void);
@@ -248,6 +249,7 @@ channel_t *S_PickChannel(int entnum, int entchannel);
 void S_IssuePlaysound(playsound_t *ps);
 int S_BuildSoundList(int *sounds);
 void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo);
+const qboolean S_SetEAXEnvironmentProperties(const sfx_eax_properties_t *properties);
 float S_GetOcclusion(channel_t *ch, const vec3_t origin);
 float S_SmoothOcclusion(channel_t *ch, float target);
 float S_ComputeOcclusion(const vec3_t origin, float *cutoff_hz);

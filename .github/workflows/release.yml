@@ -40,20 +40,25 @@ jobs:
         shell: msys2 {0}
         run: meson compile -C build
 
-      - name: Install
+      - name: Refresh .install
         shell: msys2 {0}
-        run: meson install -C build --destdir dist
+        run: |
+          python3 tools/refresh_install.py \
+            --build-dir build \
+            --install-dir .install \
+            --base-game baseq2 \
+            --platform-id windows-x86_64
 
       - name: Package
         shell: msys2 {0}
         run: |
           VERSION=$(python3 version.py --semver)
           mkdir -p release
-          python3 tools/package_release.py --input-dir dist --output-dir release \
+          python3 tools/package_release.py --input-dir .install --output-dir release \
             --package-name worr-client-win64.zip --manifest-name worr-client-win64.json \
             --version "$VERSION" --repo "${{ github.repository }}" --channel stable \
             --launch-exe worr.exe --write-config
-          python3 tools/package_release.py --input-dir dist --output-dir release \
+          python3 tools/package_release.py --input-dir .install --output-dir release \
             --package-name worr-server-win64.zip --manifest-name worr-server-win64.json \
             --version "$VERSION" --repo "${{ github.repository }}" --channel stable \
             --launch-exe worr.ded.exe --write-config
@@ -71,8 +76,8 @@ jobs:
       - name: Build MSI
         shell: powershell
         run: |
-          $version = (python version.py --semver).Trim()
-          .\tools\build_msi.ps1 -SourceDir dist -OutputDir release -Version $version -MsiName worr-win64.msi
+          $version = (python version.py --msi-version).Trim()
+          .\tools\build_msi.ps1 -SourceDir .install -OutputDir release -Version $version -MsiName worr-win64.msi
 
       - name: Release Version
         id: version

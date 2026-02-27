@@ -69,6 +69,7 @@ struct font_ttf_glyph_t {
   int top = 0;
   int bottom = 0;
   int x_skip = 0;
+  int advance_26_6 = 0;
 };
 
 struct font_ttf_chunk_t {
@@ -92,6 +93,7 @@ struct font_ttf_t {
   int extent = 0;
   int line_skip = 0;
   int fixed_advance_units = 0;
+  int fixed_advance_26_6 = 0;
   std::array<font_ttf_chunk_t *, 0x110000 / 256> chunks{};
   std::vector<font_ttf_page_t> pages;
 };
@@ -362,6 +364,8 @@ static int font_fixed_advance_scaled(const font_t *font, int scale) {
 static inline int ttf_floor_26_6(int value) { return value & -64; }
 static inline int ttf_ceil_26_6(int value) { return (value + 63) & -64; }
 static inline int ttf_trunc_26_6(int value) { return value >> 6; }
+static inline int ttf_pixels_ceil_26_6(int value) { return (value + 63) >> 6; }
+static inline float ttf_float_26_6(int value) { return (float)value / 64.0f; }
 
 static int font_ttf_hinting_mode(void) {
   if (!cl_font_ttf_hinting)
@@ -400,11 +404,11 @@ static uint32_t font_sanitize_codepoint(uint32_t codepoint) {
 static void font_ttf_get_glyph_box(FT_GlyphSlot slot, int *left, int *right,
                                    int *top, int *bottom, int *width,
                                    int *height) {
-  *left = ttf_floor_26_6(slot->metrics.horiBearingX - 64);
-  *right = ttf_ceil_26_6(slot->metrics.horiBearingX + slot->metrics.width + 64);
-  *top = ttf_ceil_26_6(slot->metrics.horiBearingY + 64);
-  *bottom =
-      ttf_floor_26_6(slot->metrics.horiBearingY - slot->metrics.height - 64);
+  // Match SDL_ttf-style glyph metrics: floor bearing, ceil extent.
+  *left = ttf_floor_26_6(slot->metrics.horiBearingX);
+  *right = ttf_ceil_26_6(slot->metrics.horiBearingX + slot->metrics.width);
+  *top = ttf_floor_26_6(slot->metrics.horiBearingY);
+  *bottom = *top - ttf_ceil_26_6(slot->metrics.height);
   *width = ttf_trunc_26_6(*right - *left);
   *height = ttf_trunc_26_6(*top - *bottom);
 }
@@ -489,7 +493,8 @@ static bool font_ttf_render_bitmap(font_t *font, uint32_t codepoint,
   out_glyph->left = ttf_trunc_26_6(left);
   out_glyph->top = ttf_trunc_26_6(top);
   out_glyph->bottom = ttf_trunc_26_6(bottom);
-  out_glyph->x_skip = std::max(1, ((int)slot->metrics.horiAdvance >> 6) + 1);
+  out_glyph->advance_26_6 = (int)slot->metrics.horiAdvance;
+  out_glyph->x_skip = std::max(0, ttf_pixels_ceil_26_6(out_glyph->advance_26_6));
   out_glyph->w = std::max(0, width);
   out_glyph->h = std::max(0, height);
 
@@ -564,8 +569,10 @@ static bool font_ttf_render_chunk(font_t *font, uint32_t chunk_index) {
       continue;
 
     any_glyph = true;
-    if (font->fixed_advance > 0 && font->ttf.fixed_advance_units > 0)
+    if (font->fixed_advance > 0 && font->ttf.fixed_advance_units > 0) {
       glyph.x_skip = font->ttf.fixed_advance_units;
+      glyph.advance_26_6 = font->ttf.fixed_advance_26_6;
+    }
 
     if (glyph.w <= 0 || glyph.h <= 0) {
       chunk->glyphs[(size_t)i] = glyph;
@@ -669,7 +676,10 @@ static float font_ttf_advance(const font_t *font, const font_ttf_glyph_t *glyph,
     return 0.0f;
   if (font->fixed_advance > 0)
     return (float)font_fixed_advance_scaled(font, scale);
-  return std::max(0.0f, (float)glyph->x_skip * font_draw_scale(font, scale));
+  if (glyph->advance_26_6 <= 0)
+    return 0.0f;
+  return std::max(0.0f, ttf_float_26_6(glyph->advance_26_6) *
+                            font_draw_scale(font, scale));
 }
 
 static float font_ttf_kerning(const font_t *font, uint32_t prev, uint32_t cur,
@@ -685,12 +695,12 @@ static float font_ttf_kerning(const font_t *font, uint32_t prev, uint32_t cur,
     return 0.0f;
 
   FT_Vector delta{};
-  if (FT_Get_Kerning(font->ttf.face, prev_index, cur_index, FT_KERNING_DEFAULT,
+  if (FT_Get_Kerning(font->ttf.face, prev_index, cur_index, FT_KERNING_UNFITTED,
                      &delta) != 0) {
     return 0.0f;
   }
 
-  return ((float)delta.x / 64.0f) * font_draw_scale(font, scale);
+  return ttf_float_26_6((int)delta.x) * font_draw_scale(font, scale);
 }
 
 static bool font_draw_ttf_glyph(const font_t *font, const font_ttf_glyph_t *glyph,
@@ -702,8 +712,6 @@ static bool font_draw_ttf_glyph(const font_t *font, const font_ttf_glyph_t *glyp
   int draw_scale = scale > 0 ? scale : 1;
   float glyph_scale = font_draw_scale(font, draw_scale);
   float advance = font_ttf_advance(font, glyph, draw_scale);
-  if (advance <= 0.0f)
-    advance = glyph_scale;
 
   if (glyph->page >= 0 && glyph->page < (int)font->ttf.pages.size() &&
       glyph->w > 0 && glyph->h > 0) {
@@ -712,8 +720,10 @@ static bool font_draw_ttf_glyph(const font_t *font, const font_ttf_glyph_t *glyp
       float baseline_y = (float)y + (float)font->ttf.baseline * glyph_scale;
       float draw_xf = *pen_x + (float)glyph->left * glyph_scale;
       if (font->fixed_advance > 0) {
+        float glyph_advance =
+            std::max(0.0f, ttf_float_26_6(glyph->advance_26_6) * glyph_scale);
         float centered = ((float)font_fixed_advance_scaled(font, draw_scale) -
-                          ((float)glyph->x_skip * glyph_scale)) *
+                          glyph_advance) *
                          0.5f;
         draw_xf += centered;
       }
@@ -819,8 +829,10 @@ static bool font_load_ttf(font_t *font, const char *path) {
   if (font->fixed_advance > 0) {
     FT_UInt m_index = FT_Get_Char_Index(face, 'M');
     if (m_index && FT_Load_Glyph(face, m_index, font_ttf_load_flags()) == 0) {
-      int xskip = std::max(1, ((int)face->glyph->metrics.horiAdvance >> 6) + 1);
+      int advance_26_6 = (int)face->glyph->metrics.horiAdvance;
+      int xskip = std::max(1, ttf_pixels_ceil_26_6(advance_26_6));
       font->ttf.fixed_advance_units = xskip;
+      font->ttf.fixed_advance_26_6 = xskip << 6;
       float vscale = (float)font->virtual_line_height / (float)font->ttf.extent;
       font->fixed_advance = std::max(1, Q_rint((float)xskip * vscale));
     }
@@ -1282,19 +1294,19 @@ int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
     if (font->kind == FONT_TTF) {
       const font_ttf_glyph_t *glyph = font_ttf_get_glyph(font, codepoint);
       if (glyph) {
+        float advance = font_ttf_advance(font, glyph, draw_scale);
         if (prev_ttf && font->fixed_advance <= 0) {
           x_f += font_ttf_kerning(font, prev_ttf_cp, codepoint, draw_scale);
-          if (ttf_spacing > 0.0f && font_ttf_advance(font, glyph, draw_scale) > 0.0f)
+          if (ttf_spacing > 0.0f && advance > 0.0f)
             x_f += ttf_spacing;
         }
 
         drawn = font_draw_ttf_glyph(font, glyph, &x_f, y, draw_scale, draw_flags,
                                     draw_color);
-        if (drawn && font->fixed_advance <= 0 &&
-            font_ttf_advance(font, glyph, draw_scale) > 0.0f) {
+        if (drawn && font->fixed_advance <= 0 && advance > 0.0f) {
           prev_ttf_cp = codepoint;
           prev_ttf = true;
-        } else {
+        } else if (!drawn) {
           prev_ttf_cp = 0;
           prev_ttf = false;
         }
@@ -1362,7 +1374,10 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
   float line_height = (float)Font_LineHeight(font, draw_scale);
   float pixel_spacing =
       font->pixel_scale > 0.0f ? (1.0f / font->pixel_scale) : 0.0f;
-  float width = 0.0f;
+  float pen_x = 0.0f;
+  float line_min_x = 0.0f;
+  float line_max_x = 0.0f;
+  bool line_has_bounds = false;
   float max_width = 0.0f;
   int lines = 1;
 
@@ -1370,15 +1385,25 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
   uint32_t prev_ttf_cp = 0;
   bool prev_ttf = false;
   float ttf_spacing = font_ttf_letter_spacing(font, draw_scale);
+  float ttf_glyph_scale = font_draw_scale(font, draw_scale);
 #endif
+
+  auto commit_line_width = [&]() {
+    // Keep measurement aligned with rendered ink + pen extents (SDL_ttf-style).
+    float line_width = line_has_bounds ? (line_max_x - line_min_x) : line_max_x;
+    max_width = std::max(max_width, line_width);
+    pen_x = 0.0f;
+    line_min_x = 0.0f;
+    line_max_x = 0.0f;
+    line_has_bounds = false;
+  };
 
   bool use_color_codes = Com_HasColorEscape(string, max_chars);
   size_t remaining = max_chars;
   const char *s = string;
   while (remaining && *s) {
     if ((flags & UI_MULTILINE) && *s == '\n') {
-      max_width = std::max(max_width, width);
-      width = 0.0f;
+      commit_line_width();
       ++lines;
 #if USE_SDL3_TTF
       prev_ttf_cp = 0;
@@ -1406,12 +1431,27 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
       const font_ttf_glyph_t *glyph =
           font_ttf_get_glyph(const_cast<font_t *>(font), codepoint);
       if (glyph) {
+        float glyph_advance = font_ttf_advance(font, glyph, draw_scale);
         if (prev_ttf && font->fixed_advance <= 0) {
-          width += font_ttf_kerning(font, prev_ttf_cp, codepoint, draw_scale);
-          if (ttf_spacing > 0.0f && font_ttf_advance(font, glyph, draw_scale) > 0.0f)
-            width += ttf_spacing;
+          pen_x += font_ttf_kerning(font, prev_ttf_cp, codepoint, draw_scale);
+          if (ttf_spacing > 0.0f && glyph_advance > 0.0f)
+            pen_x += ttf_spacing;
         }
-        advance = font_ttf_advance(font, glyph, draw_scale);
+
+        if (glyph->w > 0 && glyph->h > 0) {
+          float glyph_left = pen_x + (float)glyph->left * ttf_glyph_scale;
+          float glyph_right = glyph_left + (float)glyph->w * ttf_glyph_scale;
+          if (!line_has_bounds) {
+            line_min_x = std::min(0.0f, glyph_left);
+            line_max_x = std::max(0.0f, glyph_right);
+            line_has_bounds = true;
+          } else {
+            line_min_x = std::min(line_min_x, glyph_left);
+            line_max_x = std::max(line_max_x, glyph_right);
+          }
+        }
+
+        advance = glyph_advance;
         is_ttf = true;
       }
     }
@@ -1430,20 +1470,21 @@ int Font_MeasureString(const font_t *font, int scale, int flags,
       advance = (float)fallback_advance;
     }
 
-    width += advance;
+    pen_x += advance;
+    line_max_x = std::max(line_max_x, pen_x);
 
 #if USE_SDL3_TTF
     if (is_ttf && advance > 0.0f && font->fixed_advance <= 0) {
       prev_ttf_cp = codepoint;
       prev_ttf = true;
-    } else {
+    } else if (!is_ttf) {
       prev_ttf_cp = 0;
       prev_ttf = false;
     }
 #endif
   }
 
-  max_width = std::max(max_width, width);
+  commit_line_width();
   if (out_height) {
     *out_height =
         Q_rint((float)lines * line_height + (float)(lines - 1) * pixel_spacing);

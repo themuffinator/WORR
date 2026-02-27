@@ -1087,6 +1087,12 @@ static int DMA_GetSampleRate(void)
     return dma.speed;
 }
 
+static const qboolean DMA_SetEAXEffectProperties(const sfx_eax_properties_t *properties)
+{
+    (void)properties;
+    return qfalse;
+}
+
 const sndapi_t snd_dma = {
     .init = DMA_Init,
     .shutdown = DMA_Shutdown,
@@ -1095,6 +1101,7 @@ const sndapi_t snd_dma = {
     .sound_info = DMA_SoundInfo,
     .upload_sfx = DMA_UploadSfx,
     .page_in_sfx = DMA_PageInSfx,
+    .set_eax_effect_properties = DMA_SetEAXEffectProperties,
     .raw_samples = DMA_RawSamples,
     .need_raw_samples = DMA_NeedRawSamples,
     .have_raw_samples = DMA_HaveRawSamples,

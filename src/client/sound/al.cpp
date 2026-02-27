@@ -37,6 +37,8 @@ static cvar_t       *al_reverb_send;
 static cvar_t       *al_reverb_send_distance;
 static cvar_t       *al_reverb_send_min;
 static cvar_t       *al_reverb_send_occlusion_boost;
+static cvar_t       *al_eax;
+static cvar_t       *al_eax_lerp_time;
 
 static cvar_t       *al_timescale;
 static cvar_t       *al_merge_looping;
@@ -100,6 +102,21 @@ static al_reverb_environment_t  *s_reverb_environments;
 
 static ALuint       s_reverb_effect;
 static ALuint       s_reverb_slot;
+static bool         s_eax_effect_available;
+
+typedef struct {
+    vec3_t      origin;
+    float       radius;
+    qhandle_t   reverb_id;
+} al_eax_zone_t;
+
+static al_eax_zone_t            *s_eax_zones;
+static size_t                   s_num_eax_zones;
+static sfx_eax_properties_t     s_eax_effects[SOUND_EAX_EFFECT_MAX];
+static qhandle_t                s_eax_current_id;
+static qhandle_t                s_eax_previous_id;
+static float                    s_eax_lerp_fraction;
+static sfx_eax_properties_t     s_eax_mixed_properties;
 
 static const EFXEAXREVERBPROPERTIES s_reverb_parameters[] = {
     EFX_REVERB_PRESET_GENERIC,
@@ -164,6 +181,97 @@ static const char *const s_reverb_names[] = {
     "psychotic"
 };
 
+// EAX environment pipeline ported from Q2RTXPerimental's client EAX system
+// (PolyhedronStudio), with adaptation to WORR's OpenAL backend interfaces.
+static const sfx_eax_properties_t s_eax_default_properties = {
+    .flDensity = 1.0f,
+    .flDiffusion = 1.0f,
+    .flGain = 0.0f,
+    .flGainHF = 1.0f,
+    .flGainLF = 1.0f,
+    .flDecayTime = 1.0f,
+    .flDecayHFRatio = 1.0f,
+    .flDecayLFRatio = 1.0f,
+    .flReflectionsGain = 0.0f,
+    .flReflectionsDelay = 0.0f,
+    .flReflectionsPan = { 0.0f, 0.0f, 0.0f },
+    .flLateReverbGain = 1.0f,
+    .flLateReverbDelay = 0.0f,
+    .flLateReverbPan = { 0.0f, 0.0f, 0.0f },
+    .flEchoTime = 0.25f,
+    .flEchoDepth = 0.0f,
+    .flModulationTime = 0.25f,
+    .flModulationDepth = 0.0f,
+    .flAirAbsorptionGainHF = 1.0f,
+    .flHFReference = 5000.0f,
+    .flLFReference = 250.0f,
+    .flRoomRolloffFactor = 0.0f,
+    .iDecayHFLimit = 1
+};
+
+static const sfx_eax_properties_t s_eax_underwater_properties = {
+    .flDensity = 0.3645f,
+    .flDiffusion = 1.0f,
+    .flGain = 0.3162f,
+    .flGainHF = 0.01f,
+    .flGainLF = 1.0f,
+    .flDecayTime = 1.49f,
+    .flDecayHFRatio = 0.1f,
+    .flDecayLFRatio = 1.0f,
+    .flReflectionsGain = 0.5963f,
+    .flReflectionsDelay = 0.007f,
+    .flReflectionsPan = { 0.0f, 0.0f, 0.0f },
+    .flLateReverbGain = 7.0795f,
+    .flLateReverbDelay = 0.011f,
+    .flLateReverbPan = { 0.0f, 0.0f, 0.0f },
+    .flEchoTime = 0.25f,
+    .flEchoDepth = 0.0f,
+    .flModulationTime = 1.18f,
+    .flModulationDepth = 0.348f,
+    .flAirAbsorptionGainHF = 0.9943f,
+    .flHFReference = 5000.0f,
+    .flLFReference = 250.0f,
+    .flRoomRolloffFactor = 0.0f,
+    .iDecayHFLimit = 1
+};
+
+static const char *const s_eax_json_names[SOUND_EAX_EFFECT_MAX] = {
+    nullptr, nullptr,
+    "abandoned",
+    "alley",
+    "arena",
+    "auditorium",
+    "bathroom",
+    "carpetedhallway",
+    "cave",
+    "chapel",
+    "city",
+    "citystreets",
+    "concerthall",
+    "dizzy",
+    "drugged",
+    "dustyroom",
+    "forest",
+    "hallway",
+    "hangar",
+    "library",
+    "livingroom",
+    "mountains",
+    "museum",
+    "paddedcell",
+    "parkinglot",
+    "plain",
+    "psychotic",
+    "quarry",
+    "room",
+    "sewerpipe",
+    "smallwaterroom",
+    "stonecorridor",
+    "stoneroom",
+    "subway",
+    "underpass"
+};
+
 static void AL_LoadEffect(const EFXEAXREVERBPROPERTIES *reverb)
 {
     qalEffectf(s_reverb_effect, AL_EAXREVERB_DENSITY, reverb->flDensity);
@@ -191,6 +299,394 @@ static void AL_LoadEffect(const EFXEAXREVERBPROPERTIES *reverb)
     qalEffecti(s_reverb_effect, AL_EAXREVERB_DECAY_HFLIMIT, reverb->iDecayHFLimit);
 
     qalAuxiliaryEffectSloti(s_reverb_slot, AL_EFFECTSLOT_EFFECT, s_reverb_effect);
+}
+
+static const qboolean AL_SetEAXEffectProperties(const sfx_eax_properties_t *reverb)
+{
+    if (!reverb || !s_reverb_effect || !s_reverb_slot)
+        return qfalse;
+
+    ALuint effect = s_reverb_effect;
+
+    if (s_eax_effect_available) {
+        qalEffecti(effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
+
+        qalEffectf(effect, AL_EAXREVERB_DENSITY, Q_clipf(reverb->flDensity, AL_EAXREVERB_MIN_DENSITY, AL_EAXREVERB_MAX_DENSITY));
+        qalEffectf(effect, AL_EAXREVERB_DIFFUSION, Q_clipf(reverb->flDiffusion, AL_EAXREVERB_MIN_DIFFUSION, AL_EAXREVERB_MAX_DIFFUSION));
+        qalEffectf(effect, AL_EAXREVERB_GAIN, Q_clipf(reverb->flGain, AL_EAXREVERB_MIN_GAIN, AL_EAXREVERB_MAX_GAIN));
+        qalEffectf(effect, AL_EAXREVERB_GAINHF, Q_clipf(reverb->flGainHF, AL_EAXREVERB_MIN_GAINHF, AL_EAXREVERB_MAX_GAINHF));
+        qalEffectf(effect, AL_EAXREVERB_GAINLF, Q_clipf(reverb->flGainLF, AL_EAXREVERB_MIN_GAINLF, AL_EAXREVERB_MAX_GAINLF));
+        qalEffectf(effect, AL_EAXREVERB_DECAY_TIME, Q_clipf(reverb->flDecayTime, AL_EAXREVERB_MIN_DECAY_TIME, AL_EAXREVERB_MAX_DECAY_TIME));
+        qalEffectf(effect, AL_EAXREVERB_DECAY_HFRATIO, Q_clipf(reverb->flDecayHFRatio, AL_EAXREVERB_MIN_DECAY_HFRATIO, AL_EAXREVERB_MAX_DECAY_HFRATIO));
+        qalEffectf(effect, AL_EAXREVERB_DECAY_LFRATIO, Q_clipf(reverb->flDecayLFRatio, AL_EAXREVERB_MIN_DECAY_LFRATIO, AL_EAXREVERB_MAX_DECAY_LFRATIO));
+        qalEffectf(effect, AL_EAXREVERB_REFLECTIONS_GAIN, Q_clipf(reverb->flReflectionsGain, AL_EAXREVERB_MIN_REFLECTIONS_GAIN, AL_EAXREVERB_MAX_REFLECTIONS_GAIN));
+        qalEffectf(effect, AL_EAXREVERB_REFLECTIONS_DELAY, Q_clipf(reverb->flReflectionsDelay, AL_EAXREVERB_MIN_REFLECTIONS_DELAY, AL_EAXREVERB_MAX_REFLECTIONS_DELAY));
+        qalEffectfv(effect, AL_EAXREVERB_REFLECTIONS_PAN, reverb->flReflectionsPan);
+        qalEffectf(effect, AL_EAXREVERB_LATE_REVERB_GAIN, Q_clipf(reverb->flLateReverbGain, AL_EAXREVERB_MIN_LATE_REVERB_GAIN, AL_EAXREVERB_MAX_LATE_REVERB_GAIN));
+        qalEffectf(effect, AL_EAXREVERB_LATE_REVERB_DELAY, Q_clipf(reverb->flLateReverbDelay, AL_EAXREVERB_MIN_LATE_REVERB_DELAY, AL_EAXREVERB_MAX_LATE_REVERB_DELAY));
+        qalEffectfv(effect, AL_EAXREVERB_LATE_REVERB_PAN, reverb->flLateReverbPan);
+        qalEffectf(effect, AL_EAXREVERB_ECHO_TIME, Q_clipf(reverb->flEchoTime, AL_EAXREVERB_MIN_ECHO_TIME, AL_EAXREVERB_MAX_ECHO_TIME));
+        qalEffectf(effect, AL_EAXREVERB_ECHO_DEPTH, Q_clipf(reverb->flEchoDepth, AL_EAXREVERB_MIN_ECHO_DEPTH, AL_EAXREVERB_MAX_ECHO_DEPTH));
+        qalEffectf(effect, AL_EAXREVERB_MODULATION_TIME, Q_clipf(reverb->flModulationTime, AL_EAXREVERB_MIN_MODULATION_TIME, AL_EAXREVERB_MAX_MODULATION_TIME));
+        qalEffectf(effect, AL_EAXREVERB_MODULATION_DEPTH, Q_clipf(reverb->flModulationDepth, AL_EAXREVERB_MIN_MODULATION_DEPTH, AL_EAXREVERB_MAX_MODULATION_DEPTH));
+        qalEffectf(effect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, Q_clipf(reverb->flAirAbsorptionGainHF, AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF, AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF));
+        qalEffectf(effect, AL_EAXREVERB_HFREFERENCE, Q_clipf(reverb->flHFReference, AL_EAXREVERB_MIN_HFREFERENCE, AL_EAXREVERB_MAX_HFREFERENCE));
+        qalEffectf(effect, AL_EAXREVERB_LFREFERENCE, Q_clipf(reverb->flLFReference, AL_EAXREVERB_MIN_LFREFERENCE, AL_EAXREVERB_MAX_LFREFERENCE));
+        qalEffectf(effect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, Q_clipf(reverb->flRoomRolloffFactor, AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR, AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR));
+        qalEffecti(effect, AL_EAXREVERB_DECAY_HFLIMIT, Q_clip(reverb->iDecayHFLimit, AL_EAXREVERB_MIN_DECAY_HFLIMIT, AL_EAXREVERB_MAX_DECAY_HFLIMIT));
+    } else {
+        qalEffecti(effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB);
+
+        qalEffectf(effect, AL_REVERB_DENSITY, Q_clipf(reverb->flDensity, AL_REVERB_MIN_DENSITY, AL_REVERB_MAX_DENSITY));
+        qalEffectf(effect, AL_REVERB_DIFFUSION, Q_clipf(reverb->flDiffusion, AL_REVERB_MIN_DIFFUSION, AL_REVERB_MAX_DIFFUSION));
+        qalEffectf(effect, AL_REVERB_GAIN, Q_clipf(reverb->flGain, AL_REVERB_MIN_GAIN, AL_REVERB_MAX_GAIN));
+        qalEffectf(effect, AL_REVERB_GAINHF, Q_clipf(reverb->flGainHF, AL_REVERB_MIN_GAINHF, AL_REVERB_MAX_GAINHF));
+        qalEffectf(effect, AL_REVERB_DECAY_TIME, Q_clipf(reverb->flDecayTime, AL_REVERB_MIN_DECAY_TIME, AL_REVERB_MAX_DECAY_TIME));
+        qalEffectf(effect, AL_REVERB_DECAY_HFRATIO, Q_clipf(reverb->flDecayHFRatio, AL_REVERB_MIN_DECAY_HFRATIO, AL_REVERB_MAX_DECAY_HFRATIO));
+        qalEffectf(effect, AL_REVERB_REFLECTIONS_GAIN, Q_clipf(reverb->flReflectionsGain, AL_REVERB_MIN_REFLECTIONS_GAIN, AL_REVERB_MAX_REFLECTIONS_GAIN));
+        qalEffectf(effect, AL_REVERB_REFLECTIONS_DELAY, Q_clipf(reverb->flReflectionsDelay, AL_REVERB_MIN_REFLECTIONS_DELAY, AL_REVERB_MAX_REFLECTIONS_DELAY));
+        qalEffectf(effect, AL_REVERB_LATE_REVERB_GAIN, Q_clipf(reverb->flLateReverbGain, AL_REVERB_MIN_LATE_REVERB_GAIN, AL_REVERB_MAX_LATE_REVERB_GAIN));
+        qalEffectf(effect, AL_REVERB_LATE_REVERB_DELAY, Q_clipf(reverb->flLateReverbDelay, AL_REVERB_MIN_LATE_REVERB_DELAY, AL_REVERB_MAX_LATE_REVERB_DELAY));
+        qalEffectf(effect, AL_REVERB_AIR_ABSORPTION_GAINHF, Q_clipf(reverb->flAirAbsorptionGainHF, AL_REVERB_MIN_AIR_ABSORPTION_GAINHF, AL_REVERB_MAX_AIR_ABSORPTION_GAINHF));
+        qalEffectf(effect, AL_REVERB_ROOM_ROLLOFF_FACTOR, Q_clipf(reverb->flRoomRolloffFactor, AL_REVERB_MIN_ROOM_ROLLOFF_FACTOR, AL_REVERB_MAX_ROOM_ROLLOFF_FACTOR));
+        qalEffecti(effect, AL_REVERB_DECAY_HFLIMIT, Q_clip(reverb->iDecayHFLimit, AL_REVERB_MIN_DECAY_HFLIMIT, AL_REVERB_MAX_DECAY_HFLIMIT));
+    }
+
+    qalAuxiliaryEffectSloti(s_reverb_slot, AL_EFFECTSLOT_EFFECT, effect);
+    return (qalGetError() == AL_NO_ERROR) ? qtrue : qfalse;
+}
+
+static float AL_ParseJsonFloat(json_parse_t *parser)
+{
+    char buffer[64];
+    Json_Ensure(parser, JSMN_PRIMITIVE);
+    Q_strnlcpy(buffer, parser->buffer + parser->pos->start,
+               parser->pos->end - parser->pos->start, sizeof(buffer));
+    parser->pos++;
+    return (float)atof(buffer);
+}
+
+static int AL_ParseJsonInt(json_parse_t *parser)
+{
+    char buffer[32];
+    Json_Ensure(parser, JSMN_PRIMITIVE);
+    Q_strnlcpy(buffer, parser->buffer + parser->pos->start,
+               parser->pos->end - parser->pos->start, sizeof(buffer));
+    parser->pos++;
+    return atoi(buffer);
+}
+
+static void AL_ParseJsonVec3(json_parse_t *parser, float out[3])
+{
+    size_t array_size = Json_EnsureNext(parser, JSMN_ARRAY)->size;
+    for (int i = 0; i < 3; i++) {
+        if ((size_t)i < array_size) {
+            out[i] = AL_ParseJsonFloat(parser);
+        } else {
+            out[i] = 0.0f;
+        }
+    }
+    for (size_t i = 3; i < array_size; i++)
+        Json_SkipToken(parser);
+}
+
+static sfx_eax_properties_t AL_LoadEAXPropertiesFromJSON(const char *name)
+{
+    sfx_eax_properties_t properties = s_eax_default_properties;
+    char path[MAX_QPATH];
+    json_parse_t parser{};
+
+    Q_snprintf(path, sizeof(path), "eax/%s.json", name);
+
+    if (Json_ErrorHandler(parser)) {
+        if (parser.tokens || parser.buffer)
+            Json_Free(&parser);
+        Com_WPrintf("Couldn't load %s[%s]; %s\n", path, parser.error_loc, parser.error);
+        return properties;
+    }
+
+    Json_Load(path, &parser);
+    size_t fields = Json_EnsureNext(&parser, JSMN_OBJECT)->size;
+
+    for (size_t i = 0; i < fields; i++) {
+        if (!Json_Strcmp(&parser, "density")) {
+            parser.pos++;
+            properties.flDensity = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "diffusion")) {
+            parser.pos++;
+            properties.flDiffusion = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "gain")) {
+            parser.pos++;
+            properties.flGain = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "gain_hf")) {
+            parser.pos++;
+            properties.flGainHF = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "gain_lf")) {
+            parser.pos++;
+            properties.flGainLF = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "decay_time")) {
+            parser.pos++;
+            properties.flDecayTime = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "decay_hf_ratio")) {
+            parser.pos++;
+            properties.flDecayHFRatio = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "decay_lf_ratio")) {
+            parser.pos++;
+            properties.flDecayLFRatio = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "reflections_gain")) {
+            parser.pos++;
+            properties.flReflectionsGain = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "reflections_delay")) {
+            parser.pos++;
+            properties.flReflectionsDelay = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "reflections_pan")) {
+            parser.pos++;
+            AL_ParseJsonVec3(&parser, properties.flReflectionsPan);
+        } else if (!Json_Strcmp(&parser, "late_reverb_gain")) {
+            parser.pos++;
+            properties.flLateReverbGain = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "late_reverb_delay")) {
+            parser.pos++;
+            properties.flLateReverbDelay = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "late_reverb_pan")) {
+            parser.pos++;
+            AL_ParseJsonVec3(&parser, properties.flLateReverbPan);
+        } else if (!Json_Strcmp(&parser, "echo_time")) {
+            parser.pos++;
+            properties.flEchoTime = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "echo_depth")) {
+            parser.pos++;
+            properties.flEchoDepth = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "modulation_time")) {
+            parser.pos++;
+            properties.flModulationTime = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "modulation_depth")) {
+            parser.pos++;
+            properties.flModulationDepth = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "air_absorbtion_hf") || !Json_Strcmp(&parser, "air_absorption_hf")) {
+            parser.pos++;
+            properties.flAirAbsorptionGainHF = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "hf_reference")) {
+            parser.pos++;
+            properties.flHFReference = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "lf_reference")) {
+            parser.pos++;
+            properties.flLFReference = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "room_rolloff")) {
+            parser.pos++;
+            properties.flRoomRolloffFactor = AL_ParseJsonFloat(&parser);
+        } else if (!Json_Strcmp(&parser, "decay_hf_limit")) {
+            parser.pos++;
+            properties.iDecayHFLimit = AL_ParseJsonInt(&parser);
+        } else {
+            parser.pos++;
+            Json_SkipToken(&parser);
+        }
+    }
+
+    Json_Free(&parser);
+    return properties;
+}
+
+static void AL_LoadEAXEffectProfiles(void)
+{
+    for (int i = 0; i < SOUND_EAX_EFFECT_MAX; i++)
+        s_eax_effects[i] = s_eax_default_properties;
+
+    s_eax_effects[SOUND_EAX_EFFECT_DEFAULT] = s_eax_default_properties;
+    s_eax_effects[SOUND_EAX_EFFECT_UNDERWATER] = s_eax_underwater_properties;
+
+    for (int i = SOUND_EAX_EFFECT_ABANDONED; i < SOUND_EAX_EFFECT_MAX; i++) {
+        if (!s_eax_json_names[i])
+            continue;
+        s_eax_effects[i] = AL_LoadEAXPropertiesFromJSON(s_eax_json_names[i]);
+    }
+
+    s_eax_current_id = SOUND_EAX_EFFECT_DEFAULT;
+    s_eax_previous_id = SOUND_EAX_EFFECT_DEFAULT;
+    s_eax_lerp_fraction = 1.0f;
+    s_eax_mixed_properties = s_eax_effects[SOUND_EAX_EFFECT_DEFAULT];
+}
+
+static void AL_ClearEAXZones(void)
+{
+    Z_Free(s_eax_zones);
+    s_eax_zones = NULL;
+    s_num_eax_zones = 0;
+}
+
+static bool AL_IsEAXZoneClass(const char *classname)
+{
+    return !Q_strcasecmp(classname, "client_env_sound") || !Q_strcasecmp(classname, "env_sound");
+}
+
+static bool AL_ParseOriginString(const char *value, vec3_t out)
+{
+    return sscanf(value, "%f %f %f", &out[0], &out[1], &out[2]) == 3;
+}
+
+static void AL_AddEAXZone(const vec3_t origin, float radius, qhandle_t reverb_id)
+{
+    size_t new_count = s_num_eax_zones + 1;
+    s_eax_zones = static_cast<al_eax_zone_t *>(
+        Z_Realloc(s_eax_zones, sizeof(*s_eax_zones) * new_count));
+    al_eax_zone_t *zone = &s_eax_zones[s_num_eax_zones];
+    VectorCopy(origin, zone->origin);
+    zone->radius = radius;
+    zone->reverb_id = Q_clip(reverb_id, 0, SOUND_EAX_EFFECT_MAX - 1);
+    s_num_eax_zones = new_count;
+}
+
+static void AL_LoadEAXZones(void)
+{
+    AL_ClearEAXZones();
+
+    if (!cl.bsp || !cl.bsp->entitystring)
+        return;
+
+    const char *data = cl.bsp->entitystring;
+    char classname[MAX_QPATH];
+    char origin_string[64];
+    vec3_t zone_origin;
+    bool in_entity = false;
+    bool have_origin = false;
+    float radius = 0.0f;
+    int reverb_id = SOUND_EAX_EFFECT_DEFAULT;
+
+    classname[0] = '\0';
+    origin_string[0] = '\0';
+
+    while (true) {
+        char *token = COM_Parse(&data);
+        if (!token[0])
+            break;
+
+        if (!strcmp(token, "{")) {
+            in_entity = true;
+            classname[0] = '\0';
+            origin_string[0] = '\0';
+            have_origin = false;
+            radius = 0.0f;
+            reverb_id = SOUND_EAX_EFFECT_DEFAULT;
+            continue;
+        }
+
+        if (!strcmp(token, "}")) {
+            if (in_entity && AL_IsEAXZoneClass(classname) && have_origin && radius > 0.0f)
+                AL_AddEAXZone(zone_origin, radius, reverb_id);
+            in_entity = false;
+            continue;
+        }
+
+        if (!in_entity)
+            continue;
+
+        char key[MAX_QPATH];
+        Q_strlcpy(key, token, sizeof(key));
+        token = COM_Parse(&data);
+        if (!token[0])
+            break;
+
+        if (!Q_strcasecmp(key, "classname")) {
+            Q_strlcpy(classname, token, sizeof(classname));
+        } else if (!Q_strcasecmp(key, "origin")) {
+            Q_strlcpy(origin_string, token, sizeof(origin_string));
+            have_origin = AL_ParseOriginString(origin_string, zone_origin);
+        } else if (!Q_strcasecmp(key, "radius")) {
+            radius = (float)atof(token);
+        } else if (!Q_strcasecmp(key, "reverb_effect_id")) {
+            reverb_id = atoi(token);
+        }
+    }
+}
+
+static void AL_InterpolateEAX(const sfx_eax_properties_t *from, const sfx_eax_properties_t *to, float frac, sfx_eax_properties_t *out)
+{
+#define EAX_LERP(name) out->name = FASTLERP(from->name, to->name, frac)
+    EAX_LERP(flDensity);
+    EAX_LERP(flDiffusion);
+    EAX_LERP(flGain);
+    EAX_LERP(flGainHF);
+    EAX_LERP(flGainLF);
+    EAX_LERP(flDecayTime);
+    EAX_LERP(flDecayHFRatio);
+    EAX_LERP(flDecayLFRatio);
+    EAX_LERP(flReflectionsGain);
+    EAX_LERP(flReflectionsDelay);
+    EAX_LERP(flReflectionsPan[0]);
+    EAX_LERP(flReflectionsPan[1]);
+    EAX_LERP(flReflectionsPan[2]);
+    EAX_LERP(flLateReverbGain);
+    EAX_LERP(flLateReverbDelay);
+    EAX_LERP(flLateReverbPan[0]);
+    EAX_LERP(flLateReverbPan[1]);
+    EAX_LERP(flLateReverbPan[2]);
+    EAX_LERP(flEchoTime);
+    EAX_LERP(flEchoDepth);
+    EAX_LERP(flModulationTime);
+    EAX_LERP(flModulationDepth);
+    EAX_LERP(flAirAbsorptionGainHF);
+    EAX_LERP(flHFReference);
+    EAX_LERP(flLFReference);
+    EAX_LERP(flRoomRolloffFactor);
+    out->iDecayHFLimit = frac < 0.5f ? from->iDecayHFLimit : to->iDecayHFLimit;
+#undef EAX_LERP
+}
+
+static qhandle_t AL_DetermineEAXEnvironment(void)
+{
+    if (S_IsUnderWater())
+        return SOUND_EAX_EFFECT_UNDERWATER;
+
+    qhandle_t best = SOUND_EAX_EFFECT_DEFAULT;
+    float best_dist = 8192.0f;
+
+    for (size_t i = 0; i < s_num_eax_zones; i++) {
+        const al_eax_zone_t *zone = &s_eax_zones[i];
+        trace_t tr;
+
+        CL_Trace(&tr, zone->origin, listener_origin, vec3_origin, vec3_origin, NULL, MASK_SOLID);
+        if (tr.fraction < 1.0f)
+            continue;
+
+        vec3_t delta;
+        VectorSubtract(zone->origin, listener_origin, delta);
+        float dist = VectorLength(delta);
+        if (dist > zone->radius || dist > best_dist)
+            continue;
+
+        best_dist = dist;
+        best = zone->reverb_id;
+    }
+
+    return best;
+}
+
+static void AL_UpdateEAXEnvironment(void)
+{
+    if (!al_eax || !al_eax->integer || !s_reverb_effect || !s_reverb_slot)
+        return;
+
+    qhandle_t target = AL_DetermineEAXEnvironment();
+    target = Q_clip(target, 0, SOUND_EAX_EFFECT_MAX - 1);
+
+    if (target != s_eax_current_id) {
+        s_eax_previous_id = s_eax_current_id;
+        s_eax_current_id = target;
+        s_eax_lerp_fraction = 0.0f;
+    }
+
+    float lerp_time = al_eax_lerp_time ? Cvar_ClampValue(al_eax_lerp_time, 0.0f, 10.0f) : 0.0f;
+    if (lerp_time <= 0.0f) {
+        s_eax_lerp_fraction = 1.0f;
+    } else {
+        float step = Q_clipf(cls.frametime, 0.0f, 0.25f) / lerp_time;
+        s_eax_lerp_fraction = min(1.0f, s_eax_lerp_fraction + step);
+    }
+
+    AL_InterpolateEAX(&s_eax_effects[s_eax_previous_id], &s_eax_effects[s_eax_current_id],
+                      s_eax_lerp_fraction, &s_eax_mixed_properties);
+    S_SetEAXEnvironmentProperties(&s_eax_mixed_properties);
 }
 
 static const vec3_t             s_reverb_probes[] = {
@@ -862,10 +1358,20 @@ static bool AL_Init(void)
         }
     }
 
-    if (qalGenEffects && qalGetEnumValue("AL_EFFECT_EAXREVERB")) {
+    s_eax_effect_available = false;
+    if (qalGenEffects && qalGenAuxiliaryEffectSlots) {
         qalGenEffects(1, &s_reverb_effect);
         qalGenAuxiliaryEffectSlots(1, &s_reverb_slot);
-        qalEffecti(s_reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
+        if (!qalGetError()) {
+            qalGetError();
+            qalEffecti(s_reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
+            s_eax_effect_available = (qalGetError() == AL_NO_ERROR);
+            if (!s_eax_effect_available) {
+                qalGetError();
+                qalEffecti(s_reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB);
+                qalGetError();
+            }
+        }
     }
 
     if (s_reverb_slot && qalGenFilters && qalGetEnumValue("AL_FILTER_LOWPASS")) {
@@ -895,16 +1401,18 @@ static bool AL_Init(void)
         }
     }
 
-    al_reverb = Cvar_Get("al_reverb", "1", 0);
+    al_reverb = Cvar_Get("al_reverb", "0", 0);
     al_reverb->changed = al_reverb_changed;
-    al_reverb_lerp_time = Cvar_Get("al_reverb_lerp_time", "3.0", 0);
-    al_reverb_send = Cvar_Get("al_reverb_send", "1", 0);
+    al_reverb_lerp_time = Cvar_Get("al_reverb_lerp_time", "0.0", 0);
+    al_reverb_send = Cvar_Get("al_reverb_send", "0", 0);
     al_reverb_send_distance = Cvar_Get("al_reverb_send_distance", "2048", 0);
     al_reverb_send_min = Cvar_Get("al_reverb_send_min", "0.2", 0);
     al_reverb_send_occlusion_boost = Cvar_Get("al_reverb_send_occlusion_boost", "1.5", 0);
+    al_eax = Cvar_Get("al_eax", "1", CVAR_ARCHIVE);
+    al_eax_lerp_time = Cvar_Get("al_eax_lerp_time", "1.0", CVAR_ARCHIVE);
 
     al_timescale = Cvar_Get("al_timescale", "1", 0);
-    al_air_absorption = Cvar_Get("al_air_absorption", "1", 0);
+    al_air_absorption = Cvar_Get("al_air_absorption", "0", 0);
     al_air_absorption_distance = Cvar_Get("al_air_absorption_distance", "2048", 0);
     al_doppler = Cvar_Get("al_doppler", "1", 0);
     al_doppler_speed = Cvar_Get("al_doppler_speed", "13500", 0);
@@ -915,7 +1423,10 @@ static bool AL_Init(void)
     al_doppler_speed->changed = al_doppler_changed;
     al_doppler_changed(al_doppler);
 
-    SCR_RegisterStat("al_reverb", AL_Reverb_stat);
+    AL_LoadEAXEffectProfiles();
+    AL_ClearEAXZones();
+    if (al_eax->integer)
+        S_SetEAXEnvironmentProperties(&s_eax_effects[SOUND_EAX_EFFECT_DEFAULT]);
 
     Com_Printf("OpenAL initialized.\n");
     return true;
@@ -972,10 +1483,12 @@ static void AL_Shutdown(void)
         qalDeleteAuxiliaryEffectSlots(1, &s_reverb_slot);
         s_reverb_slot = 0;
     }
+    s_eax_effect_available = false;
 
     AL_FreeReverbEnvironments(s_reverb_environments, s_num_reverb_environments);
     s_reverb_environments = NULL;
     s_num_reverb_environments = 0;
+    AL_ClearEAXZones();
 
     s_underwater_flag = false;
     s_underwater_gain_hf->changed = NULL;
@@ -986,8 +1499,6 @@ static void AL_Shutdown(void)
     al_doppler->changed = NULL;
     if (al_doppler_speed)
         al_doppler_speed->changed = NULL;
-
-    SCR_UnregisterStat("al_reverb");
 
     QAL_Shutdown();
 }
@@ -1192,60 +1703,34 @@ static void AL_Spatialize(channel_t *ch)
     if (ch->autosound && al_merge_looping->integer >= s_merge_looping_minval && !ch->no_merge)
         return;
 
-    // anything coming from the view entity will always be full volume
     bool fullvolume = S_IsFullVolume(ch);
     vec3_t origin;
-    bool have_origin = false;
 
-    if (!fullvolume) {
-        if (ch->fixed_origin) {
-            VectorCopy(ch->origin, origin);
-        } else {
-            CL_GetEntitySoundOrigin(ch->entnum, origin);
-        }
-        have_origin = true;
+    if (fullvolume) {
+        VectorCopy(listener_origin, origin);
+    } else if (ch->fixed_origin) {
+        VectorCopy(ch->origin, origin);
+    } else {
+        CL_GetEntitySoundOrigin(ch->entnum, origin);
     }
 
-    // update fullvolume flag if needed
-    if (ch->fullvolume != fullvolume) {
-        if (s_source_spatialize) {
-            qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, !fullvolume);
-        }
-        qalSourcei(ch->srcnum, AL_SOURCE_RELATIVE, fullvolume);
-        if (fullvolume) {
-            qalSource3f(ch->srcnum, AL_POSITION, 0, 0, 0);
-        } else if (ch->fixed_origin && have_origin) {
-            qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
-        }
-        ch->fullvolume = fullvolume;
-    }
+    if (s_source_spatialize)
+        qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, !fullvolume);
 
-    // update position if needed
-    if (!ch->fixed_origin && !ch->fullvolume && have_origin) {
+    qalSourcei(ch->srcnum, AL_SOURCE_RELATIVE, fullvolume);
+    if (fullvolume) {
+        qalSource3f(ch->srcnum, AL_POSITION, 0, 0, 0);
+    } else {
         qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
     }
 
-    float distance = 0.0f;
-    if (have_origin)
-        distance = AL_DistanceFromListener(origin);
-
-    float occlusion = 0.0f;
-    if (have_origin && ch->dist_mult > 0.0f) {
-        occlusion = S_GetOcclusion(ch, origin);
+    if (s_reverb_slot && (!al_eax || al_eax->integer)) {
+        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
     } else {
-        S_ResetOcclusion(ch);
+        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
     }
 
-    float occlusion_mix = S_MapOcclusion(occlusion);
-    float gain = ch->master_vol * FASTLERP(1.0f, S_OCCLUSION_GAIN, occlusion_mix);
-    qalSourcef(ch->srcnum, AL_GAIN, gain);
-
-    float air_absorption = 0.0f;
-    if (!s_underwater_flag)
-        air_absorption = AL_ComputeAirAbsorption(distance);
-
-    AL_UpdateDirectFilter(ch, occlusion_mix, air_absorption);
-    AL_UpdateReverbSend(ch, distance, occlusion_mix);
+    qalSourcef(ch->srcnum, AL_GAIN, ch->master_vol);
 
     if (al_timescale->integer) {
         qalSourcef(ch->srcnum, AL_PITCH, max(0.75f, CL_Wheel_TimeScale() * Cvar_VariableValue("timescale")));
@@ -1254,6 +1739,7 @@ static void AL_Spatialize(channel_t *ch)
     }
 
     AL_UpdateSourceVelocity(ch);
+    ch->fullvolume = fullvolume;
 }
 
 static void AL_StopChannel(channel_t *ch)
@@ -1294,7 +1780,7 @@ static void AL_PlayChannel(channel_t *ch)
         qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
     }
 
-    if (cl.bsp && s_reverb_slot && al_reverb->integer) {
+    if (s_reverb_slot && (!al_eax || al_eax->integer)) {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
     } else {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
@@ -1846,10 +2332,8 @@ static void AL_Update(void)
     AL_UpdateListenerVelocity();
 
     AL_UpdateUnderWater();
-    
-    if (al_reverb->integer) {
-        AL_UpdateReverb();
-    }
+
+    AL_UpdateEAXEnvironment();
 
     // update spatialization for dynamic sounds
     for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
@@ -1898,29 +2382,11 @@ static void AL_Update(void)
 
 static void AL_EndRegistration(void)
 {
-    AL_FreeReverbEnvironments(s_reverb_environments, s_num_reverb_environments);
-    s_reverb_environments = NULL;
-    s_num_reverb_environments = 0;
+    AL_LoadEAXEffectProfiles();
+    AL_LoadEAXZones();
 
-    AL_LoadReverbEnvironments();
-
-    if (!s_reverb_environments)
-        return;
-
-    s_reverb_current_preset = 19;
-    memcpy(&s_active_reverb, &s_reverb_parameters[s_reverb_current_preset], sizeof(s_active_reverb));
-    AL_LoadEffect(&s_active_reverb);
-    s_reverb_lerp_start = s_reverb_lerp_time = 0;
-
-    s_reverb_probe_time = 0;
-    s_reverb_probe_index = 0;
-    for (int i = 0; i < q_countof(s_reverb_probes); i++)
-        VectorClear(s_reverb_probe_results[i]);
-    s_reverb_probe_avg = (float) 8192;
-    s_reverb_active_environment = &s_reverb_environments[s_num_reverb_environments - 1];
-
-    if (cl.bsp)
-        AL_SetReverbStepIDs();
+    if (al_eax && al_eax->integer)
+        S_SetEAXEnvironmentProperties(&s_eax_effects[SOUND_EAX_EFFECT_DEFAULT]);
 }
 
 const sndapi_t snd_openal = {
@@ -1931,6 +2397,7 @@ const sndapi_t snd_openal = {
     .sound_info = AL_SoundInfo,
     .upload_sfx = AL_UploadSfx,
     .delete_sfx = AL_DeleteSfx,
+    .set_eax_effect_properties = AL_SetEAXEffectProperties,
     .raw_samples = AL_RawSamples,
     .need_raw_samples = AL_NeedRawSamples,
     .have_raw_samples = AL_HaveRawSamples,

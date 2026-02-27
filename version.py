@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -44,33 +46,74 @@ def git_info():
         return "", ""
 
 
+def parse_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
 def build_versions():
     raw_version = read_version_file()
     major, minor, patch, prerelease = parse_semver(raw_version)
     rev, sha = git_info()
 
     base = f"{major}.{minor}.{patch}"
-
-    prerelease_parts = []
-    if prerelease:
-        prerelease_parts.append(prerelease)
+    channel = os.environ.get("WORR_CHANNEL", "stable").strip().lower() or "stable"
+    nightly_date = os.environ.get("WORR_NIGHTLY_DATE", "").strip()
+    if not nightly_date:
+        nightly_date = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
 
     is_release = os.environ.get("WORR_RELEASE") == "1" or os.environ.get("GITHUB_REF_TYPE") == "tag"
-    if not is_release:
+    release_kind = "release" if is_release else "dev"
+
+    if channel == "nightly":
+        release_kind = "nightly"
+        nightly_parts = []
+        if prerelease:
+            nightly_parts.append(prerelease)
+        nightly_parts.append(f"nightly.{nightly_date}")
+        if rev:
+            nightly_parts.append(f"r{parse_int(rev, 0):08d}")
+        else:
+            nightly_parts.append("r00000000")
+        semver = f"{base}-" + ".".join(nightly_parts)
+        display = semver
+        if sha:
+            display = f"{display}+g{sha}"
+    elif is_release:
+        semver = base
+        if prerelease:
+            semver = f"{base}-{prerelease}"
+        display = semver
+    else:
+        semver = base
+        if prerelease:
+            semver = f"{base}-{prerelease}"
+
+        prerelease_parts = []
+        if prerelease:
+            prerelease_parts.append(prerelease)
         if rev:
             prerelease_parts.append(f"dev.{rev}")
         else:
             prerelease_parts.append("dev")
 
-    semver = base
-    if prerelease:
-        semver = f"{base}-{prerelease}"
-
-    display = base
-    if prerelease_parts:
         display = f"{base}-" + ".".join(prerelease_parts)
-    if sha and not is_release:
-        display = f"{display}+g{sha}"
+        if sha:
+            display = f"{display}+g{sha}"
+
+    msi_major = clamp(parse_int(major, 0), 0, 255)
+    msi_minor = clamp(parse_int(minor, 0), 0, 255)
+    msi_patch = parse_int(patch, 0)
+    if channel == "nightly" and rev:
+        msi_patch = parse_int(rev, 0)
+    msi_patch = clamp(msi_patch, 0, 65535)
+    msi_version = f"{msi_major}.{msi_minor}.{msi_patch}"
 
     return {
         "version": display,
@@ -80,6 +123,10 @@ def build_versions():
         "minor": minor,
         "patch": patch,
         "prerelease": prerelease,
+        "channel": channel,
+        "nightly_date": nightly_date,
+        "release_kind": release_kind,
+        "msi_version": msi_version,
         "raw": raw_version or "",
     }
 
@@ -108,6 +155,18 @@ def main() -> int:
         return 0
     if arg == "--prerelease":
         print(versions["prerelease"])
+        return 0
+    if arg == "--channel":
+        print(versions["channel"])
+        return 0
+    if arg == "--nightly-date":
+        print(versions["nightly_date"])
+        return 0
+    if arg == "--msi-version":
+        print(versions["msi_version"])
+        return 0
+    if arg == "--json":
+        print(json.dumps(versions, indent=2))
         return 0
 
     print(versions["version"])

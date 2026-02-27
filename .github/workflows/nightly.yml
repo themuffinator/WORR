@@ -1,0 +1,302 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: "50 23 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run nightly release even if there were no commits today (UTC)."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.nightly.outputs.should_run }}
+      nightly_date: ${{ steps.nightly.outputs.nightly_date }}
+      nightly_tag: ${{ steps.nightly.outputs.nightly_tag }}
+      nightly_name: ${{ steps.nightly.outputs.nightly_name }}
+      commits_today: ${{ steps.nightly.outputs.commits_today }}
+      head_sha: ${{ steps.nightly.outputs.head_sha }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+      display_version: ${{ steps.version.outputs.display_version }}
+      msi_version: ${{ steps.version.outputs.msi_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare nightly metadata
+        id: nightly
+        shell: bash
+        run: |
+          FORCE_ARG=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.force }}" == "true" ]]; then
+            FORCE_ARG="--force"
+          fi
+          python3 tools/release/prepare_nightly.py --github-output "$GITHUB_OUTPUT" ${FORCE_ARG}
+
+      - name: Prepare platform matrix
+        id: matrix
+        shell: bash
+        run: |
+          {
+            echo "matrix<<EOF"
+            python3 tools/release/targets.py --matrix-json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute nightly version
+        id: version
+        if: steps.nightly.outputs.should_run == 'true'
+        shell: bash
+        env:
+          WORR_CHANNEL: nightly
+          WORR_NIGHTLY_DATE: ${{ steps.nightly.outputs.nightly_date }}
+        run: |
+          echo "version=$(python3 version.py --semver)" >> "$GITHUB_OUTPUT"
+          echo "display_version=$(python3 version.py --version)" >> "$GITHUB_OUTPUT"
+          echo "msi_version=$(python3 version.py --msi-version)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      WORR_CHANNEL: nightly
+      WORR_NIGHTLY_DATE: ${{ needs.prepare.outputs.nightly_date }}
+      WORR_RELEASE: 1
+      WORR_BUILD_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build pkg-config gcc g++ python3 cmake nasm \
+            libsdl3-dev libopenal-dev libpng-dev libjpeg-dev zlib1g-dev \
+            libx11-dev libxi-dev libwayland-dev wayland-protocols libdecor-0-dev
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          brew update
+          brew install meson ninja pkg-config cmake sdl3 openal-soft libpng jpeg-turbo
+
+      - name: Setup MSYS2 (Windows)
+        if: matrix.os == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-cmake
+
+      - name: Configure (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          meson setup builddir --wrap-mode=forcefallback --buildtype=release \
+            -Dbootstrapper=false -Dtests=false -Davcodec=disabled -Dlibcurl=disabled
+
+      - name: Configure (Windows)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        run: |
+          meson setup builddir --wrap-mode=forcefallback --buildtype=release \
+            -Dbootstrapper=true -Dtests=false -Davcodec=disabled -Dlibcurl=disabled
+
+      - name: Build (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: meson compile -C builddir
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        run: meson compile -C builddir
+
+      - name: Refresh .install (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          python3 tools/refresh_install.py \
+            --build-dir builddir \
+            --install-dir .install \
+            --base-game baseq2 \
+            --platform-id "${{ matrix.platform_id }}"
+
+      - name: Refresh .install (Windows)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        run: |
+          python3 tools/refresh_install.py \
+            --build-dir builddir \
+            --install-dir .install \
+            --base-game baseq2 \
+            --platform-id "${{ matrix.platform_id }}"
+
+      - name: Install WiX Toolset
+        if: matrix.has_installer
+        shell: powershell
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Add WiX Toolset to PATH
+        if: matrix.has_installer
+        shell: powershell
+        run: |
+          $wixRoot = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v*" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixRoot) { throw "WiX Toolset install not found." }
+          "$($wixRoot.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build MSI installer
+        if: matrix.has_installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          .\tools\build_msi.ps1 -SourceDir .install -OutputDir release -Version "${{ needs.prepare.outputs.msi_version }}" -MsiName worr-win64.msi
+
+      - name: Package release assets (Linux/macOS)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          mkdir -p release
+          python3 tools/release/package_platform.py \
+            --input-dir .install \
+            --output-dir release \
+            --platform-id "${{ matrix.platform_id }}" \
+            --repo "${{ github.repository }}" \
+            --channel nightly \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --commit-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --build-id "${WORR_BUILD_ID}" \
+            --allow-prerelease
+
+      - name: Package release assets (Windows)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p release
+          INSTALLER_ARG=""
+          if [ -f "release/worr-win64.msi" ]; then
+            INSTALLER_ARG="--installer-path release/worr-win64.msi"
+          fi
+          python3 tools/release/package_platform.py \
+            --input-dir .install \
+            --output-dir release \
+            --platform-id "${{ matrix.platform_id }}" \
+            --repo "${{ github.repository }}" \
+            --channel nightly \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --commit-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --build-id "${WORR_BUILD_ID}" \
+            --allow-prerelease \
+            ${INSTALLER_ARG}
+
+      - name: Upload platform release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.platform_id }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        shell: bash
+        run: git fetch --force --tags origin
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          path: release-assets
+          merge-multiple: false
+
+      - name: Verify expected artifacts
+        run: |
+          python3 tools/release/verify_artifacts.py --artifacts-root release-assets
+
+      - name: Compose release index
+        run: |
+          python3 tools/release/compose_release_index.py \
+            --artifacts-root release-assets \
+            --repo "${{ github.repository }}" \
+            --channel nightly \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --tag "${{ needs.prepare.outputs.nightly_tag }}" \
+            --commit-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --index-path release-assets/worr-release-index-nightly.json \
+            --asset-list-path release-assets/release-assets.txt
+
+      - name: Generate release notes
+        run: |
+          python3 tools/release/generate_release_notes.py \
+            --repo "${{ github.repository }}" \
+            --channel nightly \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --tag "${{ needs.prepare.outputs.nightly_tag }}" \
+            --commit-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --index-path release-assets/worr-release-index-nightly.json \
+            --output release-assets/release-notes.md
+
+      - name: Build upload file list
+        id: files
+        shell: bash
+        run: |
+          {
+            echo "files<<EOF"
+            cat release-assets/release-assets.txt
+            echo "release-assets/release-notes.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.nightly_tag }}
+          name: ${{ needs.prepare.outputs.nightly_name }} (${{ needs.prepare.outputs.version }})
+          prerelease: true
+          draft: false
+          target_commitish: ${{ needs.prepare.outputs.head_sha }}
+          body_path: release-assets/release-notes.md
+          files: ${{ steps.files.outputs.files }}
+          make_latest: false
+          overwrite_files: true

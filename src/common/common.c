@@ -1065,9 +1065,9 @@ void Qcommon_Init(int argc, char **argv)
 
     Com_Printf("====== " PRODUCT " initialized ======\n\n");
     Com_NPrintf(APPLICATION " " VERSION ", " __DATE__ "\n");
-    Com_Printf("https://github.com/themuffinator/WORR-2\n\n");
+    Com_Printf("https://github.com/themuffinator/WORR\n\n");
     Com_Printf("Credits:\n");
-    Com_Printf("  Q2REPRO lineage: https://github.com/themuffinator/WORR-2\n");
+    Com_Printf("  Q2REPRO lineage: https://github.com/themuffinator/WORR\n");
     Com_Printf("  Q2PRO: https://github.com/Paril/q2pro\n");
     Com_Printf("  Q2PRO (original): https://github.com/skullernet/q2pro\n\n");
     Com_DPrintf("Compiled features: %s\n", Com_GetFeatures());

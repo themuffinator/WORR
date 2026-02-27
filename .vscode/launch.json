@@ -1,0 +1,109 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "WORR (Vulkan)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\.install\\worr.exe",
+            "args": [
+                "+set",
+                "basedir",
+                "${workspaceFolder}\\.install",
+                "+set",
+                "r_renderer",
+                "vulkan",
+                "+set",
+                "logfile",
+                "1",
+                "+set",
+                "logfile_name",
+                "vk_q2dm1_launch",
+                "+set",
+                "developer",
+                "1",
+                "+set",
+                "deathmatch",
+                "1",
+                "+set",
+                "cheats",
+                "1",
+                "+map",
+                "q2dm1"
+            ],
+            "cwd": "${workspaceFolder}\\.install",
+            "console": "integratedTerminal",
+            "preLaunchTask": "meson: build"
+        },
+        {
+            "name": "WORR (RTX)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\.install\\worr.exe",
+            "args": [
+                "+set",
+                "basedir",
+                "${workspaceFolder}\\.install",
+                "+set",
+                "r_renderer",
+                "rtx",
+                "+set",
+                "logfile",
+                "1",
+                "+set",
+                "logfile_name",
+                "rtx_q2dm1_launch",
+                "+set",
+                "developer",
+                "1",
+                "+set",
+                "deathmatch",
+                "1",
+                "+set",
+                "cheats",
+                "1",
+                "+map",
+                "q2dm1"
+            ],
+            "cwd": "${workspaceFolder}\\.install",
+            "console": "integratedTerminal",
+            "preLaunchTask": "meson: build"
+        },
+        {
+            "name": "WORR (OpenGL)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\.install\\worr.exe",
+            "args": [
+                "+set",
+                "basedir",
+                "${workspaceFolder}\\.install",
+                "+set",
+                "deathmatch",
+                "1",
+                "+set",
+                "cheats",
+                "1",
+                "+map",
+                "q2dm1"
+            ],
+            "cwd": "${workspaceFolder}\\.install",
+            "console": "integratedTerminal",
+            "preLaunchTask": "meson: build"
+        },
+        {
+            "name": "WORR (dedicated)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\.install\\worr.ded.exe",
+            "args": [
+                "+set",
+                "basedir",
+                "${workspaceFolder}\\.install"
+            ],
+            "cwd": "${workspaceFolder}\\.install",
+            "console": "integratedTerminal",
+            "preLaunchTask": "meson: build"
+        }
+    ]
+}

@@ -9,10 +9,24 @@ import shutil
 
 def copy_runtime_files(build_dir: pathlib.Path, install_dir: pathlib.Path) -> int:
     copied = 0
-    patterns = ('worr*.exe', 'worr*.dll', 'worr*.pdb')
-    for pattern in patterns:
-        for path in sorted(build_dir.glob(pattern)):
+    copied_paths: set[pathlib.Path] = set()
+
+    runtime_names = ('worr', 'worr.ded', 'worr_updater')
+    runtime_patterns = ('worr*.exe', 'worr*.dll', 'worr*.pdb', 'worr*.so', 'worr*.dylib')
+
+    for name in runtime_names:
+        path = build_dir / name
+        if path.is_file() and path not in copied_paths:
             shutil.copy2(path, install_dir / path.name)
+            copied_paths.add(path)
+            copied += 1
+
+    for pattern in runtime_patterns:
+        for path in sorted(build_dir.glob(pattern)):
+            if not path.is_file() or path in copied_paths:
+                continue
+            shutil.copy2(path, install_dir / path.name)
+            copied_paths.add(path)
             copied += 1
     return copied
 
@@ -25,21 +39,25 @@ def copy_base_game_tree(build_dir: pathlib.Path, install_dir: pathlib.Path, base
     shutil.copytree(source, target)
 
 
-def copy_localization_tree(assets_dir: pathlib.Path, install_dir: pathlib.Path, base_game: str) -> int:
-    source = assets_dir / 'localization'
-    target = install_dir / base_game / 'localization'
+def copy_assets_tree(assets_dir: pathlib.Path, install_dir: pathlib.Path, base_game: str) -> int:
+    if not assets_dir.is_dir():
+        raise SystemExit(f'Assets directory not found: {assets_dir}')
 
-    if not source.is_dir():
-        raise SystemExit(f'Localization directory not found: {source}')
+    asset_files = sorted(path for path in assets_dir.rglob('*') if path.is_file())
+    if not asset_files:
+        raise SystemExit(f'No asset files found in: {assets_dir}')
 
-    localization_files = sorted(path for path in source.rglob('*') if path.is_file())
-    if not localization_files:
-        raise SystemExit(f'No localization files found in: {source}')
+    target_root = install_dir / base_game
+    for entry in sorted(assets_dir.iterdir()):
+        target = target_root / entry.name
+        if entry.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(entry, target)
+        elif entry.is_file():
+            shutil.copy2(entry, target)
 
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(source, target)
-    return len(localization_files)
+    return len(asset_files)
 
 
 def main() -> int:
@@ -66,11 +84,11 @@ def main() -> int:
         raise SystemExit(f'No runtime binaries found in {build_dir}')
 
     copy_base_game_tree(build_dir, install_dir, args.base_game)
-    copied_localization = copy_localization_tree(assets_dir, install_dir, args.base_game)
+    copied_assets = copy_assets_tree(assets_dir, install_dir, args.base_game)
 
     print(f'Wrote staged runtime to {install_dir}')
     print(f'Copied {copied_runtime} root runtime binaries')
-    print(f'Copied {copied_localization} localization files')
+    print(f'Copied {copied_assets} asset files')
     return 0
 
 

@@ -68,6 +68,26 @@ Finally, invoke build command:
 
 To enable verbose output during the build, use `meson compile -C builddir -v`.
 
+Local distributable staging
+---------------------------
+
+WORR uses `.install/` as the local distributable staging root. Refresh it after
+every build so runtime/package workflows always consume current binaries and
+assets.
+
+On Linux/macOS:
+
+    python3 tools/refresh_install.py --build-dir builddir --install-dir .install --base-game baseq2
+
+On Windows:
+
+    python tools\refresh_install.py --build-dir builddir --install-dir .install --base-game baseq2 --platform-id windows-x86_64
+
+The refresh command performs post-build staging and install packaging in one
+pass: it recreates `.install/`, copies runtime binaries, syncs base game
+payload, writes `worr-assets.pkz`, and can validate staged files for a specific
+release target.
+
 
 Installation
 ------------
@@ -122,12 +142,9 @@ with SIMD support:
 
     apt-get install nasm
 
-Meson needs correct cross build definition file for compilation. Example
-cross-files can be found in `.ci` subdirectory (available in git
-repository, but not source tarball). Note that these cross-files are specific
-to CI scripts and shouldn't be used directly (you'll need, at least, to
-customize default `pkg-config` search path). Refer to Meson documentation for
-more info.
+Meson needs a correct cross build definition file for compilation. Provide your
+own project-local cross file tuned to your compiler/toolchain and package
+layout. Refer to Meson documentation for cross-file format and usage details.
 
 Setup build directory:
 

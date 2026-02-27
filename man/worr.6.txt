@@ -85,7 +85,7 @@ AUTHOR
 Quake 2 is Copyright (C) 1997-2001 Id Software, Inc.  Q2PRO is Copyright (C)
 2003-2011 Andrey Nazarov <skuller@skuller.net>.
 
-WORR is derived from Q2REPRO (https://github.com/themuffinator/WORR-2) and Q2PRO
+WORR is derived from Q2REPRO (https://github.com/themuffinator/WORR) and Q2PRO
 (https://github.com/Paril/q2pro, https://github.com/skullernet/q2pro).
 
 This manual page was written by Andrey Nazarov <skuller@skuller.net> for the

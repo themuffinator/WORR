@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import fnmatch
 import hashlib
 import json
 import os
 import pathlib
 import sys
+import tarfile
 import zipfile
 
 
@@ -63,11 +65,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Package WORR release assets with manifest.")
     parser.add_argument("--input-dir", required=True, help="Staging install directory root")
     parser.add_argument("--output-dir", required=True, help="Output directory for artifacts")
-    parser.add_argument("--package-name", required=True, help="Zip asset name")
+    parser.add_argument("--package-name", required=True, help="Package asset name")
     parser.add_argument("--manifest-name", required=True, help="Manifest asset name")
     parser.add_argument("--version", required=True, help="Release version (semver)")
     parser.add_argument("--repo", required=True, help="GitHub owner/repo")
     parser.add_argument("--channel", default="stable", help="Release channel name")
+    parser.add_argument("--archive-format", choices=["zip", "tar.gz"], default="zip",
+                        help="Archive format for package asset")
+    parser.add_argument("--platform-id", default="", help="Platform identifier")
+    parser.add_argument("--platform-os", default="", help="Platform OS")
+    parser.add_argument("--platform-arch", default="", help="Platform architecture")
+    parser.add_argument("--build-id", default="", help="Build id")
+    parser.add_argument("--commit-sha", default="", help="Git commit sha")
     parser.add_argument("--launch-exe", required=True, help="Binary to launch after update")
     parser.add_argument("--autolaunch", dest="autolaunch", action="store_true", default=True,
                         help="Default autolaunch checkbox")
@@ -110,20 +119,45 @@ def main() -> int:
     files.sort(key=lambda entry: entry["path"])
 
     package_path = output_dir / args.package_name
-    with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for full_path in paths:
-            rel_path = full_path.relative_to(input_dir).as_posix()
-            archive.write(full_path, rel_path)
+    if args.archive_format == "zip":
+        with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for full_path in paths:
+                rel_path = full_path.relative_to(input_dir).as_posix()
+                archive.write(full_path, rel_path)
+    elif args.archive_format == "tar.gz":
+        with tarfile.open(package_path, "w:gz") as archive:
+            for full_path in paths:
+                rel_path = full_path.relative_to(input_dir).as_posix()
+                archive.add(full_path, arcname=rel_path, recursive=False)
+    else:
+        raise SystemExit(f"Unsupported archive format: {args.archive_format}")
 
     manifest = {
         "version": args.version,
+        "repo": args.repo,
+        "channel": args.channel,
+        "generated_at_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "package": {
             "name": args.package_name,
+            "format": args.archive_format,
             "sha256": hash_file(package_path),
             "size": package_path.stat().st_size,
         },
         "files": files,
     }
+
+    if args.platform_id or args.platform_os or args.platform_arch:
+        manifest["platform"] = {
+            "id": args.platform_id,
+            "os": args.platform_os,
+            "arch": args.platform_arch,
+        }
+
+    if args.build_id or args.commit_sha:
+        manifest["build"] = {
+            "id": args.build_id,
+            "commit_sha": args.commit_sha,
+        }
 
     manifest_path = output_dir / args.manifest_name
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
