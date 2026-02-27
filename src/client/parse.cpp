@@ -81,6 +81,12 @@ static void apply_entity_delta(entity_state_t *to, int number, const q2proto_ent
     if (delta_state->delta_bits & Q2P_ESD_SOUND)
         to->sound = delta_state->sound;
 
+    if (delta_state->delta_bits & Q2P_ESD_LOOP_VOLUME)
+        to->loop_volume = delta_state->loop_volume / 255.f;
+
+    if (delta_state->delta_bits & Q2P_ESD_LOOP_ATTENUATION)
+        to->loop_attenuation = q2proto_sound_decode_loop_attenuation(delta_state->loop_attenuation);
+
     if (delta_state->delta_bits & Q2P_ESD_EVENT)
         to->event = delta_state->event;
 

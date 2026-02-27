@@ -240,7 +240,6 @@ extern cvar_t       *s_occlusion_strength;
 #define S_CopyString(x) Z_TagCopyString(x, TAG_SOUND)
 
 #define S_GetEntityLoopVolume(ent)      ((ent)->loop_volume ? (ent)->loop_volume : 1.0f)
-#define S_GetEntityLoopDistMult(ent)    Com_GetEntityLoopDistMult((ent)->loop_attenuation)
 #define S_GetEntityLoopStereoPan(ent)   !(cl.csr.extended && (ent)->renderfx & RF_NO_STEREO)
 
 sfx_t *S_SfxForHandle(qhandle_t hSfx);
@@ -250,6 +249,7 @@ void S_IssuePlaysound(playsound_t *ps);
 int S_BuildSoundList(int *sounds);
 void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, float *left_vol, float *right_vol, bool stereo);
 const qboolean S_SetEAXEnvironmentProperties(const sfx_eax_properties_t *properties);
+float S_GetEntityLoopDistMult(const entity_state_t *ent);
 float S_GetOcclusion(channel_t *ch, const vec3_t origin);
 float S_SmoothOcclusion(channel_t *ch, float target);
 float S_ComputeOcclusion(const vec3_t origin, float *cutoff_hz);

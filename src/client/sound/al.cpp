@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "sound.h"
 #include "qal.h"
 #include "common/json.h"
+#include <cfloat>
 
 // translates from AL coordinate system to quake
 #define AL_UnpackVector(v)  -v[1],v[2],-v[0]
@@ -305,6 +306,9 @@ static const qboolean AL_SetEAXEffectProperties(const sfx_eax_properties_t *reve
 {
     if (!reverb || !s_reverb_effect || !s_reverb_slot)
         return qfalse;
+
+    // Clear stale AL error state so the return value reflects this update call.
+    qalGetError();
 
     ALuint effect = s_reverb_effect;
 
@@ -633,29 +637,56 @@ static void AL_InterpolateEAX(const sfx_eax_properties_t *from, const sfx_eax_pr
 #undef EAX_LERP
 }
 
+static bool AL_IsEAXZoneReachable(const al_eax_zone_t *zone)
+{
+    trace_t tr;
+    CL_Trace(&tr, zone->origin, listener_origin, vec3_origin, vec3_origin, NULL, MASK_SOLID);
+    if (tr.fraction >= 1.0f)
+        return true;
+
+    // Fallback probe ring prevents false negatives when center-point LOS is blocked.
+    const float probe_distance = Q_clipf(zone->radius * 0.2f, 32.0f, 192.0f);
+    static const vec3_t probe_dirs[] = {
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, -1.0f }
+    };
+
+    for (size_t i = 0; i < q_countof(probe_dirs); i++) {
+        vec3_t probe_origin;
+        VectorMA(zone->origin, probe_distance, probe_dirs[i], probe_origin);
+        CL_Trace(&tr, probe_origin, listener_origin, vec3_origin, vec3_origin, NULL, MASK_SOLID);
+        if (tr.fraction >= 1.0f)
+            return true;
+    }
+
+    return false;
+}
+
 static qhandle_t AL_DetermineEAXEnvironment(void)
 {
     if (S_IsUnderWater())
         return SOUND_EAX_EFFECT_UNDERWATER;
 
     qhandle_t best = SOUND_EAX_EFFECT_DEFAULT;
-    float best_dist = 8192.0f;
+    float best_dist_sq = FLT_MAX;
 
     for (size_t i = 0; i < s_num_eax_zones; i++) {
         const al_eax_zone_t *zone = &s_eax_zones[i];
-        trace_t tr;
-
-        CL_Trace(&tr, zone->origin, listener_origin, vec3_origin, vec3_origin, NULL, MASK_SOLID);
-        if (tr.fraction < 1.0f)
-            continue;
-
         vec3_t delta;
         VectorSubtract(zone->origin, listener_origin, delta);
-        float dist = VectorLength(delta);
-        if (dist > zone->radius || dist > best_dist)
+        float dist_sq = DotProduct(delta, delta);
+        float radius_sq = zone->radius * zone->radius;
+        if (dist_sq > radius_sq || dist_sq > best_dist_sq)
             continue;
 
-        best_dist = dist;
+        if (!AL_IsEAXZoneReachable(zone))
+            continue;
+
+        best_dist_sq = dist_sq;
         best = zone->reverb_id;
     }
 
@@ -1234,7 +1265,8 @@ static void AL_UpdateDirectFilter(channel_t *ch, float occlusion_mix, float air_
 
 static void AL_UpdateReverbSend(channel_t *ch, float distance, float occlusion_mix)
 {
-    if (!s_reverb_slot || !al_reverb || !al_reverb->integer || !cl.bsp) {
+    if (!s_reverb_slot || !al_reverb || !al_reverb->integer ||
+        !al_eax || !al_eax->integer || !cl.bsp) {
         qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
         return;
     }
@@ -1254,6 +1286,26 @@ static void AL_UpdateReverbSend(channel_t *ch, float distance, float occlusion_m
     qalFilterf(s_reverb_filters[ch_index], AL_LOWPASS_GAIN, send);
     qalFilterf(s_reverb_filters[ch_index], AL_LOWPASS_GAINHF, send);
     qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, s_reverb_filters[ch_index]);
+}
+
+static void AL_UpdateSpatialEffects(channel_t *ch, const vec3_t origin, bool fullvolume)
+{
+    float distance = fullvolume ? 0.0f : AL_DistanceFromListener(origin);
+    float occlusion = 0.0f;
+
+    if (!fullvolume && ch->dist_mult > 0.0f && s_occlusion && s_occlusion->integer) {
+        occlusion = S_GetOcclusion(ch, origin);
+    } else {
+        S_ResetOcclusion(ch);
+    }
+
+    float occlusion_mix = S_MapOcclusion(occlusion);
+    float air_absorption = 0.0f;
+    if (!s_underwater_flag)
+        air_absorption = AL_ComputeAirAbsorption(distance);
+
+    AL_UpdateDirectFilter(ch, occlusion_mix, air_absorption);
+    AL_UpdateReverbSend(ch, distance, occlusion_mix);
 }
 
 static bool AL_Init(void)
@@ -1724,12 +1776,6 @@ static void AL_Spatialize(channel_t *ch)
         qalSource3f(ch->srcnum, AL_POSITION, AL_UnpackVector(origin));
     }
 
-    if (s_reverb_slot && (!al_eax || al_eax->integer)) {
-        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
-    } else {
-        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
-    }
-
     qalSourcef(ch->srcnum, AL_GAIN, ch->master_vol);
 
     if (al_timescale->integer) {
@@ -1738,6 +1784,7 @@ static void AL_Spatialize(channel_t *ch)
         qalSourcef(ch->srcnum, AL_PITCH, 1.0f);
     }
 
+    AL_UpdateSpatialEffects(ch, origin, fullvolume);
     AL_UpdateSourceVelocity(ch);
     ch->fullvolume = fullvolume;
 }
@@ -1778,12 +1825,6 @@ static void AL_PlayChannel(channel_t *ch)
     qalSourcei(ch->srcnum, AL_SOURCE_RELATIVE, AL_FALSE);
     if (s_source_spatialize) {
         qalSourcei(ch->srcnum, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
-    }
-
-    if (s_reverb_slot && (!al_eax || al_eax->integer)) {
-        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, s_reverb_slot, 0, AL_FILTER_NULL);
-    } else {
-        qalSource3i(ch->srcnum, AL_AUXILIARY_SEND_FILTER, AL_EFFECT_NULL, 0, AL_FILTER_NULL);
     }
 
     // force update
@@ -1836,6 +1877,10 @@ static channel_t *AL_FindLoopingSound(int entnum, const sfx_t *sfx)
 
     for (i = 0, ch = s_channels; i < s_numchannels; i++, ch++) {
         if (!ch->autosound)
+            continue;
+        // When searching a merge target (entnum == 0), never reuse channels
+        // reserved for unmerged doppler sources.
+        if (!entnum && ch->no_merge)
             continue;
         if (entnum && ch->entnum != entnum)
             continue;

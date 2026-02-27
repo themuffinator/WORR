@@ -869,6 +869,36 @@ int S_BuildSoundList(int *sounds)
 
 int32_t volume_modified = 0;
 
+static bool S_IsProjectileLikeLoopEntity(const entity_state_t *ent)
+{
+    if (!ent)
+        return false;
+
+    if (ent->renderfx & RF_DOPPLER)
+        return true;
+
+    const effects_t doppler_fx = EF_ROCKET | EF_BLASTER | EF_BLUEHYPERBLASTER |
+                                 EF_HYPERBLASTER | EF_PLASMA | EF_IONRIPPER |
+                                 EF_BFG | EF_TRACKER | EF_TRACKERTRAIL |
+                                 EF_TRAP;
+    return (ent->effects & doppler_fx) != 0;
+}
+
+float S_GetEntityLoopDistMult(const entity_state_t *ent)
+{
+    if (!ent)
+        return SOUND_LOOPATTENUATE;
+
+    float attenuation = ent->loop_attenuation;
+    if (attenuation == 0.0f && S_IsProjectileLikeLoopEntity(ent)) {
+        // Projectile loops frequently omit explicit loop attenuation.
+        // Use ATTN_NORM to avoid over-attenuating doppler-marked projectile hum.
+        attenuation = ATTN_NORM;
+    }
+
+    return Com_GetEntityLoopDistMult(attenuation);
+}
+
 /*
 =================
 S_SpatializeOrigin
@@ -916,10 +946,133 @@ void S_SpatializeOrigin(const vec3_t origin, float master_vol, float dist_mult, 
 
 float S_ComputeOcclusion(const vec3_t origin, float *cutoff_hz)
 {
-    (void)origin;
     if (cutoff_hz)
         *cutoff_hz = S_OCCLUSION_CUTOFF_CLEAR_HZ;
-    return 0.0f;
+
+    if (!cl.bsp)
+        return 0.0f;
+
+    static const vec3_t probe_offsets[] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f }
+    };
+
+    static const char *const concrete_keys[] = { "concrete", "cement", "stone", "rock", "brick" };
+    static const char *const metal_keys[] = { "metal", "steel", "iron" };
+    static const char *const wood_keys[] = { "wood" };
+    static const char *const soft_keys[] = { "cloth", "fabric", "carpet", "dirt", "mud", "snow" };
+    static const char *const grate_keys[] = { "grate", "grid", "vent", "fence" };
+    static const char *const glass_keys[] = { "glass", "window" };
+
+    vec3_t to_source;
+    VectorSubtract(origin, listener_origin, to_source);
+    float distance = VectorLength(to_source);
+    if (distance <= SOUND_FULLVOLUME)
+        return 0.0f;
+
+    float probe_radius = S_OCCLUSION_RADIUS_BASE + distance * S_OCCLUSION_RADIUS_SCALE;
+    probe_radius = Q_clipf(probe_radius, S_OCCLUSION_RADIUS_BASE, S_OCCLUSION_RADIUS_MAX);
+
+    float blocked_weight = 0.0f;
+    float total_weight = 0.0f;
+    float cutoff_weighted = 0.0f;
+    float cutoff_weight_total = 0.0f;
+
+    for (size_t i = 0; i < q_countof(probe_offsets); i++) {
+        const float ray_weight = (i == 0) ? 1.0f : S_OCCLUSION_DIFFRACTION_WEIGHT;
+        total_weight += ray_weight;
+
+        vec3_t offset, start, end;
+        VectorScale(listener_right, probe_offsets[i][0] * probe_radius, offset);
+        VectorMA(listener_origin, 1.0f, offset, start);
+        VectorMA(origin, 1.0f, offset, end);
+        VectorScale(listener_up, probe_offsets[i][1] * probe_radius, offset);
+        VectorMA(start, 1.0f, offset, start);
+        VectorMA(end, 1.0f, offset, end);
+
+        trace_t tr;
+        CL_Trace(&tr, start, end, vec3_origin, vec3_origin, NULL, MASK_SOLID);
+        if (tr.fraction >= 1.0f)
+            continue;
+
+        float material_weight = 1.0f;
+        float material_cutoff = S_OCCLUSION_CUTOFF_DEFAULT_HZ;
+
+        bool translucent = (tr.contents & CONTENTS_WINDOW) != 0;
+        if (tr.surface) {
+            translucent = translucent || (tr.surface->flags & (SURF_TRANS33 | SURF_TRANS66));
+
+            const char *material = tr.surface->material;
+            if (material && material[0]) {
+                for (size_t k = 0; k < q_countof(glass_keys); k++) {
+                    if (Q_stristr(material, glass_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_GLASS_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_GLASS_HZ);
+                    }
+                }
+                for (size_t k = 0; k < q_countof(grate_keys); k++) {
+                    if (Q_stristr(material, grate_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_GRATE_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_GRATE_HZ);
+                    }
+                }
+                for (size_t k = 0; k < q_countof(soft_keys); k++) {
+                    if (Q_stristr(material, soft_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_SOFT_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_SOFT_HZ);
+                    }
+                }
+                for (size_t k = 0; k < q_countof(wood_keys); k++) {
+                    if (Q_stristr(material, wood_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_WOOD_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_WOOD_HZ);
+                    }
+                }
+                for (size_t k = 0; k < q_countof(metal_keys); k++) {
+                    if (Q_stristr(material, metal_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_METAL_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_METAL_HZ);
+                    }
+                }
+                for (size_t k = 0; k < q_countof(concrete_keys); k++) {
+                    if (Q_stristr(material, concrete_keys[k])) {
+                        material_weight = min(material_weight, S_OCCLUSION_CONCRETE_WEIGHT);
+                        material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_CONCRETE_HZ);
+                    }
+                }
+            }
+        }
+
+        if (translucent) {
+            material_weight = min(material_weight, S_OCCLUSION_WINDOW_WEIGHT);
+            material_cutoff = min(material_cutoff, S_OCCLUSION_CUTOFF_GLASS_HZ);
+        }
+
+        material_weight = Q_clipf(material_weight, 0.0f, 1.0f);
+        material_cutoff = Q_clipf(material_cutoff, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+
+        float weighted_hit = ray_weight * material_weight;
+        blocked_weight += weighted_hit;
+        cutoff_weighted += weighted_hit * material_cutoff;
+        cutoff_weight_total += weighted_hit;
+    }
+
+    if (cutoff_hz) {
+        if (cutoff_weight_total > 0.0f) {
+            *cutoff_hz = Q_clipf(cutoff_weighted / cutoff_weight_total,
+                                 S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+        } else {
+            *cutoff_hz = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        }
+    }
+
+    if (total_weight <= 0.0f)
+        return 0.0f;
+
+    return Q_clipf(blocked_weight / total_weight, 0.0f, 1.0f);
 }
 
 void S_ResetOcclusion(channel_t *ch)
@@ -937,22 +1090,63 @@ void S_ResetOcclusion(channel_t *ch)
 
 float S_SmoothOcclusion(channel_t *ch, float target)
 {
-    (void)target;
-    S_ResetOcclusion(ch);
-    return 0.0f;
+    if (!ch)
+        return 0.0f;
+
+    float dt = Q_clipf(cls.frametime, 0.0f, 0.25f);
+    if (dt <= 0.0f)
+        dt = 0.016f;
+
+    target = Q_clipf(target, 0.0f, 1.0f);
+    ch->occlusion_target = target;
+
+    const float rate = (target > ch->occlusion) ? S_OCCLUSION_ATTACK_RATE : S_OCCLUSION_RELEASE_RATE;
+    const float alpha = 1.0f - expf(-rate * dt);
+    ch->occlusion = FASTLERP(ch->occlusion, target, alpha);
+    ch->occlusion = Q_clipf(ch->occlusion, 0.0f, 1.0f);
+
+    const float cutoff_alpha = 1.0f - expf(-12.0f * dt);
+    ch->occlusion_cutoff = FASTLERP(ch->occlusion_cutoff, ch->occlusion_cutoff_target, cutoff_alpha);
+    ch->occlusion_cutoff = Q_clipf(ch->occlusion_cutoff, S_OCCLUSION_CUTOFF_MIN_HZ, S_OCCLUSION_CUTOFF_CLEAR_HZ);
+
+    return ch->occlusion;
 }
 
 float S_GetOcclusion(channel_t *ch, const vec3_t origin)
 {
-    (void)origin;
-    S_ResetOcclusion(ch);
-    return 0.0f;
+    if (!ch)
+        return 0.0f;
+
+    if (!s_occlusion || !s_occlusion->integer || !cl.bsp || S_IsFullVolume(ch)) {
+        S_ResetOcclusion(ch);
+        return 0.0f;
+    }
+
+    if (!ch->occlusion_time || (cl.time - ch->occlusion_time) >= S_OCCLUSION_UPDATE_MS) {
+        float cutoff_hz = S_OCCLUSION_CUTOFF_CLEAR_HZ;
+        float target = S_ComputeOcclusion(origin, &cutoff_hz);
+        ch->occlusion_cutoff_target = cutoff_hz;
+        ch->occlusion_target = target;
+        ch->occlusion_time = cl.time;
+    }
+
+    return S_SmoothOcclusion(ch, ch->occlusion_target);
 }
 
 float S_MapOcclusion(float occlusion)
 {
-    (void)occlusion;
-    return 0.0f;
+    float mapped = Q_clipf(occlusion, 0.0f, 1.0f);
+    float margin = Q_clipf(S_OCCLUSION_CLEAR_MARGIN, 0.0f, 0.95f);
+    if (mapped <= margin)
+        return 0.0f;
+
+    mapped = (mapped - margin) / (1.0f - margin);
+    mapped = powf(mapped, S_OCCLUSION_CURVE);
+
+    float strength = s_occlusion_strength ? Cvar_ClampValue(s_occlusion_strength, 0.0f, 2.0f) : 1.0f;
+    mapped *= strength;
+
+    return Q_clipf(mapped, 0.0f, 1.0f);
 }
 
 /*

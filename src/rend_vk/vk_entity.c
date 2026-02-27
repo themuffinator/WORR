@@ -50,6 +50,7 @@ enum {
     VK_MD5_MAX_MESHES = 32,
     VK_MD5_MAX_WEIGHTS = 8192,
     VK_MD5_MAX_FRAMES = 1024,
+    VK_MD5_MAX_JOINTNAME = 48,
     VK_MD5_MAX_VERTICES = 65535,
     VK_MD5_MAX_INDICES = VK_MD5_MAX_VERTICES * 3,
 };
@@ -205,6 +206,7 @@ static void VK_Entity_TransformPointWithTransform(const vk_entity_transform_t *t
 static void VK_Entity_TransformPointInverseWithTransform(const vk_entity_transform_t *transform,
                                                          const vec3_t world, vec3_t out);
 static qhandle_t VK_Entity_SelectMD2Skin(const entity_t *ent, const vk_md2_t *md2);
+static qhandle_t VK_Entity_SelectMD5Skin(const entity_t *ent);
 static bool VK_Entity_AddBspModel(const entity_t *ent, const refdef_t *fd, const bsp_t *bsp,
                                   bool depth_hack, bool weapon_model);
 static bool VK_Entity_AddParticles(const refdef_t *fd, const vec3_t view_axis[3]);
@@ -239,6 +241,8 @@ typedef struct {
     int parent;
     uint32_t flags;
     uint32_t start_index;
+    char name[VK_MD5_MAX_JOINTNAME];
+    bool scale_pos;
 } vk_md5_joint_info_t;
 
 typedef struct {
@@ -501,7 +505,9 @@ static void VK_MD5_BuildFrameSkeleton(const vk_md5_joint_info_t *joint_infos,
         Quat_ComputeW(animated_orient);
 
         vk_md5_joint_t *joint = &out_skeleton[i];
-        joint->scale = 1.0f;
+        if (joint_infos[i].scale_pos) {
+            VectorScale(animated_pos, joint->scale, animated_pos);
+        }
 
         if (joint_infos[i].parent < 0) {
             VectorCopy(animated_pos, joint->pos);
@@ -521,7 +527,105 @@ static void VK_MD5_BuildFrameSkeleton(const vk_md5_joint_info_t *joint_infos,
     }
 }
 
-static bool VK_MD5_ParseAnim(vk_md5_t *md5, const char *source)
+static void VK_MD5_LoadScales(vk_md5_t *md5, const char *path, vk_md5_joint_info_t *joint_infos)
+{
+    if (!md5 || !path || !joint_infos) {
+        return;
+    }
+
+    jsmn_parser parser;
+    jsmntok_t tokens[4096];
+    char *data = NULL;
+    int len = FS_LoadFile(path, (void **)&data);
+    if (!data) {
+        if (len != Q_ERR(ENOENT)) {
+            Com_EPrintf("Couldn't load %s: %s\n", path, Q_ErrorString(len));
+        }
+        return;
+    }
+
+    jsmn_init(&parser);
+    int ret = jsmn_parse(&parser, data, (size_t)len, tokens, q_countof(tokens));
+    if (ret < 0) {
+        goto fail;
+    }
+    if (ret == 0) {
+        goto skip;
+    }
+
+    const jsmntok_t *tok = &tokens[0];
+    if (tok->type != JSMN_OBJECT) {
+        goto fail;
+    }
+
+    const jsmntok_t *end = tokens + ret;
+    tok++;
+
+    while (tok < end) {
+        if (tok->type != JSMN_STRING) {
+            goto fail;
+        }
+
+        int joint_id = -1;
+        const char *joint_name = data + tok->start;
+        data[tok->end] = 0;
+        for (uint32_t i = 0; i < md5->num_joints; i++) {
+            if (!strcmp(joint_name, joint_infos[i].name)) {
+                joint_id = (int)i;
+                break;
+            }
+        }
+
+        if (joint_id == -1) {
+            Com_WPrintf("No such joint \"%s\" in %s\n", Com_MakePrintable(joint_name), path);
+        }
+
+        if (++tok == end || tok->type != JSMN_OBJECT) {
+            goto fail;
+        }
+
+        int num_keys = tok->size;
+        if (end - ++tok < num_keys * 2) {
+            goto fail;
+        }
+
+        for (int i = 0; i < num_keys; i++) {
+            const jsmntok_t *key = tok++;
+            const jsmntok_t *val = tok++;
+            if (key->type != JSMN_STRING || val->type != JSMN_PRIMITIVE) {
+                goto fail;
+            }
+
+            if (joint_id == -1) {
+                continue;
+            }
+
+            data[key->end] = 0;
+            const char *key_text = data + key->start;
+            if (!strcmp(key_text, "scale_positions")) {
+                joint_infos[joint_id].scale_pos = data[val->start] == 't';
+            } else {
+                unsigned frame_id = Q_atoi(key_text);
+                if (frame_id < md5->num_frames) {
+                    md5->skeleton_frames[(size_t)frame_id * md5->num_joints + (uint32_t)joint_id].scale =
+                        Q_atof(data + val->start);
+                } else {
+                    Com_WPrintf("No such frame %u in %s\n", frame_id, path);
+                }
+            }
+        }
+    }
+
+skip:
+    FS_FreeFile(data);
+    return;
+
+fail:
+    Com_EPrintf("Couldn't load %s: Invalid JSON data\n", path);
+    FS_FreeFile(data);
+}
+
+static bool VK_MD5_ParseAnim(vk_md5_t *md5, const char *source, const char *path)
 {
     if (!md5 || !source) {
         return false;
@@ -565,10 +669,11 @@ static bool VK_MD5_ParseAnim(vk_md5_t *md5, const char *source)
     VK_MD5_ParseExpect(&s, "hierarchy");
     VK_MD5_ParseExpect(&s, "{");
     for (uint32_t i = 0; i < md5->num_joints; i++) {
-        COM_SkipToken(&s); // name
+        COM_ParseToken(&s, joint_infos[i].name, sizeof(joint_infos[i].name), PARSE_FLAG_NONE);
         joint_infos[i].parent = VK_MD5_ParseInt(&s, -1, (int32_t)md5->num_joints - 1);
         joint_infos[i].flags = VK_MD5_ParseUint(&s, 0, UINT32_MAX);
         joint_infos[i].start_index = VK_MD5_ParseUint(&s, 0, num_animated_components);
+        joint_infos[i].scale_pos = false;
 
         int num_components = 0;
         for (int c = 0; c < 6; c++) {
@@ -613,6 +718,16 @@ static bool VK_MD5_ParseAnim(vk_md5_t *md5, const char *source)
 
     for (uint32_t i = 0; i < md5->num_frames * md5->num_joints; i++) {
         md5->skeleton_frames[i].scale = 1.0f;
+    }
+
+    if (path && *path) {
+        char scale_path[MAX_QPATH];
+        if (COM_StripExtension(scale_path, path, sizeof(scale_path)) < sizeof(scale_path) &&
+            Q_strlcat(scale_path, ".md5scale", sizeof(scale_path)) < sizeof(scale_path)) {
+            VK_MD5_LoadScales(md5, scale_path, joint_infos);
+        } else {
+            Com_WPrintf("MD5 scale path too long: %s\n", scale_path);
+        }
     }
 
     for (uint32_t frame = 0; frame < md5->num_frames; frame++) {
@@ -672,13 +787,18 @@ static bool VK_Entity_LoadMD5Replacement(vk_model_t *model)
     }
 
     vk_md5_t parsed = { 0 };
-    bool ok = VK_MD5_ParseMesh(&parsed, mesh_data) && VK_MD5_ParseAnim(&parsed, anim_data);
+    bool ok = VK_MD5_ParseMesh(&parsed, mesh_data) && VK_MD5_ParseAnim(&parsed, anim_data, anim_path);
     FS_FreeFile(mesh_data);
     FS_FreeFile(anim_data);
 
     if (!ok) {
         VK_MD5_Free(&parsed);
         return false;
+    }
+
+    if (model->md2.num_frames && parsed.num_frames < model->md2.num_frames) {
+        Com_WPrintf("%s has less frames than %s (%u < %u)\n",
+                    anim_path, model->name, parsed.num_frames, model->md2.num_frames);
     }
 
     VK_MD5_Free(&model->md5);
@@ -803,7 +923,8 @@ static bool VK_Entity_AddMD5(const entity_t *ent, const refdef_t *fd, const vk_m
     uint32_t oldframe = 0;
     float backlerp = 0.0f;
     float frontlerp = 1.0f;
-    if (!VK_Entity_ResolveAnimationFrames(fd, md5->num_frames, ent->frame, ent->oldframe,
+    uint32_t frame_count = model->md2.num_frames ? model->md2.num_frames : md5->num_frames;
+    if (!VK_Entity_ResolveAnimationFrames(fd, frame_count, ent->frame, ent->oldframe,
                                           ent->backlerp,
                                           &frame, &oldframe, &backlerp, &frontlerp)) {
         return true;
@@ -818,7 +939,7 @@ static bool VK_Entity_AddMD5(const entity_t *ent, const refdef_t *fd, const vk_m
     VK_Entity_BuildTransform(ent, &transform);
 
     color_t color = VK_Entity_LitColor(ent, false);
-    qhandle_t preferred_skin = VK_Entity_SelectMD2Skin(ent, &model->md2);
+    qhandle_t preferred_skin = VK_Entity_SelectMD5Skin(ent);
 
     for (uint32_t i = 0; i < md5->num_meshes; i++) {
         const vk_md5_mesh_t *mesh = &md5->meshes[i];
@@ -829,7 +950,7 @@ static bool VK_Entity_AddMD5(const entity_t *ent, const refdef_t *fd, const vk_m
 
         qhandle_t skin = preferred_skin ? preferred_skin : mesh->shader_image;
         VkDescriptorSet set = VK_Entity_SetForImage(skin);
-        bool alpha = (VK_Entity_Alpha(ent) < 1.0f) || VK_UI_IsImageTransparent(skin);
+        bool alpha = VK_Entity_Alpha(ent) < 1.0f;
 
         for (uint32_t tri_idx = 0; tri_idx < mesh->num_indices; tri_idx += 3) {
             vk_vertex_t tri[3];
@@ -1758,6 +1879,17 @@ static qhandle_t VK_Entity_SelectMD2Skin(const entity_t *ent, const vk_md2_t *md
     return md2->skins[skinnum];
 }
 
+static qhandle_t VK_Entity_SelectMD5Skin(const entity_t *ent)
+{
+    if (ent->flags & RF_CUSTOMSKIN) {
+        return ent->skin;
+    }
+    if (ent->skin) {
+        return ent->skin;
+    }
+    return 0;
+}
+
 static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_model_t *model,
                              bool depth_hack, bool weapon_model)
 {
@@ -1778,7 +1910,7 @@ static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_m
 
     qhandle_t skin = VK_Entity_SelectMD2Skin(ent, md2);
     VkDescriptorSet set = VK_Entity_SetForImage(skin);
-    bool alpha = (VK_Entity_Alpha(ent) < 1.0f) || VK_UI_IsImageTransparent(skin);
+    bool alpha = VK_Entity_Alpha(ent) < 1.0f;
     color_t color = VK_Entity_LitColor(ent, false);
     vk_entity_transform_t transform;
     VK_Entity_BuildTransform(ent, &transform);

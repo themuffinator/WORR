@@ -5,6 +5,36 @@ Date: 2026-02-27
 ## Purpose
 Create a repository-grounded SWOT and convert it into actionable, task-based project roadmaps that can guide coordinated team execution.
 
+## Status Updates (2026-02-27)
+- `FR-01-T04` In Progress:
+  - Completed Vulkan MD5 parity follow-up for frame resolve semantics and MD2/MD5 opaque-vs-alpha routing in `src/rend_vk/vk_entity.c`.
+  - Implementation log: `docs-dev/vulkan-md5-mesh-frame-alpha-parity-fix-2026-02-27.md`.
+  - Completed Vulkan MD5 `.md5scale` + scale-position parity and MD5 skin-routing correction in `src/rend_vk/vk_entity.c`.
+  - Implementation log: `docs-dev/vulkan-md5-mesh-parity-revision-2026-02-27.md`.
+- `FR-06-T01` In Progress:
+  - Fixed OpenAL loop-merge channel reuse so merged loops cannot reuse `no_merge` Doppler channels in `src/client/sound/al.cpp`.
+  - This preserves projectile world-origin tracking for Doppler-marked loop sounds when mixed with non-Doppler loops using the same sample.
+  - Implementation log: `docs-dev/audio-projectile-doppler-origin-merge-fix-2026-02-27.md`.
+  - Fixed q2proto entity delta application so loop extension fields are applied in `src/client/parse.cpp`:
+    - `Q2P_ESD_LOOP_VOLUME`
+    - `Q2P_ESD_LOOP_ATTENUATION`
+  - This prevents stale `loop_attenuation` states (for example `ATTN_LOOP_NONE`) from producing level-wide/full-volume projectile loops after entity reuse.
+  - Implementation log: `docs-dev/audio-projectile-loop-attenuation-parse-fix-2026-02-27.md`.
+  - Fixed OpenAL EAX spatial routing consistency in `src/client/sound/al.cpp`:
+    - Non-merged channels now run the same per-source spatial effect update path used by merged loops (direct filter, air absorption, and auxiliary send updates).
+    - EAX zone selection now uses uncapped nearest-zone matching (`FLT_MAX` + squared-distance checks), eliminating the hard 8192-unit selection ceiling and reducing unnecessary LOS traces.
+    - EAX effect application now clears stale AL error state before property updates for reliable success/failure reporting.
+  - Implementation log: `docs-dev/audio-eax-spatial-awareness-fixes-2026-02-27.md`.
+  - Closed remaining EAX spatial-awareness gaps:
+    - Restored real occlusion behavior in `src/client/sound/main.cpp` (`S_ComputeOcclusion`, `S_GetOcclusion`, `S_SmoothOcclusion`, `S_MapOcclusion`) with multi-ray tracing, material/transparency weighting, query rate limiting, and smoothing.
+    - Replaced center-only LOS zone validation with multi-probe reachability checks in `src/client/sound/al.cpp` to reduce false zone misses in occluded/non-convex spaces.
+  - Implementation log: `docs-dev/audio-eax-spatial-gap-closure-2026-02-27.md`.
+  - Fixed excessive projectile loop attenuation fallback in shared client sound:
+    - Added `S_GetEntityLoopDistMult(const entity_state_t *ent)` in `src/client/sound/main.cpp`.
+    - For projectile-like/doppler loops with unset `loop_attenuation` (`== 0`), fallback now uses `ATTN_NORM` before conversion to distance multiplier.
+    - This applies to both OpenAL and DMA loop paths through the shared `S_GetEntityLoopDistMult(...)` call sites.
+  - Implementation log: `docs-dev/audio-projectile-loop-attenuation-fallback-fix-2026-02-27.md`.
+
 ## Baseline Snapshot (Repository-Derived)
 - Codebase scale is substantial: approximately 733 `*.c`/`*.cpp`/`*.h`/`*.hpp` files and approximately 426k lines across `src/` and `inc/`.
 - Workload concentration is heavily in gameplay and rendering:
