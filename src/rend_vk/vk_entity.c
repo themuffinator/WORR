@@ -2020,6 +2020,17 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         return false;
     }
 
+    if (hdr.num_tris > MD2_MAX_TRIANGLES || hdr.num_xyz > MD2_MAX_VERTS || hdr.num_frames > MD2_MAX_FRAMES ||
+        hdr.num_skins > MD2_MAX_SKINS || hdr.skinwidth < 1 || hdr.skinwidth > MD2_MAX_SKINWIDTH ||
+        hdr.skinheight < 1 || hdr.skinheight > MD2_MAX_SKINHEIGHT) {
+        return false;
+    }
+
+    uint64_t min_frame_size = sizeof(dmd2frame_t) + (uint64_t)(hdr.num_xyz - 1) * sizeof(dmd2trivertx_t);
+    if (hdr.framesize < min_frame_size || hdr.framesize > MD2_MAX_FRAMESIZE) {
+        return false;
+    }
+
     if ((uint64_t)hdr.ofs_tris + (uint64_t)hdr.num_tris * sizeof(dmd2triangle_t) > len ||
         (uint64_t)hdr.ofs_st + (uint64_t)hdr.num_st * sizeof(dmd2stvert_t) > len ||
         (uint64_t)hdr.ofs_frames + (uint64_t)hdr.num_frames * (uint64_t)hdr.framesize > len ||
@@ -2027,48 +2038,94 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         return false;
     }
 
-    uint32_t num_indices = (uint32_t)hdr.num_tris * 3;
-    uint32_t num_vertices = num_indices;
+    uint32_t max_indices = (uint32_t)hdr.num_tris * 3;
+    uint32_t num_indices = 0;
+    uint32_t num_vertices = 0;
     uint32_t num_frames = (uint32_t)hdr.num_frames;
+    float *positions = NULL;
+    float *uv = NULL;
+    uint16_t *indices = NULL;
+    uint16_t *vert_indices = NULL;
+    uint16_t *tc_indices = NULL;
+    uint16_t *remap = NULL;
+    uint16_t *final_indices = NULL;
+    qhandle_t *skins = NULL;
 
-    float *positions = calloc((size_t)num_frames * num_vertices * 3, sizeof(float));
-    float *uv = calloc((size_t)num_vertices * 2, sizeof(float));
-    uint16_t *indices = calloc((size_t)num_indices, sizeof(uint16_t));
-    uint16_t *xyz_map = calloc((size_t)num_vertices, sizeof(uint16_t));
-    uint16_t *st_map = calloc((size_t)num_vertices, sizeof(uint16_t));
-    qhandle_t *skins = hdr.num_skins ? calloc((size_t)hdr.num_skins, sizeof(*skins)) : NULL;
-    if (!positions || !uv || !indices || !xyz_map || !st_map || (hdr.num_skins && !skins)) {
-        free(positions);
-        free(uv);
-        free(indices);
-        free(xyz_map);
-        free(st_map);
-        free(skins);
-        return false;
+    vert_indices = calloc((size_t)max_indices, sizeof(*vert_indices));
+    tc_indices = calloc((size_t)max_indices, sizeof(*tc_indices));
+    remap = calloc((size_t)max_indices, sizeof(*remap));
+    final_indices = calloc((size_t)max_indices, sizeof(*final_indices));
+    if (!vert_indices || !tc_indices || !remap || !final_indices) {
+        goto fail;
     }
 
     const dmd2triangle_t *tris = (const dmd2triangle_t *)(raw + hdr.ofs_tris);
     const dmd2stvert_t *st = (const dmd2stvert_t *)(raw + hdr.ofs_st);
     for (uint32_t t = 0; t < (uint32_t)hdr.num_tris; t++) {
+        bool good_tri = true;
         for (uint32_t j = 0; j < 3; j++) {
-            uint32_t out = t * 3 + j;
             uint16_t xyz = LittleShort(tris[t].index_xyz[j]);
             uint16_t tc = LittleShort(tris[t].index_st[j]);
             if (xyz >= hdr.num_xyz || tc >= hdr.num_st) {
-                free(positions);
-                free(uv);
-                free(indices);
-                free(xyz_map);
-                free(st_map);
-                free(skins);
-                return false;
+                good_tri = false;
+                break;
             }
-            xyz_map[out] = xyz;
-            st_map[out] = tc;
-            indices[out] = (uint16_t)out;
-            uv[out * 2 + 0] = (float)((int16_t)LittleShort(st[tc].s)) / (float)hdr.skinwidth;
-            uv[out * 2 + 1] = (float)((int16_t)LittleShort(st[tc].t)) / (float)hdr.skinheight;
+            vert_indices[num_indices + j] = xyz;
+            tc_indices[num_indices + j] = tc;
         }
+        if (good_tri) {
+            num_indices += 3;
+        }
+    }
+
+    if (num_indices < 3) {
+        goto fail;
+    }
+    if (num_indices != max_indices) {
+        Com_DPrintf("%s has %u bad triangles\n", model->name, (max_indices - num_indices) / 3);
+    }
+
+    for (uint32_t i = 0; i < num_indices; i++) {
+        remap[i] = UINT16_MAX;
+    }
+
+    for (uint32_t i = 0; i < num_indices; i++) {
+        if (remap[i] != UINT16_MAX) {
+            continue;
+        }
+        for (uint32_t j = i + 1; j < num_indices; j++) {
+            if (vert_indices[i] == vert_indices[j] &&
+                st[tc_indices[i]].s == st[tc_indices[j]].s &&
+                st[tc_indices[i]].t == st[tc_indices[j]].t) {
+                remap[j] = (uint16_t)i;
+                final_indices[j] = (uint16_t)num_vertices;
+            }
+        }
+        if (num_vertices == UINT16_MAX) {
+            goto fail;
+        }
+        remap[i] = (uint16_t)i;
+        final_indices[i] = (uint16_t)num_vertices++;
+    }
+
+    positions = calloc((size_t)num_frames * num_vertices * 3, sizeof(float));
+    uv = calloc((size_t)num_vertices * 2, sizeof(float));
+    indices = calloc((size_t)num_indices, sizeof(*indices));
+    skins = hdr.num_skins ? calloc((size_t)hdr.num_skins, sizeof(*skins)) : NULL;
+    if (!positions || !uv || !indices || (hdr.num_skins && !skins)) {
+        goto fail;
+    }
+
+    for (uint32_t i = 0; i < num_indices; i++) {
+        indices[i] = final_indices[i];
+    }
+    for (uint32_t i = 0; i < num_indices; i++) {
+        if (remap[i] != i) {
+            continue;
+        }
+        uint32_t out = final_indices[i];
+        uv[out * 2 + 0] = (float)((int16_t)LittleShort(st[tc_indices[i]].s)) / (float)hdr.skinwidth;
+        uv[out * 2 + 1] = (float)((int16_t)LittleShort(st[tc_indices[i]].t)) / (float)hdr.skinheight;
     }
 
     for (uint32_t f = 0; f < num_frames; f++) {
@@ -2083,9 +2140,13 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
             LittleFloat(frame->translate[1]),
             LittleFloat(frame->translate[2]),
         };
-        for (uint32_t v = 0; v < num_vertices; v++) {
-            const dmd2trivertx_t *src = &frame->verts[xyz_map[v]];
-            float *dst = &positions[((size_t)f * num_vertices + v) * 3];
+        for (uint32_t i = 0; i < num_indices; i++) {
+            if (remap[i] != i) {
+                continue;
+            }
+            uint32_t out = final_indices[i];
+            const dmd2trivertx_t *src = &frame->verts[vert_indices[i]];
+            float *dst = &positions[((size_t)f * num_vertices + out) * 3];
             dst[0] = src->v[0] * scale[0] + translate[0];
             dst[1] = src->v[1] * scale[1] + translate[1];
             dst[2] = src->v[2] * scale[2] + translate[2];
@@ -2103,8 +2164,10 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         }
     }
 
-    free(xyz_map);
-    free(st_map);
+    free(vert_indices);
+    free(tc_indices);
+    free(remap);
+    free(final_indices);
 
     model->type = VK_MODEL_MD2;
     model->md2.num_frames = num_frames;
@@ -2116,6 +2179,17 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
     model->md2.skins = skins;
     model->md2.num_skins = (uint32_t)hdr.num_skins;
     return true;
+
+fail:
+    free(positions);
+    free(uv);
+    free(indices);
+    free(vert_indices);
+    free(tc_indices);
+    free(remap);
+    free(final_indices);
+    free(skins);
+    return false;
 }
 
 static bool VK_Entity_CreatePipeline(vk_context_t *ctx, bool alpha, bool depth_hack,

@@ -11,6 +11,13 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Implementation log: `docs-dev/vulkan-md5-mesh-frame-alpha-parity-fix-2026-02-27.md`.
   - Completed Vulkan MD5 `.md5scale` + scale-position parity and MD5 skin-routing correction in `src/rend_vk/vk_entity.c`.
   - Implementation log: `docs-dev/vulkan-md5-mesh-parity-revision-2026-02-27.md`.
+  - Fixed Vulkan sky re-registration crash on same-map reload (`VK_World_SetSky` handle invalidation ordering) in `src/rend_vk/vk_world.c`.
+  - Implementation log: `docs-dev/vulkan-sky-reregister-crash-fix-2026-02-27.md`.
+  - Aligned Vulkan MD2 mesh decode topology handling with RTX/GL remap behavior in `src/rend_vk/vk_entity.c`:
+    - Skip invalid triangles instead of hard-failing the whole model.
+    - Remap/deduplicate MD2 vertices by `(index_xyz, st.s, st.t)` and emit compact index/vertex streams.
+    - Added MD2 header/frame-size/skin-dimension bounds checks matching RTX-style validation.
+  - Implementation log: `docs-dev/vulkan-md2-mesh-remap-parity-fix-2026-02-27.md`.
 - `FR-06-T01` In Progress:
   - Fixed OpenAL loop-merge channel reuse so merged loops cannot reuse `no_merge` Doppler channels in `src/client/sound/al.cpp`.
   - This preserves projectile world-origin tracking for Doppler-marked loop sounds when mixed with non-Doppler loops using the same sample.

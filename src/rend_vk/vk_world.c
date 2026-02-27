@@ -2063,7 +2063,18 @@ void VK_World_SetSky(const char *name, float rotate, bool autorotate, const vec3
         return;
     }
 
+    bool had_sky_images = false;
+    for (int i = 0; i < VK_WORLD_SKY_FACE_COUNT; i++) {
+        if (vk_world.sky_images[i]) {
+            had_sky_images = true;
+            break;
+        }
+    }
+
     if (!name || !*name || (vk_drawsky && !vk_drawsky->integer)) {
+        if (had_sky_images && vk_world.ctx && vk_world.ctx->device) {
+            vkDeviceWaitIdle(vk_world.ctx->device);
+        }
         VK_World_UnsetSky();
         return;
     }
@@ -2079,6 +2090,11 @@ void VK_World_SetSky(const char *name, float rotate, bool autorotate, const vec3
     if (!rotate) {
         autorotate = false;
     }
+
+    if (had_sky_images && vk_world.ctx && vk_world.ctx->device) {
+        vkDeviceWaitIdle(vk_world.ctx->device);
+    }
+    VK_World_UnsetSky();
 
     qhandle_t new_images[VK_WORLD_SKY_FACE_COUNT] = { 0 };
     VkDescriptorSet new_sets[VK_WORLD_SKY_FACE_COUNT] = { VK_NULL_HANDLE };
@@ -2118,7 +2134,6 @@ void VK_World_SetSky(const char *name, float rotate, bool autorotate, const vec3
         }
     }
 
-    VK_World_UnsetSky();
     for (int i = 0; i < VK_WORLD_SKY_FACE_COUNT; i++) {
         vk_world.sky_images[i] = new_images[i];
         vk_world.sky_descriptor_sets[i] = new_sets[i];
