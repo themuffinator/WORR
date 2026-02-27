@@ -130,6 +130,7 @@ static std::vector<font_t *> g_fonts;
 static int g_font_seq = 0;
 static cvar_t *cl_debug_fonts = nullptr;
 static cvar_t *cl_font_scale_boost = nullptr;
+static cvar_t *cl_font_draw_black_background = nullptr;
 
 #if USE_SDL3_TTF
 static cvar_t *cl_font_ttf_hinting = nullptr;
@@ -167,6 +168,15 @@ static float font_scale_boost(void) {
     cl_font_scale_boost = Cvar_Get("cl_font_scale_boost", "1.5", CVAR_ARCHIVE);
   return cl_font_scale_boost ? Cvar_ClampValue(cl_font_scale_boost, 0.5f, 4.0f)
                              : 1.5f;
+}
+
+static bool font_draw_black_background_enabled(void) {
+  if (!cl_font_draw_black_background) {
+    cl_font_draw_black_background =
+        Cvar_Get("cl_font_draw_black_background", "0", CVAR_ARCHIVE);
+  }
+  return cl_font_draw_black_background &&
+         Cvar_ClampInteger(cl_font_draw_black_background, 0, 1) != 0;
 }
 
 static float font_draw_scale(const font_t *font, int scale) {
@@ -1152,6 +1162,7 @@ static void Font_DumpGlyphs_f(void) {
 void Font_Init(void) {
   (void)font_debug_enabled();
   (void)font_scale_boost();
+  (void)font_draw_black_background_enabled();
 #if USE_CLIENT
   Cmd_AddCommand("font_dump_glyphs", Font_DumpGlyphs_f);
 #endif
@@ -1228,6 +1239,55 @@ void Font_SetLetterSpacing(font_t *font, float spacing) {
   font->letter_spacing = spacing > 0.0f ? spacing : 0.0f;
 }
 
+static void font_draw_string_black_background(const font_t *font, int x, int y,
+                                              int draw_scale, int flags,
+                                              size_t max_chars,
+                                              const char *string) {
+  if (!font || !string || !*string)
+    return;
+
+  const int line_height = Font_LineHeight(font, draw_scale);
+  if (line_height <= 0)
+    return;
+
+  const float pixel_spacing =
+      font->pixel_scale > 0.0f ? (1.0f / font->pixel_scale) : 0.0f;
+  const int line_step = Q_rint((float)line_height + pixel_spacing);
+  const int padding = std::max(1, Q_rint(font_draw_scale(font, draw_scale)));
+
+  size_t remaining = max_chars;
+  const char *s = string;
+  int line_y = y;
+  while (remaining && *s) {
+    const char *line_start = s;
+    size_t line_len = 0;
+
+    while (remaining && *s) {
+      if ((flags & UI_MULTILINE) && *s == '\n')
+        break;
+      ++s;
+      --remaining;
+      ++line_len;
+    }
+
+    if (line_len > 0) {
+      int line_width = Font_MeasureString(font, draw_scale, flags & ~UI_MULTILINE,
+                                          line_len, line_start, nullptr);
+      if (line_width > 0) {
+        R_DrawFill32(x - padding, line_y - padding, line_width + (padding * 2),
+                     line_height + (padding * 2), COLOR_BLACK);
+      }
+    }
+
+    if (!(flags & UI_MULTILINE) || !remaining || *s != '\n')
+      break;
+
+    ++s;
+    --remaining;
+    line_y += line_step;
+  }
+}
+
 int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
                     size_t max_chars, const char *string, color_t color) {
   if (!font || !string || !*string)
@@ -1253,6 +1313,11 @@ int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
       (font->kind == FONT_LEGACY) ? color : font_resolve_color(flags, color);
   if (use_color_codes)
     draw_color = base_color;
+
+  if (font_draw_black_background_enabled()) {
+    font_draw_string_black_background(font, x, y, draw_scale, flags, max_chars,
+                                      string);
+  }
 
 #if USE_SDL3_TTF
   uint32_t prev_ttf_cp = 0;

@@ -49,6 +49,7 @@ typedef enum {
 #if USE_PNG || USE_STB_PNG
     IM_PNG,
 #endif
+    IM_DDS,
     IM_MAX
 } imageformat_t;
 

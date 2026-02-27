@@ -10,6 +10,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include "vk_ui.h"
 
 #include "renderer/ui_scale.h"
+#include "renderer/dds.h"
 #include "format/pcx.h"
 #include "format/wal.h"
 #include "refresh/stb/stb_image.h"
@@ -1146,6 +1147,18 @@ static bool VK_UI_LoadRgbaFromFile(const char *path, int *out_w, int *out_h, byt
             *out_rgba = native_rgba;
             return true;
         }
+    } else if (ext && !Q_stricmp(ext, ".dds")) {
+        bool has_alpha = false;
+        int dds_ret = R_DecodeDDS(file_data, (size_t)file_len,
+                                  &width, &height, &native_rgba,
+                                  &has_alpha, malloc);
+        if (dds_ret >= 0) {
+            FS_FreeFile(file_data);
+            *out_w = width;
+            *out_h = height;
+            *out_rgba = native_rgba;
+            return true;
+        }
     }
 
     int channels = 0;
@@ -1252,7 +1265,7 @@ static bool VK_UI_LoadImageData(const char *normalized_name,
     }
 
     const char *fallback_exts[] = {
-        ".wal", ".png", ".tga", ".jpg", ".jpeg", ".pcx"
+        ".wal", ".dds", ".png", ".tga", ".jpg", ".jpeg", ".pcx"
     };
 
     char candidate[MAX_QPATH];

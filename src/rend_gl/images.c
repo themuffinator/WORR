@@ -32,6 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "format/pcx.h"
 #include "format/wal.h"
 #include "images.h"
+#include "renderer/dds.h"
 #include "renderer/renderer_api.h"
 
 #if USE_PNG
@@ -62,6 +63,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define IMG_LOAD(x) \
     static int IMG_Load##x(const byte *rawdata, size_t rawlen, \
         image_t *image, byte **pic)
+
+#define USE_DDS 1
 
 static bool check_image_size(unsigned w, unsigned h)
 {
@@ -375,6 +378,22 @@ IMG_LOAD(WAL)
     image->upload_width = image->width = w;
     image->upload_height = image->height = h;
     image->flags |= IMG_Unpack8((uint32_t *)*pic, rawdata + offset, w, h);
+
+    return Q_ERR_SUCCESS;
+}
+
+IMG_LOAD(DDS)
+{
+    bool has_alpha = false;
+    int ret = R_DecodeDDS(rawdata, rawlen,
+                          &image->upload_width, &image->upload_height,
+                          pic, &has_alpha, IMG_AllocPixels);
+    if (ret < 0)
+        return ret;
+
+    image->width = image->upload_width;
+    image->height = image->upload_height;
+    image->flags |= has_alpha ? IF_TRANSPARENT : IF_OPAQUE;
 
     return Q_ERR_SUCCESS;
 }
@@ -1702,11 +1721,12 @@ static const struct {
     { "jpg", IMG_LoadJPG },
 #endif
 #if USE_PNG || USE_STB_PNG
-    { "png", IMG_LoadPNG }
+    { "png", IMG_LoadPNG },
 #endif
+    { "dds", IMG_LoadDDS },
 };
 
-#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
 static imageformat_t    img_search[IM_MAX];
 static int              img_total;
 
@@ -1891,7 +1911,7 @@ static int try_image_format(imageformat_t fmt, image_t *image, byte **pic)
     return ret < 0 ? ret : fmt;
 }
 
-#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
 
 static int try_replace_ext(imageformat_t fmt, image_t *image, byte **pic)
 {
@@ -1986,7 +2006,7 @@ static void r_texture_formats_changed(cvar_t *self)
         char *tok = COM_Parse(&s);
         int i;
 
-        // handle "png jpg tga" format
+        // handle "png jpg tga dds" format
         for (i = IM_WAL + 1; i < IM_MAX; i++) {
             if (!Q_stricmp(tok, img_loaders[i].ext)) {
                 add_texture_format(i);
@@ -1996,7 +2016,7 @@ static void r_texture_formats_changed(cvar_t *self)
         if (i != IM_MAX)
             continue;
 
-        // handle legacy "pjt" format
+        // handle legacy "pjtd" format
         while (*tok) {
             for (i = IM_WAL + 1; i < IM_MAX; i++) {
                 if (Q_tolower(*tok) == img_loaders[i].ext[0]) {
@@ -2018,7 +2038,7 @@ static bool need_override_image(imagetype_t type, imageformat_t fmt)
     return r_texture_overrides->integer & (1 << type);
 }
 
-#endif // USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
+#endif // USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
 
 static void print_error(const char *name, imageflags_t flags, int err)
 {
@@ -2055,7 +2075,7 @@ static int load_image_data(image_t *image, imageformat_t fmt, bool need_dimensio
 {
     int ret;
 
-#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
     if (fmt == IM_MAX) {
         // unknown extension, but give it a chance to load anyway
         ret = try_other_formats(IM_MAX, image, pic);
@@ -2633,13 +2653,15 @@ void IMG_Init(void)
 
     Q_assert(!r_numImages);
 
-#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
     r_override_textures = Cvar_Get("r_override_textures", "1", CVAR_FILES);
     r_texture_formats = Cvar_Get("r_texture_formats", R_TEXTURE_FORMATS, 0);
     r_texture_formats->changed = r_texture_formats_changed;
     r_texture_formats_changed(r_texture_formats);
     r_texture_overrides = Cvar_Get("r_texture_overrides", "-1", CVAR_FILES);
+#endif
 
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG
 #if USE_PNG || USE_STB_PNG
     r_screenshot_format = Cvar_Get("r_screenshot_format", "png", 0);
     r_screenshot_format_legacy = Cvar_Get("gl_screenshot_format", r_screenshot_format->string,

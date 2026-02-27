@@ -31,6 +31,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "system/system.h"
 #include "format/pcx.h"
 #include "format/wal.h"
+#include "renderer/dds.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
 
@@ -332,6 +333,23 @@ IMG_LOAD(WAL)
     image->upload_width = image->width = w;
     image->upload_height = image->height = h;
     image->flags |= IMG_Unpack8((uint32_t *)*pic, (uint8_t *)mt + offset, w, h);
+
+    return Q_ERR_SUCCESS;
+}
+
+IMG_LOAD(DDS)
+{
+    bool has_alpha = false;
+    int ret = R_DecodeDDS(rawdata, rawlen,
+                          &image->upload_width, &image->upload_height,
+                          pic, &has_alpha, IMG_AllocPixels);
+    if (ret < 0)
+        return ret;
+
+    image->width = image->upload_width;
+    image->height = image->upload_height;
+    image->pixel_format = PF_R8G8B8A8_UNORM;
+    image->flags |= has_alpha ? IF_TRANSPARENT : IF_OPAQUE;
 
     return Q_ERR_SUCCESS;
 }
@@ -984,7 +1002,8 @@ static const struct {
     { "wal", IMG_LoadWAL },
     { "tga", IMG_LoadSTB },
     { "jpg", IMG_LoadSTB },
-    { "png", IMG_LoadSTB }
+    { "png", IMG_LoadSTB },
+    { "dds", IMG_LoadDDS },
 };
 
 static imageformat_t    img_search[IM_MAX];
@@ -1353,33 +1372,51 @@ static void get_image_dimensions(imageformat_t fmt, image_t *image)
     IMG_GetDimensions(buffer, &image->width, &image->height);
 }
 
+static void add_texture_format(imageformat_t fmt)
+{
+    for (int i = 0; i < img_total; i++) {
+        if (img_search[i] == fmt)
+            return;
+    }
+
+    if (img_total >= IM_MAX)
+        return;
+
+    img_search[img_total++] = fmt;
+}
+
 static void r_texture_formats_changed(cvar_t *self)
 {
-    char *s;
-    int i, j;
+    const char *s;
 
     // reset the search order
     img_total = 0;
 
     // parse the string
-    for (s = self->string; *s; s++) {
-        switch (*s) {
-            case 't': case 'T': i = IM_TGA; break;
-            case 'j': case 'J': i = IM_JPG; break;
-            case 'p': case 'P': i = IM_PNG; break;
-            default: continue;
-        }
+    s = self->string;
+    while (s) {
+        char *tok = COM_Parse(&s);
+        int i;
 
-        // don't let format to be specified more than once
-        for (j = 0; j < img_total; j++)
-            if (img_search[j] == i)
+        // handle "png jpg tga dds" format
+        for (i = IM_WAL + 1; i < IM_MAX; i++) {
+            if (!Q_stricmp(tok, img_loaders[i].ext)) {
+                add_texture_format(i);
                 break;
-        if (j != img_total)
+            }
+        }
+        if (i != IM_MAX)
             continue;
 
-        img_search[img_total++] = i;
-        if (img_total == IM_MAX) {
-            break;
+        // handle legacy "pjtd" format
+        while (*tok) {
+            for (i = IM_WAL + 1; i < IM_MAX; i++) {
+                if (Q_tolower(*tok) == img_loaders[i].ext[0]) {
+                    add_texture_format(i);
+                    break;
+                }
+            }
+            tok++;
         }
     }
 }
@@ -2096,7 +2133,7 @@ void IMG_Init(void)
     Q_assert(!r_numImages);
 
     r_override_textures = Cvar_Get("r_override_textures", "2", CVAR_FILES);
-    r_texture_formats = Cvar_Get("r_texture_formats", "pjt", 0);
+    r_texture_formats = Cvar_Get("r_texture_formats", R_TEXTURE_FORMATS, 0);
     r_texture_formats->changed = r_texture_formats_changed;
     r_texture_formats_changed(r_texture_formats);
     r_texture_overrides = Cvar_Get("r_texture_overrides", "-1", CVAR_FILES);

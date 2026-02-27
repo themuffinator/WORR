@@ -199,6 +199,7 @@ ui_src = [
 ]
 
 renderer_src = [
+  'src/renderer/dds.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_gl/draw.c',
@@ -227,6 +228,7 @@ renderer_src = [
 ]
 
 renderer_vk_rtx_src = [
+  'src/renderer/dds.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_rtx/vkpt/asvgf.c',
@@ -273,6 +275,7 @@ renderer_vk_rtx_src = [
 ]
 
 renderer_vk_src = [
+  'src/renderer/dds.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_vk/vk_main.c',
@@ -982,6 +985,8 @@ endif
 if get_option('tga')
   texture_formats += 'tga'
 endif
+
+texture_formats += 'dds'
 
 openal = dependency('openal',
   version:         '>= 1.23.1',
