@@ -12,6 +12,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include "common/common.h"
 #include "common/error.h"
 #include "common/intreadwrite.h"
+#include "renderer/renderer_api.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -614,7 +615,7 @@ int R_DecodeDDS(const byte *rawdata, size_t rawlen,
             return Q_ERR_INVALID_FORMAT;
         }
 
-        if (!(pf_flags & DDS_ALPHAPIXELS))
+        if (!uncompressed.alpha_only && !(pf_flags & DDS_ALPHAPIXELS))
             uncompressed.a_mask = 0;
     } else {
         Com_SetLastError("DDS: unsupported pixel format");

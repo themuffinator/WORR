@@ -50,6 +50,11 @@ static void stbi_write(void *context, void *data, int size)
 	fwrite(data, size, 1, ((screenshot_t *) context)->fp);
 }
 
+static void *img_alloc_pixels(size_t size)
+{
+    return IMG_AllocPixels(size);
+}
+
 /*
 ====================================================================
 
@@ -340,14 +345,16 @@ IMG_LOAD(WAL)
 IMG_LOAD(DDS)
 {
     bool has_alpha = false;
+    int width = 0;
+    int height = 0;
     int ret = R_DecodeDDS(rawdata, rawlen,
-                          &image->upload_width, &image->upload_height,
-                          pic, &has_alpha, IMG_AllocPixels);
+                          &width, &height,
+                          pic, &has_alpha, img_alloc_pixels);
     if (ret < 0)
         return ret;
 
-    image->width = image->upload_width;
-    image->height = image->upload_height;
+    image->upload_width = image->width = width;
+    image->upload_height = image->height = height;
     image->pixel_format = PF_R8G8B8A8_UNORM;
     image->flags |= has_alpha ? IF_TRANSPARENT : IF_OPAQUE;
 
@@ -1460,11 +1467,17 @@ load_img(const char *name, image_t *image)
         if(((image->flags & IF_SRC_MASK) != 0) && ((image->flags & IF_SRC_MASK) != location_flag))
             continue;
 
-        // first try with original extension
-        ret = _try_image_format(fmt, image, try_location, &pic);
-        if (ret == Q_ERR(ENOENT)) {
-            // retry with remaining extensions
-            ret = try_other_formats(fmt, image, try_location, &pic);
+        if (fmt == IM_MAX) {
+            ret = try_other_formats(IM_MAX, image, try_location, &pic);
+            if (ret == Q_ERR(ENOENT))
+                ret = Q_ERR_INVALID_PATH;
+        } else {
+            // first try with original extension
+            ret = _try_image_format(fmt, image, try_location, &pic);
+            if (ret == Q_ERR(ENOENT)) {
+                // retry with remaining extensions
+                ret = try_other_formats(fmt, image, try_location, &pic);
+            }
         }
         if (ret >= 0)
             break;

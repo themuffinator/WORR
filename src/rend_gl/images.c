@@ -71,6 +71,11 @@ static bool check_image_size(unsigned w, unsigned h)
     return (w < 1 || h < 1 || w > MAX_TEXTURE_SIZE || h > MAX_TEXTURE_SIZE);
 }
 
+static void *img_alloc_pixels(size_t size)
+{
+    return IMG_AllocPixels(size);
+}
+
 /*
 ====================================================================
 
@@ -385,14 +390,16 @@ IMG_LOAD(WAL)
 IMG_LOAD(DDS)
 {
     bool has_alpha = false;
+    int width = 0;
+    int height = 0;
     int ret = R_DecodeDDS(rawdata, rawlen,
-                          &image->upload_width, &image->upload_height,
-                          pic, &has_alpha, IMG_AllocPixels);
+                          &width, &height,
+                          pic, &has_alpha, img_alloc_pixels);
     if (ret < 0)
         return ret;
 
-    image->width = image->upload_width;
-    image->height = image->upload_height;
+    image->upload_width = image->width = width;
+    image->upload_height = image->height = height;
     image->flags |= has_alpha ? IF_TRANSPARENT : IF_OPAQUE;
 
     return Q_ERR_SUCCESS;
