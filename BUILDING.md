@@ -158,23 +158,28 @@ Build:
 Visual Studio
 -------------
 
-It is possible to build WORR on Windows using Visual Studio 2022 and Meson.
+It is possible to build WORR on Windows using Visual Studio 2022 (or later)
+and Meson.
 
 Install Visual Studio and Meson using official installers.
 
 Optionally, download and install nasm executable. The easiest way to add it
 into PATH is to put it into `Program Files/Meson`.
 
-The build needs to be launched from appropriate Visual Studio command line
-shell, e.g. `x64 Native Tools Command Prompt`.
+The build needs to be launched from the appropriate Visual Studio command
+prompt, e.g. `x64 Native Tools Command Prompt`.
 
 Change to WORR source directory, then setup build directory:
 
-    tools\meson_setup.cmd setup --native-file meson.native.ini -Dwrap_mode=forcefallback builddir
+    tools\meson_setup.cmd setup -Dwrap_mode=forcefallback builddir
+
+Do *not* use `--native-file meson.native.ini` with MSVC. That file targets
+the Clang+LLVM toolchain; using it with Visual Studio causes linker failures
+(LNK4044, LNK1107). See `BUILD_QUIRKS.md` for details.
 
 If Meson reports that it cannot find a Windows resource compiler, the
-wrapper sets `WINDRES` to `tools/rc.cmd`, which locates `llvm-rc.exe`
-for you.
+wrapper sets `WINDRES` to `tools/rc.cmd`, which locates `llvm-rc.exe` when
+available.
 
 Build:
 

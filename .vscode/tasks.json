@@ -7,7 +7,7 @@
             "command": "cmd",
             "args": [
                 "/c",
-                "if exist builddir\\meson-private\\coredata.dat (meson setup --reconfigure builddir) else (meson setup --native-file meson.native.ini builddir)"
+                "if exist builddir\\meson-private\\coredata.dat (meson setup --reconfigure builddir) else (meson setup builddir)"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

@@ -84,43 +84,44 @@ static inline bool Com_IsColorEscapeCode(char c)
 
 static inline bool Com_ColorFromEscape(char c, color_t base, color_t *out_color)
 {
+    /* Use .u32 initializers: compound literals are not constant expressions in C (MSVC C2099) */
     static const color_t q3_color_table[8] = {
-        COLOR_RGBA(0, 0, 0, 255),
-        COLOR_RGBA(255, 0, 0, 255),
-        COLOR_RGBA(0, 255, 0, 255),
-        COLOR_RGBA(255, 255, 0, 255),
-        COLOR_RGBA(0, 0, 255, 255),
-        COLOR_RGBA(0, 255, 255, 255),
-        COLOR_RGBA(255, 0, 255, 255),
-        COLOR_RGBA(255, 255, 255, 255)
+        { .u32 = COLOR_U32_RGBA(0, 0, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 255, 255, 255) }
     };
     static const color_t q3_rainbow_colors[26] = {
-        COLOR_RGBA(255, 0, 0, 255),
-        COLOR_RGBA(255, 64, 0, 255),
-        COLOR_RGBA(255, 128, 0, 255),
-        COLOR_RGBA(255, 192, 0, 255),
-        COLOR_RGBA(255, 255, 0, 255),
-        COLOR_RGBA(192, 255, 0, 255),
-        COLOR_RGBA(128, 255, 0, 255),
-        COLOR_RGBA(64, 255, 0, 255),
-        COLOR_RGBA(0, 255, 0, 255),
-        COLOR_RGBA(0, 255, 64, 255),
-        COLOR_RGBA(0, 255, 128, 255),
-        COLOR_RGBA(0, 255, 192, 255),
-        COLOR_RGBA(0, 255, 255, 255),
-        COLOR_RGBA(0, 192, 255, 255),
-        COLOR_RGBA(0, 128, 255, 255),
-        COLOR_RGBA(0, 64, 255, 255),
-        COLOR_RGBA(0, 0, 255, 255),
-        COLOR_RGBA(64, 0, 255, 255),
-        COLOR_RGBA(128, 0, 255, 255),
-        COLOR_RGBA(192, 0, 255, 255),
-        COLOR_RGBA(255, 0, 255, 255),
-        COLOR_RGBA(255, 0, 192, 255),
-        COLOR_RGBA(255, 0, 128, 255),
-        COLOR_RGBA(255, 0, 64, 255),
-        COLOR_RGBA(255, 255, 255, 255),
-        COLOR_RGBA(128, 128, 128, 255)
+        { .u32 = COLOR_U32_RGBA(255, 0, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 64, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 128, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 192, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(192, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(128, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(64, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 0, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 64, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 128, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 192, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 255, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 192, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 128, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 64, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(0, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(64, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(128, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(192, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 192, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 128, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 0, 64, 255) },
+        { .u32 = COLOR_U32_RGBA(255, 255, 255, 255) },
+        { .u32 = COLOR_U32_RGBA(128, 128, 128, 255) }
     };
 
     if (!out_color)
