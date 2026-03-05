@@ -243,6 +243,14 @@ typedef struct {
 #define VectorNegate(a,b)   ((b)[0]=-(a)[0],(b)[1]=-(a)[1],(b)[2]=-(a)[2])
 #define VectorInverse(a)    ((a)[0]=-(a)[0],(a)[1]=-(a)[1],(a)[2]=-(a)[2])
 #define VectorSet(v, x, y, z)   ((v)[0]=(x),(v)[1]=(y),(v)[2]=(z))
+/* MSVC C4576: (vec*_t){...} compound literal non-standard in C++; use brace-init for C++ */
+#ifdef __cplusplus
+#define VEC2(x, y)    (vec2_t{ (vec_t)(x), (vec_t)(y) })
+#define VEC3(x, y, z) (vec3_t{ (vec_t)(x), (vec_t)(y), (vec_t)(z) })
+#else
+#define VEC2(x, y)    ((const vec2_t){ (vec_t)(x), (vec_t)(y) })
+#define VEC3(x, y, z) ((const vec3_t){ (vec_t)(x), (vec_t)(y), (vec_t)(z) })
+#endif
 #define VectorAvg(a,b,c) \
         ((c)[0]=((a)[0]+(b)[0])*0.5f, \
          (c)[1]=((a)[1]+(b)[1])*0.5f, \
@@ -808,20 +816,31 @@ static inline int32_t SignExtend(uint32_t v, int bits)
 #define COLOR_U32_WHITE   COLOR_U32_RGB(255, 255, 255)
 
 // basic construction from rgba/rgb or alpha u8
+// MSVC C4576: (Type){...} compound literals are non-standard in C++; use Type{...} for C++
+#ifdef __cplusplus
+#define COLOR_RGBA(ur, ug, ub, ua) (color_t{ .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = (uint8_t)(ua) })
+#define COLOR_RGB(ur, ug, ub)      (color_t{ .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = 255 })
+#define COLOR_A(ua)                (color_t{ .r = 0, .g = 0, .b = 0, .a = (uint8_t)(ua) })
+#else
 #define COLOR_RGBA(ur, ug, ub, ua) ((color_t) { .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = (uint8_t)(ua) })
 #define COLOR_RGB(ur, ug, ub)      ((color_t) { .r = (uint8_t)(ur), .g = (uint8_t)(ug), .b = (uint8_t)(ub), .a = 255  })
 #define COLOR_A(ua)                ((color_t) { .r = 0, .g = 0, .b = 0, .a = (uint8_t)(ua)  })
+#endif
 
 // color mask macros
 #define COLOR_MASK_ALPHA   COLOR_A(255)
 #define COLOR_MASK_RGB     COLOR_RGBA(255, 255, 255, 0)
 
 // conversion from 32-bit or 24-bit colors
+#ifdef __cplusplus
+#define COLOR_U32(v)               (color_t{ .u32 = (v) })
+#define COLOR_U24(v)               (color_t{ .u32 = ((v) & COLOR_MASK_RGB.u32) | (COLOR_MASK_ALPHA.u32) })
+#define COLOR_SETA_U8(c, a)        (color_t{ .u32 = ((((c).u32) & COLOR_MASK_RGB.u32) | (COLOR_A((a)).u32)) })
+#else
 #define COLOR_U32(v)               ((color_t) { .u32 = (v) })
 #define COLOR_U24(v)               ((color_t) { .u32 = ((v) & COLOR_MASK_RGB.u32) | (COLOR_MASK_ALPHA.u32) })
-
-// change alpha macros
 #define COLOR_SETA_U8(c, a)   ((color_t) { .u32 = ((((c).u32) & COLOR_MASK_RGB.u32) | (COLOR_A((a)).u32)) })
+#endif
 #define COLOR_SETA_F(c, f)    COLOR_SETA_U8((c), ((f) * 255))
 
 // built-in color_t's

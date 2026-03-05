@@ -314,7 +314,7 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
 {
     dlight_t    *dl;
 
-    float fade = fade_distance_to_light((const vec2_t) { light->fade_start, light->fade_end }, light->origin, cl.refdef.vieworg);
+    float fade = fade_distance_to_light(VEC2(light->fade_start, light->fade_end), light->origin, cl.refdef.vieworg);
 
     if (fade <= 0.0f)
         return;

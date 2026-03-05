@@ -6,6 +6,7 @@ project('worr', 'c', 'cpp',
     meson.version().version_compare('>=1.3.0') ? 'c_std=gnu11,c11' : 'c_std=gnu11',
     'cpp_std=c++17',
     'buildtype=debugoptimized',
+    'b_vscrt=from_buildtype',
   ],
 )
 
@@ -732,7 +733,7 @@ texture_formats = []
 fallback_opt = ['default_library=static']
 
 game_fallback_opt = fallback_opt + [
-  'b_vscrt=static_from_buildtype',
+  'b_vscrt=from_buildtype',
   'buildtype=' + get_option('buildtype'),
   'cpp_std=c++17',
 ]
@@ -1353,7 +1354,7 @@ sgame_dll = shared_library('sgame' + cpu, sgame_src,
   install:              true,
   install_dir:          libdir / get_option('base-game'),
   install_tag:          'runtime',
-  override_options:      ['b_vscrt=static_from_buildtype', 'cpp_std=c++23'],
+  override_options:      ['b_vscrt=from_buildtype', 'cpp_std=c++latest'],
 )
 
 cgame_all_src = cgame_src + ui_src + [
@@ -1389,7 +1390,7 @@ cgame_dll = shared_library('cgame' + cpu, cgame_all_src,
   install:              true,
   install_dir:          libdir / get_option('base-game'),
   install_tag:          'runtime',
-  override_options:     ['b_vscrt=static_from_buildtype', 'cpp_std=c++20'],
+  override_options:     ['b_vscrt=from_buildtype', 'cpp_std=c++20'],
 )
 
 prog_copy_game_dll = find_program('copy-game-dll.py')
