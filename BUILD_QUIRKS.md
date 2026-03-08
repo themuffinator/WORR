@@ -28,7 +28,18 @@ ERROR: None of values ['c++23'] are supported by the CPP compiler. Possible valu
 
 **Cause:** Meson 1.10.x has a fixed list of supported `cpp_std` values for MSVC. `c++23` isn't in that list, even though VC 2022+ supports it.
 
-**Workaround:** Use `c++latest` instead of `c++23`. Meson accepts it, and MSVC maps it to `/std:c++latest` (C++23 on recent toolchains). The sgame DLL override has been updated to use `cpp_std=c++latest` for MSVC compatibility.
+**Workaround:** Use `c++latest` instead of `c++23`. Meson accepts it, and MSVC maps it to `/std:c++latest` (C++23 on recent toolchains). The sgame DLL override uses `cpp_std=c++latest` for MSVC only; on GCC/Clang (Linux/BSD) it uses `c++23` because `c++latest` is not supported there.
+
+## GCC/Clang: c++latest not supported
+
+**Symptom (on Linux):**
+```
+ERROR: None of values ['c++latest'] are supported by the CPP compiler. Possible values for option "cpp_std" are ['none', 'c++98', ..., 'c++23', 'c++26', ...]
+```
+
+**Cause:** `c++latest` is an MSVC-specific value. GCC and Clang support `c++23` (and `c++26`) but not `c++latest`.
+
+**Fix:** `meson.build` selects `cpp_std` per compiler: `c++latest` for MSVC, `c++23` for GCC/Clang.
 
 ## MSVC C4576: compound literal in C++ (COLOR_RGBA etc.)
 

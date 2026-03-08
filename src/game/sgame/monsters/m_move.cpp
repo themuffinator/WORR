@@ -215,7 +215,7 @@ static bool G_alternate_flystep(gentity_t *ent, Vector3 move, bool relink, genti
 	Vector3 dir = ent->velocity.normalized(currentSpeed);
 
 	// FIXME
-	if (isnan(dir[0]) || isnan(dir[1]) || isnan(dir[2])) {
+	if (std::isnan(dir[0]) || std::isnan(dir[1]) || std::isnan(dir[2])) {
 #if defined(_DEBUG) && defined(_WIN32)
 		__debugbreak();
 #endif
@@ -322,7 +322,7 @@ static bool G_alternate_flystep(gentity_t *ent, Vector3 move, bool relink, genti
 	Vector3 final_dir = dir ? dir : wanted_dir;
 
 	// FIXME
-	if (isnan(final_dir[0]) || isnan(final_dir[1]) || isnan(final_dir[2])) {
+	if (std::isnan(final_dir[0]) || std::isnan(final_dir[1]) || std::isnan(final_dir[2])) {
 #if defined(_DEBUG) && defined(_WIN32)
 		__debugbreak();
 #endif
@@ -386,8 +386,8 @@ static bool G_alternate_flystep(gentity_t *ent, Vector3 move, bool relink, genti
 		currentSpeed = min(wanted_speed, currentSpeed + accel);
 
 	// FIXME
-	if (isnan(final_dir[0]) || isnan(final_dir[1]) || isnan(final_dir[2]) ||
-		isnan(currentSpeed)) {
+	if (std::isnan(final_dir[0]) || std::isnan(final_dir[1]) || std::isnan(final_dir[2]) ||
+		std::isnan(currentSpeed)) {
 #if defined(_DEBUG) && defined(_WIN32)
 		__debugbreak();
 #endif

@@ -52,8 +52,8 @@ typedef struct {
     const alfunction_t *functions;
 } alsection_t;
 
-#define QALC_FN(x)  { "alc"#x, &qalc##x, alc##x }
-#define QAL_FN(x)   { "al"#x, &qal##x, al##x }
+#define QALC_FN(x)  { "alc"#x, &qalc##x, (void*)(uintptr_t)(alc##x) }
+#define QAL_FN(x)   { "al"#x, &qal##x, (void*)(uintptr_t)(al##x) }
 
 #if defined(__clang__)
 #pragma clang diagnostic push

@@ -3,7 +3,12 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "client/cgame_entity.h"
+
+using std::min;
+using std::max;
 #include "common/zone.h"
 #include "cg_client_defs.h"
 

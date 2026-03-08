@@ -7,7 +7,7 @@
             "command": "cmd",
             "args": [
                 "/c",
-                "if exist builddir\\meson-private\\coredata.dat (meson setup --reconfigure builddir) else (meson setup builddir)"
+                "if exist builddir-win\\meson-private\\coredata.dat (meson setup --reconfigure builddir-win) else (meson setup builddir-win)"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -21,7 +21,7 @@
             "args": [
                 "compile",
                 "-C",
-                "builddir"
+                "builddir-win"
             ],
             "dependsOn": [
                 "meson: setup"
@@ -38,7 +38,7 @@
             "args": [
                 "tools/refresh_install.py",
                 "--build-dir",
-                "builddir",
+                "builddir-win",
                 "--install-dir",
                 ".install",
                 "--base-game",

@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client/cgame_ui.h"
 #include "common/common.h"
+
+#include <algorithm>
+using std::min;
+using std::max;
 #include "common/error.h"
 #include "common/files.h"
 

@@ -489,6 +489,15 @@ static int R_Q_atoi(const char *s)
     return Q_atoi(s);
 }
 
+static char *R_Q_strchrnul(const char *s, int c)
+{
+#ifdef HAVE_STRCHRNUL
+    return const_cast<char *>(strchrnul(s, c));
+#else
+    return Q_strchrnul(s, c);
+#endif
+}
+
 void R_ClearDebugLines(void)
 {
     if (re.ClearDebugLines) {
@@ -741,7 +750,7 @@ static renderer_import_t R_BuildRendererImports(void)
         .Q_strcasecmp = Q_strcasecmp,
         .Q_strncasecmp = Q_strncasecmp,
         .Q_strcasestr = Q_strcasestr,
-        .Q_strchrnul = Q_strchrnul,
+        .Q_strchrnul = R_Q_strchrnul,
         .Q_strlcpy = Q_strlcpy,
         .Q_strlcat = Q_strlcat,
         .Q_concat_array = Q_concat_array,

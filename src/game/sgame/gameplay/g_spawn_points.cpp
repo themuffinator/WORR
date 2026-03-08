@@ -21,6 +21,7 @@ that have not yet been migrated.*/
 #include "../g_local.hpp"
 #include "g_headhunters.hpp"
 #include <algorithm>
+#include <cfloat>
 #include <cstring>
 #include <format>
 

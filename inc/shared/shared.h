@@ -510,12 +510,14 @@ static inline float smoothstep(float edge0, float edge1, float x)
     return t * t * (3.0f - 2.0f * t);
 }
 
+#if !defined(NOMINMAX)
 #ifndef max
 #define max(a,b) ((a)>(b)?(a):(b))
 #endif
 
 #ifndef min
 #define min(a,b) ((a)<(b)?(a):(b))
+#endif
 #endif
 
 #define frand()     ((int32_t)Q_rand() * 0x1p-32f + 0.5f)

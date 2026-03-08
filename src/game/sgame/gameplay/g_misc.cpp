@@ -2295,8 +2295,8 @@ FREEZE: freezes player's movement when viewing through camera
 */
 
 // Forward declarations for camera functions
-void misc_camera_stop(gentity_t* self);
-void camera_move_next(gentity_t* self);
+static void misc_camera_stop(gentity_t* self);
+static void camera_move_next(gentity_t* self);
 
 
 static void misc_camera_stop(gentity_t* self) {

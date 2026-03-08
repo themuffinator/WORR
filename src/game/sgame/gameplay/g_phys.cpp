@@ -819,7 +819,7 @@ static void G_Physics_Step(gentity_t* ent) {
 		G_AddRotationalFriction(ent);
 
 	// FIXME: figure out how or why this is happening
-	if (isnan(ent->velocity[_X]) || isnan(ent->velocity[_Y]) || isnan(ent->velocity[_Z]))
+	if (std::isnan(ent->velocity[_X]) || std::isnan(ent->velocity[_Y]) || std::isnan(ent->velocity[_Z]))
 		ent->velocity = {};
 
 	// add gravity except:

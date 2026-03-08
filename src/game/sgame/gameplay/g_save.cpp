@@ -1490,7 +1490,7 @@ static void read_save_type_json(const Json::Value& json, void* data, const save_
 	case Float:
 		if (!json.isDouble())
 			json_print_error(field, "expected number", false);
-		else if (isnan(json.asDouble()))
+		else if (std::isnan(json.asDouble()))
 			*((float*)data) = std::numeric_limits<float>::quiet_NaN();
 		else
 			*((float*)data) = json.asFloat();
