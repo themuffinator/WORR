@@ -59,6 +59,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 #endif
 
+/* When building the renderer DLL, ensure struct member names are not macro-expanded
+ * by shared.h (HAVE_MEMCCPY/HAVE_STRCHRNUL), which would rename Q_memccpy→memccpy etc. */
+#if defined(RENDERER_DLL)
+#ifdef Q_memccpy
+#undef Q_memccpy
+#endif
+#ifdef Q_strchrnul
+#undef Q_strchrnul
+#endif
+#endif
+
 typedef struct renderer_import_s {
     void (*Com_LPrintf)(print_type_t type, const char *fmt, ...);
     void (*Com_Error)(error_type_t type, const char *fmt, ...);

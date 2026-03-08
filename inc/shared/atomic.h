@@ -22,6 +22,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 typedef volatile int atomic_int;
 #define atomic_load(p)      (*(p))
 #define atomic_store(p, v)  (*(p) = (v))
+#elif defined(__cplusplus)
+#include <atomic>
+typedef std::atomic<int> atomic_int;
+#define atomic_load(p)      ((p)->load())
+#define atomic_store(p, v)  ((p)->store(v))
 #else
 #include <stdatomic.h>
 #endif

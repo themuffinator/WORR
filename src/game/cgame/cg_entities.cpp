@@ -2131,7 +2131,7 @@ void CL_CalcViewValues(void)
 
     // Smooth out view height over 100ms
     float viewheight_lerp = (cl.time - cl.viewheight_change_time);
-    viewheight_lerp = 100 - min(viewheight_lerp, 100);
+    viewheight_lerp = 100 - min(viewheight_lerp, 100.0f);
     viewheight = cl.current_viewheight + (float)(cl.prev_viewheight - cl.current_viewheight) * viewheight_lerp * 0.01f;
 
     cl.refdef.vieworg[2] += viewheight;

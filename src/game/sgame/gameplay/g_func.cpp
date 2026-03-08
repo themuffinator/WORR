@@ -3564,7 +3564,7 @@ void door_secret2_move2(gentity_t* self);
 void door_secret2_move3(gentity_t* self);
 void door_secret2_move4(gentity_t* self);
 void door_secret2_move5(gentity_t* self);
-void door_secret2_move6(gentity_t* self);
+static void door_secret2_move6(gentity_t* self);
 void door_secret2_done(gentity_t* self);
 
 static USE(door_secret2_use) (gentity_t* self, gentity_t* other, gentity_t* activator) -> void {

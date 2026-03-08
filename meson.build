@@ -645,7 +645,6 @@ if cpp.get_argument_syntax() == 'gcc'
   if x86
     client_cpp_args += cpp.get_supported_arguments(['-msse2', '-mfpmath=sse'])
   endif
-
   client_cpp_warn_args = [
     '-Wformat-security',
     '-Wno-microsoft-anon-tag',
@@ -666,11 +665,14 @@ endif
 
 game_cpp_args = [
   '-DHAVE_CONFIG_H',
+  '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
   '-DNO_FMT_SOURCE',
+  '-DNOMINMAX',
 ]
 
 game_c_args = [
   '-DHAVE_CONFIG_H',
+  '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
 ]
 
 game_link_args = []
@@ -999,7 +1001,12 @@ if openal.found()
   client_src += [ 'src/client/sound/al.cpp', 'src/client/sound/qal.cpp', 'inc/common/jsmn.h' ]
   client_deps += openal
   config.set10('USE_OPENAL', true)
+  # Work around OpenAL protected symbol linker error on Fedora/glibc
+  if not win32 and cpp.get_argument_syntax() == 'gcc'
+    client_cpp_args += cpp.get_supported_arguments(['-mno-direct-extern-access'])
+  endif
 endif
+client_link_args = exe_link_args
 
 # require FFmpeg >= 5.1.3
 ffmpeg_defaults = [
@@ -1205,7 +1212,11 @@ renderer_vk_rtx_lib = []
 if get_option('external-renderers')
   renderer_engine_src = []
 
+  libm = cc.find_library('m', required: false)
   renderer_deps = []
+  if libm.found()
+    renderer_deps += libm
+  endif
   if zlib.found()
     renderer_deps += zlib
   endif
@@ -1284,7 +1295,7 @@ executable('worr', common_src, client_src, renderer_engine_src,
   include_directories:   ['inc', 'q2proto/inc'],
   gnu_symbol_visibility: 'hidden',
   win_subsystem:         win_subsystem_client,
-  link_args:             exe_link_args,
+  link_args:             client_link_args,
   link_with:             q2proto_lib,
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=REF_GL', engine_args],
   cpp_args:              client_cpp_args,
@@ -1343,6 +1354,8 @@ cgame_defines = [
   '-DRENDERER_DLL',
 ]
 
+# MSVC: use c++latest (c++23 not in Meson's MSVC list). GCC/Clang: use c++23 (c++latest unsupported).
+sgame_cpp_std = cpp.get_id() == 'msvc' ? 'c++latest' : 'c++23'
 sgame_dll = shared_library('sgame' + cpu, sgame_src,
   name_prefix:           '',
   gnu_symbol_visibility: 'hidden',
@@ -1354,7 +1367,7 @@ sgame_dll = shared_library('sgame' + cpu, sgame_src,
   install:              true,
   install_dir:          libdir / get_option('base-game'),
   install_tag:          'runtime',
-  override_options:      ['b_vscrt=from_buildtype', 'cpp_std=c++latest'],
+  override_options:      ['b_vscrt=from_buildtype', 'cpp_std=' + sgame_cpp_std],
 )
 
 cgame_all_src = cgame_src + ui_src + [

@@ -34,6 +34,9 @@
 #include <type_traits>
 #include <algorithm>
 #include <array>
+
+using std::min;
+using std::max;
 #include <string_view>
 #include <string>
 #include <numeric>

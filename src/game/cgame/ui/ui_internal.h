@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
@@ -68,6 +69,9 @@ void UI_SetClipboardData(const char *text);
 #define MLF_COLOR       BIT(2)
 
 namespace ui {
+
+using std::min;
+using std::max;
 
 enum class Sound {
     NotHandled,
