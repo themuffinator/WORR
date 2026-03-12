@@ -1,0 +1,87 @@
+name: Import Roadmap to GitHub Projects
+
+on:
+  workflow_dispatch:
+    inputs:
+      csv_path:
+        description: "Path to the roadmap CSV (relative to repo root)"
+        required: true
+        default: ".tmp/worr-github-project-import-2026-02-27.csv"
+      project_title:
+        description: "GitHub Projects board title"
+        required: true
+        default: "WORR Roadmap 2026"
+      skip_issues:
+        description: "Skip issue creation; download issue map from a prior run artifact named 'roadmap-issue-map'"
+        required: false
+        default: "false"
+        type: boolean
+
+# Projects v2 requires a PAT with 'project' scope.
+# Store a fine-grained PAT (or classic PAT) as secrets.PROJECT_TOKEN.
+# The default GITHUB_TOKEN does NOT have the 'project' scope.
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: import-roadmap
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+    steps:
+      - name: Verify PROJECT_TOKEN secret is set
+        run: |
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "ERROR: secrets.PROJECT_TOKEN is not set."
+            echo "Create a PAT with 'repo' and 'project' scopes and store it as PROJECT_TOKEN."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify CSV exists
+        run: |
+          if [[ ! -f "${{ github.event.inputs.csv_path }}" ]]; then
+            echo "ERROR: CSV not found at ${{ github.event.inputs.csv_path }}"
+            exit 1
+          fi
+          echo "CSV rows: $(wc -l < "${{ github.event.inputs.csv_path }}")"
+
+      - name: Download issue map from previous run (skip-issues mode)
+        if: ${{ github.event.inputs.skip_issues == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: roadmap-issue-map
+          path: /tmp
+
+      - name: Import roadmap
+        run: |
+          SKIP_FLAG=""
+          if [[ "${{ github.event.inputs.skip_issues }}" == "true" ]]; then
+            if [[ ! -f /tmp/issue-map.json ]]; then
+              echo "ERROR: skip_issues=true but no issue-map.json artifact was found."
+              echo "Run this workflow once without skip_issues to create issues and upload the map artifact."
+              exit 1
+            fi
+            SKIP_FLAG="--skip-issues --issue-map /tmp/issue-map.json"
+          fi
+          python3 tools/project/import_roadmap.py \
+            --csv "${{ github.event.inputs.csv_path }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.event.inputs.project_title }}" \
+            --dump-issue-map /tmp/issue-map.json \
+            ${SKIP_FLAG}
+
+      - name: Upload issue map artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadmap-issue-map
+          path: /tmp/issue-map.json
+          if-no-files-found: ignore
